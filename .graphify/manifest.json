@@ -272,8 +272,8 @@
     "hash": "f62ec0dcc0621d2af3e286f72eb5a13d"
   },
   "app/api/health.py": {
-    "mtime": 1789061001899.1897,
-    "hash": "fb316265347a9cd116dbfa03b6f80f78"
+    "mtime": 1790483147222.1907,
+    "hash": "927ba3200b8c2dce70fc40a87b2b17ad"
   },
   "app/api/hotel_api_keys.py": {
     "mtime": 1783103274876.0564,
@@ -1756,8 +1756,8 @@
     "hash": "47a88f453e1cb159870e0d83992e5fff"
   },
   "tests/test_datastores_health.py": {
-    "mtime": 1789061001940.2207,
-    "hash": "ffaf954b17528729c48760450c644caf"
+    "mtime": 1790483194032.756,
+    "hash": "3209f837b239a5927d7d1247f7abd58d"
   },
   "tests/test_demo_mode.py": {
     "mtime": 1790480999189.5452,
@@ -1804,8 +1804,8 @@
     "hash": "34878c991c40095faf7d2354cbafb574"
   },
   "tests/test_invitations.py": {
-    "mtime": 1790419183333.6165,
-    "hash": "9a3f0a01d134ce281407634a9a75dbc0"
+    "mtime": 1790484060729.0125,
+    "hash": "4188749761a5bf7da6b9d94484c913f3"
   },
   "tests/test_jurisdiction_profile.py": {
     "mtime": 1788026569647.6426,
@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1790467715640.7627,
-    "hash": "de30b77e11ab1dc8758759bc85d2d6b6"
+    "mtime": 1790483896984.8237,
+    "hash": "bb974ed16eccac9d918055112efeb68e"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1790467715087.34,
-    "hash": "6e8533bcf7ef2dbe0521118a1565099e"
+    "mtime": 1790483896424.1375,
+    "hash": "1c5b0af59e2652548c70a3b8b5e67c92"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1790467715631.267,
-    "hash": "e6b3f4a9a820a20647fb77d04a82863f"
+    "mtime": 1790483896973.2239,
+    "hash": "cb93aa40c50d42ae482f6773dbf21d54"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1790467715098.573,
-    "hash": "01c7a69e018edb32275926c30569f367"
+    "mtime": 1790483896436.1362,
+    "hash": "e33b31e81623348eb3b60557e3fbc64e"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1790467715620.5637,
-    "hash": "7e4dfc02229ef73cb0736587a732ed11"
+    "mtime": 1790483896962.1545,
+    "hash": "840ff1fc311220521be68ee914855182"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1790467715268.8381,
-    "hash": "7eaafa85b59ed2452496453577a3447a"
+    "mtime": 1790483896615.2554,
+    "hash": "d5007689e78604dde947eef752087131"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -3236,8 +3236,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1790480865165.3223,
-    "hash": "a9d5bf6ffa7d0de8b3d5ce9b05256fff"
+    "mtime": 1790483869462.9612,
+    "hash": "0937af902aa98425534218ae71f9ae98"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784517879747.6167,
@@ -3964,8 +3964,8 @@
     "hash": "b984dbaafdf0ee332fc1506e7f4b2ae6"
   },
   "tests/test_role_contracts.py": {
-    "mtime": 1790436219405.1602,
-    "hash": "6ae39e01dad0083979cf5111d4783790"
+    "mtime": 1790482363258.5474,
+    "hash": "1532019162ba32e4c4a52962cbb63281"
   },
   "tests/test_settings_security_api.py": {
     "mtime": 1790427790229.5588,
@@ -4888,8 +4888,8 @@
     "hash": "a23dcc229ff13f8ca1644eb8be3bb1b2"
   },
   "docs/runbooks/enabling-infrastructure.md": {
-    "mtime": 1789061001914.542,
-    "hash": "82c0c213ac18f9ae287ab9f4c02ad4f8"
+    "mtime": 1790483252424.0317,
+    "hash": "0ec2ecbd415a9cfa2425915a3403ae5e"
   },
   "tests/integration/test_nosql_projections.py": {
     "mtime": 1788030213544.5796,
@@ -5612,8 +5612,8 @@
     "hash": "5532d6363cba3ddd7c116294bcaaf487"
   },
   "frontend/e2e/google-invitation-access.spec.ts": {
-    "mtime": 1790419183329.034,
-    "hash": "bb3479d5ec8c8795b1c3883d79ef356c"
+    "mtime": 1790483493061.4941,
+    "hash": "867f92564ca6fc9ff98ac2b163600f16"
   },
   "tests/test_actor_alias_projection.py": {
     "mtime": 1790261017425.159,

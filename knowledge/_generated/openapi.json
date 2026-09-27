@@ -15844,7 +15844,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppChannelStatusResponse"
+                }
               }
             }
           },
@@ -60935,6 +60937,84 @@
         ],
         "title": "WhatsAppChannelComplete",
         "description": "Metadata returned by the server-side Embedded Signup exchange."
+      },
+      "WhatsAppChannelStatusEnum": {
+        "type": "string",
+        "enum": [
+          "not_enabled",
+          "ready",
+          "in_meta",
+          "waiting_verification",
+          "waiting_payment_method",
+          "connecting_webhooks",
+          "test_pending",
+          "active",
+          "attention",
+          "paused",
+          "disconnected"
+        ],
+        "title": "WhatsAppChannelStatusEnum"
+      },
+      "WhatsAppChannelStatusResponse": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/WhatsAppChannelStatusEnum"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WhatsAppChannelSummaryRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "WhatsAppChannelStatusResponse"
+      },
+      "WhatsAppChannelSummaryRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WhatsAppChannelStatusEnum"
+          },
+          "display_phone_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Phone Number"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "WhatsAppChannelSummaryRead"
       },
       "WhatsAppContactRead": {
         "properties": {

@@ -1,4 +1,5 @@
 import builtins
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -136,9 +137,49 @@ def test_ready_healthcheck_reports_postgres_and_advisory_lock_fallback(monkeypat
     monkeypatch.setenv("DISTRIBUTED_LOCK_REQUIRED", "true")
     get_settings.cache_clear()
     response = health_module.ready_healthcheck()
+    payload = json.loads(response.body)
     assert response.status_code == 200
-    assert response.body
-    assert b"postgres_advisory_xact_lock" in response.body
+    assert payload["ready"] is True
+    assert payload["critical_lock"]["mechanism"] == "postgres_advisory_xact_lock"
+    assert payload["optional_degraded"] is False
+
+
+def test_ready_healthcheck_reports_optional_redis_capability_degradation(monkeypatch: pytest.MonkeyPatch):
+    import app.api.health as health_module
+
+    monkeypatch.setenv("READ_MODEL_CACHE_ENABLED", "true")
+    monkeypatch.setenv("REALTIME_EVENTS_ENABLED", "true")
+    monkeypatch.setenv("DISTRIBUTED_LOCK_ENABLED", "true")
+    monkeypatch.setenv("DISTRIBUTED_LOCK_REQUIRED", "true")
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        health_module,
+        "_postgres_healthcheck",
+        lambda: {"status": "ok", "connected": True},
+    )
+    monkeypatch.setattr(
+        health_module,
+        "_redis_healthcheck",
+        lambda: {
+            "status": "error",
+            "connected": False,
+            "cache_enabled": True,
+            "distributed_locks_enabled": True,
+            "distributed_locks_required": True,
+            "realtime_events_enabled": True,
+        },
+    )
+
+    try:
+        response = health_module.ready_healthcheck()
+    finally:
+        get_settings.cache_clear()
+
+    payload = json.loads(response.body)
+    assert response.status_code == 200
+    assert payload["ready"] is True
+    assert payload["critical_lock"]["mechanism"] == "postgres_advisory_xact_lock"
+    assert payload["optional_degraded"] is True
 
 
 def test_import_app_main_succeeds_when_optional_drivers_are_missing():

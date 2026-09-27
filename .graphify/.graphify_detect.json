@@ -1471,9 +1471,9 @@
     "video": []
   },
   "total_files": 1461,
-  "total_words": 1937439,
+  "total_words": 1935626,
   "needs_graph": true,
-  "warning": "Large corpus: 1461 files · ~1,937,439 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1461 files · ~1,935,626 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1493,7 +1493,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "e7db9fc2fabb3a0d461ca02632c628707af860f1",
+    "source_hash": "7d81967d02b2887bf1baf3a823ee0c4f2b1c4561",
     "branches": [
       "main"
     ],
@@ -1506,11 +1506,11 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "e7db9fc2fabb3a0d461ca02632c628707af860f1",
+    "head": "7d81967d02b2887bf1baf3a823ee0c4f2b1c4561",
     "candidate_count": 1617,
     "included_count": 1461,
     "excluded_untracked_count": 4,
-    "excluded_ignored_count": 31292,
+    "excluded_ignored_count": 31299,
     "excluded_sensitive_count": 14,
     "missing_committed_count": 0,
     "warnings": [],

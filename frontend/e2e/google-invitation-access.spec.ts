@@ -192,9 +192,10 @@ test("password login returns to the invitation after MFA and accepts it automati
 test("owner can invite with an alias, share an undelivered link, and edit the team alias", async ({ page }) => {
   const ownerEmail = "owner@example.test";
   const staffEmail = "staff@example.test";
+  const createdInvitationToken = "qa-new-invite-token";
   const permissions = ["dashboard:view", "settings:users:view", "settings:users:manage"];
   const testOrigin = process.env.E2E_BASE_URL || "http://127.0.0.1:5173";
-  const invitationUrl = new URL("/invitations/accept#token=qa-new-invite-token", testOrigin).toString();
+  const invitationUrl = new URL(`/invitations/accept#token=${createdInvitationToken}`, testOrigin).toString();
   const backendURL = process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040";
   const calls: Array<{ path: string; method: string; body: Record<string, unknown> | null }> = [];
   let staffAlias = "Turno noche";
@@ -279,11 +280,14 @@ test("owner can invite with an alias, share an undelivered link, and edit the te
         { code: "housekeeping", name: "Limpieza", kind: "builtin", base_role: "housekeeping", is_active: true }
       ] });
     }
+    if (method === "POST" && path === "/api/invitations/preview") {
+      return json({ email: "new-staff@example.test", hotel_name: "Hotel de prueba", inviter_email: ownerEmail });
+    }
     if (method === "POST" && path === "/api/users/invite") {
       return json({
         user: { id: 9, email: "new-staff@example.test", role: "receptionist", is_verified: false, is_active: false, password_login_enabled: false, permissions: [] },
         invitation_id: 19,
-        invite_token: "synthetic-invitation-token",
+        invite_token: createdInvitationToken,
         accept_url: invitationUrl,
         email_delivery: "not_configured"
       });
@@ -320,11 +324,17 @@ test("owner can invite with an alias, share an undelivered link, and edit the te
 
   await page.getByRole("button", { name: "Copiar enlace" }).click();
   await expect(page.getByRole("button", { name: "Enlace copiado" })).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(invitationUrl);
+  const copiedInvitationUrl = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copiedInvitationUrl).toBe(invitationUrl);
+  expect(new URL(copiedInvitationUrl).hash).toBe(`#token=${createdInvitationToken}`);
 
   await page.getByRole("button", { name: `Editar alias de ${staffEmail}` }).click();
   await page.getByLabel(`Alias de ${staffEmail}`).fill("Recepción de noche");
   await page.getByRole("button", { name: "Guardar" }).click();
   await expect(page.getByText("Recepción de noche")).toBeVisible();
   expect(calls.find((call) => call.path === "/api/users/8/alias")?.body).toEqual({ alias: "Recepción de noche" });
+
+  await page.goto(copiedInvitationUrl);
+  await expect(page.getByText("new-staff@example.test")).toBeVisible();
+  expect(calls.find((call) => call.path === "/api/invitations/preview")?.body).toEqual({ token: createdInvitationToken });
 });

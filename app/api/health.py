@@ -106,13 +106,22 @@ def ready_healthcheck() -> JSONResponse:
     redis = _redis_healthcheck()
     critical_lock = _critical_lock_readiness(redis)
     ready = postgres.get("connected") is True and critical_lock["safe"]
+    optional_redis_capability_enabled = bool(
+        redis.get("cache_enabled")
+        or redis.get("realtime_events_enabled")
+        or (
+            redis.get("distributed_locks_enabled")
+            and not redis.get("distributed_locks_required", settings.DISTRIBUTED_LOCK_REQUIRED)
+        )
+    )
+    optional_degraded = redis.get("status") == "error" and optional_redis_capability_enabled
     payload = {
         "status": "ok" if ready else "error",
         "ready": ready,
         "postgres": postgres,
         "redis": redis,
         "critical_lock": critical_lock,
-        "optional_degraded": bool(redis.get("status") == "error" and not settings.DISTRIBUTED_LOCK_REQUIRED),
+        "optional_degraded": optional_degraded,
     }
     return JSONResponse(status_code=200 if ready else 503, content=payload)
 

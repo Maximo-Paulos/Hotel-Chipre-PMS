@@ -969,6 +969,28 @@ def test_google_invitation_requires_the_exact_verified_recipient_email(owner_ctx
     assert invitation.consumed_at is None
 
 
+def test_google_invitation_rejects_unverified_google_email(owner_ctx, monkeypatch):
+    client, db, ctx = owner_ctx
+    email = "unverified-invitee@test.com"
+    token = _invitation_token(db, ctx, email)
+    _enable_test_google(monkeypatch)
+
+    with patch(
+        "app.api.auth.google_id_token.verify_oauth2_token",
+        return_value=_google_claims(email, email_verified=False),
+    ):
+        response = client.post(
+            "/api/invitations/accept/google",
+            json={"token": token, "id_token": "unverified-google-id-token"},
+        )
+
+    assert response.status_code == 401, response.text
+    assert db.query(User).filter_by(email=email).count() == 0
+    invitation = db.query(StaffInvitation).filter_by(token_hash=hash_invitation_token(token)).one()
+    assert invitation.status == "pending"
+    assert invitation.consumed_at is None
+
+
 def test_google_invitation_treats_underscores_as_literal_email_characters(owner_ctx, monkeypatch):
     client, db, ctx = owner_ctx
     email = "staff_manager@example.com"
@@ -1361,6 +1383,46 @@ def test_invitation_email_explains_that_only_the_latest_link_works():
     email_body = mocked_mailer.send.call_args.args[2]
     assert accept_url in email_body
     assert "cada reenvío invalida los anteriores" in email_body
+
+
+def test_invitation_and_resend_emails_link_to_the_current_acceptable_token(owner_ctx):
+    client, _db, _ctx = owner_ctx
+    email = "current-invitation-link@example.test"
+
+    with patch("app.api.users.mailer") as mocked_mailer:
+        mocked_mailer.configured = True
+        mocked_mailer.send.return_value = True
+
+        created = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+        assert created.status_code == 201, created.text
+        created_body = created.json()
+        created_token = created_body["invite_token"]
+        created_url = created_body["accept_url"]
+        created_email_body = mocked_mailer.send.call_args.args[2]
+
+        assert created_body["email_delivery"] == "sent"
+        assert created_url.endswith(f"#token={created_token}")
+        assert created_url in created_email_body
+
+        resent = client.post(f"/api/users/invitations/{created_body['invitation_id']}/resend")
+        assert resent.status_code == 200, resent.text
+        resent_body = resent.json()
+        resent_token = resent_body["invite_token"]
+        resent_url = resent_body["accept_url"]
+        resent_email_body = mocked_mailer.send.call_args.args[2]
+
+    assert resent_token != created_token
+    assert resent_url.endswith(f"#token={resent_token}")
+    assert resent_url in resent_email_body
+    assert client.post("/api/invitations/preview", json={"token": created_token}).status_code == 400
+    assert client.post("/api/invitations/preview", json={"token": resent_token}).status_code == 200
+
+    accepted = client.post(
+        "/api/invitations/accept",
+        json={"token": resent_token, "email": email, "password": "StrongInvitePass123!"},
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["user"]["email"] == email
 
 
 def test_revoke_user_invalidates_jwt_version_and_all_server_sessions(owner_ctx):

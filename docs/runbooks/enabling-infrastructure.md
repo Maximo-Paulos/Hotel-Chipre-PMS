@@ -4,6 +4,17 @@ Esta guía responde, en cada sección, qué se cambia y qué efecto tiene. El
 servicio web free que está activo hoy fue creado manualmente fuera del
 Blueprint; no se modificó ningún recurso cloud durante esta tarea.
 
+## Interpretar `/health/ready` cuando Redis está caído
+
+`ready=true` y HTTP 200 significan que PostgreSQL responde y las escrituras
+críticas conservan un mecanismo de lock seguro. Si Redis no responde, el lock
+puede degradar a `postgres_advisory_xact_lock`; la caché de read-models calcula
+desde PostgreSQL y SSE usa el outbox de PostgreSQL. En ese caso se debe observar
+`redis.status=error`, `critical_lock.status=degraded` y
+`optional_degraded=true` cuando haya caché, realtime o locks opcionales
+habilitados. Esto no justifica por sí solo subir de plan: Redis agrega costo y
+el core mantiene su fallback; primero hay que medir latencia y carga de base.
+
 ## ¿Qué cambio para activar Redis y el cache de read-models?
 
 El flujo SSE de invalidación no queda inutilizable si Redis/Valkey está caído:
