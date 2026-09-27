@@ -7,7 +7,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.config import is_demo_mode, is_preview_qa_mode, is_production_mode, is_testing_mode
+from app.config import is_demo_environment_allowed, is_demo_mode, is_testing_mode
 import app.models  # noqa: F401 - ensures all models are registered on Base.metadata
 from app.database import Base, get_db
 
@@ -15,8 +15,8 @@ router = APIRouter(prefix="/api", tags=["Demo"])
 
 
 def _require_demo_mode() -> None:
-    """Guard endpoints so they only run in explicit demo mode or tests."""
-    if is_production_mode() or is_preview_qa_mode():
+    """Guard demo mutations behind both an approved runtime and an explicit flag."""
+    if not is_demo_environment_allowed():
         raise HTTPException(status_code=404)
     if is_testing_mode():
         return

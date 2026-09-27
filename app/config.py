@@ -295,6 +295,36 @@ def is_testing_mode() -> bool:
     return _normalized_env_value(os.getenv("TESTING")) in {"1", "true", "yes", "on"}
 
 
+def is_demo_environment_allowed() -> bool:
+    """Allow demo mutations only when development is explicitly and consistently configured."""
+    app_env = os.getenv("APP_ENV")
+    environment = os.getenv("ENVIRONMENT")
+    settings = get_settings()
+
+    configured_values: list[str] = []
+    for value in (app_env, environment):
+        if value is not None:
+            normalized = _normalized_env_value(value)
+            if not normalized:
+                return False
+            configured_values.append(normalized)
+
+    # BaseSettings also supports APP_ENV from its configured env file. Accept it
+    # only when explicitly supplied there; the implicit development default is
+    # not sufficient authorization for a data-mutating endpoint.
+    if app_env is None and "APP_ENV" in settings.model_fields_set:
+        normalized = _normalized_env_value(settings.APP_ENV)
+        if not normalized:
+            return False
+        configured_values.append(normalized)
+
+    return (
+        bool(configured_values)
+        and len(set(configured_values)) == 1
+        and configured_values[0] == "development"
+    )
+
+
 def is_test_mode() -> bool:
     """True for pytest (TESTING=1) and the isolated Playwright E2E backend
     (APP_ENV=test, set by frontend/playwright.config.ts). Used only to allow

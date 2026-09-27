@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-27T00:07:14.927Z",
+  "generatedAt": "2026-09-27T03:51:46.726Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -4419,38 +4419,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_integrations_oauth_provider_callback",
-      "name": "oauth_provider_callback",
-      "entryPoint": "api_integrations_oauth_provider_callback",
-      "entryPointId": "api_integrations_oauth_provider_callback",
-      "path": [
-        "api_integrations_oauth_provider_callback",
-        "api_integrations_authorize_oauth_state_actor",
-        "api_integrations_ensure_enabled",
-        "api_integrations_find_integration",
-        "api_integrations_oauth_callback_page",
-        "api_integrations_store_oauth_code",
-        "api_integrations_connection_error_message"
-      ],
-      "qualifiedPath": [
-        "api_integrations_oauth_provider_callback",
-        "api_integrations_authorize_oauth_state_actor",
-        "api_integrations_ensure_enabled",
-        "api_integrations_find_integration",
-        "api_integrations_oauth_callback_page",
-        "api_integrations_store_oauth_code",
-        "api_integrations_connection_error_message"
-      ],
-      "depth": 2,
-      "nodeCount": 7,
-      "fileCount": 1,
-      "files": [
-        "app/api/integrations.py"
-      ],
-      "criticality": 0.3486,
-      "warnings": []
-    },
-    {
       "id": "flow:api_client_apifetch",
       "name": "apiFetch",
       "entryPoint": "api_client_apifetch",
@@ -4695,6 +4663,40 @@
       "warnings": []
     },
     {
+      "id": "flow:api_integrations_oauth_provider_callback",
+      "name": "oauth_provider_callback",
+      "entryPoint": "api_integrations_oauth_provider_callback",
+      "entryPointId": "api_integrations_oauth_provider_callback",
+      "path": [
+        "api_integrations_oauth_provider_callback",
+        "api_integrations_authorize_oauth_state_actor",
+        "api_integrations_ensure_enabled",
+        "api_integrations_find_integration",
+        "api_integrations_oauth_callback_page",
+        "api_integrations_reject_generic_whatsapp_mutation",
+        "api_integrations_store_oauth_code",
+        "api_integrations_connection_error_message"
+      ],
+      "qualifiedPath": [
+        "api_integrations_oauth_provider_callback",
+        "api_integrations_authorize_oauth_state_actor",
+        "api_integrations_ensure_enabled",
+        "api_integrations_find_integration",
+        "api_integrations_oauth_callback_page",
+        "api_integrations_reject_generic_whatsapp_mutation",
+        "api_integrations_store_oauth_code",
+        "api_integrations_connection_error_message"
+      ],
+      "depth": 2,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/api/integrations.py"
+      ],
+      "criticality": 0.3263,
+      "warnings": []
+    },
+    {
       "id": "flow:services_external_effects_policy_require_apple_login",
       "name": "require_apple_login",
       "entryPoint": "services_external_effects_policy_require_apple_login",
@@ -4759,66 +4761,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_integrations_oauth_callback_manual",
-      "name": "oauth_callback_manual",
-      "entryPoint": "api_integrations_oauth_callback_manual",
-      "entryPointId": "api_integrations_oauth_callback_manual",
-      "path": [
-        "api_integrations_oauth_callback_manual",
-        "api_integrations_ensure_enabled",
-        "api_integrations_find_integration",
-        "api_integrations_store_oauth_code",
-        "api_integrations_connection_error_message"
-      ],
-      "qualifiedPath": [
-        "api_integrations_oauth_callback_manual",
-        "api_integrations_ensure_enabled",
-        "api_integrations_find_integration",
-        "api_integrations_store_oauth_code",
-        "api_integrations_connection_error_message"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/api/integrations.py"
-      ],
-      "criticality": 0.32,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_integrations_connect_integration",
-      "name": "connect_integration",
-      "entryPoint": "api_integrations_connect_integration",
-      "entryPointId": "api_integrations_connect_integration",
-      "path": [
-        "api_integrations_connect_integration",
-        "api_integrations_ensure_enabled",
-        "api_integrations_find_integration",
-        "api_integrations_oauth_state_token",
-        "api_integrations_store_oauth_code",
-        "api_integrations_origin_for_popup",
-        "api_integrations_connection_error_message"
-      ],
-      "qualifiedPath": [
-        "api_integrations_connect_integration",
-        "api_integrations_ensure_enabled",
-        "api_integrations_find_integration",
-        "api_integrations_oauth_state_token",
-        "api_integrations_store_oauth_code",
-        "api_integrations_origin_for_popup",
-        "api_integrations_connection_error_message"
-      ],
-      "depth": 2,
-      "nodeCount": 7,
-      "fileCount": 1,
-      "files": [
-        "app/api/integrations.py"
-      ],
-      "criticality": 0.3129,
-      "warnings": []
-    },
-    {
       "id": "flow:api_subscription_admin_comped_override",
       "name": "admin_comped_override",
       "entryPoint": "api_subscription_admin_comped_override",
@@ -4840,6 +4782,40 @@
       "fileCount": 1,
       "files": [
         "app/api/subscription.py"
+      ],
+      "criticality": 0.295,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_integrations_connect_integration",
+      "name": "connect_integration",
+      "entryPoint": "api_integrations_connect_integration",
+      "entryPointId": "api_integrations_connect_integration",
+      "path": [
+        "api_integrations_connect_integration",
+        "api_integrations_ensure_enabled",
+        "api_integrations_find_integration",
+        "api_integrations_oauth_state_token",
+        "api_integrations_reject_generic_whatsapp_mutation",
+        "api_integrations_store_oauth_code",
+        "api_integrations_origin_for_popup",
+        "api_integrations_connection_error_message"
+      ],
+      "qualifiedPath": [
+        "api_integrations_connect_integration",
+        "api_integrations_ensure_enabled",
+        "api_integrations_find_integration",
+        "api_integrations_oauth_state_token",
+        "api_integrations_reject_generic_whatsapp_mutation",
+        "api_integrations_store_oauth_code",
+        "api_integrations_origin_for_popup",
+        "api_integrations_connection_error_message"
+      ],
+      "depth": 2,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/api/integrations.py"
       ],
       "criticality": 0.295,
       "warnings": []
@@ -4986,6 +4962,36 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_operations_service.py"
+      ],
+      "criticality": 0.295,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_integrations_oauth_callback_manual",
+      "name": "oauth_callback_manual",
+      "entryPoint": "api_integrations_oauth_callback_manual",
+      "entryPointId": "api_integrations_oauth_callback_manual",
+      "path": [
+        "api_integrations_oauth_callback_manual",
+        "api_integrations_ensure_enabled",
+        "api_integrations_find_integration",
+        "api_integrations_reject_generic_whatsapp_mutation",
+        "api_integrations_store_oauth_code",
+        "api_integrations_connection_error_message"
+      ],
+      "qualifiedPath": [
+        "api_integrations_oauth_callback_manual",
+        "api_integrations_ensure_enabled",
+        "api_integrations_find_integration",
+        "api_integrations_reject_generic_whatsapp_mutation",
+        "api_integrations_store_oauth_code",
+        "api_integrations_connection_error_message"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/api/integrations.py"
       ],
       "criticality": 0.295,
       "warnings": []
@@ -14745,6 +14751,32 @@
       "warnings": []
     },
     {
+      "id": "flow:app_config_is_demo_environment_allowed",
+      "name": "is_demo_environment_allowed",
+      "entryPoint": "app_config_is_demo_environment_allowed",
+      "entryPointId": "app_config_is_demo_environment_allowed",
+      "path": [
+        "app_config_is_demo_environment_allowed",
+        "app_config_get_settings",
+        "app_config_normalized_env_value",
+        "app_config_settings"
+      ],
+      "qualifiedPath": [
+        "app_config_is_demo_environment_allowed",
+        "app_config_get_settings",
+        "app_config_normalized_env_value",
+        "app_config_settings"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/config.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_reservation_service_list_reservations",
       "name": "list_reservations",
       "entryPoint": "services_reservation_service_list_reservations",
@@ -22957,14 +22989,18 @@
       "entryPointId": "api_integrations_refresh",
       "path": [
         "api_integrations_refresh",
-        "api_integrations_ensure_enabled"
+        "api_integrations_ensure_enabled",
+        "api_integrations_find_integration",
+        "api_integrations_reject_generic_whatsapp_mutation"
       ],
       "qualifiedPath": [
         "api_integrations_refresh",
-        "api_integrations_ensure_enabled"
+        "api_integrations_ensure_enabled",
+        "api_integrations_find_integration",
+        "api_integrations_reject_generic_whatsapp_mutation"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/api/integrations.py"
@@ -23607,14 +23643,18 @@
       "entryPointId": "api_integrations_revoke",
       "path": [
         "api_integrations_revoke",
-        "api_integrations_ensure_enabled"
+        "api_integrations_ensure_enabled",
+        "api_integrations_find_integration",
+        "api_integrations_reject_generic_whatsapp_mutation"
       ],
       "qualifiedPath": [
         "api_integrations_revoke",
-        "api_integrations_ensure_enabled"
+        "api_integrations_ensure_enabled",
+        "api_integrations_find_integration",
+        "api_integrations_reject_generic_whatsapp_mutation"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/api/integrations.py"
@@ -25962,6 +26002,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/hooks/useRoomBlocks.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:hooks_usewhatsappcrm_usewhatsappcrm",
+      "name": "useWhatsAppCRM",
+      "entryPoint": "hooks_usewhatsappcrm_usewhatsappcrm",
+      "entryPointId": "hooks_usewhatsappcrm_usewhatsappcrm",
+      "path": [
+        "hooks_usewhatsappcrm_usewhatsappcrm",
+        "hooks_usewhatsappcrm_usewhatsappchannel"
+      ],
+      "qualifiedPath": [
+        "hooks_usewhatsappcrm_usewhatsappcrm",
+        "hooks_usewhatsappcrm_usewhatsappchannel"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useWhatsappCRM.ts"
       ],
       "criticality": 0.16,
       "warnings": []

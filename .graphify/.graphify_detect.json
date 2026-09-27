@@ -526,6 +526,7 @@
       "frontend/e2e/support/step-up-owner.ts",
       "frontend/e2e/support/totp.ts",
       "frontend/e2e/v72-pages.spec.ts",
+      "frontend/e2e/whatsapp-settings-permission-separation.spec.ts",
       "frontend/e2e/zz-cash-control-journey.spec.ts",
       "frontend/i18n-auth-literals.test.mjs",
       "frontend/ios/App/App/AppDelegate.swift",
@@ -1469,10 +1470,10 @@
     ],
     "video": []
   },
-  "total_files": 1460,
-  "total_words": 1935834,
+  "total_files": 1461,
+  "total_words": 1937439,
   "needs_graph": true,
-  "warning": "Large corpus: 1460 files · ~1,935,834 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1461 files · ~1,937,439 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1492,7 +1493,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "9d05e2c49d8734fb84c6ebee3eab012e1e317425",
+    "source_hash": "e7db9fc2fabb3a0d461ca02632c628707af860f1",
     "branches": [
       "main"
     ],
@@ -1500,16 +1501,16 @@
     "active_within_days": 30
   },
   "scope": {
-    "requested_mode": "committed",
-    "resolved_mode": "committed",
+    "requested_mode": "tracked",
+    "resolved_mode": "tracked",
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "9d05e2c49d8734fb84c6ebee3eab012e1e317425",
-    "candidate_count": 1616,
-    "included_count": 1460,
+    "head": "e7db9fc2fabb3a0d461ca02632c628707af860f1",
+    "candidate_count": 1617,
+    "included_count": 1461,
     "excluded_untracked_count": 4,
-    "excluded_ignored_count": 31275,
+    "excluded_ignored_count": 31292,
     "excluded_sensitive_count": 14,
     "missing_committed_count": 0,
     "warnings": [],

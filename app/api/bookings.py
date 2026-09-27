@@ -3,11 +3,11 @@ FastAPI routes for Booking management (thin layer over Reservation).
 Provides basic CRUD plus a simple availability placeholder.
 """
 from datetime import date, datetime, timedelta, timezone
-import os
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.config import is_demo_environment_allowed, is_demo_mode
 from app.database import get_db
 from app.services.timezones import hotel_today
 from app.dependencies.auth import AuthContext, get_auth_context, require_permission
@@ -53,7 +53,9 @@ router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
 
 
 def _require_demo_mode():
-    if os.getenv("DEMO_MODE", "").lower() not in {"1", "true", "yes", "on"}:
+    if not is_demo_environment_allowed():
+        raise HTTPException(status_code=404)
+    if not is_demo_mode():
         raise HTTPException(
             status_code=403,
             detail="Demo mode is disabled. Set DEMO_MODE=true to use this endpoint.",

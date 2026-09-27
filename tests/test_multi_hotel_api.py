@@ -204,6 +204,8 @@ def test_reset_endpoint_allows_testing_env(client_with_db, monkeypatch):
     db.add(RoomCategory(name="Cat1", code="C1", base_price_per_night=100, max_occupancy=2, hotel_id=1))
     db.commit()
 
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setenv("TESTING", "1")
     r = client.post("/api/reset")
     assert r.status_code == 200
