@@ -11,12 +11,35 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
 }
 
-test("WhatsApp settings loads channel status without polling inbox conversations", async ({ page }) => {
+test("WhatsApp settings preserves tenant context and avoids inbox conversation polling", async ({ page }) => {
   let conversationRequests = 0;
+  let documentLoads = 0;
+  page.on("load", () => {
+    documentLoads += 1;
+  });
   page.on("request", (request) => {
-    if (new URL(request.url()).pathname === "/api/whatsapp/conversations") {
+    if (new URL(request.url()).pathname.startsWith("/api/whatsapp/conversations")) {
       conversationRequests += 1;
     }
+  });
+  await page.route("**/api/integrations", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      json: {
+        catalog: [
+          {
+            id: 1,
+            provider: "whatsapp",
+            display_name: "WhatsApp Business",
+            auth_type: "bearer_token",
+            scopes: null,
+            doc_url: null,
+          },
+        ],
+        connections: [],
+      },
+    });
   });
   await page.route("**/api/whatsapp/channel", async (route) => {
     await route.fulfill({
@@ -27,12 +50,20 @@ test("WhatsApp settings loads channel status without polling inbox conversations
   });
 
   await login(page);
+  await page.goto("/settings/connections");
+  await expect(page.getByRole("heading", { name: "Conexiones", exact: true })).toBeVisible();
+  const whatsappCard = page.getByTestId("integration-card-whatsapp");
+  await expect(whatsappCard).toBeVisible();
+  await expect(whatsappCard.getByRole("button")).toHaveCount(0);
+  const connectionPageLoadCount = documentLoads;
   const channelResponse = page.waitForResponse((response) =>
     new URL(response.url()).pathname === "/api/whatsapp/channel"
   );
-  await page.goto("/settings/whatsapp");
+  await page.getByRole("link", { name: "Abrir configuración de WhatsApp" }).click();
+  await expect(page).toHaveURL(/\/settings\/whatsapp$/);
   await expect(page.getByRole("heading", { name: "WhatsApp Business", exact: true })).toBeVisible();
   await channelResponse;
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(16_000);
   expect(conversationRequests).toBe(0);
+  expect(documentLoads).toBe(connectionPageLoadCount);
 });

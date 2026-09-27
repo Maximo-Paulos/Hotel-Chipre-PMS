@@ -164,6 +164,14 @@ def _find_integration(db: Session, hotel_id: int, integration_id: int):
     return integration, catalog
 
 
+def _reject_generic_whatsapp_mutation(integration) -> None:
+    if integration.provider == "whatsapp":
+        raise HTTPException(
+            status_code=409,
+            detail="WhatsApp debe gestionarse desde la configuración específica del canal.",
+        )
+
+
 def _store_oauth_code(db: Session, hotel_id: int, integration_id: int, provider: str, code: str):
     # Must precede token exchange and loading/decrypting an existing refresh token.
     _ensure_enabled()
@@ -301,6 +309,7 @@ def connect_integration(
 ):
     _ensure_enabled()
     integration, _ = _find_integration(db, context.hotel_id, integration_id)
+    _reject_generic_whatsapp_mutation(integration)
 
     if integration.auth_type == "oauth_code":
         oauth_payload = payload.payload or {}
@@ -464,6 +473,7 @@ def oauth_provider_callback(
         raise HTTPException(status_code=400, detail="code requerido")
     _authorize_oauth_state_actor(db, hotel_id=hotel_id, user_id=user_id)
     integration, _ = _find_integration(db, hotel_id, integration_id)
+    _reject_generic_whatsapp_mutation(integration)
     try:
         _store_oauth_code(db, hotel_id, integration_id, integration.provider, code)
     except HTTPException as exc:
@@ -491,10 +501,11 @@ def oauth_callback_manual(
     context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SECURITY_MANAGE)),
 ):
     _ensure_enabled()
+    integration, _ = _find_integration(db, context.hotel_id, integration_id)
+    _reject_generic_whatsapp_mutation(integration)
     code = request.query_params.get("code")
     if not code:
         raise HTTPException(status_code=400, detail="code requerido")
-    integration, _ = _find_integration(db, context.hotel_id, integration_id)
     _store_oauth_code(db, context.hotel_id, integration_id, integration.provider, code)
     return {"status": "connected"}
 
@@ -506,6 +517,8 @@ def revoke(
     context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SECURITY_MANAGE)),
 ):
     _ensure_enabled()
+    integration, _ = _find_integration(db, context.hotel_id, integration_id)
+    _reject_generic_whatsapp_mutation(integration)
     revoke_connection(db, context.hotel_id, integration_id)
     db.commit()
     return {"status": "revoked"}
@@ -518,6 +531,8 @@ def refresh(
     context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SECURITY_MANAGE)),
 ):
     _ensure_enabled()
+    integration, _ = _find_integration(db, context.hotel_id, integration_id)
+    _reject_generic_whatsapp_mutation(integration)
     try:
         conn, message = verify_connection_health(db, context.hotel_id, integration_id)
         db.commit()

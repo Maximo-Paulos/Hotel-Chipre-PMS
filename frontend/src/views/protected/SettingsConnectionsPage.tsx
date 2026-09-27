@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import {
   useConnectIntegration,
@@ -289,7 +290,7 @@ export function SettingsConnectionsPage() {
           const manualCodeVisible = Boolean(showManualCode[cat.id]);
 
           return (
-            <div key={cat.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div key={cat.id} data-testid={`integration-card-${cat.provider}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2">
@@ -330,11 +331,10 @@ export function SettingsConnectionsPage() {
                 </div>
               )}
 
-              {!isConnected && cat.provider === "whatsapp" && (
+              {cat.provider === "whatsapp" && (
                 <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-900">
-                  <p className="font-semibold">Conexión administrada por Meta</p>
-                  <p className="mt-1 text-xs">WhatsApp no acepta tokens ni IDs pegados manualmente. Completa Embedded Signup desde la pantalla de WhatsApp.</p>
-                  <a className="mt-2 inline-block text-xs font-semibold text-brand-700 hover:underline" href="/settings/whatsapp">Abrir configuración de WhatsApp</a>
+                  <p className="font-semibold">Administración específica de WhatsApp</p>
+                  <p className="mt-1 text-xs">No uses los controles genéricos de integraciones para conectar, refrescar o revocar este canal.</p>
                 </div>
               )}
 
@@ -471,7 +471,11 @@ export function SettingsConnectionsPage() {
               )}
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {!isConnected && isOauth ? (
+                {cat.provider === "whatsapp" ? (
+                  <Link className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white" to="/settings/whatsapp">
+                    Abrir configuración de WhatsApp
+                  </Link>
+                ) : !isConnected && isOauth ? (
                   <>
                     {!hasManualMercadoPagoToken && (
                       <button

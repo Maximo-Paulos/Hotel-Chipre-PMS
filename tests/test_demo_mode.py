@@ -104,6 +104,19 @@ def test_demo_reset_is_unavailable_in_production_even_if_flags_are_enabled(
     assert response.status_code == 404, response.text
 
 
+def test_demo_utilities_are_unavailable_in_preview_even_if_test_flags_are_enabled(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("APP_ENV", "qa")
+    monkeypatch.setenv("DEMO_MODE", "true")
+    monkeypatch.setenv("TESTING", "true")
+    get_settings.cache_clear()
+
+    for endpoint in ("/api/seed", "/api/reset"):
+        response = client.post(endpoint)
+        assert response.status_code == 404, response.text
+
+
 def test_demo_routes_hidden_from_openapi_by_default(client: TestClient, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("DEMO_MODE", raising=False)
     paths = client.app.openapi()["paths"]
