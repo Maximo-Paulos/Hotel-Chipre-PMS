@@ -333,22 +333,74 @@ def is_test_mode() -> bool:
     return is_testing_mode() or _normalized_env_value(os.getenv("APP_ENV")) == "test"
 
 
+_PRODUCTION_ENVIRONMENT_LABELS = frozenset({"prod", "production", "live"})
+_PREVIEW_QA_ENVIRONMENT_LABELS = frozenset({"preview", "qa", "staging"})
+_ALLOWED_RUNTIME_ENVIRONMENT_LABELS = frozenset(
+    {"development", "test"}
+    | _PRODUCTION_ENVIRONMENT_LABELS
+    | _PREVIEW_QA_ENVIRONMENT_LABELS
+)
+
+
+def _runtime_environment_values(
+    settings: Settings | None = None,
+) -> tuple[str | None, str | None, str | None]:
+    runtime_settings = settings or get_settings()
+    fields_set = getattr(runtime_settings, "model_fields_set", None)
+    # A few API tests and integrations provide lightweight settings objects
+    # instead of a Pydantic Settings instance. Treat their APP_ENV as explicit
+    # when present, while preserving Pydantic's default-vs-explicit behavior.
+    app_env_is_explicit = (
+        "APP_ENV" in fields_set
+        if fields_set is not None
+        else hasattr(runtime_settings, "APP_ENV")
+    )
+    settings_app_env = (
+        _normalized_env_value(getattr(runtime_settings, "APP_ENV", None))
+        if app_env_is_explicit
+        else None
+    )
+    return (
+        settings_app_env,
+        _normalized_env_value(os.environ["APP_ENV"]) if "APP_ENV" in os.environ else None,
+        _normalized_env_value(os.environ["ENVIRONMENT"]) if "ENVIRONMENT" in os.environ else None,
+    )
+
+
+def _validate_runtime_environment_labels(
+    values: tuple[str | None, str | None, str | None],
+) -> None:
+    if any(
+        value is not None and value not in _ALLOWED_RUNTIME_ENVIRONMENT_LABELS
+        for value in values
+    ):
+        raise RuntimeError(
+            "Unsupported APP_ENV or ENVIRONMENT value; use development, test, "
+            "preview, qa, staging, prod, production, or live"
+        )
+
+
 def is_production_mode(settings: Settings | None = None) -> bool:
-    if settings is None:
-        env = os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or get_settings().APP_ENV
-    else:
-        env = settings.APP_ENV or os.getenv("APP_ENV") or os.getenv("ENVIRONMENT")
-    env = _normalized_env_value(env)
-    return env in {"prod", "production"}
+    values = _runtime_environment_values(settings)
+    _validate_runtime_environment_labels(values)
+    return any(
+        env in _PRODUCTION_ENVIRONMENT_LABELS
+        for env in values
+        if env is not None
+    )
 
 
 def is_preview_qa_mode(settings: Settings | None = None) -> bool:
-    if settings is None:
-        env = os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or get_settings().APP_ENV
-    else:
-        env = settings.APP_ENV or os.getenv("APP_ENV") or os.getenv("ENVIRONMENT")
-    env = _normalized_env_value(env)
-    return env in {"preview", "qa", "staging"}
+    settings_app_env, process_app_env, environment = _runtime_environment_values(settings)
+    _validate_runtime_environment_labels((settings_app_env, process_app_env, environment))
+    values = (settings_app_env, process_app_env, environment)
+    if any(env in _PRODUCTION_ENVIRONMENT_LABELS for env in values if env is not None):
+        return False
+    # An explicitly supplied Settings object is authoritative for preview/dev
+    # classification. Otherwise APP_ENV takes precedence over its ENVIRONMENT
+    # fallback alias, so APP_ENV=test + ENVIRONMENT=qa remains a test runtime.
+    primary = settings_app_env or process_app_env or environment
+    return primary in _PREVIEW_QA_ENVIRONMENT_LABELS
 
 
 def _validate_preview_qa_security(runtime_settings: Settings) -> None:

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import csv
 from datetime import date
 from decimal import Decimal
+from io import StringIO
 
 import pytest
 from fastapi import FastAPI
@@ -155,3 +157,30 @@ def test_guest_export_allows_owner_and_excludes_other_hotels(guest_export_client
     assert response.status_code == 200
     assert "Guest included" in response.text
     assert "Guest excluded" not in response.text
+
+
+def test_guest_export_neutralizes_formula_like_guest_fields(guest_export_client):
+    client, db, auth_state = guest_export_client
+    _seed_hotel(db, 1)
+    _seed_reservation(db, 1, suffix="formula")
+    guest = db.query(Guest).filter(Guest.hotel_id == 1).one()
+    guest.first_name = '=HYPERLINK("https://evil.test","guest")'
+    guest.last_name = "\t=1+1"
+    guest.document_number = "@SUM(1,1)"
+    guest.email = "+SUM(1,1)"
+    db.commit()
+    auth_state["role"] = "owner"
+
+    response = client.get(
+        "/api/guests/ledger/export",
+        params={"from_date": "2026-04-01", "to_date": "2026-04-30"},
+    )
+
+    assert response.status_code == 200
+    csv_text = response.content.decode("utf-8-sig")
+    row = next(csv.DictReader(StringIO(csv_text)))
+    assert row["first_name"] == "'=HYPERLINK(\"https://evil.test\",\"guest\")"
+    assert row["last_name"] == "'\t=1+1"
+    assert row["document_number"] == "'@SUM(1,1)"
+    assert row["email"] == "'+SUM(1,1)"
+    assert row["terms_accepted"] == "true"

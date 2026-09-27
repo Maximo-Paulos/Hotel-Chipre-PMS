@@ -3,7 +3,8 @@
 from decimal import Decimal, InvalidOperation
 
 
-_FORMULA_PREFIXES = ("=", "+", "-", "@")
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "＝", "＋", "－", "＠")
+_CONTROL_PREFIXES = ("\x00", "\t", "\r", "\n")
 
 
 def spreadsheet_safe_value(value):
@@ -12,6 +13,8 @@ def spreadsheet_safe_value(value):
     if not isinstance(value, str) or not value:
         return value
     stripped = value.lstrip()
+    if stripped.startswith(_CONTROL_PREFIXES):
+        return f"'{value}"
     if stripped.startswith(("+", "-")):
         try:
             if Decimal(stripped).is_finite():

@@ -17,6 +17,55 @@ def test_runtime_mode_uses_environment_fallback_when_app_env_is_unset(monkeypatc
     assert is_production_mode()
 
 
+@pytest.mark.parametrize(
+    ("environment_key", "value"),
+    [
+        ("APP_ENV", "produciton"),
+        ("ENVIRONMENT", "stg"),
+        ("APP_ENV", ""),
+        ("ENVIRONMENT", ""),
+    ],
+)
+def test_unsupported_runtime_environment_labels_fail_closed(
+    monkeypatch, environment_key, value
+):
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv(environment_key, value)
+    get_settings.cache_clear()
+    settings = Settings(_env_file=None)
+
+    with pytest.raises(RuntimeError, match="Unsupported APP_ENV or ENVIRONMENT value"):
+        validate_runtime_security(settings)
+
+
+@pytest.mark.parametrize(
+    ("app_env", "environment"),
+    [
+        (None, "production"),
+        ("live", None),
+        ("development", "production"),
+        ("preview", "live"),
+    ],
+)
+def test_production_mode_with_settings_honors_explicit_production_labels(
+    monkeypatch, app_env, environment
+):
+    if app_env is None:
+        monkeypatch.delenv("APP_ENV", raising=False)
+    else:
+        monkeypatch.setenv("APP_ENV", app_env)
+    if environment is None:
+        monkeypatch.delenv("ENVIRONMENT", raising=False)
+    else:
+        monkeypatch.setenv("ENVIRONMENT", environment)
+    get_settings.cache_clear()
+    settings = Settings(_env_file=None)
+
+    assert is_production_mode(settings)
+    assert not is_preview_qa_mode(settings)
+
+
 def test_preview_mode_uses_environment_fallback_when_app_env_is_unset(monkeypatch):
     monkeypatch.delenv("APP_ENV", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "preview")
@@ -25,9 +74,93 @@ def test_preview_mode_uses_environment_fallback_when_app_env_is_unset(monkeypatc
     assert is_preview_qa_mode()
 
 
-def test_validate_runtime_security_rejects_default_production_secrets():
+def test_preview_mode_with_settings_honors_environment_fallback(monkeypatch):
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "qa")
+    get_settings.cache_clear()
+    settings = Settings(_env_file=None)
+
+    assert settings.APP_ENV == "development"
+    assert is_preview_qa_mode(settings)
+
+
+@pytest.mark.parametrize("app_env", ["development", "test"])
+@pytest.mark.parametrize("environment", ["preview", "qa", "staging"])
+def test_explicit_development_or_test_mode_takes_precedence_over_preview_aliases(
+    monkeypatch, app_env, environment
+):
+    monkeypatch.setenv("APP_ENV", app_env)
+    monkeypatch.setenv("ENVIRONMENT", environment)
+    get_settings.cache_clear()
+    settings = Settings(_env_file=None)
+
+    assert not is_production_mode(settings)
+    assert not is_preview_qa_mode(settings)
+
+
+def test_env_file_app_env_takes_precedence_over_preview_alias(tmp_path, monkeypatch):
+    env_file = tmp_path / "settings.env"
+    env_file.write_text("APP_ENV=development\n", encoding="utf-8")
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "qa")
+    get_settings.cache_clear()
+    settings = Settings(_env_file=env_file)
+
+    assert settings.APP_ENV == "development"
+    assert "APP_ENV" in settings.model_fields_set
+    assert not is_preview_qa_mode(settings)
+
+
+def test_explicit_app_env_preview_takes_precedence_over_development_alias(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "qa")
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    get_settings.cache_clear()
+    settings = Settings(_env_file=None)
+
+    assert is_preview_qa_mode(settings)
+
+
+def test_explicit_settings_production_cannot_be_shadowed_by_process_development(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    get_settings.cache_clear()
+    settings = Settings(APP_ENV="production", _env_file=None)
+
+    assert is_production_mode(settings)
+    assert not is_preview_qa_mode(settings)
+    with pytest.raises(RuntimeError, match="Invalid production security configuration"):
+        validate_runtime_security(settings)
+
+
+def test_explicit_settings_development_takes_precedence_over_process_preview(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "qa")
+    monkeypatch.setenv("ENVIRONMENT", "preview")
+    get_settings.cache_clear()
+    settings = Settings(APP_ENV="development", _env_file=None)
+
+    assert not is_preview_qa_mode(settings)
+
+
+@pytest.mark.parametrize("environment", ["production", "live"])
+def test_runtime_security_uses_environment_fallback_with_default_settings(monkeypatch, environment):
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", environment)
+    get_settings.cache_clear()
+    settings = Settings(_env_file=None)
+
+    assert settings.APP_ENV == "development"
+    with pytest.raises(RuntimeError, match="Invalid production security configuration"):
+        validate_runtime_security(settings)
+
+
+@pytest.mark.parametrize("app_env", ["production", "live"])
+def test_validate_runtime_security_rejects_default_production_secrets(
+    monkeypatch, app_env
+):
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
     settings = Settings(
-        APP_ENV="production",
+        APP_ENV=app_env,
         EXTERNAL_EFFECTS_ENABLED=True,
         INBOUND_PROVIDER_EVENTS_ENABLED=True,
         GOOGLE_LOGIN_ENABLED=False,
@@ -225,9 +358,10 @@ def test_validate_runtime_security_requires_realtime_events_in_production():
         validate_runtime_security(settings)
 
 
-def test_validate_runtime_security_rejects_unsafe_production_sandbox_profile():
+@pytest.mark.parametrize("app_env", ["production", "live"])
+def test_validate_runtime_security_rejects_unsafe_production_sandbox_profile(app_env):
     base = {
-        "APP_ENV": "production",
+        "APP_ENV": app_env,
         "EXTERNAL_EFFECTS_ENABLED": False,
         "INBOUND_PROVIDER_EVENTS_ENABLED": False,
         "GOOGLE_LOGIN_ENABLED": False,
@@ -265,6 +399,27 @@ def test_validate_runtime_security_rejects_unsafe_production_sandbox_profile():
             assert field in str(exc)
         else:
             raise AssertionError(f"Production sandbox must reject {field}={value!r}")
+
+
+def test_live_mode_with_active_external_flags_requires_provider_webhook_secret():
+    settings = Settings(
+        APP_ENV="live",
+        EXTERNAL_EFFECTS_ENABLED=True,
+        INBOUND_PROVIDER_EVENTS_ENABLED=True,
+        GOOGLE_LOGIN_ENABLED=False,
+        APPLE_LOGIN_ENABLED=False,
+        EMAIL_PROVIDER="null",
+        MP_ACCESS_TOKEN="synthetic-active-provider-token",
+        MERCADOPAGO_WEBHOOK_SECRET="",
+        JWT_SECRET="super-secret-value-for-production-1234567890",
+        MASTER_ADMIN_PIN="654321",
+        APP_BASE_URL="https://hotel-chipre.example.com",
+        DISTRIBUTED_LOCK_REQUIRED=True,
+        INTEGRATIONS_ENCRYPTION_KEY="fRb9jE74bWw5gAKpNwZrl_uCWhsx2Nl7fNL1jK5vLG8=",
+    )
+
+    with pytest.raises(RuntimeError, match="MERCADOPAGO_WEBHOOK_SECRET"):
+        validate_runtime_security(settings)
 
 
 def test_validate_runtime_security_rejects_insecure_cookie_override_and_cors_wildcard():

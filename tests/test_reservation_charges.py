@@ -64,6 +64,40 @@ def test_add_reservation_charge_updates_operational_financial_summary(
     assert summary["billing_adjustments"][0]["notes"] == "Desayuno y minibar"
 
 
+def test_reservation_charge_uses_reservation_currency_and_rejects_mismatch(
+    db,
+    sample_guest,
+    sample_categories,
+    sample_rooms,
+    hotel_config,
+):
+    reservation = _reservation(db, sample_guest, sample_categories[0], sample_rooms[0])
+    reservation.currency_code = "USD"
+    db.flush()
+
+    charge = add_reservation_charge(
+        db,
+        reservation=reservation,
+        hotel_id=hotel_config.id,
+        amount=Decimal("25.00"),
+        currency_code=None,
+        description="Late checkout",
+    )
+    assert charge.currency_code == "USD"
+
+    with pytest.raises(ReservationOperationsError, match="debe coincidir con la reserva"):
+        add_reservation_charge(
+            db,
+            reservation=reservation,
+            hotel_id=hotel_config.id,
+            amount=Decimal("10.00"),
+            currency_code="ARS",
+            description="Currency mismatch must not enter the ledger",
+        )
+
+    assert db.query(type(charge)).filter_by(reservation_id=reservation.id).count() == 1
+
+
 def test_reservation_charge_rejects_other_hotel_and_checked_out_reservations(
     db,
     sample_guest,

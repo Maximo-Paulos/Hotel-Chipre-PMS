@@ -110,6 +110,41 @@ def test_change_dates_pending_updates_dates_and_price(db, sample_guest, sample_r
     assert result.original_reservation.status == ReservationStatusEnum.CANCELLED
 
 
+@pytest.mark.parametrize(
+    ("pricing_mode", "expected_total"),
+    [("recalculate", 500.0), ("keep_current_total", 300.0)],
+)
+def test_change_dates_preserves_explicit_negotiated_nightly_rate(
+    db, sample_guest, sample_rooms, pricing_mode, expected_total
+):
+    res = _reservation(
+        db,
+        code=f"CD-MANUAL-{pricing_mode}",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2027, 3, 1),
+        check_out=date(2027, 3, 4),
+        total_amount=300.0,
+        pricing_snapshot=(
+            '{"pricing_source":"manual_total_override","nightly_rate":100.0,'
+            '"nights":3,"total_amount":300.0}'
+        ),
+    )
+
+    result = change_reservation_dates(
+        db,
+        reservation=res,
+        hotel_id=sample_guest.hotel_id,
+        check_in_date=date(2027, 4, 1),
+        check_out_date=date(2027, 4, 6),
+        client_version=res.version or 0,
+        pricing_mode=pricing_mode,
+    )
+
+    assert result.recreated is True
+    assert result.reservation.total_amount == expected_total
+
+
 def test_change_dates_blocked_when_room_conflict(db, sample_guest, sample_rooms):
     """§8.3 — Cannot change dates when another reservation occupies the room."""
     res1 = _reservation(

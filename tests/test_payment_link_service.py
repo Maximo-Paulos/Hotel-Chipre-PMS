@@ -88,6 +88,24 @@ def test_create_payment_link_persists_link_without_transaction(db):
     assert db.query(Transaction).count() == 0
 
 
+def test_local_payment_link_rejects_currency_different_from_reservation(db):
+    reservation = _reservation(db, 1)
+
+    with pytest.raises(PaymentLinkError, match="debe coincidir con la reserva"):
+        create_link(
+            db,
+            1,
+            PaymentLinkCreate(
+                reservation_id=reservation.id,
+                requested_amount=Decimal("75.50"),
+                recipient_email="guest@example.com",
+                currency="USD",
+            ),
+        )
+
+    assert list_links_for_reservation(db, 1, reservation.id) == []
+
+
 def test_connections_flag_closed_forces_local_only_before_gateway(db, monkeypatch):
     monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
     monkeypatch.setenv("CONNECTIONS_ENABLED", "false")

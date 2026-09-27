@@ -7,6 +7,7 @@ from app.models.reservation import ReservationStatusEnum
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.schemas.payment_link import PaymentLinkCreate
 from app.schemas.reservation import ReservationCreate
+from app.schemas.transaction import PaymentRequest
 from app.services.reservation_operations_service import (
     ReservationOperationsError,
     change_reservation_dates,
@@ -98,6 +99,16 @@ def test_date_change_with_payments_requires_manager_and_preserves_history(
     sample_rooms,
 ):
     reservation = _create_sample_reservation(db, sample_guest, sample_categories, sample_rooms)
+    pricing_state = (
+        reservation.total_amount,
+        reservation.subtotal_amount,
+        reservation.tax_amount,
+        reservation.fee_amount,
+        reservation.commission_amount,
+        reservation.net_amount,
+        reservation.currency_code,
+        reservation.pricing_snapshot,
+    )
     tx = _completed_transaction(db, reservation)
     changed_check_in = date.today() + timedelta(days=11)
     changed_check_out = date.today() + timedelta(days=13)
@@ -127,6 +138,16 @@ def test_date_change_with_payments_requires_manager_and_preserves_history(
     assert result.recreated is False
     assert result.reservation.id == reservation.id
     assert reservation.check_in_date == changed_check_in
+    assert (
+        reservation.total_amount,
+        reservation.subtotal_amount,
+        reservation.tax_amount,
+        reservation.fee_amount,
+        reservation.commission_amount,
+        reservation.net_amount,
+        reservation.currency_code,
+        reservation.pricing_snapshot,
+    ) == pricing_state
     assert db.get(Transaction, tx.id).reservation_id == reservation.id
     assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 1
 
@@ -169,6 +190,39 @@ def test_extension_requires_payment_or_link_action(db, hotel_config, sample_gues
     assert result.extension_amount == Decimal("100.00")
     assert result.payment_link is not None
     assert result.payment_link.reservation_id == reservation.id
+
+
+def test_extension_rejects_refund_as_immediate_payment_without_mutating_reservation(
+    db, hotel_config, sample_guest, sample_categories, sample_rooms
+):
+    reservation = _create_sample_reservation(db, sample_guest, sample_categories, sample_rooms)
+    reservation.status = ReservationStatusEnum.FULLY_PAID
+    reservation.amount_paid = reservation.total_amount
+    db.flush()
+    old_checkout = reservation.check_out_date
+    old_total = reservation.total_amount
+    old_transaction_count = db.query(Transaction).filter_by(reservation_id=reservation.id).count()
+
+    with pytest.raises(ReservationOperationsError, match="No se permiten devoluciones"):
+        extend_reservation_stay(
+            db,
+            reservation=reservation,
+            hotel_id=1,
+            new_checkout_date=old_checkout + timedelta(days=1),
+            client_version=reservation.version,
+            pricing_mode="original_average",
+            payment_action="immediate_payment",
+            immediate_payment=PaymentRequest(
+                reservation_id=reservation.id,
+                amount=100,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.REFUND,
+            ),
+        )
+
+    assert reservation.check_out_date == old_checkout
+    assert reservation.total_amount == old_total
+    assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == old_transaction_count
 
 
 def test_reservation_lifecycle_optimistic_lock_conflict(

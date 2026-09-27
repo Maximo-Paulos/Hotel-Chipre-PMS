@@ -64,6 +64,13 @@ class MfaCodeRequest(BaseModel):
     code: str = Field(min_length=1, max_length=64)
 
 
+class MfaEnrollmentRequest(BaseModel):
+    """Fresh account proof required before issuing a new MFA secret."""
+
+    current_password: str | None = Field(default=None, min_length=1, max_length=256)
+    google_id_token: str | None = Field(default=None, min_length=1, max_length=8192)
+
+
 class ActionStepUpRequest(BaseModel):
     code: str = Field(min_length=1, max_length=64)
     permission_code: str = Field(min_length=1, max_length=100)

@@ -70,14 +70,16 @@ class ReservationChargeCreate(BaseModel):
     """Operator-created consumption or extra charge for an active stay."""
 
     amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
-    currency_code: str = Field(default="ARS", min_length=3, max_length=3)
+    currency_code: Optional[str] = Field(default=None, min_length=3, max_length=3)
     description: str = Field(..., min_length=1, max_length=240)
 
     @field_validator("currency_code")
     @classmethod
-    def normalize_currency_code(cls, value: str) -> str:
+    def normalize_currency_code(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
         normalized = value.strip().upper()
-        if len(normalized) != 3 or not normalized.isalpha():
+        if len(normalized) != 3 or not normalized.isascii() or not normalized.isalpha():
             raise ValueError("currency_code must be a three-letter currency code")
         return normalized
 

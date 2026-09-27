@@ -77,7 +77,10 @@ def test_update_booking_foreign_room_is_not_returned_by_query(isolated_client):
     _set_auth_context_override(hotel1["hotel"].id, user_id=1, user_email="owner1@test.com", role="owner")
     response = client.patch(
         f"/api/bookings/{hotel1['reservation'].id}",
-        json={"room_id": hotel2["room"].id},
+        json={
+            "room_id": hotel2["room"].id,
+            "client_version": hotel1["reservation"].version,
+        },
     )
 
     assert response.status_code in {400, 404}, response.text

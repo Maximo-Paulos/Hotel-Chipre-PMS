@@ -296,6 +296,16 @@ def create_link(
         raise PaymentLinkError("Solo mercado_pago esta habilitado para links de pago")
 
     currency = (payload.currency or reservation.currency_code or "ARS").strip().upper()
+    reservation_currency = (reservation.currency_code or "ARS").strip().upper()
+    if (
+        len(currency) != 3
+        or not currency.isascii()
+        or not currency.isalpha()
+        or currency != reservation_currency
+    ):
+        raise PaymentLinkError(
+            f"La moneda del link ({currency}) debe coincidir con la reserva ({reservation_currency})"
+        )
     recipient_email = str(payload.recipient_email).strip().lower()
     surcharge_info = calculate_payment_surcharge(
         db,
@@ -320,11 +330,6 @@ def create_link(
         if normalized_idempotency_key is None:
             raise PaymentLinkError(
                 "Idempotency-Key es obligatorio para crear un link con proveedor"
-            )
-        reservation_currency = (reservation.currency_code or "ARS").strip().upper()
-        if currency != reservation_currency:
-            raise PaymentLinkError(
-                f"La moneda del link ({currency}) debe coincidir con la reserva ({reservation_currency})"
             )
         available_balance = _available_provider_balance(
             db,

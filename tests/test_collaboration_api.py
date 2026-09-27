@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
+from decimal import Decimal
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -12,6 +15,9 @@ from app.main import app
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.user import User
+from app.models.guest import Guest
+from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services import collaboration as collaboration_service
 from app.api import collaboration as collaboration_api
 
@@ -167,3 +173,81 @@ def test_ticket_does_not_reveal_a_resource_from_another_hotel(collaboration_clie
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "Recurso no encontrado"
+
+
+def test_collaboration_reservation_patch_requires_move_and_manager_lanes(
+    collaboration_client, monkeypatch
+):
+    client, db, _redis = collaboration_client
+    context = app.dependency_overrides[get_auth_context]()
+    context.user_role = "receptionist"
+    allowed = {"reservation:read", "reservation:update"}
+    monkeypatch.setattr(
+        collaboration_api,
+        "resolve",
+        lambda _db, _hotel_id, _role, permission, user_id=None: permission in allowed,
+    )
+
+    category = RoomCategory(
+        hotel_id=1,
+        name="Standard",
+        code="STD",
+        base_price_per_night=Decimal("100.00"),
+        max_occupancy=2,
+    )
+    guest = Guest(hotel_id=1, first_name="Ana", last_name="Test")
+    db.add_all([category, guest])
+    db.flush()
+    first_room = Room(
+        hotel_id=1,
+        category_id=category.id,
+        room_number="101",
+        floor=1,
+        status=RoomStatusEnum.AVAILABLE,
+    )
+    second_room = Room(
+        hotel_id=1,
+        category_id=category.id,
+        room_number="102",
+        floor=1,
+        status=RoomStatusEnum.AVAILABLE,
+    )
+    db.add_all([first_room, second_room])
+    db.flush()
+    reservation = Reservation(
+        hotel_id=1,
+        guest_id=guest.id,
+        category_id=category.id,
+        room_id=first_room.id,
+        confirmation_code="COLLAB-RBAC-1",
+        check_in_date=date.today(),
+        check_out_date=date.today() + timedelta(days=2),
+        status=ReservationStatusEnum.FULLY_PAID,
+        total_amount=Decimal("200.00"),
+        amount_paid=Decimal("200.00"),
+        num_adults=1,
+    )
+    db.add(reservation)
+    db.commit()
+    revision = collaboration_service.resource_revision(
+        collaboration_service.serialize_resource("reservation", reservation)
+    )
+
+    move = client.patch(
+        f"/api/collaboration/resources/reservation/{reservation.id}",
+        json={"base_revision": revision, "changes": {"room_id": second_room.id}},
+    )
+    db.refresh(reservation)
+    assert move.status_code == 403, move.text
+    assert reservation.room_id == first_room.id
+
+    date_change = client.patch(
+        f"/api/collaboration/resources/reservation/{reservation.id}",
+        json={
+            "base_revision": revision,
+            "changes": {"check_out_date": (reservation.check_out_date + timedelta(days=1)).isoformat()},
+        },
+    )
+    db.refresh(reservation)
+    assert date_change.status_code == 403, date_change.text
+    assert reservation.check_out_date == date.today() + timedelta(days=2)

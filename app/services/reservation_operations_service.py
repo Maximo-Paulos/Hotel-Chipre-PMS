@@ -32,7 +32,7 @@ from app.models.operations import (
 )
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
-from app.models.transaction import Transaction
+from app.models.transaction import Transaction, TransactionTypeEnum
 from app.services import audit_log_service
 from app.services.allocation_policy_service import record_manual_override_feedback
 from app.services.guest_room_avoidance_service import record_guest_room_avoidance
@@ -59,6 +59,7 @@ from app.services.reservation_service import (
     compute_reservation_pricing,
     create_reservation,
     assert_reservation_version,
+    manual_override_total_for_nights,
     transition_reservation_status,
     update_reservation_fields,
     _apply_pricing_result_to_reservation,
@@ -150,13 +151,13 @@ def enforce_room_move_permission(
     reservation: Reservation,
     destination_room: Room,
     hotel_id: int,
-    actor_role: str | None,
+    actor_role: str,
     actor_user_id: int | None,
 ) -> tuple[RoomCategory, RoomCategory, str]:
     """Classify a move and enforce its tier for a user-initiated operation.
 
-    Internal allocation paths have no actor role and remain governed by their
-    own orchestration policies. Every HTTP move supplies an actor role here.
+    The caller must supply a resolved actor role. Missing identity context is
+    denied rather than treated as an implicit internal/system authorization.
     """
     current_category, destination_category = _room_move_categories(
         db,
@@ -165,8 +166,15 @@ def enforce_room_move_permission(
         hotel_id=hotel_id,
     )
     required_permission = required_room_move_permission(current_category, destination_category)
-    if actor_role is None:
-        return current_category, destination_category, required_permission
+    if not actor_role:
+        audit_permission_denied(
+            db,
+            hotel_id=hotel_id,
+            user_id=actor_user_id,
+            role=None,
+            permission_code=required_permission,
+        )
+        raise RoomMovePermissionError("No se pudo determinar el rol para autorizar el cambio de habitacion.")
 
     if any(
         resolve(db, hotel_id, actor_role, permission, user_id=actor_user_id)
@@ -273,7 +281,7 @@ def add_reservation_charge(
     reservation: Reservation,
     hotel_id: int,
     amount: Decimal,
-    currency_code: str,
+    currency_code: str | None,
     description: str,
     actor_user_id: int | None = None,
 ) -> BillingAdjustment:
@@ -297,9 +305,18 @@ def add_reservation_charge(
     normalized_amount = Decimal(str(amount)).quantize(Decimal("0.01"))
     if normalized_amount <= Decimal("0.00"):
         raise ReservationOperationsError("El importe del consumo debe ser positivo")
-    normalized_currency = (currency_code or reservation.currency_code or "ARS").strip().upper()
-    if len(normalized_currency) != 3 or not normalized_currency.isalpha():
+    reservation_currency = (reservation.currency_code or "ARS").strip().upper()
+    normalized_currency = (currency_code or reservation_currency).strip().upper()
+    if (
+        len(normalized_currency) != 3
+        or not normalized_currency.isascii()
+        or not normalized_currency.isalpha()
+    ):
         raise ReservationOperationsError("La moneda del consumo debe tener tres letras")
+    if normalized_currency != reservation_currency:
+        raise ReservationOperationsError(
+            f"La moneda del consumo ({normalized_currency}) debe coincidir con la reserva ({reservation_currency})"
+        )
 
     charge = BillingAdjustment(
         hotel_id=hotel_id,
@@ -335,7 +352,7 @@ def _has_transactions(db: Session, *, hotel_id: int, reservation_id: int) -> boo
     )
 
 
-def _reservation_has_payment_or_deposit(db: Session, *, hotel_id: int, reservation: Reservation) -> bool:
+def reservation_has_payment_or_deposit(db: Session, *, hotel_id: int, reservation: Reservation) -> bool:
     return (
         reservation.status in (ReservationStatusEnum.DEPOSIT_PAID, ReservationStatusEnum.FULLY_PAID)
         or Decimal(str(reservation.amount_paid or 0)) > Decimal("0")
@@ -466,7 +483,7 @@ def resolve_extension_conflict(
             "check_in_date": conflict.check_in_date.isoformat(),
             "check_out_date": conflict.check_out_date.isoformat(),
         }
-        if _reservation_has_payment_or_deposit(db, hotel_id=hotel_id, reservation=conflict):
+        if reservation_has_payment_or_deposit(db, hotel_id=hotel_id, reservation=conflict):
             unresolved.append(
                 {
                     **details,
@@ -643,6 +660,14 @@ def change_reservation_dates(
         # original window's facts immediately (revenue was previously
         # counted there).
         _touch_facts(db, hotel_id, original_check_in, original_check_out)
+        requested_nights = (check_out_date - check_in_date).days
+        if pricing_mode == "keep_current_total":
+            explicit_total = reservation.total_amount
+        else:
+            explicit_total = manual_override_total_for_nights(
+                reservation,
+                nights=requested_nights,
+            )
         new_reservation = create_reservation(
             db,
             ReservationCreate(
@@ -657,6 +682,7 @@ def change_reservation_dates(
                 check_out_date=check_out_date,
                 num_adults=reservation.num_adults,
                 num_children=reservation.num_children,
+                total_amount=explicit_total,
                 notes=((reservation.notes or "") + "\n[DATE CHANGE] Recreated from unpaid reservation").strip(),
                 source=reservation.source,
                 external_id=None,
@@ -671,7 +697,6 @@ def change_reservation_dates(
     if not manager_authorized:
         raise ReservationOperationsError("Modificar fechas con pagos requiere gerente, dueno o codueno")
 
-    original_total = Decimal(str(reservation.total_amount or 0))
     update_reservation_fields(
         db,
         reservation,
@@ -685,11 +710,9 @@ def change_reservation_dates(
         room_move_reason_code="date_change",
         room_move_notes=reason,
         client_version=client_version,
+        recalculate_pricing=pricing_mode == "recalculate",
+        recalculate_explicit_price=pricing_mode == "recalculate",
     )
-    if pricing_mode == "keep_current_total":
-        reservation.total_amount = original_total
-        reservation.subtotal_amount = original_total
-        reservation.net_amount = original_total
     status_transitioned = False
     if (
         reservation.status != ReservationStatusEnum.FULLY_PAID
@@ -814,6 +837,8 @@ def extend_reservation_stay(
     if payment_action == "immediate_payment":
         if immediate_payment is None:
             raise ReservationOperationsError("La extension requiere datos de pago inmediato")
+        if immediate_payment.transaction_type == TransactionTypeEnum.REFUND:
+            raise ReservationOperationsError("No se permiten devoluciones como pago de extension")
         if immediate_payment.reservation_id != reservation.id:
             raise ReservationOperationsError("El pago inmediato debe pertenecer a esta reserva")
         if Decimal(str(immediate_payment.amount)) < amount:
@@ -869,7 +894,7 @@ def move_reservation_room(
     to_room_id: int,
     hotel_id: int,
     moved_by_user_id: Optional[int] = None,
-    actor_role: Optional[str] = None,
+    actor_role: str,
     reason_code: Optional[str] = None,
     notes: Optional[str] = None,
     move_type: RoomMoveTypeEnum = RoomMoveTypeEnum.MANUAL_MOVE,

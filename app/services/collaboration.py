@@ -468,6 +468,7 @@ def apply_resource_changes(
             changed_by_user_id=user_id,
             actor_role=actor_role,
             client_version=resource.version,
+            preserve_unclassified_price=True,
         )
         return resource
 

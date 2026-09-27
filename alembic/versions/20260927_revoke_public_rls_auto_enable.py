@@ -15,6 +15,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # This migration only adjusts PostgreSQL function ACLs. SQLite is used by
+    # the migration test suite and has no equivalent routine or grants.
+    if op.get_bind().dialect.name != "postgresql":
+        return
+
     # Supabase installs this SECURITY DEFINER function as an event-trigger
     # handler. PostgreSQL invokes it through the registered event trigger,
     # independently of EXECUTE grants; it should not be exposed to API roles.

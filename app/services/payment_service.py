@@ -115,11 +115,26 @@ def _resolve_reservation_hotel(
 
 def _resolve_payment_currency(reservation: Reservation, requested_currency: Optional[str]) -> str:
     """
-    Prefer an explicit payment currency, otherwise inherit the reservation currency.
-    This avoids recording ARS by default for reservations quoted in another currency.
+    Keep every payment in the reservation's ledger currency. We do not have a
+    validated FX conversion flow here, so accepting a different currency would
+    make balance checks and paid totals compare unlike amounts.
     """
-    candidate = (requested_currency or reservation.currency_code or "ARS").strip().upper()
-    return candidate[:3] if candidate else "ARS"
+    reservation_currency = (reservation.currency_code or "ARS").strip().upper()
+    candidate = (requested_currency or reservation_currency).strip().upper()
+    if (
+        len(reservation_currency) != 3
+        or not reservation_currency.isascii()
+        or not reservation_currency.isalpha()
+        or len(candidate) != 3
+        or not candidate.isascii()
+        or not candidate.isalpha()
+    ):
+        raise PaymentError("La moneda de la reserva o del pago no es válida")
+    if candidate != reservation_currency:
+        raise PaymentError(
+            f"La moneda del pago ({candidate}) debe coincidir con la reserva ({reservation_currency})"
+        )
+    return candidate
 
 
 def _payment_method_value(method) -> str:
@@ -306,6 +321,18 @@ def process_payment(
             raise PaymentError(
                 f"Payment amount ${request.amount:.2f} exceeds balance due ${balance:.2f}"
             )
+
+    if request.payment_method == PaymentMethodEnum.CASH:
+        from app.services import cash_register_service
+
+        try:
+            cash_register_service.require_open_session_for_currency(
+                db,
+                hotel_id=resolved_hotel_id,
+                currency_code=transaction_currency,
+            )
+        except cash_register_service.CashRegisterError as exc:
+            raise PaymentError(str(exc)) from exc
 
     # 4. Create transaction
     tx_status = TransactionStatusEnum.PENDING

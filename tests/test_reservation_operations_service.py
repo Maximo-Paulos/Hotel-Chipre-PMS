@@ -10,7 +10,12 @@ from app.models.ota_core import OTACommissionRule, OTACurrencyRate, OTAProvider,
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services.allocation_runtime_service import run_persisted_allocation
-from app.services.reservation_operations_service import preview_ota_rebook_as_direct, rebook_ota_reservation_as_direct
+from app.services.reservation_operations_service import (
+    RoomMovePermissionError,
+    enforce_room_move_permission,
+    preview_ota_rebook_as_direct,
+    rebook_ota_reservation_as_direct,
+)
 
 
 def _seed_commercial_setup(db, hotel_id: int, source_category_id: int, target_category_id: int):
@@ -467,6 +472,7 @@ def test_move_reservation_room_creates_feedback_trace(
         reservation=reservation,
         to_room_id=sample_rooms[1].id,
         hotel_id=hotel_config.id,
+        actor_role="owner",
         moved_by_user_id=None,
         reason_code="guest_preference",
         notes="Prefiere otra orientacion",
@@ -519,6 +525,7 @@ def test_move_reservation_room_creates_manual_audit_event(
         reservation=reservation,
         to_room_id=new_room_id,
         hotel_id=hotel_config.id,
+        actor_role="owner",
         moved_by_user_id=None,
         reason_code="guest_preference",
         notes="Prefiere otra orientacion",
@@ -576,6 +583,7 @@ def test_move_reservation_room_updates_room_status_for_checked_in_reservation(
         reservation=reservation,
         to_room_id=to_room.id,
         hotel_id=hotel_config.id,
+        actor_role="owner",
         moved_by_user_id=None,
         reason_code="guest_preference",
         notes="Cambio de habitacion con huesped alojado",
@@ -629,6 +637,7 @@ def test_checked_in_room_move_requires_explicit_origin_disposition(
             reservation=reservation,
             to_room_id=to_room.id,
             hotel_id=hotel_config.id,
+            actor_role="owner",
             reason_code="guest_preference",
         )
 
@@ -678,6 +687,7 @@ def test_checked_in_room_move_persists_non_cleaning_disposition_and_note(
             reservation=reservation,
             to_room_id=to_room.id,
             hotel_id=hotel_config.id,
+            actor_role="owner",
             reason_code="guest_preference",
             origin_room_disposition="maintenance",
         )
@@ -687,6 +697,7 @@ def test_checked_in_room_move_persists_non_cleaning_disposition_and_note(
         reservation=reservation,
         to_room_id=to_room.id,
         hotel_id=hotel_config.id,
+        actor_role="owner",
         reason_code="guest_preference",
         notes="El huésped usó parcialmente la habitación y reportó una falla.",
         origin_room_disposition="maintenance",
@@ -742,6 +753,7 @@ def test_move_reservation_room_ignores_status_for_non_checked_in_reservation(
         reservation=reservation,
         to_room_id=to_room.id,
         hotel_id=hotel_config.id,
+        actor_role="owner",
         moved_by_user_id=None,
         reason_code="guest_preference",
         notes="Reserva futura sin huesped alojado",
@@ -848,6 +860,7 @@ def test_move_reservation_room_requires_reason_code(
             reservation=reservation,
             to_room_id=sample_rooms[1].id,
             hotel_id=hotel_config.id,
+            actor_role="owner",
             reason_code=" ",
         )
 
@@ -910,11 +923,46 @@ def test_move_reservation_room_rejects_capacity_overflow_across_categories(
             reservation=reservation,
             to_room_id=single_room.id,
             hotel_id=hotel_config.id,
+            actor_role="owner",
             reason_code="guest_preference",
         )
     db.refresh(reservation)
     assert reservation.room_id == sample_rooms[0].id
     assert reservation.category_id == sample_categories[0].id
+
+
+def test_room_move_permission_fails_closed_without_actor_role(
+    db, hotel_config, sample_categories, sample_rooms, sample_guest
+):
+    reservation = Reservation(
+        confirmation_code="ROOM-MOVE-NO-ACTOR",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=sample_rooms[0].id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 9, 1),
+        check_out_date=date(2026, 9, 3),
+        total_amount=200.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=1,
+    )
+    db.add(reservation)
+    db.flush()
+    old_room_id = reservation.room_id
+
+    with pytest.raises(RoomMovePermissionError, match="determinar el rol"):
+        enforce_room_move_permission(
+            db,
+            reservation=reservation,
+            destination_room=sample_rooms[1],
+            hotel_id=hotel_config.id,
+            actor_role="",
+            actor_user_id=None,
+        )
+
+    assert reservation.room_id == old_room_id
 
 
 def test_move_reservation_room_keep_price_action_does_not_change_total_but_returns_quote(
@@ -954,6 +1002,7 @@ def test_move_reservation_room_keep_price_action_does_not_change_total_but_retur
         reservation=reservation,
         to_room_id=superior_room.id,
         hotel_id=hotel_config.id,
+        actor_role="owner",
         reason_code="upgrade",
         price_action="keep",
     )
@@ -1007,6 +1056,7 @@ def test_move_reservation_room_reprice_updates_total_amount(
         reservation=reservation,
         to_room_id=superior_room.id,
         hotel_id=hotel_config.id,
+        actor_role="owner",
         reason_code="upgrade",
         price_action="reprice",
     )

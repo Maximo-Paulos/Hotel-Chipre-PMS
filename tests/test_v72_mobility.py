@@ -253,7 +253,10 @@ def test_update_mobility_restriction_triggers_reoptimization(reservation_api_cli
     db.add(reservation)
     db.commit()
 
-    response = client.patch(f"/api/reservations/{reservation.id}", json={"mobility_restriction": False})
+    response = client.patch(
+        f"/api/reservations/{reservation.id}",
+        json={"mobility_restriction": False, "client_version": reservation.version},
+    )
 
     assert response.status_code == 200, response.text
     assert response.json()["mobility_restriction"] is False
@@ -316,7 +319,12 @@ def test_patch_reservation_silently_ignores_unsupported_category_and_status_fiel
 
     response = client.patch(
         f"/api/reservations/{reservation.id}",
-        json={"category_id": other_category.id, "status": "cancelled", "notes": "intento de cambio"},
+        json={
+            "category_id": other_category.id,
+            "status": "cancelled",
+            "notes": "intento de cambio",
+            "client_version": reservation.version,
+        },
     )
 
     assert response.status_code == 200, response.text

@@ -2,6 +2,7 @@
 FastAPI routes for Booking management (thin layer over Reservation).
 Provides basic CRUD plus a simple availability placeholder.
 """
+import logging
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.config import is_demo_environment_allowed, is_demo_mode
 from app.database import get_db
+from app.models.hotel_config import HotelConfiguration
 from app.services.timezones import hotel_today
 from app.dependencies.auth import AuthContext, get_auth_context, require_permission
 from app.models.reservation import Reservation, ReservationStatusEnum
@@ -23,12 +25,17 @@ from app.services.reservation_service import (
     create_reservation,
     find_available_rooms,
     transition_reservation_status,
-    compute_reservation_pricing,
     update_reservation_fields,
+    validate_reservation_category_compatibility,
+    _validate_reservation_occupancy,
 )
 from app.services.reservation_quote_service import build_reservation_quote
 from app.services.checkin_service import perform_checkin, perform_checkout, CheckInError
-from app.services.guest_restriction_service import GuestProhibitedError, get_active_guest_restrictions
+from app.services.guest_restriction_service import (
+    GuestProhibitedError,
+    RestrictionOverridePermissionError,
+    get_active_guest_restrictions,
+)
 from app.services.graph_projection import project_company_link, project_reservation_assignment
 from app.services import audit_log_service
 from app.services.permission_service import (
@@ -38,6 +45,7 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_DEMO_SEED,
     PERMISSION_RESERVATION_READ,
     PERMISSION_RESERVATION_UPDATE,
+    RESERVATION_MOVE_TIER_PERMISSIONS,
     PERMISSION_CHECKIN_PERFORM,
     PERMISSION_CHECKOUT_PERFORM,
     audit_permission_denied,
@@ -48,8 +56,16 @@ from app.services.temporary_action_grant_service import (
     TemporaryGrantError,
     consume_grant_for_action,
 )
+from app.services.reservation_operations_service import (
+    ReservationOperationsError,
+    RoomMovePermissionError,
+    enforce_room_move_permission,
+    required_room_move_permission,
+    reservation_has_payment_or_deposit,
+)
 
 router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
+logger = logging.getLogger(__name__)
 
 
 def _require_demo_mode():
@@ -60,6 +76,43 @@ def _require_demo_mode():
             status_code=403,
             detail="Demo mode is disabled. Set DEMO_MODE=true to use this endpoint.",
         )
+
+
+def _ensure_subscription_active(db: Session, hotel_id: int, action: str) -> None:
+    config = db.get(HotelConfiguration, hotel_id)
+    if config and not config.subscription_active:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=f"Suscripción inactiva. Reactivá el plan para {action} reservas.",
+        )
+
+
+def _ensure_permission_tier(
+    db: Session,
+    context: AuthContext,
+    required_permission: str,
+) -> None:
+    required_index = RESERVATION_MOVE_TIER_PERMISSIONS.index(required_permission)
+    if any(
+        resolve(db, context.hotel_id, context.user_role, permission, user_id=context.user_id)
+        for permission in RESERVATION_MOVE_TIER_PERMISSIONS[required_index:]
+    ):
+        return
+    audit_permission_denied(
+        db,
+        hotel_id=context.hotel_id,
+        user_id=context.user_id,
+        role=context.user_role,
+        permission_code=required_permission,
+    )
+    raise HTTPException(
+        status_code=403,
+        detail="No tenes permisos para cambiar la categoría de la reserva",
+    )
+
+
+def _is_manager_context(context: AuthContext) -> bool:
+    return context.operational_role in {"owner", "co_owner", "manager"}
 
 
 def _booking_to_read(res: Reservation) -> BookingRead:
@@ -196,6 +249,7 @@ def create_booking(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CREATE)),
 ):
+    _ensure_subscription_active(db, context.hotel_id, "crear nuevas")
     # Reuse the existing ReservationCreate schema to drive business logic
     reservation_payload = ReservationCreate(**payload.model_dump())
     try:
@@ -270,6 +324,15 @@ def cancel_booking(
         if not temporary_grant_token:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
 
+    config = db.get(HotelConfiguration, context.hotel_id)
+    if config and not config.subscription_active:
+        if not permission_allowed:
+            raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Suscripción inactiva. Reactivá el plan para gestionar reservas.",
+        )
+
     booking = (
         db.query(Reservation)
         .filter(
@@ -317,7 +380,26 @@ def cancel_booking(
     try:
         # Grant consumption and the protected state transition share this
         # session transaction; a failed mutation rolls both back together.
-        transition_reservation_status(db, booking, ReservationStatusEnum.CANCELLED, context.hotel_id)
+        transition_reservation_status(
+            db,
+            booking,
+            ReservationStatusEnum.CANCELLED,
+            context.hotel_id,
+            reason_code="cancelled_by_user",
+            changed_by_user_id=context.user_id,
+        )
+        try:
+            from app.services.payment_link_service import cancel_active_links_for_reservation
+
+            cancel_active_links_for_reservation(
+                db, context.hotel_id, booking.id, reason="reservation cancelled"
+            )
+        except Exception as exc:  # best-effort; never block the cancellation
+            logger.error(
+                "Failed cancelling payment links for reservation %s error_type=%s",
+                booking.id,
+                type(exc).__name__,
+            )
         db.commit()
         db.refresh(booking)
         return _booking_to_read(booking)
@@ -366,6 +448,13 @@ def update_booking(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
+    _ensure_subscription_active(db, context.hotel_id, "gestionar")
+    if payload.status is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede cambiar el estado desde esta ruta. Usá la acción específica de la reserva.",
+        )
+
     booking = (
         db.query(Reservation)
         .filter(
@@ -378,8 +467,16 @@ def update_booking(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
-    metadata_fields = {"arrival_time_hint", "reservation_comment", "client_version"}
-    terminal_mutation_fields = set(payload.model_fields_set) - metadata_fields
+    data = payload.model_dump(exclude_unset=True)
+    effective_data = {
+        field: value
+        for field, value in data.items()
+        if field not in {"client_version", "status"}
+        and not (field == "room_id" and value is None)
+        and getattr(booking, field, None) != value
+    }
+    metadata_fields = {"arrival_time_hint", "reservation_comment"}
+    terminal_mutation_fields = set(effective_data) - metadata_fields
     if booking.status in {
         ReservationStatusEnum.CHECKED_IN,
         ReservationStatusEnum.CHECKED_OUT,
@@ -388,23 +485,46 @@ def update_booking(
     } and terminal_mutation_fields:
         raise HTTPException(status_code=400, detail=("Cannot modify: reservation is " + booking.status.value))
 
-    before = audit_log_service.model_snapshot(booking)
     if payload.client_version is not None and booking.version != payload.client_version:
         raise HTTPException(status_code=409, detail="Reservation was modified concurrently. Reload and retry.")
+    if not effective_data:
+        return _booking_to_read(booking)
+    if payload.client_version is None:
+        raise HTTPException(
+            status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+            detail="client_version es obligatorio para modificar una reserva. Recargá e intentá nuevamente.",
+        )
+
+    before = audit_log_service.model_snapshot(booking)
+    data = effective_data
+    dates_changed = (
+        ("check_in_date" in data and data["check_in_date"] != booking.check_in_date)
+        or ("check_out_date" in data and data["check_out_date"] != booking.check_out_date)
+    )
+    if (
+        dates_changed
+        and reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=booking)
+        and not _is_manager_context(context)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Modificar fechas de una reserva con pagos requiere gerente, dueño o codueño.",
+        )
 
     # Route legacy metadata-only edits through the canonical service so version
     # checks, reservation.updated events and field normalization stay aligned
     # with the primary reservations endpoint.
-    if set(payload.model_fields_set) <= metadata_fields:
+    if set(data) <= metadata_fields:
         try:
             update_reservation_fields(
                 db,
                 booking,
-                ReservationUpdate(**payload.model_dump(exclude_unset=True)),
+                ReservationUpdate(**{**data, "client_version": payload.client_version}),
                 context.hotel_id,
                 changed_by_user_id=context.user_id,
                 actor_role=context.user_role,
                 client_version=payload.client_version,
+                preserve_unclassified_price=True,
             )
         except ReservationError as exc:
             db.rollback()
@@ -426,15 +546,40 @@ def update_booking(
         db.refresh(booking)
         return _booking_to_read(booking)
 
-    data = payload.model_dump(exclude_unset=True)
     new_category_id = data.get("category_id", booking.category_id)
     new_ci = data.get("check_in_date", booking.check_in_date)
     new_co = data.get("check_out_date", booking.check_out_date)
+    category_changed = new_category_id != booking.category_id
 
     # Validate category existence
     category = db.query(RoomCategory).filter(RoomCategory.id == new_category_id, RoomCategory.hotel_id == context.hotel_id).first()
     if not category:
         raise HTTPException(status_code=400, detail="Category not found")
+    if category_changed:
+        current_category = (
+            db.query(RoomCategory)
+            .filter(
+                RoomCategory.id == booking.category_id,
+                RoomCategory.hotel_id == context.hotel_id,
+            )
+            .first()
+        )
+        if current_category is None:
+            raise HTTPException(status_code=400, detail="Current category not found")
+        _ensure_permission_tier(
+            db,
+            context,
+            required_room_move_permission(current_category, category),
+        )
+        try:
+            validate_reservation_category_compatibility(
+                db,
+                reservation=booking,
+                category=category,
+                hotel_id=context.hotel_id,
+            )
+        except ReservationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Validate dates
     if new_co <= new_ci:
@@ -450,8 +595,12 @@ def update_booking(
         if room and room.category_id != new_category_id:
             raise HTTPException(status_code=400, detail="Existing room does not belong to the new category; change room first")
 
-    # Handle room change
-    if "room_id" in data and data["room_id"] is not None:
+    room_id_changed = (
+        "room_id" in data
+        and data["room_id"] is not None
+        and data["room_id"] != booking.room_id
+    )
+    if room_id_changed:
         room = (
             db.query(Room)
             .filter(
@@ -465,58 +614,82 @@ def update_booking(
             raise HTTPException(status_code=400, detail="Room not found")
         if room.category_id != new_category_id:
             raise HTTPException(status_code=400, detail="Room does not belong to the booking category")
-        if not check_room_availability(
-            db,
-            room.id,
-            new_ci,
-            new_co,
-            hotel_id=context.hotel_id,
-            exclude_reservation_id=booking.id,
-        ):
-            raise HTTPException(status_code=400, detail="Room is not available for the requested dates")
-        booking.room_id = room.id
-
-    # Validate current room availability with new dates
-    if booking.room_id and not check_room_availability(
-        db,
-        booking.room_id,
-        new_ci,
-        new_co,
-        hotel_id=context.hotel_id,
-        exclude_reservation_id=booking.id,
-    ):
-        raise HTTPException(status_code=400, detail="Room is not available for the new dates")
-
-    booking.category_id = new_category_id
-    booking.check_in_date = new_ci
-    booking.check_out_date = new_co
-
-    # Recalculate totals when dates or category change
-    if {"check_in_date", "check_out_date", "category_id"} & data.keys():
         try:
-            _, _, total_amount, deposit_amount = compute_reservation_pricing(
+            enforce_room_move_permission(
                 db,
-                new_category_id,
-                new_ci,
-                new_co,
+                reservation=booking,
+                destination_room=room,
                 hotel_id=context.hotel_id,
+                actor_role=context.user_role,
+                actor_user_id=context.user_id,
             )
-            booking.total_amount = total_amount
-            booking.deposit_amount = deposit_amount
-        except ReservationError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+        except RoomMovePermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ReservationOperationsError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    for field in ("num_adults", "num_children", "notes", "arrival_time_hint", "reservation_comment"):
-        if field in data:
-            setattr(booking, field, data[field])
-
-    if "status" in data and data["status"]:
+    new_num_adults = data.get("num_adults", booking.num_adults)
+    new_num_children = data.get("num_children", booking.num_children)
+    occupancy_changed = (
+        new_num_adults != booking.num_adults
+        or new_num_children != booking.num_children
+    )
+    if category_changed or occupancy_changed:
         try:
-            transition_reservation_status(db, booking, data["status"], context.hotel_id)
-        except ReservationError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            _validate_reservation_occupancy(category, new_num_adults, new_num_children)
+        except ReservationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    booking.version = (booking.version or 0) + 1
+    # Use the canonical update service for all mutable booking fields. This
+    # preserves the reservation's commercial context and applies occupancy,
+    # availability, audit-event, and pricing rules consistently.
+    service_data = {
+        field: value
+        for field, value in data.items()
+        if field in ReservationUpdate.model_fields
+    }
+    if service_data.get("check_in_date") == booking.check_in_date:
+        service_data.pop("check_in_date")
+    if service_data.get("check_out_date") == booking.check_out_date:
+        service_data.pop("check_out_date")
+    if "room_id" in service_data and service_data["room_id"] == booking.room_id:
+        service_data.pop("room_id")
+    if category_changed:
+        booking.category_id = new_category_id
+    if (category_changed or occupancy_changed) and not {
+        "check_in_date",
+        "check_out_date",
+    }.intersection(service_data):
+        # The canonical service recalculates category/occupancy-sensitive
+        # prices when dates are included; same dates are deliberate here.
+        service_data["check_in_date"] = booking.check_in_date
+
+    try:
+        update_reservation_fields(
+            db,
+            booking,
+            ReservationUpdate(**service_data),
+            context.hotel_id,
+            changed_by_user_id=context.user_id,
+            actor_role=context.user_role,
+            room_move_reason_code="legacy_bookings",
+            room_move_notes="Actualización desde la ruta legacy de reservas",
+            client_version=payload.client_version,
+            preserve_unclassified_price=True,
+        )
+    except GuestProhibitedError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc), "restriction_id": exc.restriction_id},
+        ) from exc
+    except RestrictionOverridePermissionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=403, detail="No tenés permisos para esta acción") from exc
+    except ReservationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     audit_log_service.safe_create_audit_log(
         db,
         hotel_id=context.hotel_id,
@@ -607,6 +780,7 @@ def delete_booking(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_DELETE)),
 ):
+    _ensure_subscription_active(db, context.hotel_id, "gestionar")
     booking = (
         db.query(Reservation)
         .filter(

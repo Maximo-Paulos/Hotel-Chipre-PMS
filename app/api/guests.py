@@ -27,6 +27,7 @@ from app.services.guest_service import (
     set_rating,
 )
 from app.services.reservation_service import active_reservations
+from app.services.csv_export_safety import spreadsheet_safe_row
 from app.models.audit_log import AuditActionEnum
 from app.services import audit_log_service
 from app.services.permission_service import (
@@ -65,7 +66,7 @@ def _build_guest_ledger_csv(rows: list[dict[str, object]]) -> str:
     writer = csv.DictWriter(buffer, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
     for row in rows:
-        writer.writerow(row)
+        writer.writerow(spreadsheet_safe_row(row))
     return "\ufeff" + buffer.getvalue()
 
 

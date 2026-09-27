@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import Decimal
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -10,6 +11,9 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.api import checkin as checkin_api
+from app.api import bookings as bookings_api
+from app.services import reservation_service
+from app.services.reservation_service import ReservationPricingResult
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.guest import Guest
@@ -17,9 +21,15 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.daily_rate import DailyRate
 from app.models.laundry import LaundryBatch
+from app.models.operations import ReservationStatusHistory
+from app.models.payment import PaymentLink
+from app.models.audit_log import AuditLog
+from app.models.commercial import SellableProduct
+from app.models.company import Company
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.stock import StockItem
+from app.models.transaction import Transaction
 from app.models.user import User
 from app.services.permission_service import set_role_override, set_user_override
 
@@ -100,6 +110,35 @@ def _close(db, engine):
     engine.dispose()
 
 
+def _patch_legacy_booking(client, reservation, payload):
+    versioned_payload = dict(payload)
+    versioned_payload.setdefault("client_version", reservation.version)
+    return client.patch(f"/api/bookings/{reservation.id}", json=versioned_payload)
+
+
+def test_daily_rate_snapshot_retains_original_pricing_channel():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        check_in = date.today() + timedelta(days=15)
+        pricing = reservation_service.calculate_reservation_pricing(
+            db,
+            category_id=reservation.category_id,
+            check_in=check_in,
+            check_out=check_in + timedelta(days=2),
+            hotel_id=1,
+            pricing_channel_code="website_direct",
+            occupancy=1,
+        )
+
+        import json
+
+        snapshot = json.loads(pricing.pricing_snapshot)
+        assert pricing.pricing_source == "daily_rates"
+        assert snapshot["pricing_channel_code"] == "website_direct"
+    finally:
+        _close(db, engine)
+
+
 def test_reservation_read_and_cancel_follow_individual_overrides_without_data_leak():
     client, db, engine, auth, reservation, _stock_item = _client()
     try:
@@ -123,7 +162,10 @@ def test_reservation_read_and_cancel_follow_individual_overrides_without_data_le
 
         set_user_override(db, 1, 20, "receptionist", "reservation:update", True, actor_user_id=10)
         db.commit()
-        allowed_update = client.patch(f"/api/reservations/{reservation.id}", json={"notes": "allowed"})
+        allowed_update = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={"notes": "allowed", "client_version": reservation.version},
+        )
         assert allowed_update.status_code == 200
         db.refresh(reservation)
         assert reservation.notes == "allowed"
@@ -138,6 +180,921 @@ def test_reservation_read_and_cancel_follow_individual_overrides_without_data_le
         set_user_override(db, 1, 20, "receptionist", "reservation:cancel", True, actor_user_id=10)
         db.commit()
         assert client.post(f"/api/reservations/{reservation.id}/cancel").status_code == 200
+    finally:
+        _close(db, engine)
+
+
+def test_primary_reservation_patch_requires_version_and_skips_noop_audits():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:update", True, actor_user_id=10
+        )
+        db.commit()
+        original_version = reservation.version
+        audit_count = db.query(AuditLog).filter_by(
+            table_name="reservations", record_id=reservation.id
+        ).count()
+
+        noop = client.patch(f"/api/reservations/{reservation.id}", json={})
+        assert noop.status_code == 200, noop.text
+        db.refresh(reservation)
+        assert reservation.version == original_version
+        assert db.query(AuditLog).filter_by(
+            table_name="reservations", record_id=reservation.id
+        ).count() == audit_count
+
+        missing_version = client.patch(
+            f"/api/reservations/{reservation.id}", json={"notes": "must not persist"}
+        )
+        assert missing_version.status_code == 428, missing_version.text
+        db.refresh(reservation)
+        assert reservation.notes is None
+        assert reservation.version == original_version
+
+        stale_version = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={"notes": "must not persist", "client_version": original_version - 1},
+        )
+        assert stale_version.status_code == 409, stale_version.text
+        db.refresh(reservation)
+        assert reservation.notes is None
+        assert reservation.version == original_version
+
+        updated = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={"notes": "versioned update", "client_version": original_version},
+        )
+        assert updated.status_code == 200, updated.text
+        db.refresh(reservation)
+        assert reservation.notes == "versioned update"
+        assert reservation.version == original_version + 1
+    finally:
+        _close(db, engine)
+
+
+def test_reservation_extension_requires_update_charge_and_cash_permissions_independently():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        request = {
+            "new_checkout_date": (date.today() + timedelta(days=3)).isoformat(),
+            "client_version": reservation.version,
+            "pricing_mode": "original_average",
+            "payment_action": "payment_link",
+            "payment_link": {
+                "reservation_id": reservation.id,
+                "requested_amount": "100.00",
+                "recipient_email": "guest@example.com",
+            },
+        }
+        for permission in ("reservation:update", "reservation:charge", "cash:operate"):
+            set_user_override(
+                db, 1, 20, "receptionist", permission, False, actor_user_id=10
+            )
+            db.commit()
+
+            denied = client.post(f"/api/reservations/{reservation.id}/extend", json=request)
+
+            assert denied.status_code == 403, (permission, denied.text)
+            db.refresh(reservation)
+            assert reservation.check_out_date == date.today() + timedelta(days=2)
+            assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 0
+
+            set_user_override(
+                db, 1, 20, "receptionist", permission, True, actor_user_id=10
+            )
+            db.commit()
+
+        reservation.status = ReservationStatusEnum.FULLY_PAID
+        reservation.amount_paid = reservation.total_amount
+        db.commit()
+
+        allowed = client.post(f"/api/reservations/{reservation.id}/extend", json=request)
+
+        assert allowed.status_code == 200, allowed.text
+        assert allowed.json()["payment_link"]["reservation_id"] == reservation.id
+    finally:
+        _close(db, engine)
+
+
+def test_legacy_booking_patch_rejects_status_changes_but_preserves_field_updates():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:update", True, actor_user_id=10
+        )
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:cancel", False, actor_user_id=10
+        )
+        set_user_override(
+            db, 1, 20, "receptionist", "checkin:perform", False, actor_user_id=10
+        )
+        set_user_override(
+            db, 1, 20, "receptionist", "checkout:perform", False, actor_user_id=10
+        )
+        db.commit()
+
+        ordinary_update = _patch_legacy_booking(
+            client, reservation, {"notes": "front-desk note"}
+        )
+        assert ordinary_update.status_code == 200, ordinary_update.text
+        db.refresh(reservation)
+        assert reservation.notes == "front-desk note"
+        assert reservation.status == ReservationStatusEnum.PENDING
+
+        for current_status, requested_status in (
+            (ReservationStatusEnum.PENDING, ReservationStatusEnum.FULLY_PAID),
+            (ReservationStatusEnum.PENDING, ReservationStatusEnum.CANCELLED),
+            (ReservationStatusEnum.FULLY_PAID, ReservationStatusEnum.CHECKED_IN),
+            (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT),
+        ):
+            reservation.status = current_status
+            db.commit()
+            denied = _patch_legacy_booking(
+                client, reservation, {"status": requested_status.value}
+            )
+            assert denied.status_code == 400, denied.text
+            db.refresh(reservation)
+            assert reservation.status == current_status
+
+        assert reservation.amount_paid == 0
+        assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 0
+    finally:
+        _close(db, engine)
+
+
+def test_legacy_booking_room_assignment_requires_move_permission():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        target_room = Room(
+            hotel_id=1,
+            category_id=reservation.category_id,
+            room_number="102",
+            floor=1,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(target_room)
+        db.flush()
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:update", True, actor_user_id=10
+        )
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:move", False, actor_user_id=10
+        )
+        db.commit()
+
+        denied = _patch_legacy_booking(client, reservation, {"room_id": target_room.id})
+
+        assert denied.status_code == 403, denied.text
+        db.refresh(reservation)
+        assert reservation.room_id != target_room.id
+
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:move", True, actor_user_id=10
+        )
+        db.commit()
+        allowed = _patch_legacy_booking(client, reservation, {"room_id": target_room.id})
+        assert allowed.status_code == 200, allowed.text
+        db.refresh(reservation)
+        assert reservation.room_id == target_room.id
+    finally:
+        _close(db, engine)
+
+
+@pytest.mark.parametrize("target_capacity", [2, 4])
+@pytest.mark.parametrize("include_room_id", [False, True])
+def test_legacy_booking_category_change_cannot_bypass_move_permission_tier(target_capacity, include_room_id):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        reservation.room_id = None
+        target_category = RoomCategory(
+            hotel_id=1,
+            name=f"Target {target_capacity}",
+            code=f"TGT{target_capacity}",
+            base_price_per_night=Decimal("150.00"),
+            max_occupancy=target_capacity,
+        )
+        db.add(target_category)
+        db.flush()
+        target_room = Room(
+            hotel_id=1,
+            category_id=target_category.id,
+            room_number=f"20{target_capacity}",
+            floor=2,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(target_room)
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:move", True, actor_user_id=10
+        )
+        for permission in ("reservation:move_category", "reservation:move_capacity"):
+            set_user_override(
+                db, 1, 20, "receptionist", permission, False, actor_user_id=10
+            )
+        db.commit()
+
+        payload = {"category_id": target_category.id}
+        if include_room_id:
+            payload["room_id"] = target_room.id
+        denied = _patch_legacy_booking(client, reservation, payload)
+
+        assert denied.status_code == 403, denied.text
+        db.refresh(reservation)
+        assert reservation.category_id != target_category.id
+        assert reservation.room_id is None
+    finally:
+        _close(db, engine)
+
+
+def test_legacy_booking_pricing_error_rolls_back_pending_field_mutations(monkeypatch):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        original_check_in = reservation.check_in_date
+        original_check_out = reservation.check_out_date
+        original_version = reservation.version
+        reservation.pricing_snapshot = '{"pricing_source":"daily_rates"}'
+        db.commit()
+
+        def reject_pricing(*args, **kwargs):
+            raise bookings_api.ReservationError("pricing unavailable")
+
+        monkeypatch.setattr(reservation_service, "calculate_reservation_pricing", reject_pricing)
+        response = _patch_legacy_booking(
+            client,
+            reservation,
+            {"check_in_date": (original_check_in + timedelta(days=1)).isoformat()},
+        )
+
+        assert response.status_code == 400, response.text
+        db.refresh(reservation)
+        assert reservation.check_in_date == original_check_in
+        assert reservation.check_out_date == original_check_out
+        assert reservation.version == original_version
+    finally:
+        _close(db, engine)
+
+
+@pytest.mark.parametrize(("target_capacity", "expected_status"), [(2, 200), (4, 403)])
+def test_legacy_booking_move_tier_distinguishes_category_from_capacity(
+    target_capacity, expected_status
+):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        reservation.room_id = None
+        target_category = RoomCategory(
+            hotel_id=1,
+            name=f"Tier target {target_capacity}",
+            code=f"TIER{target_capacity}",
+            base_price_per_night=Decimal("150.00"),
+            max_occupancy=target_capacity,
+        )
+        db.add(target_category)
+        db.flush()
+        target_room = Room(
+            hotel_id=1,
+            category_id=target_category.id,
+            room_number=f"30{target_capacity}",
+            floor=3,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(target_room)
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:move_category", True, actor_user_id=10
+        )
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:move_capacity", False, actor_user_id=10
+        )
+        db.commit()
+
+        response = _patch_legacy_booking(
+            client, reservation, {"category_id": target_category.id, "room_id": target_room.id}
+        )
+
+        assert response.status_code == expected_status, response.text
+        db.refresh(reservation)
+        if expected_status == 200:
+            assert reservation.category_id == target_category.id
+            assert reservation.room_id == target_room.id
+        else:
+            assert reservation.category_id != target_category.id
+            assert reservation.room_id is None
+    finally:
+        _close(db, engine)
+
+
+def test_legacy_booking_category_only_patch_uses_commercial_pricing_context(monkeypatch):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        reservation.room_id = None
+        reservation.currency_code = "USD"
+        reservation.source_provider_code = "booking"
+        target_category = RoomCategory(
+            hotel_id=1,
+            name="Category-only target",
+            code="CATONLY",
+            base_price_per_night=Decimal("150.00"),
+            max_occupancy=2,
+        )
+        db.add(target_category)
+        reservation.pricing_snapshot = (
+            '{"pricing_source":"daily_rates","payment_method":"card",'
+            '"pricing_channel_code":"website_direct"}'
+        )
+        db.flush()
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:move_category", True, actor_user_id=10
+        )
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:move_capacity", False, actor_user_id=10
+        )
+        db.commit()
+
+        pricing_context = {}
+        pricing = ReservationPricingResult(
+            nights=2,
+            nightly_rate=123.0,
+            total_amount=246.0,
+            deposit_amount=73.8,
+            subtotal_amount=200.0,
+            tax_amount=46.0,
+            fee_amount=2.0,
+            commission_amount=4.0,
+            net_amount=194.0,
+            currency_code="USD",
+            fx_rate_snapshot=1.0,
+            pricing_source="rate_plan_quote",
+            sellable_product_id=None,
+            rate_plan_id=None,
+            tax_policy_id=None,
+            pricing_snapshot='{"source":"canonical-test"}',
+        )
+
+        def calculate_pricing(_db, **kwargs):
+            pricing_context.update(kwargs)
+            return pricing
+
+        monkeypatch.setattr(reservation_service, "calculate_reservation_pricing", calculate_pricing)
+        response = _patch_legacy_booking(
+            client, reservation, {"category_id": target_category.id, "num_adults": 2}
+        )
+
+        assert response.status_code == 200, response.text
+        db.refresh(reservation)
+        assert reservation.category_id == target_category.id
+        assert pricing_context["category_id"] == target_category.id
+        assert pricing_context["hotel_id"] == 1
+        assert pricing_context["pricing_channel_code"] == "website_direct"
+        assert pricing_context["pricing_payment_method"] == "card"
+        assert pricing_context["target_currency"] == "USD"
+        assert pricing_context["occupancy"] == reservation.num_adults + reservation.num_children
+        assert reservation.total_amount == Decimal("246.0")
+        assert reservation.tax_amount == Decimal("46.0")
+        assert reservation.fee_amount == Decimal("2.0")
+        assert reservation.commission_amount == Decimal("4.0")
+        assert reservation.net_amount == Decimal("194.0")
+        assert reservation.currency_code == "USD"
+        assert reservation.pricing_snapshot == '{"source":"canonical-test"}'
+    finally:
+        _close(db, engine)
+
+
+def test_legacy_booking_noop_dates_and_category_do_not_reprice(monkeypatch):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        original_total = reservation.total_amount
+        original_dates = (reservation.check_in_date, reservation.check_out_date)
+        original_version = reservation.version
+        audit_count = db.query(AuditLog).filter_by(table_name="reservations", record_id=reservation.id).count()
+
+        def unexpected_pricing(*_args, **_kwargs):
+            raise AssertionError("No-op reservation fields must not reprice the booking")
+
+        monkeypatch.setattr(reservation_service, "calculate_reservation_pricing", unexpected_pricing)
+        response = client.patch(
+            f"/api/bookings/{reservation.id}",
+            json={
+                "category_id": reservation.category_id,
+                "check_in_date": original_dates[0].isoformat(),
+                "check_out_date": original_dates[1].isoformat(),
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        db.refresh(reservation)
+        assert reservation.total_amount == original_total
+        assert (reservation.check_in_date, reservation.check_out_date) == original_dates
+        assert reservation.version == original_version
+        assert db.query(AuditLog).filter_by(table_name="reservations", record_id=reservation.id).count() == audit_count
+    finally:
+        _close(db, engine)
+
+
+def test_legacy_booking_empty_patch_is_a_read_only_noop():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        original_version = reservation.version
+        audit_count = db.query(AuditLog).filter_by(table_name="reservations", record_id=reservation.id).count()
+
+        response = client.patch(f"/api/bookings/{reservation.id}", json={})
+
+        assert response.status_code == 200, response.text
+        db.refresh(reservation)
+        assert reservation.version == original_version
+        assert db.query(AuditLog).filter_by(table_name="reservations", record_id=reservation.id).count() == audit_count
+    finally:
+        _close(db, engine)
+
+
+def test_legacy_booking_mutations_require_current_client_version():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        original_version = reservation.version
+
+        missing_version = client.patch(
+            f"/api/bookings/{reservation.id}", json={"notes": "must not persist"}
+        )
+        assert missing_version.status_code == 428, missing_version.text
+        db.refresh(reservation)
+        assert reservation.notes is None
+        assert reservation.version == original_version
+
+        stale_version = client.patch(
+            f"/api/bookings/{reservation.id}",
+            json={"notes": "must not persist", "client_version": original_version - 1},
+        )
+        assert stale_version.status_code == 409, stale_version.text
+        db.refresh(reservation)
+        assert reservation.notes is None
+        assert reservation.version == original_version
+    finally:
+        _close(db, engine)
+
+
+@pytest.mark.parametrize("route", ["/api/bookings", "/api/reservations"])
+@pytest.mark.parametrize(
+    ("pricing_snapshot", "total", "currency"),
+    [
+        (None, Decimal("200.00"), "ARS"),
+        (
+            '{"pricing_source":"manual_total_override","nightly_rate":125.0,'
+            '"nights":2,"total_amount":250.0}',
+            Decimal("250.00"),
+            "USD",
+        ),
+    ],
+)
+def test_generic_date_edit_preserves_negotiated_and_unclassified_totals(
+    monkeypatch, route, pricing_snapshot, total, currency
+):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        reservation.total_amount = total
+        reservation.subtotal_amount = total
+        reservation.net_amount = total
+        reservation.currency_code = currency
+        reservation.pricing_snapshot = pricing_snapshot
+        db.commit()
+        new_checkout = reservation.check_out_date + timedelta(days=1)
+
+        def unexpected_pricing(*_args, **_kwargs):
+            raise AssertionError("Generic edits must preserve an explicitly negotiated total")
+
+        monkeypatch.setattr(reservation_service, "calculate_reservation_pricing", unexpected_pricing)
+        payload = {"check_out_date": new_checkout.isoformat()}
+        if route == "/api/bookings":
+            response = _patch_legacy_booking(client, reservation, payload)
+        else:
+            response = client.patch(
+                f"{route}/{reservation.id}",
+                json={**payload, "client_version": reservation.version},
+            )
+
+        assert response.status_code == 200, response.text
+        db.refresh(reservation)
+        assert reservation.check_out_date == new_checkout
+        assert reservation.total_amount == total
+        assert reservation.currency_code == currency
+        assert reservation.pricing_snapshot == pricing_snapshot
+    finally:
+        _close(db, engine)
+
+
+def test_generic_date_edit_preserves_booked_company_base_rate(monkeypatch):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        company = Company(
+            hotel_id=1,
+            legal_name="Acme Hotels LLC",
+            display_name="Acme Hotels",
+            base_price=Decimal("225.00"),
+            is_active=True,
+        )
+        db.add(company)
+        db.flush()
+        reservation.company_id = company.id
+        reservation.total_amount = Decimal("350.00")
+        reservation.subtotal_amount = Decimal("350.00")
+        reservation.net_amount = Decimal("350.00")
+        reservation.currency_code = "USD"
+        reservation.pricing_snapshot = (
+            '{"pricing_source":"company_base_price","company_id":'
+            f'{company.id},"nightly_rate":175.0,"nights":2,"total_amount":350.0' + "}"
+        )
+        db.commit()
+        new_checkout = reservation.check_out_date + timedelta(days=1)
+
+        def unexpected_pricing(*_args, **_kwargs):
+            raise AssertionError("A generic edit must preserve the booked corporate base rate")
+
+        monkeypatch.setattr(reservation_service, "calculate_reservation_pricing", unexpected_pricing)
+        response = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={"check_out_date": new_checkout.isoformat(), "client_version": reservation.version},
+        )
+
+        assert response.status_code == 200, response.text
+        db.refresh(reservation)
+        assert reservation.company_id == company.id
+        assert reservation.check_out_date == new_checkout
+        assert reservation.total_amount == Decimal("350.00")
+        assert reservation.currency_code == "USD"
+        assert reservation.pricing_snapshot.endswith('"total_amount":350.0}')
+    finally:
+        _close(db, engine)
+
+
+def test_legacy_booking_category_change_rejects_occupancy_over_target_capacity():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        source_category = RoomCategory(
+            hotel_id=1,
+            name="Family source",
+            code="FAMSRC",
+            base_price_per_night=Decimal("180.00"),
+            max_occupancy=4,
+        )
+        target_category = RoomCategory(
+            hotel_id=1,
+            name="Small target",
+            code="SMALL",
+            base_price_per_night=Decimal("100.00"),
+            max_occupancy=2,
+        )
+        db.add_all([source_category, target_category])
+        db.flush()
+        reservation.category_id = source_category.id
+        reservation.room_id = None
+        reservation.num_adults = 2
+        reservation.num_children = 1
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:move_capacity", True, actor_user_id=10
+        )
+        db.commit()
+
+        response = _patch_legacy_booking(
+            client, reservation, {"category_id": target_category.id}
+        )
+
+        assert response.status_code == 400, response.text
+        assert "hasta 2" in response.text
+        db.refresh(reservation)
+        assert reservation.category_id == source_category.id
+        assert reservation.num_adults + reservation.num_children == 3
+    finally:
+        _close(db, engine)
+
+
+@pytest.mark.parametrize(("allow_category_move", "expected_status"), [(False, 403), (True, 400)])
+def test_category_product_compatibility_is_checked_after_permission(
+    allow_category_move, expected_status
+):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        reservation.room_id = None
+        source_category_id = reservation.category_id
+        target_category = RoomCategory(
+            hotel_id=1,
+            name="Commercially incompatible target",
+            code="COMM-INCOMPAT",
+            base_price_per_night=Decimal("150.00"),
+            max_occupancy=2,
+        )
+        product = SellableProduct(
+            hotel_id=1,
+            primary_room_category_id=source_category_id,
+            code="SOURCE-CATEGORY-ONLY",
+            name="Source category only",
+            min_occupancy=1,
+            max_occupancy=2,
+            is_active=True,
+        )
+        db.add_all([target_category, product])
+        db.flush()
+        reservation.sellable_product_id = product.id
+        set_user_override(
+            db,
+            1,
+            20,
+            "receptionist",
+            "reservation:move_category",
+            allow_category_move,
+            actor_user_id=10,
+        )
+        db.commit()
+
+        response = _patch_legacy_booking(
+            client, reservation, {"category_id": target_category.id}
+        )
+
+        assert response.status_code == expected_status, response.text
+        db.refresh(reservation)
+        assert reservation.category_id == source_category_id
+    finally:
+        _close(db, engine)
+
+
+def test_legacy_booking_domain_error_during_room_move_returns_400(monkeypatch):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        target_room = Room(
+            hotel_id=1,
+            category_id=reservation.category_id,
+            room_number="102",
+            floor=1,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(target_room)
+        db.flush()
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:move", True, actor_user_id=10
+        )
+        db.commit()
+        original_room_id = reservation.room_id
+
+        def reject_move(*_args, **_kwargs):
+            raise bookings_api.ReservationOperationsError("room category context unavailable")
+
+        monkeypatch.setattr(bookings_api, "enforce_room_move_permission", reject_move)
+        response = _patch_legacy_booking(client, reservation, {"room_id": target_room.id})
+
+        assert response.status_code == 400, response.text
+        assert "room category context unavailable" in response.text
+        db.refresh(reservation)
+        assert reservation.room_id == original_room_id
+    finally:
+        _close(db, engine)
+
+
+def test_legacy_booking_date_change_checks_destination_room_not_old_room():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        target_room = Room(
+            hotel_id=1,
+            category_id=reservation.category_id,
+            room_number="103",
+            floor=1,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(target_room)
+        db.flush()
+        new_check_in = reservation.check_out_date + timedelta(days=2)
+        new_check_out = new_check_in + timedelta(days=2)
+        blocking_reservation = Reservation(
+            hotel_id=1,
+            guest_id=reservation.guest_id,
+            category_id=reservation.category_id,
+            room_id=reservation.room_id,
+            confirmation_code="OLD-ROOM-BLOCK",
+            check_in_date=new_check_in,
+            check_out_date=new_check_out,
+            status=ReservationStatusEnum.PENDING,
+            total_amount=Decimal("200.00"),
+            num_adults=1,
+        )
+        db.add(blocking_reservation)
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:move", True, actor_user_id=10
+        )
+        db.commit()
+
+        response = _patch_legacy_booking(
+            client,
+            reservation,
+            {
+                "room_id": target_room.id,
+                "check_in_date": new_check_in.isoformat(),
+                "check_out_date": new_check_out.isoformat(),
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        db.refresh(reservation)
+        assert reservation.room_id == target_room.id
+        assert reservation.check_in_date == new_check_in
+        assert reservation.check_out_date == new_check_out
+    finally:
+        _close(db, engine)
+
+
+@pytest.mark.parametrize("route", ["/api/bookings", "/api/reservations"])
+def test_generic_reservation_edit_requires_manager_for_paid_date_change(route):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        reservation.status = ReservationStatusEnum.FULLY_PAID
+        reservation.amount_paid = reservation.total_amount
+        original_dates = (reservation.check_in_date, reservation.check_out_date)
+        original_total = reservation.total_amount
+        db.commit()
+
+        denied = client.patch(
+            f"{route}/{reservation.id}",
+            json={
+                "check_out_date": (reservation.check_out_date + timedelta(days=1)).isoformat(),
+                "client_version": reservation.version,
+            },
+        )
+
+        assert denied.status_code == 403, denied.text
+        db.refresh(reservation)
+        assert (reservation.check_in_date, reservation.check_out_date) == original_dates
+        assert reservation.total_amount == original_total
+    finally:
+        _close(db, engine)
+
+
+def test_legacy_booking_create_and_update_respect_inactive_subscription():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        config = db.get(HotelConfiguration, 1)
+        config.subscription_active = False
+        db.commit()
+
+        create = client.post(
+            "/api/bookings/",
+            json={
+                "guest_id": reservation.guest_id,
+                "category_id": reservation.category_id,
+                "check_in_date": (date.today() + timedelta(days=10)).isoformat(),
+                "check_out_date": (date.today() + timedelta(days=12)).isoformat(),
+                "quote_token": "synthetic-quote-token-value",
+            },
+        )
+        update = _patch_legacy_booking(client, reservation, {"notes": "must not persist"})
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:cancel", True, actor_user_id=10
+        )
+        db.commit()
+        cancel = client.post(f"/api/bookings/{reservation.id}/cancel")
+        auth["user_id"] = 10
+        auth["role"] = "owner"
+        delete = client.delete(f"/api/bookings/{reservation.id}")
+
+        assert create.status_code == update.status_code == cancel.status_code == delete.status_code == 402
+        db.refresh(reservation)
+        assert reservation.notes is None
+        assert reservation.status == ReservationStatusEnum.PENDING
+        assert reservation.deleted_at is None
+    finally:
+        _close(db, engine)
+
+
+@pytest.mark.parametrize("protected_change", ["room", "paid_dates"])
+def test_manual_ota_duplicate_update_respects_reservation_action_lanes(protected_change):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        target_room = Room(
+            hotel_id=1,
+            category_id=reservation.category_id,
+            room_number="102",
+            floor=1,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(target_room)
+        reservation.source_provider_code = "booking"
+        reservation.external_id = "OTA-RBAC-1"
+        if protected_change == "paid_dates":
+            reservation.status = ReservationStatusEnum.FULLY_PAID
+            reservation.amount_paid = reservation.total_amount
+        db.flush()
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:create", True, actor_user_id=10
+        )
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:update", True, actor_user_id=10
+        )
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:move", False, actor_user_id=10
+        )
+        original_dates = (reservation.check_in_date, reservation.check_out_date)
+        original_room_id = reservation.room_id
+        db.commit()
+
+        payload = {
+            "guest_id": reservation.guest_id,
+            "category_id": reservation.category_id,
+            "room_id": target_room.id if protected_change == "room" else original_room_id,
+            "check_in_date": original_dates[0].isoformat(),
+            "check_out_date": (
+                original_dates[1] + timedelta(days=1)
+                if protected_change == "paid_dates"
+                else original_dates[1]
+            ).isoformat(),
+            "channel": "booking",
+            "external_id": "OTA-RBAC-1",
+        }
+
+        response = client.post("/api/reservations/manual-ota", json=payload)
+
+        assert response.status_code == 403, response.text
+        db.refresh(reservation)
+        assert reservation.room_id == original_room_id
+        assert (reservation.check_in_date, reservation.check_out_date) == original_dates
+    finally:
+        _close(db, engine)
+
+
+def test_reservation_date_change_extension_and_room_move_respect_inactive_subscription():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        config = db.get(HotelConfiguration, 1)
+        config.subscription_active = False
+        target_room = Room(
+            hotel_id=1,
+            category_id=reservation.category_id,
+            room_number="102",
+            floor=1,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(target_room)
+        for permission in (
+            "reservation:update",
+            "reservation:move",
+            "reservation:charge",
+            "cash:operate",
+        ):
+            set_user_override(
+                db, 1, 20, "receptionist", permission, True, actor_user_id=10
+            )
+        db.commit()
+
+        date_change = client.post(
+            f"/api/reservations/{reservation.id}/date-change",
+            json={
+                "check_in_date": reservation.check_in_date.isoformat(),
+                "check_out_date": (reservation.check_out_date + timedelta(days=1)).isoformat(),
+                "client_version": reservation.version,
+            },
+        )
+        extension = client.post(
+            f"/api/reservations/{reservation.id}/extend",
+            json={
+                "new_checkout_date": (reservation.check_out_date + timedelta(days=1)).isoformat(),
+                "client_version": reservation.version,
+            },
+        )
+        room_move = client.post(
+            f"/api/reservations/{reservation.id}/room-move",
+            json={"to_room_id": target_room.id, "reason_code": "guest_request"},
+        )
+
+        assert date_change.status_code == extension.status_code == room_move.status_code == 402
+        db.refresh(reservation)
+        assert reservation.room_id != target_room.id
+        assert reservation.check_out_date == date.today() + timedelta(days=2)
+    finally:
+        _close(db, engine)
+
+
+def test_legacy_booking_cancel_records_actor_and_disables_active_payment_link():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        link = PaymentLink(
+            hotel_id=1,
+            reservation_id=reservation.id,
+            link_code="LEGACY-CANCEL-1",
+            requested_amount=Decimal("100.00"),
+            recipient_email="guest@example.com",
+            status="pending",
+            execution_mode="provider",
+            payable=True,
+            external_checkout_url="https://payments.example/checkout/legacy-cancel-1",
+        )
+        db.add(link)
+        db.commit()
+
+        response = client.post(f"/api/bookings/{reservation.id}/cancel")
+
+        assert response.status_code == 200, response.text
+        db.refresh(link)
+        assert link.status == "cancelled"
+        assert not link.payable
+        history = (
+            db.query(ReservationStatusHistory)
+            .filter_by(reservation_id=reservation.id, to_status="cancelled")
+            .one()
+        )
+        assert history.reason_code == "cancelled_by_user"
+        assert history.changed_by_user_id == 20
     finally:
         _close(db, engine)
 

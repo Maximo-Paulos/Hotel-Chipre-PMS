@@ -8,7 +8,7 @@ import logging
 import string
 import random
 from dataclasses import dataclass, field, replace
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Optional
 from zoneinfo import ZoneInfo
@@ -495,6 +495,7 @@ def calculate_reservation_pricing(
             tax_policy=tax_policy,
             pricing_channel_code=pricing_channel_code or "direct",
             guest_scope=guest_scope,
+            pricing_payment_method=pricing_payment_method,
         )
 
     return _daily_rate_pricing_result(
@@ -652,6 +653,7 @@ def _daily_rate_pricing_result(
         "pricing_source": "daily_rates",
         "category_id": category.id,
         "payment_method": payment_method,
+        "pricing_channel_code": pricing_channel_code or "direct",
         "nights": nights,
         "nightly_rate": nightly_rate,
         "breakdown": breakdown,
@@ -855,6 +857,7 @@ def _apply_corporate_pricing(
     pricing: ReservationPricingResult,
     company: Company,
     explicit_total,
+    target_currency: str | None = None,
 ) -> ReservationPricingResult:
     if explicit_total is not None:
         nightly = float(explicit_total) / pricing.nights if pricing.nights else 0.0
@@ -866,6 +869,7 @@ def _apply_corporate_pricing(
             nightly_rate=nightly,
             pricing_source="manual_total_override",
             company_id=company.id,
+            currency_code=target_currency.strip().upper() if target_currency else None,
         )
 
     if company.base_price is None or pricing.rate_plan_id is not None:
@@ -1091,7 +1095,14 @@ def create_reservation(
             tax_policy_id=data.tax_policy_id,
         )
         if company is not None:
-            pricing = _apply_corporate_pricing(db, hotel_id=hotel_id, pricing=pricing, company=company, explicit_total=data.total_amount)
+            pricing = _apply_corporate_pricing(
+                db,
+                hotel_id=hotel_id,
+                pricing=pricing,
+                company=company,
+                explicit_total=data.total_amount,
+                target_currency=data.target_currency,
+            )
         else:
             # B4: manual tarifa on a direct (non-corporate) reservation --
             # the same override mechanism corporate accounts already use,
@@ -1773,6 +1784,9 @@ def update_reservation_fields(
     room_move_reason_code: Optional[str] = None,
     room_move_notes: Optional[str] = None,
     client_version: Optional[int] = None,
+    recalculate_pricing: bool = True,
+    recalculate_explicit_price: bool = False,
+    preserve_unclassified_price: bool = False,
 ) -> Reservation:
     # Optimistic locking — reject stale writes (v72 security-audit §6)
     if client_version is not None and reservation.version != client_version:
@@ -1812,6 +1826,10 @@ def update_reservation_fields(
 
     new_ci = update_data.get("check_in_date", reservation.check_in_date)
     new_co = update_data.get("check_out_date", reservation.check_out_date)
+    pricing_occupancy = (
+        int(update_data.get("num_adults", reservation.num_adults) or 0)
+        + int(update_data.get("num_children", reservation.num_children) or 0)
+    )
 
     if "num_adults" in update_data or "num_children" in update_data:
         category_query = db.query(RoomCategory).filter(RoomCategory.id == reservation.category_id)
@@ -1829,32 +1847,110 @@ def update_reservation_fields(
     if "check_in_date" in update_data or "check_out_date" in update_data:
         if new_co <= new_ci:
             raise ReservationError("Check-out must be after check-in")
-        if reservation.room_id and not check_room_availability(
+        target_room_id = update_data.get("room_id", reservation.room_id)
+        if target_room_id and not check_room_availability(
             db,
-            reservation.room_id,
+            target_room_id,
             new_ci,
             new_co,
             hotel_id=hotel_id,
             exclude_reservation_id=reservation.id,
         ):
             raise ReservationError("Room is not available for the new dates")
-        pricing = calculate_reservation_pricing(
-            db,
-            category_id=reservation.category_id,
-            check_in=new_ci,
-            check_out=new_co,
-            hotel_id=hotel_id,
-            sellable_product_id=reservation.sellable_product_id,
-            rate_plan_id=reservation.rate_plan_id,
-            tax_policy_id=reservation.tax_policy_id,
-            pricing_channel_code=reservation.source_provider_code or reservation.source.value,
-            guest_scope="all",
-            target_currency=reservation.currency_code,
-            occupancy=reservation.num_adults + reservation.num_children,
+        pricing_snapshot = _pricing_snapshot_values(reservation)
+        pricing_source = pricing_snapshot.get("pricing_source")
+        is_explicit_price = pricing_source == "manual_total_override"
+        is_booked_company_price = pricing_source == "company_base_price"
+        is_classified_price = pricing_source in {
+            "manual_total_override",
+            "rate_plan_quote",
+            "daily_rates",
+            "company_base_price",
+        }
+        should_recalculate = recalculate_pricing and (
+            (not (is_explicit_price or is_booked_company_price) or recalculate_explicit_price)
+            and (not preserve_unclassified_price or is_classified_price or recalculate_explicit_price)
         )
+        if should_recalculate and is_explicit_price:
+            nights = (new_co - new_ci).days
+            explicit_total = manual_override_total_for_nights(reservation, nights=nights)
+            category = (
+                db.query(RoomCategory)
+                .filter(RoomCategory.id == reservation.category_id, RoomCategory.hotel_id == hotel_id)
+                .first()
+            )
+            if category is None:
+                raise ReservationError("Room category not found")
+            pricing = _pricing_result_for_explicit_total(
+                db,
+                hotel_id=hotel_id,
+                category=category,
+                check_in=new_ci,
+                check_out=new_co,
+                sellable_product_id=reservation.sellable_product_id,
+                rate_plan_id=reservation.rate_plan_id,
+                tax_policy_id=reservation.tax_policy_id,
+            )
+            if reservation.company_id is not None:
+                company = _resolve_reservation_company(
+                    db, hotel_id=hotel_id, company_id=reservation.company_id
+                )
+                pricing = _apply_corporate_pricing(
+                    db,
+                    hotel_id=hotel_id,
+                    pricing=pricing,
+                    company=company,
+                    explicit_total=explicit_total,
+                    target_currency=reservation.currency_code,
+                )
+            else:
+                pricing = _apply_manual_total_override(
+                    db,
+                    hotel_id=hotel_id,
+                    pricing=pricing,
+                    total_amount=explicit_total,
+                    target_currency=reservation.currency_code,
+                )
+            _apply_pricing_result_to_reservation(reservation, pricing)
+        elif should_recalculate:
+            pricing = calculate_reservation_pricing(
+                db,
+                category_id=reservation.category_id,
+                check_in=new_ci,
+                check_out=new_co,
+                hotel_id=hotel_id,
+                sellable_product_id=reservation.sellable_product_id,
+                rate_plan_id=reservation.rate_plan_id,
+                tax_policy_id=reservation.tax_policy_id,
+                pricing_channel_code=(
+                    pricing_snapshot.get("pricing_channel_code")
+                    or reservation.source_provider_code
+                    or reservation.source.value
+                ),
+                pricing_payment_method=(
+                    pricing_snapshot.get("pricing_payment_method")
+                    or pricing_snapshot.get("payment_method")
+                ),
+                guest_scope=pricing_snapshot.get("guest_scope") or "all",
+                target_currency=reservation.currency_code,
+                occupancy=pricing_occupancy,
+                guest_id=reservation.guest_id,
+                company_id=reservation.company_id,
+            )
+            if reservation.company_id is not None:
+                company = _resolve_reservation_company(
+                    db, hotel_id=hotel_id, company_id=reservation.company_id
+                )
+                pricing = _apply_corporate_pricing(
+                    db,
+                    hotel_id=hotel_id,
+                    pricing=pricing,
+                    company=company,
+                    explicit_total=None,
+                )
+            _apply_pricing_result_to_reservation(reservation, pricing)
         reservation.check_in_date = new_ci
         reservation.check_out_date = new_co
-        _apply_pricing_result_to_reservation(reservation, pricing)
 
     if "room_id" in update_data and update_data["room_id"] is not None:
         previous_room_id = reservation.room_id
@@ -2070,6 +2166,61 @@ def _resolve_reservation_commercial_context(
     return sellable_product, rate_plan, tax_policy
 
 
+def validate_reservation_category_compatibility(
+    db: Session,
+    *,
+    reservation: Reservation,
+    category: RoomCategory,
+    hotel_id: int,
+) -> None:
+    """Reject a category change that would detach the reservation's product/plan."""
+    if category.hotel_id != hotel_id or reservation.hotel_id != hotel_id:
+        raise ReservationError("Reservation category does not belong to the active hotel")
+    _resolve_reservation_commercial_context(
+        db,
+        hotel_id=hotel_id,
+        category=category,
+        sellable_product_id=reservation.sellable_product_id,
+        rate_plan_id=reservation.rate_plan_id,
+        tax_policy_id=reservation.tax_policy_id,
+    )
+
+
+def _pricing_snapshot_values(reservation: Reservation) -> dict[str, Any]:
+    if not reservation.pricing_snapshot:
+        return {}
+    try:
+        value = json.loads(reservation.pricing_snapshot)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def manual_override_total_for_nights(
+    reservation: Reservation,
+    *,
+    nights: int,
+) -> Decimal | None:
+    """Carry a negotiated nightly amount across an explicitly repriced stay."""
+    snapshot = _pricing_snapshot_values(reservation)
+    if snapshot.get("pricing_source") != "manual_total_override":
+        return None
+    if nights <= 0:
+        raise ReservationError("Check-out must be after check-in")
+
+    nightly_rate = snapshot.get("nightly_rate")
+    try:
+        nightly = Decimal(str(nightly_rate)) if nightly_rate is not None else None
+    except (InvalidOperation, ValueError, TypeError):
+        nightly = None
+    if nightly is None or nightly < 0:
+        original_nights = (reservation.check_out_date - reservation.check_in_date).days
+        if original_nights <= 0:
+            raise ReservationError("Cannot safely recalculate the negotiated reservation price")
+        nightly = Decimal(str(reservation.total_amount or 0)) / Decimal(original_nights)
+    return (nightly * Decimal(nights)).quantize(Decimal("0.01"))
+
+
 def _pricing_result_from_quote(
     db: Session,
     *,
@@ -2082,6 +2233,7 @@ def _pricing_result_from_quote(
     tax_policy: TaxPolicy | None,
     pricing_channel_code: str,
     guest_scope: str,
+    pricing_payment_method: str | None,
 ) -> ReservationPricingResult:
     nightly_rate = round(quote.gross_total / nights, 2) if nights > 0 else 0.0
     deposit_amount = _compute_deposit_amount(db, hotel_id=hotel_id, gross_total=quote.gross_total)
@@ -2092,6 +2244,7 @@ def _pricing_result_from_quote(
         "tax_policy_id": tax_policy.id if tax_policy else None,
         "pricing_channel_code": pricing_channel_code,
         "guest_scope": guest_scope,
+        "pricing_payment_method": pricing_payment_method,
         "tax_breakdown": quote.tax_breakdown,
         "breakdown": [
             {

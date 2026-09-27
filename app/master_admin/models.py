@@ -17,6 +17,9 @@ class MasterAdminSession(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # Bind the high-privilege cookie to the user's global revocation counter.
+    # Password resets and other identity-compromise actions bump this value.
+    token_version = Column(Integer, nullable=False, default=0, server_default="0")
     session_token_hash = Column(String(128), nullable=False, unique=True, index=True)
     csrf_token_hash = Column(String(128), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)

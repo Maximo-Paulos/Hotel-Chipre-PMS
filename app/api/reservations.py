@@ -65,6 +65,7 @@ from app.services.reservation_operations_service import (
     move_reservation_room,
     preview_ota_rebook_as_direct,
     rebook_ota_reservation_as_direct,
+    reservation_has_payment_or_deposit,
 )
 from app.services.reservation_action_service import (
     ReservationActionError,
@@ -82,6 +83,7 @@ from app.services.payment_service import PaymentError
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.dependencies.auth import AuthContext, get_auth_context, require_all_permissions, require_any_permission, require_permission
 from app.services.permission_service import (
+    PERMISSION_CASH_OPERATE,
     PERMISSION_COMPANY_MANAGE,
     PERMISSION_GUEST_CREATE,
     PERMISSION_RESERVATION_CANCEL,
@@ -333,6 +335,27 @@ def create_or_update_manual_ota(
         )
         .first()
     )
+    if existing is not None:
+        if data.room_id is not None and data.room_id != existing.room_id:
+            _ensure_action_permission(
+                db,
+                context,
+                PERMISSION_RESERVATION_MOVE,
+                acceptable_permissions=RESERVATION_MOVE_TIER_PERMISSIONS[1:],
+            )
+        dates_changed = (
+            data.check_in_date != existing.check_in_date
+            or data.check_out_date != existing.check_out_date
+        )
+        if (
+            dates_changed
+            and reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=existing)
+            and not _is_manager_context(context)
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Modificar fechas de una reserva con pagos requiere gerente, dueño o codueño.",
+            )
     before = audit_log_service.model_snapshot(existing)
     try:
         reservation = create_or_update_manual_ota_reservation(
@@ -927,6 +950,12 @@ def change_dates(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
+    config = db.get(HotelConfiguration, context.hotel_id)
+    if config and not config.subscription_active:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Suscripción inactiva. Reactivá el plan para gestionar reservas.",
+        )
     if payload.room_id is not None:
         # change_reservation_dates/create_reservation rejects a room from a
         # different category, so this implicit move is necessarily tier 1.
@@ -994,15 +1023,6 @@ def modify_reservation(
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
     """Modify a reservation, including arrival metadata in any non-deleted state."""
-    if "room_id" in data.model_fields_set:
-        # update_reservation_fields rejects cross-category rooms, so this
-        # legacy edit path can only make a same-category (tier 1) move.
-        _ensure_action_permission(
-            db,
-            context,
-            PERMISSION_RESERVATION_MOVE,
-            acceptable_permissions=RESERVATION_MOVE_TIER_PERMISSIONS[1:],
-        )
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
         raise HTTPException(
@@ -1012,8 +1032,38 @@ def modify_reservation(
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
-    metadata_fields = {"arrival_time_hint", "reservation_comment", "client_version"}
-    terminal_mutation_fields = set(data.model_fields_set) - metadata_fields
+    submitted_data = data.model_dump(exclude_unset=True)
+    effective_data = {
+        field: value
+        for field, value in submitted_data.items()
+        if field not in {"client_version", "restriction_override"}
+        and not (field == "room_id" and value is None)
+        and getattr(r, field, None) != value
+    }
+    if "room_id" in effective_data and effective_data["room_id"] is not None:
+        # update_reservation_fields rejects cross-category rooms, so this
+        # legacy edit path can only make a same-category (tier 1) move.
+        _ensure_action_permission(
+            db,
+            context,
+            PERMISSION_RESERVATION_MOVE,
+            acceptable_permissions=RESERVATION_MOVE_TIER_PERMISSIONS[1:],
+        )
+    dates_changed = (
+        "check_in_date" in effective_data
+        or "check_out_date" in effective_data
+    )
+    if (
+        dates_changed
+        and reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=r)
+        and not _is_manager_context(context)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Modificar fechas de una reserva con pagos requiere gerente, dueño o codueño.",
+        )
+    metadata_fields = {"arrival_time_hint", "reservation_comment"}
+    terminal_mutation_fields = set(effective_data) - metadata_fields
     if r.status in (
         ReservationStatusEnum.CHECKED_IN,
         ReservationStatusEnum.CHECKED_OUT,
@@ -1021,22 +1071,36 @@ def modify_reservation(
         ReservationStatusEnum.NO_SHOW,
     ) and terminal_mutation_fields:
         raise HTTPException(status_code=400, detail=("Cannot modify: reservation is " + r.status.value))
+    if data.client_version is not None and r.version != data.client_version:
+        raise HTTPException(status_code=409, detail="Reservation was modified concurrently. Reload and retry.")
+    if not effective_data:
+        return _to_read(r)
+    if data.client_version is None:
+        raise HTTPException(
+            status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+            detail="client_version es obligatorio para modificar una reserva. Recargá e intentá nuevamente.",
+        )
+
+    update_payload = {**effective_data, "client_version": data.client_version}
+    if "restriction_override" in submitted_data:
+        update_payload["restriction_override"] = submitted_data["restriction_override"]
+    update_data = ReservationUpdate.model_validate(update_payload)
     before = audit_log_service.model_snapshot(r)
     mobility_restriction_changed = (
-        "mobility_restriction" in data.model_fields_set
-        and data.mobility_restriction != r.mobility_restriction
+        "mobility_restriction" in effective_data
     )
     try:
         update_reservation_fields(
             db,
             r,
-            data,
+            update_data,
             context.hotel_id,
             changed_by_user_id=context.user_id,
             actor_role=context.user_role,
             room_move_reason_code="manual_update",
             room_move_notes="Cambio manual desde API de reservas",
-            client_version=data.client_version,
+            client_version=update_data.client_version,
+            preserve_unclassified_price=True,
         )
         audit_log_service.safe_create_audit_log(
             db,
@@ -1053,7 +1117,7 @@ def modify_reservation(
         )
         db.commit()
         db.refresh(r)
-        if any(value is not None for value in (data.check_in_date, data.check_out_date, data.room_id)) or mobility_restriction_changed:
+        if any(field in effective_data for field in ("check_in_date", "check_out_date", "room_id")) or mobility_restriction_changed:
             background_tasks.add_task(
                 _trigger_reoptimization_bg,
                 hotel_id=context.hotel_id,
@@ -1078,9 +1142,21 @@ def extend_stay(
     payload: ReservationExtensionRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
+    context: AuthContext = Depends(
+        require_all_permissions(
+            PERMISSION_RESERVATION_UPDATE,
+            PERMISSION_RESERVATION_CHARGE,
+            PERMISSION_CASH_OPERATE,
+        )
+    ),
 ):
     """Extend a guest's stay to a new checkout date."""
+    config = db.get(HotelConfiguration, context.hotel_id)
+    if config and not config.subscription_active:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Suscripción inactiva. Reactivá el plan para gestionar reservas.",
+        )
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
@@ -1145,6 +1221,12 @@ def room_move(
         )
     ),
 ):
+    config = db.get(HotelConfiguration, context.hotel_id)
+    if config and not config.subscription_active:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Suscripción inactiva. Reactivá el plan para gestionar reservas.",
+        )
     try:
         manual_reason_code = ManualRoomMoveReasonCodeEnum(payload.reason_code)
     except ValueError as exc:

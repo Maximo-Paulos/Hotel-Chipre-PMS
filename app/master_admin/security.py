@@ -255,6 +255,7 @@ def create_master_session(db: Session, user: User, request: Request | None = Non
     csrf_token = _issue_token()
     session = MasterAdminSession(
         user_id=user.id,
+        token_version=user.token_version or 0,
         session_token_hash=_hash_value(session_token),
         csrf_token_hash=_hash_value(csrf_token),
         expires_at=_session_expiry(),
@@ -492,6 +493,11 @@ def _load_session(db: Session, session_token: str) -> MasterAdminSession | None:
     if not session:
         return None
     if session.revoked_at is not None:
+        return None
+    user = db.get(User, session.user_id)
+    if user is None or session.token_version != (user.token_version or 0):
+        session.revoked_at = _now()
+        db.flush()
         return None
     now = _now()
     absolute_expiry = _as_aware(session.expires_at)

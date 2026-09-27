@@ -54,7 +54,10 @@ def test_forward_multi_hotel_context_cannot_read_or_attach_foreign_entities(isol
 
     foreign_room_update = client.patch(
         f"/api/bookings/{hotel_one['reservation'].id}",
-        json={"room_id": hotel_two["room"].id},
+        json={
+            "room_id": hotel_two["room"].id,
+            "client_version": hotel_one["reservation"].version,
+        },
     )
     assert foreign_room_update.status_code in {400, 404}, foreign_room_update.text
 

@@ -44,6 +44,7 @@ from app.schemas.auth import (
     GoogleUnlinkRequest,
     LoginRequest,
     MfaChallengeResponse,
+    MfaEnrollmentRequest,
     MfaCodeRequest,
     MfaDisableRequest,
     MfaEnrollmentResponse,
@@ -1382,9 +1383,42 @@ def reset_password(
 
 @router.post("/mfa/enroll", response_model=MfaEnrollmentResponse)
 def enroll_mfa(
+    payload: MfaEnrollmentRequest,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    reauthenticated = bool(
+        user.password_login_enabled
+        and payload.current_password
+        and verify_password(payload.current_password, user.password_hash)
+    )
+    if not reauthenticated and payload.google_id_token and user.google_sub:
+        try:
+            require_google_login()
+        except GoogleLoginDisabled as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        claims, _email, google_sub = _verify_google_claims(
+            payload.google_id_token, get_settings()
+        )
+        try:
+            issued_at = datetime.fromtimestamp(float(claims.get("iat")), tz=timezone.utc)
+        except (TypeError, ValueError, OverflowError):
+            issued_at = None
+        token_age = (
+            (datetime.now(timezone.utc) - issued_at).total_seconds()
+            if issued_at is not None
+            else float("inf")
+        )
+        reauthenticated = (
+            google_sub == user.google_sub
+            and -30 <= token_age <= 5 * 60
+        )
+    if not reauthenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Reautenticación requerida para configurar MFA",
+        )
+
     try:
         _mfa_secret, secret = mfa_service.enroll_user(db, user.id)
     except ValueError as exc:

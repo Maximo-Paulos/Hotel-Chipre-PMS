@@ -459,6 +459,73 @@ def test_master_login_sets_cookie_and_hydrates_me(master_client, monkeypatch):
     assert payload["csrf_token"]
 
 
+def test_master_admin_cookie_is_revoked_when_user_token_version_changes(
+    master_client, monkeypatch
+):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+    db = SessionLocal()
+    try:
+        _seed_platform_admin(db)
+        db.commit()
+    finally:
+        db.close()
+
+    _complete_master_login(client, SessionLocal)
+    assert client.get("/api/master-admin/auth/me").status_code == 200
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(email="platform-admin@example.com").one()
+        user.token_version += 1
+        db.commit()
+    finally:
+        db.close()
+
+    rejected = client.get("/api/master-admin/auth/me")
+    assert rejected.status_code == 401, rejected.text
+
+
+def test_master_admin_mfa_challenge_is_revoked_when_user_token_version_changes(
+    master_client, monkeypatch
+):
+    client, SessionLocal = master_client
+    monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")
+    get_settings.cache_clear()
+    db = SessionLocal()
+    try:
+        user = _seed_platform_admin(db)
+        mfa_row = db.query(UserMfaSecret).filter_by(user_id=user.id).one()
+        secret = mfa_service.decrypt_totp_secret(mfa_row.encrypted_secret)
+        db.commit()
+    finally:
+        db.close()
+
+    login = client.post(
+        "/api/master-admin/auth/login",
+        json={"email": "platform-admin@example.com", "password": "Master123!", "pin": "654321"},
+    )
+    assert login.status_code == 200, login.text
+    challenge = login.json()
+    assert challenge["requires_mfa"] is True
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(email="platform-admin@example.com").one()
+        user.token_version += 1
+        db.commit()
+    finally:
+        db.close()
+
+    rejected = client.post(
+        "/api/master-admin/auth/login/mfa",
+        json={"mfa_token": challenge["mfa_token"], "code": pyotp.TOTP(secret).now()},
+    )
+    assert rejected.status_code == 401, rejected.text
+    assert "revocado" in rejected.text.lower()
+
+
 def test_master_admin_rejects_untrusted_origin_for_reads_and_writes(master_client, monkeypatch):
     client, SessionLocal = master_client
     monkeypatch.setenv("MASTER_ADMIN_PIN", "654321")

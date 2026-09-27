@@ -150,6 +150,26 @@ def get_open_session(db: Session, hotel_id: int) -> CashSession | None:
     )
 
 
+def require_open_session_for_currency(
+    db: Session,
+    *,
+    hotel_id: int,
+    currency_code: str,
+) -> CashSession:
+    """Return the active drawer only when its single currency matches a payment."""
+    session = get_open_session(db, hotel_id)
+    if session is None:
+        raise CashRegisterError("Cash payment requires an open cash session")
+
+    session_currency = (session.currency_code or "").strip().upper()
+    payment_currency = (currency_code or "").strip().upper()
+    if session_currency != payment_currency:
+        raise CashRegisterError(
+            f"Cash session currency ({session_currency}) does not match payment currency ({payment_currency})"
+        )
+    return session
+
+
 def record_cash_payment_movement(
     db: Session,
     *,
@@ -170,9 +190,11 @@ def record_cash_payment_movement(
     if transaction.status != TransactionStatusEnum.COMPLETED:
         return None
 
-    session = get_open_session(db, transaction.hotel_id)
-    if session is None:
-        raise CashRegisterError("Cash payment requires an open cash session")
+    session = require_open_session_for_currency(
+        db,
+        hotel_id=transaction.hotel_id,
+        currency_code=transaction.currency,
+    )
 
     from app.models.transaction import TransactionTypeEnum
 

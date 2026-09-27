@@ -49,7 +49,13 @@ from app.services.collaboration import (
 )
 from app.services import audit_log_service
 from app.services.domain_events import RealtimeEventsUnavailable, get_realtime_client
-from app.services.permission_service import audit_permission_denied, resolve
+from app.services.permission_service import (
+    PERMISSION_RESERVATION_MOVE,
+    RESERVATION_MOVE_TIER_PERMISSIONS,
+    audit_permission_denied,
+    resolve,
+)
+from app.services.reservation_operations_service import reservation_has_payment_or_deposit
 from app.services.reservation_service import ReservationError
 
 
@@ -238,6 +244,45 @@ def patch_collaborative_resource(
             }
 
         if changes:
+            if canonical_type == "reservation":
+                if changes.get("room_id") is not None and changes["room_id"] != resource.room_id:
+                    move_allowed = any(
+                        resolve(
+                            db,
+                            context.hotel_id,
+                            context.user_role,
+                            permission,
+                            user_id=context.user_id,
+                        )
+                        for permission in RESERVATION_MOVE_TIER_PERMISSIONS
+                    )
+                    if not move_allowed:
+                        audit_permission_denied(
+                            db,
+                            hotel_id=context.hotel_id,
+                            user_id=context.user_id,
+                            role=context.user_role,
+                            permission_code=PERMISSION_RESERVATION_MOVE,
+                        )
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="No tenes permisos para mover la reserva",
+                        )
+                dates_changed = (
+                    ("check_in_date" in changes and changes["check_in_date"] != resource.check_in_date)
+                    or ("check_out_date" in changes and changes["check_out_date"] != resource.check_out_date)
+                )
+                if (
+                    dates_changed
+                    and reservation_has_payment_or_deposit(
+                        db, hotel_id=context.hotel_id, reservation=resource
+                    )
+                    and context.operational_role not in {"owner", "co_owner", "manager"}
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Modificar fechas de una reserva con pagos requiere gerente, dueño o codueño.",
+                    )
             before_editable_values = editable_resource_values(canonical_type, resource)
             apply_resource_changes(
                 db,

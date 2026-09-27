@@ -13,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.database as db_module
+import app.api.auth as auth_api
 import app.main as main_module
 import app.models  # noqa: F401
 from app.config import get_settings
@@ -1533,7 +1534,11 @@ def _enroll_and_confirm_mfa(
 ) -> tuple[dict[str, object], str, list[str]]:
     auth = _verified_auth(client, email, monkeypatch)
     headers = _auth_headers(auth)
-    enrollment = client.post("/api/auth/mfa/enroll", headers=headers)
+    enrollment = client.post(
+        "/api/auth/mfa/enroll",
+        headers=headers,
+        json={"current_password": "Demo123!pass"},
+    )
     assert enrollment.status_code == 200, enrollment.text
     enrollment_body = enrollment.json()
     secret = enrollment_body["secret"]
@@ -1551,6 +1556,67 @@ def _enroll_and_confirm_mfa(
     assert audit.hotel_id == auth["hotel_id"]
     assert json.loads(audit.details) == {"factor": "totp"}
     return auth, secret, recovery_codes
+
+
+def test_mfa_enrollment_requires_current_password_for_password_account(
+    client_and_db, fixed_code_patch, monkeypatch
+):
+    client, db, _session_factory = client_and_db
+    auth = _verified_auth(client, "mfa-reauth@example.com", monkeypatch)
+    headers = _auth_headers(auth)
+
+    missing = client.post("/api/auth/mfa/enroll", headers=headers, json={})
+    wrong = client.post(
+        "/api/auth/mfa/enroll",
+        headers=headers,
+        json={"current_password": "not-the-current-password"},
+    )
+    assert missing.status_code == wrong.status_code == 401
+    user = db.query(User).filter_by(email="mfa-reauth@example.com").one()
+    assert db.query(UserMfaSecret).filter_by(user_id=user.id).count() == 0
+
+    allowed = client.post(
+        "/api/auth/mfa/enroll",
+        headers=headers,
+        json={"current_password": "Demo123!pass"},
+    )
+    assert allowed.status_code == 200, allowed.text
+    assert db.query(UserMfaSecret).filter_by(user_id=user.id).count() == 1
+
+
+@pytest.mark.parametrize(("token_age", "expected_status"), [(0, 200), (301, 401)])
+def test_google_only_account_needs_fresh_linked_provider_proof_to_enroll_mfa(
+    client_and_db, fixed_code_patch, monkeypatch, token_age, expected_status
+):
+    client, db, _session_factory = client_and_db
+    email = f"google-mfa-reauth-{token_age}@example.com"
+    auth = _verified_auth(client, email, monkeypatch)
+    headers = _auth_headers(auth)
+    user = db.query(User).filter_by(email=email).one()
+    user.google_sub = "google-subject-mfa-test"
+    user.password_login_enabled = False
+    db.commit()
+    issued_at = int(time.time()) - token_age
+    monkeypatch.setattr(
+        auth_api,
+        "_verify_google_claims",
+        lambda _token, _settings: (
+            {"iat": issued_at},
+            email,
+            "google-subject-mfa-test",
+        ),
+    )
+
+    response = client.post(
+        "/api/auth/mfa/enroll",
+        headers=headers,
+        json={"google_id_token": "synthetic-signed-google-proof"},
+    )
+
+    assert response.status_code == expected_status, response.text
+    assert db.query(UserMfaSecret).filter_by(user_id=user.id).count() == (
+        1 if expected_status == 200 else 0
+    )
 
 
 def test_password_reset_preserves_mfa_and_completes_login_after_code(client_and_db, fixed_code_patch, monkeypatch):

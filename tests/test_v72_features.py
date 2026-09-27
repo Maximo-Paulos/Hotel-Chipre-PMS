@@ -267,6 +267,7 @@ def test_reservation_is_motor_protected_set_on_manual_move(db, sample_guest, sam
         reservation=reservation,
         to_room_id=sample_rooms[1].id,
         hotel_id=sample_guest.hotel_id,
+        actor_role="owner",
         move_type=RoomMoveTypeEnum.MANUAL_MOVE,
         reason_code="guest_request",
     )

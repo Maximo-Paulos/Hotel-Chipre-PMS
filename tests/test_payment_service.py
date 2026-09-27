@@ -10,6 +10,7 @@ Tests the complete payment lifecycle including:
 import pytest
 from datetime import date
 
+from app.models.cash_register import CashSession
 from app.models.hotel_config import HotelConfiguration
 from app.models.guest import Guest
 from app.models.operations import BillingAdjustment, BillingAdjustmentTypeEnum
@@ -623,6 +624,8 @@ class TestPaymentEdgeCases:
         )
         res = create_reservation(db, data, hotel_id=1)
         res.currency_code = "USD"
+        cash_session = db.query(CashSession).filter_by(hotel_id=hotel_config.id).one()
+        cash_session.currency_code = "USD"
         db.flush()
         _assign_hotel(res, DEFAULT_HOTEL_ID, db)
 
@@ -642,6 +645,63 @@ class TestPaymentEdgeCases:
         assert tx.currency == "USD"
         assert summary["currency_code"] == "USD"
         assert summary["transactions"][0]["currency"] == "USD"
+
+    def test_payment_rejects_currency_different_from_reservation_before_writing(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 8, 27),
+            check_out_date=date(2026, 8, 29),
+        )
+        reservation = create_reservation(db, data, hotel_id=hotel_config.id)
+        before_paid = reservation.amount_paid
+
+        with pytest.raises(PaymentError, match="debe coincidir con la reserva"):
+            process_payment(
+                db,
+                PaymentRequest(
+                    reservation_id=reservation.id,
+                    amount=30.0,
+                    payment_method=PaymentMethodEnum.CASH,
+                    transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+                    currency="USD",
+                ),
+                hotel_id=hotel_config.id,
+            )
+
+        assert reservation.amount_paid == before_paid
+        assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 0
+
+    def test_cash_payment_requires_drawer_currency_to_match_reservation(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 8, 27),
+            check_out_date=date(2026, 8, 29),
+        )
+        reservation = create_reservation(db, data, hotel_id=hotel_config.id)
+        reservation.currency_code = "USD"
+        db.flush()
+
+        with pytest.raises(PaymentError, match="Cash session currency"):
+            process_payment(
+                db,
+                PaymentRequest(
+                    reservation_id=reservation.id,
+                    amount=30.0,
+                    payment_method=PaymentMethodEnum.CASH,
+                    transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+                    currency="USD",
+                ),
+                hotel_id=hotel_config.id,
+            )
+
+        assert reservation.amount_paid == 0
+        assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 0
 
 
 class TestPaymentActorAudit:
