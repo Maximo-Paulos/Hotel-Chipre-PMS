@@ -11,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
 from app.api import bookings, guests, reports, reservations, rooms
+from app.config import get_settings
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.models.guest import Guest
@@ -117,6 +118,40 @@ def test_receptionist_guest_permissions_are_effective(role_client):
         PERMISSION_GUEST_TAGS,
     }.issubset(permissions)
     assert "guest:export" not in permissions
+
+
+def test_booking_demo_seed_endpoint_fails_closed_in_live_with_flags(role_client, monkeypatch):
+    client, db, _auth, _room, _guest, _category = role_client
+    monkeypatch.setenv("APP_ENV", "live")
+    monkeypatch.setenv("ENVIRONMENT", "live")
+    monkeypatch.setenv("DEMO_MODE", "true")
+    monkeypatch.setenv("TESTING", "true")
+    get_settings.cache_clear()
+
+    before = (
+        db.query(Reservation).count(),
+        db.query(RoomCategory).count(),
+        db.query(Room).count(),
+        db.query(Guest).count(),
+    )
+
+    def unexpected_seed_work(*_args, **_kwargs):
+        pytest.fail("A denied booking demo-seed request reached its side effects.")
+
+    monkeypatch.setattr(bookings, "hotel_today", unexpected_seed_work)
+    try:
+        response = client.post("/api/bookings/demo-seed")
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 404, response.text
+    after = (
+        db.query(Reservation).count(),
+        db.query(RoomCategory).count(),
+        db.query(Room).count(),
+        db.query(Guest).count(),
+    )
+    assert after == before
 
 
 def test_housekeeping_cannot_access_guest_or_reservation_pii(role_client):
