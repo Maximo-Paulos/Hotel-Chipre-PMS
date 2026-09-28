@@ -8,20 +8,18 @@ redeploy/restart -- and a filesystem path never survives a move to a real
 object store either. This module gives both write paths one small interface
 to target instead.
 
-Two implementations:
-- LocalObjectStorage: writes to a local directory. This is the only backend
-  actually wired up in this environment (no S3-compatible bucket
-  credentials exist here) -- it is fine for dev/tests, and it is what
-  `OBJECT_STORAGE_BACKEND=local` (the default) uses in every environment
-  today, ephemeral-disk caveat and all.
-- S3ObjectStorage: stub for a real S3-compatible bucket (AWS S3, Cloudflare
-  R2, Backblaze B2, MinIO, ...). Deliberately NotImplementedError -- see its
-  docstring for exactly what wiring it up needs.
+Available backends:
+- LocalObjectStorage: writes to a local directory. It is the default and is
+  suitable for development/tests, but a hosted container's local filesystem
+  may be ephemeral and is not durable evidence storage.
+- GCSObjectStorage: implemented, but requires the optional
+  `google-cloud-storage` package, a bucket and working cloud credentials.
+  It is not activated merely because the adapter exists.
+- S3ObjectStorage: a stub that deliberately raises NotImplementedError.
 
-get_object_storage() picks the backend from Settings via getattr() with
-safe defaults, so it works today without requiring any new fields on
-app.config.Settings; add OBJECT_STORAGE_* fields there (env-configurable)
-once a real bucket is provisioned and OBJECT_STORAGE_BACKEND=s3 is set.
+get_object_storage() picks the backend from the environment-configurable
+Settings fields. Confirm that the selected backend and its durable storage
+are configured in the actual deployment before accepting uploaded files.
 """
 from __future__ import annotations
 
@@ -242,8 +240,7 @@ class GCSObjectStorage(ObjectStorage):
 def get_object_storage() -> ObjectStorage:
     """Backend picked by `settings.OBJECT_STORAGE_BACKEND` (default: local).
 
-    Uses getattr() with defaults so this works even before Settings grows
-    dedicated OBJECT_STORAGE_* fields -- see module docstring.
+    `local` is the default; GCS and S3 require explicit deployment settings.
     """
     settings = get_settings()
     backend = (getattr(settings, "OBJECT_STORAGE_BACKEND", "") or "local").lower()

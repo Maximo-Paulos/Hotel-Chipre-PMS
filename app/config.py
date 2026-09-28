@@ -187,9 +187,10 @@ class Settings(BaseSettings):
     ANALYTICS_EXPORTS_DIR: str = "./var/exports/analytics"
 
     # Object storage (app.services.object_storage): where payment-proof
-    # images and analytics .xlsx exports live instead of Postgres/filesystem.
-    # "local" is the only backend actually wired up today; "s3" is a stub
-    # (see S3ObjectStorage docstring for what's needed to enable it).
+    # images and analytics .xlsx exports live instead of Postgres. "local"
+    # is the default but may be ephemeral in hosted containers; GCS has an
+    # adapter but requires its optional library, bucket and credentials.
+    # S3 remains a stub (see S3ObjectStorage for what's needed to enable it).
     OBJECT_STORAGE_BACKEND: str = "local"
     OBJECT_STORAGE_LOCAL_DIR: str = "./var/object-storage"
     OBJECT_STORAGE_S3_BUCKET: str = ""

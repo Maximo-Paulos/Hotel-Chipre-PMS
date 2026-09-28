@@ -1,5 +1,10 @@
 # Hotel Chipre PMS - Deploy Guide
 
+> Nota de vigencia: esta guía conserva una baseline técnica del 2026-09-03.
+> Describe configuración y requisitos del repositorio, no prueba qué plan,
+> servicios o variables están activos hoy en Vercel, Render o Supabase. Antes
+> de cambiar producción, confirmar el estado directamente en esos proveedores.
+
 ## Baseline de trazabilidad TECH-0140
 
 Esta copia fue revisada el 2026-09-03 desde la rama
@@ -93,7 +98,8 @@ Variables de entorno:
 - `PUBLIC_INQUIRY_GLOBAL_RATE_LIMIT=100`
 - `PUBLIC_MARKETING_GLOBAL_RATE_LIMIT=100` (15-minute shared cap across early-access lead submissions)
 - `ANALYTICS_EXPORTS_DIR=/var/exports/analytics`
-- Transfer-proof bytes are stored in the private `payment_proof_blobs` table; expose them only through the authenticated, tenant-scoped proof endpoint.
+- **Comprobantes internos de pagos registrados:** el pago y sus datos quedan en PostgreSQL. El comprobante se prepara en el navegador al imprimirlo o guardarlo como PDF; no se crea un archivo permanente en el servidor y no es una factura fiscal.
+- **Imágenes de transferencias adjuntadas para revisión:** son evidencia distinta del comprobante interno. Sus metadatos y referencia se registran en PostgreSQL; los bytes se escriben en el almacenamiento configurado. `OBJECT_STORAGE_BACKEND=local` es el valor predeterminado y usa `OBJECT_STORAGE_LOCAL_DIR` (por defecto `./var/object-storage`), que no debe considerarse durable en un contenedor efímero. El adaptador GCS del código requiere agregar su biblioteca opcional, configurar bucket/autenticación y comprobar acceso; no está habilitado por este documento. El adaptador S3 sigue siendo un stub. Las cargas existentes deben verificarse antes de cambiar de backend: no se copian automáticamente.
 - `AI_ENABLED=false` until the hotel-specific IA provider is configured
 - `GEMMA_ENABLED=false`
 
