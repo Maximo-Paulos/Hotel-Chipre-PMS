@@ -1,6 +1,6 @@
 """Regression coverage for in-person payments and financial step-up controls."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import importlib
 
 import pytest
@@ -16,8 +16,10 @@ from app.models.transaction import (
 from app.services.action_step_up_service import create_action_step_up_ticket
 from app.services.cash_register_service import open_session
 from app.services.permission_service import (
+    PERMISSION_CASH_OPERATE,
     PERMISSION_PAYMENT_REFUND,
     PERMISSION_RESERVATION_CANCEL_PAID,
+    set_override,
 )
 from tests.test_payment_links_api import _reservation, client_with_db
 
@@ -126,6 +128,60 @@ def test_completed_manual_payment_retry_reuses_transaction_before_balance_valida
     assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 1
 
 
+def test_receipt_endpoint_uses_persisted_values_and_does_not_create_another_payment(client_with_db):
+    client, db, _ctx = client_with_db
+    reservation = _reservation(db, 1, "RECEIPT-PERSISTED-1")
+    hotel = db.get(HotelConfiguration, 1)
+    hotel.hotel_name = "Receipt Hotel"
+    paid = _manual_payment(client, reservation.id, reference="POS-RECEIPT-1")
+    assert paid.status_code == 201, paid.text
+
+    transaction = db.get(Transaction, paid.json()["id"])
+    transaction.gross_amount = 31.50
+    transaction.fee_amount = 1.50
+    db.flush()
+
+    response = client.get(f"/api/payments/transactions/{transaction.id}/receipt")
+    assert response.status_code == 200, response.text
+    receipt = response.json()
+    assert receipt["id"] == transaction.id
+    assert receipt["confirmation_code"] == "RECEIPT-PERSISTED-1"
+    assert receipt["hotel_name"] == "Receipt Hotel"
+    assert float(receipt["amount"]) == 30
+    assert float(receipt["gross_amount"]) == 31.5
+    assert float(receipt["fee_amount"]) == 1.5
+    assert receipt["manual_reference"] == "POS-RECEIPT-1"
+    assert datetime.fromisoformat(receipt["created_at"].replace("Z", "+00:00")).utcoffset() == timedelta(0)
+    assert "refund_reason" not in receipt
+    assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 1
+
+    pending = Transaction(
+        hotel_id=1,
+        reservation_id=reservation.id,
+        amount=5,
+        currency="ARS",
+        transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+        payment_method=PaymentMethodEnum.CASH,
+        status=TransactionStatusEnum.PENDING,
+    )
+    db.add(pending)
+    db.flush()
+    unavailable = client.get(f"/api/payments/transactions/{pending.id}/receipt")
+    assert unavailable.status_code == 404
+
+
+def test_receipt_endpoint_respects_cash_operation_denial(client_with_db):
+    client, db, _ctx = client_with_db
+    reservation = _reservation(db, 1, "RECEIPT-PERMISSION-1")
+    paid = _manual_payment(client, reservation.id, reference="POS-RECEIPT-2")
+    assert paid.status_code == 201, paid.text
+
+    set_override(db, 1, "receptionist", PERMISSION_CASH_OPERATE, False, user_id=1)
+    db.commit()
+    response = client.get(f"/api/payments/transactions/{paid.json()['id']}/receipt")
+    assert response.status_code == 403, response.text
+
+
 def test_refund_requires_manager_permission_and_one_use_step_up(client_with_db):
     client, db, ctx = client_with_db
     reservation = _reservation(db, 1, "MANUAL-REFUND-1")
@@ -170,6 +226,16 @@ def test_refund_requires_manager_permission_and_one_use_step_up(client_with_db):
     refund_summary = next(tx for tx in summary.json()["transactions"] if tx["type"] == "refund")
     assert refund_summary["refund_of_transaction_id"] == paid.json()["id"]
     assert "refund_reason" not in refund_summary
+
+    refund_receipt_response = client.get(
+        f"/api/payments/transactions/{approved.json()['id']}/receipt"
+    )
+    assert refund_receipt_response.status_code == 200, refund_receipt_response.text
+    refund_receipt = refund_receipt_response.json()
+    assert refund_receipt["type"] == "refund"
+    assert refund_receipt["refund_of_transaction_id"] == paid.json()["id"]
+    assert float(refund_receipt["amount"]) == 30
+    assert "refund_reason" not in refund_receipt
 
     replayed = client.post(refund_path, json=refund_payload, headers=action_headers)
     assert replayed.status_code == 428

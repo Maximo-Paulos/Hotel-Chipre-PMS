@@ -4,6 +4,7 @@ Pydantic schemas for Transaction / Payments.
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime
+from decimal import Decimal
 from app.models.transaction import PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
 
 
@@ -56,6 +57,26 @@ class TransactionRead(BaseModel):
     created_by_user_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
+
+
+class PaymentReceiptRead(BaseModel):
+    """Minimal, tenant-authorized source data for an on-demand local receipt."""
+
+    id: int
+    reservation_id: int
+    confirmation_code: str
+    hotel_name: str
+    hotel_timezone: str
+    amount: Decimal
+    gross_amount: Decimal
+    fee_amount: Decimal
+    currency: str
+    method: PaymentMethodEnum
+    type: TransactionTypeEnum
+    status: TransactionStatusEnum
+    manual_reference: Optional[str] = None
+    refund_of_transaction_id: Optional[int] = None
+    created_at: datetime
 
 
 class PaymentGatewayResponse(BaseModel):

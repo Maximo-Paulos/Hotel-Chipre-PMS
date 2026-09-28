@@ -663,7 +663,45 @@
       "adjustmentStatusLine": "Status: {{status}} · External resolution: {{external}}",
       "paymentsTitle": "Payments",
       "transactionLine": "{{type}} · {{method}} · {{status}}",
-      "noTransactions": "No transactions registered."
+      "noTransactions": "No transactions registered.",
+      "receipt": {
+        "language": "en",
+        "documentTitle": "Internal payment receipt {{id}}",
+        "heading": "Internal payment receipt",
+        "refundHeading": "Internal refund receipt",
+        "internalNotice": "Internal record of the movement saved in Hotels PMS. It is not a tax invoice.",
+        "hotelLabel": "Hotel",
+        "hotelUnavailable": "Hotel name unavailable",
+        "operationLabel": "Transaction",
+        "reservationLabel": "Reservation",
+        "dateLabel": "Date and time",
+        "movementLabel": "Movement",
+        "paymentMethodLabel": "Payment method",
+        "statusLabel": "Status",
+        "appliedAmountLabel": "Amount applied to reservation",
+        "surchargeLabel": "Surcharge applied",
+        "amountLabel": "Total collected",
+        "refundAmountLabel": "Amount refunded",
+        "referenceLabel": "Transaction reference",
+        "refundOfLabel": "Refund of payment",
+        "download": "Print / save PDF",
+        "downloadAria": "Print receipt for transaction {{id}}",
+        "loading": "Preparing receipt…",
+        "unavailable": "This receipt is no longer available. Refresh the reservation and try again.",
+        "popupBlocked": "Your browser blocked the receipt window. Allow pop-ups for this site and try again.",
+        "invalidAmount": "The receipt could not be prepared because the transaction amount is invalid.",
+        "types": {
+          "deposit": "Deposit",
+          "full_payment": "Full payment",
+          "partial_payment": "Partial payment",
+          "balance_payment": "Balance payment",
+          "refund": "Refund"
+        },
+        "statuses": {
+          "completed": "Confirmed",
+          "refunded": "Refunded"
+        }
+      }
     },
     "guestPanel": {
       "eyebrow": "Guest Details",

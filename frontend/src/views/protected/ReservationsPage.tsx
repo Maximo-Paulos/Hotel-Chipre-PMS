@@ -43,7 +43,7 @@ import ManualOtaReservationModal from "../../components/ManualOtaReservationModa
 import { RestrictionOverrideModal } from "../../components/RestrictionOverrideModal";
 import { useRestrictionOverridePrompt } from "../../hooks/useRestrictionOverridePrompt";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
-import { type PaymentMethod } from "../../api/payments";
+import { getPaymentReceiptData, type PaymentMethod, type PaymentSummary } from "../../api/payments";
 import { useCategories } from "../../hooks/useCategories";
 import { useGuest, useGuestCreate } from "../../hooks/useGuests";
 import {
@@ -70,6 +70,7 @@ import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { useSession } from "../../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
 import { escapeHtml, resolveVoucherOperationalBalance } from "../../utils/escapeHtml";
+import { buildPaymentReceiptHtml, canPrintPaymentReceipt } from "../../utils/paymentReceiptHtml";
 import { addDaysIso, formatLocalIsoDate, todayIso } from "../../utils/date";
 import {
   canCancelReservation,
@@ -1608,6 +1609,102 @@ export function ReservationsPage() {
     win.focus();
     win.print();
     win.close();
+  };
+
+  const printPaymentReceipt = async (transaction: PaymentSummary["transactions"][number]) => {
+    if (!detailsReservation || !canPrintPaymentReceipt(transaction.status, canOperateCash)) return;
+
+    // Open synchronously from the click so browser popup protection still permits the async fetch.
+    const win = window.open("", "_blank");
+    if (!win) {
+      showToast("error", t("page.details.receipt.popupBlocked"));
+      return;
+    }
+    win.opener = null;
+    win.document.write("<!doctype html><meta charset=\"utf-8\"><title>Hotels-PMS</title><p>" + escapeHtml(t("page.details.receipt.loading")) + "</p>");
+    win.document.close();
+
+    try {
+      // The server rechecks permission, hotel scope and payment status and returns only persisted receipt fields.
+      const receiptData = await getPaymentReceiptData(transaction.id, session);
+      if (!canPrintPaymentReceipt(receiptData.status, canOperateCash)) {
+        win.close();
+        showToast("error", t("page.details.receipt.unavailable"));
+        return;
+      }
+      const amount = Number(receiptData.amount);
+      const grossAmount = Number(receiptData.gross_amount ?? receiptData.amount);
+      const surchargeAmount = Number(receiptData.fee_amount ?? 0);
+      if (![amount, grossAmount, surchargeAmount].every(Number.isFinite)) {
+        win.close();
+        showToast("error", t("page.details.receipt.invalidAmount"));
+        return;
+      }
+
+      const language = t("page.details.receipt.language") as "en" | "es";
+      const locale = language === "en" ? "en-US" : "es-AR";
+      const createdAt = new Date(receiptData.created_at);
+      let receiptDate = receiptData.created_at;
+      if (!Number.isNaN(createdAt.getTime())) {
+        try {
+          receiptDate = new Intl.DateTimeFormat(locale, {
+            dateStyle: "medium",
+            timeStyle: "short",
+            timeZone: receiptData.hotel_timezone
+          }).format(createdAt);
+        } catch {
+          receiptDate = new Intl.DateTimeFormat(locale, {
+            dateStyle: "medium",
+            timeStyle: "short"
+          }).format(createdAt);
+        }
+      }
+
+      const isRefund = receiptData.type === "refund";
+      const hasSurcharge = !isRefund && Math.abs(surchargeAmount) > 0.01;
+      const amountToShow = isRefund ? Math.abs(amount) : Math.abs(grossAmount);
+      const receiptHtml = buildPaymentReceiptHtml({
+        language,
+        title: t("page.details.receipt.documentTitle", { id: receiptData.id }),
+        heading: isRefund ? t("page.details.receipt.refundHeading") : t("page.details.receipt.heading"),
+        internalNotice: t("page.details.receipt.internalNotice"),
+        hotelLabel: t("page.details.receipt.hotelLabel"),
+        hotelName: receiptData.hotel_name,
+        operationLabel: t("page.details.receipt.operationLabel"),
+        operationId: receiptData.id,
+        reservationLabel: t("page.details.receipt.reservationLabel"),
+        reservationCode: receiptData.confirmation_code,
+        dateLabel: t("page.details.receipt.dateLabel"),
+        date: receiptDate,
+        movementLabel: t("page.details.receipt.movementLabel"),
+        movement: t("page.details.receipt.types." + receiptData.type, { defaultValue: receiptData.type }),
+        paymentMethodLabel: t("page.details.receipt.paymentMethodLabel"),
+        paymentMethod: t("drawer.payment.methods." + receiptData.method, { defaultValue: receiptData.method }),
+        statusLabel: t("page.details.receipt.statusLabel"),
+        status: t("page.details.receipt.statuses." + receiptData.status, { defaultValue: receiptData.status }),
+        appliedAmountLabel: hasSurcharge ? t("page.details.receipt.appliedAmountLabel") : undefined,
+        appliedAmount: hasSurcharge ? formatMoney(Math.abs(amount), receiptData.currency) : null,
+        surchargeLabel: hasSurcharge ? t("page.details.receipt.surchargeLabel") : undefined,
+        surcharge: hasSurcharge ? formatMoney(Math.abs(surchargeAmount), receiptData.currency) : null,
+        amountLabel: isRefund ? t("page.details.receipt.refundAmountLabel") : t("page.details.receipt.amountLabel"),
+        amount: formatMoney(amountToShow, receiptData.currency),
+        referenceLabel: t("page.details.receipt.referenceLabel"),
+        manualReference: receiptData.manual_reference,
+        refundOfLabel: t("page.details.receipt.refundOfLabel"),
+        refundOfTransactionId: receiptData.refund_of_transaction_id
+      });
+
+      if (win.closed) return;
+      win.document.open();
+      win.document.write(receiptHtml);
+      win.document.close();
+      win.focus();
+      win.onafterprint = () => win.close();
+      win.setTimeout(() => win.print(), 100);
+    } catch {
+      if (!win.closed) win.close();
+      showToast("error", t("page.details.receipt.unavailable"));
+    }
   };
 
   const guestHistory = useMemo(
@@ -4007,7 +4104,7 @@ export function ReservationsPage() {
                 {detailsSummary?.transactions?.length ? (
                   <ul className="divide-y divide-slate-200">
                     {detailsSummary.transactions.map((tx) => (
-                      <li key={tx.id} className="flex items-center justify-between py-2">
+                      <li key={tx.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                         <div>
                           <p className="font-semibold">{formatMoney(tx.amount, tx.currency)}</p>
                           <p className="text-xs text-slate-500">
@@ -4015,7 +4112,20 @@ export function ReservationsPage() {
                           </p>
                           {tx.manual_reference ? <p className="text-xs text-slate-500">{t("page.form.manualPaymentReferenceRecorded", { reference: tx.manual_reference })}</p> : null}
                         </div>
-                        <span className="text-xs text-slate-500">{tx.created_at}</span>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-xs text-slate-500">{tx.created_at}</span>
+                          {canPrintPaymentReceipt(tx.status, canOperateCash) ? (
+                            <button
+                              type="button"
+                              data-testid={"payment-receipt-download-" + tx.id}
+                              aria-label={t("page.details.receipt.downloadAria", { id: tx.id })}
+                              onClick={() => void printPaymentReceipt(tx)}
+                              className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                            >
+                              {t("page.details.receipt.download")}
+                            </button>
+                          ) : null}
+                        </div>
                       </li>
                     ))}
                   </ul>

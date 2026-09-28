@@ -48,8 +48,29 @@ export type PaymentSummary = {
   }>;
 };
 
+export type PaymentReceiptData = {
+  id: number;
+  reservation_id: number;
+  confirmation_code: string;
+  hotel_name: string;
+  hotel_timezone: string;
+  amount: number | string;
+  gross_amount: number | string;
+  fee_amount: number | string;
+  currency: string;
+  method: string;
+  type: string;
+  status: string;
+  manual_reference?: string | null;
+  refund_of_transaction_id?: number | null;
+  created_at: string;
+};
+
 export const getPaymentSummary = (reservationId: number, session?: SessionLike) =>
   apiFetch<PaymentSummary>(`/api/payments/summary/${reservationId}`, { session });
+
+export const getPaymentReceiptData = (transactionId: number, session?: SessionLike) =>
+  apiFetch<PaymentReceiptData>(`/api/payments/transactions/${transactionId}/receipt`, { session });
 
 export const newPaymentIdempotencyKey = (reservationId: number) => {
   const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;

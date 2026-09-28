@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import AuthContext, authorize_permission, require_permission
 from app.schemas.reservation_operations import ReservationFinancialSummaryRead
-from app.schemas.transaction import PaymentRequest, TransactionRead
+from app.schemas.transaction import PaymentReceiptRead, PaymentRequest, TransactionRead
 from app.services.payment_service import (
     process_payment,
     get_reservation_financial_summary,
+    get_payment_receipt_data,
     PaymentError,
     PaymentNotFoundError,
 )
@@ -95,4 +96,17 @@ def financial_summary(
     except PaymentNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except PaymentError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/transactions/{transaction_id}/receipt", response_model=PaymentReceiptRead)
+def payment_receipt_data(
+    transaction_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+):
+    """Re-authorize and fetch the persisted source data before local receipt rendering."""
+    try:
+        return get_payment_receipt_data(db, context.hotel_id, transaction_id)
+    except PaymentNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

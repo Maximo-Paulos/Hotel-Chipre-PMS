@@ -37,6 +37,7 @@ from app.models.reservation import Reservation, ReservationSourceEnum, Reservati
 from app.models.room import Room, RoomCategory
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.stock import StockItem, StockLocation
+from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.models.user import User
 from app.services.action_step_up_service import create_action_step_up_ticket
 from app.services.permission_service import PERMISSION_PERMISSION_MANAGE
@@ -156,6 +157,18 @@ def two_hotel_client():
         content_type="image/png", sha256_hex="b" * 64,
     )
     db.add(proof_blob_b)
+    transaction_b = Transaction(
+        hotel_id=HOTEL_B,
+        reservation_id=res_b.id,
+        amount=50,
+        gross_amount=50,
+        fee_amount=0,
+        currency="ARS",
+        transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+        payment_method=PaymentMethodEnum.CASH,
+        status=TransactionStatusEnum.COMPLETED,
+    )
+    db.add(transaction_b)
 
     # ── Now seed Hotel A's own data (its ids will differ but that's not the
     # point — Hotel A's *token* is what we test against Hotel B's real ids).
@@ -169,6 +182,7 @@ def two_hotel_client():
         "guest_b": guest_b.id, "stock_item_b": stock_item_b.id,
         "stock_location_b": stock_location_b.id, "cash_session_b": cash_b.id,
         "payment_link_b": link_b.id, "payment_proof_b": proof_b.id,
+        "transaction_b": transaction_b.id,
         "category_a": cat_a.id, "reservation_a": res_a.id,
         "invitation_b": db.query(StaffInvitation).filter_by(hotel_id=HOTEL_B).one().id,
     }
@@ -220,6 +234,14 @@ def test_reservation_financial_summary_denied_across_hotels(two_hotel_client):
     assert resp.status_code == 404, resp.text
     assert "RES-B" not in resp.text
     assert str(HOTEL_B) not in resp.text
+
+
+def test_payment_receipt_denied_across_hotels(two_hotel_client):
+    client, ids = two_hotel_client
+    resp = client.get(f"/api/payments/transactions/{ids['transaction_b']}/receipt")
+    assert resp.status_code == 404, resp.text
+    assert "RES-B" not in resp.text
+    assert "Hotel B" not in resp.text
 
 
 def test_payment_write_denied_across_hotels_without_foreign_error_leak(two_hotel_client):

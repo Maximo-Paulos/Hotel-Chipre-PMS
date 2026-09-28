@@ -663,7 +663,45 @@
       "adjustmentStatusLine": "Estado: {{status}} · Resolución externa: {{external}}",
       "paymentsTitle": "Pagos",
       "transactionLine": "{{type}} · {{method}} · {{status}}",
-      "noTransactions": "Sin transacciones registradas."
+      "noTransactions": "Sin transacciones registradas.",
+      "receipt": {
+        "language": "es",
+        "documentTitle": "Comprobante interno de pago {{id}}",
+        "heading": "Comprobante interno de pago",
+        "refundHeading": "Comprobante interno de devolución",
+        "internalNotice": "Documento interno del movimiento registrado en Hotels PMS. No reemplaza una factura fiscal.",
+        "hotelLabel": "Hotel",
+        "hotelUnavailable": "Nombre del hotel no disponible",
+        "operationLabel": "Operación",
+        "reservationLabel": "Reserva",
+        "dateLabel": "Fecha y hora",
+        "movementLabel": "Movimiento",
+        "paymentMethodLabel": "Medio de pago",
+        "statusLabel": "Estado",
+        "appliedAmountLabel": "Importe aplicado a la reserva",
+        "surchargeLabel": "Recargo aplicado",
+        "amountLabel": "Total cobrado",
+        "refundAmountLabel": "Importe devuelto",
+        "referenceLabel": "Referencia de la operación",
+        "refundOfLabel": "Devolución del pago",
+        "download": "Imprimir / guardar PDF",
+        "downloadAria": "Imprimir comprobante del movimiento {{id}}",
+        "loading": "Preparando comprobante…",
+        "unavailable": "Este comprobante ya no está disponible. Actualizá la reserva e intentá de nuevo.",
+        "popupBlocked": "El navegador bloqueó la ventana del comprobante. Permití las ventanas emergentes para este sitio y volvé a intentar.",
+        "invalidAmount": "No se pudo preparar el comprobante porque el importe del movimiento no es válido.",
+        "types": {
+          "deposit": "Seña",
+          "full_payment": "Pago total",
+          "partial_payment": "Pago parcial",
+          "balance_payment": "Pago de saldo",
+          "refund": "Devolución"
+        },
+        "statuses": {
+          "completed": "Confirmado",
+          "refunded": "Reembolsado"
+        }
+      }
     },
     "guestPanel": {
       "eyebrow": "Ficha de Huésped",

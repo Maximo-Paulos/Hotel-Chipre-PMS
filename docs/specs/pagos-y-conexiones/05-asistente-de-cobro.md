@@ -81,9 +81,9 @@ Actualización en vivo: la pantalla consulta `GET /api/payment-sessions/{id}` ca
 
 ### Comprobante de pago descargable
 
-- El pago confirmado en `Transaction` y sus datos persistidos en la base son la fuente de verdad. Al pedir "Descargar comprobante", el sistema arma el documento en ese momento y el navegador lo descarga en esa computadora; no guarda una copia PDF por cada pago en el servidor ni en Storage.
-- Volver a descargar o imprimir usa el mismo pago y no crea otra transacción, pago ni número de operación. Para que una reimpresión histórica sea fiel, el comprobante usa los importes, moneda, método, fecha y referencias guardados con la transacción; si hacen falta datos descriptivos que pueden cambiar (por ejemplo, nombre comercial del hotel), se conserva solo una instantánea pequeña en la base, no el archivo renderizado.
-- El endpoint de descarga vuelve a comprobar hotel y permiso de lectura del pago en el servidor. No se arma desde montos editables del navegador.
+- El pago confirmado en `Transaction` y sus datos persistidos en la base son la fuente de verdad. Al pedir el comprobante, la API vuelve a validar hotel, permiso y estado del pago; el navegador prepara la hoja imprimible y la persona puede imprimirla o elegir "Guardar como PDF" en esa computadora. No se guarda una copia PDF por cada pago en el servidor ni en Storage.
+- Volver a imprimir usa el mismo pago y no crea otra transacción ni otro número de operación. El contenido se arma a partir de los importes, moneda, método, fecha y referencias devueltos por la API desde la base; el navegador no manda montos para fabricar el documento.
+- Por ahora el nombre del hotel se toma de su configuración actual, así que si se cambia el nombre una reimpresión antigua podría mostrar el nuevo. Si se requiere que la denominación histórica sea exacta, se agregará una instantánea pequeña al registro; no se almacenará el PDF renderizado.
 - Este comprobante interno acredita un pago registrado; no es una factura ni reemplaza un comprobante fiscal.
 - La imagen que un huésped adjunta para demostrar una transferencia es otra cosa: es evidencia para revisar/aprobar el pago. Se conserva separada del recibo descargable y solo mientras la necesite la operación o la política de retención aprobada.
 
@@ -99,6 +99,7 @@ Actualización en vivo: la pantalla consulta `GET /api/payment-sessions/{id}` ca
 | `GET /api/reservations/{id}/payment-options?purpose=` | `payment:collect` | Canales habilitados con total por canal, lista y bonificaciones |
 | `POST /api/payment-sessions` | `payment:collect` | Crea la sesión (`reservation_id`, `purpose`, `channel_ids`, `parts` con montos; header `Idempotency-Key`) |
 | `GET /api/payment-sessions/{id}` | `payment:collect` | Estado de sesión y partes |
+| `GET /api/payments/transactions/{id}/receipt` | `cash:operate` | Valida hotel y estado confirmado; devuelve los campos persistidos mínimos para imprimir o guardar el comprobante localmente |
 | `POST /api/payment-sessions/{id}/parts/{part_id}/start` | `payment:collect` | Ejecuta la parte: crea orden QR/Point, envía link o valida efectivo |
 | `POST /api/payment-sessions/{id}/parts/{part_id}/cash` | `payment:collect` + `cash:operate` | `cash_received` |
 | `POST /api/payment-sessions/{id}/parts/{part_id}/assisted` | `payment:collect` | Evidencia de terminal asistida |

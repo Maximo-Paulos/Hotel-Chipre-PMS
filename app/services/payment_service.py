@@ -783,6 +783,59 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
     }
 
 
+def get_payment_receipt_data(db: Session, hotel_id: Optional[int], transaction_id: int) -> dict:
+    """Return only confirmed, tenant-scoped transaction data for receipt rendering."""
+    if hotel_id is None:
+        raise PaymentNotFoundError("Payment not found")
+
+    transaction = (
+        db.query(Transaction)
+        .filter(Transaction.id == transaction_id, Transaction.hotel_id == hotel_id)
+        .first()
+    )
+    if transaction is None or transaction.status not in {
+        TransactionStatusEnum.COMPLETED,
+        TransactionStatusEnum.REFUNDED,
+    }:
+        raise PaymentNotFoundError("Confirmed payment not found")
+
+    reservation_code = (
+        db.query(Reservation.confirmation_code)
+        .filter(
+            Reservation.id == transaction.reservation_id,
+            Reservation.hotel_id == hotel_id,
+        )
+        .scalar()
+    )
+    if reservation_code is None:
+        raise PaymentNotFoundError("Confirmed payment not found")
+
+    hotel = db.get(HotelConfiguration, hotel_id)
+    created_at = transaction.created_at
+    if created_at.tzinfo is None:
+        # Legacy DateTime columns are stored as naive UTC values.
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    else:
+        created_at = created_at.astimezone(timezone.utc)
+    return {
+        "id": transaction.id,
+        "reservation_id": transaction.reservation_id,
+        "confirmation_code": reservation_code,
+        "hotel_name": hotel.hotel_name if hotel and hotel.hotel_name else "Mi Hotel",
+        "hotel_timezone": hotel.hotel_timezone if hotel and hotel.hotel_timezone else "America/Argentina/Buenos_Aires",
+        "amount": transaction.amount,
+        "gross_amount": transaction.gross_amount if transaction.gross_amount is not None else transaction.amount,
+        "fee_amount": transaction.fee_amount or Decimal("0.00"),
+        "currency": transaction.currency,
+        "method": transaction.payment_method,
+        "type": transaction.transaction_type,
+        "status": transaction.status,
+        "manual_reference": transaction.manual_reference,
+        "refund_of_transaction_id": transaction.refund_of_transaction_id,
+        "created_at": created_at,
+    }
+
+
 def _signed_transaction_amount(transaction_type: TransactionTypeEnum, amount) -> Decimal:
     d = Decimal(str(amount))
     return -d if transaction_type == TransactionTypeEnum.REFUND else d
