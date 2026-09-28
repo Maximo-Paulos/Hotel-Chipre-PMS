@@ -277,6 +277,106 @@ def test_revert_group_service_conflict_does_not_overwrite_original_room(movement
         assert group.is_reverted is False
 
 
+def test_revert_group_refuses_original_room_with_insufficient_capacity(movement_api_client):
+    _, SessionLocal, _ = movement_api_client
+    with SessionLocal() as db:
+        seeded = _seed_group(
+            db,
+            hotel_id=1,
+            suffix="CAPACITY_REVERT",
+            trigger_reason="allocation_run",
+            from_capacity=2,
+            to_capacity=4,
+            num_adults=3,
+        )
+        reservation = seeded["reservation"]
+        group = seeded["group"]
+        to_room_id = seeded["to_room"].id
+
+        result = revert_group(db, hotel_id=1, group_id=group.id, reverted_by_user_id=10)
+
+        assert result["reverted"] == []
+        assert result["conflicts"][0]["reason"] == "original_room_capacity_insufficient"
+        assert result["conflicts"][0]["requested_occupancy"] == 3
+        assert result["conflicts"][0]["original_room_capacity"] == 2
+        assert reservation.room_id == to_room_id
+        assert group.is_reverted is False
+
+
+@pytest.mark.parametrize(
+    "advanced_status",
+    [
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_OUT,
+        ReservationStatusEnum.CANCELLED,
+        ReservationStatusEnum.NO_SHOW,
+    ],
+)
+def test_revert_group_does_not_change_reservation_or_room_status_after_stay_advances(
+    movement_api_client,
+    advanced_status,
+):
+    _, SessionLocal, _ = movement_api_client
+    suffix = f"ST_{advanced_status.value[:8].upper()}"
+    with SessionLocal() as db:
+        seeded = _seed_group(db, hotel_id=1, suffix=suffix, trigger_reason="allocation_run")
+        reservation = seeded["reservation"]
+        from_room = seeded["from_room"]
+        to_room = seeded["to_room"]
+        group = seeded["group"]
+        reservation.status = advanced_status
+        if advanced_status == ReservationStatusEnum.CHECKED_IN:
+            from_room.status = RoomStatusEnum.CLEANING
+            to_room.status = RoomStatusEnum.OCCUPIED
+        db.flush()
+
+        result = revert_group(db, hotel_id=1, group_id=group.id, reverted_by_user_id=10)
+
+        assert result["reverted"] == []
+        assert result["conflicts"][0]["reason"] == "reservation_state_changed_after_group"
+        assert result["conflicts"][0]["reservation_status"] == advanced_status.value
+        assert reservation.room_id == to_room.id
+        expected_source_status = (
+            RoomStatusEnum.CLEANING
+            if advanced_status == ReservationStatusEnum.CHECKED_IN
+            else RoomStatusEnum.AVAILABLE
+        )
+        expected_destination_status = (
+            RoomStatusEnum.OCCUPIED
+            if advanced_status == ReservationStatusEnum.CHECKED_IN
+            else RoomStatusEnum.AVAILABLE
+        )
+        assert from_room.status == expected_source_status
+        assert to_room.status == expected_destination_status
+        assert group.is_reverted is False
+
+
+def test_revert_group_does_not_override_a_later_room_change(movement_api_client):
+    _, SessionLocal, _ = movement_api_client
+    with SessionLocal() as db:
+        seeded = _seed_group(db, hotel_id=1, suffix="LATER_ROOM", trigger_reason="allocation_run")
+        reservation = seeded["reservation"]
+        group = seeded["group"]
+        later_room = Room(
+            hotel_id=1,
+            room_number="1LATER3",
+            floor=3,
+            category_id=seeded["to_room"].category_id,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(later_room)
+        db.flush()
+        reservation.room_id = later_room.id
+        db.flush()
+
+        result = revert_group(db, hotel_id=1, group_id=group.id, reverted_by_user_id=10)
+
+        assert result["reverted"] == []
+        assert result["conflicts"][0]["reason"] == "reservation_room_changed_after_group"
+        assert reservation.room_id == later_room.id
+        assert group.is_reverted is False
+
+
 def test_movement_group_hotel_isolation(movement_api_client):
     client, SessionLocal, _ = movement_api_client
     with SessionLocal() as db:
@@ -310,16 +410,36 @@ def test_revert_already_reverted_group_returns_400(movement_api_client):
     assert response.json()["detail"] == "Movement group is already reverted"
 
 
-def _seed_group(db, *, hotel_id: int, suffix: str, trigger_reason: str):
+def _seed_group(
+    db,
+    *,
+    hotel_id: int,
+    suffix: str,
+    trigger_reason: str,
+    from_capacity: int = 2,
+    to_capacity: int = 2,
+    num_adults: int = 1,
+):
     category = RoomCategory(
         hotel_id=hotel_id,
         name=f"Standard {suffix}",
         code=f"STD_{suffix}",
         base_price_per_night=100,
-        max_occupancy=2,
+        max_occupancy=from_capacity,
     )
     db.add(category)
     db.flush()
+    destination_category = category
+    if to_capacity != from_capacity:
+        destination_category = RoomCategory(
+            hotel_id=hotel_id,
+            name=f"Superior {suffix}",
+            code=f"SUP_{suffix}",
+            base_price_per_night=150,
+            max_occupancy=to_capacity,
+        )
+        db.add(destination_category)
+        db.flush()
 
     from_room = Room(
         hotel_id=hotel_id,
@@ -332,7 +452,7 @@ def _seed_group(db, *, hotel_id: int, suffix: str, trigger_reason: str):
         hotel_id=hotel_id,
         room_number=f"{hotel_id}{suffix}2",
         floor=2,
-        category_id=category.id,
+        category_id=destination_category.id,
         status=RoomStatusEnum.AVAILABLE,
     )
     guest = Guest(
@@ -355,6 +475,7 @@ def _seed_group(db, *, hotel_id: int, suffix: str, trigger_reason: str):
         check_in_date=date(2026, 7, 1),
         check_out_date=date(2026, 7, 3),
         status=ReservationStatusEnum.PENDING,
+        num_adults=num_adults,
         total_amount=100,
         amount_paid=0,
         deposit_amount=0,

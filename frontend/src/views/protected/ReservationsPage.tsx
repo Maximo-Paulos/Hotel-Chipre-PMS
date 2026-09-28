@@ -1064,8 +1064,12 @@ export function ReservationsPage() {
     if (!confirmed) return;
 
     try {
-      await revertMovementGroupMutation.mutateAsync(group.id);
-      showToast("success", t("page.messages.groupReverted", { id: group.id }));
+      const revertedGroup = await revertMovementGroupMutation.mutateAsync(group.id);
+      if (revertedGroup.is_reverted) {
+        showToast("success", t("page.messages.groupReverted", { id: group.id }));
+      } else {
+        showToast("info", t("page.messages.groupRevertPartial", { id: group.id }));
+      }
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.revertGroupFailed"));
     }
