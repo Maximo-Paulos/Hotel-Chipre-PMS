@@ -50,6 +50,27 @@ Estos valores son una propuesta operativa, no una configuración aplicada.
 - El export CSV de la timeline de auditoría de TECH-0070 es un patrón de
   exportación redacted y tenant-scoped. No se considera un backup de base.
 
+## Evidencia directa del entorno publicado — 2026-09-28
+
+- La organización de Supabase está en plan Free. La documentación vigente de
+  Supabase indica que los backups diarios automáticos se incluyen en Pro, Team
+  y Enterprise; para Free recomienda exportar con Supabase CLI y mantener una
+  copia fuera del proyecto ([Database Backups](https://supabase.com/docs/guides/platform/backups)).
+- La base publicada reporta `20260928_public_inquiry_retention_anchor`, igual a
+  la cabeza Alembic de `main` durante esta comprobación. Esto confirma el
+  esquema aplicado, no que exista una copia recuperable.
+- No hay una copia externa verificada ni un restore drill del proveedor. No se
+  generó un dump ni se restauró la base durante esta revisión.
+- El servicio publicado de Render está en Free, con un único servicio web y
+  sin disco persistente; Render confirma que los discos no están disponibles
+  en su plan gratuito. Por eso `OBJECT_STORAGE_BACKEND=local` no es un destino
+  durable para imágenes o exportaciones.
+- La retención de consultas/leads sí tiene su job diario activo en Supabase
+  Cron y registró dos ejecuciones exitosas en los últimos siete días. Ese job
+  elimina registros vencidos; no respalda la base.
+- No se cambió ningún plan, credencial ni configuración de almacenamiento. La
+  copia externa y su destino quedan pendientes de autorización y verificación.
+
 ## Drill local reproducible
 
 Crear una base SQLite efímera con el esquema Alembic actual y ejecutar el drill
