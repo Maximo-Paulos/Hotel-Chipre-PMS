@@ -319,6 +319,28 @@ def revert_group(
             )
             continue
 
+        original_room_status = (
+            from_room.status.value if hasattr(from_room.status, "value") else str(from_room.status)
+        )
+        if (
+            not from_room.is_active
+            or from_room.deleted_at is not None
+            or from_room.status in {RoomStatusEnum.MAINTENANCE, RoomStatusEnum.BLOCKED}
+        ):
+            conflicts.append(
+                {
+                    "move_event_id": event.id,
+                    "reservation_id": reservation.id,
+                    "original_room_id": from_room.id,
+                    "current_room_id": reservation.room_id,
+                    "room_status": original_room_status,
+                    "room_is_active": bool(from_room.is_active),
+                    "room_is_deleted": from_room.deleted_at is not None,
+                    "reason": "original_room_unavailable",
+                }
+            )
+            continue
+
         try:
             _validate_reservation_occupancy(
                 original_category,

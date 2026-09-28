@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -300,6 +300,50 @@ def test_revert_group_refuses_original_room_with_insufficient_capacity(movement_
         assert result["conflicts"][0]["requested_occupancy"] == 3
         assert result["conflicts"][0]["original_room_capacity"] == 2
         assert reservation.room_id == to_room_id
+        assert group.is_reverted is False
+
+
+@pytest.mark.parametrize(
+    ("room_status", "room_is_active", "room_is_deleted"),
+    [
+        (RoomStatusEnum.MAINTENANCE, True, False),
+        (RoomStatusEnum.BLOCKED, True, False),
+        (RoomStatusEnum.AVAILABLE, False, False),
+        (RoomStatusEnum.AVAILABLE, True, True),
+    ],
+)
+def test_revert_group_refuses_unavailable_original_room(
+    movement_api_client,
+    room_status,
+    room_is_active,
+    room_is_deleted,
+):
+    _, SessionLocal, _ = movement_api_client
+    with SessionLocal() as db:
+        seeded = _seed_group(
+            db,
+            hotel_id=1,
+            suffix=f"UNAVAILABLE_{room_status.value}_{room_is_active}_{room_is_deleted}",
+            trigger_reason="room_status_maintenance",
+        )
+        reservation = seeded["reservation"]
+        from_room = seeded["from_room"]
+        to_room = seeded["to_room"]
+        group = seeded["group"]
+        from_room.status = room_status
+        from_room.is_active = room_is_active
+        if room_is_deleted:
+            from_room.deleted_at = datetime.now(timezone.utc)
+        db.flush()
+
+        result = revert_group(db, hotel_id=1, group_id=group.id, reverted_by_user_id=10)
+
+        assert result["reverted"] == []
+        assert result["conflicts"][0]["reason"] == "original_room_unavailable"
+        assert result["conflicts"][0]["room_status"] == room_status.value
+        assert result["conflicts"][0]["room_is_active"] is room_is_active
+        assert result["conflicts"][0]["room_is_deleted"] is room_is_deleted
+        assert reservation.room_id == to_room.id
         assert group.is_reverted is False
 
 
