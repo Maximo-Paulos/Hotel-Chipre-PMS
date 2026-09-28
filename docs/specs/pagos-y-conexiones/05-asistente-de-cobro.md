@@ -75,9 +75,17 @@ Actualización en vivo: la pantalla consulta `GET /api/payment-sessions/{id}` ca
 
 ### Paso 4 — Resumen
 
-- Todas las partes `paid` → sesión `completed`, pantalla "Pago registrado" con detalle y botón "Continuar con el check-in" o "Imprimir comprobante".
+- Todas las partes `paid` → sesión `completed`, pantalla "Pago registrado" con detalle y botón "Continuar con el check-in" o "Descargar comprobante".
 - Partes `awaiting_customer` o `pending_verification` → sesión `in_progress`; la reserva muestra "Pago en curso".
 - El check-in exige el propósito configurado (por ejemplo, saldo completo) salvo el permiso `checkin:override_payment` con motivo.
+
+### Comprobante de pago descargable
+
+- El pago confirmado en `Transaction` y sus datos persistidos en la base son la fuente de verdad. Al pedir "Descargar comprobante", el sistema arma el documento en ese momento y el navegador lo descarga en esa computadora; no guarda una copia PDF por cada pago en el servidor ni en Storage.
+- Volver a descargar o imprimir usa el mismo pago y no crea otra transacción, pago ni número de operación. Para que una reimpresión histórica sea fiel, el comprobante usa los importes, moneda, método, fecha y referencias guardados con la transacción; si hacen falta datos descriptivos que pueden cambiar (por ejemplo, nombre comercial del hotel), se conserva solo una instantánea pequeña en la base, no el archivo renderizado.
+- El endpoint de descarga vuelve a comprobar hotel y permiso de lectura del pago en el servidor. No se arma desde montos editables del navegador.
+- Este comprobante interno acredita un pago registrado; no es una factura ni reemplaza un comprobante fiscal.
+- La imagen que un huésped adjunta para demostrar una transferencia es otra cosa: es evidencia para revisar/aprobar el pago. Se conserva separada del recibo descargable y solo mientras la necesite la operación o la política de retención aprobada.
 
 ### Cancelación
 
@@ -116,3 +124,4 @@ Los servicios viven en `app/services/payment_session_service.py`. Los routers so
 4. Recargar el navegador en medio de un cobro retoma la misma sesión y no crea una segunda orden en el proveedor (idempotencia).
 5. Un recepcionista sin `payment:custom_amount` no puede cambiar montos por API (403).
 6. Cada parte pagada genera exactamente una `Transaction` con `gross_amount`, `fee_amount`, `fee_vat_amount` (columna nueva; no reutilizar `tax_amount`, que es impuesto de la venta), `net_amount`, `provider_code` y referencia a la parte.
+7. Descargar o reimprimir un comprobante genera el archivo desde los datos autorizados de la transacción, no guarda un PDF permanente en el servidor y nunca crea un segundo pago.

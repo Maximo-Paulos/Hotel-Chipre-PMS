@@ -3,6 +3,7 @@
 Documentación para que un agente de desarrollo implemente el módulo de cobros y el hub de conexiones del PMS. Está escrita para ejecutarse en fases, con criterios de aceptación verificables. No contiene código de implementación.
 
 - **Relevado:** 27–28/09/2026 sobre el commit `4a4c34e` de `main`.
+- **Vigencia:** la revisión original es un corte histórico. `main` avanzó desde entonces; esta especificación orienta decisiones y no demuestra que cada flujo esté implementado hoy. Verificar el código actual antes de tomarla como estado operativo.
 - **Presentación para el dueño:** https://claude.ai/artifact/NktokpoAkqW1eZv5aL4LWv (privada; compartir desde su menú).
 - **Estados de certeza** (según `knowledge/00-control/SOURCE-OF-TRUTH.md`): `confirmed` = leído en código o en documentación oficial del proveedor; `inferred` = deducido, sin fuente directa; `needs-verification` = hay que confirmarlo con el proveedor o con una prueba real antes de implementar.
 
@@ -14,6 +15,10 @@ Documentación para que un agente de desarrollo implemente el módulo de cobros 
 4. El dueño define en Tarifas si cobra distinto por medio de pago (precio de lista + bonificaciones) o el mismo precio para todos.
 5. Huéspedes extranjeros pueden pagar con tarjeta extranjera, y se puede tomar una tarjeta en garantía o una seña.
 6. Stripe se usa solo para que la plataforma (PMS Paulus) cobre la suscripción mensual a los hoteles. No es un medio de cobro de los hoteles.
+
+## Decisión confirmada: comprobante de pago
+
+El registro del pago permanece en la base de datos. El comprobante interno se genera al descargar o imprimir y no se guarda como PDF permanente en el servidor. Una imagen que el huésped adjunta para acreditar una transferencia es evidencia separada; el comprobante interno tampoco reemplaza una factura fiscal. El detalle está en [05 · Asistente de cobro](05-asistente-de-cobro.md).
 
 ## Índice
 

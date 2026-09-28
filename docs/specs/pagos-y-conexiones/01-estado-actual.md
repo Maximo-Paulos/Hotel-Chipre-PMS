@@ -2,6 +2,8 @@
 
 Todo lo de este archivo es `confirmed` por lectura de código, salvo donde se indica.
 
+> Este relevamiento describe el código observado en `4a4c34e`; no es una garantía del estado del `main` actual. La rama avanzó después de ese corte. Revalidar cada afirmación en el código desplegado antes de implementar o tomar una decisión operativa.
+
 ## Cobros
 
 | Pieza | Estado | Evidencia | Notas |
