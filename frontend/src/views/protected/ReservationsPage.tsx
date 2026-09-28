@@ -2219,14 +2219,16 @@ export function ReservationsPage() {
                       </p>
                       {group.notes ? <p className="mt-1 text-xs text-slate-500">{group.notes}</p> : null}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRevertMovementGroup(group)}
-                      disabled={group.is_reverted || revertMovementGroupMutation.isPending || subscriptionBlocked}
-                      className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {t("page.allocation.revert")}
-                    </button>
+                    {hasPermission("reservation:movement_group_revert") ? (
+                      <button
+                        type="button"
+                        onClick={() => handleRevertMovementGroup(group)}
+                        disabled={group.is_reverted || revertMovementGroupMutation.isPending || subscriptionBlocked}
+                        className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {t("page.allocation.revert")}
+                      </button>
+                    ) : null}
                   </div>
                 );
               })}

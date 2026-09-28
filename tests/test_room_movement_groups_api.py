@@ -94,6 +94,28 @@ def test_revert_movement_group_marks_reservations_protected():
         engine.dispose()
 
 
+def test_receptionist_can_read_but_cannot_revert_room_movement_group():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist", user_id=10)
+    try:
+        reservation, _, to_room, group = _seed_group(db, hotel_id=1)
+        db.commit()
+
+        listing = client.get("/api/room-movement-groups/")
+        denied = client.post(f"/api/room-movement-groups/{group.id}/revert")
+
+        db.refresh(reservation)
+        db.refresh(group)
+        assert listing.status_code == 200, listing.text
+        assert denied.status_code == 403, denied.text
+        assert group.is_reverted is False
+        assert reservation.room_id == to_room.id
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
 def test_room_movement_group_cross_hotel_isolation():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager", user_id=10)

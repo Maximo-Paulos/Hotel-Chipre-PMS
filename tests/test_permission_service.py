@@ -28,6 +28,7 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_RESERVATION_MOVE_CAPACITY,
     PERMISSION_RESERVATION_MOVE_CATEGORY,
+    PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
     PERMISSION_WHATSAPP_INBOX_VIEW,
     PERMISSION_WHATSAPP_NOTE_MANAGE,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
@@ -101,6 +102,11 @@ def test_default_permissions_seeded_for_owner_manager_reception_housekeeping(db)
     assert rows[("housekeeping", PERMISSION_RESERVATION_MOVE)] is False
     assert rows[("housekeeping", PERMISSION_RESERVATION_MOVE_CATEGORY)] is False
     assert rows[("housekeeping", PERMISSION_RESERVATION_MOVE_CAPACITY)] is False
+    assert rows[("owner", PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT)] is True
+    assert rows[("co_owner", PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT)] is True
+    assert rows[("manager", PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT)] is True
+    assert rows[("receptionist", PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT)] is False
+    assert rows[("housekeeping", PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT)] is False
     assert rows[("owner", PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE)] is True
     assert rows[("co_owner", PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE)] is True
     assert rows[("manager", PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE)] is True

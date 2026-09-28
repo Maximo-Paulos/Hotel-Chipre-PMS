@@ -6,7 +6,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
 from app.schemas.room_movement_group import RoomMovementGroupRead
-from app.services.permission_service import PERMISSION_RESERVATION_MOVE
+from app.services.permission_service import (
+    PERMISSION_RESERVATION_MOVE,
+    PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
+)
 from app.services.room_movement_group_service import (
     RoomMovementGroupError,
     get_group,
@@ -44,7 +47,7 @@ def read_room_movement_group(
 def revert_room_movement_group(
     group_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT)),
 ):
     try:
         result = revert_group(

@@ -161,6 +161,29 @@ def test_revert_movement_group_restores_original_room_and_audits(movement_api_cl
         assert audit.resource_id == str(group_id)
 
 
+def test_receptionist_can_list_movement_groups_but_cannot_revert_them(movement_api_client):
+    client, SessionLocal, auth_state = movement_api_client
+    with SessionLocal() as db:
+        seeded = _seed_group(db, hotel_id=1, suffix="RECEPTION", trigger_reason="allocation_run")
+        db.commit()
+        group_id = seeded["group"].id
+        reservation_id = seeded["reservation"].id
+        assigned_room_id = seeded["to_room"].id
+
+    auth_state["role"] = "receptionist"
+    listing = client.get("/api/movement-groups/")
+    denied = client.post(f"/api/movement-groups/{group_id}/revert")
+
+    assert listing.status_code == 200, listing.text
+    assert [group["id"] for group in listing.json()] == [group_id]
+    assert denied.status_code == 403, denied.text
+    with SessionLocal() as db:
+        reservation = db.get(Reservation, reservation_id)
+        group = db.get(RoomMovementGroup, group_id)
+        assert reservation.room_id == assigned_room_id
+        assert group.is_reverted is False
+
+
 def test_revert_group_service_returns_reverted_without_conflicts(movement_api_client):
     _, SessionLocal, _ = movement_api_client
     with SessionLocal() as db:
