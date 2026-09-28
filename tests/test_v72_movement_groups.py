@@ -184,6 +184,23 @@ def test_receptionist_can_list_movement_groups_but_cannot_revert_them(movement_a
         assert group.is_reverted is False
 
 
+def test_housekeeping_cannot_list_read_or_revert_movement_groups(movement_api_client):
+    client, SessionLocal, auth_state = movement_api_client
+    with SessionLocal() as db:
+        seeded = _seed_group(db, hotel_id=1, suffix="HOUSEKEEPING", trigger_reason="allocation_run")
+        db.commit()
+        group_id = seeded["group"].id
+
+    auth_state["role"] = "housekeeping"
+    listing = client.get("/api/movement-groups/")
+    detail = client.get(f"/api/movement-groups/{group_id}")
+    denied = client.post(f"/api/movement-groups/{group_id}/revert")
+
+    assert listing.status_code == 403, listing.text
+    assert detail.status_code == 403, detail.text
+    assert denied.status_code == 403, denied.text
+
+
 def test_revert_group_service_returns_reverted_without_conflicts(movement_api_client):
     _, SessionLocal, _ = movement_api_client
     with SessionLocal() as db:

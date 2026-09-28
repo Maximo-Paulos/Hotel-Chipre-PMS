@@ -304,7 +304,7 @@ Esta actualización conserva §11 como registro del corte histórico `1b6ca04`; 
 ### Decisión de producto aplicada en el código
 
 - El catálogo observado antes de este ajuste tenía 100 permisos canónicos; ahora tiene 101. Se agrega `reservation:movement_group_revert`, separado de `reservation:move`.
-- La reversión completa de movimientos de habitaciones queda habilitada por defecto para owner, co-owner y manager. Receptionist y housekeeping conservan la lectura/listado permitidos por sus capacidades actuales, pero no reciben la reversión por defecto. Mover una reserva individual no cambia.
+- La reversión completa de movimientos de habitaciones queda habilitada por defecto para owner, co-owner y manager. Receptionist conserva la lectura/listado de grupos mediante `reservation:move`, pero no recibe la reversión por defecto. Housekeeping no tiene `reservation:read` ni `reservation:move` por defecto, así que no accede a la pantalla de reservas ni a los endpoints de lectura de grupos. Mover una reserva individual no cambia.
 - La facultad sigue siendo configurable por el owner para roles y personas, como las demás capabilities delegables; no se marcó como invariante inmutable.
 - Una denegación explícita previa de `reservation:move` también deniega la reversión grupal, para no levantar silenciosamente una restricción ya elegida. Un grant previo de `reservation:move` no se convierte en grant de reversión.
 - Los dos endpoints de reversión usan la nueva capability y la pantalla oculta el botón cuando el permiso efectivo está denegado. La matriz de permisos se amplía mediante el sembrado existente; no requiere migración de esquema.
