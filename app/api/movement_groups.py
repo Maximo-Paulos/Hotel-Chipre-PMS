@@ -15,7 +15,10 @@ from app.services.room_movement_group_service import (
     list_groups,
     revert_group,
 )
-from app.services.permission_service import PERMISSION_RESERVATION_MOVE
+from app.services.permission_service import (
+    PERMISSION_RESERVATION_MOVE,
+    PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
+)
 
 
 router = APIRouter(prefix="/api/movement-groups", tags=["Movement Groups"])
@@ -156,7 +159,7 @@ def read_movement_group(
 def revert_movement_group(
     group_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT)),
 ):
     try:
         result = revert_group(

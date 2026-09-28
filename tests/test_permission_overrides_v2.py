@@ -34,6 +34,10 @@ from app.services.permission_service import (
     PERMISSION_SETTINGS_DAILY_REPORT_VIEW,
     PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
     PERMISSION_RATES_UPDATE,
+    PERMISSION_RESERVATION_MOVE,
+    PERMISSION_RESERVATION_MOVE_CATEGORY,
+    PERMISSION_RESERVATION_MOVE_CAPACITY,
+    PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
     PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
     PERMISSION_ROOM_STATUS_UPDATE,
     PERMISSION_STOCK_ADJUST,
@@ -178,10 +182,22 @@ def test_legacy_explicit_denials_survive_permission_splits(db):
                 permission_code=PERMISSION_SETTINGS_ASSISTANT_VIEW,
                 allowed=False,
             ),
+            UserPermissionOverride(
+                hotel_id=1,
+                user_id=20,
+                permission_code=PERMISSION_RESERVATION_MOVE,
+                allowed=False,
+            ),
             HotelPermissionOverride(
                 hotel_id=1,
                 role="co_owner",
                 permission_code=PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
+                allowed=False,
+            ),
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="co_owner",
+                permission_code=PERMISSION_RESERVATION_MOVE,
                 allowed=False,
             ),
         ]
@@ -194,6 +210,11 @@ def test_legacy_explicit_denials_survive_permission_splits(db):
     assert assistant["allowed"] is False
     assert assistant["source"] == "legacy_user_deny"
     assert assistant["legacy_permission_code"] == PERMISSION_SETTINGS_ASSISTANT_VIEW
+
+    movement_group_revert = details[PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT]
+    assert movement_group_revert["allowed"] is False
+    assert movement_group_revert["source"] == "legacy_user_deny"
+    assert movement_group_revert["legacy_permission_code"] == PERMISSION_RESERVATION_MOVE
 
     for code in (PERMISSION_SETTINGS_DAILY_REPORT_VIEW, PERMISSION_SETTINGS_DAILY_REPORT_MANAGE):
         daily_report = details[code]
@@ -210,12 +231,60 @@ def test_legacy_explicit_denials_survive_permission_splits(db):
         PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE,
         user_id=20,
     )
+    assert not resolve(db, 1, "co_owner", PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT, user_id=20)
     for code in (PERMISSION_SETTINGS_DAILY_REPORT_VIEW, PERMISSION_SETTINGS_DAILY_REPORT_MANAGE):
         assert not resolve(db, 1, "co_owner", code, user_id=20)
 
     role_matrix = get_matrix(db, 1)
     assert role_matrix["co_owner"][PERMISSION_SETTINGS_DAILY_REPORT_VIEW]["source"] == "legacy_role_deny"
     assert role_matrix["co_owner"][PERMISSION_SETTINGS_DAILY_REPORT_VIEW]["legacy_permission_code"] == PERMISSION_SETTINGS_NOTIFICATIONS_VIEW
+    movement_group_role = get_effective_permission_details(db, 1, "co_owner")[PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT]
+    assert movement_group_role["allowed"] is False
+    assert movement_group_role["source"] == "legacy_role_deny"
+    assert movement_group_role["legacy_permission_code"] == PERMISSION_RESERVATION_MOVE
+
+
+def test_movement_group_revert_is_a_separate_delegable_capability(db):
+    db.add(HotelConfiguration(id=1, subscription_active=True))
+    db.flush()
+    seed_default_permissions(db)
+    db.add(
+        HotelPermissionOverride(
+            hotel_id=1,
+            role="receptionist",
+            permission_code=PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
+            allowed=True,
+        )
+    )
+    db.flush()
+
+    details = get_effective_permission_details(db, 1, "receptionist")
+
+    assert details[PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT]["allowed"] is True
+    assert details[PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT]["source"] == "role_override"
+    assert details[PERMISSION_RESERVATION_MOVE_CATEGORY]["allowed"] is False
+    assert details[PERMISSION_RESERVATION_MOVE_CAPACITY]["allowed"] is False
+
+
+def test_legacy_room_move_grant_does_not_grant_group_revert(db):
+    db.add(HotelConfiguration(id=1, subscription_active=True))
+    db.flush()
+    seed_default_permissions(db)
+    db.add(
+        HotelPermissionOverride(
+            hotel_id=1,
+            role="housekeeping",
+            permission_code=PERMISSION_RESERVATION_MOVE,
+            allowed=True,
+        )
+    )
+    db.flush()
+
+    details = get_effective_permission_details(db, 1, "housekeeping")
+
+    assert details[PERMISSION_RESERVATION_MOVE]["allowed"] is True
+    assert details[PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT]["allowed"] is False
+    assert details[PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT]["source"] == "role_default"
 
 
 def test_new_permission_decisions_win_and_legacy_grants_are_not_inherited(db):

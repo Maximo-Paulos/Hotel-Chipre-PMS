@@ -294,3 +294,34 @@ El barrido previo de ramas encontró 13 worktrees no-main, 11 con material local
 ### Decisión
 
 Se mantiene la recomendación: consolidar el resolver actual y no migrar completamente a Casbin, OpenFGA, SpiceDB u OPA. Este diff reduce dispersión y suma granularidad con coste operativo marginal, pero no elimina la deuda de QA autenticada ni decide políticas de producto pendientes. El estado es `confirmed` para código/tests locales, `historical` para la evidencia de §10 y `needs-verification` para el deploy, la matriz autenticada por rol y el tratamiento de overrides tras un cambio de rol.
+
+---
+
+## 12. Revisión posterior: permisos de reversión grupal (2026-09-28)
+
+Esta actualización conserva §11 como registro del corte histórico `1b6ca04`; resuelve dos temas que allí quedaron pendientes y no convierte las pruebas locales en evidencia de producción.
+
+### Decisión de producto aplicada en el código
+
+- El catálogo observado antes de este ajuste tenía 100 permisos canónicos; ahora tiene 101. Se agrega `reservation:movement_group_revert`, separado de `reservation:move`.
+- La reversión completa de movimientos de habitaciones queda habilitada por defecto para owner, co-owner y manager. Receptionist conserva la lectura/listado de grupos mediante `reservation:move`, pero no recibe la reversión por defecto. Housekeeping no tiene `reservation:read` ni `reservation:move` por defecto, así que no accede a la pantalla de reservas ni a los endpoints de lectura de grupos. Mover una reserva individual no cambia.
+- La facultad sigue siendo configurable por el owner para roles y personas, como las demás capabilities delegables; no se marcó como invariante inmutable. Una concesión explícita autoriza únicamente a revertir grupos ya registrados —incluidos los que cruzan categorías o capacidades—, pero no habilita a crear movimientos de esa amplitud.
+- Antes de cambiar datos, el servicio exige que la reserva siga en la habitación registrada por el movimiento, que el huésped aún no haya ingresado/salido ni cancelado/no-show, que la habitación original esté disponible y que admita la ocupación actual. Si no se cumple, deja ese movimiento sin tocar, registra el conflicto en auditoría y conserva el grupo como pendiente; los ya restaurados se reconocen al reintentar. Una reversión parcial se informa claramente en pantalla. Los cambios de habitación de huéspedes alojados deben seguir el flujo normal, que sincroniza los estados de habitación.
+- Una denegación explícita previa de `reservation:move` también deniega la reversión grupal, para no levantar silenciosamente una restricción ya elegida. Un grant previo de `reservation:move` no se convierte en grant de reversión.
+- Los dos endpoints de reversión usan la nueva capability y la pantalla oculta el botón cuando el permiso efectivo está denegado. Una migración de datos aditiva agrega el permiso y sus valores iniciales para los cinco roles; no requiere cambios de esquema ni altera overrides existentes.
+
+El ciclo de vida al cambiar roles se confirma en el código y pruebas actuales: se limpian concesiones individuales y se conservan denegaciones explícitas. El sistema conserva el resolver propio y RLS; no agrega dependencia ni servicio de autorización externo.
+
+### Validación local del candidato
+
+- Backend enfocado: **43 pruebas aprobadas** para catálogo, precedencia/denegaciones, contratos de rutas, lectura y reversión de ambos tipos de grupo.
+- Suite backend segura con SQLite: **2.376 aprobadas, 9 omitidas y 12 xfailed**. Se excluyeron suites de integración y pruebas que requieren PostgreSQL real; no se usó un PostgreSQL aislado ni se hicieron escrituras directas a Supabase.
+- Frontend: **53 pruebas**, typecheck, lint y build aprobados. Vite conserva un aviso de bundle principal superior a 500 kB.
+- Revisión independiente de solo lectura: no encontró bypass o regresión concreta en el diff candidato.
+
+### Límites pendientes
+
+- Este registro es del candidato local: al momento de escribirlo, la producción todavía responde con `d6a91da`; el cambio necesita publicarse y verificarse en Vercel y Render.
+- No se hizo una matriz allow/deny autenticada con sesiones distintas de receptionist y manager en producción. Las pruebas con SQLite confirman la política de aplicación, no sustituyen RLS live ni una certificación cloud.
+- El contrato AST de migración verifica un subconjunto explícito de rutas. La ausencia de guardas estáticas por rol no demuestra por sí sola que cada endpoint tenga la capability semánticamente correcta; falta cerrar un inventario completo y mantenerlo como contrato.
+- Falta una prueba verdaderamente concurrente de dos consumos del mismo grant en el motor PostgreSQL activo. El código y pruebas existentes cubren uso único, recurso/acción exactos y rollback; no se afirma aquí que esa condición haya sido probada bajo concurrencia PostgreSQL.

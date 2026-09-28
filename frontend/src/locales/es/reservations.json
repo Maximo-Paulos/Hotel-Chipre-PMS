@@ -737,6 +737,7 @@
       "availableCount": "Disponibles: {{count}} habitaciones",
       "allocationRecalculated": "Asignación recalculada: {{created}} asignadas, {{moved}} movimientos.",
       "groupReverted": "Grupo #{{id}} revertido",
+      "groupRevertPartial": "El grupo #{{id}} no se revirtió por completo. Algunas reservas quedaron sin cambios; revisá su estado, capacidad y disponibilidad antes de reintentar.",
       "bankTransferHint": "Para transferencia cargá el comprobante y esperá la aprobación.",
       "otherMethodHint": "Para este medio generá un link o confirmá el pago desde su integración.",
       "depositAlreadyCovered": "La Seña ya está cubierta.",

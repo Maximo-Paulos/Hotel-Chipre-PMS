@@ -89,6 +89,7 @@ PERMISSION_RESERVATION_DELETE = "reservation:delete"
 PERMISSION_RESERVATION_DEMO_SEED = "reservation:demo_seed"
 PERMISSION_RESERVATION_CHARGE = "reservation:charge"
 PERMISSION_RESERVATION_MOVE = "reservation:move"
+PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT = "reservation:movement_group_revert"
 PERMISSION_RESERVATION_MOVE_CATEGORY = "reservation:move_category"
 PERMISSION_RESERVATION_MOVE_CAPACITY = "reservation:move_capacity"
 PERMISSION_RESERVATION_MANUAL_RATE = "reservation:manual_rate"
@@ -217,6 +218,7 @@ LEGACY_PERMISSION_DENY_FALLBACKS: dict[str, tuple[str, ...]] = {
     PERMISSION_SETTINGS_ASSISTANT_ACTIONS_MANAGE: (PERMISSION_SETTINGS_ASSISTANT_VIEW,),
     PERMISSION_SETTINGS_DAILY_REPORT_VIEW: (PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,),
     PERMISSION_SETTINGS_DAILY_REPORT_MANAGE: (PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,),
+    PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT: (PERMISSION_RESERVATION_MOVE,),
 }
 
 # Ordered from narrowest to widest. A room-move operation checks the minimum
@@ -300,6 +302,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     PERMISSION_RESERVATION_MOVE: (
         "reservations", "Move reservations between rooms",
         "Permite mover una reserva entre habitaciones de la misma categoría. No permite cambiar de categoría ni de capacidad; los permisos de categoría o capacidad incluyen este alcance.",
+    ),
+    PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT: (
+        "reservations", "Revert allocation movement groups",
+        "Permite deshacer un grupo completo de movimientos de habitaciones. No reemplaza los permisos para mover reservas individuales.",
     ),
     PERMISSION_RESERVATION_MOVE_CATEGORY: (
         "reservations", "Move reservations to another category with equal capacity",
@@ -697,7 +703,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_CANCEL_PAID,
         PERMISSION_RESERVATION_DELETE, PERMISSION_RESERVATION_DEMO_SEED,
         PERMISSION_RESERVATION_MOVE, PERMISSION_RESERVATION_MOVE_CATEGORY,
-        PERMISSION_RESERVATION_MOVE_CAPACITY, PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
+        PERMISSION_RESERVATION_MOVE_CAPACITY, PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
+        PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
         PERMISSION_ROOM_READ, PERMISSION_ROOM_STATUS_UPDATE,
         PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_ROOM_BLOCK_RELEASE,
         PERMISSION_CHECKIN_PERFORM, PERMISSION_CHECKOUT_PERFORM,

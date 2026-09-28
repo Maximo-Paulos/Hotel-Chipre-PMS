@@ -8,10 +8,14 @@ from sqlalchemy.orm import Session
 from app.models.audit_log import AuditActionEnum
 from app.models.operations import RoomMoveEvent, RoomMovementGroup
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.room import Room, RoomStatusEnum
+from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.services import audit_log_service
-from app.services.reservation_service import check_room_availability
+from app.services.reservation_service import (
+    ReservationError,
+    _validate_reservation_occupancy,
+    check_room_availability,
+)
 
 
 class RoomMovementGroupError(Exception):
@@ -254,6 +258,109 @@ def revert_group(
         )
         if from_room is None:
             raise RoomMovementGroupError("Original room no longer exists")
+
+        # A previous partial attempt may already have restored this move.
+        # Treat it as complete so a retry can finish the remaining events.
+        if reservation.room_id == from_room.id:
+            reverted.append(
+                {
+                    "move_event_id": event.id,
+                    "reservation_id": reservation.id,
+                    "room_id": from_room.id,
+                    "already_reverted": True,
+                }
+            )
+            continue
+
+        if reservation.status in {
+            ReservationStatusEnum.CHECKED_IN,
+            ReservationStatusEnum.CHECKED_OUT,
+            ReservationStatusEnum.CANCELLED,
+            ReservationStatusEnum.NO_SHOW,
+        }:
+            conflicts.append(
+                {
+                    "move_event_id": event.id,
+                    "reservation_id": reservation.id,
+                    "original_room_id": from_room.id,
+                    "current_room_id": reservation.room_id,
+                    "reservation_status": reservation.status.value,
+                    "reason": "reservation_state_changed_after_group",
+                }
+            )
+            continue
+
+        if reservation.room_id != event.to_room_id:
+            conflicts.append(
+                {
+                    "move_event_id": event.id,
+                    "reservation_id": reservation.id,
+                    "original_room_id": from_room.id,
+                    "expected_current_room_id": event.to_room_id,
+                    "current_room_id": reservation.room_id,
+                    "reason": "reservation_room_changed_after_group",
+                }
+            )
+            continue
+
+        original_category = (
+            db.query(RoomCategory)
+            .filter(RoomCategory.id == from_room.category_id, RoomCategory.hotel_id == hotel_id)
+            .first()
+        )
+        if original_category is None:
+            conflicts.append(
+                {
+                    "move_event_id": event.id,
+                    "reservation_id": reservation.id,
+                    "original_room_id": from_room.id,
+                    "reason": "original_room_category_unavailable",
+                }
+            )
+            continue
+
+        original_room_status = (
+            from_room.status.value if hasattr(from_room.status, "value") else str(from_room.status)
+        )
+        if (
+            not from_room.is_active
+            or from_room.deleted_at is not None
+            or from_room.status in {RoomStatusEnum.MAINTENANCE, RoomStatusEnum.BLOCKED}
+        ):
+            conflicts.append(
+                {
+                    "move_event_id": event.id,
+                    "reservation_id": reservation.id,
+                    "original_room_id": from_room.id,
+                    "current_room_id": reservation.room_id,
+                    "room_status": original_room_status,
+                    "room_is_active": bool(from_room.is_active),
+                    "room_is_deleted": from_room.deleted_at is not None,
+                    "reason": "original_room_unavailable",
+                }
+            )
+            continue
+
+        try:
+            _validate_reservation_occupancy(
+                original_category,
+                reservation.num_adults,
+                reservation.num_children,
+            )
+        except ReservationError as exc:
+            conflicts.append(
+                {
+                    "move_event_id": event.id,
+                    "reservation_id": reservation.id,
+                    "original_room_id": from_room.id,
+                    "current_room_id": reservation.room_id,
+                    "requested_occupancy": int(reservation.num_adults or 0) + int(reservation.num_children or 0),
+                    "original_room_capacity": int(original_category.max_occupancy or 0),
+                    "reason": "original_room_capacity_insufficient",
+                    "detail": str(exc),
+                }
+            )
+            continue
 
         conflicting_reservations = _active_reservation_conflicts_for_room(
             db,

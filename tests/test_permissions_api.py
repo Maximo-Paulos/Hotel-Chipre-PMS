@@ -160,7 +160,7 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         legacy_codes = set(LEGACY_PERMISSION_ALIASES)
 
         # New role-only business actions are named capabilities in the catalog.
-        assert len(canonical_codes) == 100
+        assert len(canonical_codes) == 101
         assert {"payment:proof:view", "payment:proof:review"} <= canonical_codes
         assert {"payment:refund", "reservation:cancel_paid"} <= canonical_codes
         assert "cash:expense" in canonical_codes

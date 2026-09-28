@@ -737,6 +737,7 @@
       "availableCount": "Available: {{count}} rooms",
       "allocationRecalculated": "Allocation recalculated: {{created}} assigned, {{moved}} moves.",
       "groupReverted": "Group #{{id}} reverted",
+      "groupRevertPartial": "Group #{{id}} was not fully reverted. Some reservations were left unchanged; review their status, room capacity, and availability before retrying.",
       "bankTransferHint": "For bank transfer, upload the proof and wait for approval.",
       "otherMethodHint": "For this method, generate a link or confirm the payment from its integration.",
       "depositAlreadyCovered": "The deposit is already covered.",

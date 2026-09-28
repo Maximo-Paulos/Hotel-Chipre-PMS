@@ -1064,8 +1064,12 @@ export function ReservationsPage() {
     if (!confirmed) return;
 
     try {
-      await revertMovementGroupMutation.mutateAsync(group.id);
-      showToast("success", t("page.messages.groupReverted", { id: group.id }));
+      const revertedGroup = await revertMovementGroupMutation.mutateAsync(group.id);
+      if (revertedGroup.is_reverted) {
+        showToast("success", t("page.messages.groupReverted", { id: group.id }));
+      } else {
+        showToast("info", t("page.messages.groupRevertPartial", { id: group.id }));
+      }
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.revertGroupFailed"));
     }
@@ -2219,14 +2223,16 @@ export function ReservationsPage() {
                       </p>
                       {group.notes ? <p className="mt-1 text-xs text-slate-500">{group.notes}</p> : null}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRevertMovementGroup(group)}
-                      disabled={group.is_reverted || revertMovementGroupMutation.isPending || subscriptionBlocked}
-                      className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {t("page.allocation.revert")}
-                    </button>
+                    {hasPermission("reservation:movement_group_revert") ? (
+                      <button
+                        type="button"
+                        onClick={() => handleRevertMovementGroup(group)}
+                        disabled={group.is_reverted || revertMovementGroupMutation.isPending || subscriptionBlocked}
+                        className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {t("page.allocation.revert")}
+                      </button>
+                    ) : null}
                   </div>
                 );
               })}

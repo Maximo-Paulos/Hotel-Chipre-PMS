@@ -1,5 +1,6 @@
 from datetime import date
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -11,10 +12,15 @@ from app.main import app as fastapi_app
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.operations import RoomMoveEvent, RoomMoveTypeEnum, RoomMovementGroup
+from app.models.permission import HotelPermissionOverride
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
+from app.services.permission_service import (
+    PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
+    seed_default_permissions,
+)
 
 
 def _override_auth(hotel_id: int, role: str = "manager", user_id: int = 10):
@@ -88,6 +94,76 @@ def test_revert_movement_group_marks_reservations_protected():
         audit = db.query(SecurityAuditLog).filter(SecurityAuditLog.hotel_id == 1).one()
         assert audit.action == "room_movement_group.reverted"
         assert audit.resource_id == str(group.id)
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_receptionist_can_read_but_cannot_revert_room_movement_group():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist", user_id=10)
+    try:
+        reservation, _, to_room, group = _seed_group(db, hotel_id=1)
+        db.commit()
+
+        listing = client.get("/api/room-movement-groups/")
+        denied = client.post(f"/api/room-movement-groups/{group.id}/revert")
+
+        db.refresh(reservation)
+        db.refresh(group)
+        assert listing.status_code == 200, listing.text
+        assert denied.status_code == 403, denied.text
+        assert group.is_reverted is False
+        assert reservation.room_id == to_room.id
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+@pytest.mark.parametrize("route_prefix", ["/api/movement-groups", "/api/room-movement-groups"])
+def test_explicit_receptionist_grant_can_revert_group(route_prefix):
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist", user_id=10)
+    try:
+        _, _, _, group = _seed_group(db, hotel_id=1)
+        seed_default_permissions(db)
+        db.add(
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="receptionist",
+                permission_code=PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
+                allowed=True,
+                updated_by_user_id=10,
+            )
+        )
+        db.commit()
+
+        response = client.post(f"{route_prefix}/{group.id}/revert")
+
+        assert response.status_code == 200, response.text
+        assert response.json()["is_reverted"] is True
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_housekeeping_cannot_read_or_revert_room_movement_group():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping", user_id=10)
+    try:
+        _, _, _, group = _seed_group(db, hotel_id=1)
+        db.commit()
+
+        listing = client.get("/api/room-movement-groups/")
+        detail = client.get(f"/api/room-movement-groups/{group.id}")
+        denied = client.post(f"/api/room-movement-groups/{group.id}/revert")
+
+        assert listing.status_code == 403, listing.text
+        assert detail.status_code == 403, detail.text
+        assert denied.status_code == 403, denied.text
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()
