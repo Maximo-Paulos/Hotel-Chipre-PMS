@@ -34,7 +34,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
 from app.models.operations import ReservationStatusHistory
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
-from app.services.financial_ledger import billing_adjustment_totals_by_reservation, completed_paid_amounts_by_reservation
+from app.services.financial_ledger import billing_adjustment_totals_by_reservation, paid_amounts_by_reservation
 from app.services.pricing_policy_service import PricingPolicyError, StayPricingQuote, quote_rate_plan_stay
 from app.services.pricing_service import build_pricing_revision, get_price_for_date
 from app.services.quote_token_service import QuoteTokenError, verify_quote_token
@@ -1713,12 +1713,9 @@ def get_occupancy_grid(
     )
 
     reservation_ids = [row.id for row in reservation_rows]
-    # Same bulk pattern as operational_report_service.daily_report: confirmed
-    # transactions win, materialized amount_paid is only the fallback for
-    # legacy rows with no ledger entries at all.
-    paid_by_reservation = completed_paid_amounts_by_reservation(db, hotel_id, reservation_ids)
-    for row in reservation_rows:
-        paid_by_reservation.setdefault(row.id, Decimal(row.amount_paid or 0))
+    # Guest balances include confirmed OTA credit plus completed in-house
+    # payments. Hotel cash/revenue reports use the transaction-only helper.
+    paid_by_reservation = paid_amounts_by_reservation(db, hotel_id, reservation_ids)
     adjustments_by_reservation = billing_adjustment_totals_by_reservation(db, hotel_id, reservation_ids)
 
     reservations: list[dict] = []

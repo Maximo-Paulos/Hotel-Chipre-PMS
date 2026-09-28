@@ -4,7 +4,7 @@ No global/singleton: one row per hotel (id == hotel_id).
 Admin Panel controls: deposit %, enabled gateways, cancellation policy, etc.
 """
 import json
-from sqlalchemy import Column, Integer, Float, Boolean, String, Text, DateTime, JSON
+from sqlalchemy import CheckConstraint, Column, Integer, Float, Boolean, String, Text, DateTime, JSON, text
 from datetime import datetime, timezone
 
 from app.database import Base
@@ -13,12 +13,23 @@ from app.database import Base
 class HotelConfiguration(Base):
     """Configuration table scoped by hotel (id == hotel_id)."""
     __tablename__ = "hotel_configuration"
+    __table_args__ = (
+        CheckConstraint(
+            "checkin_payment_policy IN ('deposit', 'total', 'free')",
+            name="ck_hotel_configuration_checkin_payment_policy",
+        ),
+    )
 
     # hotel_id is the primary key; no auto-assigned default to avoid implicit singletons
     id = Column(Integer, primary_key=True, autoincrement=False)
 
     # Financial policies
     deposit_percentage = Column(Float, nullable=False, default=30.0)  # % of total required as deposit
+    # The pilot default accepts the configured deposit and collects any
+    # remaining balance before checkout.
+    checkin_payment_policy = Column(
+        String(16), nullable=False, default="deposit", server_default=text("'deposit'")
+    )
     enable_full_payment = Column(Boolean, nullable=False, default=True)
     enable_deposit_payment = Column(Boolean, nullable=False, default=True)
 

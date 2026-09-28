@@ -152,14 +152,23 @@ def test_retention_hold_list_paginates_and_keeps_unreleased_holds_first(master_c
     first_page = client.get("/api/master-admin/privacy-retention/holds?limit=2&offset=0", headers=headers)
     second_page = client.get("/api/master-admin/privacy-retention/holds?limit=2&offset=2", headers=headers)
     assert first_page.status_code == second_page.status_code == 200
+    assert first_page.headers["cache-control"] == "private, no-store, max-age=0"
     assert len(first_page.json()) == 2
     assert all(row["released_at"] is None for row in first_page.json())
     assert [row["id"] for row in second_page.json()] == [hold_ids[0]]
+    with SessionLocal() as db:
+        events = db.query(MasterAdminAuditEvent).filter_by(action="privacy_retention_hold_list").all()
+        assert len(events) == 2
+        assert [json.loads(event.metadata_json) for event in events] == [
+            {"limit": 2, "offset": 0, "result_count": 2},
+            {"limit": 2, "offset": 2, "result_count": 1},
+        ]
 
 
 def test_hold_can_protect_a_public_inquiry_without_copying_its_content(master_client, monkeypatch):
     client, SessionLocal = master_client
     headers = _login(client, SessionLocal, monkeypatch)
+    inquiry_created_at = datetime(2026, 6, 1, 12, 30)
     inquiry_anchor = datetime(2026, 9, 26, 12, 30)
     with SessionLocal() as db:
         inquiry = PublicInquiry(
@@ -167,7 +176,8 @@ def test_hold_can_protect_a_public_inquiry_without_copying_its_content(master_cl
             email="contact@example.test",
             message="Synthetic inquiry text",
             privacy_consent_at=datetime.now(timezone.utc).replace(tzinfo=None),
-            created_at=inquiry_anchor,
+            created_at=inquiry_created_at,
+            updated_at=inquiry_anchor,
         )
         db.add(inquiry)
         db.commit()
@@ -202,6 +212,41 @@ def test_hold_can_protect_a_public_inquiry_without_copying_its_content(master_cl
         assert "Synthetic inquiry text" not in event.metadata_json
     finally:
         db.close()
+
+
+def test_public_inquiry_content_is_master_only_no_store_and_audited(master_client, monkeypatch):
+    client, SessionLocal = master_client
+    with SessionLocal() as db:
+        inquiry = PublicInquiry(
+            name="Synthetic Contact",
+            email="contact@example.test",
+            company_name="Synthetic Hotel",
+            phone="+54 11 5555-0101",
+            message="Synthetic private message",
+            source_path="/contacto",
+            privacy_consent_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        db.add(inquiry)
+        db.commit()
+        inquiry_id = inquiry.id
+
+    path = f"/api/master-admin/privacy-retention/inquiries/{inquiry_id}"
+    unauthorized = client.get(path)
+    assert unauthorized.status_code in {401, 403}
+
+    headers = _login(client, SessionLocal, monkeypatch)
+    response = client.get(path, headers=headers)
+    assert response.status_code == 200, response.text
+    assert response.headers["cache-control"] == "private, no-store, max-age=0"
+    assert response.json()["email"] == "contact@example.test"
+    assert response.json()["message"] == "Synthetic private message"
+
+    with SessionLocal() as db:
+        event = db.query(MasterAdminAuditEvent).filter_by(action="privacy_retention_inquiry_read").one()
+        assert event.target_type == "public_inquiry"
+        assert event.target_id == str(inquiry_id)
+        assert "contact@example.test" not in event.metadata_json
+        assert "Synthetic private message" not in event.metadata_json
 
 
 def test_retention_target_search_masks_email_and_audits_only_search_metadata(master_client, monkeypatch):

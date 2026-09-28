@@ -10,6 +10,7 @@ from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.models.user import User
+from app.schemas.transaction import PaymentRequest
 from app.services.cash_register_service import (
     CashRegisterError,
     add_movement,
@@ -17,6 +18,7 @@ from app.services.cash_register_service import (
     close_session,
     open_session,
 )
+from app.services.payment_service import process_payment
 
 
 def _hotel(db, hotel_id: int) -> HotelConfiguration:
@@ -139,7 +141,18 @@ def test_close_report_expected_balance_from_confirmed_cash(db):
     _user(db, 10)
     reservation = _reservation(db, 1, "CASH-1")
     session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100.00"))
-    completed_cash = _transaction(db, hotel_id=1, reservation_id=reservation.id, amount=Decimal("60.00"))
+    completed_cash = process_payment(
+        db,
+        PaymentRequest(
+            reservation_id=reservation.id,
+            amount=60,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            currency="ARS",
+        ),
+        hotel_id=1,
+        apply_surcharge=False,
+    )
     pending_cash = _transaction(
         db,
         hotel_id=1,
@@ -155,36 +168,9 @@ def test_close_report_expected_balance_from_confirmed_cash(db):
         method=PaymentMethodEnum.CREDIT_CARD,
     )
 
-    add_movement(
-        db,
-        hotel_id=1,
-        session_id=session.id,
-        recorded_by_user_id=10,
-        movement_type=CashMovementTypeEnum.INCOME,
-        amount=Decimal("60.00"),
-        transaction_id=completed_cash.id,
-        reservation_id=reservation.id,
-    )
-    add_movement(
-        db,
-        hotel_id=1,
-        session_id=session.id,
-        recorded_by_user_id=10,
-        movement_type=CashMovementTypeEnum.INCOME,
-        amount=Decimal("40.00"),
-        transaction_id=pending_cash.id,
-        reservation_id=reservation.id,
-    )
-    add_movement(
-        db,
-        hotel_id=1,
-        session_id=session.id,
-        recorded_by_user_id=10,
-        movement_type=CashMovementTypeEnum.INCOME,
-        amount=Decimal("30.00"),
-        transaction_id=completed_card.id,
-        reservation_id=reservation.id,
-    )
+    assert completed_cash.status == TransactionStatusEnum.COMPLETED
+    assert pending_cash.status == TransactionStatusEnum.PENDING
+    assert completed_card.status == TransactionStatusEnum.COMPLETED
     add_movement(
         db,
         hotel_id=1,

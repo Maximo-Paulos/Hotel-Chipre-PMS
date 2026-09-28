@@ -14,6 +14,7 @@ xfail tests below flag REAL gaps where main diverges from the BRM the fervent su
 from datetime import date
 
 import pytest
+from sqlalchemy import func
 
 from app.models.guest import (
     DocumentTypeEnum,
@@ -36,6 +37,7 @@ from app.services.allocation_engine import (
     _run_allocation_greedy,
 )
 from app.services.checkin_service import CheckInError, perform_checkin
+from app.services import checkin_service
 from app.services.guest_service import (
     add_tag,
     list_active_tags,
@@ -49,6 +51,18 @@ from app.services.reservation_operations_service import (
     move_reservation_room,
 )
 from app.services.reservation_service import update_reservation_fields
+
+
+@pytest.fixture(autouse=True)
+def anchor_hotel_day_to_fixture_arrival(db, monkeypatch):
+    def hotel_day_for_test(session, hotel_id):
+        return (
+            session.query(func.max(Reservation.check_in_date))
+            .filter(Reservation.hotel_id == hotel_id)
+            .scalar()
+        ) or date(2027, 1, 1)
+
+    monkeypatch.setattr(checkin_service, "hotel_today", hotel_day_for_test)
 
 
 def _reservation(

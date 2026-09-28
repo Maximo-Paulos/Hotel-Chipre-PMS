@@ -198,7 +198,14 @@ def _transaction_exists(db: Session, hotel_id: int, reservation_id: int, idempot
     )
 
 
-def _ensure_completed_transaction(db: Session, payment: Payment, provider: str, payload: dict[str, Any]) -> None:
+def _ensure_completed_transaction(
+    db: Session,
+    payment: Payment,
+    provider: str,
+    payload: dict[str, Any],
+    *,
+    allow_verified_cancelled_settlement: bool = False,
+) -> None:
     idempotency_key = f"{provider}:{payment.external_payment_id}:completed"
     if _transaction_exists(db, payment.hotel_id, payment.reservation_id, idempotency_key):
         return
@@ -231,6 +238,7 @@ def _ensure_completed_transaction(db: Session, payment: Payment, provider: str, 
             gateway_response=json.dumps(payload, sort_keys=True, default=str),
         ),
         idempotency_key=idempotency_key,
+        allow_verified_cancelled_settlement=allow_verified_cancelled_settlement,
     )
     db.flush()
 
@@ -423,7 +431,15 @@ def ingest_webhook(
     try:
         if status == "completed":
             payment.processed_at = payment.processed_at or _completed_at(payload)
-            _ensure_completed_transaction(db, payment, provider, payload)
+            _ensure_completed_transaction(
+                db,
+                payment,
+                provider,
+                payload,
+                allow_verified_cancelled_settlement=(
+                    closed_link_status is not None and must_verify_with_provider
+                ),
+            )
 
         refresh_link_collection(db, link)
         if closed_link_status is not None and link.status != "completed":

@@ -84,6 +84,7 @@ PERMISSION_RESERVATION_READ = "reservation:read"
 PERMISSION_RESERVATION_CREATE = "reservation:create"
 PERMISSION_RESERVATION_UPDATE = "reservation:update"
 PERMISSION_RESERVATION_CANCEL = "reservation:cancel"
+PERMISSION_RESERVATION_CANCEL_PAID = "reservation:cancel_paid"
 PERMISSION_RESERVATION_DELETE = "reservation:delete"
 PERMISSION_RESERVATION_DEMO_SEED = "reservation:demo_seed"
 PERMISSION_RESERVATION_CHARGE = "reservation:charge"
@@ -120,6 +121,7 @@ PERMISSION_HOTEL_SECURITY_MANAGE = "hotel_settings:security_manage"
 # Existing capabilities outside the split modules stay canonical.
 PERMISSION_COMPANY_MANAGE = "company:manage"
 PERMISSION_CASH_OPERATE = "cash:operate"
+PERMISSION_CASH_EXPENSE = "cash:expense"
 PERMISSION_CASH_APPROVE_DIFFERENCE = "cash:approve_difference"
 PERMISSION_CASH_CUSTODY_RECEIVE = "cash:custody:receive"
 PERMISSION_OPERATIONAL_TASK_READ = "operations:tasks:view"
@@ -130,6 +132,8 @@ PERMISSION_REPORTS_OPERATIONAL_VIEW = "reports:operational:view"
 PERMISSION_REPORTS_FINANCIAL_VIEW = "reports:financial:view"
 PERMISSION_PAYMENT_PROOF_VIEW = "payment:proof:view"
 PERMISSION_PAYMENT_PROOF_REVIEW = "payment:proof:review"
+PERMISSION_PAYMENT_REFUND = "payment:refund"
+PERMISSION_OTA_PAYMENT_CONFIRM = "payment:ota_confirm"
 PERMISSION_APIKEY_MANAGE = "apikey:manage"
 
 # Section visibility and management permissions used by the next frontend
@@ -277,6 +281,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "reservations", "Cancel reservations",
         "Permite cancelar reservas. No permite crearlas, editarlas ni moverlas.",
     ),
+    PERMISSION_RESERVATION_CANCEL_PAID: (
+        "reservations", "Cancel reservations with completed payments",
+        "Permite cancelar una reserva con historial de pagos completados. Requiere MFA reciente y el permiso habitual de cancelación.",
+    ),
     PERMISSION_RESERVATION_DELETE: (
         "reservations", "Delete eligible bookings",
         "Permite eliminar lógicamente reservas que todavía no fueron marcadas como ingresadas o finalizadas. No reemplaza la cancelación ni borra el historial de reservas activas o concluidas.",
@@ -412,6 +420,18 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     PERMISSION_CASH_OPERATE: (
         "cash", "Operate cash register sessions and movements",
         "Permite abrir, operar y cerrar sesiones de caja y registrar movimientos. No permite aprobar diferencias de cierre.",
+    ),
+    PERMISSION_CASH_EXPENSE: (
+        "cash", "Record manual cash expenses",
+        "Permite registrar egresos manuales de caja. Requiere permiso explícito y MFA reciente; los reembolsos de huéspedes deben usar el flujo de devoluciones.",
+    ),
+    PERMISSION_PAYMENT_REFUND: (
+        "payments", "Issue reservation refunds",
+        "Permite devolver un cobro registrado. Requiere MFA reciente además del permiso para operar cobros.",
+    ),
+    PERMISSION_OTA_PAYMENT_CONFIRM: (
+        "payments", "Confirm an external OTA prepayment",
+        "Permite confirmar un importe pagado en una OTA con referencia verificable. Requiere MFA reciente y no registra dinero recibido en la caja del hotel.",
     ),
     PERMISSION_CASH_APPROVE_DIFFERENCE: (
         "cash", "Approve cash close differences",
@@ -674,6 +694,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_GUEST_EXPORT,
         PERMISSION_RESERVATION_READ, PERMISSION_RESERVATION_CREATE,
         PERMISSION_RESERVATION_UPDATE, PERMISSION_RESERVATION_CANCEL,
+        PERMISSION_RESERVATION_CANCEL_PAID,
         PERMISSION_RESERVATION_DELETE, PERMISSION_RESERVATION_DEMO_SEED,
         PERMISSION_RESERVATION_MOVE, PERMISSION_RESERVATION_MOVE_CATEGORY,
         PERMISSION_RESERVATION_MOVE_CAPACITY, PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
@@ -688,6 +709,10 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_PROMOTIONS_MANAGE, PERMISSION_REPORTS_OPERATIONAL_VIEW,
         PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW,
         PERMISSION_PAYMENT_PROOF_VIEW, PERMISSION_PAYMENT_PROOF_REVIEW,
+        PERMISSION_RESERVATION_CHARGE, PERMISSION_CASH_OPERATE,
+        PERMISSION_CASH_EXPENSE,
+        PERMISSION_PAYMENT_REFUND,
+        PERMISSION_OTA_PAYMENT_CONFIRM,
         PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
         PERMISSION_WAITLIST_VIEW, PERMISSION_WAITLIST_MANAGE,
         PERMISSION_CASH_VIEW,
@@ -720,7 +745,6 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_ROOM_READ, PERMISSION_ROOM_STATUS_UPDATE, PERMISSION_LAUNDRY_READ,
         PERMISSION_LAUNDRY_MOVE, PERMISSION_LAUNDRY_REMITO_MANAGE,
         PERMISSION_OPERATIONAL_TASK_READ, PERMISSION_OPERATIONAL_TASK_REPORT,
-        PERMISSION_WHATSAPP_INBOX_VIEW, PERMISSION_WHATSAPP_NOTE_MANAGE,
     ),
 }
 
@@ -733,7 +757,15 @@ _OWNER_ONLY = frozenset(
         PERMISSION_CASH_CUSTODY_RECEIVE,
     }
 )
-_STEP_UP_REQUIRED = _OWNER_ONLY | frozenset({PERMISSION_CASH_APPROVE_DIFFERENCE})
+_STEP_UP_REQUIRED = _OWNER_ONLY | frozenset(
+    {
+        PERMISSION_CASH_APPROVE_DIFFERENCE,
+        PERMISSION_CASH_EXPENSE,
+        PERMISSION_PAYMENT_REFUND,
+        PERMISSION_OTA_PAYMENT_CONFIRM,
+        PERMISSION_RESERVATION_CANCEL_PAID,
+    }
+)
 _ROLE_SCOPES: dict[str, frozenset[str]] = {
     PERMISSION_SETTINGS_USERS_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_USERS_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),

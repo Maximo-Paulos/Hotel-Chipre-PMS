@@ -163,6 +163,8 @@ class ReservationTransactionSummaryRead(BaseModel):
     method: str
     type: str
     status: str
+    manual_reference: Optional[str] = None
+    refund_of_transaction_id: Optional[int] = None
     created_at: str
 
 

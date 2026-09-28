@@ -1068,6 +1068,51 @@ def test_manual_ota_duplicate_update_respects_reservation_action_lanes(protected
         _close(db, engine)
 
 
+def test_manual_ota_paid_occupancy_guard_refreshes_and_locks_stale_reservation():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        reservation.source_provider_code = "booking"
+        reservation.external_id = "OTA-STALE-PAID-1"
+        db.commit()
+
+        # Reproduce an identity-map snapshot read before a payment transaction
+        # updates the stored paid state. The endpoint must authorize against
+        # the refreshed, locked tenant row rather than this stale Python object.
+        db.query(Reservation).filter(
+            Reservation.hotel_id == 1,
+            Reservation.id == reservation.id,
+        ).update(
+            {
+                Reservation.status: ReservationStatusEnum.FULLY_PAID,
+                Reservation.amount_paid: reservation.total_amount,
+            },
+            synchronize_session=False,
+        )
+        assert reservation.status == ReservationStatusEnum.PENDING
+        assert reservation.amount_paid == Decimal("0")
+
+        response = client.post(
+            "/api/reservations/manual-ota",
+            json={
+                "guest_id": reservation.guest_id,
+                "category_id": reservation.category_id,
+                "room_id": reservation.room_id,
+                "check_in_date": reservation.check_in_date.isoformat(),
+                "check_out_date": reservation.check_out_date.isoformat(),
+                "num_adults": 2,
+                "channel": "booking",
+                "external_id": "OTA-STALE-PAID-1",
+            },
+        )
+
+        assert response.status_code == 403, response.text
+        db.refresh(reservation)
+        assert reservation.status == ReservationStatusEnum.FULLY_PAID
+        assert reservation.num_adults == 1
+    finally:
+        _close(db, engine)
+
+
 def test_reservation_date_change_extension_and_room_move_respect_inactive_subscription():
     client, db, engine, _auth, reservation, _stock_item = _client()
     try:

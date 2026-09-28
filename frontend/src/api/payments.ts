@@ -11,6 +11,9 @@ export type PaymentRequest = {
   transaction_type: TransactionType;
   currency?: string;
   description?: string;
+  manual_reference?: string;
+  refund_of_transaction_id?: number;
+  refund_reason?: string;
 };
 
 export type PaymentSummary = {
@@ -38,6 +41,9 @@ export type PaymentSummary = {
     method: string;
     type: string;
     status: string;
+    manual_reference?: string | null;
+    refund_of_transaction_id?: number | null;
+    refund_reason?: string | null;
     created_at: string;
   }>;
 };

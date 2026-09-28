@@ -26,7 +26,7 @@ from app.schemas.reports import (
 )
 from app.services.financial_ledger import (
     billing_adjustment_totals_by_reservation,
-    completed_paid_amounts_by_reservation,
+    paid_amounts_by_reservation,
 )
 from app.services.reservation_service import active_reservations
 from app.services.timezones import hotel_today
@@ -272,14 +272,9 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         reservation.id
         for reservation in (*arrivals, *departures, *balance_candidates, *late_arrivals)
     }
-    paid_by_reservation = completed_paid_amounts_by_reservation(db, hotel_id, candidate_ids)
-    # Legacy/imported reservations may predate the transaction ledger. Keep the
-    # materialized value only for those rows; once a ledger row exists, it wins.
-    for reservation in (*arrivals, *departures, *balance_candidates, *late_arrivals):
-        paid_by_reservation.setdefault(
-            reservation.id,
-            Decimal(reservation.amount_paid or 0),
-        )
+    # The operational due reflects confirmed OTA credits as well as local
+    # payments; cash/revenue totals remain transaction-only elsewhere.
+    paid_by_reservation = paid_amounts_by_reservation(db, hotel_id, candidate_ids)
     # Consumption/extra charges (BillingAdjustment) are part of the collectible
     # balance, same as the canonical operational_balance_due helper used
     # elsewhere; omitting them understated/hid pending payments once a guest

@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models.payment import Payment, PaymentLink
-from app.models.reservation import Reservation
+from app.models.reservation import Reservation, ReservationStatusEnum
 from app.schemas.payment_link import PaymentLinkCreate
 from app.services.external_effects_policy import (
     ExternalEffectsDisabled,
@@ -291,6 +291,10 @@ def create_link(
     idempotency_key: str | None = None,
 ) -> PaymentLink:
     reservation = _get_reservation_for_hotel(db, hotel_id, payload.reservation_id)
+    if reservation.status in (ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT):
+        raise PaymentLinkError(
+            f"Cannot create a payment link for a reservation in status '{reservation.status.value}'"
+        )
     provider = payload.provider or "mercado_pago"
     if provider != "mercado_pago":
         raise PaymentLinkError("Solo mercado_pago esta habilitado para links de pago")

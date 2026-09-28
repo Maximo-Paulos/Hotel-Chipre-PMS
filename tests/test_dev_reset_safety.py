@@ -55,6 +55,23 @@ def test_demo_seed_cli_rejects_live_before_database_initialization(monkeypatch: 
         seed_demo.main()
 
 
+def test_demo_seed_helper_rejects_live_before_database_query(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("APP_ENV", "live")
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv("DEMO_MODE", "true")
+    monkeypatch.setenv("TESTING", "true")
+
+    class LiveTargetSession:
+        def get_bind(self):
+            return SimpleNamespace(url=make_url("sqlite:///./dev.db"))
+
+        def get(self, *_args, **_kwargs):
+            pytest.fail("A live seed must be rejected before reading application data.")
+
+    with pytest.raises(DemoResetSafetyError, match="unavailable in this environment"):
+        seed_demo.seed(LiveTargetSession())
+
+
 def test_dev_reset_keeps_explicit_development_workflow(
     monkeypatch: pytest.MonkeyPatch,
 ):

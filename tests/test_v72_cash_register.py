@@ -17,7 +17,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -41,6 +41,7 @@ from app.models.transaction import (
 from app.models.user import User
 from app.schemas.cash_register import CashMovementCreate, CashSessionClose, CashSessionOpen
 from app.services.cash_register_service import add_movement, close_session, open_session
+from app.services.cash_register_service import CashRegisterError
 from app.services.permission_service import PERMISSION_CASH_APPROVE_DIFFERENCE
 
 
@@ -136,6 +137,10 @@ def _add_cash_movement(
         transaction_id=transaction_id,
         reservation_id=reservation_id,
     )
+
+
+def _http_request(path: str) -> Request:
+    return Request({"type": "http", "method": "POST", "path": path, "headers": []})
 
 
 def _make_reservation(db: Session, hotel_id: int = HOTEL_ID) -> Reservation:
@@ -388,6 +393,7 @@ class TestCashMovements:
                 amount=Decimal("250.00"),
                 description="Room payment",
             ),
+            request=_http_request(f"/api/cash-register/sessions/{session.id}/movements"),
             db=db,
             context=_auth_context(),
         )
@@ -400,20 +406,21 @@ class TestCashMovements:
         from app.api.cash_register import add_cash_movement
 
         session = _open_cash_session(db, opening_balance=Decimal("500.00"))
-        result = add_cash_movement(
-            session.id,
-            CashMovementCreate(
-                movement_type=CashMovementTypeEnum.EXPENSE,
-                amount=Decimal("75.00"),
-                description="Office supplies purchase",
-            ),
-            db=db,
-            context=_auth_context(),
-        )
+        with pytest.raises(HTTPException) as exc_info:
+            add_cash_movement(
+                session.id,
+                CashMovementCreate(
+                    movement_type=CashMovementTypeEnum.EXPENSE,
+                    amount=Decimal("75.00"),
+                    description="Office supplies purchase",
+                ),
+                request=_http_request(f"/api/cash-register/sessions/{session.id}/movements"),
+                db=db,
+                context=_auth_context(),
+            )
 
-        assert result.movement_type == CashMovementTypeEnum.EXPENSE
-        assert result.amount == Decimal("75.00")
-        assert result.description == "Office supplies purchase"
+        assert exc_info.value.status_code == 428
+        assert "cash:expense" in str(exc_info.value.detail)
 
     def test_create_movement_on_closed_session_raises_400(self, db: Session):
         from app.api.cash_register import add_cash_movement
@@ -434,6 +441,7 @@ class TestCashMovements:
                     movement_type=CashMovementTypeEnum.INCOME,
                     amount=Decimal("100.00"),
                 ),
+                request=_http_request(f"/api/cash-register/sessions/{session.id}/movements"),
                 db=db,
                 context=_auth_context(),
             )
@@ -545,17 +553,14 @@ class TestAutoCashEntry:
         reservation = _make_reservation(db)
         tx = _make_transaction(db, reservation, amount=Decimal("300.00"))
 
-        movement = _add_cash_movement(
-            db,
-            session,
-            amount=Decimal("300.00"),
-            transaction_id=tx.id,
-            reservation_id=reservation.id,
-        )
-
-        assert movement.transaction_id == tx.id
-        assert movement.reservation_id == reservation.id
-        assert movement.movement_type == CashMovementTypeEnum.INCOME
+        with pytest.raises(CashRegisterError, match="payment workflow"):
+            _add_cash_movement(
+                db,
+                session,
+                amount=Decimal("300.00"),
+                transaction_id=tx.id,
+                reservation_id=reservation.id,
+            )
 
     def test_manual_cash_movement_rejects_cross_reservation_transaction(self, db: Session):
         session = _open_cash_session(db)
@@ -563,13 +568,17 @@ class TestAutoCashEntry:
         other_reservation = _make_reservation(db)
         tx = _make_transaction(db, reservation, amount=Decimal("100.00"))
 
-        with pytest.raises(Exception, match="selected reservation"):
-            _add_cash_movement(
+        with pytest.raises(CashRegisterError, match="selected reservation"):
+            add_movement(
                 db,
-                session,
+                hotel_id=session.hotel_id,
+                session_id=session.id,
+                recorded_by_user_id=USER_ID,
+                movement_type=CashMovementTypeEnum.INCOME,
                 amount=Decimal("100.00"),
                 transaction_id=tx.id,
                 reservation_id=other_reservation.id,
+                _from_payment_transaction=True,
             )
 
 

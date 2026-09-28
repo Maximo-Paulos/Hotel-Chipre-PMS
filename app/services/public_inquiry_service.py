@@ -65,17 +65,13 @@ def _utcnow_naive() -> datetime:
 
 
 def _notification_body(inquiry: PublicInquiry) -> str:
-    company = inquiry.company_name or "No informado"
-    phone = inquiry.phone or "No informado"
     return (
-        "Nueva consulta recibida desde Hotel Chipre PMS\n\n"
-        f"Nombre: {inquiry.name}\n"
-        f"Email: {inquiry.email}\n"
-        f"Empresa: {company}\n"
-        f"Teléfono: {phone}\n"
-        f"Ruta de origen: {inquiry.source_path}\n\n"
-        "Para responder, escribí un nuevo correo a la dirección indicada como Email.\n\n"
-        f"Mensaje:\n{inquiry.message}\n"
+        f"Nueva consulta #{inquiry.id} recibida desde Hotel Chipre PMS.\n\n"
+        "Para consultar los datos y responder, ingresá al panel Master Admin y abrí "
+        "Privacidad y cumplimiento > Retenciones legales; buscá la consulta por este ID.\n\n"
+        "Por privacidad, este aviso no incluye nombre, email, teléfono ni mensaje. "
+        "La consulta se elimina a los 90 días de su última actualización, salvo una "
+        "excepción legal vigente y auditada.\n"
     )
 
 

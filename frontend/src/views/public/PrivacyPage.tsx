@@ -98,10 +98,11 @@ export function PrivacyPage() {
             para responder la consulta o gestionar el aviso de apertura que solicitaste.
             Procesamos la IP de conexión y el correo para limitar envíos abusivos; las
             claves de rate limit se borran en el ciclo diario siguiente. Las consultas
-            de contacto se eliminan automáticamente en el primer ciclo diario posterior a
-            cumplir 90 días desde su recepción; los leads de acceso temprano, en el primer
-            ciclo diario posterior a cumplir 90 días desde su última actualización, salvo
-            que una obligación legal exija conservarlos por más tiempo.
+            de contacto y los leads de acceso temprano se eliminan automáticamente en el
+            primer ciclo diario posterior a cumplir 90 días desde su última actualización,
+            salvo que una obligación legal exija conservarlos por más tiempo. Los avisos
+            comerciales por correo no incluyen el contenido ni los datos de contacto de la
+            consulta.
           </p>
         </Section>
 
@@ -146,9 +147,8 @@ export function PrivacyPage() {
             </li>
             <li>
               Consultas de contacto y leads de acceso temprano: se purgan en el primer ciclo
-              diario posterior a cumplir <strong>90 días</strong> desde su recepción o última
-              actualización, respectivamente, mediante borrado automático, salvo obligación
-              legal aplicable.
+              diario posterior a cumplir <strong>90 días</strong> desde su última actualización,
+              mediante borrado automático, salvo obligación legal aplicable.
             </li>
             <li>
               Datos que debamos conservar por obligación legal (por ejemplo, fiscal): el
@@ -160,7 +160,8 @@ export function PrivacyPage() {
         <Section title="8. Tus derechos">
           <p>
             Podés pedirnos acceso, rectificación, actualización o supresión de tus datos
-            de cuenta, así como oponerte a un tratamiento puntual, escribiendo a{" "}
+            de cuenta, consultas de contacto o solicitudes de acceso temprano, así como
+            oponerte a un tratamiento puntual, escribiendo a{" "}
             <a className="text-brand-700 underline" href="mailto:privacy@hotels-pms.com">
               privacy@hotels-pms.com
             </a>

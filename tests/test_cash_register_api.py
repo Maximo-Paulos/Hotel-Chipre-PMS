@@ -10,9 +10,11 @@ import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
+from app.models.cash_register import CashMovement
 from app.models.hotel_config import HotelConfiguration
 from app.models.cash_register import CashSession, CashSessionStatusEnum
 from app.models.user import User
+from app.services.action_step_up_service import create_action_step_up_ticket
 
 
 @pytest.fixture
@@ -42,8 +44,7 @@ def client_with_db():
         ]
     )
     db.flush()
-    # Cash register is a reception/finance lane; manager does not receive
-    # cash:operate in the default matrix.
+    # Cash register operations are available to reception and manager by default.
     ctx = {"hotel_id": 1, "role": "receptionist", "user_id": 50}
 
     def override_get_db():
@@ -104,6 +105,59 @@ def test_cash_register_api_open_add_close_and_list(client_with_db):
     assert db.get(CashSession, session_id).status == CashSessionStatusEnum.CLOSED
 
 
+def test_manual_cash_expense_requires_manager_mfa_and_cannot_link_guest_refunds(client_with_db):
+    client, db, ctx = client_with_db
+    opened = client.post("/api/cash-register/sessions", json={"opening_balance": "100.00"})
+    assert opened.status_code == 201, opened.text
+    session_id = opened.json()["id"]
+    path = f"/api/cash-register/sessions/{session_id}/movements"
+    payload = {"movement_type": "expense", "amount": "30.00", "description": "manual expense"}
+
+    receptionist = client.post(path, json=payload)
+    assert receptionist.status_code == 403
+    assert db.query(CashMovement).count() == 0
+
+    ctx["role"] = "manager"
+    missing_step_up = client.post(path, json=payload)
+    assert missing_step_up.status_code == 428
+    assert missing_step_up.json()["detail"]["permission_code"] == "cash:expense"
+
+    def expense_ticket():
+        return create_action_step_up_ticket(
+            user_id=50,
+            hotel_id=ctx["hotel_id"],
+            token_version=0,
+            permission_code="cash:expense",
+            method="POST",
+            path=path,
+        )
+
+    allowed = client.post(
+        path,
+        json=payload,
+        headers={"X-Action-Step-Up-Ticket": expense_ticket()},
+    )
+    assert allowed.status_code == 201, allowed.text
+    assert db.query(CashMovement).count() == 1
+
+    linked_refund = client.post(
+        path,
+        json={**payload, "reservation_id": 999},
+        headers={"X-Action-Step-Up-Ticket": expense_ticket()},
+    )
+    assert linked_refund.status_code == 400
+    assert "payment-refund" in linked_refund.json()["detail"]
+
+    linked_transaction = client.post(
+        path,
+        json={**payload, "transaction_id": 999},
+        headers={"X-Action-Step-Up-Ticket": expense_ticket()},
+    )
+    assert linked_transaction.status_code == 400
+    assert "payment workflow" in linked_transaction.json()["detail"]
+    assert db.query(CashMovement).count() == 1
+
+
 def test_cash_register_api_returns_latest_close_report_for_successor_opening(client_with_db):
     client, _db, _ctx = client_with_db
 
@@ -156,7 +210,7 @@ def test_cash_register_api_difference_approval_requires_permission(client_with_d
     assert db.get(CashSession, session_id).status == CashSessionStatusEnum.OPEN
 
 
-def test_manager_can_read_daily_cash_summary_without_cash_mutation_permission(client_with_db):
+def test_manager_can_read_daily_cash_summary_and_operate_cash_by_default(client_with_db):
     client, _db, ctx = client_with_db
     ctx["role"] = "manager"
 
@@ -165,7 +219,7 @@ def test_manager_can_read_daily_cash_summary_without_cash_mutation_permission(cl
     assert summary.status_code == 200, summary.text
     assert summary.json()["report_date"] == "2026-09-04"
     assert summary.json()["entries"] == []
-    assert client.post("/api/cash-register/sessions", json={"opening_balance": "10.00"}).status_code == 403
+    assert client.post("/api/cash-register/sessions", json={"opening_balance": "10.00"}).status_code == 201
 
 
 def test_cash_csv_treats_formula_prefixed_actor_alias_as_text(client_with_db, monkeypatch):

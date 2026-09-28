@@ -19,6 +19,7 @@ from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.services import checkin_service
 
 HOTEL_ID = 7301
 
@@ -94,9 +95,10 @@ def _seed_fully_paid_reservation(db, *, guest_kwargs=None, max_occupancy=2) -> R
     return reservation
 
 
-def test_checkin_without_new_fields_fails_with_clear_message():
+def test_checkin_without_new_fields_fails_with_clear_message(monkeypatch):
     """Red case: guest missing the 4 new mandatory fields cannot check in."""
     client, db, engine = _client_with_db()
+    monkeypatch.setattr(checkin_service, "hotel_today", lambda *_: date(2026, 3, 1))
     try:
         reservation = _seed_fully_paid_reservation(db)
         response = client.post(f"/api/checkin/{reservation.id}")
@@ -112,9 +114,10 @@ def test_checkin_without_new_fields_fails_with_clear_message():
         engine.dispose()
 
 
-def test_checkin_captures_missing_fields_in_same_request():
+def test_checkin_captures_missing_fields_in_same_request(monkeypatch):
     """Green case: same endpoint, now with `guest` in the payload, succeeds once."""
     client, db, engine = _client_with_db()
+    monkeypatch.setattr(checkin_service, "hotel_today", lambda *_: date(2026, 3, 1))
     try:
         reservation = _seed_fully_paid_reservation(db)
         response = client.post(
@@ -141,8 +144,9 @@ def test_checkin_captures_missing_fields_in_same_request():
         engine.dispose()
 
 
-def test_partial_checkin_reaches_pre_check_in_then_final_checkin():
+def test_partial_checkin_reaches_pre_check_in_then_final_checkin(monkeypatch):
     client, db, engine = _client_with_db()
+    monkeypatch.setattr(checkin_service, "hotel_today", lambda *_: date(2026, 3, 1))
     try:
         reservation = _seed_fully_paid_reservation(db)
         guest_patch = {
@@ -170,16 +174,19 @@ def test_partial_checkin_reaches_pre_check_in_then_final_checkin():
         engine.dispose()
 
 
-def test_partial_checkin_requires_fully_paid():
+def test_partial_checkin_requires_configured_deposit(monkeypatch):
     client, db, engine = _client_with_db()
+    monkeypatch.setattr(checkin_service, "hotel_today", lambda *_: date(2026, 3, 1))
     try:
         reservation = _seed_fully_paid_reservation(db)
         reservation.status = ReservationStatusEnum.DEPOSIT_PAID
+        reservation.deposit_amount = Decimal("60.00")
+        reservation.amount_paid = Decimal("0.00")
         db.flush()
 
         response = client.post(f"/api/checkin/{reservation.id}/partial")
         assert response.status_code == 400
-        assert "fully_paid" in response.json()["detail"]
+        assert "configured deposit" in response.json()["detail"]
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

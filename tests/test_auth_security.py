@@ -1644,6 +1644,45 @@ def test_shared_mfa_budget_migrates_recent_legacy_action_attempts(
         db.commit()
 
 
+def test_shared_mfa_budget_migrates_legacy_master_admin_attempts(
+    client_and_db, monkeypatch
+):
+    from app.adapters.rate_limiter import mfa_code_guess_limiter
+    from app.master_admin.security import allow_master_admin_mfa_attempt
+    from app.models.rate_limit_event import RateLimitEvent
+
+    _client, db, _session_factory = client_and_db
+    user_id = 842_003
+    monkeypatch.setattr(mfa_code_guess_limiter, "limit", 2)
+    db.add(
+        RateLimitEvent(
+            scope="mfa_code_guess",
+            subject_key=f"master_admin:login:{user_id}",
+        )
+    )
+    db.commit()
+
+    try:
+        # The new shared request is admitted as the second attempt, but the
+        # next proof through the other surface must see the exhausted budget.
+        auth_api._allow_mfa_attempt(db, "login", user_id)
+        with pytest.raises(HTTPException) as blocked:
+            allow_master_admin_mfa_attempt(db, "enroll", user_id)
+
+        assert blocked.value.status_code == 429
+        assert db.query(RateLimitEvent).filter_by(
+            scope="mfa_code_guess",
+            subject_key=f"master_admin:login:{user_id}",
+        ).count() == 0
+        assert db.query(RateLimitEvent).filter_by(
+            scope="mfa_code_guess",
+            subject_key=f"totp:{user_id}",
+        ).count() >= 2
+    finally:
+        mfa_code_guess_limiter.reset(f"totp:{user_id}", db=db)
+        db.commit()
+
+
 def test_mfa_enrollment_rejects_active_factor_before_password_verification(
     client_and_db, fixed_code_patch, monkeypatch
 ):

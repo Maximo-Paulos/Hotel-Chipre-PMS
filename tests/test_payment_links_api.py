@@ -12,8 +12,10 @@ from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.reservation import ReservationStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
+from app.services.permission_service import PERMISSION_CASH_OPERATE, set_override
 
 
 @pytest.fixture
@@ -101,6 +103,21 @@ def test_payment_links_api_create_list_and_cancel(client_with_db):
     assert cancelled.json()["status"] == "cancelled"
 
 
+def test_payment_links_api_rejects_cancelled_reservations(client_with_db):
+    client, db, _ctx = client_with_db
+    reservation = _reservation(db, 1, "API-CANCELLED-NO-LINK")
+    reservation.status = ReservationStatusEnum.CANCELLED
+    db.commit()
+
+    response = client.post(
+        "/api/payment-links",
+        json={"reservation_id": reservation.id, "requested_amount": "25.00", "recipient_email": "api@example.com"},
+    )
+
+    assert response.status_code == 400
+    assert "Cannot create a payment link" in response.json()["detail"]
+
+
 def test_payment_links_api_cross_hotel_isolation(client_with_db):
     client, db, ctx = client_with_db
     reservation_b = _reservation(db, 2, "API-2")
@@ -120,10 +137,12 @@ def test_payment_links_api_cross_hotel_isolation(client_with_db):
     assert cancelled.status_code == 404
 
 
-def test_payment_links_api_rejects_manager_without_cash_operate(client_with_db):
+def test_payment_links_api_respects_explicit_manager_cash_operate_denial(client_with_db):
     client, db, ctx = client_with_db
     reservation = _reservation(db, 1, "API-MANAGER-DENIED")
     ctx["role"] = "manager"
+    set_override(db, 1, "manager", PERMISSION_CASH_OPERATE, False, user_id=None)
+    db.commit()
 
     response = client.post(
         "/api/payment-links",

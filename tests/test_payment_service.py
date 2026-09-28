@@ -458,7 +458,7 @@ class TestPaymentEdgeCases:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         )
-        process_payment(db, full_payment, hotel_id=DEFAULT_HOTEL_ID)
+        original_tx = process_payment(db, full_payment, hotel_id=DEFAULT_HOTEL_ID)
         db.flush()
         db.refresh(res)
         assert res.status == ReservationStatusEnum.FULLY_PAID
@@ -468,6 +468,8 @@ class TestPaymentEdgeCases:
             amount=200.0,
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.REFUND,
+            refund_of_transaction_id=original_tx.id,
+            refund_reason="Approved guest cancellation",
         )
         tx = process_payment(db, refund, hotel_id=DEFAULT_HOTEL_ID)
         db.flush()
@@ -497,16 +499,41 @@ class TestPaymentEdgeCases:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.DEPOSIT,
         )
-        process_payment(db, deposit_payment, hotel_id=DEFAULT_HOTEL_ID)
+        original_tx = process_payment(db, deposit_payment, hotel_id=DEFAULT_HOTEL_ID)
         db.flush()
+
+        another_reservation = create_reservation(db, data, hotel_id=1)
+        wrong_source_refund = PaymentRequest(
+            reservation_id=another_reservation.id,
+            amount=10.0,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.REFUND,
+            refund_of_transaction_id=original_tx.id,
+            refund_reason="Wrong reservation regression check",
+        )
+        with pytest.raises(PaymentError, match="original payment was not found"):
+            process_payment(db, wrong_source_refund, hotel_id=DEFAULT_HOTEL_ID)
+
+        non_cash_refund = PaymentRequest(
+            reservation_id=res.id,
+            amount=10.0,
+            payment_method=PaymentMethodEnum.CREDIT_CARD,
+            transaction_type=TransactionTypeEnum.REFUND,
+            refund_of_transaction_id=original_tx.id,
+            refund_reason="Gateway refund is intentionally unsupported",
+        )
+        with pytest.raises(PaymentError, match="returned through cash"):
+            process_payment(db, non_cash_refund, hotel_id=DEFAULT_HOTEL_ID)
 
         over_refund = PaymentRequest(
             reservation_id=res.id,
             amount=100.0,  # Only $60 was ever paid.
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.REFUND,
+            refund_of_transaction_id=original_tx.id,
+            refund_reason="Approved guest cancellation",
         )
-        with pytest.raises(PaymentError, match="exceeds paid amount"):
+        with pytest.raises(PaymentError, match="remaining refundable amount"):
             process_payment(db, over_refund, hotel_id=DEFAULT_HOTEL_ID)
 
         db.refresh(res)

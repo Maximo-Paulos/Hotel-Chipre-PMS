@@ -4,11 +4,13 @@ Validates guest data requirements before allowing check-in.
 """
 import pytest
 from datetime import date
+from sqlalchemy import func
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.guest import Guest
 from app.schemas.reservation import ReservationCreate
 from app.services.reservation_service import create_reservation
 from app.services.payment_service import process_payment
+from app.services import checkin_service
 from app.services.checkin_service import perform_checkin, perform_checkout, validate_guest_for_checkin, CheckInError
 from app.schemas.transaction import PaymentRequest
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
@@ -16,8 +18,20 @@ from app.services.cash_register_service import open_session
 
 
 @pytest.fixture(autouse=True)
-def opened_cash_register(db, hotel_config):
+def opened_cash_register(db, hotel_config, monkeypatch):
     """Operational tests must prepare the caja before collecting cash."""
+    # These fixtures use historical reservation dates. Pin the hotel-local day
+    # to the reservation's arrival so the tests exercise payment/data rules,
+    # not the separate early/expired-arrival guards.
+    def hotel_day_for_test(session, hotel_id):
+        latest_arrival = (
+            session.query(func.max(Reservation.check_in_date))
+            .filter(Reservation.hotel_id == hotel_id)
+            .scalar()
+        )
+        return latest_arrival or date(2027, 1, 1)
+
+    monkeypatch.setattr(checkin_service, "hotel_today", hotel_day_for_test)
     open_session(db, hotel_id=hotel_config.id, opened_by_user_id=None, opening_balance=0)
 
 
@@ -81,7 +95,7 @@ class TestCheckIn:
         )
         res = create_reservation(db, data)
         db.flush()
-        with pytest.raises(CheckInError, match="fully_paid"):
+        with pytest.raises(CheckInError, match="configured deposit"):
             perform_checkin(db, res.id)
 
     def test_checkin_blocked_missing_documents(self, db, sample_guest_incomplete, sample_rooms, sample_categories, hotel_config):

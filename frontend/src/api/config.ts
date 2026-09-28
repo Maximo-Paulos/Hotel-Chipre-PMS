@@ -6,6 +6,7 @@ export type HotelConfig = {
   hotel_timezone: string;
   default_currency: string;
   deposit_percentage: number;
+  checkin_payment_policy: "deposit" | "total" | "free";
   free_cancellation_hours: number;
   cancellation_penalty_percentage: number;
   enable_full_payment: boolean;

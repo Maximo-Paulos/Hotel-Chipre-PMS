@@ -47,6 +47,7 @@ type FormState = {
   amount_ars: string;
   amount_usd: string;
   amount_paid: string;
+  external_paid_reference: string;
 };
 
 const emptyFormState = (): FormState => ({
@@ -62,7 +63,8 @@ const emptyFormState = (): FormState => ({
   external_id: "",
   amount_ars: "",
   amount_usd: "",
-  amount_paid: ""
+  amount_paid: "",
+  external_paid_reference: ""
 });
 
 type ManualOtaReservationModalProps = {
@@ -164,6 +166,10 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
       setError("Ingresá un monto ya cobrado válido.");
       return;
     }
+    if (amountPaid !== null && amountPaid > 0 && !form.external_paid_reference.trim()) {
+      setError("Para confirmar un prepago de OTA necesitás ingresar la referencia del comprobante o de la operación.");
+      return;
+    }
 
     // ARS/USD are independent, hand-typed prices (no conversion between
     // them). The canonical total_amount/currency_code used for billing
@@ -189,7 +195,8 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
         target_currency: targetCurrency,
         quoted_amount_ars: amountArs,
         quoted_amount_usd: amountUsd,
-        amount_paid: amountPaid
+        amount_paid: amountPaid,
+        external_paid_reference: form.external_paid_reference.trim() || null
       });
       setCreated(reservation);
     } catch (err: unknown) {
@@ -452,7 +459,7 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
                 />
               </label>
               <label className="text-xs font-semibold text-slate-600">
-                Ya cobrado
+                Ya cobrado por la OTA
                 <input
                   type="number"
                   min={0}
@@ -463,6 +470,19 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                 />
               </label>
+              <label className="text-xs font-semibold text-slate-600">
+                Referencia del prepago OTA
+                <input
+                  value={form.external_paid_reference}
+                  onChange={(e) => setForm((prev) => ({ ...prev, external_paid_reference: e.target.value }))}
+                  maxLength={120}
+                  placeholder="Código visible en la OTA"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                />
+              </label>
+              <p className="text-xs text-slate-500 md:col-span-2">
+                Confirmar un prepago requiere autorización de responsable y MFA. Se registra como pago externo, no como efectivo recibido por el hotel.
+              </p>
             </div>
 
             <div className="flex items-center justify-end gap-2">

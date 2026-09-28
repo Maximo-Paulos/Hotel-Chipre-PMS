@@ -1,19 +1,21 @@
 """
 V72 §7.1 — Check-in Payment Gate Tests.
 
-Requirement: "No se puede hacer check-in sin que la reserva esté completamente pagada (fully_paid)."
+Requirement: check-in payment is configured per hotel (deposit by default, full amount, or no upfront payment).
 
 These tests are COMPLEMENTARY to tests/test_checkin.py.
 They focus on explicit payment-gate scenarios not covered there:
-  - DEPOSIT_PAID (partial 30%) is explicitly blocked
-  - Error messages are accurate and contain the expected status
-  - Config flag require_full_payment_for_checkin is respected
+  - deposit policy allows check-in after the configured deposit
+  - total policy blocks a deposit-only payment
+  - free policy permits check-in without upfront payment
+  - arrival date is enforced
   - validate_guest_for_checkin document/terms checks as separate cases
   - Checkout room status side-effects
   - Cancelled reservation blocked at check-in
 """
 import pytest
-from datetime import date
+from datetime import date, timedelta
+from sqlalchemy import func
 
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomStatusEnum, Room
@@ -27,14 +29,26 @@ from app.services.checkin_service import (
     validate_guest_for_checkin,
     CheckInError,
 )
+from app.services import checkin_service
 from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
 from app.services.cash_register_service import open_session
 
 
 @pytest.fixture(autouse=True)
-def opened_cash_register(db, hotel_config):
+def opened_cash_register(db, hotel_config, monkeypatch):
     """Payment-gate scenarios start with an explicitly opened caja."""
+    # Anchor ordinary cases to their own arrival date; dedicated tests below
+    # replace this value to exercise early/expired arrival boundaries.
+    def hotel_day_for_test(session, hotel_id):
+        latest_arrival = (
+            session.query(func.max(Reservation.check_in_date))
+            .filter(Reservation.hotel_id == hotel_id)
+            .scalar()
+        )
+        return latest_arrival or date(2027, 1, 1)
+
+    monkeypatch.setattr(checkin_service, "hotel_today", hotel_day_for_test)
     open_session(db, hotel_id=hotel_config.id, opened_by_user_id=None, opening_balance=0)
 
 
@@ -89,41 +103,100 @@ def _pay_full(db, reservation, hotel_id=1):
 
 
 # ---------------------------------------------------------------------------
-# §7.1 — Payment gate: DEPOSIT_PAID is NOT enough for check-in
+# Hotel payment policy: deposit is the explicit configured default.
 # ---------------------------------------------------------------------------
 
 class TestPaymentGateDepositPaid:
-    """Deposit-only payment (30%) must NOT allow check-in."""
+    """Check-in must follow the explicit per-hotel payment policy."""
 
-    def test_checkin_blocked_when_deposit_paid(
+    def test_default_deposit_policy_allows_checkin_after_deposit(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config
     ):
-        """§7.1: Reservation in DEPOSIT_PAID status raises CheckInError."""
+        assert hotel_config.checkin_payment_policy == "deposit"
         res = _make_reservation(db, sample_guest, sample_categories)
         _pay_deposit(db, res)
         assert res.status == ReservationStatusEnum.DEPOSIT_PAID
 
-        with pytest.raises(CheckInError):
-            perform_checkin(db, res.id)
+        result = perform_checkin(db, res.id)
+        assert result.status == ReservationStatusEnum.CHECKED_IN
 
-    def test_checkin_blocked_deposit_paid_error_mentions_fully_paid(
+    def test_total_policy_blocks_deposit_only_and_allows_full_payment(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config
     ):
-        """§7.1: Error message tells the operator the required status is 'fully_paid'."""
+        hotel_config.checkin_payment_policy = "total"
+        db.flush()
         res = _make_reservation(db, sample_guest, sample_categories, check_in=date(2027, 2, 1), check_out=date(2027, 2, 3))
         _pay_deposit(db, res)
 
-        with pytest.raises(CheckInError, match="fully_paid"):
+        with pytest.raises(CheckInError, match="full reservation amount"):
             perform_checkin(db, res.id)
 
-    def test_checkin_blocked_deposit_paid_error_mentions_current_status(
+        remaining = res.total_amount - res.amount_paid
+        process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=res.id,
+                amount=remaining,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.FULL_PAYMENT,
+            ),
+            hotel_id=hotel_config.id,
+        )
+        db.flush()
+        db.refresh(res)
+        assert perform_checkin(db, res.id).status == ReservationStatusEnum.CHECKED_IN
+
+    def test_free_policy_allows_checkin_without_upfront_payment(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config
     ):
-        """§7.1: Error message also reveals the current (blocking) status."""
-        res = _make_reservation(db, sample_guest, sample_categories, check_in=date(2027, 3, 1), check_out=date(2027, 3, 3))
-        _pay_deposit(db, res)
+        hotel_config.checkin_payment_policy = "free"
+        db.flush()
+        res = _make_reservation(db, sample_guest, sample_categories)
 
-        with pytest.raises(CheckInError, match="deposit_paid"):
+        assert res.status == ReservationStatusEnum.PENDING
+        assert perform_checkin(db, res.id).status == ReservationStatusEnum.CHECKED_IN
+
+    def test_free_policy_still_blocks_unconfirmed_legacy_ota_prepayment(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        hotel_config.checkin_payment_policy = "free"
+        db.flush()
+        res = _make_reservation(db, sample_guest, sample_categories)
+        res.source_provider_code = "booking"
+        res.external_id = "BKG-LEGACY-UNVERIFIED"
+        res.external_paid_amount = 30
+        res.external_paid_confirmed = False
+        res.external_paid_ever_confirmed = True
+        res.amount_paid = 0
+        db.flush()
+
+        with pytest.raises(CheckInError, match="OTA prepayment needs a manager's confirmation"):
+            perform_checkin(db, res.id)
+
+    def test_checkin_before_arrival_date_is_rejected(
+        self, db, sample_guest, sample_rooms, sample_categories, monkeypatch
+    ):
+        today = date(2026, 9, 27)
+        monkeypatch.setattr(checkin_service, "hotel_today", lambda _db, _hotel_id: today)
+        # Create through the normal quote/availability path, then move the
+        # persisted dates to tomorrow so this test isolates the check-in gate.
+        res = _make_reservation(db, sample_guest, sample_categories)
+        res.check_in_date = today + timedelta(days=1)
+        res.check_out_date = today + timedelta(days=3)
+        db.flush()
+
+        with pytest.raises(CheckInError, match="before the reservation arrival date"):
+            perform_checkin(db, res.id)
+
+    def test_checkin_after_departure_date_is_rejected(self, db, sample_guest, sample_rooms, sample_categories, monkeypatch):
+        today = date(2026, 9, 27)
+        monkeypatch.setattr(checkin_service, "hotel_today", lambda _db, _hotel_id: today)
+        res = _make_reservation(db, sample_guest, sample_categories)
+        res.check_in_date = today - timedelta(days=3)
+        res.check_out_date = today
+        db.flush()
+
+        with pytest.raises(CheckInError, match="after the reservation departure date"):
             perform_checkin(db, res.id)
 
     def test_checkin_succeeds_after_balance_paid_following_deposit(
@@ -166,7 +239,7 @@ class TestPaymentGatePending:
         res = _make_reservation(db, sample_guest, sample_categories, check_in=date(2027, 5, 1), check_out=date(2027, 5, 3))
         assert res.status == ReservationStatusEnum.PENDING
 
-        with pytest.raises(CheckInError, match="pending"):
+        with pytest.raises(CheckInError, match="configured deposit"):
             perform_checkin(db, res.id)
 
     def test_checkin_blocked_cancelled_reservation(
@@ -186,25 +259,23 @@ class TestPaymentGatePending:
 
 
 # ---------------------------------------------------------------------------
-# §7.1 — Config flag: require_full_payment_for_checkin (default True)
+# The guest identity/terms flags remain independent from the payment policy.
 # ---------------------------------------------------------------------------
 
 class TestConfigFlag:
-    """Verify the hotel config flag is respected (default = True → gate enforced)."""
+    """Verify payment and guest-data gates remain separate."""
 
     def test_default_config_enforces_payment_gate(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config
     ):
         """Config flag is True by default; gate is active for PENDING reservation."""
-        # hotel_config fixture sets require_document_for_checkin=True / require_terms_acceptance=True
-        # The payment gate is always active regardless of config (hardcoded in service),
-        # but verifying config exists and is sane is part of §7.1 coverage.
         assert hotel_config.require_document_for_checkin is True
         assert hotel_config.require_terms_acceptance is True
+        assert hotel_config.checkin_payment_policy == "deposit"
 
         res = _make_reservation(db, sample_guest, sample_categories, check_in=date(2027, 7, 1), check_out=date(2027, 7, 3))
-        # Reservation is PENDING — gate blocks regardless of config
-        with pytest.raises(CheckInError, match="fully_paid"):
+        # Reservation is PENDING — the default deposit policy still applies.
+        with pytest.raises(CheckInError, match="configured deposit"):
             perform_checkin(db, res.id)
 
     def test_payment_gate_not_bypassable_via_config(
@@ -216,8 +287,8 @@ class TestConfigFlag:
         db.flush()
 
         res = _make_reservation(db, sample_guest, sample_categories, check_in=date(2027, 8, 1), check_out=date(2027, 8, 3))
-        # No payment — must still be blocked by payment gate
-        with pytest.raises(CheckInError, match="fully_paid"):
+        # Disabling guest-document checks cannot bypass the separate payment gate.
+        with pytest.raises(CheckInError, match="configured deposit"):
             perform_checkin(db, res.id)
 
 

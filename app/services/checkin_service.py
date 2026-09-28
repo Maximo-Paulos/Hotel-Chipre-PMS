@@ -30,6 +30,7 @@ from app.services.jurisdiction_profile import compute_missing_guest_fields
 from app.models.room import Room, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.financial_ledger import paid_amount_with_legacy_fallback
+from app.services.timezones import hotel_today
 from app.schemas.guest_restriction import GuestRestrictionOverrideRequest
 from app.services.guest_restriction_service import record_restriction_override, validate_no_active_restriction
 
@@ -191,6 +192,46 @@ def _apply_guest_patch_and_validate(
         )
 
 
+def _validate_checkin_window_and_payment(db: Session, reservation: Reservation, hotel_id: int) -> None:
+    today = hotel_today(db, hotel_id)
+    if reservation.check_in_date > today:
+        raise CheckInError(
+            f"Cannot check in before the reservation arrival date ({reservation.check_in_date.isoformat()})."
+        )
+    if reservation.check_out_date <= today:
+        raise CheckInError(
+            f"Cannot check in after the reservation departure date ({reservation.check_out_date.isoformat()}); extend the stay first."
+        )
+
+    if (
+        Decimal(str(reservation.external_paid_amount or 0)) > Decimal("0.00")
+        and not reservation.external_paid_confirmed
+    ):
+        raise CheckInError(
+            "Cannot check in: the imported OTA prepayment needs a manager's confirmation and reference first."
+        )
+
+    config = db.get(HotelConfiguration, hotel_id)
+    policy = getattr(config, "checkin_payment_policy", "deposit") if config else "deposit"
+    if policy not in {"deposit", "total", "free"}:
+        raise CheckInError("Cannot check in: the hotel's payment policy is invalid.")
+    if policy == "free":
+        return
+
+    paid = Decimal(str(paid_amount_with_legacy_fallback(db, hotel_id, reservation)))
+    if policy == "total":
+        required = Decimal(str(reservation.total_amount or 0))
+        requirement_name = "the full reservation amount"
+    else:
+        required = Decimal(str(reservation.deposit_amount or 0))
+        requirement_name = "the configured deposit"
+    if paid + Decimal("0.01") < required:
+        raise CheckInError(
+            f"Cannot check in: {requirement_name} must be paid first. "
+            f"Required: ${required:.2f}; paid: ${paid:.2f}."
+        )
+
+
 def perform_checkin(
     db: Session,
     reservation_id: int,
@@ -206,7 +247,7 @@ def perform_checkin(
     """
     Full check-in process:
     1. Load reservation with guest data
-    2. Verify reservation is in 'fully_paid' or 'pre_check_in' status
+    2. Verify the hotel's payment policy and arrival date
     3. Apply any captured guest data, then validate guest identity documents
     4. Transition to checked_in
     5. Record actual check-in timestamp
@@ -218,16 +259,18 @@ def perform_checkin(
     tag gate in `_guard_prohibido`.
     """
     reservation, hotel_id = _load_reservation(db, reservation_id, hotel_id)
-    ledger_paid = paid_amount_with_legacy_fallback(db, hotel_id, reservation)
-    ledger_balance = max(Decimal("0"), Decimal(str(reservation.total_amount or 0)) - ledger_paid)
-
-    # Must be fully_paid or pre_check_in to check in
-    allowed_pre_checkin = {ReservationStatusEnum.FULLY_PAID, ReservationStatusEnum.PRE_CHECK_IN}
+    allowed_pre_checkin = {
+        ReservationStatusEnum.PENDING,
+        ReservationStatusEnum.DEPOSIT_PAID,
+        ReservationStatusEnum.FULLY_PAID,
+        ReservationStatusEnum.PRE_CHECK_IN,
+    }
     if reservation.status not in allowed_pre_checkin:
         raise CheckInError(
             f"Cannot check in: reservation status is '{reservation.status.value}'. "
-            f"Must be 'fully_paid' or 'pre_check_in'. Outstanding balance: ${ledger_balance:.2f}"
+            "The reservation is not in an eligible pre-arrival state."
         )
+    _validate_checkin_window_and_payment(db, reservation, hotel_id)
 
     # Load guest
     guest = db.query(Guest).filter(Guest.id == reservation.guest_id, Guest.hotel_id == hotel_id).first()
@@ -294,15 +337,20 @@ def perform_partial_checkin(
     room entry"). Since PRE_CHECK_IN means the guest's data is already on
     file, this shares the same guest-patch + validation gate as the final
     check-in; only the target status and timestamp differ. Only reachable
-    from 'fully_paid' (see VALID_TRANSITIONS).
+    from a state allowed by the hotel's payment policy.
     """
     reservation, hotel_id = _load_reservation(db, reservation_id, hotel_id)
 
-    if reservation.status != ReservationStatusEnum.FULLY_PAID:
+    if reservation.status not in {
+        ReservationStatusEnum.PENDING,
+        ReservationStatusEnum.DEPOSIT_PAID,
+        ReservationStatusEnum.FULLY_PAID,
+    }:
         raise CheckInError(
             f"Cannot start partial check-in: reservation status is '{reservation.status.value}'. "
-            "Must be 'fully_paid'."
+            "The reservation is not in an eligible pre-arrival state."
         )
+    _validate_checkin_window_and_payment(db, reservation, hotel_id)
 
     guest = db.query(Guest).filter(Guest.id == reservation.guest_id, Guest.hotel_id == hotel_id).first()
     if not guest:

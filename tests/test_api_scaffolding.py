@@ -17,6 +17,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.user import User
+from app.services import checkin_service
 
 
 @pytest.fixture
@@ -281,10 +282,11 @@ def test_bookings_basic_flow(api_client):
         assert booking.deleted_at is not None
 
 
-def test_booking_status_and_overlap(api_client):
+def test_booking_status_and_overlap(api_client, monkeypatch):
     client, SessionLocal = api_client
     start = date(2026, 4, 1)
     end = start + timedelta(days=2)  # 2 nights
+    monkeypatch.setattr(checkin_service, "hotel_today", lambda *_: start)
 
     with SessionLocal() as db:
         cat = RoomCategory(
@@ -388,8 +390,9 @@ def test_booking_status_and_overlap(api_client):
     assert checkout_resp.json()["status"] == ReservationStatusEnum.CHECKED_OUT.value
 
 
-def test_checkin_api_blocks_missing_primary_guest_fields(api_client):
+def test_checkin_api_blocks_missing_primary_guest_fields(api_client, monkeypatch):
     client, SessionLocal = api_client
+    monkeypatch.setattr(checkin_service, "hotel_today", lambda *_: date(2026, 4, 10))
     with SessionLocal() as db:
         guest = Guest(
             first_name="Incomplete",

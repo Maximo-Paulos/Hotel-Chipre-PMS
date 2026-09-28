@@ -88,8 +88,14 @@ def test_public_inquiry_persists_and_notifies_after_acceptance(inquiry_client):
     inquiry = _inquiry_rows(db)[0]
     assert inquiry["email"] == "ana@example.com"
     assert inquiry["privacy_consent_at"] is not None
+    assert inquiry["updated_at"] is not None
     assert inquiry["notification_status"] == "sent"
     assert sent and sent[0][0] == "ventas@example.com"
+    email_body = sent[0][2]
+    assert "consulta #" in email_body
+    assert "ana@example.com" not in email_body
+    assert "Ana Pérez" not in email_body
+    assert "Quiero conocer el sistema" not in email_body
 
 
 def test_public_inquiry_keeps_record_when_notification_fails(inquiry_client):
@@ -318,7 +324,7 @@ def test_rejected_email_does_not_consume_the_shared_global_budget(inquiry_client
 
 
 def test_public_inquiry_collapses_newlines_in_single_line_email_fields(inquiry_client):
-    client, _db, monkeypatch = inquiry_client
+    client, db, monkeypatch = inquiry_client
     sent = []
     monkeypatch.setattr("app.config.get_settings", _configured_settings)
     monkeypatch.setattr(
@@ -332,10 +338,13 @@ def test_public_inquiry_collapses_newlines_in_single_line_email_fields(inquiry_c
     )
 
     assert response.status_code == 201, response.text
-    assert "Nombre: Ana Email: forged@example.com\n" in sent[0]
-    assert "Empresa: Hotel Urgente\n" in sent[0]
-    assert "Teléfono: 11 0000\n" in sent[0]
-    assert "\nEmail: forged@example.com\n" not in sent[0]
+    inquiry = _inquiry_rows(db)[0]
+    assert inquiry["name"] == "Ana Email: forged@example.com"
+    assert inquiry["company_name"] == "Hotel Urgente"
+    assert inquiry["phone"] == "11 0000"
+    assert "forged@example.com" not in sent[0]
+    assert "Hotel Urgente" not in sent[0]
+    assert "11 0000" not in sent[0]
 
 
 def test_public_inquiry_is_not_stored_when_notification_recipient_is_unconfigured(inquiry_client):

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -27,6 +28,7 @@ from app.services.financial_ledger import (
     completed_paid_amount,
     operational_balance_due,
     paid_amount_with_legacy_fallback,
+    reconciled_paid_amounts_by_reservation,
 )
 
 
@@ -40,6 +42,21 @@ class PaymentNotFoundError(PaymentError):
 
 
 DEFAULT_DEPOSIT_PERCENTAGE = 30.0
+MANUAL_REFERENCE_METHODS = frozenset(
+    {PaymentMethodEnum.CREDIT_CARD, PaymentMethodEnum.DEBIT_CARD, PaymentMethodEnum.BANK_TRANSFER}
+)
+
+
+def _same_idempotent_payment(existing: Transaction, request: PaymentRequest, currency: str) -> bool:
+    return (
+        Decimal(str(existing.amount)) == Decimal(str(request.amount))
+        and existing.payment_method == request.payment_method
+        and existing.transaction_type == request.transaction_type
+        and existing.currency == currency
+        and existing.manual_reference == request.manual_reference
+        and existing.refund_of_transaction_id == request.refund_of_transaction_id
+        and existing.refund_reason == request.refund_reason
+    )
 
 
 def get_hotel_config(db: Session, hotel_id: int) -> HotelConfiguration:
@@ -222,6 +239,7 @@ def process_payment(
     actor_user_id: Optional[int] = None,
     manual_confirmation: bool = False,
     apply_surcharge: bool = True,
+    allow_verified_cancelled_settlement: bool = False,
 ) -> Transaction:
     """
     Process a payment for a reservation.
@@ -278,17 +296,97 @@ def process_payment(
         raise PaymentError("Reservation does not belong to selected hotel")
 
     is_refund = request.transaction_type == TransactionTypeEnum.REFUND
+    transaction_currency = _resolve_payment_currency(reservation, request.currency)
+    if idempotency_key is not None:
+        existing_by_key = (
+            db.query(Transaction)
+            .filter(
+                Transaction.hotel_id == resolved_hotel_id,
+                Transaction.reservation_id == request.reservation_id,
+                Transaction.idempotency_key == idempotency_key,
+            )
+            .first()
+        )
+        if existing_by_key is not None:
+            if not _same_idempotent_payment(existing_by_key, request, transaction_currency):
+                raise PaymentError("Idempotency key was already used for a different payment request")
+            return existing_by_key
+
+    if request.manual_reference and (is_refund or request.payment_method not in MANUAL_REFERENCE_METHODS):
+        raise PaymentError("Manual references are only valid for in-person card, debit, or bank-transfer payments")
+    if not is_refund and (request.refund_of_transaction_id is not None or request.refund_reason is not None):
+        raise PaymentError("Refund source and reason are only valid for refund transactions")
+    refund_source = None
+    if is_refund:
+        if request.payment_method != PaymentMethodEnum.CASH:
+            raise PaymentError("Manual reservation refunds must be returned through cash")
+        if request.refund_of_transaction_id is None or not request.refund_reason:
+            raise PaymentError("A refund must identify the original payment and include a reason")
+        refund_source = (
+            db.query(Transaction)
+            .filter(
+                Transaction.hotel_id == resolved_hotel_id,
+                Transaction.reservation_id == request.reservation_id,
+                Transaction.id == request.refund_of_transaction_id,
+                Transaction.status == TransactionStatusEnum.COMPLETED,
+                Transaction.transaction_type != TransactionTypeEnum.REFUND,
+            )
+            .with_for_update()
+            .first()
+        )
+        if refund_source is None:
+            raise PaymentError("The original payment was not found as a completed payment for this reservation")
+        if refund_source.currency != transaction_currency:
+            raise PaymentError("A refund must use the original payment currency")
+        already_refunded = (
+            db.query(func.coalesce(func.sum(Transaction.amount), 0))
+            .filter(
+                Transaction.hotel_id == resolved_hotel_id,
+                Transaction.refund_of_transaction_id == refund_source.id,
+                Transaction.transaction_type == TransactionTypeEnum.REFUND,
+                Transaction.status == TransactionStatusEnum.COMPLETED,
+            )
+            .scalar()
+        )
+        refundable_remaining = Decimal(str(refund_source.amount)) - Decimal(str(already_refunded or 0))
+        # These values are stored as two-decimal NUMERIC amounts, so there is
+        # no floating-point rounding to absorb here. A one-cent tolerance would
+        # permit a refund larger than the original payment.
+        if Decimal(str(request.amount)) > refundable_remaining:
+            raise PaymentError(
+                f"Refund amount ${request.amount:.2f} exceeds the remaining refundable amount "
+                f"${max(refundable_remaining, Decimal('0.00')):.2f} for the original payment"
+            )
+    if manual_confirmation and request.manual_reference:
+        duplicate_reference = (
+            db.query(Transaction.id)
+            .filter(
+                Transaction.hotel_id == resolved_hotel_id,
+                Transaction.payment_method == request.payment_method,
+                func.lower(Transaction.manual_reference) == request.manual_reference.strip().lower(),
+            )
+            .first()
+        )
+        if duplicate_reference is not None:
+            raise PaymentError("This manual payment reference is already recorded for the reservation")
+
+    verified_late_settlement = (
+        allow_verified_cancelled_settlement
+        and reservation.status == ReservationStatusEnum.CANCELLED
+        and gateway_response is not None
+        and gateway_response.success
+        and bool(gateway_response.external_payment_id)
+    )
     if not is_refund and reservation.status in (
         ReservationStatusEnum.CHECKED_OUT,
         ReservationStatusEnum.CANCELLED,
-    ):
+    ) and not verified_late_settlement:
         raise PaymentError(
             f"Cannot process payment for reservation in status '{reservation.status.value}'"
         )
 
     # 2. Validate payment method
     validate_payment_method_enabled(db, request.payment_method, resolved_hotel_id)
-    transaction_currency = _resolve_payment_currency(reservation, request.currency)
     if apply_surcharge and not is_refund:
         surcharge_info = calculate_payment_surcharge(
             db,
@@ -306,7 +404,7 @@ def process_payment(
     _TOLERANCE = Decimal("0.01")
     ledger_paid = paid_amount_with_legacy_fallback(db, resolved_hotel_id, reservation)
     if is_refund:
-        if Decimal(str(request.amount)) > ledger_paid + _TOLERANCE:
+        if Decimal(str(request.amount)) > ledger_paid:
             raise PaymentError(
                 f"Refund amount ${request.amount:.2f} exceeds paid amount ${ledger_paid:.2f}"
             )
@@ -375,6 +473,9 @@ def process_payment(
         status=tx_status,
         external_payment_id=external_payment_id,
         external_status=external_status,
+        manual_reference=request.manual_reference,
+        refund_of_transaction_id=request.refund_of_transaction_id,
+        refund_reason=request.refund_reason,
         gateway_response=raw_response,
         description=request.description,
         processed_at=processed_at,
@@ -400,7 +501,21 @@ def process_payment(
                 .first()
             )
             if existing is not None:
-                return existing
+                if _same_idempotent_payment(existing, request, transaction_currency):
+                    return existing
+                raise PaymentError("Idempotency key was already used for a different payment request")
+            if manual_confirmation and request.manual_reference:
+                duplicate_reference = (
+                    db.query(Transaction.id)
+                    .filter(
+                        Transaction.hotel_id == resolved_hotel_id,
+                        Transaction.payment_method == request.payment_method,
+                        func.lower(Transaction.manual_reference) == request.manual_reference.strip().lower(),
+                    )
+                    .first()
+                )
+                if duplicate_reference is not None:
+                    raise PaymentError("This manual payment reference is already recorded for the reservation")
             raise
     else:
         db.add(transaction)
@@ -415,6 +530,9 @@ def process_payment(
             request.transaction_type,
             resolved_hotel_id,
         )
+        if verified_late_settlement:
+            reservation.requires_manual_review = True
+            reservation.settlement_status = "review_cancellation"
         # 6. Physical cash must land in an explicitly opened caja so the
         #    arqueo reconciles. The cash-register service rejects the payment
         #    if there is no open session.
@@ -489,14 +607,14 @@ def _update_reservation_financials(
     hotel_id: int,
 ) -> None:
     """
-    Refresh the materialized amount_paid cache from the confirmed ledger and
-    transition status based on that canonical value.
+    Refresh the materialized amount_paid cache from confirmed OTA credits and
+    the in-house completed ledger, then transition status from that total.
 
     State machine:
     - If deposit paid (amount >= deposit_amount) and status is PENDING → deposit_paid
     - If fully paid (balance_due == 0) → fully_paid
     """
-    reservation.amount_paid = completed_paid_amount(db, hotel_id, reservation.id)
+    reservation.amount_paid = paid_amount_with_legacy_fallback(db, hotel_id, reservation)
     _sync_reservation_financial_status(db, reservation, hotel_id=hotel_id, reason_code=tx_type.value)
     db.flush()
 
@@ -508,7 +626,12 @@ def _sync_reservation_financial_status(
     hotel_id: int,
     reason_code: str,
 ) -> None:
-    if reservation.status in (ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT):
+    if reservation.status in (
+        ReservationStatusEnum.CANCELLED,
+        ReservationStatusEnum.PRE_CHECK_IN,
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_OUT,
+    ):
         return
 
     _TOL = Decimal("0.01")
@@ -521,12 +644,6 @@ def _sync_reservation_financial_status(
         target_status = ReservationStatusEnum.DEPOSIT_PAID
     else:
         target_status = ReservationStatusEnum.PENDING
-
-    # Payment settlement must not move an in-house guest backwards in the
-    # operational lifecycle. Check-in/out state is independent from billing
-    # state once the guest is physically in the room.
-    if reservation.status == ReservationStatusEnum.CHECKED_IN and target_status == ReservationStatusEnum.FULLY_PAID:
-        return
 
     if reservation.status == target_status:
         return
@@ -607,7 +724,12 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
     d_paid = paid_amount_with_legacy_fallback(db, resolved_hotel_id, reservation)
     operational_total = d_total + billing_adjustment_total
     operational_balance_due = max(Decimal("0"), operational_total - d_paid)
-    reconciliation_gap = materialized_paid - completed_payment_total
+    evidenced_paid = reconciled_paid_amounts_by_reservation(
+        db,
+        resolved_hotel_id,
+        [reservation.id],
+    ).get(reservation.id, Decimal("0.00"))
+    reconciliation_gap = materialized_paid - evidenced_paid
 
     return {
         "reservation_id": reservation.id,
@@ -639,6 +761,8 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
                 "method": t.payment_method.value,
                 "type": t.transaction_type.value,
                 "status": t.status.value,
+                "manual_reference": t.manual_reference,
+                "refund_of_transaction_id": t.refund_of_transaction_id,
                 "created_at": str(t.created_at),
             }
             for t in transactions

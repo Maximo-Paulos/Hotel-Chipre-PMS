@@ -9,6 +9,7 @@ import hmac
 import json
 import secrets
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -40,6 +41,7 @@ from app.services.reservation_service import (
 )
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services import audit_log_service
+from app.services.financial_ledger import completed_paid_amount, has_payment_history_for_cancellation
 
 
 class OTAError(Exception):
@@ -423,12 +425,39 @@ class OTAIntegrationService:
             paid_amount=normalized.paid_amount,
             gross_total=gross_total,
         )
-        amount_paid = OTAIntegrationService._resolve_paid_amount(
-            normalized=normalized,
-            collection_model=collection_model,
-            gross_total=gross_total,
+        previous_external_paid = Decimal(str(reservation.external_paid_amount or 0))
+        if normalized.paid_amount is None and previous_external_paid > 0:
+            # Partial OTA modification payloads often omit settlement fields;
+            # absence is not evidence that a previously confirmed credit was
+            # reversed. An explicit zero still replaces the snapshot below.
+            amount_paid = float(previous_external_paid)
+        else:
+            amount_paid = OTAIntegrationService._resolve_paid_amount(
+                normalized=normalized,
+                collection_model=collection_model,
+                gross_total=gross_total,
+            )
+        external_paid = Decimal(str(amount_paid)).quantize(Decimal("0.01"))
+        reservation.external_paid_amount = external_paid
+        reservation.external_paid_reference = (
+            f"{normalized.provider_code}:{normalized.external_reservation_id}"[:120]
+            if external_paid > 0
+            else None
         )
-        reservation.amount_paid = amount_paid
+        reservation.external_paid_confirmed = external_paid > 0
+        reservation.external_paid_ever_confirmed = (
+            bool(reservation.external_paid_ever_confirmed) or external_paid > 0
+        )
+        reservation.external_paid_confirmed_by_user_id = None
+        received_at = normalized.received_at or datetime.now(timezone.utc)
+        reservation.external_paid_confirmed_at = (
+            received_at.astimezone(timezone.utc).replace(tzinfo=None)
+            if external_paid > 0 and received_at.tzinfo is not None
+            else (received_at if external_paid > 0 else None)
+        )
+        locally_paid = completed_paid_amount(db, hotel_id, reservation.id)
+        total_paid_for_guest_balance = (external_paid + locally_paid).quantize(Decimal("0.01"))
+        reservation.amount_paid = total_paid_for_guest_balance
         reservation.payment_collection_model = collection_model
         reservation.settlement_status = OTAIntegrationService._normalize_settlement_status(
             normalized.settlement_status,
@@ -437,9 +466,9 @@ class OTAIntegrationService:
             gross_total=gross_total,
         )
         if not preserve_operational_status:
-            if gross_total > 0 and amount_paid >= gross_total:
+            if gross_total > 0 and total_paid_for_guest_balance >= Decimal(str(gross_total)):
                 reservation.status = ReservationStatusEnum.FULLY_PAID
-            elif amount_paid > 0:
+            elif total_paid_for_guest_balance > 0:
                 reservation.status = ReservationStatusEnum.DEPOSIT_PAID
             else:
                 reservation.status = ReservationStatusEnum.PENDING
@@ -955,6 +984,7 @@ class OTAIntegrationService:
             db.flush()
             return mapping
 
+        needs_cancellation_review = has_payment_history_for_cancellation(db, hotel_id, reservation)
         if reservation.status != ReservationStatusEnum.CANCELLED:
             transition_reservation_status(
                 db,
@@ -964,10 +994,16 @@ class OTAIntegrationService:
                 reason_code="ota_cancelled",
                 notes=f"Cancelada por {normalized.provider_code} via webhook",
             )
-        reservation.requires_manual_review = False
+        reservation.requires_manual_review = needs_cancellation_review
         reservation.allocation_status = "cancelled"
-        reservation.settlement_status = (
-            "review_cancellation" if reservation.payment_collection_model != "hotel_collect" else "not_applicable"
+        reservation.settlement_status = "review_cancellation" if needs_cancellation_review else "not_applicable"
+        from app.services.payment_link_service import cancel_active_links_for_reservation
+
+        cancel_active_links_for_reservation(
+            db,
+            hotel_id,
+            reservation.id,
+            reason="OTA reservation cancelled",
         )
         mapping.sync_status = OTASyncStatusEnum.SYNCED
         mapping.error_message = None

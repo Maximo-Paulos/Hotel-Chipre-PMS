@@ -245,7 +245,7 @@ TODO(owner): hosted OpenAI-compatible endpoint vs local model per deployment. Pe
 - 8.2 Overbooking — platform stance (allow / forbid / flag). TODO(owner).
 - 8.3 Room-move authority — platform rule (owner only / front desk with log / any). TODO(owner).
 - 8.4 Manual-review triggers — platform-fixed list; not tenant-tunable. TODO(owner) confirm.
-- 8.5 Refund authority — TODO(owner): which role may issue refunds (owner only? co_owner? front desk with cap?). See §8.7 for refund-handling paths.
+- 8.5 Refund authority — resolved for the pilot by [ADR: Check-in, manual payments, and financial approvals](decisions/checkin-manual-payments-financial-approvals-adr.md): refunds require `payment:refund` and fresh step-up MFA; manager and owner receive it by default. The current manual refund path returns cash only; gateway-backed refunds remain a separate product capability.
 - 8.6 Roles & permissions — platform-wide matrix. Observable: `owner`, `co_owner`. TODO(verify) full matrix from `app/dependencies/auth.py`.
 
 ### 8.7 Refund handling

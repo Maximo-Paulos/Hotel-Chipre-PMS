@@ -69,6 +69,7 @@ import { useRooms } from "../../hooks/useRooms";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { useSession } from "../../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
+import { escapeHtml, resolveVoucherOperationalBalance } from "../../utils/escapeHtml";
 import { addDaysIso, formatLocalIsoDate, todayIso } from "../../utils/date";
 import {
   canCancelReservation,
@@ -111,6 +112,7 @@ const paymentMethodValues: PaymentMethod[] = [
   "bank_transfer",
   "paypal"
 ];
+const manualPaymentMethods: PaymentMethod[] = ["credit_card", "debit_card", "bank_transfer"];
 
 // Single source of truth for which payment methods are offered: the hotel
 // configuration (enable_* flags). Avoids offering a method the backend will reject.
@@ -233,6 +235,9 @@ export function ReservationsPage() {
   const [guestForm, setGuestForm] = useState<QuickGuestFormValues>(emptyQuickGuestForm);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentAmountInput, setPaymentAmountInput] = useState("");
+  const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
+  const [refundTargetTransactionId, setRefundTargetTransactionId] = useState<number | null>(null);
+  const [refundReasonInput, setRefundReasonInput] = useState("");
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
   const [paymentProofPreview, setPaymentProofPreview] = useState<{ proofId: number; url: string } | null>(null);
   const [viewingPaymentProofId, setViewingPaymentProofId] = useState<number | null>(null);
@@ -633,6 +638,9 @@ export function ReservationsPage() {
     setManualTargetCurrency("ARS");
     setLastCreatedReservation(null);
     setPaymentAmountInput("");
+    setPaymentReferenceInput("");
+    setRefundTargetTransactionId(null);
+    setRefundReasonInput("");
     setPaymentProofFile(null);
     setFormOpen(true);
   };
@@ -681,6 +689,9 @@ export function ReservationsPage() {
     setManualTargetCurrency("ARS");
     setLastCreatedReservation(null);
     setPaymentAmountInput("");
+    setPaymentReferenceInput("");
+    setRefundTargetTransactionId(null);
+    setRefundReasonInput("");
     setPaymentProofFile(null);
     setFormOpen(true);
   };
@@ -694,6 +705,9 @@ export function ReservationsPage() {
     setManualTotalAmountInput("");
     setLastCreatedReservation(null);
     setPaymentAmountInput("");
+    setPaymentReferenceInput("");
+    setRefundTargetTransactionId(null);
+    setRefundReasonInput("");
     setPaymentProofFile(null);
   };
 
@@ -913,7 +927,8 @@ export function ReservationsPage() {
   const canCheckOut = canCheckOutReservation;
   const canNoShow = (status: ReservationStatus) => ["pending", "deposit_paid", "fully_paid"].includes(status);
   const canMoveRoom = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);
-  const canAddCharge = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);
+  const canAddCharge = (status: ReservationStatus) =>
+    hasPermission("reservation:charge") && !["cancelled", "checked_out", "no_show"].includes(status);
   const metadataOnlyEdit = Boolean(
     editing && ["checked_in", "checked_out", "cancelled", "no_show"].includes(editing.status)
   );
@@ -1056,6 +1071,31 @@ export function ReservationsPage() {
   };
 
   const paymentSummary = paymentSummaryQuery.data;
+  const isManualPaymentMethod = manualPaymentMethods.includes(paymentMethod);
+  const canOperateCash = hasPermission("cash:operate");
+  const canRegisterSelectedPayment = canOperateCash && (paymentMethod === "cash" || isManualPaymentMethod);
+  const canRefundPayment = hasPermission("payment:refund");
+  const refundablePaymentOptions = (paymentSummary?.transactions ?? [])
+    .filter((transaction) => transaction.status === "completed" && transaction.type !== "refund")
+    .map((transaction) => {
+      const refundedAmount = (paymentSummary?.transactions ?? [])
+        .filter(
+          (refund) =>
+            refund.status === "completed" &&
+            refund.type === "refund" &&
+            refund.refund_of_transaction_id === transaction.id
+        )
+        .reduce((total, refund) => total + Number(refund.amount || 0), 0);
+      return {
+        ...transaction,
+        refundableRemaining: Math.max(0, Number(transaction.amount || 0) - refundedAmount)
+      };
+    })
+    .filter((transaction) => transaction.refundableRemaining > 0.01);
+  const selectedRefundTargetId =
+    refundablePaymentOptions.find((transaction) => transaction.id === refundTargetTransactionId)?.id ??
+    refundablePaymentOptions[0]?.id ??
+    null;
   const hotelConfigQuery = useHotelConfig();
   const availablePaymentMethods = useMemo(
     () => enabledPaymentMethods(hotelConfigQuery.data),
@@ -1147,13 +1187,18 @@ export function ReservationsPage() {
 
   const handlePayDeposit = async () => {
     if (!editing || !paymentSummary) return;
-    if (paymentMethod !== "cash") {
+    if (!canRegisterSelectedPayment) {
       showToast(
         "info",
         paymentMethod === "bank_transfer"
           ? t("page.messages.bankTransferHint")
           : t("page.messages.otherMethodHint")
       );
+      return;
+    }
+    const manualReference = isManualPaymentMethod ? paymentReferenceInput.trim() : undefined;
+    if (isManualPaymentMethod && !manualReference) {
+      showToast("error", t("page.errors.manualPaymentReferenceRequired"));
       return;
     }
     const due = Math.max(paymentSummary.deposit_required - paymentSummary.amount_paid, 0);
@@ -1167,8 +1212,10 @@ export function ReservationsPage() {
         amount: Number(due.toFixed(2)),
         payment_method: paymentMethod,
         transaction_type: "deposit",
-        currency: editingCurrencyCode
+        currency: editingCurrencyCode,
+        manual_reference: manualReference
       });
+      setPaymentReferenceInput("");
       showToast("success", t("page.messages.depositRegistered"));
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.paymentFailed"));
@@ -1177,13 +1224,18 @@ export function ReservationsPage() {
 
   const handlePayFull = async () => {
     if (!editing || !paymentSummary) return;
-    if (paymentMethod !== "cash") {
+    if (!canRegisterSelectedPayment) {
       showToast(
         "info",
         paymentMethod === "bank_transfer"
           ? t("page.messages.bankTransferHint")
           : t("page.messages.otherMethodHint")
       );
+      return;
+    }
+    const manualReference = isManualPaymentMethod ? paymentReferenceInput.trim() : undefined;
+    if (isManualPaymentMethod && !manualReference) {
+      showToast("error", t("page.errors.manualPaymentReferenceRequired"));
       return;
     }
     const due = paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0;
@@ -1197,8 +1249,10 @@ export function ReservationsPage() {
         amount: Number(due.toFixed(2)),
         payment_method: paymentMethod,
         transaction_type: "full_payment",
-        currency: editingCurrencyCode
+        currency: editingCurrencyCode,
+        manual_reference: manualReference
       });
+      setPaymentReferenceInput("");
       showToast("success", t("page.messages.fullPaymentDone"));
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.paymentFailed"));
@@ -1207,13 +1261,18 @@ export function ReservationsPage() {
 
   const handlePayPartial = async () => {
     if (!editing || !paymentSummary) return;
-    if (paymentMethod !== "cash") {
+    if (!canRegisterSelectedPayment) {
       showToast(
         "info",
         paymentMethod === "bank_transfer"
           ? t("page.messages.bankTransferHint")
           : t("page.messages.otherMethodHint")
       );
+      return;
+    }
+    const manualReference = isManualPaymentMethod ? paymentReferenceInput.trim() : undefined;
+    if (isManualPaymentMethod && !manualReference) {
+      showToast("error", t("page.errors.manualPaymentReferenceRequired"));
       return;
     }
     const amount = Number(paymentAmountInput);
@@ -1228,9 +1287,11 @@ export function ReservationsPage() {
         amount: Number(amount.toFixed(2)),
         payment_method: paymentMethod,
         transaction_type: "partial_payment",
-        currency: editingCurrencyCode
+        currency: editingCurrencyCode,
+        manual_reference: manualReference
       });
       setPaymentAmountInput("");
+      setPaymentReferenceInput("");
       showToast("success", t("page.messages.partialPaymentDone"));
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.paymentFailed"));
@@ -1239,13 +1300,23 @@ export function ReservationsPage() {
 
   const handleRefund = async () => {
     if (!editing || !paymentSummary) return;
+    if (!canRefundPayment) return;
     if (paymentMethod !== "cash") {
       showToast("info", t("page.messages.refundCashOnly"));
       return;
     }
+    const refundTarget = refundablePaymentOptions.find((transaction) => transaction.id === selectedRefundTargetId);
+    if (!refundTarget) {
+      showToast("error", t("page.errors.refundSourceRequired"));
+      return;
+    }
+    const refundReason = refundReasonInput.trim();
+    if (!refundReason) {
+      showToast("error", t("page.errors.refundReasonRequired"));
+      return;
+    }
     const amount = Number(paymentAmountInput);
-    const amountPaid = Number(paymentSummary.amount_paid ?? 0);
-    if (!Number.isFinite(amount) || amount <= 0 || amount > amountPaid + 0.01) {
+    if (!Number.isFinite(amount) || amount <= 0 || amount > refundTarget.refundableRemaining + 0.01) {
       showToast("error", t("page.errors.invalidRefundAmount"));
       return;
     }
@@ -1257,9 +1328,12 @@ export function ReservationsPage() {
         payment_method: paymentMethod,
         transaction_type: "refund",
         currency: editingCurrencyCode,
-        description: t("page.messages.refundManualDescription")
+        description: t("page.messages.refundManualDescription"),
+        refund_of_transaction_id: refundTarget.id,
+        refund_reason: refundReason
       });
       setPaymentAmountInput("");
+      setRefundReasonInput("");
       showToast("success", t("page.messages.refundDone"));
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.refundFailed"));
@@ -1473,18 +1547,27 @@ export function ReservationsPage() {
 
   const exportVoucher = () => {
     if (!detailsReservation) return;
-    if (detailsFinancialsLoading) {
+    if (detailsFinancialsLoading || detailsOperationsQuery.isLoading) {
       showToast("info", t("page.messages.waitForFinancialSummary"));
       return;
     }
     const summary = detailsSummary;
+    const operationalBalanceDue = resolveVoucherOperationalBalance(
+      detailsOperations?.financial_summary.operational_balance_due,
+      summary?.operational_balance_due
+    );
+    if (operationalBalanceDue === null) {
+      showToast("error", t("page.errors.voucherFinancialSummaryUnavailable"));
+      return;
+    }
     const guest = detailsGuest;
     const win = window.open("", "_blank");
     if (!win) return;
+    const htmlText = (value: unknown) => escapeHtml(value);
     const html = `
       <html>
         <head>
-          <title>${t("page.voucher.title", { code: detailsReservation.confirmation_code })}</title>
+          <title>${htmlText(t("page.voucher.title", { code: detailsReservation.confirmation_code }))}</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 16px; color: #0f172a; }
             h1 { margin: 0 0 8px 0; }
@@ -1495,28 +1578,28 @@ export function ReservationsPage() {
           </style>
         </head>
         <body>
-          <h1>${t("page.voucher.heading")}</h1>
-          <p class="muted">${t("page.voucher.code", { code: detailsReservation.confirmation_code })}</p>
+          <h1>${htmlText(t("page.voucher.heading"))}</h1>
+          <p class="muted">${htmlText(t("page.voucher.code", { code: detailsReservation.confirmation_code }))}</p>
           <div class="grid">
             <div class="card">
-              <p class="label">${t("page.voucher.reservationLabel")}</p>
-              <p>${t("page.voucher.checkIn")} <strong>${detailsReservation.check_in_date}</strong></p>
-              <p>${t("page.voucher.checkOut")} <strong>${detailsReservation.check_out_date}</strong></p>
-              <p>${t("page.voucher.roomCat")} <strong>${detailsReservation.room_number ?? t("page.voucher.unassigned")} / ${detailsReservation.category_name ?? categoryNameById.get(detailsReservation.category_id) ?? t("page.common.informationUnavailable")}</strong></p>
-              <p>${t("page.voucher.status")} <strong>${statusConfig[detailsReservation.status]?.label ?? detailsReservation.status}</strong></p>
+              <p class="label">${htmlText(t("page.voucher.reservationLabel"))}</p>
+              <p>${htmlText(t("page.voucher.checkIn"))} <strong>${htmlText(detailsReservation.check_in_date)}</strong></p>
+              <p>${htmlText(t("page.voucher.checkOut"))} <strong>${htmlText(detailsReservation.check_out_date)}</strong></p>
+              <p>${htmlText(t("page.voucher.roomCat"))} <strong>${htmlText(detailsReservation.room_number ?? t("page.voucher.unassigned"))} / ${htmlText(detailsReservation.category_name ?? categoryNameById.get(detailsReservation.category_id) ?? t("page.common.informationUnavailable"))}</strong></p>
+              <p>${htmlText(t("page.voucher.status"))} <strong>${htmlText(statusConfig[detailsReservation.status]?.label ?? detailsReservation.status)}</strong></p>
             </div>
             <div class="card">
-              <p class="label">${t("page.voucher.guestLabel")}</p>
-              <p>${guest ? `${guest.first_name} ${guest.last_name}` : t("page.voucher.guestIdFallback", { id: detailsReservation.guest_id })}</p>
-              <p>${t("page.voucher.email")} ${guest?.email ?? "-"}</p>
-              <p>${t("page.voucher.phone")} ${guest?.phone ?? "-"}</p>
+              <p class="label">${htmlText(t("page.voucher.guestLabel"))}</p>
+              <p>${htmlText(guest ? `${guest.first_name} ${guest.last_name}` : t("page.voucher.guestIdFallback", { id: detailsReservation.guest_id }))}</p>
+              <p>${htmlText(t("page.voucher.email"))} ${htmlText(guest?.email ?? "-")}</p>
+              <p>${htmlText(t("page.voucher.phone"))} ${htmlText(guest?.phone ?? "-")}</p>
             </div>
           </div>
           <div class="card" style="margin-top:12px;">
-            <p class="label">${t("page.voucher.financeLabel")}</p>
-            <p>${t("page.voucher.total")} <strong>${formatMoney(summary?.total_amount ?? detailsReservation.total_amount ?? 0, detailsCurrencyCode)}</strong></p>
-            <p>${t("page.voucher.paid")} <strong>${formatMoney(summary?.amount_paid ?? detailsReservation.amount_paid ?? 0, detailsCurrencyCode)}</strong></p>
-            <p>${t("page.voucher.balance")} <strong>${formatMoney(summary?.balance_due ?? detailsReservation.balance_due ?? 0, detailsCurrencyCode)}</strong></p>
+            <p class="label">${htmlText(t("page.voucher.financeLabel"))}</p>
+            <p>${htmlText(t("page.voucher.total"))} <strong>${htmlText(formatMoney(detailsOperations?.financial_summary.operational_total_amount ?? summary?.operational_total_amount ?? detailsReservation.total_amount ?? 0, detailsCurrencyCode))}</strong></p>
+            <p>${htmlText(t("page.voucher.paid"))} <strong>${htmlText(formatMoney(detailsOperations?.financial_summary.amount_paid ?? summary?.amount_paid ?? detailsReservation.amount_paid ?? 0, detailsCurrencyCode))}</strong></p>
+            <p>${htmlText(t("page.voucher.balance"))} <strong>${htmlText(formatMoney(operationalBalanceDue, detailsCurrencyCode))}</strong></p>
           </div>
         </body>
       </html>`;
@@ -2912,7 +2995,10 @@ export function ReservationsPage() {
                       {t("page.form.paymentMethod")}
                       <select
                         value={paymentMethod}
-                        onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                        onChange={(e) => {
+                          setPaymentMethod(e.target.value as PaymentMethod);
+                          setPaymentReferenceInput("");
+                        }}
                         className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                       >
                         {availablePaymentMethods.map((value) => (
@@ -2923,22 +3009,80 @@ export function ReservationsPage() {
                       </select>
                     </label>
                     <label className="text-xs font-semibold text-slate-600">
-                      {t("page.form.amountToCharge")}
+                      {paymentMethod === "cash" && canRefundPayment
+                        ? t("page.form.cashMovementAmount")
+                        : t("page.form.amountToCharge")}
                       <input
-                        aria-label={t("page.form.amountToChargeAria")}
+                        aria-label={paymentMethod === "cash" && canRefundPayment
+                          ? t("page.form.cashMovementAmount")
+                          : t("page.form.amountToChargeAria")}
                         type="number"
                         min="0.01"
                         step="0.01"
                         value={paymentAmountInput}
                         onChange={(event) => setPaymentAmountInput(event.target.value)}
-                        placeholder={t("page.form.amountToChargePlaceholder")}
+                        placeholder={paymentMethod === "cash" && canRefundPayment
+                          ? t("page.form.cashMovementAmountPlaceholder")
+                          : t("page.form.amountToChargePlaceholder")}
                         className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
                       />
                     </label>
+                    {paymentMethod === "cash" && canRefundPayment ? (
+                      <>
+                        <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
+                          {t("page.form.refundSource")}
+                          <select
+                            required
+                            value={selectedRefundTargetId ?? ""}
+                            onChange={(event) =>
+                              setRefundTargetTransactionId(event.target.value ? Number(event.target.value) : null)
+                            }
+                            disabled={refundablePaymentOptions.length === 0}
+                            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm disabled:bg-slate-100"
+                          >
+                            {refundablePaymentOptions.length === 0 ? (
+                              <option value="">{t("page.form.noRefundablePayments")}</option>
+                            ) : null}
+                            {refundablePaymentOptions.map((transaction) => (
+                              <option key={transaction.id} value={transaction.id}>
+                                {transaction.method} · {formatMoney(transaction.amount, transaction.currency)} · {t("page.form.refundRemaining", { amount: formatMoney(transaction.refundableRemaining, transaction.currency) })}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
+                          {t("page.form.refundReason")}
+                          <input
+                            type="text"
+                            required
+                            maxLength={240}
+                            value={refundReasonInput}
+                            onChange={(event) => setRefundReasonInput(event.target.value)}
+                            placeholder={t("page.form.refundReasonPlaceholder")}
+                            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
+                          />
+                        </label>
+                      </>
+                    ) : null}
+                    {isManualPaymentMethod ? (
+                      <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
+                        {t("page.form.manualPaymentReference")}
+                        <input
+                          type="text"
+                          required
+                          maxLength={120}
+                          value={paymentReferenceInput}
+                          onChange={(event) => setPaymentReferenceInput(event.target.value)}
+                          placeholder={t("page.form.manualPaymentReferencePlaceholder")}
+                          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
+                        />
+                        <span className="mt-1 block font-normal text-slate-500">{t("page.form.manualPaymentReferenceHint")}</span>
+                      </label>
+                    ) : null}
                     <button
                       type="button"
                       onClick={handlePayPartial}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash"}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || !canRegisterSelectedPayment}
                       className="rounded-lg border border-sky-200 bg-sky-100 px-3 py-2 text-sm font-semibold text-sky-800 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Cobro parcial
@@ -2946,7 +3090,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handlePayDeposit}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash"}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || !canRegisterSelectedPayment}
                       className="rounded-lg border border-amber-200 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800 hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {t("page.form.registerDeposit")}
@@ -2954,7 +3098,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handlePayFull}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash"}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || !canRegisterSelectedPayment}
                       className="rounded-lg border border-emerald-200 bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {t("page.form.fullPayment")}
@@ -2962,7 +3106,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handleRefund}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash"}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash" || !canRefundPayment || !selectedRefundTargetId || !refundReasonInput.trim()}
                       className="rounded-lg border border-brand-200 bg-brand-100 px-3 py-2 text-sm font-semibold text-brand-800 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {t("page.form.registerRefund")}
@@ -2970,6 +3114,9 @@ export function ReservationsPage() {
                     {paymentMutation.isError && (
                       <p className="text-xs text-rose-600">{t("page.form.paymentError")}</p>
                     )}
+                    {!canOperateCash ? (
+                      <p className="text-xs text-amber-700 sm:col-span-6">{t("page.form.paymentPermissionRequired")}</p>
+                    ) : null}
                   </div>
 
                   {paymentMethod === "cash" && (
@@ -3187,6 +3334,7 @@ export function ReservationsPage() {
                           <li key={tx.id} className="flex items-center justify-between">
                             <span>
                               {tx.type} · {tx.method}
+                              {tx.manual_reference ? <span className="block text-slate-500">{t("page.form.manualPaymentReferenceRecorded", { reference: tx.manual_reference })}</span> : null}
                               {tx.fee_amount && tx.fee_amount > 0 ? (
                                 <span className="text-amber-700">{t("page.form.feeSuffix", { amount: formatMoney(tx.fee_amount, tx.currency) })}</span>
                               ) : null}
@@ -3815,7 +3963,11 @@ export function ReservationsPage() {
                 </button>
               </form>
               {!canAddCharge(detailsReservation.status) ? (
-                <p className="mt-2 text-xs text-slate-500">{t("page.details.chargesBlockedHint")}</p>
+                <p className="mt-2 text-xs text-slate-500">
+                  {hasPermission("reservation:charge")
+                    ? t("page.details.chargesBlockedHint")
+                    : t("page.details.chargePermissionRequired")}
+                </p>
               ) : null}
             </section>
 
@@ -3861,6 +4013,7 @@ export function ReservationsPage() {
                           <p className="text-xs text-slate-500">
                             {t("page.details.transactionLine", { type: tx.type, method: tx.method, status: tx.status })}
                           </p>
+                          {tx.manual_reference ? <p className="text-xs text-slate-500">{t("page.form.manualPaymentReferenceRecorded", { reference: tx.manual_reference })}</p> : null}
                         </div>
                         <span className="text-xs text-slate-500">{tx.created_at}</span>
                       </li>

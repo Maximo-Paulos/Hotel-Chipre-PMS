@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 from app.models.operations import BillingAdjustment, ReservationAdjustment, ReservationAdjustmentStatusEnum, RoomMoveEvent
 from app.models.ota_core import OTAReservationLink, OTAReservationLifecycleEnum
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
-from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.services.payment_service import get_reservation_financial_summary
+from app.services.financial_ledger import reconciled_paid_amounts_by_reservation
 from app.services.reservation_service import active_reservations, active_reservations_select
 from app.services.timezones import hotel_today
 
@@ -33,7 +33,7 @@ _PRIORITY_SCORE = {
 # silently from the actual candidates for an action.
 _TERMINAL_STATUSES = {ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT}
 _PROBLEM_ALLOCATION_STATUSES = {"manual_review", "unassigned", "error"}
-_PROBLEM_SETTLEMENT_STATUSES = {"manual_resolution_required", "pending_hotel_action"}
+_PROBLEM_SETTLEMENT_STATUSES = {"manual_resolution_required", "pending_hotel_action", "review_cancellation"}
 _PENDING_ADJUSTMENT_STATUSES = {ReservationAdjustmentStatusEnum.DRAFT, ReservationAdjustmentStatusEnum.PENDING}
 _ACTIVE_WINDOW_DAYS = 1
 # ponytail: known ceiling -- if a hotel legitimately has more real candidates
@@ -197,16 +197,7 @@ def _candidate_reservation_ids(db: Session, *, hotel_id: int) -> list[int]:
         )
     }
 
-    completed_paid_by_reservation: dict[int, Decimal] = {}
-    for reservation_id, amount, transaction_type in db.execute(
-        select(Transaction.reservation_id, Transaction.amount, Transaction.transaction_type).where(
-            Transaction.hotel_id == hotel_id,
-            Transaction.reservation_id.in_(ids),
-            Transaction.status == TransactionStatusEnum.COMPLETED,
-        )
-    ):
-        signed = -Decimal(str(amount)) if transaction_type == TransactionTypeEnum.REFUND else Decimal(str(amount))
-        completed_paid_by_reservation[reservation_id] = completed_paid_by_reservation.get(reservation_id, Decimal("0")) + signed
+    paid_by_reservation = reconciled_paid_amounts_by_reservation(db, hotel_id, ids)
 
     return [
         row.id
@@ -216,7 +207,7 @@ def _candidate_reservation_ids(db: Session, *, hotel_id: int) -> list[int]:
             ota_manual_resolution_ids=ota_manual_resolution_ids,
             adjustment_flag_ids=adjustment_flag_ids,
             billing_adjustment_ids=billing_adjustment_ids,
-            completed_paid_by_reservation=completed_paid_by_reservation,
+            paid_by_reservation=paid_by_reservation,
         )
     ]
 
@@ -227,7 +218,7 @@ def _row_could_generate_action(
     ota_manual_resolution_ids: set[int],
     adjustment_flag_ids: set[int],
     billing_adjustment_ids: set[int],
-    completed_paid_by_reservation: dict[int, Decimal],
+    paid_by_reservation: dict[int, Decimal],
 ) -> bool:
     if row.requires_manual_review:
         return True
@@ -255,8 +246,8 @@ def _row_could_generate_action(
         return True
 
     materialized_paid = Decimal(str(row.amount_paid or 0))
-    completed_total = completed_paid_by_reservation.get(row.id, Decimal("0"))
-    if abs(materialized_paid - completed_total) > Decimal("0.01"):
+    canonical_paid = paid_by_reservation.get(row.id, Decimal("0"))
+    if abs(materialized_paid - canonical_paid) > Decimal("0.01"):
         return True
 
     return False

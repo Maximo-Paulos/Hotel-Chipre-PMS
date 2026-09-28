@@ -108,6 +108,9 @@ class ReservationRead(BaseModel):
     actual_check_out: Optional[datetime]
     total_amount: float
     amount_paid: float
+    external_paid_amount: float = 0.0
+    external_paid_reference: Optional[str] = None
+    external_paid_confirmed: bool = False
     deposit_amount: float
     subtotal_amount: float = 0.0
     tax_amount: float = 0.0

@@ -51,10 +51,16 @@ def check_mfa_attempt(db: Session, action: str, user_id: int) -> bool:
     """
     bucket = "reauth" if action.strip().casefold().endswith("_reauth") else "totp"
     key = mfa_attempt_key(action, user_id)
-    legacy_keys = [
-        f"{legacy_action}:{user_id}"
-        for legacy_action in _LEGACY_ACTIONS_BY_BUCKET[bucket]
-    ]
+    legacy_actions = _LEGACY_ACTIONS_BY_BUCKET[bucket]
+    # Before the shared app/master-admin limiter landed, master-admin flows
+    # used a distinct namespace: ``master_admin:{action}:{user_id}``. Carry
+    # those active attempts forward too; otherwise deploy would grant those
+    # accounts a fresh OTP budget for the rest of the window.
+    legacy_keys = [f"{legacy_action}:{user_id}" for legacy_action in legacy_actions]
+    legacy_keys.extend(
+        f"master_admin:{legacy_action}:{user_id}"
+        for legacy_action in legacy_actions
+    )
     cutoff = (
         datetime.now(timezone.utc).replace(tzinfo=None)
         - mfa_code_guess_limiter.window

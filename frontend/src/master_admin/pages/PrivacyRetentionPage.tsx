@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { ApiError } from "../../api/client";
@@ -26,6 +26,19 @@ type Hold = {
   released_at: string | null;
   release_reason_code: ReleaseReason | null;
   release_reference: string | null;
+};
+
+type PublicInquiry = {
+  id: number;
+  name: string;
+  email: string;
+  company_name: string | null;
+  phone: string | null;
+  message: string;
+  source_path: string;
+  privacy_consent_at: string;
+  created_at: string;
+  updated_at: string;
 };
 
 const card = "rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/10 backdrop-blur";
@@ -56,7 +69,7 @@ const releaseLabels: Record<ReleaseReason, string> = {
 
 const formatDate = (value: string | null) => {
   if (!value) return "Indefinido";
-  const date = new Date(value);
+  const date = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`);
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("es-AR", { dateStyle: "medium", timeStyle: "short" }).format(date);
 };
 
@@ -66,7 +79,7 @@ function errorMessage(error: unknown, fallback: string) {
 
 function holdStatus(hold: Hold) {
   if (hold.released_at) return "Liberado";
-  if (hold.hold_until && new Date(hold.hold_until).getTime() <= Date.now()) return "Vencido";
+  if (hold.hold_until && new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(hold.hold_until) ? hold.hold_until : `${hold.hold_until}Z`).getTime() <= Date.now()) return "Vencido";
   return "Vigente";
 }
 
@@ -75,6 +88,8 @@ export function MasterAdminPrivacyRetentionPage() {
   const [query, setQuery] = useState("");
   const [targets, setTargets] = useState<Target[]>([]);
   const [selected, setSelected] = useState<Target | null>(null);
+  const [viewingInquiry, setViewingInquiry] = useState<PublicInquiry | null>(null);
+  const [loadingInquiryId, setLoadingInquiryId] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
   const [reason, setReason] = useState<HoldReason>("litigation");
   const [caseReference, setCaseReference] = useState("");
@@ -90,6 +105,7 @@ export function MasterAdminPrivacyRetentionPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const inquiryViewRequest = useRef(0);
 
   const refreshHolds = useCallback(async () => {
     setLoadingHolds(true);
@@ -128,6 +144,8 @@ export function MasterAdminPrivacyRetentionPage() {
     setError(null);
     setNotice(null);
     setSelected(null);
+    setViewingInquiry(null);
+    inquiryViewRequest.current += 1;
     setSearching(true);
     try {
       const rows = await masterAdminFetch<Target[]>("/api/master-admin/privacy-retention/targets/search", {
@@ -140,6 +158,23 @@ export function MasterAdminPrivacyRetentionPage() {
       setError(errorMessage(searchError, "No se pudo buscar el registro."));
     } finally {
       setSearching(false);
+    }
+  };
+
+  const viewInquiry = async (target: Target) => {
+    setError(null);
+    setNotice(null);
+    setSelected(target);
+    setViewingInquiry(null);
+    const requestId = ++inquiryViewRequest.current;
+    setLoadingInquiryId(target.record_id);
+    try {
+      const inquiry = await masterAdminFetch<PublicInquiry>(`/api/master-admin/privacy-retention/inquiries/${target.record_id}`);
+      if (requestId === inquiryViewRequest.current) setViewingInquiry(inquiry);
+    } catch (loadError) {
+      if (requestId === inquiryViewRequest.current) setError(errorMessage(loadError, "No se pudo abrir la consulta."));
+    } finally {
+      if (requestId === inquiryViewRequest.current) setLoadingInquiryId(null);
     }
   };
 
@@ -215,8 +250,11 @@ export function MasterAdminPrivacyRetentionPage() {
         <p className="text-xs uppercase tracking-[0.35em] text-amber-300/80">Privacidad y cumplimiento</p>
         <h2 className="mt-2 text-3xl font-semibold text-white">Retenciones legales</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-          Los leads se eliminan a los 90 días de su última actualización; las consultas, a los 90 días de recibidas.
+          Los leads y las consultas se eliminan a los 90 días de su última actualización.
           Una excepción vigente las excluye temporalmente de la purga. Al vencer o liberarse, no se reinicia el plazo.
+        </p>
+        <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-400">
+          Los avisos por email no incluyen datos personales. El acceso al contenido de una consulta desde este panel queda auditado.
         </p>
       </section>
 
@@ -229,7 +267,7 @@ export function MasterAdminPrivacyRetentionPage() {
         <form onSubmit={searchTargets} className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] md:items-end">
           <label className="block text-sm text-slate-200">
             Tipo de registro
-            <select className={field} value={resourceType} onChange={(event) => { setResourceType(event.target.value as ResourceType); setTargets([]); setSelected(null); }}>
+            <select className={field} value={resourceType} onChange={(event) => { inquiryViewRequest.current += 1; setViewingInquiry(null); setLoadingInquiryId(null); setResourceType(event.target.value as ResourceType); setTargets([]); setSelected(null); }}>
               <option value="marketing_lead">Interesado (acceso temprano)</option>
               <option value="public_inquiry">Consulta del formulario público</option>
             </select>
@@ -244,20 +282,54 @@ export function MasterAdminPrivacyRetentionPage() {
         {targets.length > 0 && (
           <ul className="mt-5 space-y-2">
             {targets.map((target) => (
-              <li key={`${target.resource_type}:${target.record_id}`}>
+              <li key={`${target.resource_type}:${target.record_id}`} className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setSelected(target)}
+                  onClick={() => { setSelected(target); setViewingInquiry(null); }}
                   className={`flex min-h-14 w-full flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left text-sm ${selected?.record_id === target.record_id && selected.resource_type === target.resource_type ? "border-amber-300/70 bg-amber-300/10" : "border-white/10 bg-slate-950/60 hover:bg-white/5"}`}
                 >
                   <span className="text-white">ID {target.record_id} · {target.masked_email}</span>
                   <span className="text-xs text-slate-400">El plazo de 90 días corre desde {formatDate(target.retention_anchor_at)}</span>
                 </button>
+                {target.resource_type === "public_inquiry" && (
+                  <button
+                    type="button"
+                    className={secondaryButton}
+                    disabled={loadingInquiryId === target.record_id}
+                    onClick={() => void viewInquiry(target)}
+                  >
+                    {loadingInquiryId === target.record_id ? "Abriendo…" : "Ver consulta auditada"}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {viewingInquiry && (
+        <section className={card}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.25em] text-amber-300/80">Acceso auditado · consulta #{viewingInquiry.id}</p>
+              <h3 className="mt-2 text-xl font-semibold text-white">{viewingInquiry.name}</h3>
+            </div>
+            <button type="button" className={secondaryButton} onClick={() => { inquiryViewRequest.current += 1; setViewingInquiry(null); }}>Cerrar datos</button>
+          </div>
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            <div><dt className="text-slate-400">Email</dt><dd className="break-all text-white">{viewingInquiry.email}</dd></div>
+            <div><dt className="text-slate-400">Empresa</dt><dd className="text-white">{viewingInquiry.company_name || "No informada"}</dd></div>
+            <div><dt className="text-slate-400">Teléfono</dt><dd className="text-white">{viewingInquiry.phone || "No informado"}</dd></div>
+            <div><dt className="text-slate-400">Origen</dt><dd className="text-white">{viewingInquiry.source_path}</dd></div>
+            <div><dt className="text-slate-400">Recibida</dt><dd className="text-white">{formatDate(viewingInquiry.created_at)}</dd></div>
+            <div><dt className="text-slate-400">Última actualización / purga desde</dt><dd className="text-white">{formatDate(viewingInquiry.updated_at)}</dd></div>
+          </dl>
+          <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/60 p-4">
+            <h4 className="text-sm font-medium text-slate-300">Mensaje</h4>
+            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-white">{viewingInquiry.message}</p>
+          </div>
+        </section>
+      )}
 
       {selected && (
         <section className={card}>

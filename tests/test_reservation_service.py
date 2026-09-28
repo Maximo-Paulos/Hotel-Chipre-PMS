@@ -488,7 +488,7 @@ class TestStateTransitions:
         result = transition_reservation_status(db, res, ReservationStatusEnum.DEPOSIT_PAID)
         assert result.status == ReservationStatusEnum.DEPOSIT_PAID
 
-    def test_invalid_transition_pending_to_checked_in(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
+    def test_valid_transition_pending_to_checked_in_for_free_payment_policy(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         data = ReservationCreate(
             guest_id=sample_guest.id,
             category_id=sample_categories[0].id,
@@ -496,8 +496,8 @@ class TestStateTransitions:
             check_out_date=date(2026, 4, 3),
         )
         res = create_reservation(db, data)
-        with pytest.raises(ReservationError, match="Cannot transition"):
-            transition_reservation_status(db, res, ReservationStatusEnum.CHECKED_IN)
+        result = transition_reservation_status(db, res, ReservationStatusEnum.CHECKED_IN)
+        assert result.status == ReservationStatusEnum.CHECKED_IN
 
     def test_invalid_transition_from_terminal_state(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         data = ReservationCreate(

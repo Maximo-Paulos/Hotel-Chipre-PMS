@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 from decimal import Decimal
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -18,6 +19,7 @@ from app.models.reservation import (
     ReservationStatusEnum,
 )
 from app.models.security_audit_log import SecurityAuditLog
+from app.models.transaction import Transaction
 from app.models.user import User
 from app.models.waitlist import WaitlistEntry, WaitlistStatusEnum
 from app.schemas.ota_manual import ManualOTAReservationCreate
@@ -29,6 +31,7 @@ from app.services.reservation_service import (
     update_reservation_fields,
 )
 from app.services.waitlist_service import promote_from_waitlist
+from app.services.financial_ledger import completed_paid_amount
 
 
 class OTAManualReservationError(Exception):
@@ -115,7 +118,7 @@ def create_or_update_manual_ota_reservation(
     reservation.external_confirmation_code = _clean(data.external_confirmation_code)
     reservation.payment_collection_model = _clean(data.payment_collection_model) or "hotel_collect"
     reservation.settlement_status = _clean(data.settlement_status) or "pending"
-    _apply_manual_amounts(reservation, data)
+    _apply_manual_amounts(db, reservation, data, actor_user_id=actor_user_id)
     _audit(
         db,
         hotel_id=hotel_id,
@@ -139,9 +142,36 @@ def release_no_guarantee(
     actor_user_id: int | None = None,
     reason: str | None = None,
 ) -> Reservation:
+    reservation = (
+        db.query(Reservation)
+        .filter(
+            Reservation.id == reservation.id,
+            Reservation.hotel_id == reservation.hotel_id,
+            Reservation.deleted_at.is_(None),
+        )
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+    if reservation is None:
+        raise OTAManualReservationError("OTA reservation was not found or is no longer active")
     if not reservation.source_provider_code or not reservation.external_id:
         raise OTAManualReservationError("Only OTA reservations can be internally released")
-    if Decimal(str(reservation.amount_paid or 0)) > Decimal("0"):
+    has_payment_record = (
+        db.query(Transaction.id)
+        .filter(
+            Transaction.hotel_id == reservation.hotel_id,
+            Transaction.reservation_id == reservation.id,
+        )
+        .first()
+        is not None
+    )
+    if (
+        Decimal(str(reservation.amount_paid or 0)) > Decimal("0")
+        or Decimal(str(reservation.external_paid_amount or 0)) > Decimal("0")
+        or reservation.external_paid_ever_confirmed
+        or has_payment_record
+    ):
         raise OTAManualReservationError("OTA reservation has payments and cannot be released as no-guarantee")
     collection_model = _clean(reservation.payment_collection_model) or "unknown"
     if collection_model not in _NO_GUARANTEE_MODELS:
@@ -169,6 +199,14 @@ def release_no_guarantee(
     reservation.settlement_status = "internal_release_no_guarantee"
     reservation.requires_manual_review = False
     reservation.version = (reservation.version or 0) + 1
+    from app.services.payment_link_service import cancel_active_links_for_reservation
+
+    cancel_active_links_for_reservation(
+        db,
+        reservation.hotel_id,
+        reservation.id,
+        reason="OTA reservation internally released as no-guarantee",
+    )
     _attempt_waitlist_promotion_after_release(
         db,
         reservation=reservation,
@@ -293,7 +331,7 @@ def _update_existing_manual_ota_reservation(
     reservation.payment_collection_model = _clean(data.payment_collection_model) or reservation.payment_collection_model
     if data.settlement_status is not None:
         reservation.settlement_status = _clean(data.settlement_status) or reservation.settlement_status
-    _apply_manual_amounts(reservation, data)
+    _apply_manual_amounts(db, reservation, data, actor_user_id=actor_user_id)
     _audit(
         db,
         hotel_id=reservation.hotel_id,
@@ -327,7 +365,13 @@ def _clean(value: str | None) -> str:
     return (value or "").strip()
 
 
-def _apply_manual_amounts(reservation: Reservation, data: ManualOTAReservationCreate) -> None:
+def _apply_manual_amounts(
+    db: Session,
+    reservation: Reservation,
+    data: ManualOTAReservationCreate,
+    *,
+    actor_user_id: int | None,
+) -> None:
     if data.total_amount is not None:
         reservation.total_amount = data.total_amount
         reservation.subtotal_amount = data.total_amount
@@ -347,7 +391,19 @@ def _apply_manual_amounts(reservation: Reservation, data: ManualOTAReservationCr
         # just prevents a USD total from being silently mislabeled as ARS.
         reservation.currency_code = data.target_currency.strip().upper()
     if data.amount_paid is not None:
-        reservation.amount_paid = data.amount_paid
+        external_amount = Decimal(str(data.amount_paid)).quantize(Decimal("0.01"))
+        reservation.external_paid_amount = external_amount
+        reservation.external_paid_reference = data.external_paid_reference if external_amount > 0 else None
+        reservation.external_paid_confirmed = external_amount > 0
+        reservation.external_paid_ever_confirmed = (
+            bool(reservation.external_paid_ever_confirmed) or external_amount > 0
+        )
+        reservation.external_paid_confirmed_by_user_id = actor_user_id if external_amount > 0 else None
+        reservation.external_paid_confirmed_at = (
+            datetime.now(timezone.utc).replace(tzinfo=None) if external_amount > 0 else None
+        )
+        local_paid = completed_paid_amount(db, reservation.hotel_id, reservation.id)
+        reservation.amount_paid = (external_amount + local_paid).quantize(Decimal("0.01"))
 
 
 def _reservation_snapshot(reservation: Reservation) -> dict[str, Any]:
@@ -363,6 +419,11 @@ def _reservation_snapshot(reservation: Reservation) -> dict[str, Any]:
         "source_provider_code": reservation.source_provider_code,
         "external_id": reservation.external_id,
         "status": reservation.status.value if hasattr(reservation.status, "value") else str(reservation.status),
+        "total_amount": str(reservation.total_amount or 0),
+        "amount_paid": str(reservation.amount_paid or 0),
+        "external_paid_amount": str(reservation.external_paid_amount or 0),
+        "external_paid_reference": reservation.external_paid_reference,
+        "external_paid_confirmed": bool(reservation.external_paid_confirmed),
         "version": reservation.version,
     }
 

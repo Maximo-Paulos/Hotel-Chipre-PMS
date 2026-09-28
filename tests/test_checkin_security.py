@@ -8,6 +8,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.guest import Guest, GuestTag, GuestTagTypeEnum
@@ -15,6 +16,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services.checkin_service import perform_checkin, CheckInError
+from app.services import checkin_service
 from app.services.reservation_service import (
     ReservationError,
     update_reservation_fields,
@@ -66,6 +68,19 @@ def _make_room(db: Session, hotel_id: int) -> tuple[RoomCategory, Room]:
 
 
 _res_counter = 0
+
+
+@pytest.fixture(autouse=True)
+def anchor_hotel_day_to_fixture_arrival(db: Session, monkeypatch):
+    """Historical fixture stays test tag/state rules, not today's calendar."""
+    def hotel_day_for_test(session, hotel_id):
+        return (
+            session.query(func.max(Reservation.check_in_date))
+            .filter(Reservation.hotel_id == hotel_id)
+            .scalar()
+        ) or date(2027, 1, 1)
+
+    monkeypatch.setattr(checkin_service, "hotel_today", hotel_day_for_test)
 
 
 def _make_paid_reservation(

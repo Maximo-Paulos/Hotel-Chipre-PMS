@@ -32,7 +32,7 @@ from app.models.operations import (
 )
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
-from app.models.transaction import Transaction, TransactionTypeEnum
+from app.models.transaction import PaymentMethodEnum, Transaction, TransactionTypeEnum
 from app.services import audit_log_service
 from app.services.allocation_policy_service import record_manual_override_feedback
 from app.services.guest_room_avoidance_service import record_guest_room_avoidance
@@ -41,7 +41,7 @@ from app.schemas.payment_link import PaymentLinkCreate
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.schemas.transaction import PaymentRequest
 from app.services.payment_link_service import PaymentLinkError, create_link
-from app.services.payment_service import PaymentError, process_payment
+from app.services.payment_service import MANUAL_REFERENCE_METHODS, PaymentError, process_payment
 from app.services.permission_service import (
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_RESERVATION_MOVE_CAPACITY,
@@ -356,6 +356,8 @@ def reservation_has_payment_or_deposit(db: Session, *, hotel_id: int, reservatio
     return (
         reservation.status in (ReservationStatusEnum.DEPOSIT_PAID, ReservationStatusEnum.FULLY_PAID)
         or Decimal(str(reservation.amount_paid or 0)) > Decimal("0")
+        or Decimal(str(reservation.external_paid_amount or 0)) > Decimal("0")
+        or bool(reservation.external_paid_ever_confirmed)
         or _has_transactions(db, hotel_id=hotel_id, reservation_id=reservation.id)
     )
 
@@ -855,6 +857,17 @@ def extend_reservation_stay(
             raise ReservationOperationsError("El pago inmediato debe pertenecer a esta reserva")
         if Decimal(str(immediate_payment.amount)) < amount:
             raise ReservationOperationsError("El pago inmediato debe cubrir el importe de la extension")
+        if immediate_payment.payment_method not in {PaymentMethodEnum.CASH, *MANUAL_REFERENCE_METHODS}:
+            raise ReservationOperationsError(
+                "El pago inmediato solo admite efectivo o un pago presencial confirmado; para una pasarela genera un link de pago"
+            )
+        if (
+            immediate_payment.payment_method in MANUAL_REFERENCE_METHODS
+            and not immediate_payment.manual_reference
+        ):
+            raise ReservationOperationsError(
+                "La confirmacion de tarjeta, debito o transferencia requiere el cupon u operacion de referencia"
+            )
     elif payment_action == "payment_link":
         if payment_link is None:
             raise ReservationOperationsError("La extension requiere generar link de pago")
@@ -878,7 +891,13 @@ def extend_reservation_stay(
     link = None
     try:
         if payment_action == "immediate_payment":
-            transaction = process_payment(db, immediate_payment, hotel_id=hotel_id, actor_user_id=changed_by_user_id)
+            transaction = process_payment(
+                db,
+                immediate_payment,
+                hotel_id=hotel_id,
+                actor_user_id=changed_by_user_id,
+                manual_confirmation=immediate_payment.payment_method in MANUAL_REFERENCE_METHODS,
+            )
             if original_status == ReservationStatusEnum.CHECKED_IN and reservation.status != ReservationStatusEnum.CHECKED_IN:
                 reservation.status = ReservationStatusEnum.CHECKED_IN
         else:
@@ -1168,7 +1187,11 @@ def preview_ota_rebook_as_direct(
         pricing_source = "category_fallback"
 
     deposit_amount = _compute_deposit_amount(db, hotel_id=hotel_id, gross_total=quoted_total_amount)
-    amount_delta = round(quoted_total_amount - reservation.total_amount, 2)
+    amount_delta = float(
+        (Decimal(str(quoted_total_amount)) - Decimal(str(reservation.total_amount or 0))).quantize(
+            Decimal("0.01")
+        )
+    )
     return OTARebookPreview(
         target_category_id=target_category_id,
         target_rate_plan_id=target_rate_plan.id if target_rate_plan else None,
@@ -1208,12 +1231,29 @@ def rebook_ota_reservation_as_direct(
 ) -> OTARebookResult:
     if reservation.hotel_id != hotel_id:
         raise ReservationOperationsError("La reserva no pertenece al hotel activo")
+    reservation = (
+        db.query(Reservation)
+        .filter(
+            Reservation.id == reservation.id,
+            Reservation.hotel_id == hotel_id,
+            Reservation.deleted_at.is_(None),
+        )
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+    if reservation is None:
+        raise ReservationOperationsError("La reserva no existe o ya no está activa")
     if reservation.source == ReservationSourceEnum.DIRECT:
         raise ReservationOperationsError("Esta operacion esta pensada para reservas de canales externos")
     if reservation.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
         raise ReservationOperationsError("No se puede rebookear una reserva ya check-in o check-out")
     if reservation.status == ReservationStatusEnum.CANCELLED:
         raise ReservationOperationsError("La reserva original ya esta cancelada")
+    if reservation_has_payment_or_deposit(db, hotel_id=hotel_id, reservation=reservation):
+        raise ReservationOperationsError(
+            "La reserva tiene pagos o intentos registrados; la conversión directa no transfiere ni reconcilia fondos"
+        )
 
     preview = preview_ota_rebook_as_direct(
         db,

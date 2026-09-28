@@ -195,7 +195,7 @@ def test_report_permissions_split_operational_from_financial(role_client):
     manager_permissions = set(get_effective_permissions(db, 1, "manager"))
     assert PERMISSION_REPORTS_OPERATIONAL_VIEW in manager_permissions
     assert PERMISSION_REPORTS_FINANCIAL_VIEW not in manager_permissions
-    assert PERMISSION_CASH_OPERATE not in manager_permissions
+    assert PERMISSION_CASH_OPERATE in manager_permissions
     assert PERMISSION_CASH_APPROVE_DIFFERENCE not in manager_permissions
     assert client.get("/api/reports/occupancy").status_code == 200
     assert client.get("/api/reports/daily").status_code == 403

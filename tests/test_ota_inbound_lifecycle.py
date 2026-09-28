@@ -6,6 +6,7 @@ from app.config import get_settings
 from app.models.guest import Guest
 from app.models.ota import OTAReservationMapping, OTASyncStatusEnum
 from app.models.ota_core import OTAReservationLifecycleEnum, OTAReservationLink
+from app.models.payment import PaymentLink
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.services.ota_service import OTAIntegrationService
 from app.services.reservation_service import transition_reservation_status
@@ -93,6 +94,20 @@ def test_booking_cancel_cancels_existing_pre_checkin_reservation(db, sample_room
     secret = _seed_booking_secret(db, hotel_config.id)
     mapping = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, _booking_payload())
     db.flush()
+    payment_link = PaymentLink(
+        hotel_id=hotel_config.id,
+        reservation_id=mapping.reservation_id,
+        link_code="ota-cancel-open-link",
+        requested_amount=100,
+        recipient_email="ota-guest@example.test",
+        provider="mercado_pago",
+        status="pending",
+        execution_mode="provider",
+        payable=True,
+        external_checkout_url="https://mp.test/ota-cancel-open-link",
+    )
+    db.add(payment_link)
+    db.flush()
 
     cancelled_mapping = OTAIntegrationService.process_booking_webhook(
         db,
@@ -113,6 +128,34 @@ def test_booking_cancel_cancels_existing_pre_checkin_reservation(db, sample_room
     assert reservation.allocation_status == "cancelled"
     assert cancelled_mapping.sync_status == OTASyncStatusEnum.SYNCED
     assert link.provider_state == OTAReservationLifecycleEnum.CANCELLED
+    assert payment_link.status == "cancelled"
+    assert payment_link.payable is False
+
+
+def test_booking_cancel_with_confirmed_external_payment_requires_settlement_review(
+    db, sample_rooms, sample_categories, hotel_config
+):
+    secret = _seed_booking_secret(db, hotel_config.id)
+    mapping = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, _booking_payload())
+    reservation = db.query(Reservation).filter(Reservation.id == mapping.reservation_id).one()
+    reservation.external_paid_amount = 90
+    reservation.external_paid_confirmed = True
+    reservation.external_paid_ever_confirmed = True
+    reservation.amount_paid = 90
+    db.flush()
+
+    cancelled_mapping = OTAIntegrationService.process_booking_webhook(
+        db,
+        hotel_config.id,
+        secret,
+        _booking_payload(event="reservation.cancelled"),
+    )
+
+    db.refresh(reservation)
+    assert cancelled_mapping.sync_status == OTASyncStatusEnum.SYNCED
+    assert reservation.status == ReservationStatusEnum.CANCELLED
+    assert reservation.requires_manual_review is True
+    assert reservation.settlement_status == "review_cancellation"
 
 
 def test_booking_cancel_after_checkin_requires_manual_resolution(db, sample_rooms, sample_categories, hotel_config):

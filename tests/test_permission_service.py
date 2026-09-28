@@ -10,6 +10,7 @@ from app.services.permission_service import (
     DEFAULT_MATRIX,
     PERMISSION_CASH_APPROVE_DIFFERENCE,
     PERMISSION_CASH_OPERATE,
+    PERMISSION_PAYMENT_REFUND,
     PERMISSION_CHECKIN_PERFORM,
     PERMISSION_GUEST_CREATE,
     PERMISSION_GUEST_EDIT,
@@ -21,10 +22,14 @@ from app.services.permission_service import (
     PERMISSION_DEFINITIONS,
     PERMISSION_OCCUPANCY_VIEW,
     PERMISSION_RESERVATION_CREATE,
+    PERMISSION_RESERVATION_CANCEL_PAID,
+    PERMISSION_RESERVATION_CHARGE,
     PERMISSION_RESERVATION_MANUAL_RATE,
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_RESERVATION_MOVE_CAPACITY,
     PERMISSION_RESERVATION_MOVE_CATEGORY,
+    PERMISSION_WHATSAPP_INBOX_VIEW,
+    PERMISSION_WHATSAPP_NOTE_MANAGE,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
     PERMISSION_REPORTS_OPERATIONAL_VIEW,
     PERMISSION_ROOM_CLEANING_STATUS,
@@ -65,7 +70,10 @@ def test_default_permissions_seeded_for_owner_manager_reception_housekeeping(db)
     assert rows[("housekeeping", PERMISSION_CHECKIN_PERFORM)] is False
     assert rows[("manager", PERMISSION_STOCK_OPERATE)] is True
     assert rows[("manager", PERMISSION_STOCK_ADJUST)] is False
-    assert rows[("manager", PERMISSION_CASH_OPERATE)] is False
+    assert rows[("manager", PERMISSION_CASH_OPERATE)] is True
+    assert rows[("manager", PERMISSION_RESERVATION_CHARGE)] is True
+    assert rows[("manager", PERMISSION_PAYMENT_REFUND)] is True
+    assert rows[("manager", PERMISSION_RESERVATION_CANCEL_PAID)] is True
     assert rows[("manager", PERMISSION_CASH_APPROVE_DIFFERENCE)] is False
     assert rows[("receptionist", PERMISSION_CASH_OPERATE)] is True
     assert rows[("owner", PERMISSION_STOCK_ADJUST)] is True
@@ -76,6 +84,8 @@ def test_default_permissions_seeded_for_owner_manager_reception_housekeeping(db)
     assert rows[("housekeeping", PERMISSION_ROOM_CLEANING_STATUS)] is True
     # Product default: cleaning staff do not receive guest/reservation data.
     assert rows[("housekeeping", PERMISSION_OCCUPANCY_VIEW)] is False
+    assert rows[("housekeeping", PERMISSION_WHATSAPP_INBOX_VIEW)] is False
+    assert rows[("housekeeping", PERMISSION_WHATSAPP_NOTE_MANAGE)] is False
     assert rows[("owner", PERMISSION_RESERVATION_MOVE)] is True
     assert rows[("owner", PERMISSION_RESERVATION_MOVE_CATEGORY)] is True
     assert rows[("owner", PERMISSION_RESERVATION_MOVE_CAPACITY)] is True

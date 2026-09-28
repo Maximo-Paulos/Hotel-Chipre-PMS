@@ -71,10 +71,10 @@ function getRoomDeleteBlockedDetail(error: unknown): RoomDeleteBlockedDetail | n
 
 const paymentMethodConfigOptions: Array<{ key: keyof HotelConfig; label: string; helper: string }> = [
   { key: "enable_cash", label: "Efectivo", helper: "Se registra en caja." },
-  { key: "enable_debit_card", label: "Tarjeta de débito", helper: "Cobro manual con tarjeta." },
-  { key: "enable_credit_card", label: "Tarjeta de crédito", helper: "Cobro manual con tarjeta." },
+  { key: "enable_debit_card", label: "Tarjeta de débito", helper: "Cobro manual con cupón de posnet obligatorio." },
+  { key: "enable_credit_card", label: "Tarjeta de crédito", helper: "Cobro manual con cupón de posnet obligatorio." },
   { key: "enable_mercado_pago", label: "Mercado Pago", helper: "Links y confirmación por webhook." },
-  { key: "enable_bank_transfer", label: "Transferencia", helper: "Requiere comprobante y aprobación." },
+  { key: "enable_bank_transfer", label: "Transferencia", helper: "Comprobante pendiente de aprobación o registro manual de operación verificada." },
   { key: "enable_paypal", label: "PayPal", helper: "Gateway externo." }
 ];
 
@@ -444,6 +444,21 @@ export function SettingsHotelPage() {
             <label className="text-sm font-semibold text-slate-700">
               Depósito (%)
               <input type="number" min={0} max={100} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.deposit_percentage ?? 0} onChange={(e) => handleChange("deposit_percentage", parseFloat(e.target.value || "0"))} />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Requisito de pago para el check-in
+              <select
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                value={form.checkin_payment_policy ?? "deposit"}
+                onChange={(e) => handleChange("checkin_payment_policy", e.target.value as HotelConfig["checkin_payment_policy"])}
+              >
+                <option value="deposit">Seña configurada (recomendado)</option>
+                <option value="total">Estadía completamente pagada</option>
+                <option value="free">Sin requisito de pago al ingresar</option>
+              </select>
+              <span className="mt-1 block text-xs font-normal text-slate-500">
+                El saldo operativo sigue controlándose al hacer el check-out.
+              </span>
             </label>
             <label className="text-sm font-semibold text-slate-700">
               Cancelación gratis (horas)

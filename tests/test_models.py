@@ -3,6 +3,7 @@ Tests for database models — validates schema creation, constraints, relationsh
 """
 import pytest
 from datetime import date, datetime, timezone
+from sqlalchemy import ForeignKeyConstraint
 
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest, GuestCompanion, DocumentTypeEnum
@@ -118,10 +119,14 @@ class TestReservationModel:
         # From PENDING
         assert ReservationStatusEnum.DEPOSIT_PAID in VALID_TRANSITIONS[ReservationStatusEnum.PENDING]
         assert ReservationStatusEnum.FULLY_PAID in VALID_TRANSITIONS[ReservationStatusEnum.PENDING]
+        assert ReservationStatusEnum.PRE_CHECK_IN in VALID_TRANSITIONS[ReservationStatusEnum.PENDING]
+        assert ReservationStatusEnum.CHECKED_IN in VALID_TRANSITIONS[ReservationStatusEnum.PENDING]
         assert ReservationStatusEnum.CANCELLED in VALID_TRANSITIONS[ReservationStatusEnum.PENDING]
 
         # From DEPOSIT_PAID
         assert ReservationStatusEnum.FULLY_PAID in VALID_TRANSITIONS[ReservationStatusEnum.DEPOSIT_PAID]
+        assert ReservationStatusEnum.PRE_CHECK_IN in VALID_TRANSITIONS[ReservationStatusEnum.DEPOSIT_PAID]
+        assert ReservationStatusEnum.CHECKED_IN in VALID_TRANSITIONS[ReservationStatusEnum.DEPOSIT_PAID]
         assert ReservationStatusEnum.CANCELLED in VALID_TRANSITIONS[ReservationStatusEnum.DEPOSIT_PAID]
 
         # From FULLY_PAID
@@ -154,7 +159,8 @@ class TestReservationModel:
         db.flush()
 
         assert res.can_transition_to(ReservationStatusEnum.DEPOSIT_PAID) is True
-        assert res.can_transition_to(ReservationStatusEnum.CHECKED_IN) is False
+        # Free check-in is authorized by the service policy/date gate.
+        assert res.can_transition_to(ReservationStatusEnum.CHECKED_IN) is True
         assert res.can_transition_to(ReservationStatusEnum.CHECKED_OUT) is False
 
     def test_reservation_balance_due(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -195,6 +201,19 @@ class TestReservationModel:
 
 class TestTransactionModel:
     """Tests for Transaction model."""
+
+    def test_refund_lineage_is_tenant_scoped(self):
+        constraint = next(
+            item
+            for item in Transaction.__table__.constraints
+            if isinstance(item, ForeignKeyConstraint)
+            and item.name == "fk_transactions_refund_source_same_hotel"
+        )
+        assert [column.name for column in constraint.columns] == ["hotel_id", "refund_of_transaction_id"]
+        assert [element.target_fullname for element in constraint.elements] == [
+            "transactions.hotel_id",
+            "transactions.id",
+        ]
 
     def test_create_transaction(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         """Create a transaction and verify attributes."""

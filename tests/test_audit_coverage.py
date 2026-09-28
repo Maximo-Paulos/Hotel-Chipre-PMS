@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from starlette.requests import Request
 
 from app.api.daily_rates import DailyRateIn, upsert_daily_rate
 from app.api.guests import update_guest
@@ -17,6 +18,24 @@ from app.models.room import Room, RoomCategory
 from app.models.user import User
 from app.schemas.guest import GuestUpdate
 from app.schemas.room import RoomUpdate
+
+
+def _post_request(path: str) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "http",
+            "path": path,
+            "raw_path": path.encode(),
+            "query_string": b"",
+            "headers": [],
+            "client": ("testclient", 50000),
+            "server": ("testserver", 80),
+        }
+    )
 
 
 def _hotel(db, hotel_id: int = 1) -> HotelConfiguration:
@@ -146,7 +165,12 @@ def test_reservation_cancel_creates_audit_log(db):
     _user(db, 9101)
     reservation = _reservation(db)
 
-    result = cancel_reservation(reservation.id, db=db, context=_context())
+    result = cancel_reservation(
+        reservation.id,
+        request=_post_request(f"/api/reservations/{reservation.id}/cancel"),
+        db=db,
+        context=_context(),
+    )
 
     audit = _audit_for(db, table_name="reservations", record_id=result.id)
     assert audit is not None
@@ -222,7 +246,12 @@ def test_reservation_cancel_succeeds_when_audit_write_fails(db, monkeypatch):
 
     monkeypatch.setattr("app.services.audit_log_service.create_audit_log", raise_audit)
 
-    cancel_reservation(reservation.id, db=db, context=_context())
+    cancel_reservation(
+        reservation.id,
+        request=_post_request(f"/api/reservations/{reservation.id}/cancel"),
+        db=db,
+        context=_context(),
+    )
 
     assert db.get(Reservation, reservation.id).status == ReservationStatusEnum.CANCELLED
 

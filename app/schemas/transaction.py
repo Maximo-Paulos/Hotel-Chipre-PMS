@@ -1,7 +1,7 @@
 """
 Pydantic schemas for Transaction / Payments.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime
 from app.models.transaction import PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
@@ -15,6 +15,25 @@ class PaymentRequest(BaseModel):
     transaction_type: TransactionTypeEnum
     currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     description: Optional[str] = None
+    manual_reference: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    refund_of_transaction_id: Optional[int] = Field(default=None, gt=0)
+    refund_reason: Optional[str] = Field(default=None, min_length=1, max_length=240)
+
+    @field_validator("manual_reference")
+    @classmethod
+    def normalize_manual_reference(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @field_validator("refund_reason")
+    @classmethod
+    def normalize_refund_reason(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
 
 class TransactionRead(BaseModel):
@@ -28,6 +47,9 @@ class TransactionRead(BaseModel):
     status: TransactionStatusEnum
     external_payment_id: Optional[str]
     external_status: Optional[str]
+    manual_reference: Optional[str] = None
+    refund_of_transaction_id: Optional[int] = None
+    refund_reason: Optional[str] = None
     description: Optional[str]
     created_at: Optional[datetime]
     processed_at: Optional[datetime]

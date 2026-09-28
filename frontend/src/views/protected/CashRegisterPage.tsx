@@ -75,6 +75,7 @@ export function CashRegisterPage() {
   const canApproveDifference = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
   const canReceiveCustody = session.baseRole === "owner";
   const canOperateCash = hasPermission("cash:operate");
+  const canRecordCashExpense = hasPermission("cash:expense");
 
   // Authoritative figures come from the backend summary (same logic as the
   // arqueo), so the displayed "Esperado" always matches what the close computes.
@@ -549,7 +550,7 @@ export function CashRegisterPage() {
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 >
                   <option value="income">Ingreso</option>
-                  <option value="expense">Egreso</option>
+                  <option value="expense" disabled={!canRecordCashExpense}>Egreso manual (responsable + MFA)</option>
                   <option value="adjustment">Ajuste</option>
                 </select>
               </label>
@@ -572,10 +573,15 @@ export function CashRegisterPage() {
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 />
               </label>
+              {movementForm.movement_type === "expense" && !canRecordCashExpense ? (
+                <p className="text-xs text-amber-800 md:col-span-2">
+                  Los egresos manuales requieren autorización de responsable y MFA. Las devoluciones a huéspedes se registran desde el flujo de reembolso.
+                </p>
+              ) : null}
               <div className="md:col-span-2 flex justify-end">
                 <button
                   type="submit"
-                  disabled={busy || !canOperateCash || !selectedSession || selectedSession.status !== "open" || Number(movementForm.amount) <= 0}
+                  disabled={busy || !canOperateCash || (movementForm.movement_type === "expense" && !canRecordCashExpense) || !selectedSession || selectedSession.status !== "open" || Number(movementForm.amount) <= 0}
                   className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                 >
                   Registrar movimiento

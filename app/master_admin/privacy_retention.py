@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import re
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
@@ -112,6 +112,21 @@ class RetentionTargetRead(BaseModel):
     retention_anchor_at: datetime
 
 
+class PublicInquiryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: str
+    company_name: str | None
+    phone: str | None
+    message: str
+    source_path: str
+    privacy_consent_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+
 def _lock_hold_table_for_write(db: Session) -> None:
     """Use a consistent table-lock order with the scheduled purge function."""
     if db.get_bind().dialect.name == "postgresql":
@@ -149,12 +164,13 @@ def _effective(hold: PrivacyRetentionHold, now: datetime) -> bool:
 @router.get("/holds", response_model=list[RetentionHoldRead])
 def list_retention_holds(
     request: Request,
+    response: Response,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0, le=100_000),
     db: Session = Depends(get_db),
 ):
-    require_master_admin(request=request, db=db, write=False)
-    return (
+    context = require_master_admin(request=request, db=db, write=False)
+    rows = (
         db.query(PrivacyRetentionHold)
         .order_by(
             PrivacyRetentionHold.released_at.is_(None).desc(),
@@ -165,6 +181,18 @@ def list_retention_holds(
         .limit(limit)
         .all()
     )
+    audit_master_action(
+        db,
+        actor_user_id=context.user.id,
+        action="privacy_retention_hold_list",
+        target_type="privacy_retention_hold",
+        metadata={"result_count": len(rows), "limit": limit, "offset": offset},
+        request=request,
+    )
+    db.commit()
+    response.headers["Cache-Control"] = "private, no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return rows
 
 
 @router.post("/targets/search", response_model=list[RetentionTargetRead])
@@ -180,7 +208,7 @@ def search_retention_targets(
         write=True,
     )
     model = _target_model(payload.resource_type)
-    retention_anchor_column = model.updated_at if model is MarketingLead else model.created_at
+    retention_anchor_column = model.updated_at
     query = db.query(model.id, model.email, retention_anchor_column.label("retention_anchor_at"))
     if payload.query.isdecimal():
         query = query.filter(model.id == int(payload.query))
@@ -208,6 +236,45 @@ def search_retention_targets(
         )
         for row in rows
     ]
+
+
+@router.get("/inquiries/{inquiry_id}", response_model=PublicInquiryRead)
+def read_public_inquiry(
+    inquiry_id: int,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    context = require_master_admin(request=request, db=db, write=False)
+    inquiry = db.query(PublicInquiry).filter(PublicInquiry.id == inquiry_id).first()
+    if inquiry is None:
+        audit_master_action(
+            db,
+            actor_user_id=context.user.id,
+            action="privacy_retention_inquiry_read",
+            outcome="not_found",
+            target_type="public_inquiry",
+            target_id=str(inquiry_id),
+            metadata={"record_id": inquiry_id},
+            request=request,
+        )
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Public inquiry not found")
+
+    audit_master_action(
+        db,
+        actor_user_id=context.user.id,
+        action="privacy_retention_inquiry_read",
+        outcome="success",
+        target_type="public_inquiry",
+        target_id=str(inquiry.id),
+        metadata={"record_id": inquiry.id},
+        request=request,
+    )
+    db.commit()
+    response.headers["Cache-Control"] = "private, no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return inquiry
 
 
 @router.post("/holds", response_model=RetentionHoldRead, status_code=status.HTTP_201_CREATED)

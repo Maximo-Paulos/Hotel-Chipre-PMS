@@ -12,6 +12,7 @@ from typing import Iterable
 from sqlalchemy.orm import Session
 
 from app.models.operations import BillingAdjustment
+from app.models.reservation import Reservation
 from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
 
 
@@ -56,15 +57,143 @@ def completed_paid_amount(db: Session, hotel_id: int, reservation_id: int) -> De
     )
 
 
+def paid_amounts_by_reservation(
+    db: Session,
+    hotel_id: int,
+    reservation_ids: Iterable[int] | None = None,
+) -> dict[int, Decimal]:
+    """Bulk guest-balance credits: confirmed OTA amounts plus local payments.
+
+    Legacy non-OTA caches are retained only when there is no transaction
+    history. External OTA credits are deliberately excluded from the cash and
+    hotel-receipt reports, which use ``completed_paid_amounts_by_reservation``.
+    """
+    ids = tuple(reservation_ids) if reservation_ids is not None else None
+    if ids == ():
+        return {}
+    completed = completed_paid_amounts_by_reservation(db, hotel_id, ids)
+    reservations_query = db.query(
+        Reservation.id,
+        Reservation.source_provider_code,
+        Reservation.external_id,
+        Reservation.amount_paid,
+        Reservation.external_paid_amount,
+        Reservation.external_paid_confirmed,
+    ).filter(Reservation.hotel_id == hotel_id)
+    transactions_query = db.query(Transaction.reservation_id).filter(
+        Transaction.hotel_id == hotel_id
+    )
+    if ids is not None:
+        reservations_query = reservations_query.filter(Reservation.id.in_(ids))
+        transactions_query = transactions_query.filter(Transaction.reservation_id.in_(ids))
+    rows = reservations_query.all()
+    has_transactions = {reservation_id for (reservation_id,) in transactions_query.distinct().all()}
+
+    result: dict[int, Decimal] = {}
+    for row in rows:
+        ledger_paid = completed.get(row.id, Decimal("0.00"))
+        is_ota_reservation = bool(row.source_provider_code or row.external_id)
+        if is_ota_reservation:
+            external_paid = (
+                Decimal(str(row.external_paid_amount or 0))
+                if row.external_paid_confirmed
+                else Decimal("0.00")
+            )
+            result[row.id] = (ledger_paid + external_paid).quantize(Decimal("0.01"))
+        elif row.id in has_transactions:
+            result[row.id] = ledger_paid
+        else:
+            result[row.id] = Decimal(str(row.amount_paid or 0)).quantize(Decimal("0.01"))
+    return result
+
+
+def reconciled_paid_amounts_by_reservation(
+    db: Session,
+    hotel_id: int,
+    reservation_ids: Iterable[int] | None = None,
+) -> dict[int, Decimal]:
+    """Return evidenced paid totals without legacy-cache fallback.
+
+    Completed local ledger transactions are authoritative. For OTA reservations,
+    explicitly confirmed external credits are added; inferred/unconfirmed
+    historical amounts and ``amount_paid`` compatibility caches are excluded so
+    reconciliation can surface records that need operator review.
+    """
+    ids = tuple(reservation_ids) if reservation_ids is not None else None
+    totals = completed_paid_amounts_by_reservation(db, hotel_id, ids)
+    query = db.query(
+        Reservation.id,
+        Reservation.source_provider_code,
+        Reservation.external_id,
+        Reservation.external_paid_amount,
+        Reservation.external_paid_confirmed,
+    ).filter(Reservation.hotel_id == hotel_id)
+    if ids is not None:
+        if not ids:
+            return {}
+        query = query.filter(Reservation.id.in_(ids))
+    for row in query.all():
+        if (
+            (row.source_provider_code or row.external_id)
+            and row.external_paid_confirmed
+        ):
+            totals[row.id] = (
+                totals.get(row.id, Decimal("0.00"))
+                + Decimal(str(row.external_paid_amount or 0))
+            ).quantize(Decimal("0.01"))
+    return totals
+
+
 def paid_amount_with_legacy_fallback(db: Session, hotel_id: int, reservation) -> Decimal:
-    """Read the ledger, falling back only for imported rows with no transactions."""
+    """Return confirmed OTA credits plus the net completed in-house ledger.
+
+    OTA payments are a reservation-level external credit rather than hotel cash
+    transactions. Legacy non-OTA rows still use ``amount_paid`` only when no
+    transaction history exists.
+    """
+    completed_ledger = completed_paid_amount(db, hotel_id, reservation.id)
+    is_ota_reservation = bool(
+        getattr(reservation, "source_provider_code", None)
+        or getattr(reservation, "external_id", None)
+    )
+    if is_ota_reservation:
+        external_paid = (
+            Decimal(str(getattr(reservation, "external_paid_amount", 0) or 0))
+            if bool(getattr(reservation, "external_paid_confirmed", False))
+            else Decimal("0.00")
+        )
+        return (completed_ledger + external_paid).quantize(Decimal("0.01"))
+
     has_transactions = db.query(Transaction.id).filter(
         Transaction.hotel_id == hotel_id,
         Transaction.reservation_id == reservation.id,
     ).first()
     if has_transactions is None:
         return Decimal(str(reservation.amount_paid or 0)).quantize(Decimal("0.01"))
-    return completed_paid_amount(db, hotel_id, reservation.id)
+    return completed_ledger
+
+
+def has_payment_history_for_cancellation(db: Session, hotel_id: int, reservation) -> bool:
+    """Whether cancellation needs the paid-reservation control.
+
+    Completed ledger rows include fully refunded reservations, which still
+    need an accountable cancellation. Imported legacy reservations may have a
+    materialized ``amount_paid`` but no transaction rows, so retain the
+    compatibility fallback for those records.
+    """
+    if bool(getattr(reservation, "external_paid_ever_confirmed", False)) or Decimal(
+        str(getattr(reservation, "external_paid_amount", 0) or 0)
+    ) > Decimal("0.00"):
+        return True
+
+    completed_payment = db.query(Transaction.id).filter(
+        Transaction.hotel_id == hotel_id,
+        Transaction.reservation_id == reservation.id,
+        Transaction.status == TransactionStatusEnum.COMPLETED,
+    ).first()
+    if completed_payment is not None:
+        return True
+    return paid_amount_with_legacy_fallback(db, hotel_id, reservation) > Decimal("0.00")
 
 
 def billing_adjustment_totals_by_reservation(

@@ -5,13 +5,15 @@ from datetime import date
 import pytest
 
 from app.models.guest import Guest
+from app.models.cash_register import CashMovement
 from app.models.operations import RoomMoveEvent, RoomMoveTypeEnum, RoomMovementGroup
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room
-from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
+from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.schemas.transaction import PaymentRequest
-from app.services.reservation_operations_service import extend_reservation_stay
+from app.services.reservation_operations_service import ReservationOperationsError, extend_reservation_stay
 from app.services.cash_register_service import open_session
+from app.services.payment_service import process_payment
 
 
 @pytest.fixture(autouse=True)
@@ -204,6 +206,100 @@ def test_paid_future_conflict_reports_conflict_and_extension_does_not_proceed(db
     assert result.conflicts[0]["reservation_id"] == future.id
     assert result.conflicts[0]["reason"] == "future_reservation_has_payment_or_deposit"
     assert db.query(RoomMovementGroup).count() == 0
+
+
+def test_extension_card_payment_with_pos_reference_is_completed_and_audited(db, sample_guest, sample_rooms):
+    reservation = _reservation(
+        db,
+        code="EXT-MANUAL-CARD",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 1, 1),
+        check_out=date(2028, 1, 4),
+        total_amount=300.0,
+        amount_paid=0.0,
+    )
+    initial_payment = process_payment(
+        db,
+        PaymentRequest(
+            reservation_id=reservation.id,
+            amount=300.0,
+            payment_method=PaymentMethodEnum.CREDIT_CARD,
+            transaction_type=TransactionTypeEnum.FULL_PAYMENT,
+            currency="ARS",
+            manual_reference="POS-BASE-2028-001",
+        ),
+        hotel_id=sample_guest.hotel_id,
+        actor_user_id=1,
+        manual_confirmation=True,
+    )
+    assert initial_payment.status == TransactionStatusEnum.COMPLETED
+
+    extension_payment = PaymentRequest(
+        reservation_id=reservation.id,
+        amount=200.0,
+        payment_method=PaymentMethodEnum.CREDIT_CARD,
+        transaction_type=TransactionTypeEnum.BALANCE_PAYMENT,
+        currency="ARS",
+        manual_reference="POS-EXT-2028-001",
+    )
+    result = extend_reservation_stay(
+        db,
+        reservation=reservation,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2028, 1, 6),
+        client_version=reservation.version or 0,
+        pricing_mode="original_average",
+        payment_action="immediate_payment",
+        immediate_payment=extension_payment,
+        changed_by_user_id=27,
+    )
+
+    assert result.success is True
+    assert result.transaction is not None
+    assert result.transaction.status == TransactionStatusEnum.COMPLETED
+    assert result.transaction.manual_reference == "POS-EXT-2028-001"
+    assert result.transaction.created_by_user_id == 27
+    assert reservation.amount_paid == 500.0
+    # Card receipts never enter the physical cash drawer.
+    assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 2
+    assert db.query(CashMovement).count() == 0
+
+
+def test_extension_manual_card_payment_requires_reference_before_mutating_stay(db, sample_guest, sample_rooms):
+    reservation = _reservation(
+        db,
+        code="EXT-MANUAL-CARD-NO-REF",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 2, 1),
+        check_out=date(2028, 2, 4),
+        total_amount=300.0,
+        amount_paid=300.0,
+        status=ReservationStatusEnum.FULLY_PAID,
+    )
+    extension_payment = PaymentRequest(
+        reservation_id=reservation.id,
+        amount=200.0,
+        payment_method=PaymentMethodEnum.CREDIT_CARD,
+        transaction_type=TransactionTypeEnum.BALANCE_PAYMENT,
+        currency="ARS",
+    )
+
+    with pytest.raises(ReservationOperationsError, match="referencia"):
+        extend_reservation_stay(
+            db,
+            reservation=reservation,
+            hotel_id=sample_guest.hotel_id,
+            new_checkout_date=date(2028, 2, 6),
+            client_version=reservation.version or 0,
+            pricing_mode="original_average",
+            payment_action="immediate_payment",
+            immediate_payment=extension_payment,
+        )
+
+    assert reservation.check_out_date == date(2028, 2, 4)
+    assert reservation.total_amount == 300.0
 
 
 def test_no_future_conflict_extends_normally(db, sample_guest, sample_rooms):

@@ -160,8 +160,11 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         legacy_codes = set(LEGACY_PERMISSION_ALIASES)
 
         # New role-only business actions are named capabilities in the catalog.
-        assert len(canonical_codes) == 96
+        assert len(canonical_codes) == 100
         assert {"payment:proof:view", "payment:proof:review"} <= canonical_codes
+        assert {"payment:refund", "reservation:cancel_paid"} <= canonical_codes
+        assert "cash:expense" in canonical_codes
+        assert "payment:ota_confirm" in canonical_codes
         assert {code for code in canonical_codes if code.startswith("whatsapp:")} == {
             "whatsapp:inbox:view", "whatsapp:inbox:all", "whatsapp:message:send",
             "whatsapp:note:manage", "whatsapp:conversation:assign", "whatsapp:conversation:close",
@@ -177,8 +180,21 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
                 assert cell["help_es"] == _CANONICAL_DEFINITIONS[code][2]
         for role in ("owner", "co_owner", "manager"):
             assert matrix[role]["payment:proof:review"]["allowed"] is True
+        assert matrix["manager"]["reservation:charge"]["allowed"] is True
+        assert matrix["manager"]["cash:operate"]["allowed"] is True
+        assert matrix["manager"]["payment:refund"]["allowed"] is True
+        assert matrix["manager"]["reservation:cancel_paid"]["allowed"] is True
+        assert matrix["manager"]["cash:expense"]["allowed"] is True
+        assert matrix["co_owner"]["cash:expense"]["allowed"] is True
+        assert matrix["manager"]["payment:ota_confirm"]["allowed"] is True
+        assert matrix["co_owner"]["payment:ota_confirm"]["allowed"] is True
         for role in ("receptionist", "housekeeping"):
             assert matrix[role]["payment:proof:review"]["allowed"] is False
+            assert matrix[role]["payment:refund"]["allowed"] is False
+            assert matrix[role]["reservation:cancel_paid"]["allowed"] is False
+            assert matrix[role]["payment:ota_confirm"]["allowed"] is False
+        assert matrix["housekeeping"]["whatsapp:inbox:view"]["allowed"] is False
+        assert matrix["housekeeping"]["whatsapp:note:manage"]["allowed"] is False
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()
@@ -254,6 +270,8 @@ def test_permission_catalog_exposes_owner_only_normal_metadata_and_help_text():
         assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["critical"] is False
         assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["step_up_required"] is True
         assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["delegable"] is True
+        assert catalog["cash:expense"]["step_up_required"] is True
+        assert catalog["payment:ota_confirm"]["step_up_required"] is True
 
         for code in (PERMISSION_GUEST_CREATE, PERMISSION_RESERVATION_CREATE, PERMISSION_ROOM_STATUS_UPDATE):
             assert catalog[code]["critical"] is False

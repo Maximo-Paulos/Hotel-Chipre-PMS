@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from tests.smoke.helpers import register_owner, seed_operational_reservation
 from app.models.reservation import ReservationStatusEnum
 from app.dependencies.auth import AuthContext, get_auth_context
+from app.services import checkin_service
 import app.main as main_module
 
 
-def test_reservation_checkin_checkout_smoke(client, engine):
+def test_reservation_checkin_checkout_smoke(client, engine, monkeypatch):
+    monkeypatch.setattr(checkin_service, "hotel_today", lambda *_: date.today() + timedelta(days=1))
     headers, hotel_id = register_owner(client, "reservation-ops-owner@example.com")
     seeded = seed_operational_reservation(
         engine,
@@ -29,12 +33,13 @@ def test_reservation_checkin_checkout_smoke(client, engine):
     assert checkout.json()["status"] == "checked_out"
 
 
-def test_housekeeping_cannot_checkout_reservation(client, engine):
+def test_housekeeping_cannot_checkout_reservation(client, engine, monkeypatch):
     """POST /api/checkin/checkout only enforced authentication (get_auth_context),
     not PERMISSION_CHECKIN_PERFORM like its sibling POST /api/checkin/{id} does.
     housekeeping has checkin:perform=False in the role matrix (V72 SS17) but could
     still call this endpoint directly and close out any guest's stay.
     """
+    monkeypatch.setattr(checkin_service, "hotel_today", lambda *_: date.today() + timedelta(days=1))
     headers, hotel_id = register_owner(client, "reservation-ops-owner-hk@example.com")
     seeded = seed_operational_reservation(
         engine,

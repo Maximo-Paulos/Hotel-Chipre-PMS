@@ -5,7 +5,7 @@ Complete CRUD + cancel, modify, no-show, extend stay.
 import logging
 from datetime import date
 from typing import Literal
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -81,13 +81,16 @@ from app.services.ota_manual_service import (
     release_no_guarantee,
 )
 from app.services.payment_service import PaymentError
+from app.services.financial_ledger import has_payment_history_for_cancellation
 from app.services.allocation_runtime_service import run_persisted_allocation
-from app.dependencies.auth import AuthContext, get_auth_context, require_all_permissions, require_any_permission, require_permission
+from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_all_permissions, require_any_permission, require_permission
 from app.services.permission_service import (
     PERMISSION_CASH_OPERATE,
     PERMISSION_COMPANY_MANAGE,
     PERMISSION_GUEST_CREATE,
     PERMISSION_RESERVATION_CANCEL,
+    PERMISSION_RESERVATION_CANCEL_PAID,
+    PERMISSION_OTA_PAYMENT_CONFIRM,
     PERMISSION_RESERVATION_CHARGE,
     PERMISSION_RESERVATION_CREATE,
     PERMISSION_RESERVATION_MANUAL_RATE,
@@ -314,6 +317,7 @@ def create_new_reservation(
 @router.post("/manual-ota", response_model=ReservationRead, status_code=status.HTTP_201_CREATED)
 def create_or_update_manual_ota(
     data: ManualOTAReservationCreate,
+    request: Request,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(
         require_all_permissions(PERMISSION_RESERVATION_CREATE, PERMISSION_RESERVATION_UPDATE)
@@ -327,6 +331,11 @@ def create_or_update_manual_ota(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Suscripción inactiva. Reactivá el plan para crear nuevas reservas.",
         )
+    if data.amount_paid is not None:
+        # Any explicit edit (including reducing a previous OTA credit) changes
+        # financial history, so require the separate manager-level, MFA-bound
+        # capability before acquiring the reservation lock below.
+        authorize_permission(request, db, context, PERMISSION_OTA_PAYMENT_CONFIRM)
     existing = (
         db.query(Reservation)
         .filter(
@@ -334,6 +343,12 @@ def create_or_update_manual_ota(
             Reservation.source_provider_code == data.channel.strip().lower(),
             Reservation.external_id == data.external_id.strip(),
         )
+        # Payment processing locks this same tenant-scoped reservation row.
+        # Refresh and acquire that lock before checking whether a receptionist
+        # may change paid dates/occupancy, so a concurrent payment cannot land
+        # between the authorization decision and the mutation.
+        .populate_existing()
+        .with_for_update()
         .first()
     )
     if existing is not None:
@@ -702,6 +717,7 @@ def add_reservation_guests(
 @router.post("/{reservation_id}/cancel", response_model=ReservationRead)
 def cancel_reservation(
     reservation_id: int,
+    request: Request,
     manager_pin: str | None = None,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
@@ -742,7 +758,17 @@ def cancel_reservation(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Suscripción inactiva. Reactivá el plan para gestionar reservas.",
         )
-    r = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    r = (
+        db.query(Reservation)
+        .filter(
+            Reservation.id == reservation_id,
+            Reservation.hotel_id == context.hotel_id,
+            Reservation.deleted_at.is_(None),
+        )
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
     if not r:
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
@@ -760,6 +786,32 @@ def cancel_reservation(
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(status_code=400, detail="Reservation is already cancelled")
+
+    requires_paid_cancel_approval = has_payment_history_for_cancellation(db, context.hotel_id, r)
+    if requires_paid_cancel_approval:
+        authorize_permission(request, db, context, PERMISSION_RESERVATION_CANCEL_PAID)
+        # Consuming the one-use step-up ticket commits its own transaction and
+        # releases this row lock. Reacquire the row and revalidate its lifecycle
+        # state before performing the protected mutation.
+        r = (
+            db.query(Reservation)
+            .filter(
+                Reservation.id == reservation_id,
+                Reservation.hotel_id == context.hotel_id,
+                Reservation.deleted_at.is_(None),
+            )
+            .populate_existing()
+            .with_for_update()
+            .first()
+        )
+        if not r:
+            raise HTTPException(status_code=404, detail="Reservation not found")
+        if r.status in (
+            ReservationStatusEnum.CHECKED_IN,
+            ReservationStatusEnum.CHECKED_OUT,
+            ReservationStatusEnum.CANCELLED,
+        ):
+            raise HTTPException(status_code=409, detail="Reservation changed while approval was being verified")
 
     if not permission_allowed:
         try:
@@ -883,6 +935,11 @@ def release_no_guarantee_reservation(
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
+    if reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=r):
+        raise HTTPException(
+            status_code=409,
+            detail="An OTA reservation with payment history cannot be released as no-guarantee",
+        )
     before = audit_log_service.model_snapshot(r)
     try:
         release_no_guarantee(
@@ -1338,6 +1395,14 @@ def rebook_ota_to_direct(
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
+    if reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=reservation):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This reservation has payment history. Rebooking does not transfer or reconcile payments; "
+                "resolve the financial balance before converting it to a direct booking."
+            ),
+        )
     try:
         result = rebook_ota_reservation_as_direct(
             db,

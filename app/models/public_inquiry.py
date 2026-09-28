@@ -4,7 +4,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Enum, Index, Integer, String, Text
+from sqlalchemy import Column, DateTime, Enum, Index, Integer, String, Text, func
 
 from app.database import Base
 
@@ -39,6 +39,13 @@ class PublicInquiry(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        server_default=func.now(),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
     notification_status = Column(
         Enum(
             PublicInquiryNotificationStatus,
@@ -52,4 +59,7 @@ class PublicInquiry(Base):
     notified_at = Column(DateTime, nullable=True)
     notification_error_type = Column(String(80), nullable=True)
 
-    __table_args__ = (Index("ix_public_inquiries_created_at", "created_at"),)
+    __table_args__ = (
+        Index("ix_public_inquiries_created_at", "created_at"),
+        Index("ix_public_inquiries_updated_at", "updated_at"),
+    )

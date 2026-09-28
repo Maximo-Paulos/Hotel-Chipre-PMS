@@ -95,7 +95,7 @@ export function ContactPage() {
               <div>
                 <h2 className="font-semibold text-slate-950">Tus datos quedan asociados a esta consulta</h2>
                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                  Usamos la información para responderte y gestionar el contacto comercial. La consulta se elimina automáticamente en el ciclo diario posterior a 90 días. Consultá la{" "}
+                  Usamos la información para responderte y gestionar el contacto comercial. La consulta se elimina automáticamente en el ciclo diario posterior a 90 días desde su última actualización, salvo obligación legal. El aviso por correo no incluye tus datos personales. Consultá la{" "}
                   <Link to="/privacy" className="text-brand-700 underline underline-offset-2">Política de Privacidad</Link>.
                 </p>
               </div>
@@ -143,7 +143,7 @@ export function ContactPage() {
             <MarketingIcon name="arrow-right" size={18} />
             {isSubmitting ? "Enviando consulta…" : "Enviar consulta"}
           </button>
-          <p className="mt-3 text-center text-xs leading-5 text-slate-500">Al enviar, la consulta se elimina automáticamente en el ciclo diario posterior a 90 días y se intenta notificar al destinatario comercial configurado.</p>
+          <p className="mt-3 text-center text-xs leading-5 text-slate-500">Al enviar, la consulta se elimina automáticamente en el ciclo diario posterior a 90 días desde su última actualización, salvo obligación legal. El destinatario comercial recibe un aviso sin tus datos personales.</p>
         </form>
       </section>
     </MarketingShell>

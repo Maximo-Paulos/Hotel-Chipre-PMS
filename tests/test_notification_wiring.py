@@ -14,6 +14,7 @@ from app.models.notification import NotificationOutbox
 from app.models.user import User
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.checkin_service import perform_checkin, perform_checkout
+from app.services import checkin_service
 from app.services.guest_restriction_service import create_guest_restriction, resolve_guest_restriction
 from app.services.reservation_service import (
     create_reservation,
@@ -72,7 +73,8 @@ def test_no_show_enqueues_notification(db, sample_guest, sample_rooms, sample_ca
     assert "reservation.no_show" in _outbox_event_types(db)
 
 
-def test_checkin_checkout_enqueue_notifications(db, sample_guest, sample_rooms, sample_categories, hotel_config):
+def test_checkin_checkout_enqueue_notifications(db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch):
+    monkeypatch.setattr(checkin_service, "hotel_today", lambda *_: date(2026, 4, 1))
     _owner(db)
     data = ReservationCreate(
         guest_id=sample_guest.id, category_id=sample_categories[0].id,

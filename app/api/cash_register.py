@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_permission
+from app.models.cash_register import CashMovementTypeEnum
 from app.schemas.cash_register import (
     CashCloseReportRead,
     CashMovementCreate,
@@ -33,6 +34,7 @@ from app.services.cash_register_service import (
 from app.services.permission_service import (
     PERMISSION_CASH_APPROVE_DIFFERENCE,
     PERMISSION_CASH_CUSTODY_RECEIVE,
+    PERMISSION_CASH_EXPENSE,
     PERMISSION_CASH_OPERATE,
     PERMISSION_CASH_VIEW,
 )
@@ -236,10 +238,13 @@ def latest_cash_close_report(
 def add_cash_movement(
     session_id: int,
     payload: CashMovementCreate,
+    request: Request,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
 ):
     try:
+        if payload.movement_type == CashMovementTypeEnum.EXPENSE:
+            authorize_permission(request, db, context, PERMISSION_CASH_EXPENSE)
         movement = add_movement(
             db,
             hotel_id=context.hotel_id,

@@ -5,7 +5,7 @@ Supports: Efectivo (Cash), MercadoPago, PayPal, Credit/Debit Card.
 import enum
 from sqlalchemy import (
     Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime,
-    CheckConstraint, ForeignKeyConstraint, Index, UniqueConstraint
+    CheckConstraint, ForeignKeyConstraint, Index, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -96,6 +96,11 @@ class Transaction(Base):
     # External payment gateway references
     external_payment_id = Column(String(200), nullable=True)  # MP preference_id, PayPal order_id
     external_status = Column(String(50), nullable=True)       # Gateway-reported status
+    # In-person card/debit/bank-transfer operation or voucher number entered
+    # by the authenticated staff member who verified receipt.
+    manual_reference = Column(String(120), nullable=True)
+    refund_of_transaction_id = Column(Integer, nullable=True)
+    refund_reason = Column(String(240), nullable=True)
     gateway_response = Column(Text, nullable=True)            # Full JSON response from gateway
     # Idempotency: dedupe gateway-driven transactions (hotel_id, reservation_id, idempotency_key)
     idempotency_key = Column(String(100), nullable=True)
@@ -132,6 +137,16 @@ class Transaction(Base):
             sqlite_where=idempotency_key.isnot(None),
             postgresql_where=idempotency_key.isnot(None),
         ),
+        # A manual receipt/operation reference cannot be credited twice within
+        # a hotel/payment method, even if the caller changes its idempotency key.
+        Index(
+            "uq_transactions_manual_reference_hotel_method",
+            "hotel_id", "payment_method", func.lower(manual_reference),
+            unique=True,
+            sqlite_where=manual_reference.isnot(None),
+            postgresql_where=manual_reference.isnot(None),
+        ),
+        Index("ix_transactions_refund_source_status", "hotel_id", "refund_of_transaction_id", "status"),
         Index("ix_transactions_hotel_status_created_at", "hotel_id", "status", "created_at"),
         Index(
             "ix_transactions_hotel_processed_status_method",
@@ -143,6 +158,12 @@ class Transaction(Base):
             ["reservations.hotel_id", "reservations.id"],
             name="fk_transactions_hotel_reservation",
             ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "refund_of_transaction_id"],
+            ["transactions.hotel_id", "transactions.id"],
+            name="fk_transactions_refund_source_same_hotel",
+            ondelete="RESTRICT",
         ),
     )
 

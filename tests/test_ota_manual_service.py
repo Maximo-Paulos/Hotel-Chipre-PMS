@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 import app.main as main_module
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.payment import PaymentLink
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
@@ -324,6 +325,20 @@ def test_no_guarantee_ota_internal_release_does_not_call_provider_cancel(db, mon
         actor_user_id=7,
     )
     db.flush()
+    payment_link = PaymentLink(
+        hotel_id=1,
+        reservation_id=reservation.id,
+        link_code="ota-no-guarantee-release-link",
+        requested_amount=100,
+        recipient_email="ota-guest@example.test",
+        provider="mercado_pago",
+        status="pending",
+        execution_mode="provider",
+        payable=True,
+        external_checkout_url="https://mp.test/ota-no-guarantee-release-link",
+    )
+    db.add(payment_link)
+    db.flush()
 
     def fail_provider_cancel(*args, **kwargs):
         raise AssertionError("provider cancel API must not be called")
@@ -341,6 +356,8 @@ def test_no_guarantee_ota_internal_release_does_not_call_provider_cancel(db, mon
     assert released.status == ReservationStatusEnum.CANCELLED
     assert released.allocation_status == "internally_released"
     assert released.settlement_status == "internal_release_no_guarantee"
+    assert payment_link.status == "cancelled"
+    assert payment_link.payable is False
     assert db.query(SecurityAuditLog).filter_by(
         hotel_id=1,
         action="ota.no_guarantee.internal_release",

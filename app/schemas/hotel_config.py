@@ -1,7 +1,7 @@
 """
 Pydantic schemas for HotelConfiguration.
 """
-from typing import Optional, List
+from typing import Literal, Optional, List
 from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
@@ -22,6 +22,7 @@ def _normalize_currency(value: str) -> str:
 class HotelConfigRead(BaseModel):
     id: int
     deposit_percentage: float
+    checkin_payment_policy: Literal["deposit", "total", "free"]
     enable_full_payment: bool
     enable_deposit_payment: bool
     enable_cash: bool
@@ -55,6 +56,7 @@ class HotelConfigRead(BaseModel):
 
 class HotelConfigUpdate(BaseModel):
     deposit_percentage: Optional[float] = Field(default=None, ge=0, le=100)
+    checkin_payment_policy: Optional[Literal["deposit", "total", "free"]] = None
     enable_full_payment: Optional[bool] = None
     enable_deposit_payment: Optional[bool] = None
     enable_cash: Optional[bool] = None
@@ -81,6 +83,13 @@ class HotelConfigUpdate(BaseModel):
     no_show_cutoff_hours: Optional[int] = Field(default=None, ge=0, le=72)
     operational_report_recipients: Optional[List[str]] = None
     extra_policies: Optional[str] = None
+
+    @field_validator("checkin_payment_policy")
+    @classmethod
+    def reject_null_checkin_payment_policy(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            raise ValueError("checkin_payment_policy cannot be null")
+        return value
 
     @field_validator("hotel_timezone")
     @classmethod

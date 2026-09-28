@@ -136,10 +136,14 @@ VALID_TRANSITIONS: dict[ReservationStatusEnum, set[ReservationStatusEnum]] = {
     ReservationStatusEnum.PENDING: {
         ReservationStatusEnum.DEPOSIT_PAID,
         ReservationStatusEnum.FULLY_PAID,
+        ReservationStatusEnum.PRE_CHECK_IN,
+        ReservationStatusEnum.CHECKED_IN,
         ReservationStatusEnum.CANCELLED,
     },
     ReservationStatusEnum.DEPOSIT_PAID: {
         ReservationStatusEnum.FULLY_PAID,
+        ReservationStatusEnum.PRE_CHECK_IN,
+        ReservationStatusEnum.CHECKED_IN,
         ReservationStatusEnum.CANCELLED,
     },
     ReservationStatusEnum.FULLY_PAID: {
@@ -201,6 +205,15 @@ class Reservation(Base):
     # Financial
     total_amount = Column(Numeric(12, 2), nullable=False, default=0)
     amount_paid = Column(Numeric(12, 2), nullable=False, default=0)
+    # Payments credited by an external booking channel reduce the guest's
+    # operational balance but are not hotel cash or an in-app payment. Keep
+    # this source separate from the transaction ledger.
+    external_paid_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    external_paid_reference = Column(String(120), nullable=True)
+    external_paid_confirmed = Column(Boolean, nullable=False, default=False)
+    external_paid_ever_confirmed = Column(Boolean, nullable=False, default=False)
+    external_paid_confirmed_by_user_id = Column(Integer, nullable=True)
+    external_paid_confirmed_at = Column(DateTime, nullable=True)
     deposit_amount = Column(Numeric(12, 2), nullable=False, default=0)
     subtotal_amount = Column(Numeric(12, 2), nullable=False, default=0)
     tax_amount = Column(Numeric(12, 2), nullable=False, default=0)
@@ -367,6 +380,7 @@ class Reservation(Base):
         CheckConstraint("check_out_date > check_in_date", name="ck_reservation_dates"),
         CheckConstraint("total_amount >= 0", name="ck_reservation_total_positive"),
         CheckConstraint("amount_paid >= 0", name="ck_reservation_paid_positive"),
+        CheckConstraint("external_paid_amount >= 0", name="ck_reservation_external_paid_nonnegative"),
         CheckConstraint("subtotal_amount >= 0", name="ck_reservation_subtotal_positive"),
         CheckConstraint("tax_amount >= 0", name="ck_reservation_tax_positive"),
         CheckConstraint("fee_amount >= 0", name="ck_reservation_fee_positive"),

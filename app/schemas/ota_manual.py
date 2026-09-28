@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.reservation import _normalize_arrival_time_hint, _normalize_reservation_comment
 
@@ -35,6 +35,7 @@ class ManualOTAReservationCreate(BaseModel):
     quoted_amount_ars: Decimal | None = Field(default=None, ge=0)
     quoted_amount_usd: Decimal | None = Field(default=None, ge=0)
     amount_paid: Decimal | None = Field(default=None, ge=0)
+    external_paid_reference: str | None = Field(default=None, max_length=120)
     payment_collection_model: str = Field(default="hotel_collect", max_length=40)
     settlement_status: str | None = Field(default=None, max_length=40)
     client_version: int | None = Field(default=None, ge=0)
@@ -48,3 +49,17 @@ class ManualOTAReservationCreate(BaseModel):
     @classmethod
     def normalize_reservation_comment(cls, value: object) -> str | None:
         return _normalize_reservation_comment(value)
+
+    @field_validator("external_paid_reference", mode="before")
+    @classmethod
+    def normalize_external_paid_reference(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    @model_validator(mode="after")
+    def require_external_payment_reference(self):
+        if self.amount_paid is not None and self.amount_paid > 0 and not self.external_paid_reference:
+            raise ValueError("external_paid_reference is required when confirming a positive OTA payment")
+        return self

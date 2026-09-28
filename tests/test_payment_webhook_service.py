@@ -326,6 +326,41 @@ def test_verified_late_success_is_recorded_without_reopening_cancelled_link(
     assert link.cancelled_at is not None
 
 
+def test_verified_late_success_on_cancelled_reservation_is_recorded_for_manual_review(db):
+    reservation = _reservation(db)
+    link = _link(db, reservation)
+    cancel_link(db, 1, link.id, reason="reservation cancelled")
+    reservation.status = ReservationStatusEnum.CANCELLED
+    db.flush()
+
+    fetched = {
+        "id": "mp-payment-after-reservation-cancel",
+        "status": "approved",
+        "transaction_amount": 40.0,
+        "currency_id": "ARS",
+    }
+    result = ingest_webhook(
+        db,
+        hotel_id=1,
+        provider="mercado_pago",
+        webhook_id="mp-hook-after-reservation-cancel",
+        payload={"type": "payment", "data": {"id": "mp-payment-after-reservation-cancel"}},
+        payment_link_id=link.id,
+        provider_fetcher=lambda _db, _hotel_id, _payment_id: fetched,
+    )
+
+    assert result["status"] == "ok"
+    assert db.query(Transaction).one().status == TransactionStatusEnum.COMPLETED
+    db.refresh(reservation)
+    assert reservation.status == ReservationStatusEnum.CANCELLED
+    assert reservation.amount_paid == Decimal("40.00")
+    assert reservation.requires_manual_review is True
+    assert reservation.settlement_status == "review_cancellation"
+    db.refresh(link)
+    assert link.status == "cancelled"
+    assert link.payable is False
+
+
 def test_cancelled_payment_link_rejects_unverified_success_event(db):
     reservation = _reservation(db)
     link = _link(db, reservation)

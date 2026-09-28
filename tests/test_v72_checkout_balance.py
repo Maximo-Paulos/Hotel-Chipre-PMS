@@ -4,21 +4,31 @@ Tests for v72 check-out balance reconciliation.
 import pytest
 from datetime import date
 from decimal import Decimal
+from sqlalchemy import func
 
 from app.models.operations import BillingAdjustment, BillingAdjustmentTypeEnum
-from app.models.reservation import ReservationStatusEnum
+from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
 from app.schemas.reservation import ReservationCreate
 from app.schemas.transaction import PaymentRequest
 from app.services.checkin_service import CheckInError, perform_checkin, perform_checkout
+from app.services import checkin_service
 from app.services.payment_service import process_payment
 from app.services.reservation_service import create_reservation
 from app.services.cash_register_service import open_session
 
 
 @pytest.fixture(autouse=True)
-def opened_cash_register(db, hotel_config):
+def opened_cash_register(db, hotel_config, monkeypatch):
     """Checkout balance scenarios collect cash through an open caja."""
+    def hotel_day_for_test(session, hotel_id):
+        return (
+            session.query(func.max(Reservation.check_in_date))
+            .filter(Reservation.hotel_id == hotel_id)
+            .scalar()
+        ) or date(2027, 1, 1)
+
+    monkeypatch.setattr(checkin_service, "hotel_today", hotel_day_for_test)
     open_session(db, hotel_id=hotel_config.id, opened_by_user_id=None, opening_balance=0)
 
 

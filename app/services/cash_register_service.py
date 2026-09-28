@@ -105,12 +105,22 @@ def add_movement(
     description: str | None = None,
     reservation_id: int | None = None,
     transaction_id: int | None = None,
+    _from_payment_transaction: bool = False,
 ) -> CashMovement:
     """Add an income, expense, or adjustment into an open hotel cash session."""
 
     session = _require_open_session(db, hotel_id, session_id)
     if _money(amount) <= 0:
         raise CashRegisterError("Cash movement amount must be positive")
+
+    if not _from_payment_transaction and transaction_id is not None:
+        raise CashRegisterError("Transaction-linked cash movements are created by the payment workflow")
+    if (
+        not _from_payment_transaction
+        and movement_type == CashMovementTypeEnum.EXPENSE
+        and reservation_id is not None
+    ):
+        raise CashRegisterError("Guest refunds must use the audited payment-refund workflow")
 
     if transaction_id is not None:
         transaction = (
@@ -122,6 +132,18 @@ def add_movement(
             raise CashRegisterError("Transaction does not belong to this hotel")
         if reservation_id is not None and transaction.reservation_id != reservation_id:
             raise CashRegisterError("Transaction does not belong to the selected reservation")
+        if _from_payment_transaction:
+            from app.models.transaction import TransactionTypeEnum
+
+            if transaction.status != TransactionStatusEnum.COMPLETED or transaction.payment_method != PaymentMethodEnum.CASH:
+                raise CashRegisterError("Only completed cash transactions can create linked cash movements")
+            expected_movement_type = (
+                CashMovementTypeEnum.EXPENSE
+                if transaction.transaction_type == TransactionTypeEnum.REFUND
+                else CashMovementTypeEnum.INCOME
+            )
+            if movement_type != expected_movement_type:
+                raise CashRegisterError("Cash movement type does not match the payment transaction")
 
     movement = CashMovement(
         hotel_id=hotel_id,
@@ -220,6 +242,7 @@ def record_cash_payment_movement(
         description=description,
         reservation_id=transaction.reservation_id,
         transaction_id=transaction.id,
+        _from_payment_transaction=True,
     )
 
 

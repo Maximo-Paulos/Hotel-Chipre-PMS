@@ -5,16 +5,17 @@ Provides basic CRUD plus a simple availability placeholder.
 import logging
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.config import is_demo_environment_allowed, is_demo_mode
 from app.database import get_db
 from app.models.hotel_config import HotelConfiguration
 from app.services.timezones import hotel_today
-from app.dependencies.auth import AuthContext, get_auth_context, require_permission
+from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_permission
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.audit_log import AuditActionEnum
+from app.models.transaction import Transaction, TransactionStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
 from app.schemas.booking import BookingCreate, BookingRead, BookingUpdate
@@ -41,6 +42,7 @@ from app.services.graph_projection import project_company_link, project_reservat
 from app.services import audit_log_service
 from app.services.permission_service import (
     PERMISSION_RESERVATION_CANCEL,
+    PERMISSION_RESERVATION_CANCEL_PAID,
     PERMISSION_RESERVATION_CREATE,
     PERMISSION_RESERVATION_DELETE,
     PERMISSION_RESERVATION_DEMO_SEED,
@@ -64,6 +66,7 @@ from app.services.reservation_operations_service import (
     required_room_move_permission,
     reservation_has_payment_or_deposit,
 )
+from app.services.financial_ledger import has_payment_history_for_cancellation
 
 router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
 logger = logging.getLogger(__name__)
@@ -298,6 +301,7 @@ def get_booking(
 @router.post("/{booking_id}/cancel", response_model=BookingRead)
 def cancel_booking(
     booking_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
     temporary_grant_token: str | None = Header(default=None, alias="X-Temporary-Action-Grant"),
@@ -341,6 +345,8 @@ def cancel_booking(
             Reservation.hotel_id == context.hotel_id,
             Reservation.deleted_at.is_(None),
         )
+        .populate_existing()
+        .with_for_update()
         .first()
     )
     if not booking:
@@ -355,6 +361,34 @@ def cancel_booking(
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(status_code=400, detail="Booking is already cancelled")
+
+    requires_paid_cancel_approval = has_payment_history_for_cancellation(db, context.hotel_id, booking)
+    if requires_paid_cancel_approval:
+        authorize_permission(request, db, context, PERMISSION_RESERVATION_CANCEL_PAID)
+        # Consuming the one-use step-up ticket commits its own transaction,
+        # releasing the reservation row lock. Reacquire and revalidate before
+        # applying the cancellation so a concurrent state change cannot slip
+        # through the MFA round-trip.
+        booking = (
+            db.query(Reservation)
+            .filter(
+                Reservation.id == booking_id,
+                Reservation.hotel_id == context.hotel_id,
+                Reservation.deleted_at.is_(None),
+            )
+            .populate_existing()
+            .with_for_update()
+            .first()
+        )
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        if booking.status in (
+            ReservationStatusEnum.CHECKED_IN,
+            ReservationStatusEnum.CHECKED_OUT,
+            ReservationStatusEnum.CANCELLED,
+        ):
+            raise HTTPException(status_code=409, detail="Booking changed while approval was being verified")
+
     grant_consumed = False
     if not permission_allowed and temporary_grant_token:
         try:
@@ -797,6 +831,8 @@ def delete_booking(
             Reservation.hotel_id == context.hotel_id,
             Reservation.deleted_at.is_(None),
         )
+        .populate_existing()
+        .with_for_update()
         .first()
     )
     if not booking:
@@ -804,6 +840,11 @@ def delete_booking(
     # Avoid deleting checked-in/checked-out bookings to preserve history
     if booking.status in {ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT}:
         raise HTTPException(status_code=400, detail="Cannot delete an active/finished booking")
+    if reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=booking):
+        raise HTTPException(
+            status_code=409,
+            detail="A booking with payment history cannot be deleted; use the cancellation workflow instead",
+        )
     before = audit_log_service.model_snapshot(booking)
     booking.deleted_at = datetime.now(timezone.utc)
     booking.deleted_by_user_id = context.user_id

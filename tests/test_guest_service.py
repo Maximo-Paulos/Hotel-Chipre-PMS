@@ -2,6 +2,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import func
 
 from app.models.guest import Guest, GuestRatingEnum, GuestTag, GuestTagTypeEnum
 from app.models.hotel_config import HotelConfiguration
@@ -10,7 +11,20 @@ from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.services.checkin_service import CheckInError, perform_checkin
+from app.services import checkin_service
 from app.services.guest_service import add_tag, quick_profile, search_guests, set_rating
+
+
+@pytest.fixture(autouse=True)
+def anchor_hotel_day_to_fixture_arrival(db, monkeypatch):
+    def hotel_day_for_test(session, hotel_id):
+        return (
+            session.query(func.max(Reservation.check_in_date))
+            .filter(Reservation.hotel_id == hotel_id)
+            .scalar()
+        ) or date(2027, 1, 1)
+
+    monkeypatch.setattr(checkin_service, "hotel_today", hotel_day_for_test)
 
 
 def _hotel(db, hotel_id: int) -> HotelConfiguration:

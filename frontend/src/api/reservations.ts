@@ -55,6 +55,9 @@ export type Reservation = {
   // the canonical billing amount.
   quoted_amount_ars?: number | null;
   quoted_amount_usd?: number | null;
+  external_paid_amount?: number;
+  external_paid_reference?: string | null;
+  external_paid_confirmed?: boolean;
   allocation_status?: string;
   allocation_locked?: boolean;
   requires_manual_review?: boolean;
@@ -114,6 +117,9 @@ export type ReservationTransactionSummary = {
   method: string;
   type: string;
   status: string;
+  manual_reference?: string | null;
+  refund_of_transaction_id?: number | null;
+  refund_reason?: string | null;
   created_at: string;
 };
 
@@ -415,6 +421,7 @@ export type ManualOtaReservationPayload = {
   quoted_amount_ars?: number | null;
   quoted_amount_usd?: number | null;
   amount_paid?: number | null;
+  external_paid_reference?: string | null;
 };
 
 export const createManualOtaReservation = (payload: ManualOtaReservationPayload, session?: SessionLike) =>
