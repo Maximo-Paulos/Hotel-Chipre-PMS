@@ -33,6 +33,7 @@ export type StockMovement = {
   reservation_id?: number | null;
   created_by_user_id?: number | null;
   created_at: string;
+  transfer_reference?: string | null;
 };
 
 export type StockItemCreate = {
@@ -59,6 +60,27 @@ export type StockMovementCreate = {
   reservation_id?: number | null;
 };
 
+export type StockTransferCreate = {
+  item_id: number;
+  source_location_id: number;
+  destination_location_id: number;
+  quantity: DecimalValue;
+  reason: string;
+};
+
+export type StockTransferResult = {
+  transfer_reference: string;
+  outbound: StockMovement;
+  inbound: StockMovement;
+};
+
+export type StockOpeningCountCreate = {
+  item_id: number;
+  location_id: number;
+  quantity: DecimalValue;
+  reason: string;
+};
+
 export type CurrentStock = {
   item_id: number;
   quantity: DecimalValue;
@@ -70,6 +92,12 @@ export type CurrentStock = {
 export type StockSummaryEntry = {
   item: StockItem;
   current_quantity: DecimalValue;
+  location_balances: Array<{
+    location_id: number;
+    location_name: string;
+    current_quantity: DecimalValue;
+    has_movements: boolean;
+  }>;
 };
 
 export type StockConsumptionGroupBy = "week" | "month";
@@ -123,6 +151,30 @@ export const createStockMovement = (
     method: "POST",
     data: payload,
     headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+    session
+  });
+
+export const createStockTransfer = (
+  payload: StockTransferCreate,
+  { idempotencyKey }: { idempotencyKey: string },
+  session?: SessionLike
+) =>
+  apiFetch<StockTransferResult>("/api/stock/transfers", {
+    method: "POST",
+    data: payload,
+    headers: { "Idempotency-Key": idempotencyKey },
+    session
+  });
+
+export const createStockOpeningCount = (
+  payload: StockOpeningCountCreate,
+  { idempotencyKey }: { idempotencyKey: string },
+  session?: SessionLike
+) =>
+  apiFetch<StockMovement>("/api/stock/opening-counts", {
+    method: "POST",
+    data: payload,
+    headers: { "Idempotency-Key": idempotencyKey },
     session
   });
 

@@ -177,21 +177,11 @@ class InvitationTokenPayload(BaseModel):
     token: str = Field(min_length=1, max_length=512)
 
 
-def _invitation_info(token: str, request: Request, db: Session):
-    key = _source_key(request)
-    if not invitation_preview_limiter.allow(key, db=db):
-        db.commit()
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Demasiadas consultas de invitación")
-    db.commit()
-    invitation = _available_invitation(token, db)
-    hotel = db.get(HotelConfiguration, invitation.hotel_id)
-    return {
-        "email": invitation.email,
-        "role": invitation.role,
-        "hotel_id": invitation.hotel_id,
-        "hotel_name": hotel.hotel_name if hotel else None,
-        "inviter_email": invitation.inviter_email,
-    }
+def _raise_preview_error(code: str, message: str) -> None:
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={"code": code, "msg": message},
+    )
 
 
 @router.post("/preview")
@@ -200,7 +190,37 @@ def get_invitation_preview(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    return _invitation_info(payload.token, request, db)
+    key = _source_key(request)
+    if not invitation_preview_limiter.allow(key, db=db):
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Demasiadas consultas de invitación")
+    db.commit()
+    invitation = find_by_token(db, payload.token)
+    if invitation is None:
+        _raise_preview_error("INVITATION_NOT_FOUND", "Esta invitación ya no está disponible.")
+    if invitation.status == "accepted":
+        _raise_preview_error("INVITATION_ALREADY_ACCEPTED", "Esta invitación ya fue aceptada.")
+    if invitation.status == "revoked":
+        _raise_preview_error("INVITATION_REVOKED", "Esta invitación ya no está disponible.")
+    if is_expired(invitation):
+        _raise_preview_error("INVITATION_EXPIRED", "Esta invitación venció.")
+    if invitation.status != "pending" or invitation.role == "owner":
+        _raise_preview_error("INVITATION_NOT_AVAILABLE", "Esta invitación ya no está disponible.")
+    try:
+        custom_role = require_active_hotel_role(db, invitation.hotel_id, invitation.role)
+    except HotelRoleNotFound:
+        _raise_preview_error("INVITATION_NOT_AVAILABLE", "Esta invitación ya no está disponible.")
+    if custom_role is None and invitation.role not in INVITABLE_ROLES:
+        _raise_preview_error("INVITATION_NOT_AVAILABLE", "Esta invitación ya no está disponible.")
+    hotel = db.get(HotelConfiguration, invitation.hotel_id)
+    return {
+        "email": invitation.email,
+        "role": invitation.role,
+        "role_name": custom_role.name if custom_role is not None else None,
+        "hotel_id": invitation.hotel_id,
+        "hotel_name": hotel.hotel_name if hotel else None,
+        "inviter_email": invitation.inviter_email,
+    }
 
 
 class AcceptPayload(LoginRequest):

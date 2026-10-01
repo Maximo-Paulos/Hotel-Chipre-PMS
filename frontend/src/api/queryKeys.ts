@@ -1,8 +1,11 @@
 /** Shared keys for queries whose data is consumed by multiple settings/ops views. */
+const roomCategoriesKey = (hotelId: number | null) => ["room-categories", hotelId] as const;
+
 export const queryKeys = {
   rooms: (hotelId: number | null) => ["rooms", hotelId] as const,
-  roomCategories: (hotelId: number | null) => ["room-categories", hotelId] as const,
-  categories: (hotelId: number | null) => ["categories", hotelId] as const,
+  housekeepingBoard: (hotelId: number | null) => ["housekeeping-board", hotelId] as const,
+  roomCategories: roomCategoriesKey,
+  categories: roomCategoriesKey,
   apiKeys: (hotelId: number | null) => ["api-keys", hotelId] as const,
   integrations: (hotelId: number | null) => ["integrations", hotelId] as const,
   reservations: (hotelId: number | null) => ["reservations", hotelId] as const,
@@ -33,6 +36,7 @@ export const queryKeys = {
   stockItems: (hotelId: number | null) => ["stock-items", hotelId] as const,
   stockLocations: (hotelId: number | null) => ["stock-locations", hotelId] as const,
   hotelConfig: (hotelId: number | null) => ["hotel-config", hotelId] as const,
+  hotelInterfaceLanguage: (hotelId: number | null, userId: string | null) => ["hotel-interface-language", hotelId, userId] as const,
   users: (hotelId: number | null) => ["users", hotelId] as const
 };
 
@@ -75,11 +79,13 @@ export const HOTEL_ID_INDEX_BY_QUERY_PREFIX: Readonly<Record<string, number>> = 
   "guest-tags": 1,
   guest: 1,
   guests: 1,
+  "housekeeping-board": 1,
   "gemma-chat": 1,
   "gemma-chat-history": 1,
   "gemma-insights": 1,
   "gemma-runtime-status": 1,
   "hotel-config": 1,
+  "hotel-interface-language": 1,
   integrations: 1,
   "notification-preferences": 2,
   notifications: 2,
@@ -179,6 +185,7 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
   ],
   rooms: [
     "rooms",
+    "housekeeping-board",
     "room-categories",
     "categories",
     "room-blocks",
@@ -195,6 +202,7 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
   security: ["permissions", "permissions-catalog", "permissions-matrix", "permissions-role-profiles", "permissions-user-overrides", "permissions-users", "permissions-visibility-windows", "settings-security", "operational-audit"],
   settings: [
     "hotel-config",
+    "hotel-interface-language",
     "permissions-matrix",
     "api-keys",
     "subscription",

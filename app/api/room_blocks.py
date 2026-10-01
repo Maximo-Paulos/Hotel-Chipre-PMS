@@ -18,6 +18,7 @@ from app.services.room_block_service import (
     create_block,
     get_block,
     list_active_blocks,
+    preview_block_conflicts,
     resolve_block,
 )
 
@@ -49,6 +50,11 @@ class RoomBlockRead(BaseModel):
     resolved_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class RoomBlockConflictPreview(BaseModel):
+    reservation_count: int
+    protected_reservation_count: int
 
 
 @router.post("/", response_model=RoomBlockRead, status_code=status.HTTP_201_CREATED)
@@ -92,6 +98,29 @@ def list_room_blocks(
 ):
     try:
         return list_active_blocks(db, hotel_id=context.hotel_id, start_date=start_date, end_date=end_date)
+    except RoomBlockError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/conflicts/preview", response_model=RoomBlockConflictPreview)
+def preview_room_block_conflicts_endpoint(
+    room_id: int,
+    starts_at: date,
+    ends_at: date | None = None,
+    is_indefinite: bool = False,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_BLOCK_CREATE)),
+):
+    """Return counts only; guest identity and reservation IDs are not needed for this warning."""
+    try:
+        return preview_block_conflicts(
+            db,
+            hotel_id=context.hotel_id,
+            room_id=room_id,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            is_indefinite=is_indefinite,
+        )
     except RoomBlockError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

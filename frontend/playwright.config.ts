@@ -40,6 +40,19 @@ if (!pythonExecutablePath) {
 const pythonExecutable = JSON.stringify(pythonExecutablePath);
 const e2eDbPath = path.join(repoRoot, "_e2e.db").replace(/\\/g, "/");
 const e2eDatabaseURL = process.env.E2E_DATABASE_URL || `sqlite:///${e2eDbPath}`;
+const postgresE2eEnabled = process.env.E2E_POSTGRES_ISOLATED === "true";
+const explicitPostgresE2eDatabaseURL = process.env.E2E_POSTGRES_DATABASE_URL_EXPLICIT || "";
+const postgresE2eSeedDatabaseURL = process.env.E2E_POSTGRES_SEED_DATABASE_URL || "";
+const explicitPostgresE2eSeedDatabaseURL = process.env.E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT || "";
+const postgresE2eURL = /^postgresql(?:\+psycopg2)?:\/\//.test(e2eDatabaseURL);
+if (
+  (postgresE2eURL && (!postgresE2eEnabled || explicitPostgresE2eDatabaseURL !== e2eDatabaseURL)) ||
+  (!postgresE2eURL && postgresE2eEnabled) ||
+  (postgresE2eURL && (!postgresE2eSeedDatabaseURL || explicitPostgresE2eSeedDatabaseURL !== postgresE2eSeedDatabaseURL)) ||
+  (!postgresE2eURL && (postgresE2eSeedDatabaseURL || explicitPostgresE2eSeedDatabaseURL))
+) {
+  throw new Error("PostgreSQL E2E requires matching explicit app and seed database URLs for the isolated test target.");
+}
 const jwtSecret =
   process.env.E2E_JWT_SECRET || "e2e-local-jwt-secret-change-me-32chars";
 const emailOutboxPath =
@@ -76,7 +89,7 @@ export default defineConfig({
   expect: {
     timeout: 10_000
   },
-  // The 3 webkit-*-business Apple device projects share one SQLite database
+  // The 3 webkit-*-business Apple device projects share one isolated database
   // and one hotel's cash register (a single non-date-scoped resource, unlike
   // rooms/reservations which can be disambiguated by date). Concurrent
   // workers racing to open/close/approve that one cash session produces
@@ -96,7 +109,7 @@ export default defineConfig({
     {
       name: "chromium",
       testIgnore: ["**/responsive-smoke.spec.ts", "**/preview-host-routing.spec.ts", "**/public-site.spec.ts"],
-      // The isolated E2E backend uses one SQLite database. Keep mutating
+      // The isolated E2E backend uses one shared database. Keep mutating
       // journeys deterministic while read-only page smoke tests run beside it.
       workers: 1,
       use: { ...devices["Desktop Chrome"] }
@@ -134,7 +147,7 @@ export default defineConfig({
       name: "webkit-iphone-se",
       testMatch: "**/responsive-smoke.spec.ts",
       // These 3 webkit-iphone-* projects share the same isolated E2E backend/
-      // SQLite database (same as the chromium project above), and
+      // isolated database (same as the chromium project above), and
       // responsive-smoke.spec.ts opens/closes a real cash session. Running
       // them at workers > 1 lets two projects race to open the same hotel's
       // cash session concurrently, leaving one worker polling for a button
@@ -188,6 +201,11 @@ export default defineConfig({
         APP_ENV: "test",
         DATABASE_URL: e2eDatabaseURL,
         E2E_RESET_DATABASE: "true",
+        E2E_POSTGRES_ISOLATED: postgresE2eEnabled ? "true" : "",
+        E2E_POSTGRES_DATABASE_URL_EXPLICIT: postgresE2eEnabled ? explicitPostgresE2eDatabaseURL : "",
+        E2E_POSTGRES_SEED_DATABASE_URL: postgresE2eEnabled ? postgresE2eSeedDatabaseURL : "",
+        E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT: postgresE2eEnabled ? explicitPostgresE2eSeedDatabaseURL : "",
+        E2E_F003_LOAD: process.env.E2E_F003_LOAD === "true" ? "true" : "",
         // Keep local E2E deterministic even when the developer's .env enables
         // provider traffic. Payment-link tests must exercise the persisted
         // local_only artifact and never call an external gateway.

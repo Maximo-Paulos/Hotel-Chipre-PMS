@@ -12,6 +12,8 @@ const localIsoDate = (offsetDays: number) => {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 };
 
+const displayDate = (isoDate: string) => `${isoDate.slice(8, 10)}/${isoDate.slice(5, 7)}/${isoDate.slice(0, 4)}`;
+
 // The 3 webkit-*-business Apple device projects share one SQLite database
 // and run this exact spec concurrently, pinning the same room 101 for the
 // same relative dates. A per-project date salt gives each device project
@@ -67,8 +69,8 @@ async function openReservationForm(
   const roomValue = await roomOption.getAttribute("value");
   expect(roomValue).toBeTruthy();
   await roomSelect.selectOption(roomValue!);
-  await form.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(checkIn);
-  await form.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(checkOut);
+  await form.getByLabel("Check-in", { exact: true }).fill(checkIn);
+  await form.getByLabel("Check-out", { exact: true }).fill(checkOut);
   await expect(form.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
   await form.getByRole("button", { name: "Crear", exact: true }).click();
   if (options.expectCreated !== false) {
@@ -105,8 +107,8 @@ test("owner preserves availability dates after querying a category", async ({ pa
   await expect(availabilityButton).toHaveCount(1);
   await availabilityButton.click();
   await expect(page.getByText(/Disponibles: \d+ habitaciones/, { exact: false })).toBeVisible();
-  await expect(checkInField).toHaveValue(checkIn);
-  await expect(checkOutField).toHaveValue(checkOut);
+  await expect(checkInField).toHaveValue(displayDate(checkIn));
+  await expect(checkOutField).toHaveValue(displayDate(checkOut));
 });
 
 test("owner edits, extends, rejects an overlap and cancels a reservation", async ({ page }, testInfo) => {
@@ -134,7 +136,7 @@ test("owner edits, extends, rejects an overlap and cancels a reservation", async
 
   const editForm = page.locator("form").filter({ hasText: "Pagos y balance" });
   await expect(editForm).toBeVisible();
-  const editCheckOut = editForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]');
+  const editCheckOut = editForm.getByLabel("Check-out", { exact: true });
   await editCheckOut.fill(extendedCheckOut);
   await editForm.getByRole("button", { name: "Guardar cambios", exact: true }).click();
   await expect(page.getByText("Reserva actualizada", { exact: true })).toBeVisible();

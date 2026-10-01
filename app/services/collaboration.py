@@ -20,6 +20,7 @@ from typing import Any, Mapping
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.orm import Session
 
+from app.services.row_locks import lock_query
 from app.models.cash_register import CashSession
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
@@ -435,7 +436,7 @@ def get_resource(
         if deleted_column is not None:
             query = query.filter(deleted_column.is_(None))
     if lock_for_update:
-        query = query.with_for_update()
+        query = lock_query(query, spec.model)
     return query.one_or_none()
 
 

@@ -34,6 +34,7 @@ export type LaundryVendorPrice = {
   vendor_id: number;
   linen_item_id: number;
   unit_price: DecimalValue;
+  effective_from: string;
   currency_code: string;
   updated_at: string;
 };
@@ -41,6 +42,7 @@ export type LaundryVendorPrice = {
 export type LaundryVendorPriceUpsert = {
   linen_item_id: number;
   unit_price: DecimalValue;
+  effective_from?: string;
   currency_code?: string | null;
 };
 
@@ -56,10 +58,12 @@ export type LaundryRemito = {
   hotel_id: number;
   vendor_id: number;
   direction: RemitoDirection;
+  house_location_id?: number | null;
   remito_number: string;
   remito_date: string;
   notes?: string | null;
   created_by_user_id?: number | null;
+  created_by_name?: string | null;
   created_at: string;
   lines: LaundryRemitoLine[];
 };

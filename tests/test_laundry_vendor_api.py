@@ -16,7 +16,10 @@ from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.hotel_config import HotelConfiguration
+from app.models.hotel_membership import HotelMembership
+from app.models.linen import LinenMovement
 from app.models.permission import HotelPermissionOverride
+from app.models.user import User
 from app.services.linen_service import create_linen_item, create_location, register_movement
 from app.services.permission_service import PERMISSION_LAUNDRY_PRICE_MANAGE
 from app.services.permission_service import ROLE_HOUSEKEEPING, create_custom_role
@@ -102,6 +105,11 @@ def test_vendor_price_write_requires_laundry_price_permission():
         vendor = client.post("/api/laundry/vendors", json={"name": "Lavadero precios"})
         assert vendor.status_code == 201, vendor.text
         item = create_linen_item(db, hotel_id=1, name="Toallas", unit="unit", min_quantity=None, active=True)
+        owner_default = client.post(
+            f"/api/laundry/vendors/{vendor.json()['id']}/prices",
+            json={"linen_item_id": item.id, "unit_price": "100.00", "effective_from": "2026-09-30"},
+        )
+        assert owner_default.status_code == 201, owner_default.text
         db.add(
             HotelPermissionOverride(
                 hotel_id=1,
@@ -114,9 +122,49 @@ def test_vendor_price_write_requires_laundry_price_permission():
 
         response = client.post(
             f"/api/laundry/vendors/{vendor.json()['id']}/prices",
-            json={"linen_item_id": item.id, "unit_price": "100.00"},
+            json={"linen_item_id": item.id, "unit_price": "110.00", "effective_from": "2026-09-30"},
         )
         assert response.status_code == 403, response.text
+    finally:
+        _teardown(db, engine)
+
+
+def test_manager_needs_explicit_vendor_price_permission():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        vendor = client.post("/api/laundry/vendors", json={"name": "Lavadero con permiso"})
+        assert vendor.status_code == 201, vendor.text
+        item = create_linen_item(db, hotel_id=1, name="Sabanas", unit="unit", min_quantity=None, active=True)
+        db.commit()
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+        allowed_vendor = client.post("/api/laundry/vendors", json={"name": "Lavadero de gerencia"})
+        assert allowed_vendor.status_code == 201, allowed_vendor.text
+        payload = {"linen_item_id": item.id, "unit_price": "100.00", "effective_from": "2026-09-30"}
+        denied = client.post(f"/api/laundry/vendors/{vendor.json()['id']}/prices", json=payload)
+        assert denied.status_code == 403
+
+        db.add(
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="manager",
+                permission_code=PERMISSION_LAUNDRY_PRICE_MANAGE,
+                allowed=True,
+            )
+        )
+        db.commit()
+        granted = client.post(f"/api/laundry/vendors/{vendor.json()['id']}/prices", json=payload)
+        assert granted.status_code == 201, granted.text
+        assert granted.json()["effective_from"] == "2026-09-30"
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "co_owner")
+        co_owner_vendor = client.post("/api/laundry/vendors", json={"name": "Lavadero codueña"})
+        assert co_owner_vendor.status_code == 201, co_owner_vendor.text
+        co_owner_price = client.post(
+            f"/api/laundry/vendors/{co_owner_vendor.json()['id']}/prices", json=payload
+        )
+        assert co_owner_price.status_code == 201, co_owner_price.text
     finally:
         _teardown(db, engine)
 
@@ -175,9 +223,114 @@ def test_owner_can_register_a_linen_movement_and_load_an_opening_balance():
         _teardown(db, engine)
 
 
+def test_owner_can_save_atomic_linen_opening_count_grid_and_housekeeping_cannot():
+    client, db, engine = _client_with_db()
+    try:
+        db.add(User(id=10, email="linen-grid@example.test", password_hash="test"))
+        db.commit()
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=10)
+        item_ids = [
+            client.post("/api/laundry/items", json={"name": name, "unit": "unidad"}).json()["id"]
+            for name in ("Sabanas", "Toallones")
+        ]
+        location_ids = [
+            client.post("/api/laundry/locations", json={"name": name}).json()["id"]
+            for name in ("Deposito", "Office 2")
+        ]
+        response = client.post(
+            "/api/laundry/opening-counts",
+            json={
+                "reason": "Conteo inicial por grilla",
+                "counts": [
+                    {"linen_item_id": item_ids[0], "location_id": location_ids[0], "quantity": "12"},
+                    {"linen_item_id": item_ids[0], "location_id": location_ids[1], "quantity": "3"},
+                    {"linen_item_id": item_ids[1], "location_id": location_ids[0], "quantity": "8"},
+                ],
+            },
+        )
+        assert response.status_code == 201, response.text
+        assert len(response.json()) == 3
+        assert {row["created_by_user_id"] for row in response.json()} == {10}
+
+        transfer_payload = {
+            "linen_item_id": item_ids[0],
+            "source_location_id": location_ids[0],
+            "destination_location_id": location_ids[1],
+            "quantity": "4",
+            "reason": "Reposición del office",
+        }
+        transfer = client.post(
+            "/api/laundry/transfers",
+            json=transfer_payload,
+            headers={"Idempotency-Key": "laundry-transfer-api-1"},
+        )
+        assert transfer.status_code == 201, transfer.text
+        transfer_body = transfer.json()
+        assert transfer_body["outbound"]["movement_type"] == "out"
+        assert transfer_body["inbound"]["movement_type"] == "in"
+        assert transfer_body["outbound"]["transfer_reference"] == transfer_body["transfer_reference"]
+        assert transfer_body["inbound"]["transfer_reference"] == transfer_body["transfer_reference"]
+
+        replay = client.post(
+            "/api/laundry/transfers",
+            json=transfer_payload,
+            headers={"Idempotency-Key": "laundry-transfer-api-1"},
+        )
+        assert replay.status_code == 201, replay.text
+        assert replay.json()["outbound"]["id"] == transfer_body["outbound"]["id"]
+        assert db.query(LinenMovement).count() == 5
+
+        conflicting_replay = client.post(
+            "/api/laundry/transfers",
+            json={**transfer_payload, "quantity": "5"},
+            headers={"Idempotency-Key": "laundry-transfer-api-1"},
+        )
+        assert conflicting_replay.status_code == 409
+
+        repeated = client.post(
+            "/api/laundry/opening-counts",
+            json={
+                "reason": "Reintento",
+                "counts": [
+                    {"linen_item_id": item_ids[0], "location_id": location_ids[0], "quantity": "1"},
+                    {"linen_item_id": item_ids[1], "location_id": location_ids[1], "quantity": "5"},
+                ],
+            },
+        )
+        assert repeated.status_code == 409, repeated.text
+        assert db.query(LinenMovement).count() == 5
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping", user_id=20)
+        denied = client.post(
+            "/api/laundry/opening-counts",
+            json={
+                "reason": "No autorizado",
+                "counts": [{"linen_item_id": item_ids[1], "location_id": location_ids[1], "quantity": "1"}],
+            },
+        )
+        assert denied.status_code == 403
+        denied_transfer = client.post(
+            "/api/laundry/transfers",
+            json=transfer_payload,
+            headers={"Idempotency-Key": "laundry-transfer-hk-1"},
+        )
+        assert denied_transfer.status_code == 403
+    finally:
+        _teardown(db, engine)
+
+
 def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
     client, db, engine = _client_with_db()
     try:
+        db.add_all(
+            [
+                User(id=1, email="owner@example.test", password_hash="test", display_name="Martín"),
+                User(id=2, email="housekeeping@example.test", password_hash="test", display_name="Personal de limpieza"),
+                HotelMembership(hotel_id=1, user_id=1, role="owner", status="active", alias="Martín"),
+                HotelMembership(hotel_id=1, user_id=2, role="housekeeping", status="active", alias="Rosa"),
+            ]
+        )
+        db.commit()
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=1)
         vendor_resp = client.post(
             "/api/laundry/vendors",
@@ -267,7 +420,17 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
         assert created.status_code == 201
         body = created.json()
         assert body["remito"]["direction"] == "outbound"
+        assert body["remito"]["house_location_id"] == house.id
+        assert body["remito"]["created_by_name"] == "Rosa"
+        assert body["remito"]["created_by_user_id"] is None
         assert "No hay precio configurado" in body["warnings"][0]
+
+        history = client.get("/api/laundry/remitos")
+        assert history.status_code == 200
+        assert history.json()[0]["house_location_id"] == house.id
+        assert history.json()[0]["created_by_name"] == "Rosa"
+        assert history.json()[0]["created_by_user_id"] is None
+        assert "housekeeping@example.test" not in history.text
 
         balance = client.get(f"/api/laundry/vendors/{vendor_id}/balance")
         assert balance.status_code == 200
@@ -342,7 +505,7 @@ def test_settlements_default_unpaid_and_can_be_marked_paid_with_notes():
         db.commit()
         client.post(
             f"/api/laundry/vendors/{vendor_id}/prices",
-            json={"linen_item_id": item.id, "unit_price": "100.00"},
+            json={"linen_item_id": item.id, "unit_price": "100.00", "effective_from": "2026-07-05"},
         )
         client.post(
             "/api/laundry/remitos",
@@ -486,5 +649,53 @@ def test_linen_summary_is_hotel_scoped_and_denies_roles_without_laundry_permissi
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
         denied = client.get("/api/laundry/items/summary")
         assert denied.status_code == 403
+    finally:
+        _teardown(db, engine)
+
+
+def test_location_minimum_is_manager_configurable_and_housekeeping_read_only():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=1)
+        item = create_linen_item(db, hotel_id=1, name="Sabanas mínimo", unit="unidad")
+        location = create_location(db, hotel_id=1, name="Deposito mínimo")
+        other_hotel_item = create_linen_item(db, hotel_id=2, name="Sabanas H2", unit="unidad")
+        other_hotel_location = create_location(db, hotel_id=2, name="Deposito H2")
+        db.commit()
+
+        saved = client.put(
+            f"/api/laundry/items/{item.id}/locations/{location.id}/minimum",
+            json={"min_quantity": "5.00"},
+        )
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["min_quantity"] == "5.00"
+
+        summary = client.get("/api/laundry/items/summary", params={"location_id": location.id})
+        assert summary.status_code == 200
+        entry = next(row for row in summary.json() if row["item"]["id"] == item.id)
+        assert entry["current_quantity"] == "0.00"
+        assert entry["min_quantity"] == "5.00"
+
+        negative = client.put(
+            f"/api/laundry/items/{item.id}/locations/{location.id}/minimum",
+            json={"min_quantity": "-1.00"},
+        )
+        assert negative.status_code == 422
+
+        cross_hotel = client.put(
+            f"/api/laundry/items/{other_hotel_item.id}/locations/{other_hotel_location.id}/minimum",
+            json={"min_quantity": "2.00"},
+        )
+        assert cross_hotel.status_code == 404
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping", user_id=2)
+        readable = client.get("/api/laundry/items/summary", params={"location_id": location.id})
+        assert readable.status_code == 200
+        assert next(row for row in readable.json() if row["item"]["id"] == item.id)["min_quantity"] == "5.00"
+        denied_write = client.put(
+            f"/api/laundry/items/{item.id}/locations/{location.id}/minimum",
+            json={"min_quantity": "7.00"},
+        )
+        assert denied_write.status_code == 403
     finally:
         _teardown(db, engine)

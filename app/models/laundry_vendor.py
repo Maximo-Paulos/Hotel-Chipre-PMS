@@ -17,7 +17,7 @@ app/models/linen.py) and enforced by tests/test_tenant_rls_contract.py: a
 scalar FK across two hotel-scoped tables can point at a row belonging to a
 different hotel, a composite FK cannot.
 """
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     Boolean,
@@ -82,6 +82,7 @@ class LaundryVendorPrice(Base):
     vendor_id = Column(Integer, nullable=False)
     linen_item_id = Column(Integer, nullable=False)
     unit_price = Column(Numeric(12, 2), nullable=False)
+    effective_from = Column(Date, nullable=False, default=date.today)
     currency_code = Column(String(3), nullable=False, server_default="ARS")
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
@@ -94,7 +95,12 @@ class LaundryVendorPrice(Base):
     vendor = relationship("LaundryVendor", back_populates="prices")
 
     __table_args__ = (
-        UniqueConstraint("vendor_id", "linen_item_id", name="uq_laundry_vendor_prices_vendor_item"),
+        UniqueConstraint(
+            "vendor_id",
+            "linen_item_id",
+            "effective_from",
+            name="uq_laundry_vendor_prices_vendor_item_effective",
+        ),
         CheckConstraint("unit_price >= 0", name="ck_laundry_vendor_prices_unit_price_non_negative"),
         ForeignKeyConstraint(
             ["hotel_id", "vendor_id"],
@@ -118,6 +124,10 @@ class LaundryRemito(Base):
     hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", name="fk_laundry_remitos_hotel_id"), nullable=False)
     vendor_id = Column(Integer, nullable=False)
     direction = Column(String(10), nullable=False)
+    # The hotel-side stock location for this laundry visit. Existing remitos
+    # predate this field and stay null because their source location cannot be
+    # reconstructed safely from the unlinked movement rows.
+    house_location_id = Column(Integer, nullable=True)
     # The number the laundry writes on its own paper slip -- not globally
     # unique, can repeat across different vendors (see plan D1).
     remito_number = Column(String(60), nullable=False)
@@ -145,6 +155,11 @@ class LaundryRemito(Base):
             ["hotel_id", "vendor_id"],
             ["laundry_vendors.hotel_id", "laundry_vendors.id"],
             name="fk_laundry_remitos_hotel_vendor",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "house_location_id"],
+            ["linen_locations.hotel_id", "linen_locations.id"],
+            name="fk_laundry_remitos_hotel_house_location",
         ),
         Index("ix_laundry_remitos_hotel_id", "hotel_id"),
         Index("ix_laundry_remitos_vendor_id", "vendor_id"),

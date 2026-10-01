@@ -15,7 +15,12 @@ from app.services.payment_service import (
     PaymentError,
     PaymentNotFoundError,
 )
-from app.services.permission_service import PERMISSION_CASH_OPERATE, PERMISSION_PAYMENT_REFUND
+from app.services.permission_service import (
+    PERMISSION_CASH_OPERATE,
+    PERMISSION_CASH_RECORD_PRIOR_RECEIPT,
+    PERMISSION_PAYMENT_REFUND,
+)
+from app.services.timezones import hotel_today
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
 
 router = APIRouter(prefix="/api/payments", tags=["Payments"])
@@ -32,6 +37,13 @@ def make_payment(
 ):
     try:
         is_refund = data.transaction_type == TransactionTypeEnum.REFUND
+        if data.collected_before:
+            authorize_permission(request, db, context, PERMISSION_CASH_RECORD_PRIOR_RECEIPT)
+            if data.collected_on is not None and data.collected_on > hotel_today(db, context.hotel_id):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="The prior receipt date cannot be in the future.",
+                )
         if is_refund:
             authorize_permission(request, db, context, PERMISSION_PAYMENT_REFUND)
             if data.payment_method != PaymentMethodEnum.CASH:

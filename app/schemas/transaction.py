@@ -1,11 +1,12 @@
 """
 Pydantic schemas for Transaction / Payments.
 """
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional
-from datetime import datetime
+from datetime import date
 from decimal import Decimal
 from app.models.transaction import PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
+from app.schemas.datetime_types import UTCDateTime
 
 
 class PaymentRequest(BaseModel):
@@ -19,6 +20,10 @@ class PaymentRequest(BaseModel):
     manual_reference: Optional[str] = Field(default=None, min_length=1, max_length=120)
     refund_of_transaction_id: Optional[int] = Field(default=None, gt=0)
     refund_reason: Optional[str] = Field(default=None, min_length=1, max_length=240)
+    company_night_charge_ids: list[int] = Field(default_factory=list, max_length=90)
+    collected_before: bool = False
+    collected_on: Optional[date] = None
+    prior_receipt_note: Optional[str] = Field(default=None, min_length=1, max_length=240)
 
     @field_validator("manual_reference")
     @classmethod
@@ -36,6 +41,34 @@ class PaymentRequest(BaseModel):
         normalized = value.strip()
         return normalized or None
 
+    @field_validator("prior_receipt_note")
+    @classmethod
+    def normalize_prior_receipt_note(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @model_validator(mode="after")
+    def validate_prior_receipt_fields(self) -> "PaymentRequest":
+        if any(charge_id <= 0 for charge_id in self.company_night_charge_ids):
+            raise ValueError("Company night charge ids must be positive")
+        if len(self.company_night_charge_ids) != len(set(self.company_night_charge_ids)):
+            raise ValueError("Company night charge ids must be unique")
+        if self.transaction_type == TransactionTypeEnum.REFUND and self.company_night_charge_ids:
+            raise ValueError("Refunds cannot allocate company night charges")
+        has_prior_receipt_details = self.collected_on is not None or self.prior_receipt_note is not None
+        if self.collected_before:
+            if self.payment_method != PaymentMethodEnum.CASH:
+                raise ValueError("Prior receipts must be recorded as cash payments")
+            if self.transaction_type == TransactionTypeEnum.REFUND:
+                raise ValueError("Refunds cannot be recorded as prior receipts")
+            if self.collected_on is None or not self.prior_receipt_note:
+                raise ValueError("A prior cash receipt requires its collection date and reason")
+        elif has_prior_receipt_details:
+            raise ValueError("Prior receipt date and reason require collected_before")
+        return self
+
 
 class TransactionRead(BaseModel):
     id: int
@@ -51,9 +84,12 @@ class TransactionRead(BaseModel):
     manual_reference: Optional[str] = None
     refund_of_transaction_id: Optional[int] = None
     refund_reason: Optional[str] = None
+    collected_before: bool = False
+    collected_on: Optional[date] = None
+    prior_receipt_note: Optional[str] = None
     description: Optional[str]
-    created_at: Optional[datetime]
-    processed_at: Optional[datetime]
+    created_at: Optional[UTCDateTime]
+    processed_at: Optional[UTCDateTime]
     created_by_user_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
@@ -76,7 +112,7 @@ class PaymentReceiptRead(BaseModel):
     status: TransactionStatusEnum
     manual_reference: Optional[str] = None
     refund_of_transaction_id: Optional[int] = None
-    created_at: datetime
+    created_at: UTCDateTime
 
 
 class PaymentGatewayResponse(BaseModel):

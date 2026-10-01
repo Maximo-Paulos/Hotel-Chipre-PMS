@@ -15,6 +15,34 @@
     "occupied": "Ocupadas",
     "cleaning": "En limpieza"
   },
+  "housekeepingStatus": {
+    "label": "Estado de limpieza",
+    "hint": "Este estado no cambia la ocupación ni las reservas futuras.",
+    "dirty": "Sucia",
+    "in_progress": "En limpieza",
+    "clean": "Limpia",
+    "inspected": "Inspeccionada"
+  },
+  "housekeepingToday": {
+    "eyebrow": "Operación diaria",
+    "title": "Limpieza de hoy",
+    "loadingDate": "Fecha del hotel",
+    "summary": "Resumen de limpieza",
+    "refresh": "Actualizar",
+    "refreshing": "Actualizando...",
+    "loading": "Cargando habitaciones...",
+    "loadError": "No se pudo cargar el tablero de limpieza.",
+    "retry": "Reintentar",
+    "empty": "No hay habitaciones activas.",
+    "roomList": "Habitaciones para limpieza",
+    "room": "Hab. {{number}}",
+    "floorCategory": "Piso {{floor}} · {{category}}",
+    "arrival": "Llegada pendiente hoy",
+    "departure": "Salida pendiente hoy",
+    "maintenanceBlocked": "Bloqueada por mantenimiento",
+    "noSpecialEvents": "Sin eventos especiales hoy",
+    "statusForRoom": "Estado de limpieza · {{number}}"
+  },
   "inventory": {
     "eyebrow": "Inventario",
     "title": "Habitaciones ({{count}})",
@@ -28,12 +56,14 @@
     "noNotes": "Sin notas",
     "statusLabel": "Estado operativo",
     "statusAriaLabel": "Estado de habitación {{number}}",
-    "housekeepingHint": "Housekeeping sólo puede alternar Limpieza y Libre.",
+    "housekeepingHint": "Actualizá la limpieza sin cambiar la ocupación ni las reservas futuras.",
     "saving": "Guardando...",
     "statusUpdateError": "No se pudo actualizar el estado: {{message}}",
     "readOnlyRole": "Solo lectura para tu rol.",
     "empty": "No hay habitaciones cargadas en el sistema.",
-    "statusUpdateDefaultError": "No se pudo actualizar el estado de la habitación."
+    "statusUpdateDefaultError": "No se pudo actualizar el estado de la habitación.",
+    "maintenanceStatusLoading": "Verificando los bloqueos de mantenimiento...",
+    "maintenanceStatusError": "No se pudieron verificar los bloqueos de mantenimiento. Consultá con recepción antes de asignar esta habitación."
   },
   "blocks": {
     "eyebrow": "Bloqueos",
@@ -54,6 +84,11 @@
     "create": "Crear bloqueo",
     "createSuccess": "Bloqueo creado.",
     "createError": "No se pudo crear el bloqueo.",
+    "conflictsLoading": "Verificando reservas para esas fechas...",
+    "conflictWarning": "Reservas superpuestas: {{count}}. Revisá la Planilla antes de crear el bloqueo.",
+    "protectedConflictWarning": "Reservas que requieren resolución manual antes de bloquear: {{count}}.",
+    "conflictVerificationError": "No se pudo verificar el solapamiento. Revisá la Planilla antes de continuar; el servidor mantiene sus validaciones al guardar.",
+    "protectedConflictRejected": "No se creó el bloqueo. Reservas que requieren resolución manual: {{count}}. Revisá la Planilla antes de volver a intentar.",
     "roomFallback": "Información no disponible",
     "roomFloor": "Hab. {{number}} · Piso {{floor}}",
     "resolving": "Resolviendo...",

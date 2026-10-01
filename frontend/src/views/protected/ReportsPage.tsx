@@ -3,14 +3,16 @@ import { useMemo, useState } from "react";
 import { type OperationalReservationGroup, type OperationalReservationSummary } from "../../api/reports";
 import { ApiError } from "../../api/client";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
+import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { useDailyOperationalReport, useOccupancyReport, useOperationalAlerts, useRevenueReport } from "../../hooks/useReports";
-import { todayIso as today } from "../../utils/date";
+import { formatHotelDateTime, todayIso as today } from "../../utils/date";
 
 const money = (value?: number | string | null) =>
   Number(value ?? 0).toLocaleString("es-AR", { style: "currency", currency: "ARS" });
 
 export function ReportsPage() {
   const { hasPermission } = useEffectivePermissions();
+  const hotelConfigQuery = useHotelConfig();
   const canViewFinancial = hasPermission("reports:financial:view");
   const [reportDate, setReportDate] = useState(today());
   const reportQuery = useDailyOperationalReport(reportDate);
@@ -125,7 +127,7 @@ export function ReportsPage() {
                     {report.cash_session.session_id ? `Caja #${report.cash_session.session_id}` : "Sin sesión abierta"}
                   </p>
                   {report.cash_session.opened_at ? (
-                    <p className="text-xs text-slate-500">Abierta {new Date(report.cash_session.opened_at).toLocaleString("es-AR")}</p>
+                    <p className="text-xs text-slate-500">Abierta {formatHotelDateTime(report.cash_session.opened_at, hotelConfigQuery.data?.hotel_timezone)}</p>
                   ) : null}
                 </div>
               </section>}

@@ -378,7 +378,10 @@ def create_company(db: Session, *, hotel_id: int, user_id: int, payload: Company
         contact_email=payload.email,
         contact_phone=payload.phone,
         administrative_contact=payload.administrative_contact,
-        base_price=payload.base_price,
+        # Off-system invoicing is intentionally not represented as a stored
+        # reservation or company amount in the PMS.
+        base_price=None if payload.payment_deferred else payload.base_price,
+        extra_person_nightly_surcharge=payload.extra_person_nightly_surcharge,
         payment_deferred=payload.payment_deferred,
         deferred_days=payload.deferred_days,
         requires_voucher=payload.requires_voucher,
@@ -414,6 +417,8 @@ def update_company(db: Session, *, hotel_id: int, user_id: int, company_id: int,
     }
     for field, value in update_data.items():
         setattr(company, field_map.get(field, field), value)
+    if company.payment_deferred:
+        company.base_price = None
     db.flush()
     _record_audit_event(
         db,

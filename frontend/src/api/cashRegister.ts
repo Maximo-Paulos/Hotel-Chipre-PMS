@@ -33,6 +33,7 @@ export type CashCloseReport = {
   id: number;
   hotel_id: number;
   session_id: number;
+  currency_code: string;
   closed_by_user_id?: number | null;
   expected_balance: number;
   declared_balance: number;
@@ -40,6 +41,10 @@ export type CashCloseReport = {
   difference_approved: boolean;
   approved_by_user_id?: number | null;
   successor_session_id?: number | null;
+  successor_opening_balance?: number | string | null;
+  successor_float_declared_amount?: number | string | null;
+  successor_float_declared_by_user_id?: number | null;
+  successor_float_declared_at?: string | null;
   custody_handoff?: CashCustodyHandoff | null;
   notes?: string | null;
   closed_at: string;
@@ -85,6 +90,25 @@ export type CashDailyCollector = {
   gross_collected: number;
   refunds: number;
   net_collected: number;
+  transaction_count: number;
+};
+
+export type CashDailyPriorReceipt = {
+  transaction_id: number;
+  reservation_id: number;
+  confirmation_code: string;
+  amount: number;
+  currency_code: string;
+  collected_on: string;
+  prior_receipt_note: string;
+  recorded_at: string;
+  recorded_by_user_id?: number | null;
+  recorded_by_name: string;
+};
+
+export type CashDailyPriorReceiptTotal = {
+  currency_code: string;
+  amount: number;
   transaction_count: number;
 };
 
@@ -144,6 +168,9 @@ export type CashDailySummary = {
     manual_income_total: number;
     manual_expense_total: number;
   };
+  prior_receipts: CashDailyPriorReceipt[];
+  prior_receipt_totals: CashDailyPriorReceiptTotal[];
+  prior_receipts_truncated: boolean;
   sessions: CashDailySession[];
   entries: CashDailyEntry[];
   entries_truncated: boolean;
@@ -170,11 +197,24 @@ export type CashSessionClosePayload = {
   approve_difference?: boolean;
 };
 
+export type CashCustodyReceiptPayload = {
+  successor_float_amount: number;
+};
+
 export const listCashSessions = (session?: SessionLike) =>
   apiFetch<CashSession[]>("/api/cash-register/sessions", { session });
 
 export const getLatestCashCloseReport = (session?: SessionLike) =>
   apiFetch<CashCloseReport | null>("/api/cash-register/close-reports/latest", { session });
+
+export const listPendingCashCloseReports = (session?: SessionLike) =>
+  apiFetch<CashCloseReport[]>("/api/cash-register/close-reports/pending", { session });
+
+export const listPendingCashCustodyReports = (session?: SessionLike) =>
+  apiFetch<CashCloseReport[]>("/api/cash-register/close-reports/custody/pending", { session });
+
+export const getCashSessionCloseReport = (sessionId: number, session?: SessionLike) =>
+  apiFetch<CashCloseReport | null>(`/api/cash-register/sessions/${sessionId}/close-report`, { session });
 
 export const openCashSession = (payload: CashSessionOpenPayload, session?: SessionLike) =>
   apiFetch<CashSession>("/api/cash-register/sessions", { method: "POST", data: payload, session });
@@ -235,8 +275,9 @@ export const approveCashCloseDifference = (reportId: number, session?: SessionLi
     session
   });
 
-export const confirmCashCustody = (reportId: number, session?: SessionLike) =>
+export const confirmCashCustody = (reportId: number, payload: CashCustodyReceiptPayload, session?: SessionLike) =>
   apiFetch<CashCloseReport>(`/api/cash-register/close-reports/${reportId}/custody/confirm`, {
     method: "POST",
+    data: payload,
     session
   });

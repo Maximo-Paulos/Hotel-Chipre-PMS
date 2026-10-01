@@ -165,6 +165,9 @@ class ReservationTransactionSummaryRead(BaseModel):
     status: str
     manual_reference: Optional[str] = None
     refund_of_transaction_id: Optional[int] = None
+    collected_before: bool = False
+    collected_on: Optional[date] = None
+    prior_receipt_note: Optional[str] = None
     created_at: str
 
 

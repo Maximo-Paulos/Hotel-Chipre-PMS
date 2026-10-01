@@ -1195,6 +1195,9 @@ def test_static_invitation_flow_keeps_bearer_out_of_urls_and_application_logs(ow
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["hotel_id"] == ctx["hotel_id"]
     assert accepted.json()["user"]["role"] == "manager"
+    replayed_preview = client.post("/api/invitations/preview", json={"token": token})
+    assert replayed_preview.status_code == 400
+    assert replayed_preview.json()["detail"]["code"] == "INVITATION_ALREADY_ACCEPTED"
     assert token not in caplog.text
     assert "route=/api/invitations" in caplog.text
     assert db.query(HotelMembership).filter_by(hotel_id=ctx["hotel_id"], role="manager", status="active").count() == 1
@@ -1252,7 +1255,9 @@ def test_expired_invitation_is_not_available(owner_ctx):
     invitation.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
     db.commit()
 
-    assert client.post("/api/invitations/preview", json={"token": token}).status_code == 400
+    preview = client.post("/api/invitations/preview", json={"token": token})
+    assert preview.status_code == 400
+    assert preview.json()["detail"]["code"] == "INVITATION_EXPIRED"
     assert client.post(
         "/api/invitations/accept",
         json={"token": token, "email": email, "password": "new-account-password"},
@@ -1680,6 +1685,69 @@ def test_co_owner_cannot_grant_privileged_roles(owner_ctx):
 
     demote_to_manager = client.patch(f"/api/users/{staff.id}/role", json={"role": "manager"})
     assert demote_to_manager.status_code == 200
+
+
+def test_owner_can_invite_co_owner_using_canonical_role_code(owner_ctx):
+    client, db, ctx = owner_ctx
+
+    response = client.post(
+        "/api/users/invite",
+        json={"email": "new-co-owner@test.com", "role": "co_owner"},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["user"]["role"] == "co_owner"
+    membership = db.query(HotelMembership).filter_by(
+        hotel_id=ctx["hotel_id"],
+        user_id=response.json()["user"]["id"],
+    ).one()
+    assert membership.role == "co_owner"
+    assert membership.status == "invited"
+
+
+def test_co_owner_cannot_revoke_or_change_primary_owner_membership(owner_ctx):
+    client, db, ctx = owner_ctx
+    primary_owner_membership = db.query(HotelMembership).filter_by(
+        hotel_id=ctx["hotel_id"],
+        user_id=ctx["user_id"],
+    ).one()
+    primary_owner_membership.is_primary_owner = True
+    co_owner = User(
+        email="co-owner-security@test.com",
+        password_hash=hash_password("pw"),
+        role="co_owner",
+        is_verified=True,
+    )
+    db.add(co_owner)
+    db.flush()
+    db.add(HotelMembership(
+        hotel_id=ctx["hotel_id"],
+        user_id=co_owner.id,
+        role="co_owner",
+        status="active",
+    ))
+    db.commit()
+
+    fastapi_app.dependency_overrides[get_auth_context_target()] = lambda: AuthContext(
+        hotel_id=ctx["hotel_id"],
+        user_id=co_owner.id,
+        user_email=co_owner.email,
+        user_role="co_owner",
+        is_verified=True,
+        permissions=set(),
+    )
+
+    revoke = client.delete(f"/api/users/{ctx['user_id']}")
+    change_role = client.patch(
+        f"/api/users/{ctx['user_id']}/role",
+        json={"role": "manager"},
+    )
+
+    assert revoke.status_code == 403
+    assert change_role.status_code == 403
+    db.refresh(primary_owner_membership)
+    assert primary_owner_membership.role == "owner"
+    assert primary_owner_membership.status == "active"
 
 
 def test_co_owner_cannot_demote_peer_through_invitation_email(owner_ctx):

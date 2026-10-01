@@ -8,7 +8,7 @@ import { ReservationDetailDrawer } from "../components/ReservationDetailDrawer";
 import { ReservationGlobalSearch } from "../components/ReservationGlobalSearch";
 import { Seo } from "../components/Seo";
 import { useDialogA11y } from "../hooks/useDialogA11y";
-import { useHotelConfig } from "../hooks/useHotelConfig";
+import { useHotelConfig, useHotelInterfaceLanguage } from "../hooks/useHotelConfig";
 import { useInstallPrompt } from "../hooks/useInstallPrompt";
 import { useUnreadNotificationCount } from "../hooks/useNotifications";
 import { useOnboardingStatus } from "../hooks/useOnboardingStatus";
@@ -55,6 +55,7 @@ const dailyNav: NavItem[] = [
   { label: "nav.daily.reservations", to: "/reservas", requiresAnyPermission: ["reservation:read"], hideForPreviewRoles: ["housekeeping"] },
   { label: "nav.daily.guests", to: "/huespedes", requiresAnyPermission: ["guest:read"], hideForPreviewRoles: ["housekeeping"] },
   { label: "nav.daily.rooms", to: "/habitaciones", requiresAnyPermission: ["room:read"] },
+  { label: "nav.daily.housekeepingToday", to: "/operacion/limpieza-hoy", requiresAnyPermission: ["housekeeping:board_view"] },
   { label: "nav.daily.tasks", to: "/operacion/tareas", requiresAnyPermission: ["operations:tasks:view", "operations:tasks:report", "operations:tasks:manage"] },
   { label: "nav.daily.cashRegister", to: "/caja", requiresAnyPermission: ["cash:view"], hideForPreviewRoles: ["housekeeping"] },
 ];
@@ -184,6 +185,7 @@ export function AppShell() {
   // so a hotel's interface_language takes effect on every protected route,
   // including the Settings page where it's actually changed.
   const { data: hotelConfig } = useHotelConfig();
+  useHotelInterfaceLanguage();
 
   const { data: onboarding, isFetching, error } = useOnboardingStatus({
     enabled: isLoggedIn && isVerified && ["owner", "co_owner"].includes(realRole ?? "")

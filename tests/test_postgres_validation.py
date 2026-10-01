@@ -72,6 +72,24 @@ skip_if_no_pg = pytest.mark.skipif(
 )
 
 
+def _reset_pg_to_empty_schema(env):
+    """Rebuild the explicitly isolated test DB as a truly empty public schema."""
+    from sqlalchemy import create_engine, text
+
+    safe_dsn = validate_postgres_test_target(PG_DSN, os.environ)
+    engine = create_engine(safe_dsn)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("DROP SCHEMA public CASCADE"))
+            conn.execute(text("CREATE SCHEMA public"))
+            remaining = conn.execute(
+                text("SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public'")
+            ).scalar_one()
+            assert remaining == 0, "public schema should be empty before migration validation"
+    finally:
+        engine.dispose()
+
+
 def _reset_pg_to_clean_head(env, cwd):
     """Rebuild the shared test DB into a pristine, fully-migrated schema.
 
@@ -82,17 +100,9 @@ def _reset_pg_to_clean_head(env, cwd):
     inconsistent state fails on missing relations, so reset the schema and re-apply
     every migration from scratch before exercising the down/up cycle.
     """
-    from sqlalchemy import create_engine, text
-
     safe_dsn = validate_postgres_test_target(PG_DSN, os.environ)
     safe_env = {**env, "DATABASE_URL": safe_dsn}
-    engine = create_engine(safe_dsn)
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("DROP SCHEMA public CASCADE"))
-            conn.execute(text("CREATE SCHEMA public"))
-    finally:
-        engine.dispose()
+    _reset_pg_to_empty_schema(env)
 
     baseline = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
@@ -106,10 +116,12 @@ def test_alembic_upgrade_on_empty_database():
     """Alembic upgrade head succeeds on fresh PostgreSQL database."""
     safe_dsn = validate_postgres_test_target(PG_DSN, os.environ)
     env = {**os.environ, "DATABASE_URL": safe_dsn}
+    cwd = os.path.dirname(os.path.dirname(__file__))
+    _reset_pg_to_empty_schema(env)
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         capture_output=True, text=True, env=env,
-        cwd=os.path.dirname(os.path.dirname(__file__))
+        cwd=cwd
     )
     assert result.returncode == 0, f"alembic upgrade failed:\n{result.stderr}"
 
@@ -334,6 +346,7 @@ def test_concurrent_reservation_auto_assignment_does_not_double_book(pg_engine):
 
     from app.models.guest import Guest
     from app.models.hotel_config import HotelConfiguration
+    from app.models.analytics import FactReservationDaily, FactRoomOccupancyDaily
     from app.models.reservation import Reservation
     from app.models.room import Room, RoomCategory, RoomStatusEnum
     from app.schemas.reservation import ReservationCreate
@@ -363,12 +376,14 @@ def test_concurrent_reservation_auto_assignment_does_not_double_book(pg_engine):
             last_name="Concurrency B",
             terms_accepted=True,
         )
-        setup.add_all([hotel, category, guest_a, guest_b])
+        setup.add(hotel)
+        setup.flush()
+        setup.add_all([category, guest_a, guest_b])
         setup.flush()
         room = Room(
             hotel_id=hotel_id,
             category_id=category.id,
-            room_number="PG-CONCURRENCY-1",
+            room_number="PC-1",
             floor=1,
             status=RoomStatusEnum.AVAILABLE,
             is_active=True,
@@ -422,6 +437,12 @@ def test_concurrent_reservation_auto_assignment_does_not_double_book(pg_engine):
     finally:
         cleanup = Session()
         try:
+            cleanup.query(FactReservationDaily).filter(
+                FactReservationDaily.hotel_id == hotel_id
+            ).delete(synchronize_session=False)
+            cleanup.query(FactRoomOccupancyDaily).filter(
+                FactRoomOccupancyDaily.hotel_id == hotel_id
+            ).delete(synchronize_session=False)
             cleanup.query(Reservation).filter(Reservation.hotel_id == hotel_id).delete(synchronize_session=False)
             cleanup.query(Guest).filter(Guest.hotel_id == hotel_id).delete(synchronize_session=False)
             cleanup.query(Room).filter(Room.hotel_id == hotel_id).delete(synchronize_session=False)

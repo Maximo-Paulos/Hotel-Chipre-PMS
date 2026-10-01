@@ -44,7 +44,11 @@ const installGoogleStub = async (page: Page) => {
   }));
 };
 
-const installApiMocks = async (page: Page, initialLogin = false) => {
+const installApiMocks = async (
+  page: Page,
+  initialLogin = false,
+  googleEnabled = Boolean(process.env.E2E_GOOGLE_CLIENT_ID)
+) => {
   const calls: Array<{ path: string; body: Record<string, unknown> | null }> = [];
   const backendURL = process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040";
 
@@ -60,10 +64,10 @@ const installApiMocks = async (page: Page, initialLogin = false) => {
     });
 
     if (method === "GET" && path === "/api/auth/providers") {
-      const clientId = process.env.E2E_GOOGLE_CLIENT_ID || null;
+      const clientId = googleEnabled ? process.env.E2E_GOOGLE_CLIENT_ID || null : null;
       return json({
         google: {
-          enabled: Boolean(clientId),
+          enabled: Boolean(googleEnabled && clientId),
           client_id: clientId,
           self_signup_enabled: Boolean(clientId),
           allowed_domains: []
@@ -74,7 +78,7 @@ const installApiMocks = async (page: Page, initialLogin = false) => {
       return json({ detail: "No active test session" }, 401);
     }
     if (method === "POST" && path === "/api/invitations/preview") {
-      return json({ email: invitedEmail, hotel_name: "Hotel de prueba", inviter_email: "owner@example.test" });
+      return json({ email: invitedEmail, role: "manager", hotel_name: "Hotel de prueba", inviter_email: "owner@example.test" });
     }
     if (method === "POST" && path === "/api/invitations/accept/google") {
       calls.push({ path, body });
@@ -189,16 +193,31 @@ test("password login returns to the invitation after MFA and accepts it automati
   expect(pageErrors).toEqual([]);
 });
 
-test("owner can invite with an alias, share an undelivered link, and edit the team alias", async ({ page }) => {
+test("invitation acceptance hides Google instructions when Google login is disabled", async ({ page }) => {
+  await installApiMocks(page, false, false);
+
+  await page.goto(`/invitations/accept#token=${invitationToken}`);
+  await expect(page.getByText("Hotel de prueba")).toBeVisible();
+  await expect(page.getByTestId("google-signin-button")).toHaveCount(0);
+  await expect(page.getByText(/Google/i)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Primer acceso" })).toBeVisible();
+  await expect(page.getByLabel("Contraseña nueva")).toBeVisible();
+});
+
+test("co-owner can invite staff and cannot manage the primary owner row", async ({ page }) => {
   const ownerEmail = "owner@example.test";
+  const coOwnerEmail = "co-owner@example.test";
   const staffEmail = "staff@example.test";
   const createdInvitationToken = "qa-new-invite-token";
   const permissions = ["dashboard:view", "settings:users:view", "settings:users:manage"];
   const testOrigin = process.env.E2E_BASE_URL || "http://127.0.0.1:5173";
   const invitationUrl = new URL(`/invitations/accept#token=${createdInvitationToken}`, testOrigin).toString();
+  const resentInvitationToken = "qa-resent-invite-token";
+  const resentInvitationUrl = new URL(`/invitations/accept#token=${resentInvitationToken}`, testOrigin).toString();
   const backendURL = process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040";
   const calls: Array<{ path: string; method: string; body: Record<string, unknown> | null }> = [];
   let staffAlias = "Turno noche";
+  let pendingInviteOpen = true;
 
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", {
@@ -217,33 +236,38 @@ test("owner can invite with an alias, share an undelivered link, and edit the te
     const body = method === "POST" || method === "PATCH"
       ? request.postDataJSON() as Record<string, unknown>
       : null;
-    if (body) calls.push({ path, method, body });
+    if (["POST", "PATCH", "DELETE"].includes(method)) calls.push({ path, method, body });
     const json = (data: unknown, status = 200) => route.fulfill({
       status,
       contentType: "application/json",
       body: JSON.stringify(data)
     });
 
+    if (method === "GET" && path === "/api/auth/providers") {
+      return json({
+        google: { enabled: false, client_id: null, self_signup_enabled: false, allowed_domains: [] }
+      });
+    }
     if (method === "POST" && path.endsWith("/api/auth/session/refresh")) {
       return json({ detail: "No active test session" }, 401);
     }
     if (method === "POST" && path === "/api/auth/login") {
       return json({
-        access_token: "synthetic-owner-access-token",
+        access_token: "synthetic-co-owner-access-token",
         token_type: "bearer",
         hotel_id: 42,
         hotel_ids: [42],
         user: {
-          id: 1,
-          email: ownerEmail,
-          role: "owner",
+          id: 2,
+          email: coOwnerEmail,
+          role: "co_owner",
           is_verified: true,
           is_active: true,
           password_login_enabled: true,
           permissions
         },
         permissions,
-        csrf_token: "synthetic-owner-csrf-token"
+        csrf_token: "synthetic-co-owner-csrf-token"
       });
     }
     if (method === "GET" && path === "/api/onboarding/status") {
@@ -259,19 +283,32 @@ test("owner can invite with an alias, share an undelivered link, and edit the te
       return json([]);
     }
     if (method === "GET" && path === "/api/permissions/effective") {
-      return json({ hotel_id: 42, role: "owner", permissions });
+      return json({ hotel_id: 42, role: "co_owner", permissions });
     }
     if (method === "GET" && path === "/api/users/") {
       return json([
         { id: 1, email: ownerEmail, role: "owner", is_verified: true, is_active: true, password_login_enabled: true, permissions },
+        { id: 2, email: coOwnerEmail, role: "co_owner", is_verified: true, is_active: true, password_login_enabled: true, permissions },
         { id: 8, email: staffEmail, role: "manager", is_verified: true, is_active: true, password_login_enabled: true, permissions: ["dashboard:view"] }
       ]);
     }
     if (method === "GET" && path === "/api/users/aliases") {
       return json({ items: [
         { user_id: 1, email: ownerEmail, role: "owner", status: "active", alias: null },
+        { user_id: 2, email: coOwnerEmail, role: "co_owner", status: "active", alias: null },
         { user_id: 8, email: staffEmail, role: "manager", status: "active", alias: staffAlias }
       ] });
+    }
+    if (method === "GET" && path === "/api/users/invitations") {
+      return json(pendingInviteOpen ? [{
+        invitation_id: 41,
+        email: "pending-staff@example.test",
+        role: "receptionist",
+        inviter_email: coOwnerEmail,
+        status: "pending",
+        created_at: "2026-09-29T12:00:00Z",
+        expires_at: "2026-10-06T12:00:00Z"
+      }] : []);
     }
     if (method === "GET" && path === "/api/roles") {
       return json({ roles: [
@@ -281,7 +318,7 @@ test("owner can invite with an alias, share an undelivered link, and edit the te
       ] });
     }
     if (method === "POST" && path === "/api/invitations/preview") {
-      return json({ email: "new-staff@example.test", hotel_name: "Hotel de prueba", inviter_email: ownerEmail });
+      return json({ email: "new-staff@example.test", role: "receptionist", hotel_name: "Hotel de prueba", inviter_email: coOwnerEmail });
     }
     if (method === "POST" && path === "/api/users/invite") {
       return json({
@@ -292,6 +329,19 @@ test("owner can invite with an alias, share an undelivered link, and edit the te
         email_delivery: "not_configured"
       });
     }
+    if (method === "POST" && path === "/api/users/invitations/41/resend") {
+      return json({
+        user: { id: 10, email: "pending-staff@example.test", role: "receptionist", is_verified: false, is_active: false, permissions: [] },
+        invitation_id: 41,
+        invite_token: resentInvitationToken,
+        accept_url: resentInvitationUrl,
+        email_delivery: "not_configured"
+      });
+    }
+    if (method === "DELETE" && path === "/api/users/invitations/41") {
+      pendingInviteOpen = false;
+      return route.fulfill({ status: 204, body: "" });
+    }
     if (method === "PATCH" && path === "/api/users/8/alias") {
       staffAlias = String(body?.alias ?? "");
       return json({ user_id: 8, email: staffEmail, role: "manager", status: "active", alias: staffAlias });
@@ -300,7 +350,7 @@ test("owner can invite with an alias, share an undelivered link, and edit the te
   });
 
   await page.goto("/login");
-  await page.getByLabel("Email").fill(ownerEmail);
+  await page.getByLabel("Email").fill(coOwnerEmail);
   await page.locator("#login-password").fill("synthetic-owner-password");
   await page.getByTestId("login-submit").click();
   await expect(page).toHaveURL(/\/dashboard$/);
@@ -308,17 +358,23 @@ test("owner can invite with an alias, share an undelivered link, and edit the te
   await page.getByRole("link", { name: "Usuarios", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "Usuarios y roles" })).toBeVisible();
+  const primaryOwnerRow = page.locator("tbody tr").filter({ hasText: ownerEmail });
+  await expect(primaryOwnerRow.getByLabel(`Rol de ${ownerEmail}`)).toHaveCount(0);
+  await expect(primaryOwnerRow.getByRole("button", { name: "Revocar", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: `Editar alias de ${ownerEmail}` })).toHaveCount(0);
   await expect(page.getByLabel("Rol para invitar").locator('option[value="receptionist"]')).toHaveText("Recepción");
-  await expect(page.getByText(staffEmail)).toBeVisible();
+  await expect(page.getByRole("cell", { name: staffEmail, exact: true })).toBeVisible();
   await expect(page.getByText("Turno noche")).toBeVisible();
+  await expect(page.getByText("pending-staff@example.test")).toBeVisible();
 
   await page.getByLabel("Email de invitación").fill("new-staff@example.test");
   await page.getByLabel("Alias del usuario (opcional)").fill("Recepción tarde");
+  await page.getByLabel("Rol para invitar").selectOption("receptionist");
   await page.getByRole("button", { name: "Invitar" }).click();
   await expect(page.getByRole("alert")).toContainText("el envío de email no está configurado");
   expect(calls.find((call) => call.path === "/api/users/invite")?.body).toMatchObject({
     email: "new-staff@example.test",
-    role: "manager",
+    role: "receptionist",
     alias: "Recepción tarde"
   });
 
@@ -327,6 +383,17 @@ test("owner can invite with an alias, share an undelivered link, and edit the te
   const copiedInvitationUrl = await page.evaluate(() => navigator.clipboard.readText());
   expect(copiedInvitationUrl).toBe(invitationUrl);
   expect(new URL(copiedInvitationUrl).hash).toBe(`#token=${createdInvitationToken}`);
+
+  await page.getByRole("button", { name: "Reenviar", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Abrir invitación" })).toBeVisible();
+  await page.getByRole("button", { name: "Copiar enlace" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(resentInvitationUrl);
+
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "Cancelar invitación", exact: true }).click();
+  await expect(page.getByText("No hay invitaciones pendientes.")).toBeVisible();
+  expect(calls.some((call) => call.path === "/api/users/invitations/41/resend")).toBe(true);
+  expect(calls.some((call) => call.path === "/api/users/invitations/41" && call.method === "DELETE")).toBe(true);
 
   await page.getByRole("button", { name: `Editar alias de ${staffEmail}` }).click();
   await page.getByLabel(`Alias de ${staffEmail}`).fill("Recepción de noche");

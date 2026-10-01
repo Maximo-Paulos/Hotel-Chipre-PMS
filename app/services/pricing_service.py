@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.hotel_config import HotelConfiguration
 from app.models.commercial import RatePlan, RatePlanPrice, TaxPolicy, TaxRule
+from app.models.company import Company
 from app.models.room import RoomCategory
 
 # Payment method column names on DailyRate / PricePeriod
@@ -344,6 +345,7 @@ def build_pricing_revision(
     guest_scope: str = "all",
     target_currency: str | None = None,
     occupancy: int | None = None,
+    company_id: int | None = None,
 ) -> str:
     """Return a deterministic revision for every input that affects a quote.
 
@@ -382,6 +384,7 @@ def build_pricing_revision(
             "guest_scope": guest_scope,
             "target_currency": target_currency,
             "occupancy": occupancy,
+            "company_id": company_id,
         },
         "hotel_policy": {
             "updated_at": _stamp(getattr(config, "updated_at", None)),
@@ -422,6 +425,23 @@ def build_pricing_revision(
         }
         for row in daily_rows
     ]
+
+    company = None
+    if company_id is not None:
+        company = (
+            db.query(Company)
+            .filter(Company.id == company_id, Company.hotel_id == hotel_id, Company.is_active.is_(True))
+            .first()
+        )
+    source["company"] = {
+        "id": company.id,
+        "base_price": company.base_price,
+        "payment_deferred": company.payment_deferred,
+        "deferred_days": company.deferred_days,
+        "requires_voucher": company.requires_voucher,
+        "requires_signature": company.requires_signature,
+        "updated_at": _stamp(company.updated_at),
+    } if company is not None else None
 
     periods = (
         db.query(PricePeriod)

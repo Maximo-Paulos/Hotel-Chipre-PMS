@@ -441,9 +441,13 @@ def test_destructive_postgres_operations_are_guarded_before_execution():
     assert fixture_source.rindex("validate_postgres_test_target") < fixture_source.index("drop_all")
 
     reset_source = inspect.getsource(postgres_validation._reset_pg_to_clean_head)
-    guard_position = reset_source.index("safe_dsn = validate_postgres_test_target")
-    assert guard_position < reset_source.index("engine = create_engine")
-    assert guard_position < reset_source.index("DROP SCHEMA")
+    reset_guard_position = reset_source.index("safe_dsn = validate_postgres_test_target")
+    assert reset_guard_position < reset_source.index("_reset_pg_to_empty_schema(env)")
+
+    empty_schema_source = inspect.getsource(postgres_validation._reset_pg_to_empty_schema)
+    empty_schema_guard_position = empty_schema_source.index("safe_dsn = validate_postgres_test_target")
+    assert empty_schema_guard_position < empty_schema_source.index("engine = create_engine")
+    assert empty_schema_guard_position < empty_schema_source.index("DROP SCHEMA")
 
 
 def test_postgres_validation_has_no_tautological_true_assertions():

@@ -6,12 +6,14 @@ the API and dashboard gating can use.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Iterable, Optional
 
 from sqlalchemy.orm import Session
 
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
+from app.models.invitation import StaffInvitation
 from app.models.onboarding import OnboardingState
 from app.models.room import Room, RoomCategory
 from app.models.daily_rate import DailyRate, PricePeriod
@@ -38,12 +40,24 @@ from app.services.hotel_configuration_service import (
     set_ota_channels,
     set_payment_methods,
 )
-from app.services.staff_invitation_service import normalize_staff_role, provision_staff_invitation
+from app.services.invitation_service import normalize_email, utcnow
+from app.services.staff_invitation_service import (
+    StaffInvitationProvision,
+    normalize_staff_role,
+    provision_staff_invitation,
+)
+from app.services.user_lookup_service import find_user_by_email
 from app.services.room_catalog_service import upsert_categories as upsert_catalog_categories, upsert_rooms as upsert_catalog_rooms
 
 
 class OnboardingError(Exception):
     """Raised when onboarding preconditions are not met."""
+
+
+@dataclass
+class StaffOnboardingResult:
+    status: dict
+    invitations: list[StaffInvitationProvision]
 
 
 ALLOWED_SUBSCRIPTION_PLANS = {"starter", "pro", "ultra"}
@@ -154,6 +168,7 @@ def _current_subscription_context(db: Session, hotel_id: int) -> dict:
         "staff_limit": snapshot["staff_limit"],
         "can_write": snapshot["can_write"],
         "trial_available": snapshot.get("trial_available", False),
+        "trial_end_at": snapshot.get("trial_end_at"),
     }
 
 
@@ -495,31 +510,77 @@ def store_staff(
     hotel_id: Optional[int] = None,
     actor_user_id: int | None = None,
     actor_email: str | None = None,
-) -> dict:
+    actor_role: str | None = None,
+) -> StaffOnboardingResult:
     hid = resolve_hotel_id(db, hotel_id)
-    state = get_or_create_state(db, hid)
     staff_members = list(staff)
-    staff_list = [member.model_dump() for member in staff_members]
+    normalized_members: list[StaffMember] = []
+    for member in staff_members:
+        try:
+            normalized_role = normalize_staff_role(member.role)
+        except ValueError as exc:
+            raise OnboardingError(str(exc)) from exc
+        if normalized_role == "co_owner" and actor_role != "owner":
+            raise OnboardingError("Solo el dueño puede invitar a otra copropietaria")
+        normalized_members.append(member.model_copy(update={"role": normalized_role}))
+
+    staff_list = [member.model_dump() for member in normalized_members]
+    state = get_or_create_state(db, hid)
     state.set_staff(staff_list)
     inviter_email = actor_email or state.owner_email
+    provisions: list[StaffInvitationProvision] = []
     if inviter_email:
-        for member in staff_members:
+        for member in normalized_members:
             if not member.email:
                 continue
+            email = normalize_email(member.email)
+            existing_user = find_user_by_email(db, email)
+            existing_membership = (
+                db.query(HotelMembership)
+                .filter(HotelMembership.hotel_id == hid, HotelMembership.user_id == existing_user.id)
+                .one_or_none()
+                if existing_user is not None
+                else None
+            )
+            if existing_membership is not None and existing_membership.status == "active":
+                if existing_membership.role == member.role:
+                    continue
+                raise OnboardingError("Esta persona ya tiene acceso al hotel con otro rol; actualizá el rol en Usuarios")
+
+            pending = (
+                db.query(StaffInvitation)
+                .filter(
+                    StaffInvitation.hotel_id == hid,
+                    StaffInvitation.email == email,
+                    StaffInvitation.status == "pending",
+                )
+                .order_by(StaffInvitation.id.desc())
+                .first()
+            )
+            if (
+                pending is not None
+                and pending.expires_at > utcnow()
+                and pending.role == member.role
+                and existing_membership is not None
+                and existing_membership.status == "invited"
+                and existing_membership.role == member.role
+            ):
+                continue
             try:
-                normalized_role = normalize_staff_role(member.role)
-                provision_staff_invitation(
-                    db,
-                    hotel_id=hid,
-                    email=member.email,
-                    role=normalized_role,
-                    inviter_user_id=actor_user_id,
-                    inviter_email=inviter_email,
+                provisions.append(
+                    provision_staff_invitation(
+                        db,
+                        hotel_id=hid,
+                        email=email,
+                        role=member.role or "receptionist",
+                        inviter_user_id=actor_user_id,
+                        inviter_email=inviter_email,
+                    )
                 )
             except ValueError as exc:
                 raise OnboardingError(str(exc)) from exc
     db.flush()
-    return _status_from_state(db, state)
+    return StaffOnboardingResult(status=_status_from_state(db, state), invitations=provisions)
 
 
 def finish_onboarding(db: Session, hotel_id: Optional[int] = None, actor_role: str | None = None) -> dict:

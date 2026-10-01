@@ -20,10 +20,14 @@ test("owner can save an enabled transfer method without completing the category 
   const transferMethod = page.locator("label").filter({ hasText: "Transferencia" }).locator('input[type="checkbox"]');
   await expect(transferMethod).toHaveCount(1);
   await transferMethod.check();
+  await page.getByLabel("Check-in desde").fill("14:00");
+  await page.getByLabel("Check-out hasta").fill("10:00");
 
   await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
   await expect(page.getByText("Cambios guardados.", { exact: true })).toBeVisible();
 
   await page.reload();
   await expect(transferMethod).toBeChecked();
+  await expect(page.getByLabel("Check-in desde")).toHaveValue("14:00");
+  await expect(page.getByLabel("Check-out hasta")).toHaveValue("10:00");
 });

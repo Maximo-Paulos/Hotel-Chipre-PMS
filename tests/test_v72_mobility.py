@@ -14,6 +14,7 @@ from app.main import app as fastapi_app
 from app.models.guest import Guest
 from app.models.audit_log import AuditLog
 from app.models.hotel_config import HotelConfiguration
+from app.models.permission import HotelPermissionOverride
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 
@@ -457,6 +458,18 @@ def test_room_move_endpoint_rejects_capacity_overflow_and_returns_delta_on_repri
         num_children=0,
     )
     db.add(reservation)
+    db.commit()
+
+    # This endpoint test exercises the reprice mechanics. F-039 leaves Owner's
+    # rate-adjust permission disabled by default, so opt in explicitly here.
+    db.add(
+        HotelPermissionOverride(
+            hotel_id=1,
+            role="owner",
+            permission_code="reservation:rate_adjust",
+            allowed=True,
+        )
+    )
     db.commit()
 
     overflow = client.post(

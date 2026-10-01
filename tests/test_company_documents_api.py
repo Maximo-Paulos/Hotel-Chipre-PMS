@@ -1,3 +1,5 @@
+import base64
+import hashlib
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -9,9 +11,11 @@ from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.company import Company
+from app.models.company_document import CompanyDocumentTypeEnum
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.services.object_storage import ObjectStat
 from app.models.user import User
 from app.schemas.reservation import ReservationCreate
 from app.services.reservation_service import create_reservation
@@ -68,7 +72,7 @@ def _client_with_db():
     return client, db, engine
 
 
-def _seed_reservation(db, *, hotel_id: int = 1):
+def _seed_reservation(db, *, hotel_id: int = 1, company_linked: bool = True):
     category = RoomCategory(
         hotel_id=hotel_id,
         name=f"Standard {hotel_id}",
@@ -102,7 +106,7 @@ def _seed_reservation(db, *, hotel_id: int = 1):
             guest_id=guest.id,
             category_id=category.id,
             room_id=room.id,
-            company_id=company.id,
+            company_id=company.id if company_linked else None,
             check_in_date=date(2026, 7, 1),
             check_out_date=date(2026, 7, 3),
         ),
@@ -220,6 +224,111 @@ def test_company_documents_api_cross_hotel_isolation():
         hidden = client.get(f"/api/company-documents/company/{company_h1.id}")
         assert hidden.status_code == 200
         assert hidden.json() == []
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_company_document_cannot_be_attached_to_unlinked_reservation():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+    try:
+        company, reservation = _seed_reservation(db, hotel_id=1, company_linked=False)
+
+        created = client.post(
+            "/api/company-documents",
+            json={
+                "reservation_id": reservation.id,
+                "company_id": company.id,
+                "doc_type": "voucher_pdf",
+                "file_name": "voucher.pdf",
+            },
+        )
+        assert created.status_code == 400
+        assert "linked to that company" in created.json()["detail"]
+
+        uploaded = client.post(
+            "/api/company-documents/upload",
+            json={
+                "reservation_id": reservation.id,
+                "company_id": company.id,
+                "doc_type": "voucher_pdf",
+                "file_name": "voucher.pdf",
+                "content_base64": base64.b64encode(b"%PDF-1.7\n").decode("ascii"),
+            },
+        )
+        assert uploaded.status_code == 400
+        assert "linked to that company" in uploaded.json()["detail"]
+
+        listed = client.get(f"/api/company-documents/company/{company.id}")
+        assert listed.status_code == 200
+        assert listed.json() == []
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_uploaded_company_voucher_is_private_signature_aware_and_tenant_scoped(monkeypatch):
+    class MemoryStorage:
+        def __init__(self):
+            self.objects: dict[str, bytes] = {}
+
+        def put_bytes(self, key, data, *, content_type=None):
+            self.objects[key] = data
+
+        def stat(self, key):
+            data = self.objects[key]
+            return ObjectStat(byte_size=len(data), sha256_hex=hashlib.sha256(data).hexdigest())
+
+        def get_bytes(self, key):
+            return self.objects[key]
+
+        def delete(self, key):
+            self.objects.pop(key, None)
+
+    storage = MemoryStorage()
+    import app.services.company_document_service as company_document_service
+    import app.services.stored_object_service as stored_object_service
+
+    monkeypatch.setattr(company_document_service, "get_object_storage", lambda: storage)
+    monkeypatch.setattr(stored_object_service, "get_object_storage", lambda: storage)
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager", user_id=55)
+    try:
+        company, reservation = _seed_reservation(db, hotel_id=1)
+        company.requires_voucher = True
+        company.requires_signature = True
+        db.commit()
+        pdf = b"%PDF-1.7\n% private voucher\n"
+        uploaded = client.post(
+            "/api/company-documents/upload",
+            json={
+                "reservation_id": reservation.id,
+                "company_id": company.id,
+                "doc_type": CompanyDocumentTypeEnum.VOUCHER_PDF.value,
+                "file_name": "../voucher private.pdf",
+                "content_base64": base64.b64encode(pdf).decode("ascii"),
+            },
+        )
+
+        assert uploaded.status_code == 201, uploaded.text
+        document = uploaded.json()
+        assert document["file_name"] == "voucher_private.pdf"
+        assert document["stored_object_id"]
+        assert document["requires_signature"] is True
+        assert document["status"] == "pending"
+
+        file_response = client.get(f"/api/company-documents/{document['id']}/file")
+        assert file_response.status_code == 200
+        assert file_response.content == pdf
+        assert "sandbox" in file_response.headers.get_list("content-security-policy")
+        assert file_response.headers["x-content-type-options"] == "nosniff"
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(2, "owner", user_id=55)
+        cross_hotel_file = client.get(f"/api/company-documents/{document['id']}/file")
+        assert cross_hotel_file.status_code == 404
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

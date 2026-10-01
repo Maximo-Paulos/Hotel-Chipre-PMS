@@ -91,8 +91,8 @@ test("owner creates a lodging restriction, it blocks booking, override unblocks 
   const categoryValue = await categoryOption.getAttribute("value");
   expect(categoryValue).toBeTruthy();
   await categorySelect.selectOption(categoryValue!);
-  await reservationForm.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(checkIn);
-  await reservationForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(checkOut);
+  await reservationForm.getByLabel("Check-in", { exact: true }).fill(checkIn);
+  await reservationForm.getByLabel("Check-out", { exact: true }).fill(checkOut);
 
   await expect(reservationForm.getByText(/restricción de alojamiento activa/i)).toBeVisible();
   await expect(reservationForm.getByRole("button", { name: "Crear", exact: true })).toBeDisabled();

@@ -18,6 +18,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -223,6 +224,7 @@ class BillingAdjustment(Base):
 
     __table_args__ = (
         CheckConstraint("total_amount != 0", name="ck_billing_adjustments_total_nonzero"),
+        UniqueConstraint("hotel_id", "id", name="uq_billing_adjustments_hotel_id_id"),
         Index("ix_billing_adjustments_hotel_id", "hotel_id"),
         Index("ix_billing_adjustments_reservation_id", "reservation_id"),
     )

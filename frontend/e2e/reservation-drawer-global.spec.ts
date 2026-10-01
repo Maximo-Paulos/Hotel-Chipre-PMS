@@ -40,11 +40,10 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
 
   await login(page);
 
-  // Only "cash" completes a payment immediately in this backend (bank
-  // transfer/gateway methods stay pending until a proof/webhook confirms
-  // them) -- see app/services/payment_service.py:process_payment. Cash
-  // requires an open register, so open one first (idempotent: another spec
-  // may have already left this hotel's register open).
+  // Cash and a manually verified in-person card/bank operation complete at
+  // this collection point; gateway links are handled by their separate flow.
+  // Cash requires an open register, so open one first (idempotent: another
+  // spec may have already left this hotel's register open).
   const sessionsResponse = page.waitForResponse(
     (response) => response.url().includes("/api/cash-register/sessions") && response.request().method() === "GET"
   );
@@ -81,8 +80,8 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   const categoryValue = await categoryOption.getAttribute("value");
   await categorySelect.selectOption(categoryValue!);
 
-  await form.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(checkIn);
-  await form.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(checkOut);
+  await form.getByLabel("Check-in", { exact: true }).fill(checkIn);
+  await form.getByLabel("Check-out", { exact: true }).fill(checkOut);
   await expect(form.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
 
   const [createResponse] = await Promise.all([
@@ -109,6 +108,11 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   await expect(drawer.getByTestId("drawer-guest-name")).toHaveText(`Huésped ${guestLastName}`);
   await expect(drawer).toContainText(guestLastName);
   await expect(drawer.getByText("Sin acompañantes cargados.", { exact: true })).toBeVisible();
+  const drawerPaymentMethod = drawer.getByLabel("Método de pago");
+  await expect(drawerPaymentMethod.locator('option[value="mercado_pago"]')).toHaveCount(0);
+  await drawerPaymentMethod.selectOption("credit_card");
+  await expect(drawer.getByLabel("Identificador verificado del cobro")).toBeVisible();
+  await drawerPaymentMethod.selectOption("cash");
   const balanceBeforePayment = await drawer.getByTestId("drawer-balance-due").innerText();
   expect(balanceBeforePayment).toMatch(/\d/);
   expect(balanceBeforePayment).not.toMatch(/^\D*0[.,]00\D*$/);
@@ -202,8 +206,8 @@ test("an authenticated second context sees a committed payment through realtime 
   const roomSelect = form.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
   const roomOption = roomSelect.locator("option").filter({ hasText: "101" });
   await roomSelect.selectOption((await roomOption.getAttribute("value"))!);
-  await form.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(pastIsoDate(5000 + salt));
-  await form.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(pastIsoDate(4998 + salt));
+  await form.getByLabel("Check-in", { exact: true }).fill(pastIsoDate(5000 + salt));
+  await form.getByLabel("Check-out", { exact: true }).fill(pastIsoDate(4998 + salt));
   const [createResponse] = await Promise.all([
     page.waitForResponse((response) => response.url().includes("/api/reservations/") && response.request().method() === "POST"),
     form.getByRole("button", { name: "Crear", exact: true }).click()

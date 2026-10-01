@@ -18,7 +18,7 @@ export function useEffectivePermissions() {
     queryKey: effectivePermissionsKey(session.hotelId, session.userId),
     queryFn: () => fetchEffectivePermissions(session),
     enabled: hasValidSession(session),
-    staleTime: 30 * 1000
+    staleTime: 5 * 60 * 1000
   });
 
   useEffect(() => {

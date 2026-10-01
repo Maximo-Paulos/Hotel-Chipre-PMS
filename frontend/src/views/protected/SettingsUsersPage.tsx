@@ -4,14 +4,17 @@ import { useTranslation } from "react-i18next";
 
 import {
   inviteUser,
+  listStaffInvitations,
   listUserAliases,
   listUsers,
+  revokeInvitation,
   resendInvitation,
   revokeUser,
   updateUserAlias,
   updateUserRole,
   type InvitePayload,
-  type InviteResponse
+  type InviteResponse,
+  type StaffInvitationEntry
 } from "../../api/users";
 import { type AuthUser } from "../../api/auth";
 import { hasValidSession } from "../../api/client";
@@ -31,6 +34,7 @@ export function SettingsUsersPage() {
   const { hasPermission } = useEffectivePermissions();
   const canManage = ["owner", "co_owner"].includes(session.baseRole ?? session.role ?? "")
     && hasPermission("settings:users:manage");
+  const canManageUser = (user: AuthUser) => canManage && session.userId !== user.email && user.role !== "owner";
   const rolesQuery = useQuery({
     queryKey: hotelRolesQueryKey(session.hotelId),
     enabled: hasValidSession(session) && canManage,
@@ -42,7 +46,6 @@ export function SettingsUsersPage() {
       role.is_active && role.code !== "owner" && !(actorRole === "co_owner" && role.code === "co_owner")
     );
   }, [rolesQuery.data?.roles, session.baseRole, session.role]);
-  const defaultAssignableRole = activeAssignableRoles.find((role) => role.code === "manager") ?? activeAssignableRoles[0];
   const roleDisplayName = (code: string) => {
     const role = rolesQuery.data?.roles.find((item) => item.code === code);
     if (role?.kind === "custom") return role.name;
@@ -61,6 +64,11 @@ export function SettingsUsersPage() {
     enabled: hasValidSession(session) && canManage,
     queryFn: () => listUserAliases(session)
   });
+  const invitationsQuery = useQuery<StaffInvitationEntry[]>({
+    queryKey: ["users", "invitations", session.hotelId],
+    enabled: hasValidSession(session) && canManage,
+    queryFn: () => listStaffInvitations(session)
+  });
   const inviteMutation = useGuardedMutation({
     // The wire payload carries a string role code. The API helper still narrows
     // it to the legacy built-in union; backend support for custom codes is a
@@ -73,12 +81,26 @@ export function SettingsUsersPage() {
       await Promise.all([
         refreshUserState(qc, session.hotelId),
         qc.invalidateQueries({ queryKey: ["users", "aliases", session.hotelId] }),
+        qc.invalidateQueries({ queryKey: ["users", "invitations", session.hotelId] }),
         qc.invalidateQueries({ queryKey: hotelRolesQueryKey(session.hotelId) })
       ]);
     }
   });
   const resendMutation = useGuardedMutation({
-    mutationFn: (invitationId: number) => resendInvitation(invitationId, session)
+    mutationFn: (invitationId: number) => resendInvitation(invitationId, session),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["users", "invitations", session.hotelId] });
+    }
+  });
+  const revokeInvitationMutation = useGuardedMutation({
+    mutationFn: (invitationId: number) => revokeInvitation(invitationId, session),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["users", "invitations", session.hotelId] }),
+        qc.invalidateQueries({ queryKey: ["users", "aliases", session.hotelId] }),
+        refreshUserState(qc, session.hotelId)
+      ]);
+    }
   });
   const revokeMutation = useGuardedMutation({
     mutationFn: (userId: number) => revokeUser(userId, session),
@@ -110,18 +132,20 @@ export function SettingsUsersPage() {
     }
   });
 
-  const [inviteForm, setInviteForm] = useState<InviteFormState>({ email: "", role: "manager", alias: "" });
+  const [inviteForm, setInviteForm] = useState<InviteFormState>({ email: "", role: "", alias: "" });
   const [inviteResult, setInviteResult] = useState<InviteResponse | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const [roleDrafts, setRoleDrafts] = useState<Record<number, string>>({});
+  const [roleChangeNotice, setRoleChangeNotice] = useState<{ email: string; role: string } | null>(null);
   const [editingAliasUserId, setEditingAliasUserId] = useState<number | null>(null);
   const [aliasDraft, setAliasDraft] = useState("");
   const [aliasError, setAliasError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!rolesQuery.data || activeAssignableRoles.some((role) => role.code === inviteForm.role)) return;
-    setInviteForm((current) => ({ ...current, role: defaultAssignableRole?.code ?? "" }));
-  }, [activeAssignableRoles, defaultAssignableRole, inviteForm.role, rolesQuery.data]);
+    if (!rolesQuery.data || !inviteForm.role || activeAssignableRoles.some((role) => role.code === inviteForm.role)) return;
+    setInviteForm((current) => ({ ...current, role: "" }));
+  }, [activeAssignableRoles, inviteForm.role, rolesQuery.data]);
 
   const aliasesByUserId = useMemo(
     () => new Map((aliasesQuery.data?.items ?? []).map((entry) => [entry.user_id, entry])),
@@ -139,18 +163,38 @@ export function SettingsUsersPage() {
       setInviteResult(response);
       setLinkCopied(false);
       setCopyError(false);
-      setInviteForm({ email: "", role: defaultAssignableRole?.code ?? "", alias: "" });
+      setInviteForm({ email: "", role: "", alias: "" });
     } catch {
       // The mutation state renders the safe backend error below.
     }
   };
 
-  const handleRoleChange = async (userId: number, role: string) => {
+  const handleRoleChange = async (user: AuthUser, role: string) => {
     if (!activeAssignableRoles.some((item) => item.code === role)) return;
-    if (!window.confirm(t("hotelRoles.roleChangePermissionConfirm", { role: roleDisplayName(role) }))) return;
+    setRoleDrafts((current) => ({ ...current, [user.id]: role }));
+    if (!window.confirm(t("hotelRoles.roleChangePermissionConfirm", { role: roleDisplayName(role) }))) {
+      setRoleDrafts((current) => {
+        const next = { ...current };
+        delete next[user.id];
+        return next;
+      });
+      return;
+    }
+    setRoleChangeNotice(null);
     try {
-      await updateRoleMutation.mutateAsync({ userId, role });
+      await updateRoleMutation.mutateAsync({ userId: user.id, role });
+      setRoleDrafts((current) => {
+        const next = { ...current };
+        delete next[user.id];
+        return next;
+      });
+      setRoleChangeNotice({ email: user.email, role });
     } catch {
+      setRoleDrafts((current) => {
+        const next = { ...current };
+        delete next[user.id];
+        return next;
+      });
       // The mutation state renders the safe backend error below.
     }
   };
@@ -168,6 +212,26 @@ export function SettingsUsersPage() {
     try {
       const response = await resendMutation.mutateAsync(inviteResult.invitation_id);
       setInviteResult((current) => current ? { ...current, ...response } : response);
+    } catch {
+      // The mutation state renders the safe backend error below.
+    }
+  };
+
+  const handleResendListedInvitation = async (invitationId: number) => {
+    try {
+      const response = await resendMutation.mutateAsync(invitationId);
+      setInviteResult(response);
+      setLinkCopied(false);
+      setCopyError(false);
+    } catch {
+      // The mutation state renders the safe backend error below.
+    }
+  };
+
+  const handleRevokeInvitation = async (invitation: StaffInvitationEntry) => {
+    if (!window.confirm(`¿Cancelar la invitación pendiente para ${invitation.email}?`)) return;
+    try {
+      await revokeInvitationMutation.mutateAsync(invitation.invitation_id);
     } catch {
       // The mutation state renders the safe backend error below.
     }
@@ -315,6 +379,61 @@ export function SettingsUsersPage() {
         </div>
       )}
 
+      {canManage && (
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="pending-invitations-title">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="pending-invitations-title" className="text-sm font-semibold text-slate-800">Invitaciones pendientes</h2>
+            {invitationsQuery.isFetching && <span className="text-xs text-slate-500">Actualizando...</span>}
+          </div>
+          {invitationsQuery.isError && <p className="mt-3 text-sm text-rose-700" role="alert">No se pudieron cargar las invitaciones.</p>}
+          {invitationsQuery.isLoading && <p className="mt-3 text-sm text-slate-500" role="status">Cargando invitaciones...</p>}
+          {invitationsQuery.isSuccess && invitationsQuery.data.length === 0 && (
+            <p className="mt-3 text-sm text-slate-600">No hay invitaciones pendientes.</p>
+          )}
+          <ul className="mt-3 space-y-3">
+            {(invitationsQuery.data ?? []).map((invitation) => {
+              const isLegacyOwnerInvitation = invitation.role === "owner";
+              const canRevoke = !isLegacyOwnerInvitation || (session.baseRole ?? session.role) === "owner";
+              return (
+                <li key={invitation.invitation_id} className="flex flex-col justify-between gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center">
+                  <div className="min-w-0">
+                    <p className="break-all text-sm font-semibold text-slate-900">{invitation.email}</p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      {roleDisplayName(invitation.role)} · {invitation.status === "expired" ? "Vencida" : "Pendiente"} · vence {new Date(invitation.expires_at).toLocaleString("es-AR", { dateStyle: "medium", timeStyle: "short" })}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">Invitó: {invitation.inviter_email}</p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {!isLegacyOwnerInvitation && (
+                      <button
+                        type="button"
+                        onClick={() => void handleResendListedInvitation(invitation.invitation_id)}
+                        disabled={resendMutation.isPending}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        {resendMutation.isPending ? "Reenviando..." : "Reenviar"}
+                      </button>
+                    )}
+                    {canRevoke && (
+                      <button
+                        type="button"
+                        onClick={() => void handleRevokeInvitation(invitation)}
+                        disabled={revokeInvitationMutation.isPending}
+                        className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                      >
+                        Cancelar invitación
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {resendMutation.isError && <p className="mt-2 text-sm text-rose-700" role="alert">No se pudo reenviar esta invitación.</p>}
+          {revokeInvitationMutation.isError && <p className="mt-2 text-sm text-rose-700" role="alert">No se pudo cancelar esta invitación.</p>}
+        </section>
+      )}
+
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-800">Usuarios del hotel</h2>
@@ -345,6 +464,9 @@ export function SettingsUsersPage() {
                       {(() => {
                         const membership = aliasesByUserId.get(u.id);
                         if (!membership) return <span className="text-slate-400">—</span>;
+                        if (!canManageUser(u)) {
+                          return <span className="text-slate-700">{membership.alias || <span className="text-slate-400">Sin alias</span>}</span>;
+                        }
                         if (editingAliasUserId !== u.id) {
                           return (
                             <div className="flex items-center gap-2">
@@ -394,13 +516,13 @@ export function SettingsUsersPage() {
                     </td>
                   )}
                   <td className="px-3 py-2">
-                    {canManage && session.userId !== u.email ? (
+                    {canManageUser(u) ? (
                       <select
                         className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
                         aria-label={`Rol de ${u.email}`}
-                        value={u.role}
+                        value={roleDrafts[u.id] ?? u.role}
                         disabled={rolesQuery.isLoading || rolesQuery.isError || updateRoleMutation.isPending}
-                        onChange={(e) => void handleRoleChange(u.id, e.target.value)}
+                        onChange={(e) => void handleRoleChange(u, e.target.value)}
                       >
                         {!activeAssignableRoles.some((role) => role.code === u.role) ? (
                           <option value={u.role} disabled>{`${roleDisplayName(u.role)} — ${t("hotelRoles.unavailable")}`}</option>
@@ -421,7 +543,7 @@ export function SettingsUsersPage() {
                     )}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {canManage && session.userId !== u.email && (
+                    {canManageUser(u) && (
                       <button
                         type="button"
                         onClick={() => void handleRevoke(u.id)}
@@ -441,6 +563,11 @@ export function SettingsUsersPage() {
           {updateRoleMutation.isError && (
             <p className="mt-2 text-sm text-rose-600">
               {(updateRoleMutation.error as Error).message || "No se pudo actualizar el rol"}
+            </p>
+          )}
+          {roleChangeNotice && (
+            <p className="mt-2 text-sm text-emerald-700" role="status">
+              {t("hotelRoles.roleChangeSuccess", { email: roleChangeNotice.email, role: roleDisplayName(roleChangeNotice.role) })}
             </p>
           )}
         </div>

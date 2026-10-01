@@ -77,8 +77,8 @@ test("QA- default hotel deposit shown before confirming matches the deposit stor
   await expect(roomOption).toHaveCount(1);
   await roomSelect.selectOption((await roomOption.getAttribute("value"))!);
 
-  await form.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(checkIn);
-  await form.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(checkOut);
+  await form.getByLabel("Check-in", { exact: true }).fill(checkIn);
+  await form.getByLabel("Check-out", { exact: true }).fill(checkOut);
 
   // Dejar "Seña manual" vacía a propósito: el operador espera usar la seña
   // porcentual configurada por el hotel, no una seña de $0 ni "sin definir".

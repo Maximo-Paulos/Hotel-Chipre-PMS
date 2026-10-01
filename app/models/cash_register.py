@@ -225,6 +225,17 @@ class CashCloseReport(Base):
     closed_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     successor_session_id = Column(Integer, nullable=True, unique=True)
+    successor_float_declared_amount = Column(Numeric(12, 2), nullable=True)
+    successor_float_declared_by_user_id = Column(
+        Integer,
+        ForeignKey(
+            "users.id",
+            name="fk_cash_close_reports_successor_float_declared_by_user",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+    successor_float_declared_at = Column(DateTime, nullable=True)
 
     session = relationship("CashSession", back_populates="close_report", foreign_keys=[session_id])
     successor_session = relationship("CashSession", foreign_keys=[successor_session_id], uselist=False)
@@ -236,6 +247,10 @@ class CashCloseReport(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "successor_float_declared_amount IS NULL OR successor_float_declared_amount >= 0",
+            name="ck_cash_close_successor_float_nonneg",
+        ),
         UniqueConstraint("hotel_id", "id", name="uq_cash_close_reports_hotel_id_id"),
         ForeignKeyConstraint(
             ["hotel_id", "session_id"], ["cash_sessions.hotel_id", "cash_sessions.id"],
@@ -254,6 +269,20 @@ class CashCloseReport(Base):
             f"expected={self.expected_balance}, declared={self.declared_balance}, "
             f"diff={self.difference})>"
         )
+
+    @property
+    def currency_code(self):
+        """Currency of the cash session represented by this close report."""
+        if self.session is None:
+            return None
+        return self.session.currency_code
+
+    @property
+    def successor_opening_balance(self):
+        """Opening float recorded for the next session, when one exists."""
+        if self.successor_session is None:
+            return None
+        return self.successor_session.opening_balance
 
 
 class CashCustodyHandoff(Base):

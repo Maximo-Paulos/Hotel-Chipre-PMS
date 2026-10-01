@@ -15,6 +15,34 @@
     "occupied": "Occupied",
     "cleaning": "Cleaning"
   },
+  "housekeepingStatus": {
+    "label": "Cleaning status",
+    "hint": "This status does not change occupancy or future reservations.",
+    "dirty": "Dirty",
+    "in_progress": "In progress",
+    "clean": "Clean",
+    "inspected": "Inspected"
+  },
+  "housekeepingToday": {
+    "eyebrow": "Daily operations",
+    "title": "Housekeeping today",
+    "loadingDate": "Hotel date",
+    "summary": "Housekeeping summary",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing...",
+    "loading": "Loading rooms...",
+    "loadError": "Unable to load the housekeeping board.",
+    "retry": "Retry",
+    "empty": "There are no active rooms.",
+    "roomList": "Rooms for housekeeping",
+    "room": "Room {{number}}",
+    "floorCategory": "Floor {{floor}} · {{category}}",
+    "arrival": "Arrival due today",
+    "departure": "Departure due today",
+    "maintenanceBlocked": "Blocked for maintenance",
+    "noSpecialEvents": "No special events today",
+    "statusForRoom": "Cleaning status · {{number}}"
+  },
   "inventory": {
     "eyebrow": "Inventory",
     "title": "Rooms ({{count}})",
@@ -28,12 +56,14 @@
     "noNotes": "No notes",
     "statusLabel": "Operational status",
     "statusAriaLabel": "Status for room {{number}}",
-    "housekeepingHint": "Housekeeping can only toggle Cleaning and Available.",
+    "housekeepingHint": "Update cleaning without changing occupancy or future reservations.",
     "saving": "Saving...",
     "statusUpdateError": "Unable to update the status: {{message}}",
     "readOnlyRole": "Read-only for your role.",
     "empty": "No rooms loaded in the system.",
-    "statusUpdateDefaultError": "Unable to update the room's status."
+    "statusUpdateDefaultError": "Unable to update the room's status.",
+    "maintenanceStatusLoading": "Checking maintenance blocks...",
+    "maintenanceStatusError": "Unable to verify maintenance blocks. Check with reception before assigning this room."
   },
   "blocks": {
     "eyebrow": "Blocks",
@@ -54,6 +84,11 @@
     "create": "Create block",
     "createSuccess": "Block created.",
     "createError": "Unable to create the block.",
+    "conflictsLoading": "Checking reservations for those dates...",
+    "conflictWarning": "Overlapping reservations: {{count}}. Review Occupancy Planning before creating the block.",
+    "protectedConflictWarning": "Reservations that require manual resolution before blocking: {{count}}.",
+    "conflictVerificationError": "Could not verify the overlap. Review Occupancy Planning before continuing; the server still validates the block when saved.",
+    "protectedConflictRejected": "The block was not created. Reservations that require manual resolution: {{count}}. Review Occupancy Planning before trying again.",
     "roomFallback": "Information unavailable",
     "roomFloor": "Room {{number}} · Floor {{floor}}",
     "resolving": "Resolving...",

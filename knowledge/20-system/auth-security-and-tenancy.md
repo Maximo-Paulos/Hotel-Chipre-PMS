@@ -12,7 +12,7 @@ Las APIs de `app/api` ya no invocan `require_roles()` ni `require_roles_and_perm
 
 El catálogo local tiene 94 permisos canónicos. Quince capabilities tienen alcance de rol inmutable: configuración sensible/usuarios, suscripción, seguridad, pruebas, reportes diarios, acciones del asistente, grants temporales y configuración comercial se limitan a owner/co-owner; demo-seed y borrado lógico de reservas se limitan a owner/co-owner/manager. El seed es idempotente y corre con el inicio de la aplicación; no se agregó migración ni dependencia.
 
-La aprobación de diferencia de caja y la recepción de custodia usan capabilities distintas y step-up MFA: el ticket es corto, de un solo uso y ligado a la acción/ruta. La capability de custodia es owner-only. La aprobación adicional de caja se verifica solo cuando el cierre solicita explícitamente aprobar una diferencia. El cierre deja la recepción en `PENDING`; no auto-confirma efectivo por el hecho de que quien cierra sea owner. La confirmación se realiza aparte por el endpoint owner-only con step-up.
+La aprobación de diferencia de caja y la recepción de custodia usan capabilities distintas y step-up MFA: el ticket es corto, de un solo uso y ligado a la acción/ruta. Owner y co-owner pueden aprobar diferencias y recibir custodia; gerencia, recepción y limpieza no obtienen esas capabilities. La aprobación adicional de caja se verifica solo cuando el cierre solicita explícitamente aprobar una diferencia. El cierre deja la recepción en `PENDING`; no auto-confirma efectivo por el hecho de que quien cierra sea owner. La confirmación se realiza aparte con step-up.
 
 ## Validación local de esta revisión
 

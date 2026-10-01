@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
@@ -13,10 +14,13 @@ import {
 import { GoogleSignInButton } from "../../components/GoogleSignInButton";
 import { PasswordInput } from "../../components/PasswordInput";
 import { Seo } from "../../components/Seo";
+import { useAuthProviders } from "../../hooks/useAuthProviders";
 import { defaultPathForRole, normalizeRole, useSession } from "../../state/session";
 
 type InvitationInfo = {
   email: string;
+  role: string;
+  role_name?: string | null;
   hotel_name?: string;
   inviter_email?: string;
 };
@@ -38,11 +42,14 @@ const sessionFromAuthResponse = (response: AuthResponse) => {
 };
 
 export function AcceptInvitationPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const queryToken = new URLSearchParams(location.search).get("token") || "";
   const token = queryToken || new URLSearchParams(location.hash.slice(1)).get("token") || "";
   const { login, logout, session, isInitializing } = useSession();
+  const authProvidersQuery = useAuthProviders();
+  const googleLoginAvailable = authProvidersQuery.data?.google?.enabled === true;
   const attemptedSessionAccept = useRef<string | null>(null);
 
   useEffect(() => {
@@ -64,6 +71,7 @@ export function AcceptInvitationPage() {
   const [mfaCode, setMfaCode] = useState("");
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -72,6 +80,7 @@ export function AcceptInvitationPage() {
     setIsLoadingInfo(true);
     setInvitation(null);
     setError(null);
+    setPreviewFailed(false);
     setInfo(null);
     setMfaToken(null);
     attemptedSessionAccept.current = null;
@@ -89,7 +98,19 @@ export function AcceptInvitationPage() {
         if (active) setInvitation(data);
       })
       .catch((err) => {
-        if (active) setError(err instanceof ApiError ? err.message : "Invitación inválida o expirada");
+        if (!active) return;
+        const payload = err instanceof ApiError && err.payload && typeof err.payload === "object"
+          ? err.payload as Record<string, unknown>
+          : null;
+        const detail = payload?.detail && typeof payload.detail === "object"
+          ? payload.detail as Record<string, unknown>
+          : null;
+        const code = typeof detail?.code === "string" ? detail.code : "";
+        const unavailable = code.startsWith("INVITATION_");
+        setPreviewFailed(unavailable);
+        setError(unavailable
+          ? "Esta invitación ya no está disponible. Puede que ya la hayas usado o haya vencido."
+          : err instanceof ApiError ? err.message : "No se pudo consultar la invitación.");
       })
       .finally(() => {
         if (active) setIsLoadingInfo(false);
@@ -242,7 +263,10 @@ export function AcceptInvitationPage() {
     }
   };
 
-  const signInUrl = `/login#invitation=${encodeURIComponent(token)}`;
+  const signInPath = invitation ? `/login#invitation=${encodeURIComponent(token)}` : "/login";
+  const signInState = previewFailed
+    ? { invitationNotice: "unavailable" }
+    : undefined;
   const hasSession = Boolean(session.accessToken);
   const sessionEmailMatches = Boolean(
     invitation?.email && session.email?.trim().toLowerCase() === invitation.email.trim().toLowerCase()
@@ -253,7 +277,11 @@ export function AcceptInvitationPage() {
       <Seo title="Aceptar invitación | Hotels-PMS" description="Activa tu acceso al hotel invitado." noindex />
       <main className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg ring-1 ring-slate-100 sm:p-8">
         <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900">Aceptar invitación</h1>
-        <p className="mt-2 text-sm text-slate-600">Ingresá con Google, verificá tu cuenta existente o creá una nueva contraseña si es tu primer acceso.</p>
+        <p className="mt-2 text-sm text-slate-600">
+          {googleLoginAvailable
+            ? "Ingresá con Google, verificá tu cuenta existente o creá una nueva contraseña si es tu primer acceso."
+            : "Verificá tu cuenta existente o creá una nueva contraseña si es tu primer acceso."}
+        </p>
 
         {isLoadingInfo ? (
           <p className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600" role="status">
@@ -265,6 +293,7 @@ export function AcceptInvitationPage() {
               {invitation.hotel_name && <p><strong>Hotel:</strong> {invitation.hotel_name}</p>}
               {invitation.inviter_email && <p><strong>Invitado por:</strong> {invitation.inviter_email}</p>}
               <p><strong>Email invitado:</strong> <span className="break-all text-slate-900">{invitation.email}</span></p>
+              <p><strong>Rol:</strong> {invitation.role_name || t(`hotelRoleNames.${invitation.role}`, { defaultValue: invitation.role })}</p>
             </div>
 
             {hasSession && sessionEmailMatches && !loading && !mfaToken && !error && (
@@ -329,90 +358,108 @@ export function AcceptInvitationPage() {
               </form>
             ) : !sessionEmailMatches && (
               <>
-                <div className="mt-5 rounded-lg border border-slate-200 p-3">
-                  <p className="mb-3 text-sm font-medium text-slate-700">Usar Google con el email de la invitación</p>
-                  <div aria-disabled={loading} className={loading ? "pointer-events-none opacity-60" : undefined}>
-                    <GoogleSignInButton onCredential={handleGoogleCredential} />
+                {googleLoginAvailable && (
+                  <div className="mt-5 rounded-lg border border-slate-200 p-3">
+                    <p className="mb-3 text-sm font-medium text-slate-700">Usar Google con el email de la invitación</p>
+                    <div aria-disabled={loading} className={loading ? "pointer-events-none opacity-60" : undefined}>
+                      <GoogleSignInButton onCredential={handleGoogleCredential} />
+                    </div>
+                    {loading && <p className="mt-2 text-center text-xs text-slate-500" role="status">Verificando con Google...</p>}
                   </div>
-                  {loading && <p className="mt-2 text-center text-xs text-slate-500" role="status">Verificando con Google...</p>}
-                </div>
+                )}
 
                 {!hasSession && (
                   <>
-                    <section className="mt-5 rounded-lg border border-slate-200 p-3">
-                      <h2 className="text-sm font-semibold text-slate-800">Ya tenés una cuenta</h2>
-                      <p className="mt-1 text-xs text-slate-600">Ingresá tu contraseña actual; no se modifica.</p>
-                      <form className="mt-3 space-y-3" onSubmit={submitCurrentPassword}>
-                        <label className="block text-sm font-medium text-slate-700" htmlFor="invitation-current-password">
-                          Contraseña actual
+                    <section className="mt-5 rounded-lg border border-brand-100 bg-brand-50/40 p-3">
+                      <h2 className="text-sm font-semibold text-slate-800">Primer acceso</h2>
+                      <p className="mt-1 text-xs text-slate-600">Creá una contraseña nueva para activar tu cuenta.</p>
+                      <form className="mt-3 space-y-4" onSubmit={submitPassword}>
+                        <label className="block text-sm font-medium text-slate-700" htmlFor="invitation-password">
+                          Contraseña nueva
                         </label>
                         <PasswordInput
-                          id="invitation-current-password"
-                          value={currentPassword}
-                          onChange={setCurrentPassword}
-                          placeholder="Tu contraseña actual"
+                          id="invitation-password"
+                          value={password}
+                          onChange={setPassword}
+                          placeholder="Mínimo 12 caracteres"
                           required
-                          autoComplete="current-password"
+                          autoComplete="new-password"
                         />
+                        <label className="block text-sm font-medium text-slate-700" htmlFor="invitation-password-confirm">
+                          Confirmar contraseña
+                          <input
+                            id="invitation-password-confirm"
+                            type="password"
+                            autoComplete="new-password"
+                            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                            placeholder="Repetí tu contraseña"
+                            minLength={12}
+                            value={confirm}
+                            onChange={(event) => setConfirm(event.target.value)}
+                            required
+                          />
+                        </label>
                         <button
-                          className="w-full rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-100 disabled:opacity-60"
+                          className="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
                           disabled={loading || !token}
                           type="submit"
                         >
-                          {loading ? "Verificando..." : "Verificar y aceptar"}
+                          {loading ? "Verificando..." : "Continuar y aceptar"}
                         </button>
                       </form>
                     </section>
 
-                    <div className="relative my-4 flex items-center">
-                      <div className="flex-grow border-t border-slate-200" />
-                      <span className="mx-3 text-xs uppercase text-slate-400">primer acceso</span>
-                      <div className="flex-grow border-t border-slate-200" />
-                    </div>
-                    <form className="space-y-4" onSubmit={submitPassword}>
-                      <label className="block text-sm font-medium text-slate-700" htmlFor="invitation-password">
-                        Contraseña nueva
-                      </label>
-                      <PasswordInput
-                        id="invitation-password"
-                        value={password}
-                        onChange={setPassword}
-                        placeholder="Mínimo 12 caracteres"
-                        required
-                        autoComplete="new-password"
-                      />
-                      <label className="block text-sm font-medium text-slate-700" htmlFor="invitation-password-confirm">
-                        Confirmar contraseña
-                        <input
-                          id="invitation-password-confirm"
-                          type="password"
-                          autoComplete="new-password"
-                          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                          placeholder="Repetí tu contraseña"
-                          minLength={12}
-                          value={confirm}
-                          onChange={(event) => setConfirm(event.target.value)}
-                          required
-                        />
-                      </label>
-                      <button
-                        className="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
-                        disabled={loading || !token}
-                        type="submit"
-                      >
-                        {loading ? "Verificando..." : "Continuar y aceptar"}
-                      </button>
-                    </form>
+                    <details className="mt-4 rounded-lg border border-slate-200 px-3 py-3">
+                      <summary className="cursor-pointer text-sm font-semibold text-slate-700">Ya tenés una cuenta</summary>
+                      <div className="mt-2 border-t border-slate-200 pt-3">
+                        <p className="text-xs text-slate-600">Ingresá tu contraseña actual; no se modifica.</p>
+                        <form className="mt-3 space-y-3" onSubmit={submitCurrentPassword}>
+                          <label className="block text-sm font-medium text-slate-700" htmlFor="invitation-current-password">
+                            Contraseña actual
+                          </label>
+                          <PasswordInput
+                            id="invitation-current-password"
+                            value={currentPassword}
+                            onChange={setCurrentPassword}
+                            placeholder="Tu contraseña actual"
+                            required
+                            autoComplete="current-password"
+                          />
+                          <button
+                            className="w-full rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-100 disabled:opacity-60"
+                            disabled={loading || !token}
+                            type="submit"
+                          >
+                            {loading ? "Verificando..." : "Verificar y aceptar"}
+                          </button>
+                        </form>
+                      </div>
+                    </details>
                   </>
                 )}
 
                 <p className="mt-5 text-center text-sm text-slate-600">
-                  ¿Ya tenés una cuenta? <Link to={signInUrl} className="font-semibold text-brand-700 hover:underline">Ingresá y aceptá</Link>
+                  ¿Ya tenés una cuenta? <Link to={signInPath} className="font-semibold text-brand-700 hover:underline">Ingresá y aceptá</Link>
                 </p>
               </>
             )}
           </>
         ) : null}
+
+        {!isLoadingInfo && previewFailed && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" role="status">
+            <p>Esta invitación ya no está disponible. Puede que ya la hayas usado o haya vencido.</p>
+            {hasSession ? (
+              <Link className="mt-2 inline-block font-semibold text-brand-700 hover:underline" to={defaultPathForRole(session.baseRole ?? session.role)}>
+                Ir a mi cuenta
+              </Link>
+            ) : (
+              <Link className="mt-2 inline-block font-semibold text-brand-700 hover:underline" to={signInPath} state={signInState}>
+                Ingresar
+              </Link>
+            )}
+          </div>
+        )}
 
         {info && <p className="mt-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-800" role="status">{info}</p>}
         {error && <p className="mt-4 rounded-md bg-rose-50 p-3 text-sm text-rose-700" role="alert">{error}</p>}
@@ -421,7 +468,7 @@ export function AcceptInvitationPage() {
           <p className="mt-4 text-center text-sm text-slate-500" role="status">Procesando la invitación...</p>
         )}
         <div className="mt-5 text-center text-sm">
-          <Link to={signInUrl} className="text-brand-700 hover:underline">Volver al ingreso</Link>
+          <Link to={signInPath} state={signInState} className="text-brand-700 hover:underline">Volver al ingreso</Link>
         </div>
       </main>
     </div>

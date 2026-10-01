@@ -138,6 +138,10 @@ let refreshInFlight: { session: SessionLike | null; promise: Promise<AuthRespons
 let unauthorizedHandled = false;
 let actionStepUpHandler: ActionStepUpHandler | null = null;
 let actionStepUpQueue: Promise<void> = Promise.resolve();
+let permissionAdminReadStepUpInFlight: {
+  session: SessionLike | null;
+  promise: Promise<ActionStepUpTicket | null>;
+} | null = null;
 let permissionAdminReadStepUpCache: {
   ticket: string;
   expiresAt: number;
@@ -198,8 +202,25 @@ const isRefreshResponseForSession = (response: AuthResponsePayload, session: Ses
   normalizedSessionUserId(response.user.email) === normalizedSessionUserId(session.userId) &&
   normalizeHotelId(response.hotel_id) === normalizeHotelId(session.hotelId);
 
-const isSameRefreshContext = (left: SessionLike | null, right: SessionLike | null) =>
-  left === null || right === null ? left === right : hasSameSession(left, right);
+const isSameRefreshContext = (left: SessionLike | null, right: SessionLike | null) => {
+  if (left === null || right === null) return left === right;
+
+  const leftToken = left.accessToken?.trim() || "";
+  const rightToken = right.accessToken?.trim() || "";
+  if (!leftToken && !rightToken) {
+    // React StrictMode can mount the session provider twice during startup.
+    // Both anonymous contexts share the same browser cookie, even though
+    // hasSameSession() intentionally requires a bearer token. Coalesce their
+    // cookie refresh so a rotating session cookie is never consumed twice.
+    return (
+      normalizedSessionUserId(left.userId) === normalizedSessionUserId(right.userId) &&
+      normalizeHotelId(left.hotelId) === normalizeHotelId(right.hotelId) &&
+      (left.csrfToken?.trim() || "") === (right.csrfToken?.trim() || "")
+    );
+  }
+
+  return hasSameSession(left, right);
+};
 
 export const setClientSession = (session?: SessionLike | null) => {
   if (!session || !hasSameSessionIdentity(clientSession, session)) {
@@ -235,9 +256,27 @@ const requestActionStepUpTicket = (
   session: SessionLike | null,
   signal?: AbortSignal
 ): Promise<ActionStepUpTicket | null> => {
+  const isPermissionAdminRead = isPermissionAdminReadAction(challenge.method, challenge.path);
+  if (isPermissionAdminRead) {
+    const cachedTicket = getPermissionAdminReadStepUpTicket(challenge.method, challenge.path, session);
+    if (cachedTicket) {
+      return Promise.resolve({
+        ticket: cachedTicket,
+        scope: "permission_admin_read",
+        expiresInSeconds: 0
+      });
+    }
+    if (
+      permissionAdminReadStepUpInFlight &&
+      hasSameSession(permissionAdminReadStepUpInFlight.session, session)
+    ) {
+      return permissionAdminReadStepUpInFlight.promise;
+    }
+  }
+
   const queuedRequest = actionStepUpQueue.then(async () => {
     if (signal?.aborted || !isCurrentSession(session)) return null;
-    if (isPermissionAdminReadAction(challenge.method, challenge.path)) {
+    if (isPermissionAdminRead) {
       const cachedTicket = getPermissionAdminReadStepUpTicket(challenge.method, challenge.path, session);
       if (cachedTicket) {
         return {
@@ -264,13 +303,21 @@ const requestActionStepUpTicket = (
     }
     return normalizedTicket;
   });
+  const trackedRequest = queuedRequest.finally(() => {
+    if (permissionAdminReadStepUpInFlight?.promise === trackedRequest) {
+      permissionAdminReadStepUpInFlight = null;
+    }
+  });
+  if (isPermissionAdminRead) {
+    permissionAdminReadStepUpInFlight = { session: session ? { ...session } : null, promise: trackedRequest };
+  }
   // Keep the queue alive even when a UI handler rejects unexpectedly. The
   // original protected request will surface its own 428 in that case.
-  actionStepUpQueue = queuedRequest.then(
+  actionStepUpQueue = trackedRequest.then(
     () => undefined,
     () => undefined
   );
-  return queuedRequest;
+  return trackedRequest;
 };
 
 // Clear the in-memory session and redirect to /login. Guarded so a burst of

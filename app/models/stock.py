@@ -109,6 +109,10 @@ class StockMovement(Base):
     # or with a real key in a unique constraint (same convention as
     # payment_links.idempotency_key, see 20260812_external_effect_payment_links).
     idempotency_key = Column(String(100), nullable=True)
+    # Both ledger rows for one physical location-to-location transfer share
+    # this opaque reference so the pair is auditable and excluded from
+    # consumption totals. It is nullable for ordinary stock movements.
+    transfer_reference = Column(String(36), nullable=True)
 
     item = relationship("StockItem", back_populates="movements", lazy="joined")
     location = relationship("StockLocation", back_populates="movements", lazy="joined")
@@ -119,6 +123,10 @@ class StockMovement(Base):
             name="ck_stock_movements_type_valid",
         ),
         CheckConstraint("quantity > 0", name="ck_stock_movements_quantity_positive"),
+        CheckConstraint(
+            "transfer_reference IS NULL OR movement_type IN ('in', 'out')",
+            name="ck_stock_movements_transfer_direction_valid",
+        ),
         ForeignKeyConstraint(
             ["hotel_id", "item_id"], ["stock_items.hotel_id", "stock_items.id"],
             name="fk_stock_movements_hotel_item", ondelete="CASCADE",
@@ -133,6 +141,15 @@ class StockMovement(Base):
         ),
         UniqueConstraint(
             "hotel_id", "idempotency_key", name="uq_stock_movement_idempotency_per_hotel"
+        ),
+        Index(
+            "uq_stock_movement_transfer_direction",
+            "hotel_id",
+            "transfer_reference",
+            "movement_type",
+            unique=True,
+            sqlite_where=text("transfer_reference IS NOT NULL"),
+            postgresql_where=text("transfer_reference IS NOT NULL"),
         ),
         Index("ix_stock_movements_hotel_id", "hotel_id"),
     )

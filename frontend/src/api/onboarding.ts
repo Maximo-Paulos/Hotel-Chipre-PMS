@@ -23,10 +23,16 @@ export type OnboardingStatus = {
   payment_methods?: Record<string, OnboardingProviderSetup> | null;
   ota_channels?: Record<string, OnboardingProviderSetup> | null;
   subscription_choice?: Record<string, unknown> | null;
-  current_subscription?: Record<string, unknown> | null;
+  current_subscription?: OnboardingSubscription | null;
   categories?: CategoryPayload[];
   rooms?: RoomPayload[];
   staff?: StaffPayload[];
+  staff_invitations?: Array<{
+    invitation_id: number;
+    email: string;
+    role: string;
+    email_delivery: "sent" | "failed" | "not_configured";
+  }>;
   readiness_checklist?: Array<{
     key: string;
     label: string;
@@ -36,6 +42,16 @@ export type OnboardingStatus = {
     optional?: boolean;
   }>;
   readiness_complete?: boolean;
+};
+
+export type OnboardingSubscription = {
+  plan?: string;
+  status?: string;
+  room_limit?: number;
+  staff_limit?: number;
+  can_write?: boolean;
+  trial_available?: boolean;
+  trial_end_at?: string | null;
 };
 
 export type OwnerPayload = {

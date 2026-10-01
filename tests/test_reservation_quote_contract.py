@@ -4,6 +4,7 @@ import json
 import pytest
 
 from app.models.daily_rate import DailyRate
+from app.models.company import Company
 from app.schemas.reservation import ReservationCreate
 from app.services.pricing_service import build_pricing_revision
 from app.services.quote_token_service import QuoteTokenError, issue_quote_token, verify_quote_token
@@ -106,3 +107,64 @@ def test_confirmed_reservation_stores_pricing_revision(
     snapshot = json.loads(reservation.pricing_snapshot or "{}")
     assert snapshot["pricing_revision"] == revision
     assert snapshot["breakdown"]
+
+
+def test_company_quote_is_bound_to_company_and_its_current_terms(
+    db, sample_categories, sample_rooms, sample_guest, hotel_config
+):
+    company = Company(
+        hotel_id=1,
+        legal_name="Acme Travel SRL",
+        display_name="Acme Travel",
+        base_price=80,
+    )
+    db.add(company)
+    db.flush()
+    category = sample_categories[0]
+    check_in = date(2030, 2, 10)
+    check_out = check_in + timedelta(days=2)
+    quote = build_reservation_quote(
+        db,
+        hotel_id=1,
+        category_id=category.id,
+        check_in_date=check_in,
+        check_out_date=check_out,
+        occupancy=2,
+        company_id=company.id,
+    )
+    token_payload = verify_quote_token(quote["quote_token"])
+    assert token_payload["company_id"] == company.id
+    assert quote["total_amount"] == 160
+
+    reservation = create_reservation(
+        db,
+        ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=category.id,
+            company_id=company.id,
+            check_in_date=check_in,
+            check_out_date=check_out,
+            num_adults=2,
+            quote_token=quote["quote_token"],
+        ),
+        hotel_id=1,
+    )
+    assert reservation.company_id == company.id
+    assert reservation.total_amount == 160
+
+    company.base_price = 70
+    db.flush()
+    with pytest.raises(ReservationError, match="venció"):
+        create_reservation(
+            db,
+            ReservationCreate(
+                guest_id=sample_guest.id,
+                category_id=category.id,
+                company_id=company.id,
+                check_in_date=check_in,
+                check_out_date=check_out,
+                num_adults=2,
+                quote_token=quote["quote_token"],
+            ),
+            hotel_id=1,
+        )

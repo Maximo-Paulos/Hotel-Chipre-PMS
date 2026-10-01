@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
 
 import { hasValidSession } from "../../api/client";
@@ -7,14 +7,34 @@ import { currentUser, linkGoogle, setPasswordWithGoogle } from "../../api/auth";
 import { getSecurityEvents, getSecurityOverview, revokeAllSessions } from "../../api/security";
 import { useSession } from "../../state/session";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
+import { useHotelConfig } from "../../hooks/useHotelConfig";
+import { useAuthProviders } from "../../hooks/useAuthProviders";
 import { GoogleSignInButton } from "../../components/GoogleSignInButton";
+import { MfaSettingsCard } from "../../components/MfaSettingsCard";
 import { PasswordInput } from "../../components/PasswordInput";
+import { formatHotelDateTime } from "../../utils/date";
 
 const formatEventAction = (action: string) => action.replace(/_/g, " ").replace(/:/g, " · ");
 
 export function SettingsSecurityPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { session, logout } = useSession();
+  const hotelConfigQuery = useHotelConfig();
+  const authProvidersQuery = useAuthProviders();
+  const googleLoginAvailable = authProvidersQuery.data?.google?.enabled === true;
+  const rawMfaReturnTo = new URLSearchParams(location.search).get("mfaReturnTo");
+  let mfaReturnTo: string | null = null;
+  if (rawMfaReturnTo) {
+    try {
+      const target = new URL(rawMfaReturnTo, window.location.origin);
+      if (target.origin === window.location.origin) {
+        mfaReturnTo = `${target.pathname}${target.search}${target.hash}`;
+      }
+    } catch {
+      mfaReturnTo = null;
+    }
+  }
   const enabled = hasValidSession(session);
   const userQuery = useQuery({
     queryKey: ["auth-user", session.hotelId, session.userId],
@@ -197,7 +217,7 @@ export function SettingsSecurityPage() {
                   Rol {overview.current_user.role} · versión de sesión {overview.current_user.token_version}
                 </p>
                 <p className="text-xs text-slate-500">
-                  Último ingreso: {overview.current_user.last_login ? new Date(overview.current_user.last_login).toLocaleString("es-AR") : "sin registro"}
+                  Último ingreso: {overview.current_user.last_login ? formatHotelDateTime(overview.current_user.last_login, hotelConfigQuery.data?.hotel_timezone) : "sin registro"}
                 </p>
               </div>
               <button
@@ -213,7 +233,7 @@ export function SettingsSecurityPage() {
             {userQuery.isError && (
               <p role="alert" className="mt-3 text-sm text-rose-700">No se pudo verificar si tu cuenta tiene una contraseña configurada.</p>
             )}
-            {userQuery.data?.password_login_enabled === false && !passwordSuccess && (
+            {userQuery.data?.password_login_enabled === false && googleLoginAvailable && !passwordSuccess && (
               <div className="mt-4 rounded-lg border border-brand-100 bg-brand-50 p-4">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900">Agregá una contraseña de Hotels-PMS</h3>
@@ -275,7 +295,12 @@ export function SettingsSecurityPage() {
                 {passwordError && <p className="mt-3 text-sm text-rose-700" role="alert">{passwordError}</p>}
               </div>
             )}
-            {userQuery.data?.password_login_enabled === true && userQuery.data.google_login_enabled === false && (
+            {userQuery.data?.password_login_enabled === false && !authProvidersQuery.isLoading && !googleLoginAvailable && !passwordSuccess && (
+              <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status" data-testid="security-login-help">
+                Esta cuenta no tiene una contraseña de Hotels-PMS habilitada. Contactá al responsable del hotel para recuperar el acceso.
+              </p>
+            )}
+            {userQuery.data?.password_login_enabled === true && userQuery.data.google_login_enabled === false && googleLoginAvailable && (
               <div className="mt-4 rounded-lg border border-brand-100 bg-brand-50 p-4" data-testid="google-link-card">
                 <h3 className="text-sm font-semibold text-slate-900">Vinculá Google a esta cuenta</h3>
                 <p className="mt-1 text-sm text-slate-700">
@@ -328,19 +353,19 @@ export function SettingsSecurityPage() {
                 )}
               </div>
             )}
-            {userQuery.data?.password_login_enabled === true && userQuery.data.google_login_enabled === true && (
+            {userQuery.data?.password_login_enabled === true && userQuery.data.google_login_enabled === true && googleLoginAvailable && (
               <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800" role="status">
                 Esta cuenta permite ingresar con Google o con tu contraseña de Hotels-PMS.
               </p>
             )}
-            {googleLinkSuccess && (
+            {googleLinkSuccess && googleLoginAvailable && (
               <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800" role="status">
                 Google quedó vinculado. Tu contraseña de Hotels-PMS sigue activa.
               </p>
             )}
             {passwordSuccess && (
               <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800" role="status">
-                Contraseña creada. Ya podés ingresar con Google o con email y contraseña.
+                Contraseña creada. Ya podés ingresar con email y contraseña.
               </p>
             )}
             {revokeMutation.isError && (
@@ -349,6 +374,14 @@ export function SettingsSecurityPage() {
           </section>
         </>
       ) : null}
+
+      <MfaSettingsCard
+        session={session}
+        returnTo={mfaReturnTo}
+        onContinue={() => {
+          if (mfaReturnTo) window.location.assign(mfaReturnTo);
+        }}
+      />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
@@ -371,7 +404,7 @@ export function SettingsSecurityPage() {
                   </p>
                 </div>
                 <time className="text-xs text-slate-500" dateTime={event.created_at}>
-                  {new Date(event.created_at).toLocaleString("es-AR")}
+                  {formatHotelDateTime(event.created_at, hotelConfigQuery.data?.hotel_timezone)}
                 </time>
               </li>
             ))}

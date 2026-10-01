@@ -50,6 +50,8 @@ test("owner can register, verify, recover access and complete onboarding through
   await page.getByLabel("Precio base por noche", { exact: true }).fill("65000");
   await page.getByLabel("Ocupación máxima", { exact: true }).fill("2");
   await page.getByLabel("Descripción breve", { exact: true }).fill("Categoría de prueba sintética");
+  await saveAndExpectPath(page, "/onboarding/subscription");
+  await page.getByRole("radio", { name: "Plan Pro, hasta 40 habitaciones", exact: true }).click();
   await saveAndExpectPath(page, "/onboarding/rooms");
 
   await page.getByRole("button", { name: "+ Agregar habitación", exact: true }).click();
@@ -68,15 +70,19 @@ test("owner can register, verify, recover access and complete onboarding through
   }
   await expect(mercadoPagoCheckbox).toBeChecked();
   await saveAndExpectPath(page, "/onboarding/ota");
-
-  await saveAndExpectPath(page, "/onboarding/subscription");
   await saveAndExpectPath(page, "/onboarding/staff");
 
   await page.getByRole("button", { name: "+ Agregar staff", exact: true }).click();
+  await page.getByRole("button", { name: "+ Agregar staff", exact: true }).click();
+  await page.getByRole("button", { name: /^Quitar persona/ }).first().click();
   await page.getByLabel("Nombre", { exact: true }).fill("Recepción QA");
-  await page.getByLabel("Rol", { exact: true }).fill("Reception");
+  await page.getByLabel("Rol", { exact: true }).selectOption("receptionist");
   await page.getByLabel("Email", { exact: true }).fill(`reception-${suffix}@example.test`);
+  const staffSaveResponse = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/onboarding/staff");
   await saveAndExpectPath(page, "/onboarding/finish");
+  const savedStaff = await (await staffSaveResponse).json();
+  expect(savedStaff.staff_invitations).toHaveLength(1);
+  await expect(page.getByRole("status")).toContainText("Personal guardado. Invitaciones:");
 
   // Reproduce a late onboarding refetch after the user has already navigated
   // away from the wizard; it must not redirect the user back to the dashboard.

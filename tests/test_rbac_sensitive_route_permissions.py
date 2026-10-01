@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -13,6 +13,7 @@ from app.database import Base, get_db
 from app.api import checkin as checkin_api
 from app.api import bookings as bookings_api
 from app.services import reservation_service
+from app.services import reservation_operations_service
 from app.services.reservation_service import ReservationPricingResult
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
@@ -26,13 +27,23 @@ from app.models.payment import PaymentLink
 from app.models.audit_log import AuditLog
 from app.models.commercial import SellableProduct
 from app.models.company import Company
-from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.stock import StockItem
-from app.models.transaction import Transaction
+from app.models.transaction import (
+    PaymentMethodEnum,
+    Transaction,
+    TransactionStatusEnum,
+    TransactionTypeEnum,
+)
 from app.models.user import User
 from app.schemas.reservation import ReservationUpdate
-from app.services.permission_service import set_role_override, set_user_override
+from app.services.permission_service import (
+    PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
+    PERMISSION_RESERVATION_RATE_ADJUST,
+    set_role_override,
+    set_user_override,
+)
 
 
 def _client():
@@ -185,6 +196,182 @@ def test_reservation_read_and_cancel_follow_individual_overrides_without_data_le
         _close(db, engine)
 
 
+def test_company_extension_request_records_only_request_metadata_and_audit():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        company = Company(
+            hotel_id=1,
+            legal_name="Company Extension Test LLC",
+            display_name="Company Extension Test",
+            payment_deferred=True,
+        )
+        db.add(company)
+        db.flush()
+        reservation.company_id = company.id
+        reservation.status = ReservationStatusEnum.CHECKED_IN
+        reservation.amount_paid = Decimal("25.00")
+        db.commit()
+
+        before = (
+            reservation.check_in_date,
+            reservation.check_out_date,
+            reservation.total_amount,
+            reservation.subtotal_amount,
+            reservation.net_amount,
+            reservation.amount_paid,
+            reservation.version,
+        )
+        response = client.put(
+            f"/api/reservations/{reservation.id}/extension-request",
+            json={
+                "pending": True,
+                "note": " La empresa pidió salir el viernes; falta confirmación ",
+                "client_version": reservation.version,
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["company_extension_request_pending"] is True
+        assert response.json()["company_extension_request_note"] == "La empresa pidió salir el viernes; falta confirmación"
+
+        db.refresh(reservation)
+        after = (
+            reservation.check_in_date,
+            reservation.check_out_date,
+            reservation.total_amount,
+            reservation.subtotal_amount,
+            reservation.net_amount,
+            reservation.amount_paid,
+            reservation.version - 1,
+        )
+        assert after == before
+        assert reservation.company_extension_request_pending is True
+        assert db.query(PaymentLink).filter_by(reservation_id=reservation.id).count() == 0
+        assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 0
+
+        import json
+
+        audit = (
+            db.query(AuditLog)
+            .filter_by(table_name="reservations", record_id=reservation.id, actor_user_id=20)
+            .order_by(AuditLog.id.desc())
+            .first()
+        )
+        assert audit is not None
+        payload_after = json.loads(audit.payload_after or "{}")
+        assert payload_after["company_extension_request_pending"] is True
+        assert payload_after["company_extension_request_note"] == "La empresa pidió salir el viernes; falta confirmación"
+
+        clear_response = client.put(
+            f"/api/reservations/{reservation.id}/extension-request",
+            json={"pending": False, "client_version": reservation.version},
+        )
+        assert clear_response.status_code == 422, clear_response.text
+        db.refresh(reservation)
+        assert reservation.company_extension_request_pending is True
+        assert reservation.company_extension_request_note == "La empresa pidió salir el viernes; falta confirmación"
+    finally:
+        _close(db, engine)
+
+
+def test_company_extension_request_rejects_non_company_terminal_and_stale_mutations():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        payload = {
+            "pending": True,
+            "note": "Pedir confirmación a la empresa",
+            "client_version": reservation.version,
+        }
+        non_company = client.put(f"/api/reservations/{reservation.id}/extension-request", json=payload)
+        assert non_company.status_code == 422, non_company.text
+
+        company = Company(
+            hotel_id=1,
+            legal_name="Company Extension State Test LLC",
+            display_name="Company Extension State Test",
+        )
+        db.add(company)
+        db.flush()
+        reservation.company_id = company.id
+        reservation.status = ReservationStatusEnum.CANCELLED
+        db.commit()
+        terminal = client.put(
+            f"/api/reservations/{reservation.id}/extension-request",
+            json={**payload, "client_version": reservation.version},
+        )
+        assert terminal.status_code == 422, terminal.text
+        db.refresh(reservation)
+        assert reservation.company_extension_request_pending is False
+
+        reservation.status = ReservationStatusEnum.CHECKED_IN
+        reservation.version += 1
+        db.commit()
+        stale = client.put(f"/api/reservations/{reservation.id}/extension-request", json=payload)
+        assert stale.status_code == 409, stale.text
+        db.refresh(reservation)
+        assert reservation.company_extension_request_pending is False
+    finally:
+        _close(db, engine)
+
+
+def test_confirmed_extension_clears_pending_marker_and_preserves_request_note(monkeypatch):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    del client
+    try:
+        company = Company(
+            hotel_id=1,
+            legal_name="Company Extension Success LLC",
+            display_name="Company Extension Success",
+            payment_deferred=True,
+        )
+        db.add(company)
+        db.flush()
+        reservation.company_id = company.id
+        reservation.status = ReservationStatusEnum.CHECKED_IN
+        reservation.company_extension_request_pending = True
+        reservation.company_extension_request_note = "La empresa pidió salir el viernes"
+        db.commit()
+
+        monkeypatch.setattr(
+            reservation_operations_service,
+            "resolve_extension_conflict",
+            lambda *args, **kwargs: {"resolved": True, "conflicts": [], "actions": []},
+        )
+        monkeypatch.setattr(
+            reservation_operations_service,
+            "_extension_amount",
+            lambda *args, **kwargs: Decimal("50.00"),
+        )
+        monkeypatch.setattr(
+            reservation_operations_service,
+            "create_link",
+            lambda *args, **kwargs: object(),
+        )
+        from app.schemas.payment_link import PaymentLinkCreate
+
+        previous_checkout = reservation.check_out_date
+        reservation_operations_service.extend_reservation_stay(
+            db,
+            reservation=reservation,
+            hotel_id=1,
+            new_checkout_date=previous_checkout + timedelta(days=1),
+            client_version=reservation.version,
+            pricing_mode="current_rate",
+            payment_action="payment_link",
+            payment_link=PaymentLinkCreate(
+                reservation_id=reservation.id,
+                requested_amount=Decimal("50.00"),
+                recipient_email="guest@example.com",
+                currency="ARS",
+            ),
+            changed_by_user_id=10,
+        )
+        assert reservation.check_out_date == previous_checkout + timedelta(days=1)
+        assert reservation.company_extension_request_pending is False
+        assert reservation.company_extension_request_note == "La empresa pidió salir el viernes"
+    finally:
+        _close(db, engine)
+
+
 def test_primary_reservation_patch_requires_version_and_skips_noop_audits():
     client, db, engine, _auth, reservation, _stock_item = _client()
     try:
@@ -230,6 +417,210 @@ def test_primary_reservation_patch_requires_version_and_skips_noop_audits():
         db.refresh(reservation)
         assert reservation.notes == "versioned update"
         assert reservation.version == original_version + 1
+    finally:
+        _close(db, engine)
+
+
+def test_paid_reservation_total_adjustment_is_audited_and_keeps_payment_rows():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        payment = Transaction(
+            hotel_id=1,
+            reservation_id=reservation.id,
+            amount=Decimal("50.00"),
+            currency="ARS",
+            transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            payment_method=PaymentMethodEnum.CASH,
+            status=TransactionStatusEnum.COMPLETED,
+            processed_at=datetime.now(timezone.utc),
+            created_by_user_id=10,
+        )
+        reservation.amount_paid = Decimal("50.00")
+        db.add(payment)
+        db.commit()
+
+        payload = {
+            "total_amount": "180.00",
+            "paid_total_change_reason": "Tarifa confirmada por gerencia",
+            "client_version": reservation.version,
+        }
+        auth.update({"user_id": 30, "role": "manager"})
+        manager_denied = client.patch(f"/api/reservations/{reservation.id}", json=payload)
+        assert manager_denied.status_code == 403, manager_denied.text
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("200.00")
+
+        auth.update({"user_id": 10, "role": "owner"})
+        owner_updated = client.patch(f"/api/reservations/{reservation.id}", json=payload)
+        assert owner_updated.status_code == 200, owner_updated.text
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("180.00")
+        assert reservation.amount_paid == Decimal("50.00")
+        assert reservation.manual_rate_reason == "Tarifa confirmada por gerencia"
+        assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 1
+        assert db.query(Transaction).filter_by(reservation_id=reservation.id).one().amount == Decimal("50.00")
+
+        import json
+
+        audit = (
+            db.query(AuditLog)
+            .filter_by(table_name="reservations", record_id=reservation.id, actor_user_id=10)
+            .order_by(AuditLog.id.desc())
+            .first()
+        )
+        assert audit is not None
+        after = json.loads(audit.payload_after or "{}")
+        assert after["paid_total_adjustment"]["reason"] == "Tarifa confirmada por gerencia"
+
+        set_role_override(
+            db,
+            1,
+            "manager",
+            PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
+            True,
+            actor_user_id=10,
+        )
+        db.commit()
+        auth.update({"user_id": 30, "role": "manager"})
+        manager_updated = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": "190.00",
+                "paid_total_change_reason": "Ajuste aprobado por el dueño",
+                "client_version": reservation.version,
+            },
+        )
+        assert manager_updated.status_code == 200, manager_updated.text
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("190.00")
+        assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 1
+    finally:
+        _close(db, engine)
+
+
+def test_paid_total_adjustment_requires_payment_history_and_reason():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        auth.update({"user_id": 10, "role": "owner"})
+        missing_reason = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={"total_amount": "150.00", "client_version": reservation.version},
+        )
+        assert missing_reason.status_code == 422, missing_reason.text
+
+        unpaid = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": "150.00",
+                "paid_total_change_reason": "Corrección solicitada",
+                "client_version": reservation.version,
+            },
+        )
+        assert unpaid.status_code == 409, unpaid.text
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("200.00")
+    finally:
+        _close(db, engine)
+
+
+def test_room_upgrade_without_charge_requires_configurable_rate_adjust_permission():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        target_category = RoomCategory(
+            hotel_id=1,
+            name="Superior",
+            code="SUP",
+            base_price_per_night=Decimal("300.00"),
+            max_occupancy=2,
+        )
+        db.add(target_category)
+        db.flush()
+        target_room = Room(
+            hotel_id=1,
+            category_id=target_category.id,
+            room_number="201",
+            floor=2,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(target_room)
+        set_user_override(
+            db,
+            1,
+            20,
+            "receptionist",
+            "reservation:move_category",
+            True,
+            actor_user_id=10,
+        )
+        db.commit()
+
+        payload = {
+            "to_room_id": target_room.id,
+            "client_version": reservation.version,
+            "reason_code": "upgrade",
+            "price_action": "keep",
+        }
+        denied = client.post(f"/api/reservations/{reservation.id}/room-move", json=payload)
+        assert denied.status_code == 403, denied.text
+        db.refresh(reservation)
+        assert reservation.category_id != target_category.id
+        assert reservation.total_amount == Decimal("200.00")
+
+        # The permission is configurable from the hotel permission matrix and
+        # can be granted for a specific employee when the hotel wants that.
+        set_user_override(
+            db,
+            1,
+            20,
+            "receptionist",
+            PERMISSION_RESERVATION_RATE_ADJUST,
+            True,
+            actor_user_id=10,
+        )
+        db.commit()
+        permitted = client.post(f"/api/reservations/{reservation.id}/room-move", json=payload)
+        assert permitted.status_code == 200, permitted.text
+        db.refresh(reservation)
+        assert reservation.category_id == target_category.id
+        assert reservation.total_amount == Decimal("200.00")
+    finally:
+        _close(db, engine)
+
+
+def test_complimentary_ota_discount_preview_requires_rate_adjust_permission():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        reservation.source = ReservationSourceEnum.OTHER_OTA
+        reservation.source_provider_code = "booking"
+        reservation.external_id = "BOOKING-RATE-PREVIEW-1"
+        db.commit()
+
+        denied = client.post(
+            f"/api/reservations/{reservation.id}/rebook-direct/preview",
+            json={"target_category_id": reservation.category_id, "discount_pct": 10},
+        )
+        assert denied.status_code == 403, denied.text
+        denied_commit = client.post(
+            f"/api/reservations/{reservation.id}/rebook-direct",
+            json={"target_category_id": reservation.category_id, "discount_pct": 10},
+        )
+        assert denied_commit.status_code == 403, denied_commit.text
+
+        set_user_override(
+            db,
+            1,
+            20,
+            "receptionist",
+            PERMISSION_RESERVATION_RATE_ADJUST,
+            True,
+            actor_user_id=10,
+        )
+        db.commit()
+        allowed = client.post(
+            f"/api/reservations/{reservation.id}/rebook-direct/preview",
+            json={"target_category_id": reservation.category_id, "discount_pct": 10},
+        )
+        assert allowed.status_code == 200, allowed.text
     finally:
         _close(db, engine)
 

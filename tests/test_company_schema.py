@@ -9,6 +9,7 @@ import app.main as main_module
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.models.hotel_config import HotelConfiguration
+from app.models.company import Company
 from app.models.user import User
 
 
@@ -99,7 +100,7 @@ def test_company_create_and_patch_round_trips_commercial_fields(api_client):
     body = create.json()
     assert body["contact_name"] == "Reservations Desk"
     assert body["email"] == "reservations@acme.test"
-    assert body["base_price"] == 175.5
+    assert body["base_price"] is None
     assert body["payment_deferred"] is True
 
     patch = client.patch(
@@ -115,5 +116,35 @@ def test_company_create_and_patch_round_trips_commercial_fields(api_client):
     updated = patch.json()
     assert updated["contact_name"] == "Corporate Ops"
     assert updated["email"] == "ops@acme.test"
-    assert updated["base_price"] == 190.0
+    assert updated["base_price"] == "190.00"
     assert updated["payment_deferred"] is False
+
+
+def test_reservation_company_options_return_only_minimal_fields(api_client):
+    client, SessionLocal = api_client
+    with SessionLocal() as db:
+        db.add(
+            Company(
+                hotel_id=1,
+                legal_name="Acme Travel SRL",
+                display_name="Acme Travel",
+                tax_id="30-11111111-1",
+                contact_name="Reservations Desk",
+                contact_email="desk@acme.test",
+            )
+        )
+        db.commit()
+
+    response = client.get("/api/companies/options")
+    assert response.status_code == 200, response.text
+    assert response.json() == [
+        {
+            "id": response.json()[0]["id"],
+            "display_name": "Acme Travel",
+            "legal_name": "Acme Travel SRL",
+            "is_active": True,
+        }
+    ]
+    assert "tax_id" not in response.text
+    assert "contact_name" not in response.text
+    assert "contact_email" not in response.text

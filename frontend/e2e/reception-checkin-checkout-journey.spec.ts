@@ -85,8 +85,8 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   expect(roomValue).toBeTruthy();
   await roomSelect.selectOption(roomValue!);
 
-  await reservationForm.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(checkIn);
-  await reservationForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(checkOut);
+  await reservationForm.getByLabel("Check-in", { exact: true }).fill(checkIn);
+  await reservationForm.getByLabel("Check-out", { exact: true }).fill(checkOut);
 
   const createReservationButton = reservationForm.getByRole("button", { name: "Crear", exact: true });
   await expect(createReservationButton).toBeEnabled();

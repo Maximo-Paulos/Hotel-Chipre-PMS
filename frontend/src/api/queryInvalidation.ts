@@ -21,6 +21,14 @@ export async function refreshAfterMutation(
   if (!hotelId || !Number.isInteger(hotelId) || hotelId <= 0 || domains.length === 0) return;
 
   const prefixes = new Set(domains.flatMap((domain) => QUERY_PREFIXES_BY_DOMAIN[domain]));
+  await refreshHotelQueriesByPrefix(queryClient, hotelId, prefixes);
+}
+
+const refreshHotelQueriesByPrefix = async (
+  queryClient: QueryClient,
+  hotelId: number,
+  prefixes: ReadonlySet<string>
+): Promise<void> => {
   await queryClient.invalidateQueries({
     predicate: (query) => {
       const prefix = query.queryKey[0];
@@ -32,7 +40,21 @@ export async function refreshAfterMutation(
     // received the authoritative server representation.
     refetchType: "active"
   });
-}
+};
+
+/** A new booking changes reservation lists, pending actions, and occupancy.
+ * It does not create a room-movement group, payment, or cash movement. */
+export const refreshReservationCreatedState = (
+  queryClient: QueryClient,
+  hotelId: number | null | undefined
+) => {
+  if (!hotelId || !Number.isInteger(hotelId) || hotelId <= 0) return Promise.resolve();
+  return refreshHotelQueriesByPrefix(
+    queryClient,
+    hotelId,
+    new Set(["reservations", "reservation-pending-actions", "occupancy-grid"])
+  );
+};
 
 export const refreshReservationState = (
   queryClient: QueryClient,
@@ -40,7 +62,7 @@ export const refreshReservationState = (
   reservationId?: number
 ) => {
   void reservationId;
-  return refreshAfterMutation(queryClient, hotelId, ["reservations", "payments", "cash", "analytics", "rooms"]);
+  return refreshAfterMutation(queryClient, hotelId, ["reservations", "payments", "cash"]);
 };
 
 /**
@@ -56,7 +78,10 @@ export const refreshPaymentState = (
   queryClient: QueryClient,
   hotelId: number | null | undefined,
   reservationId?: number
-) => refreshReservationState(queryClient, hotelId, reservationId);
+) => {
+  void reservationId;
+  return refreshAfterMutation(queryClient, hotelId, ["reservations", "payments", "cash", "analytics"]);
+};
 
 export const refreshGuestState = (
   queryClient: QueryClient,

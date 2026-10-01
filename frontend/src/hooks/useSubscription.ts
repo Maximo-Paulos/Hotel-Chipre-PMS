@@ -10,6 +10,8 @@ import {
 import { hasValidSession } from "../api/client";
 import { type SessionState, useSession } from "../state/session";
 
+import { useEffectivePermissions } from "./usePermissions";
+
 export const FALLBACK_PLANS: SubscriptionPlan[] = [
   {
     code: "starter",
@@ -173,8 +175,10 @@ const normalizeStatus = (data: SubscriptionStatus | null | undefined, session: S
 
 export function useSubscriptionStatus(options?: { enabled?: boolean }) {
   const { session } = useSession();
+  const { hasPermission } = useEffectivePermissions();
+  const enabled = hasValidSession(session) && (options?.enabled ?? true) && hasPermission("settings:subscription:view");
   return useQuery({
-    queryKey: ["subscription", session.hotelId ?? "none"],
+    queryKey: ["subscription", session.hotelId ?? "none", session.userId ?? "none"],
     queryFn: async () => {
       try {
         const remote = await getSubscriptionStatus(session);
@@ -184,7 +188,7 @@ export function useSubscriptionStatus(options?: { enabled?: boolean }) {
         return buildMockStatus(session);
       }
     },
-    enabled: hasValidSession(session) && (options?.enabled ?? true),
+    enabled,
     staleTime: 60_000,
     placeholderData: () => buildMockStatus(session)
   });

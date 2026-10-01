@@ -22,6 +22,7 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_RESERVATION_MOVE_CAPACITY,
     PERMISSION_RESERVATION_MOVE_CATEGORY,
+    PERMISSION_RESERVATION_RATE_ADJUST,
     seed_default_permissions,
 )
 from app.services.reservation_operations_service import required_room_move_permission
@@ -220,6 +221,19 @@ def test_existing_wide_roles_still_move_anywhere(room_move_api_client, role, des
     role_state["role"] = role
     monkeypatch.setattr("app.api.reservations._trigger_reoptimization_bg", lambda **_kwargs: None)
     reservation, rooms, *_ = _seed_move_shapes(db)
+    if role in {"owner", "co_owner"} and destination_key != "same_category":
+        # F-039 makes courtesy upgrades manager-only by default. Grant the
+        # separate rate-adjust permission here so this test remains focused on
+        # the independent room-movement tiers for explicitly configured roles.
+        db.add(
+            HotelPermissionOverride(
+                hotel_id=1,
+                role=role,
+                permission_code=PERMISSION_RESERVATION_RATE_ADJUST,
+                allowed=True,
+            )
+        )
+        db.commit()
 
     response = _move(client, reservation, rooms[destination_key])
 

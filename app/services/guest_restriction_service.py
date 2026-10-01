@@ -87,6 +87,37 @@ def get_active_guest_restrictions(db: Session, *, hotel_id: int, guest_id: int) 
     )
 
 
+def get_active_guest_restriction_guest_ids(
+    db: Session,
+    *,
+    hotel_id: int,
+    guest_ids: list[int],
+) -> list[int]:
+    """Return only tenant-scoped guest IDs with an active restriction.
+
+    This projection powers guest-list badges without returning internal
+    reasons/details or issuing one restriction query for every visible row.
+    """
+    unique_guest_ids = sorted(set(guest_ids))
+    if not unique_guest_ids:
+        return []
+
+    now = _now()
+    rows = (
+        db.query(GuestRestriction.guest_id)
+        .filter(
+            GuestRestriction.hotel_id == hotel_id,
+            GuestRestriction.guest_id.in_(unique_guest_ids),
+            GuestRestriction.status == GuestRestrictionStatusEnum.ACTIVE,
+            or_(GuestRestriction.valid_until.is_(None), GuestRestriction.valid_until > now),
+        )
+        .distinct()
+        .order_by(GuestRestriction.guest_id)
+        .all()
+    )
+    return [guest_id for (guest_id,) in rows]
+
+
 def _flag_future_active_reservations(db: Session, *, hotel_id: int, guest_id: int) -> None:
     """Mark every future, non-cancelled/non-no-show reservation for this
     guest for manual review. Past reservations are left untouched."""

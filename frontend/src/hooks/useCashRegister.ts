@@ -7,11 +7,15 @@ import {
   closeCashSession,
   getLatestCashCloseReport,
   getCashSessionSummary,
+  getCashSessionCloseReport,
   getCashDailySummary,
   listCashMovements,
   listCashSessions,
+  listPendingCashCloseReports,
+  listPendingCashCustodyReports,
   openCashSession,
   type CashCloseReport,
+  type CashCustodyReceiptPayload,
   type CashMovement,
   type CashMovementPayload,
   type CashSession,
@@ -30,6 +34,8 @@ const cashSessionsKey = (hotelId: number | null) => ["cash-sessions", hotelId];
 const cashMovementsKey = (hotelId: number | null, sessionId: number) => ["cash-movements", hotelId, sessionId];
 
 const latestCloseReportKey = (hotelId: number | null) => ["cash-latest-close-report", hotelId];
+const pendingCloseReportsKey = (hotelId: number | null) => ["cash-latest-close-report", hotelId, "pending"];
+const pendingCashCustodyReportsKey = (hotelId: number | null) => ["cash-latest-close-report", hotelId, "custody-pending"];
 const dailySummaryKey = (hotelId: number | null, date: string, currency?: string | null) => ["cash-daily-summary", hotelId, date, currency || "auto"];
 
 /**
@@ -58,6 +64,36 @@ export function useLatestCashCloseReport(options?: { enabled?: boolean }) {
     queryFn: () => getLatestCashCloseReport(session),
     enabled: hasValidSession(session) && (options?.enabled ?? true),
     staleTime: 15 * 1000
+  });
+}
+
+export function usePendingCashCloseReports(options?: { enabled?: boolean }) {
+  const { session } = useSession();
+  return useQuery<CashCloseReport[]>({
+    queryKey: pendingCloseReportsKey(session.hotelId),
+    queryFn: () => listPendingCashCloseReports(session),
+    enabled: hasValidSession(session) && (options?.enabled ?? true),
+    staleTime: 10 * 1000
+  });
+}
+
+export function usePendingCashCustodyReports(options?: { enabled?: boolean }) {
+  const { session } = useSession();
+  return useQuery<CashCloseReport[]>({
+    queryKey: pendingCashCustodyReportsKey(session.hotelId),
+    queryFn: () => listPendingCashCustodyReports(session),
+    enabled: hasValidSession(session) && (options?.enabled ?? true),
+    staleTime: 10 * 1000
+  });
+}
+
+export function useCashSessionCloseReport(sessionId?: number) {
+  const { session } = useSession();
+  return useQuery<CashCloseReport | null>({
+    queryKey: ["cash-latest-close-report", session.hotelId, "session", sessionId ?? null],
+    queryFn: () => getCashSessionCloseReport(sessionId!, session),
+    enabled: Boolean(sessionId) && hasValidSession(session),
+    staleTime: 10 * 1000
   });
 }
 
@@ -126,8 +162,8 @@ export function useCashRegisterMutations(sessionId?: number) {
     onError: async () => invalidateSessions()
   });
 
-  const confirmCustodyMutation = useGuardedMutation({
-    mutationFn: (reportId: number) => confirmCashCustody(reportId, session),
+  const confirmCustodyMutation = useGuardedMutation<CashCloseReport, unknown, { reportId: number } & CashCustodyReceiptPayload>({
+    mutationFn: ({ reportId, ...payload }) => confirmCashCustody(reportId, payload, session),
     onSuccess: async () => invalidateSessions(),
     onError: async () => invalidateSessions()
   });

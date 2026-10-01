@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
+import { getMfaStatus, mfaStatusQueryKey } from "../api/auth";
 import {
   ApiError,
   apiFetch,
+  hasValidSession,
   setActionStepUpHandler,
   type ActionStepUpChallenge,
   type ActionStepUpTicket,
@@ -60,6 +63,13 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
   const promptIdRef = useRef(0);
   const submitControllerRef = useRef<AbortController | null>(null);
   currentSessionRef.current = session;
+  const mfaStatusQuery = useQuery({
+    queryKey: mfaStatusQueryKey(session.userId ?? null),
+    queryFn: () => getMfaStatus(session),
+    enabled: Boolean(activePrompt) && hasValidSession(session),
+    staleTime: 0,
+    retry: false
+  });
 
   const settlePrompt = useCallback((ticket: ActionStepUpTicket | null) => {
     const pending = activePromptRef.current;
@@ -117,7 +127,7 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (activePrompt) codeInputRef.current?.focus();
-  }, [activePrompt]);
+  }, [activePrompt, mfaStatusQuery.data?.enabled]);
 
   useEffect(() => {
     const unregister = setActionStepUpHandler(enqueuePrompt);
@@ -235,55 +245,96 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
               })}
             </p>
 
-            <form className="mt-5 space-y-5" onSubmit={handleSubmit}>
-              <div>
-                <label htmlFor={inputId} className="mb-1.5 block text-sm font-medium text-slate-800">
-                  {t("auth.stepUp.codeLabel", { defaultValue: "Código de autenticación" })}
-                </label>
-                <input
-                  ref={codeInputRef}
-                  autoComplete="one-time-code"
-                  autoCapitalize="off"
-                  inputMode="numeric"
-                  maxLength={64}
-                  name="totp-code"
-                  onChange={(event) => setTotpCode(event.currentTarget.value)}
-                  placeholder={t("auth.stepUp.codePlaceholder", { defaultValue: "Ingresá tu código" })}
-                  required
-                  type="text"
-                  value={totpCode}
-                  id={inputId}
-                  aria-invalid={Boolean(errorMessage)}
-                  aria-describedby={errorMessage ? errorId : undefined}
-                  spellCheck={false}
-                  className="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                />
-                {errorMessage ? (
-                  <p id={errorId} role="alert" className="mt-2 text-sm text-red-700">
-                    {errorMessage}
-                  </p>
-                ) : null}
+            {mfaStatusQuery.isPending ? (
+              <div className="mt-5 flex items-center justify-between gap-3">
+                <p className="text-sm text-slate-600" role="status">Comprobando el estado del autenticador...</p>
+                <button type="button" onClick={cancelPrompt} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">Cancelar</button>
               </div>
+            ) : mfaStatusQuery.isError ? (
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <p role="alert" className="text-sm text-red-700">No se pudo comprobar si tenés un autenticador activo.</p>
+                <button type="button" onClick={() => void mfaStatusQuery.refetch()} className="text-sm font-semibold text-indigo-700 underline">
+                  Reintentar
+                </button>
+                <button type="button" onClick={cancelPrompt} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">Cancelar</button>
+              </div>
+            ) : mfaStatusQuery.data?.enabled ? (
+              <form className="mt-5 space-y-5" onSubmit={handleSubmit}>
+                <div>
+                  <label htmlFor={inputId} className="mb-1.5 block text-sm font-medium text-slate-800">
+                    {t("auth.stepUp.codeLabel", { defaultValue: "Código de autenticación o recuperación" })}
+                  </label>
+                  <input
+                    ref={codeInputRef}
+                    autoComplete="one-time-code"
+                    autoCapitalize="off"
+                    inputMode="numeric"
+                    maxLength={64}
+                    name="totp-code"
+                    onChange={(event) => setTotpCode(event.currentTarget.value)}
+                    placeholder={t("auth.stepUp.codePlaceholder", { defaultValue: "Ingresá tu código" })}
+                    required
+                    type="text"
+                    value={totpCode}
+                    id={inputId}
+                    aria-invalid={Boolean(errorMessage)}
+                    aria-describedby={errorMessage ? errorId : undefined}
+                    spellCheck={false}
+                    className="block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  />
+                  {errorMessage ? (
+                    <p id={errorId} role="alert" className="mt-2 text-sm text-red-700">
+                      {errorMessage}
+                    </p>
+                  ) : null}
+                </div>
 
-              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={cancelPrompt}
+                    className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                  >
+                    {t("auth.stepUp.cancel", { defaultValue: "Cancelar" })}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!totpCode.trim() || isSubmitting}
+                    className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSubmitting
+                      ? t("auth.stepUp.submitting", { defaultValue: "Verificando…" })
+                      : t("auth.stepUp.submit", { defaultValue: "Verificar y continuar" })}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="mt-5 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+                <p className="text-sm leading-6 text-indigo-950">
+                  Esta acción requiere verificación en 2 pasos y tu cuenta todavía no tiene un autenticador activo.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+                    const destination = new URL("/settings/security", window.location.origin);
+                    destination.searchParams.set("mfaReturnTo", returnTo);
+                    window.location.assign(destination.toString());
+                  }}
+                  className="mt-3 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                  data-testid="step-up-activate-mfa"
+                >
+                  Activar verificación en 2 pasos
+                </button>
                 <button
                   type="button"
                   onClick={cancelPrompt}
-                  className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                  className="ml-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                 >
                   {t("auth.stepUp.cancel", { defaultValue: "Cancelar" })}
                 </button>
-                <button
-                  type="submit"
-                  disabled={!totpCode.trim() || isSubmitting}
-                  className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSubmitting
-                    ? t("auth.stepUp.submitting", { defaultValue: "Verificando…" })
-                    : t("auth.stepUp.submit", { defaultValue: "Verificar y continuar" })}
-                </button>
               </div>
-            </form>
+            )}
           </div>
         </div>
       ) : null}

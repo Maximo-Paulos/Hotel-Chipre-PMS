@@ -49,8 +49,8 @@ test("reservation quote failure explains why confirmation is blocked", async ({ 
   const reservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
   const categorySelect = reservationForm.locator("label").filter({ hasText: "Categoría" }).locator("select");
   await categorySelect.selectOption("999");
-  await reservationForm.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(localIsoDate(1));
-  await reservationForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(localIsoDate(2));
+  await reservationForm.getByLabel("Check-in", { exact: true }).fill(localIsoDate(1));
+  await reservationForm.getByLabel("Check-out", { exact: true }).fill(localIsoDate(2));
 
   const quoteAlert = reservationForm.getByRole("alert");
   await expect(quoteAlert).toContainText("No se pudo calcular la cotización");
@@ -96,8 +96,8 @@ test("reservation quote 400 (no active rate plan) shows the dedicated error, not
   const reservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
   const categorySelect = reservationForm.locator("label").filter({ hasText: "Categoría" }).locator("select");
   await categorySelect.selectOption("998");
-  await reservationForm.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(localIsoDate(1));
-  await reservationForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(localIsoDate(2));
+  await reservationForm.getByLabel("Check-in", { exact: true }).fill(localIsoDate(1));
+  await reservationForm.getByLabel("Check-out", { exact: true }).fill(localIsoDate(2));
 
   const quoteAlert = reservationForm.getByRole("alert");
   await expect(quoteAlert).toContainText("No hay una tarifa disponible");

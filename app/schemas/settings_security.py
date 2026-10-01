@@ -1,16 +1,16 @@
 """Public, redacted contracts for hotel security settings."""
 
-from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+from app.schemas.datetime_types import UTCDateTime
 
 
 class SecurityCurrentUserRead(BaseModel):
     id: int
     email: str
     role: str
-    last_login: datetime | None = None
+    last_login: UTCDateTime | None = None
     token_version: int
 
 
@@ -31,7 +31,7 @@ class SecurityEventRead(BaseModel):
     actor_name: str = "Sistema"
     resource_type: str | None = None
     resource_id: str | None = None
-    created_at: datetime
+    created_at: UTCDateTime
 
 
 class SecurityEventsRead(BaseModel):
@@ -44,7 +44,7 @@ class AuditTimelineItemRead(BaseModel):
     action: str
     actor_user_id: int | None = None
     actor_name: str = "Sistema"
-    created_at: datetime
+    created_at: UTCDateTime
     summary: str
     details: dict[str, Any] = Field(default_factory=dict)
 

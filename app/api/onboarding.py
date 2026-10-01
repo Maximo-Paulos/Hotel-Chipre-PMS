@@ -4,8 +4,12 @@ FastAPI routes for the onboarding flow used by smoke tests.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
+from app.models.hotel_config import HotelConfiguration
+from app.services.email_service import mailer
+from app.services.invitation_email_service import send_staff_invitation_email
 from app.schemas.onboarding import (
     CategoriesPayload,
     DepositPolicyPayload,
@@ -15,6 +19,7 @@ from app.schemas.onboarding import (
     OwnerPayload,
     PaymentMethodsPayload,
     RoomsPayload,
+    StaffInvitationDelivery,
     StaffPayload,
     SubscriptionChoicePayload,
 )
@@ -134,14 +139,39 @@ def set_staff(
     context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_UPDATE)),
 ):
     try:
-        status_data = onboarding_service.store_staff(
+        result = onboarding_service.store_staff(
             db,
             payload.staff,
             hotel_id=context.hotel_id,
             actor_user_id=context.user_id,
             actor_email=context.user_email,
+            actor_role=context.user_role,
         )
         db.commit()
+        hotel = db.get(HotelConfiguration, context.hotel_id)
+        hotel_name = hotel.hotel_name if hotel else f"Hotel {context.hotel_id}"
+        settings = get_settings()
+        deliveries = []
+        for provision in result.invitations:
+            _, delivery = send_staff_invitation_email(
+                email=provision.invitation.email,
+                hotel_name=hotel_name,
+                role=provision.invitation.role,
+                inviter_email=context.user_email or "",
+                token=provision.token,
+                frontend_url=settings.FRONTEND_URL,
+                sender=mailer,
+            )
+            deliveries.append(
+                StaffInvitationDelivery(
+                    invitation_id=provision.invitation.id,
+                    email=provision.invitation.email,
+                    role=provision.invitation.role,
+                    email_delivery=delivery,
+                )
+            )
+        status_data = result.status
+        status_data["staff_invitations"] = deliveries
         return status_data
     except OnboardingError as e:
         db.rollback()

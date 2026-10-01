@@ -2,10 +2,12 @@ from decimal import Decimal
 
 import pytest
 
+import app.services.stock_service as stock_service
 from app.models.hotel_config import HotelConfiguration
 from app.models.stock import StockMovement
 from app.services.stock_service import (
     StockError,
+    StockIdempotencyConflict,
     create_location,
     create_stock_item,
     current_stock,
@@ -14,7 +16,9 @@ from app.services.stock_service import (
     list_stock_items,
     low_stock_items,
     register_movement,
+    register_opening_count,
     stock_summary,
+    transfer_stock,
     update_stock_item,
 )
 
@@ -544,11 +548,16 @@ def test_stock_summary_returns_every_active_item_balance_in_one_call_hotel_scope
     item = create_stock_item(db, hotel_id=1, name="Sabanas", unit="unidad")
     other_hotel_item = create_stock_item(db, hotel_id=2, name="Sabanas", unit="unidad")
     house = create_location(db, hotel_id=1, name="Deposito")
+    floor_stock = create_location(db, hotel_id=1, name="Office piso 1")
     db.flush()
 
     register_movement(
         db, hotel_id=1, item_id=item.id, location_id=house.id, movement_type="in",
         quantity=Decimal("8.00"), reason=None, reservation_id=None, created_by_user_id=None,
+    )
+    register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=floor_stock.id, movement_type="in",
+        quantity=Decimal("3.00"), reason=None, reservation_id=None, created_by_user_id=None,
     )
     register_movement(
         db, hotel_id=2, item_id=other_hotel_item.id, location_id=None, movement_type="in",
@@ -559,12 +568,193 @@ def test_stock_summary_returns_every_active_item_balance_in_one_call_hotel_scope
     summary = stock_summary(db, hotel_id=1)
     assert len(summary) == 1
     assert summary[0]["item"].id == item.id
-    assert summary[0]["current_quantity"] == Decimal("8.00")
+    assert summary[0]["current_quantity"] == Decimal("11.00")
+    assert summary[0]["location_balances"] == [
+        {
+            "location_id": house.id, "location_name": "Deposito", "current_quantity": Decimal("8.00"),
+            "has_movements": True,
+        },
+        {
+            "location_id": floor_stock.id, "location_name": "Office piso 1", "current_quantity": Decimal("3.00"),
+            "has_movements": True,
+        },
+    ]
 
     summary_at_house = stock_summary(db, hotel_id=1, location_id=house.id)
     assert summary_at_house[0]["current_quantity"] == Decimal("8.00")
+    assert summary_at_house[0]["location_balances"] == [
+        {
+            "location_id": house.id, "location_name": "Deposito", "current_quantity": Decimal("8.00"),
+            "has_movements": True,
+        }
+    ]
 
     other_location = create_location(db, hotel_id=1, name="Otro deposito")
     db.commit()
     summary_elsewhere = stock_summary(db, hotel_id=1, location_id=other_location.id)
     assert summary_elsewhere[0]["current_quantity"] == Decimal("0.00")
+
+
+def test_stock_transfer_is_atomic_idempotent_and_keeps_hotel_total(db):
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Toallas", unit="unidad")
+    source = create_location(db, hotel_id=1, name="Depósito")
+    destination = create_location(db, hotel_id=1, name="Piso 1")
+    register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=source.id, movement_type="in",
+        quantity=Decimal("10.00"), reason="Conteo inicial", created_by_user_id=None,
+    )
+    db.flush()
+
+    reference, outbound, inbound = transfer_stock(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        source_location_id=source.id,
+        destination_location_id=destination.id,
+        quantity=Decimal("3.00"),
+        reason="Reposición de piso",
+        created_by_user_id=None,
+        idempotency_key="transfer-key-001",
+    )
+    db.commit()
+
+    assert outbound.transfer_reference == reference
+    assert inbound.transfer_reference == reference
+    assert outbound.movement_type == "out" and inbound.movement_type == "in"
+    assert current_stock(db, hotel_id=1, item_id=item.id) == Decimal("10.00")
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=source.id) == Decimal("7.00")
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=destination.id) == Decimal("3.00")
+
+    retry = transfer_stock(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        source_location_id=source.id,
+        destination_location_id=destination.id,
+        quantity=Decimal("3.00"),
+        reason="Reposición de piso",
+        created_by_user_id=None,
+        idempotency_key="transfer-key-001",
+    )
+    assert retry[0] == reference
+    assert retry[1].id == outbound.id
+    assert retry[2].id == inbound.id
+
+    with pytest.raises(StockIdempotencyConflict):
+        transfer_stock(
+            db,
+            hotel_id=1,
+            item_id=item.id,
+            source_location_id=source.id,
+            destination_location_id=destination.id,
+            quantity=Decimal("4.00"),
+            reason="Reposición de piso",
+            created_by_user_id=None,
+            idempotency_key="transfer-key-001",
+        )
+
+    with pytest.raises(StockError, match="negative"):
+        transfer_stock(
+            db,
+            hotel_id=1,
+            item_id=item.id,
+            source_location_id=source.id,
+            destination_location_id=destination.id,
+            quantity=Decimal("8.00"),
+            reason="Conteo incorrecto",
+            created_by_user_id=None,
+            idempotency_key="transfer-key-002",
+        )
+    assert len(list_stock_movements(db, hotel_id=1, item_id=item.id, limit=20)) == 3
+
+
+def test_opening_count_is_available_once_and_retries_match_payload(db):
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Jabón", unit="unidad")
+    location = create_location(db, hotel_id=1, name="Depósito")
+    db.flush()
+
+    movement = register_opening_count(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        location_id=location.id,
+        quantity=Decimal("12.00"),
+        reason="Conteo inicial de apertura",
+        created_by_user_id=None,
+        idempotency_key="opening-key-001",
+    )
+    db.commit()
+    retried = register_opening_count(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        location_id=location.id,
+        quantity=Decimal("12.00"),
+        reason="Conteo inicial de apertura",
+        created_by_user_id=None,
+        idempotency_key="opening-key-001",
+    )
+    assert retried.id == movement.id
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=location.id) == Decimal("12.00")
+
+    with pytest.raises(StockIdempotencyConflict):
+        register_opening_count(
+            db,
+            hotel_id=1,
+            item_id=item.id,
+            location_id=location.id,
+            quantity=Decimal("15.00"),
+            reason="Conteo inicial de apertura",
+            created_by_user_id=None,
+            idempotency_key="opening-key-001",
+        )
+    with pytest.raises(StockError, match="only available"):
+        register_opening_count(
+            db,
+            hotel_id=1,
+            item_id=item.id,
+            location_id=location.id,
+            quantity=Decimal("15.00"),
+            reason="Segundo conteo",
+            created_by_user_id=None,
+            idempotency_key="opening-key-002",
+        )
+    assert len(list_stock_movements(db, hotel_id=1, item_id=item.id, limit=20)) == 1
+
+
+def test_stock_transfer_rolls_back_outbound_if_inbound_insert_fails(db, monkeypatch):
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Toallas", unit="unidad")
+    source = create_location(db, hotel_id=1, name="Depósito")
+    destination = create_location(db, hotel_id=1, name="Piso 1")
+    register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=source.id, movement_type="in",
+        quantity=Decimal("10.00"), reason="Stock sintético", created_by_user_id=None,
+    )
+    db.flush()
+    original_register_movement = stock_service.register_movement
+
+    def fail_destination_insert(*args, **kwargs):
+        if kwargs.get("transfer_reference") and kwargs.get("movement_type") == "in":
+            raise StockError("simulated destination failure")
+        return original_register_movement(*args, **kwargs)
+
+    monkeypatch.setattr(stock_service, "register_movement", fail_destination_insert)
+    with pytest.raises(StockError, match="simulated destination failure"):
+        stock_service.transfer_stock(
+            db,
+            hotel_id=1,
+            item_id=item.id,
+            source_location_id=source.id,
+            destination_location_id=destination.id,
+            quantity=Decimal("3.00"),
+            reason="Reposición de piso",
+            created_by_user_id=None,
+            idempotency_key="transfer-key-rollback",
+        )
+
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=source.id) == Decimal("10.00")
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=destination.id) == Decimal("0.00")
+    assert len(list_stock_movements(db, hotel_id=1, item_id=item.id, limit=20)) == 1

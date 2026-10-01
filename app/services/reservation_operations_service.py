@@ -16,8 +16,10 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.services.row_locks import lock_query
 from app.models.audit_log import AuditActionEnum
 from app.models.commercial import RatePlan, SellableProduct, TaxPolicy
+from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota_core import OTAReservationLifecycleEnum, OTAReservationLink
 from app.models.operations import (
@@ -46,6 +48,7 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_RESERVATION_MOVE_CAPACITY,
     PERMISSION_RESERVATION_MOVE_CATEGORY,
+    PERMISSION_RESERVATION_RATE_ADJUST,
     RESERVATION_MOVE_TIER_PERMISSIONS,
     audit_permission_denied,
     resolve,
@@ -62,6 +65,7 @@ from app.services.reservation_service import (
     manual_override_total_for_nights,
     transition_reservation_status,
     update_reservation_fields,
+    _notify_reservation_event,
     _apply_pricing_result_to_reservation,
     _validate_reservation_occupancy,
 )
@@ -371,7 +375,7 @@ def _extension_conflicts(
 ) -> list[Reservation]:
     if reservation.room_id is None:
         return []
-    return (
+    overlapping_query = (
         db.query(Reservation)
         .filter(
             Reservation.hotel_id == hotel_id,
@@ -389,9 +393,8 @@ def _extension_conflicts(
         )
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
         .populate_existing()
-        .with_for_update()
-        .all()
     )
+    return lock_query(overlapping_query, Reservation).all()
 
 
 def _is_auto_assignable_future_reservation(conflict: Reservation) -> bool:
@@ -788,6 +791,73 @@ def _extension_amount(
     return Decimal(str(pricing.total_amount)).quantize(Decimal("0.01"))
 
 
+def set_company_extension_request(
+    db: Session,
+    *,
+    reservation: Reservation,
+    hotel_id: int,
+    pending: bool,
+    note: str | None,
+    client_version: int,
+    actor_user_id: int | None,
+) -> Reservation:
+    """Record a company extension request without changing stay or billing data."""
+    if reservation.hotel_id != hotel_id:
+        raise ReservationOperationsError("La reserva no pertenece al hotel activo")
+    if reservation.company_id is None:
+        raise ReservationOperationsError("La solicitud de extensión solo está disponible para reservas de empresa")
+    company = (
+        db.query(Company)
+        .filter(
+            Company.id == reservation.company_id,
+            Company.hotel_id == hotel_id,
+            Company.is_active.is_(True),
+        )
+        .first()
+    )
+    if company is None:
+        raise ReservationOperationsError("La empresa no está activa en el hotel")
+    if reservation.status in (
+        ReservationStatusEnum.CHECKED_OUT,
+        ReservationStatusEnum.CANCELLED,
+        ReservationStatusEnum.NO_SHOW,
+    ):
+        raise ReservationOperationsError("Solo se puede registrar una extensión en una reserva activa")
+
+    lock_reservation_version(
+        db,
+        reservation,
+        hotel_id=hotel_id,
+        client_version=client_version,
+    )
+    normalized_note = (note or "").strip() or None
+    if pending and normalized_note is None:
+        raise ReservationOperationsError("Indicá qué extensión pidió la empresa o qué falta confirmar")
+    if not pending:
+        raise ReservationOperationsError(
+            "La solicitud solo se completa al aplicar una extensión autorizada"
+        )
+    if reservation.company_extension_request_pending == pending and (
+        not pending or reservation.company_extension_request_note == normalized_note
+    ):
+        return reservation
+
+    reservation.company_extension_request_pending = pending
+    if pending:
+        reservation.company_extension_request_note = normalized_note
+    reservation.version = (reservation.version or 0) + 1
+    db.flush()
+    _notify_reservation_event(
+        db,
+        hotel_id=hotel_id,
+        reservation=reservation,
+        event_type="reservation.company_extension_request_updated",
+        title="Extensión de empresa pendiente",
+        dedupe_suffix=f"company-extension:{reservation.version}",
+    )
+    return reservation
+
+
 def extend_reservation_stay(
     db: Session,
     *,
@@ -905,6 +975,13 @@ def extend_reservation_stay(
     except (PaymentError, PaymentLinkError) as exc:
         raise ReservationOperationsError(str(exc)) from exc
 
+    # The extension request remains pending if validation, availability,
+    # pricing, or payment-link creation fails. Clear it only after this
+    # operation has successfully changed the reservation dates in memory and
+    # produced the requested payment action; the surrounding route commits
+    # both changes together.
+    reservation.company_extension_request_pending = False
+
     db.flush()
     _invalidate_availability_cache(hotel_id)
     _touch_facts(db, hotel_id, reservation.check_in_date, max(original_check_out, reservation.check_out_date))
@@ -1009,6 +1086,37 @@ def move_reservation_room(
     )
     quoted_total = Decimal(str(pricing.total_amount)).quantize(Decimal("0.01"))
     amount_delta = (quoted_total - previous_total).quantize(Decimal("0.01"))
+
+    # A cross-category move that keeps a more expensive quote is a
+    # complimentary upgrade. Repricing also changes the reservation's
+    # commercial total. Both are separately configurable from the hotel's
+    # permission settings; a room-movement permission alone must not grant
+    # authority over the reservation price.
+    changes_price = amount_delta != Decimal("0.00") and price_action == "reprice"
+    complimentary_upgrade = (
+        category_changed
+        and price_action == "keep"
+        and amount_delta > Decimal("0.00")
+    )
+    if changes_price or complimentary_upgrade:
+        if not resolve(
+            db,
+            hotel_id,
+            actor_role,
+            PERMISSION_RESERVATION_RATE_ADJUST,
+            user_id=moved_by_user_id,
+        ):
+            audit_permission_denied(
+                db,
+                hotel_id=hotel_id,
+                user_id=moved_by_user_id,
+                role=actor_role,
+                permission_code=PERMISSION_RESERVATION_RATE_ADJUST,
+            )
+            raise RoomMovePermissionError(
+                "Para aplicar un cambio de tarifa o una mejora sin cargo necesitás el permiso "
+                "'Ajustar tarifa de reserva'."
+            )
 
     previous_room_id = reservation.room_id
     status_value = reservation.status.value if hasattr(reservation.status, "value") else str(reservation.status)
@@ -1231,7 +1339,7 @@ def rebook_ota_reservation_as_direct(
 ) -> OTARebookResult:
     if reservation.hotel_id != hotel_id:
         raise ReservationOperationsError("La reserva no pertenece al hotel activo")
-    reservation = (
+    reservation_query = (
         db.query(Reservation)
         .filter(
             Reservation.id == reservation.id,
@@ -1239,9 +1347,8 @@ def rebook_ota_reservation_as_direct(
             Reservation.deleted_at.is_(None),
         )
         .populate_existing()
-        .with_for_update()
-        .first()
     )
+    reservation = lock_query(reservation_query, Reservation).first()
     if reservation is None:
         raise ReservationOperationsError("La reserva no existe o ya no está activa")
     if reservation.source == ReservationSourceEnum.DIRECT:

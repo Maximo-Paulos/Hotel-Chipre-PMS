@@ -43,6 +43,8 @@ from app.services.user_session_service import revoke_all_sessions
 from app.adapters.rate_limiter import invite_limiter
 from app.config import get_settings
 from app.services.email_service import mailer
+from app.services.invitation_email_service import send_staff_invitation_email
+from app.schemas.datetime_types import UTCDateTime
 from app.models.hotel_config import HotelConfiguration
 from app.services import audit_log_service
 from app.services.staff_invitation_service import (
@@ -154,6 +156,16 @@ class StaffAliasRosterResponse(BaseModel):
     items: list[StaffAliasItem]
 
 
+class StaffInvitationListItem(BaseModel):
+    invitation_id: int
+    email: str
+    role: str
+    inviter_email: str
+    status: Literal["pending", "expired"]
+    created_at: UTCDateTime
+    expires_at: UTCDateTime
+
+
 class UpdateStaffAliasPayload(BaseModel):
     alias: str | None = Field(max_length=80)
 
@@ -172,32 +184,15 @@ def _send_invitation_email(
     token: str,
 ) -> tuple[str, Literal["sent", "failed", "not_configured"]]:
     settings = get_settings()
-    base = settings.FRONTEND_URL.rstrip("/")
-    # Fragments are not sent in HTTP requests or access logs; the SPA forwards
-    # the capability to invitation endpoints in a JSON body.
-    accept_url = f"{base}/invitations/accept#token={token}"
-    subj = f"Invitación a {hotel_name}"
-    body = (
-        f"Hola,\n\n"
-        f"Te invitaron al hotel '{hotel_name}' con el rol {role}.\n"
-        f"Ingresá con Google o con tu cuenta aquí: {accept_url}\n\n"
-        "Si recibiste más de un correo, usá el enlace del más reciente: cada reenvío invalida los anteriores.\n\n"
-        f"Invitó: {inviter_email}\n"
-        f"Si no esperabas este correo, podés ignorarlo."
+    return send_staff_invitation_email(
+        email=email,
+        hotel_name=hotel_name,
+        role=role,
+        inviter_email=inviter_email,
+        token=token,
+        frontend_url=settings.FRONTEND_URL,
+        sender=mailer,
     )
-    try:
-        configured = mailer.configured
-    except Exception:
-        return accept_url, "failed"
-    if not configured:
-        return accept_url, "not_configured"
-    try:
-        sent = mailer.send(email, subj, body)
-    except Exception:
-        # The invite is already committed. Keep the provider's diagnostic
-        # private and let the operator retry through the existing resend path.
-        return accept_url, "failed"
-    return accept_url, "sent" if sent else "failed"
 
 
 @router.post("/invite", response_model=InviteResponse, status_code=status.HTTP_201_CREATED)
@@ -207,11 +202,6 @@ def invite_user(
     context: AuthContext = Depends(_MANAGE_STAFF),
 ):
     key = f"user:{context.user_id}"
-    if not invite_limiter.allow(key, db=db):
-        db.commit()
-        raise HTTPException(status_code=429, detail="Demasiadas invitaciones en poco tiempo. Intentá más tarde.")
-    db.commit()
-
     email = normalize_email(payload.email)
     if not email:
         raise HTTPException(status_code=400, detail="Email requerido")
@@ -242,7 +232,16 @@ def invite_user(
         if existing_membership is not None:
             if existing_membership.user_id == context.user_id:
                 raise HTTPException(status_code=400, detail="No puedes invitarte a ti mismo con otro rol")
-            _assert_manageable_membership(context.user_role, existing_membership, action="invitar")
+            # A revoked legacy owner invitation must not permanently lock the
+            # person's email out of ordinary staff onboarding. Only the owner
+            # may reuse that account after explicitly revoking the bad invite.
+            revoked_legacy_owner = (
+                existing_membership.role == "owner"
+                and existing_membership.status == "revoked"
+                and context.user_role == "owner"
+            )
+            if not revoked_legacy_owner:
+                _assert_manageable_membership(context.user_role, existing_membership, action="invitar")
     try:
         provision = provision_staff_invitation(
             db,
@@ -287,14 +286,20 @@ def invite_user(
         if before.get("user_id") == context.user_id:
             db.rollback()
             raise HTTPException(status_code=400, detail="No puedes invitarte a ti mismo con otro rol")
-        try:
-            # Recheck the role snapshot returned by the provision path
-            # to close the race where the membership appeared after the
-            # preflight email lookup above.
-            _assert_manageable_role(context.user_role, str(before.get("role") or ""), action="invitar")
-        except HTTPException:
-            db.rollback()
-            raise
+        revoked_legacy_owner = (
+            before.get("role") == "owner"
+            and before.get("status") == "revoked"
+            and context.user_role == "owner"
+        )
+        if not revoked_legacy_owner:
+            try:
+                # Recheck the role snapshot returned by the provision path
+                # to close the race where the membership appeared after the
+                # preflight email lookup above.
+                _assert_manageable_role(context.user_role, str(before.get("role") or ""), action="invitar")
+            except HTTPException:
+                db.rollback()
+                raise
     if membership:
         audit_log_service.safe_create_audit_log(
             db,
@@ -324,6 +329,9 @@ def invite_user(
         payload_before=invitation_before,
         payload_after={"event": "invitation.resend" if reused else "invitation.created", **invitation_snapshot(invitation)},
     )
+    if not invite_limiter.allow(key, db=db):
+        db.rollback()
+        raise HTTPException(status_code=429, detail="Demasiadas invitaciones en poco tiempo. Intentá más tarde.")
     db.commit()
     db.refresh(user)
 
@@ -362,8 +370,10 @@ def resend_invitation(
     )
     if invitation is None:
         raise HTTPException(status_code=404, detail="Invitación no encontrada")
-    if invitation.status != "pending" or invitation.expires_at <= utcnow():
+    if invitation.status != "pending":
         raise HTTPException(status_code=409, detail="La invitación ya no está pendiente")
+    if invitation.role == "owner":
+        raise HTTPException(status_code=409, detail="El rol Dueño no se puede reenviar como una invitación de staff")
     try:
         require_active_hotel_role(db, context.hotel_id, invitation.role, lock=True)
     except HotelRoleNotFound as exc:
@@ -403,6 +413,10 @@ def resend_invitation(
         payload_before=before,
         payload_after={"event": "invitation.resend", **invitation_snapshot(refreshed)},
     )
+    key = f"user:{context.user_id}"
+    if not invite_limiter.allow(key, db=db):
+        db.rollback()
+        raise HTTPException(status_code=429, detail="Demasiadas invitaciones en poco tiempo. Intentá más tarde.")
     db.commit()
 
     user = db.get(User, invitation.user_id)
@@ -422,6 +436,35 @@ def resend_invitation(
         accept_url=accept_url,
         email_delivery=email_delivery,
     )
+
+
+@router.get("/invitations", response_model=list[StaffInvitationListItem])
+def list_staff_invitations(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(_MANAGE_STAFF),
+):
+    now = utcnow()
+    invitations = (
+        db.query(StaffInvitation)
+        .filter(
+            StaffInvitation.hotel_id == context.hotel_id,
+            StaffInvitation.status == "pending",
+        )
+        .order_by(StaffInvitation.created_at.desc(), StaffInvitation.id.desc())
+        .all()
+    )
+    return [
+        StaffInvitationListItem(
+            invitation_id=invitation.id,
+            email=invitation.email,
+            role=invitation.role,
+            inviter_email=invitation.inviter_email,
+            status="expired" if invitation.expires_at <= now else "pending",
+            created_at=invitation.created_at,
+            expires_at=invitation.expires_at,
+        )
+        for invitation in invitations
+    ]
 
 
 @router.delete("/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -453,7 +496,12 @@ def revoke_invitation(
         if invitation.user_id is not None
         else None
     )
-    if membership is not None:
+    if invitation.role == "owner":
+        if context.user_role != "owner":
+            raise HTTPException(status_code=403, detail="Solo el dueño puede revocar una invitación de dueño")
+        if membership is not None and membership.role != "owner":
+            raise HTTPException(status_code=409, detail="La membresía ya no coincide con la invitación")
+    elif membership is not None:
         _assert_manageable_membership(context.user_role, membership, action="revocar")
 
     before_invitation = invitation_snapshot(invitation)

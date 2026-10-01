@@ -364,6 +364,22 @@ export function SettingsHotelPage() {
   };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const minAdjustment = form.manual_rate_min_adjustment_pct == null || form.manual_rate_min_adjustment_pct === ""
+      ? null
+      : Number(form.manual_rate_min_adjustment_pct);
+    const maxAdjustment = form.manual_rate_max_adjustment_pct == null || form.manual_rate_max_adjustment_pct === ""
+      ? null
+      : Number(form.manual_rate_max_adjustment_pct);
+    if ((minAdjustment === null) !== (maxAdjustment === null)) {
+      setError("Definí ambos límites de tarifa manual o dejá ambos vacíos.");
+      return;
+    }
+    if (minAdjustment !== null && maxAdjustment !== null) {
+      if (!Number.isFinite(minAdjustment) || !Number.isFinite(maxAdjustment) || minAdjustment < -100 || minAdjustment > maxAdjustment) {
+        setError("Revisá los límites: el mínimo debe ser al menos -100% y no puede superar al máximo.");
+        return;
+      }
+    }
     try {
       await updateConfigMutation.mutateAsync(form);
     } catch (cause) {
@@ -373,6 +389,7 @@ export function SettingsHotelPage() {
 
   const ownerOnly = session.baseRole === "owner";
   const canDeleteRooms = permissionsKnown && hasPermission("hotel_settings:update");
+  const canManageManualRatePolicy = permissionsKnown && hasPermission("reservation:manual_rate_policy_manage");
 
   if (!hasValidSession(session)) return <p className="text-sm text-slate-600">Iniciá sesión con un hotel activo para editar la configuración.</p>;
 
@@ -425,6 +442,30 @@ export function SettingsHotelPage() {
               </datalist>
             </label>
           </div>
+          <div className="rounded-lg border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-800">Horarios habituales</h3>
+            <p className="mt-1 text-xs text-slate-500">Se guardan en la zona horaria del hotel. Dejá un campo vacío si todavía no definiste ese horario.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="text-sm font-semibold text-slate-700">
+                Check-in desde
+                <input
+                  type="time"
+                  value={form.check_in_time ?? ""}
+                  onChange={(event) => handleChange("check_in_time", event.target.value || null)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="text-sm font-semibold text-slate-700">
+                Check-out hasta
+                <input
+                  type="time"
+                  value={form.check_out_time ?? ""}
+                  onChange={(event) => handleChange("check_out_time", event.target.value || null)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+          </div>
           <div className="grid gap-3 md:grid-cols-3">
             <label className="text-sm font-semibold text-slate-700">
               Moneda
@@ -449,11 +490,11 @@ export function SettingsHotelPage() {
               Requisito de pago para el check-in
               <select
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                value={form.checkin_payment_policy ?? "deposit"}
+                value={form.checkin_payment_policy ?? "total"}
                 onChange={(e) => handleChange("checkin_payment_policy", e.target.value as HotelConfig["checkin_payment_policy"])}
               >
-                <option value="deposit">Seña configurada (recomendado)</option>
-                <option value="total">Estadía completamente pagada</option>
+                <option value="total">Estadía completamente pagada (predeterminado)</option>
+                <option value="deposit">Seña configurada</option>
                 <option value="free">Sin requisito de pago al ingresar</option>
               </select>
               <span className="mt-1 block text-xs font-normal text-slate-500">
@@ -477,6 +518,38 @@ export function SettingsHotelPage() {
               <input maxLength={3} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase" value={form.jurisdiction_code ?? "AR"} onChange={(e) => handleChange("jurisdiction_code", e.target.value.toUpperCase())} />
             </label>
           </div>
+
+          {canManageManualRatePolicy && (
+            <div className="rounded-lg border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-800">Límites de tarifa manual directa</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Se comparan con la cotización automática de la estadía. El equipo autorizado debe indicar el motivo; estos límites no modifican Tarifas. Dejá ambos campos vacíos para deshabilitar tarifas manuales limitadas. Guardar este cambio requiere revalidación y queda auditado.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="text-sm font-semibold text-slate-700">
+                  Ajuste mínimo (%)
+                  <input
+                    type="number"
+                    min={-100}
+                    step="0.01"
+                    value={form.manual_rate_min_adjustment_pct ?? ""}
+                    onChange={(event) => handleChange("manual_rate_min_adjustment_pct", event.target.value === "" ? null : Number(event.target.value))}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Ajuste máximo (%)
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.manual_rate_max_adjustment_pct ?? ""}
+                    onChange={(event) => handleChange("manual_rate_max_adjustment_pct", event.target.value === "" ? null : Number(event.target.value))}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
 
           {ownerOnly && (
             <div className="rounded-lg border border-slate-200 p-4">

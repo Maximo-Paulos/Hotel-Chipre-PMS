@@ -6,10 +6,13 @@ import { type TFunction } from "i18next";
 
 import {
   addReservationCharge,
+  createReservationGroup,
+  listReservationGroups,
   markReservationNoShow,
   moveReservationRoom,
   type Reservation,
   type ReservationChargePayload,
+  type ReservationGroupSummary,
   type ReservationNoShowPayload,
   type ReservationPayload,
   type ReservationPendingAction,
@@ -19,6 +22,7 @@ import {
   type ReservationStatus,
   type ReservationUpdatePayload
 } from "../../api/reservations";
+import { listCompanyOptions, type CompanyOption } from "../../api/companies";
 import {
   listReservationCommunications,
   sendReservationCommunication,
@@ -39,11 +43,12 @@ import GuestQuickCreatePanel, {
   hasQuickGuestFormData,
   type QuickGuestFormValues
 } from "../../components/GuestQuickCreatePanel";
+import LocalizedDateField from "../../components/LocalizedDateField";
 import ManualOtaReservationModal from "../../components/ManualOtaReservationModal";
 import { RestrictionOverrideModal } from "../../components/RestrictionOverrideModal";
 import { useRestrictionOverridePrompt } from "../../hooks/useRestrictionOverridePrompt";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
-import { getPaymentReceiptData, type PaymentMethod, type PaymentSummary } from "../../api/payments";
+import { getPaymentReceiptData, type PaymentMethod, type PaymentRequest, type PaymentSummary } from "../../api/payments";
 import { useCategories } from "../../hooks/useCategories";
 import { useGuest, useGuestCreate } from "../../hooks/useGuests";
 import {
@@ -71,7 +76,7 @@ import { useSession } from "../../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
 import { escapeHtml, resolveVoucherOperationalBalance } from "../../utils/escapeHtml";
 import { buildPaymentReceiptHtml, canPrintPaymentReceipt } from "../../utils/paymentReceiptHtml";
-import { addDaysIso, formatLocalIsoDate, todayIso } from "../../utils/date";
+import { addDaysIso, formatHotelDateTime, formatLocalIsoDate, todayIso } from "../../utils/date";
 import {
   canCancelReservation,
   canCheckInReservation,
@@ -92,6 +97,8 @@ type FormState = {
   guest_id: string;
   category_id: string;
   room_id: string;
+  company_id: string;
+  group_size: string;
   check_in_date: string;
   check_out_date: string;
   num_adults: string;
@@ -146,6 +153,8 @@ const defaultFormState = (): FormState => ({
   guest_id: "",
   category_id: "",
   room_id: "",
+  company_id: "",
+  group_size: "1",
   check_in_date: "",
   check_out_date: "",
   num_adults: "1",
@@ -168,17 +177,8 @@ const reservationGuestLabel = (
     ? `${reservation.guest.first_name} ${reservation.guest.last_name}`.trim()
     : t("page.guestLabel.fallback", { id: reservation.guest_id });
 
-const formatDateTime = (value?: string | null) => {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-};
+const formatDateTime = (value?: string | null, timeZone?: string | null) =>
+  formatHotelDateTime(value, timeZone);
 
 const auditMetadataLines = (
   details: Record<string, unknown>,
@@ -217,16 +217,20 @@ const readFileAsDataUrl = (file: File, errorMessage: string) =>
   });
 
 export function ReservationsPage() {
-  const { t } = useTranslation("reservations");
+  const { t, i18n } = useTranslation("reservations");
   // Backend codes (hotel_collect, not_applicable...) never reach the screen
   // raw; an unmapped value falls back to the code rather than a blank.
   const enumLabel = (group: "collection" | "settlement" | "nextAction", value: string) =>
     t(`page.enums.${group}.${value}`, { defaultValue: value });
+  const translatedEnum = (group: string, value?: string | null) =>
+    value ? t(`page.enums.${group}.${value}`, { defaultValue: t("page.enums.unknownValue") }) : t("page.enums.unknownValue");
   const sourceLabel = (value: string) => t(`page.form.sourceOptions.${value}`, { defaultValue: value });
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
+  const canAdjustPaidReservationTotal = hasPermission("reservation:paid_total_adjust");
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<ReservationStatus | "all" | "">("");
+  const [companyFilter, setCompanyFilter] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -237,6 +241,9 @@ export function ReservationsPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentAmountInput, setPaymentAmountInput] = useState("");
   const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
+  const [collectedBefore, setCollectedBefore] = useState(false);
+  const [collectedOn, setCollectedOn] = useState("");
+  const [priorReceiptNote, setPriorReceiptNote] = useState("");
   const [refundTargetTransactionId, setRefundTargetTransactionId] = useState<number | null>(null);
   const [refundReasonInput, setRefundReasonInput] = useState("");
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
@@ -250,6 +257,9 @@ export function ReservationsPage() {
   // reemplaza la cotización automática en vez de convivir con ella.
   const [manualTotalAmountInput, setManualTotalAmountInput] = useState("");
   const [manualTargetCurrency, setManualTargetCurrency] = useState<"ARS" | "USD">("ARS");
+  const [manualRateReasonInput, setManualRateReasonInput] = useState("");
+  const [paidTotalAmountInput, setPaidTotalAmountInput] = useState("");
+  const [paidTotalChangeReasonInput, setPaidTotalChangeReasonInput] = useState("");
   const [lastCreatedReservation, setLastCreatedReservation] = useState<Reservation | null>(null);
   const [otaFormOpen, setOtaFormOpen] = useState(false);
   const [availabilityForm, setAvailabilityForm] = useState<{
@@ -276,7 +286,7 @@ export function ReservationsPage() {
   const [noShowNotes, setNoShowNotes] = useState("");
   const [guestIdOpen, setGuestIdOpen] = useState<number | null>(null);
   const [allocationForm, setAllocationForm] = useState({
-    apply: true,
+    apply: false,
     horizon_start: todayIso(),
     horizon_end: ""
   });
@@ -289,14 +299,11 @@ export function ReservationsPage() {
     typeof subscription.room_limit === "number" &&
     subscription.room_limit > 0 &&
     subscription.rooms_in_use >= subscription.room_limit;
-  const inactiveSubscription = subscription && subscription.status !== "active";
-  const subscriptionBlocked = Boolean(subscription) && (inactiveSubscription || limitReached || writeBlocked);
+  const subscriptionBlocked = Boolean(subscription) && (writeBlocked || limitReached);
   const subscriptionBlockReason = subscriptionBlocked
     ? writeBlocked
       ? t("page.subscription.readOnly")
-      : inactiveSubscription
-        ? t("page.subscription.inactive")
-        : t("page.subscription.roomLimitReached", { used: subscription?.rooms_in_use, limit: subscription?.room_limit })
+      : t("page.subscription.roomLimitReached", { used: subscription?.rooms_in_use, limit: subscription?.room_limit })
     : null;
 
   const filters = {
@@ -309,13 +316,31 @@ export function ReservationsPage() {
     // asking for the ordering it already assumed (check_in_date ASC) and the
     // server's max page size, instead of silently truncating to 50.
     order: "check_in" as const,
-    limit: 200
+    limit: 200,
+    companyId: companyFilter ? Number(companyFilter) : undefined
   };
 
   const { data: reservations = [], isLoading, isFetching, error } = useReservations(filters);
   const pendingActionsQuery = usePendingReservationActions(12);
   const { roomsQuery } = useRooms();
   const { data: categoriesData = [] } = useCategories();
+  const companyOptionsQuery = useQuery<CompanyOption[]>({
+    queryKey: ["company-options", session.hotelId],
+    queryFn: () => listCompanyOptions(session),
+    enabled: hasPermission("reservation:read") && hasValidSession(session),
+    staleTime: 30_000
+  });
+  const companyOptions = useMemo(() => companyOptionsQuery.data ?? [], [companyOptionsQuery.data]);
+  const companyNameById = useMemo(
+    () => new Map(companyOptions.map((company) => [company.id, company.display_name || company.legal_name])),
+    [companyOptions]
+  );
+  const reservationGroupsQuery = useQuery<ReservationGroupSummary[]>({
+    queryKey: ["reservation-groups", session.hotelId],
+    queryFn: () => listReservationGroups(session),
+    enabled: hasPermission("reservation:read") && hasValidSession(session),
+    staleTime: 15_000
+  });
   const categoryNameById = useMemo(() => {
     const map = new Map<number, string>();
     categoriesData.forEach((category) => map.set(category.id, category.name));
@@ -348,6 +373,13 @@ export function ReservationsPage() {
     mutationFn: (payload) => checkRoomAvailability(payload, session)
   });
   const { createMutation, updateMutation, cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations(filters);
+  const createGroupMutation = useGuardedMutation<ReservationGroupSummary, unknown, ReservationPayload[]>({
+    mutationFn: (payloads) => createReservationGroup(payloads, session),
+    onSuccess: async () => {
+      await refreshReservationState(queryClient, session.hotelId);
+      await queryClient.invalidateQueries({ queryKey: ["reservation-groups", session.hotelId] });
+    }
+  });
   const restrictionOverridePrompt = useRestrictionOverridePrompt();
   const { resolveExternalMutation, clearManualReviewMutation } = useReservationActionMutations(filters);
   const movementGroupsQuery = useQuery<RoomMovementGroup[]>({
@@ -449,7 +481,16 @@ export function ReservationsPage() {
       window.clearTimeout(toastTimeout.current);
     }
     setToast({ type, message });
-    toastTimeout.current = window.setTimeout(() => setToast(null), 3800);
+    toastTimeout.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimeout.current = null;
+    }, 3800);
+  };
+
+  const clearToast = () => {
+    if (toastTimeout.current) window.clearTimeout(toastTimeout.current);
+    toastTimeout.current = null;
+    setToast(null);
   };
 
   const today = todayIso();
@@ -527,6 +568,7 @@ export function ReservationsPage() {
           check_out_date: formValues.check_out_date,
           pricing_payment_method: pricingPaymentMethod === "base" ? null : pricingPaymentMethod,
           occupancy: (Number(formValues.num_adults) || 1) + (Number(formValues.num_children) || 0),
+          company_id: Number(formValues.company_id) > 0 ? Number(formValues.company_id) : null,
           // Lets an operator find out a guest is restricted before filling
           // out the whole form -- the endpoint itself has no override, the
           // real override happens at reservation creation (see submitCreate).
@@ -534,6 +576,8 @@ export function ReservationsPage() {
         }
       : null
   );
+  const isReservationQuoteUpdating =
+    !editing && manualTotalAmountInput.trim() === "" && quoteQuery.isFetching;
   const reservationQuote = useMemo(() => {
     if (!quoteQuery.data || !selectedFormCategory || quoteNights <= 0) {
       return null;
@@ -562,6 +606,36 @@ export function ReservationsPage() {
     quoteNights,
     selectedFormCategory
   ]);
+  const canUseUnboundedManualRate = hasPermission("reservation:manual_rate");
+  const canUseBoundedManualRate = hasPermission("reservation:manual_rate_limited");
+  const isBoundedManualRate = !canUseUnboundedManualRate && canUseBoundedManualRate;
+  const boundedManualRateContextAllowed = formValues.source === "direct" && !(Number(formValues.company_id) > 0);
+  const boundedManualRateRange = useMemo(() => {
+    const minAdjustment = quoteQuery.data?.manual_rate_min_adjustment_pct;
+    const maxAdjustment = quoteQuery.data?.manual_rate_max_adjustment_pct;
+    if (minAdjustment == null || maxAdjustment == null || !reservationQuote) return null;
+    const minPct = Number(minAdjustment);
+    const maxPct = Number(maxAdjustment);
+    if (!Number.isFinite(minPct) || !Number.isFinite(maxPct)) return null;
+    const roundCurrency = (amount: number) => Math.round((amount + Number.EPSILON) * 100) / 100;
+    return {
+      minimum: roundCurrency(reservationQuote.total * (1 + minPct / 100)),
+      maximum: roundCurrency(reservationQuote.total * (1 + maxPct / 100)),
+      minPct,
+      maxPct
+    };
+  }, [quoteQuery.data, reservationQuote]);
+  const boundedManualRateReady = Boolean(
+    isBoundedManualRate &&
+      boundedManualRateContextAllowed &&
+      boundedManualRateRange &&
+      !quoteQuery.isFetching &&
+      !quoteQuery.isError
+  );
+  const canSetManualRate = canUseUnboundedManualRate || canUseBoundedManualRate;
+  const manualRateCurrencyCode = isBoundedManualRate
+    ? quoteQuery.data?.currency_code ?? reservationQuote?.currencyCode ?? manualTargetCurrency
+    : manualTargetCurrency;
   const parsedDepositAmount = depositAmountInput.trim() === "" ? null : Number(depositAmountInput);
   // Si el operador no escribe una seña manual, el backend aplica la seña
   // porcentual configurada por el hotel (deposit_amount de la cotización) al
@@ -625,21 +699,28 @@ export function ReservationsPage() {
   const pendingActions = pendingActionsQuery.data ?? [];
   const criticalPendingActions = pendingActions.filter((item) => item.priority === "critical").length;
 
-  const openCreate = () => {
+  const openCreate = (initialValues: Partial<FormState> = {}) => {
     if (subscriptionBlocked) {
       setToast({ type: "error", message: subscriptionBlockReason || t("page.errors.blockedBySubscription") });
       return;
     }
+    clearToast();
     setEditing(null);
-    setFormValues(defaultFormState());
+    setFormValues({ ...defaultFormState(), ...initialValues });
     setFormError(null);
     setPricingPaymentMethod("base");
     setDepositAmountInput("");
     setManualTotalAmountInput("");
     setManualTargetCurrency("ARS");
+    setManualRateReasonInput("");
+    setPaidTotalAmountInput("");
+    setPaidTotalChangeReasonInput("");
     setLastCreatedReservation(null);
     setPaymentAmountInput("");
     setPaymentReferenceInput("");
+    setCollectedBefore(false);
+    setCollectedOn("");
+    setPriorReceiptNote("");
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
     setPaymentProofFile(null);
@@ -654,25 +735,49 @@ export function ReservationsPage() {
   const { openReservation } = useReservationDrawer();
   useEffect(() => {
     if (searchParams.get("crear") === "1") {
-      openCreate();
+      const positiveId = (value: string | null) => {
+        const parsed = Number(value);
+        return Number.isSafeInteger(parsed) && parsed > 0 ? String(parsed) : "";
+      };
+      const validDate = (value: string | null) => {
+        if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
+        const parsed = new Date(`${value}T00:00:00`);
+        return Number.isNaN(parsed.getTime()) || formatLocalIsoDate(parsed) !== value ? "" : value;
+      };
+      const checkIn = validDate(searchParams.get("check_in_date"));
+      const requestedCheckOut = validDate(searchParams.get("check_out_date"));
+      const initialValues: Partial<FormState> = {
+        room_id: positiveId(searchParams.get("room_id")),
+        category_id: positiveId(searchParams.get("category_id"))
+      };
+      if (checkIn) {
+        initialValues.check_in_date = checkIn;
+        initialValues.check_out_date = requestedCheckOut > checkIn ? requestedCheckOut : addDaysIso(checkIn, 1);
+      }
+      openCreate(initialValues);
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          next.delete("crear");
+          ["crear", "room_id", "category_id", "check_in_date", "check_out_date"].forEach((key) => next.delete(key));
           return next;
         },
         { replace: true }
       );
     }
+    // The global shortcut can change the query while this page is already mounted.
+    // Re-run when the location search changes; the first run still handles direct links.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams, setSearchParams]);
 
   const openEdit = (reservation: Reservation) => {
+    clearToast();
     setEditing(reservation);
     setFormValues({
       guest_id: String(reservation.guest_id),
       category_id: String(reservation.category_id),
       room_id: reservation.room_id ? String(reservation.room_id) : "",
+      company_id: reservation.company_id ? String(reservation.company_id) : "",
+      group_size: "1",
       check_in_date: reservation.check_in_date,
       check_out_date: reservation.check_out_date,
       num_adults: String(reservation.num_adults),
@@ -688,9 +793,15 @@ export function ReservationsPage() {
     setDepositAmountInput("");
     setManualTotalAmountInput("");
     setManualTargetCurrency("ARS");
+    setManualRateReasonInput("");
+    setPaidTotalAmountInput(Number(reservation.total_amount || 0).toFixed(2));
+    setPaidTotalChangeReasonInput("");
     setLastCreatedReservation(null);
     setPaymentAmountInput("");
     setPaymentReferenceInput("");
+    setCollectedBefore(false);
+    setCollectedOn("");
+    setPriorReceiptNote("");
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
     setPaymentProofFile(null);
@@ -704,9 +815,15 @@ export function ReservationsPage() {
     setFormError(null);
     setDepositAmountInput("");
     setManualTotalAmountInput("");
+    setManualRateReasonInput("");
+    setPaidTotalAmountInput("");
+    setPaidTotalChangeReasonInput("");
     setLastCreatedReservation(null);
     setPaymentAmountInput("");
     setPaymentReferenceInput("");
+    setCollectedBefore(false);
+    setCollectedOn("");
+    setPriorReceiptNote("");
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
     setPaymentProofFile(null);
@@ -799,11 +916,50 @@ export function ReservationsPage() {
       setFormError(t("page.errors.datesInvalid"));
       return;
     }
+    const groupSize = Number(currentFormValues.group_size || 1);
+    if (!editing && (!Number.isInteger(groupSize) || groupSize < 1 || groupSize > 10)) {
+      setFormError(t("page.errors.groupSizeInvalid"));
+      return;
+    }
+    if (!editing && groupSize > 1 && currentFormValues.source !== "direct") {
+      setFormError(t("page.errors.groupRequiresDirect"));
+      return;
+    }
     const manualTotalAmount =
       manualTotalAmountInput.trim() === "" ? null : Number(manualTotalAmountInput);
+    if (!editing && groupSize > 1 && manualTotalAmount !== null) {
+      setFormError(t("page.errors.groupManualRateUnsupported"));
+      return;
+    }
     if (!editing && manualTotalAmount !== null && (!Number.isFinite(manualTotalAmount) || manualTotalAmount < 0)) {
       setFormError(t("page.errors.invalidManualRate"));
       return;
+    }
+    const manualRateReason = manualRateReasonInput.trim();
+    if (!editing && manualTotalAmount !== null && !manualRateReason) {
+      setFormError(t("page.errors.manualRateReasonRequired"));
+      return;
+    }
+    if (!editing && manualTotalAmount !== null && isBoundedManualRate) {
+      if (!boundedManualRateContextAllowed) {
+        setFormError(t("page.errors.boundedManualRateDirectOnly"));
+        return;
+      }
+      if (!boundedManualRateReady || !boundedManualRateRange || !reservationQuote) {
+        setFormError(t("page.errors.boundedManualRateUnavailable"));
+        return;
+      }
+      if (normalizeCurrencyCode(quoteQuery.data?.currency_code) !== normalizeCurrencyCode(manualRateCurrencyCode)) {
+        setFormError(t("page.errors.boundedManualRateCurrency"));
+        return;
+      }
+      if (manualTotalAmount < boundedManualRateRange.minimum || manualTotalAmount > boundedManualRateRange.maximum) {
+        setFormError(t("page.errors.boundedManualRateRange", {
+          minimum: formatMoney(boundedManualRateRange.minimum, manualRateCurrencyCode),
+          maximum: formatMoney(boundedManualRateRange.maximum, manualRateCurrencyCode)
+        }));
+        return;
+      }
     }
     const effectiveTotal = manualTotalAmount ?? reservationQuote?.total;
     if (!editing && parsedDepositAmount !== null) {
@@ -837,6 +993,24 @@ export function ReservationsPage() {
       // cambian con Check-in/Check-out/Cancelar/Marcar no-show.
       const { category_id, ...updatePayload } = commonPayload;
       void category_id;
+      const paidTotalAmount = paidTotalAmountInput.trim() === "" ? null : Number(paidTotalAmountInput);
+      const currentTotal = Number(editing.total_amount || 0);
+      const paidTotalChanged = paidTotalAmount !== null &&
+        Math.round((paidTotalAmount + Number.EPSILON) * 100) !== Math.round((currentTotal + Number.EPSILON) * 100);
+      if (paidTotalChanged && (!Number.isFinite(paidTotalAmount) || paidTotalAmount < 0)) {
+        setFormError(t("page.errors.invalidPaidTotal"));
+        return;
+      }
+      const paidTotalChangeReason = paidTotalChangeReasonInput.trim();
+      if (paidTotalChanged && !paidTotalChangeReason) {
+        setFormError(t("page.errors.paidTotalReasonRequired"));
+        return;
+      }
+      const updateData: ReservationUpdatePayload = { ...updatePayload };
+      if (paidTotalChanged && paidTotalAmount !== null) {
+        updateData.total_amount = paidTotalAmount;
+        updateData.paid_total_change_reason = paidTotalChangeReason;
+      }
       const submitUpdate = async (payload: ReservationUpdatePayload, forceRegularMutation = false): Promise<void> => {
         try {
           // When the authenticated collaboration channel is available, PATCH
@@ -872,7 +1046,7 @@ export function ReservationsPage() {
           showToast("error", msg);
         }
       };
-      await submitUpdate(updatePayload);
+      await submitUpdate(updateData, paidTotalChanged);
     } else {
       // B4: con tarifa manual, la cotización automática (y su quote_token) no
       // aplica -- el backend usaría el total manual igual, pero no tiene
@@ -886,14 +1060,27 @@ export function ReservationsPage() {
         ...commonPayload,
         guest_id: guestIdNum,
         source: formValues.source,
+        company_id: Number(currentFormValues.company_id) > 0 ? Number(currentFormValues.company_id) : null,
         pricing_payment_method: pricingPaymentMethod === "base" ? null : pricingPaymentMethod,
         deposit_amount: parsedDepositAmount,
         ...(manualTotalAmount !== null
-          ? { total_amount: manualTotalAmount, target_currency: manualTargetCurrency }
+          ? {
+              total_amount: manualTotalAmount,
+              target_currency: manualRateCurrencyCode,
+              manual_rate_reason: manualRateReason
+            }
           : { quote_token: reservationQuote?.quoteToken })
       };
       const submitCreate = async (payload: ReservationPayload): Promise<void> => {
         try {
+          if (groupSize > 1) {
+            await createGroupMutation.mutateAsync(
+              Array.from({ length: groupSize }, () => ({ ...payload, room_id: null }))
+            );
+            showToast("success", t("page.messages.reservationGroupCreated", { count: groupSize }));
+            closeForm();
+            return;
+          }
           const created = await createMutation.mutateAsync(payload);
           showToast("success", t("page.messages.reservationCreated"));
           if (manualTotalAmount !== null) {
@@ -913,9 +1100,13 @@ export function ReservationsPage() {
           ) {
             return;
           }
-          const msg = err instanceof Error ? err.message : t("page.errors.createFailed");
-          setFormError(msg);
-          showToast("error", msg);
+          const rawMessage = err instanceof Error ? err.message : t("page.errors.createFailed");
+          const noRoomsMatch = /^No rooms available in category (.+) for the requested dates$/.exec(rawMessage);
+          const message = noRoomsMatch
+            ? t("page.errors.noRoomsAvailable", { category: noRoomsMatch[1] })
+            : rawMessage;
+          setFormError(message);
+          showToast("error", message);
         }
       };
       await submitCreate(createPayload);
@@ -944,6 +1135,7 @@ export function ReservationsPage() {
   };
 
   const handleCheckIn = (reservation: Reservation) => {
+    clearToast();
     if (!isCheckInReady(reservation.status)) {
       const balance = reservation.balance_due ?? Math.max(0, reservation.total_amount - reservation.amount_paid);
       openEdit(reservation);
@@ -980,6 +1172,7 @@ export function ReservationsPage() {
   };
 
   const handleCheckOut = async (reservation: Reservation) => {
+    clearToast();
     // Cierra el loop cobro→estadía→egreso: si queda saldo, llevamos al operador a
     // cobrarlo (Pago total, que cae en la caja) en vez de fallar el check-out.
     // reservation.balance_due sólo cubre total_amount - amount_paid: no ve los
@@ -1044,6 +1237,8 @@ export function ReservationsPage() {
       return;
     }
 
+    if (allocationForm.apply && !window.confirm(t("page.allocation.confirmApply"))) return;
+
     try {
       const run = await allocationRunMutation.mutateAsync(allocationForm);
       showToast("success", t("page.messages.allocationRecalculated", { created: run.assignments_created, moved: run.moved_count }));
@@ -1079,6 +1274,7 @@ export function ReservationsPage() {
   const isManualPaymentMethod = manualPaymentMethods.includes(paymentMethod);
   const canOperateCash = hasPermission("cash:operate");
   const canRegisterSelectedPayment = canOperateCash && (paymentMethod === "cash" || isManualPaymentMethod);
+  const canRecordPriorReceipt = hasPermission("cash:record_prior_receipt");
   const canRefundPayment = hasPermission("payment:refund");
   const refundablePaymentOptions = (paymentSummary?.transactions ?? [])
     .filter((transaction) => transaction.status === "completed" && transaction.type !== "refund")
@@ -1136,7 +1332,12 @@ export function ReservationsPage() {
   const paymentProofMutations = usePaymentProofMutations(editing?.id || undefined);
   // Closing mid-save would drop the in-flight payment/link result, so the
   // close controls are disabled (not silently ignored) until it settles.
+  const reservationSavePending =
+    createMutation.isPending || createGroupMutation.isPending || updateMutation.isPending;
   const formBusy =
+    createMutation.isPending ||
+    createGroupMutation.isPending ||
+    updateMutation.isPending ||
     collaborativeReservation.isSaving ||
     paymentMutation.isPending ||
     paymentProofMutations.submitMutation.isPending ||
@@ -1152,17 +1353,38 @@ export function ReservationsPage() {
     setCommunicationRecipient(detailsGuest?.email ?? "");
   }, [detailsReservationId, detailsGuest?.email]);
   const editingCurrencyCode = normalizeCurrencyCode(paymentSummary?.currency_code ?? editing?.currency_code);
+  const suggestedDepositAmount = Math.max(
+    Number(paymentSummary?.deposit_required ?? 0) - Number(paymentSummary?.amount_paid ?? 0),
+    0
+  );
+  const requestedDepositPreview = paymentAmountInput.trim()
+    ? Number(paymentAmountInput)
+    : suggestedDepositAmount;
+  const depositAmountPreview = Number.isFinite(requestedDepositPreview) && requestedDepositPreview > 0
+    ? Number(requestedDepositPreview.toFixed(2))
+    : null;
   const canApprovePaymentProof = hasPermission("payment:proof:review");
-  // Security fix: reads baseRole -- not the "Cambiar vista" preview role --
-  // so this only hides the manual tarifa override for the real authenticated
-  // role. The backend (POST /api/reservations) enforces this independently
-  // via reservation:manual_rate; this is UX only, not the real gate.
-  const canSetManualRate = ["owner", "co_owner"].includes(session.baseRole ?? "");
   const detailsCurrencyCode = normalizeCurrencyCode(
     detailsSummary?.currency_code ??
       detailsOperations?.financial_summary.currency_code ??
       detailsReservation?.currency_code
   );
+  const getPriorReceiptFields = (): Pick<PaymentRequest, "collected_before" | "collected_on" | "prior_receipt_note"> | null => {
+    if (!collectedBefore) return {};
+    if (!canRecordPriorReceipt || paymentMethod !== "cash") {
+      showToast("error", t("page.errors.priorReceiptPermissionRequired"));
+      return null;
+    }
+    if (!collectedOn || !priorReceiptNote.trim()) {
+      showToast("error", t("page.errors.priorReceiptDetailsRequired"));
+      return null;
+    }
+    return {
+      collected_before: true,
+      collected_on: collectedOn,
+      prior_receipt_note: priorReceiptNote.trim()
+    };
+  };
   const communicationMutation = useGuardedMutation<
     { delivery: ReservationEmailDelivery; deduplicated: boolean },
     unknown,
@@ -1211,16 +1433,49 @@ export function ReservationsPage() {
       showToast("info", t("page.messages.depositAlreadyCovered"));
       return;
     }
+    const enteredAmount = paymentAmountInput.trim();
+    const requestedAmount = enteredAmount ? Number(enteredAmount) : due;
+    const balance = Number(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+      showToast("error", t("page.errors.invalidPartialAmount"));
+      return;
+    }
+    const amount = Number(requestedAmount.toFixed(2));
+    const roundedBalance = Number(balance.toFixed(2));
+    if (!Number.isFinite(balance) || amount > roundedBalance) {
+      showToast("error", t("page.errors.invalidPartialAmount"));
+      return;
+    }
+    const roundedSuggested = Number(due.toFixed(2));
+    if (
+      enteredAmount &&
+      amount !== roundedSuggested &&
+      !window.confirm(
+        t("page.confirm.depositAmountDiff", {
+          suggested: formatMoney(roundedSuggested, editingCurrencyCode),
+          amount: formatMoney(amount, editingCurrencyCode)
+        })
+      )
+    ) {
+      return;
+    }
+    const priorReceiptFields = getPriorReceiptFields();
+    if (!priorReceiptFields) return;
     try {
       await paymentMutation.mutateAsync({
         reservation_id: editing.id,
-        amount: Number(due.toFixed(2)),
+        amount,
         payment_method: paymentMethod,
         transaction_type: "deposit",
         currency: editingCurrencyCode,
-        manual_reference: manualReference
+        manual_reference: manualReference,
+        ...priorReceiptFields
       });
+      setPaymentAmountInput("");
       setPaymentReferenceInput("");
+      setCollectedBefore(false);
+      setCollectedOn("");
+      setPriorReceiptNote("");
       showToast("success", t("page.messages.depositRegistered"));
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.paymentFailed"));
@@ -1248,6 +1503,8 @@ export function ReservationsPage() {
       showToast("info", t("page.messages.noBalanceDue"));
       return;
     }
+    const priorReceiptFields = getPriorReceiptFields();
+    if (!priorReceiptFields) return;
     try {
       await paymentMutation.mutateAsync({
         reservation_id: editing.id,
@@ -1255,9 +1512,13 @@ export function ReservationsPage() {
         payment_method: paymentMethod,
         transaction_type: "full_payment",
         currency: editingCurrencyCode,
-        manual_reference: manualReference
+        manual_reference: manualReference,
+        ...priorReceiptFields
       });
       setPaymentReferenceInput("");
+      setCollectedBefore(false);
+      setCollectedOn("");
+      setPriorReceiptNote("");
       showToast("success", t("page.messages.fullPaymentDone"));
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.paymentFailed"));
@@ -1286,6 +1547,8 @@ export function ReservationsPage() {
       showToast("error", t("page.errors.invalidPartialAmount"));
       return;
     }
+    const priorReceiptFields = getPriorReceiptFields();
+    if (!priorReceiptFields) return;
     try {
       await paymentMutation.mutateAsync({
         reservation_id: editing.id,
@@ -1293,10 +1556,14 @@ export function ReservationsPage() {
         payment_method: paymentMethod,
         transaction_type: "partial_payment",
         currency: editingCurrencyCode,
-        manual_reference: manualReference
+        manual_reference: manualReference,
+        ...priorReceiptFields
       });
       setPaymentAmountInput("");
       setPaymentReferenceInput("");
+      setCollectedBefore(false);
+      setCollectedOn("");
+      setPriorReceiptNote("");
       showToast("success", t("page.messages.partialPaymentDone"));
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.paymentFailed"));
@@ -1460,12 +1727,14 @@ export function ReservationsPage() {
   };
 
   const openDetails = (reservation: Reservation) => {
+    clearToast();
     setDetailsReservationId(reservation.id);
     setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep", origin_room_disposition: "", origin_room_disposition_note: "" });
     setNoShowNotes("");
     setChargeForm({ description: "", amount: "" });
   };
   const openDetailsById = (reservationId: number) => {
+    clearToast();
     setDetailsReservationId(reservationId);
     setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep", origin_room_disposition: "", origin_room_disposition_note: "" });
     setNoShowNotes("");
@@ -1654,12 +1923,14 @@ export function ReservationsPage() {
           receiptDate = new Intl.DateTimeFormat(locale, {
             dateStyle: "medium",
             timeStyle: "short",
+            hourCycle: "h23",
             timeZone: receiptData.hotel_timezone
           }).format(createdAt);
         } catch {
           receiptDate = new Intl.DateTimeFormat(locale, {
-            dateStyle: "medium",
-            timeStyle: "short"
+          dateStyle: "medium",
+            timeStyle: "short",
+            hourCycle: "h23"
           }).format(createdAt);
         }
       }
@@ -1716,21 +1987,16 @@ export function ReservationsPage() {
     [guestIdOpen, reservations]
   );
 
-  const reservationsByRoom = useMemo(() => {
-    const map: Record<number, Reservation[]> = {};
-    reservations.forEach((r) => {
-      if (!r.room_id) return;
-      if (!map[r.room_id]) map[r.room_id] = [];
-      map[r.room_id].push(r);
-    });
-    return map;
-  }, [reservations]);
   const recentMovementGroups = movementGroupsQuery.data ?? [];
 
   return (
     <div className="space-y-6">
       {toast && (
-        <div className="fixed right-6 top-20 z-40 flex w-80 items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+        <div
+          className="fixed right-6 top-20 z-40 flex w-80 items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+          role={toast.type === "error" ? "alert" : "status"}
+          aria-live={toast.type === "error" ? "assertive" : "polite"}
+        >
           <span
             className={`mt-1 h-2 w-2 rounded-full ${
               toast.type === "success" ? "bg-emerald-500" : toast.type === "error" ? "bg-rose-500" : "bg-amber-500"
@@ -1745,6 +2011,16 @@ export function ReservationsPage() {
           <button className="ml-auto text-xs text-slate-500 hover:text-slate-800" onClick={() => setToast(null)} type="button">
             {t("page.toast.close")}
           </button>
+        </div>
+      )}
+      {checkInMutation.isPending && (
+        <div className="fixed right-6 top-20 z-40 rounded-xl border border-sky-200 bg-white p-3 text-sm text-sky-900 shadow-xl" role="status" aria-live="polite">
+          {t("page.messages.checkInProcessing")}
+        </div>
+      )}
+      {checkOutMutation.isPending && (
+        <div className="fixed right-6 top-20 z-40 rounded-xl border border-sky-200 bg-white p-3 text-sm text-sky-900 shadow-xl" role="status" aria-live="polite">
+          {t("page.messages.checkOutProcessing")}
         </div>
       )}
       {subscriptionBlocked && (
@@ -1766,26 +2042,29 @@ export function ReservationsPage() {
         <div className="flex flex-wrap gap-2">
           <button
             className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:opacity-60"
-            onClick={openCreate}
+            onClick={() => openCreate()}
             type="button"
             disabled={subscriptionBlocked}
           >
             {t("page.header.createButton")}
           </button>
-          <button
-            className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:opacity-60"
-            onClick={() => {
-              if (subscriptionBlocked) {
-                setToast({ type: "error", message: subscriptionBlockReason || t("page.errors.blockedBySubscription") });
-                return;
-              }
-              setOtaFormOpen(true);
-            }}
-            type="button"
-            disabled={subscriptionBlocked}
-          >
-            {t("page.header.otaButton")}
-          </button>
+          {hasPermission("reservation:ota_record") ? (
+            <button
+              className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:opacity-60"
+              onClick={() => {
+                if (subscriptionBlocked) {
+                  setToast({ type: "error", message: subscriptionBlockReason || t("page.errors.blockedBySubscription") });
+                  return;
+                }
+                setOtaFormOpen(true);
+              }}
+              type="button"
+              disabled={subscriptionBlocked}
+              data-testid="open-manual-ota"
+            >
+              {t("page.header.otaButton")}
+            </button>
+          ) : null}
           <Link
             to="/dashboard"
             className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
@@ -1971,25 +2250,31 @@ export function ReservationsPage() {
             <p className="text-xs uppercase tracking-wide text-slate-500">{t("page.filters.eyebrow")}</p>
             <h2 className="text-lg font-semibold text-slate-900">{t("page.filters.title")}</h2>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-            <label className="flex flex-col text-xs font-semibold text-slate-600">
-              {t("page.common.from")}
-              <input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none"
-              />
-            </label>
-            <label className="flex flex-col text-xs font-semibold text-slate-600">
-              {t("page.common.to")}
-              <input
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none"
-              />
-            </label>
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-5">
+            <LocalizedDateField
+              id="reservation-filter-from"
+              label={t("page.common.from")}
+              value={fromDate}
+              onChange={setFromDate}
+              className="flex flex-col"
+              inputClassName="mt-1 rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none"
+              labelClassName="text-xs font-semibold text-slate-600"
+              placeholder={t("page.dateInput.datePlaceholder")}
+              chooseDateLabel={t("page.dateInput.chooseDate")}
+              invalidMessage={t("page.dateInput.invalidDate")}
+            />
+            <LocalizedDateField
+              id="reservation-filter-to"
+              label={t("page.common.to")}
+              value={toDate}
+              onChange={setToDate}
+              className="flex flex-col"
+              inputClassName="mt-1 rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none"
+              labelClassName="text-xs font-semibold text-slate-600"
+              placeholder={t("page.dateInput.datePlaceholder")}
+              chooseDateLabel={t("page.dateInput.chooseDate")}
+              invalidMessage={t("page.dateInput.invalidDate")}
+            />
             <label className="flex flex-col text-xs font-semibold text-slate-600">
               {t("page.filters.status")}
               <select
@@ -2007,12 +2292,29 @@ export function ReservationsPage() {
                 <option value="cancelled">{t("page.statusOptions.cancelled")}</option>
               </select>
             </label>
+            {hasPermission("company:manage") && companyOptions.length > 0 && (
+              <label className="flex flex-col text-xs font-semibold text-slate-600">
+                {t("page.filters.company")}
+                <select
+                  data-testid="reservation-company-filter"
+                  value={companyFilter}
+                  onChange={(event) => setCompanyFilter(event.target.value)}
+                  className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none"
+                >
+                  <option value="">{t("page.filters.allCompanies")}</option>
+                  {companyOptions.map((company) => (
+                    <option key={company.id} value={company.id}>{company.display_name || company.legal_name}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button
               type="button"
               onClick={() => {
                 setFromDate("");
                 setToDate("");
                 setStatusFilter("");
+                setCompanyFilter("");
               }}
               className="self-end rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-300"
             >
@@ -2029,8 +2331,8 @@ export function ReservationsPage() {
             <h2 className="text-lg font-semibold text-slate-900">{t("page.availability.title")}</h2>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            {availabilityMutation.isPending && <span className="text-slate-600">{t("page.availability.querying")}</span>}
-            {availabilityMutation.isError && <span className="text-rose-600">{t("page.availability.queryError")}</span>}
+            {availabilityMutation.isPending && <span className="text-slate-600" role="status" aria-live="polite">{t("page.availability.querying")}</span>}
+            {availabilityMutation.isError && <span className="text-rose-600" role="alert">{t("page.availability.queryError")}</span>}
           </div>
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-4">
@@ -2049,24 +2351,30 @@ export function ReservationsPage() {
               ))}
             </select>
           </label>
-          <label className="text-xs font-semibold text-slate-600">
-            {t("page.availability.checkIn")}
-            <input
-              type="date"
-              value={availabilityForm.check_in_date}
-              onChange={(e) => setAvailabilityForm((prev) => ({ ...prev, check_in_date: e.target.value }))}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-            />
-          </label>
-          <label className="text-xs font-semibold text-slate-600">
-            {t("page.availability.checkOut")}
-            <input
-              type="date"
-              value={availabilityForm.check_out_date}
-              onChange={(e) => setAvailabilityForm((prev) => ({ ...prev, check_out_date: e.target.value }))}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-            />
-          </label>
+          <LocalizedDateField
+            id="availability-check-in"
+            label={t("page.availability.checkIn")}
+            value={availabilityForm.check_in_date}
+            onChange={(value) => setAvailabilityForm((prev) => ({ ...prev, check_in_date: value }))}
+            className="w-full"
+            labelClassName="text-xs font-semibold text-slate-600"
+            inputClassName="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-800 shadow-sm"
+            placeholder={t("page.dateInput.datePlaceholder")}
+            chooseDateLabel={t("page.dateInput.chooseDate")}
+            invalidMessage={t("page.dateInput.invalidDate")}
+          />
+          <LocalizedDateField
+            id="availability-check-out"
+            label={t("page.availability.checkOut")}
+            value={availabilityForm.check_out_date}
+            onChange={(value) => setAvailabilityForm((prev) => ({ ...prev, check_out_date: value }))}
+            className="w-full"
+            labelClassName="text-xs font-semibold text-slate-600"
+            inputClassName="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-800 shadow-sm"
+            placeholder={t("page.dateInput.datePlaceholder")}
+            chooseDateLabel={t("page.dateInput.chooseDate")}
+            invalidMessage={t("page.dateInput.invalidDate")}
+          />
           <div className="flex items-end">
             <button
               type="button"
@@ -2108,30 +2416,36 @@ export function ReservationsPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            {allocationRunMutation.isPending ? <span>Recalculando...</span> : null}
-            {movementGroupsQuery.isFetching ? <span>Actualizando grupos...</span> : null}
+            {allocationRunMutation.isPending ? <span>{t("page.allocation.recalculating")}</span> : null}
+            {movementGroupsQuery.isFetching ? <span>{t("page.allocation.updatingGroups")}</span> : null}
           </div>
         </div>
 
         <div className="mt-3 grid gap-3 md:grid-cols-5">
-          <label className="text-xs font-semibold text-slate-600">
-            {t("page.common.from")}
-            <input
-              type="date"
-              value={allocationForm.horizon_start}
-              onChange={(e) => setAllocationForm((prev) => ({ ...prev, horizon_start: e.target.value }))}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-            />
-          </label>
-          <label className="text-xs font-semibold text-slate-600">
-            {t("page.common.to")}
-            <input
-              type="date"
-              value={allocationForm.horizon_end}
-              onChange={(e) => setAllocationForm((prev) => ({ ...prev, horizon_end: e.target.value }))}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-            />
-          </label>
+          <LocalizedDateField
+            id="allocation-horizon-from"
+            label={t("page.common.from")}
+            value={allocationForm.horizon_start}
+            onChange={(value) => setAllocationForm((prev) => ({ ...prev, horizon_start: value }))}
+            className="w-full"
+            labelClassName="text-xs font-semibold text-slate-600"
+            inputClassName="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-800 shadow-sm"
+            placeholder={t("page.dateInput.datePlaceholder")}
+            chooseDateLabel={t("page.dateInput.chooseDate")}
+            invalidMessage={t("page.dateInput.invalidDate")}
+          />
+          <LocalizedDateField
+            id="allocation-horizon-to"
+            label={t("page.common.to")}
+            value={allocationForm.horizon_end}
+            onChange={(value) => setAllocationForm((prev) => ({ ...prev, horizon_end: value }))}
+            className="w-full"
+            labelClassName="text-xs font-semibold text-slate-600"
+            inputClassName="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-800 shadow-sm"
+            placeholder={t("page.dateInput.datePlaceholder")}
+            chooseDateLabel={t("page.dateInput.chooseDate")}
+            invalidMessage={t("page.dateInput.invalidDate")}
+          />
           <label className="flex items-center gap-2 self-end rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
             <input
               type="checkbox"
@@ -2212,7 +2526,7 @@ export function ReservationsPage() {
                         >
                           {group.is_reverted ? t("page.allocation.reverted") : t("page.allocation.active")}
                         </span>
-                        <span className="text-xs text-slate-500">{formatDateTime(group.created_at)}</span>
+                        <span className="text-xs text-slate-500">{formatDateTime(group.created_at, hotelConfigQuery.data?.hotel_timezone)}</span>
                       </div>
                       <p className="mt-1 text-xs text-slate-600">
                         {t("page.allocation.groupTrigger", {
@@ -2241,66 +2555,6 @@ export function ReservationsPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">{t("page.matrix.eyebrow")}</p>
-            <h2 className="text-lg font-semibold text-slate-900">{t("page.matrix.title")}</h2>
-            <p className="text-xs text-slate-500">{t("page.matrix.hint")}</p>
-          </div>
-        </div>
-        <div className="mt-3 overflow-x-auto">
-          <table className="min-w-full text-xs">
-            <thead>
-              <tr>
-                <th className="sticky left-0 z-10 bg-white px-2 py-1 text-left font-semibold text-slate-600">{t("page.matrix.roomColumn")}</th>
-                {calendarDays.map((d) => (
-                  <th key={d.iso} className="px-2 py-1 text-center font-semibold text-slate-500">
-                    {d.label.split(" ").slice(0, 2).join(" ")}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(roomsQuery.data ?? []).map((room) => {
-                const roomRes = reservationsByRoom[room.id] ?? [];
-                return (
-                  <tr key={room.id} className="border-t border-slate-100">
-                    <td className="sticky left-0 z-10 bg-white px-2 py-1 text-left font-semibold text-slate-800">
-                      {t("page.common.room", { number: room.room_number || t("page.common.informationUnavailable") })}
-                    </td>
-                    {calendarDays.map((day) => {
-                      const target = new Date(day.iso);
-                      const res = roomRes.find(
-                        (r) => new Date(r.check_in_date) <= target && new Date(r.check_out_date) > target
-                      );
-                      const isArrival = res?.check_in_date === day.iso;
-                      const isDeparture = res?.check_out_date === day.iso;
-                      return (
-                        <td key={day.iso} className="px-1 py-1 text-center align-middle">
-                          {res ? (
-                            <div className="flex flex-col items-center gap-1">
-                              <span className="h-1 w-full rounded-full bg-brand-300" />
-                              <span className="text-[10px] text-slate-600">{res.confirmation_code}</span>
-                              <div className="flex gap-1">
-                                {isArrival && <span className="rounded-full bg-emerald-100 px-1 text-[10px] text-emerald-700">I</span>}
-                                {isDeparture && <span className="rounded-full bg-sky-100 px-1 text-[10px] text-sky-700">O</span>}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-slate-300">·</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div>
@@ -2311,6 +2565,38 @@ export function ReservationsPage() {
           </div>
           <span className="text-xs text-slate-500">{t("page.list.total", { count: reservations.length })}</span>
         </div>
+        {(reservationGroupsQuery.data?.length ?? 0) > 0 && (
+          <section className="border-b border-slate-200 p-4" aria-label={t("page.groups.title")}>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">{t("page.groups.title")}</h3>
+            <div className="grid gap-3 lg:grid-cols-2">
+              {reservationGroupsQuery.data?.slice(0, 6).map((group) => (
+                <article
+                  key={group.id}
+                  data-testid={`reservation-group-summary-${group.id}`}
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-slate-900">{group.guest_name}</p>
+                      {group.company_name && <p className="text-xs text-slate-600">{group.company_name}</p>}
+                    </div>
+                    <span className="rounded-full bg-brand-100 px-2 py-1 text-xs font-semibold text-brand-800">
+                      {t("page.groups.rooms", { count: group.reservation_count })}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-600">
+                    {group.check_in_date} → {group.check_out_date} · {group.reservation_codes.join(", ")}
+                  </p>
+                  <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                    <div><dt className="text-slate-500">{t("page.groups.total")}</dt><dd className="font-semibold">{formatMoney(group.total_amount, group.currency_code)}</dd></div>
+                    <div><dt className="text-slate-500">{t("page.groups.paid")}</dt><dd className="font-semibold">{formatMoney(group.amount_paid, group.currency_code)}</dd></div>
+                    <div><dt className="text-slate-500">{t("page.groups.balance")}</dt><dd className="font-semibold">{formatMoney(group.balance_due, group.currency_code)}</dd></div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
         {/* Dense table needs real column width -- desktop/tablet only. */}
         <div className="hidden overflow-x-auto md:block">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -2318,6 +2604,7 @@ export function ReservationsPage() {
               <tr>
                 <th className="px-4 py-2">{t("page.list.columns.code")}</th>
                 <th className="px-4 py-2">{t("page.list.columns.guest")}</th>
+                <th className="px-4 py-2">{t("page.list.columns.company")}</th>
                 <th className="px-4 py-2">{t("page.list.columns.roomCat")}</th>
                 <th className="px-4 py-2">{t("page.list.columns.checkIn")}</th>
                 <th className="px-4 py-2">{t("page.list.columns.arrivalTime")}</th>
@@ -2330,7 +2617,7 @@ export function ReservationsPage() {
             <tbody className="divide-y divide-slate-200 bg-white">
               {!isLoading && reservations.length === 0 && (
                 <tr>
-                  <td className="px-4 py-4 text-sm text-slate-500" colSpan={9}>
+                  <td className="px-4 py-4 text-sm text-slate-500" colSpan={10}>
                     {t("page.list.noResults")}
                   </td>
                 </tr>
@@ -2344,6 +2631,9 @@ export function ReservationsPage() {
                       <button className="text-left font-semibold text-brand-700 hover:underline" onClick={() => openGuest(reservation.guest_id)} type="button">
                         {reservationGuestLabel(t, reservation)}
                       </button>
+                    </td>
+                    <td className="px-4 py-2 text-slate-600">
+                      {reservation.company_id ? companyNameById.get(reservation.company_id) ?? t("page.list.companyLinked") : "—"}
                     </td>
                     <td className="px-4 py-2 text-slate-600">
                       {t("page.list.roomCat", {
@@ -2450,6 +2740,9 @@ export function ReservationsPage() {
                     category: reservation.category_name ?? categoryNameById.get(reservation.category_id) ?? t("page.common.informationUnavailable")
                   })}
                 </p>
+                {reservation.company_id ? (
+                  <p className="text-xs text-slate-600">{t("page.list.columns.company")}: {companyNameById.get(reservation.company_id) ?? t("page.list.companyLinked")}</p>
+                ) : null}
                 <p className="text-xs text-slate-600">
                   {reservation.check_in_date} → {reservation.check_out_date}
                 </p>
@@ -2542,9 +2835,12 @@ export function ReservationsPage() {
                 .
               </div>
             )}
-            {formError && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{formError}</div>}
-
             <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
+              <fieldset
+                disabled={isReservationQuoteUpdating}
+                aria-busy={isReservationQuoteUpdating}
+                className={`min-w-0 space-y-4 ${isReservationQuoteUpdating ? "opacity-60" : ""}`}
+              >
               <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
                 {t("page.form.sectionData")}
               </div>
@@ -2641,30 +2937,90 @@ export function ReservationsPage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="text-xs font-semibold text-slate-600">
-                  {t("page.form.room")}
+                {hasPermission("company:manage") && <label className="text-xs font-semibold text-slate-600">
+                  {t("page.form.company")}
                   <select
-                    value={collaborativeFormValues.room_id}
-                    onChange={(e) => setReservationField("room_id", e.target.value)}
-                    onFocus={() => editing && collaborativeReservation.focusField("room_id")}
-                    onBlur={() => editing && collaborativeReservation.blurField("room_id")}
-                    disabled={metadataOnlyEdit}
-                    title={metadataOnlyEdit ? t("page.form.metadataOnlyEditTitle") : undefined}
+                    data-testid="reservation-company-select"
+                    value={formValues.company_id}
+                    onChange={(event) => setFormValues((previous) => ({ ...previous, company_id: event.target.value }))}
+                    disabled={Boolean(editing) || companyOptionsQuery.isLoading}
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                   >
-                    <option value="">{t("page.common.unassigned")}</option>
-                    {availableRooms.map((room) => (
-                      <option key={room.id} value={room.id}>
-                        {t("page.form.roomOption", { number: room.room_number || t("page.common.informationUnavailable"), category: categoryNameById.get(room.category_id) ?? t("page.common.informationUnavailable") })}
+                    <option value="">{t("page.form.individualReservation")}</option>
+                    {companyOptions.map((company) => (
+                      <option key={company.id} value={company.id} disabled={!company.is_active}>
+                        {company.display_name || company.legal_name}{company.is_active ? "" : ` · ${t("page.form.companyInactive")}`}
                       </option>
                     ))}
                   </select>
-                </label>
+                  {editing && formValues.company_id && (
+                    <span className="mt-1 block font-normal text-slate-500">{t("page.form.companyEditHint")}</span>
+                  )}
+                </label>}
+                {!editing && formValues.source === "direct" && (
+                  <label className="text-xs font-semibold text-slate-600">
+                    {t("page.form.groupSize")}
+                    <select
+                      data-testid="reservation-group-size"
+                      value={formValues.group_size}
+                      onChange={(event) => {
+                        const groupSize = event.target.value;
+                        setFormValues((previous) => ({
+                          ...previous,
+                          group_size: groupSize,
+                          room_id: Number(groupSize) > 1 ? "" : previous.room_id
+                        }));
+                        if (Number(groupSize) > 1) setManualTotalAmountInput("");
+                      }}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                    >
+                      {Array.from({ length: 10 }, (_, index) => index + 1).map((count) => (
+                        <option key={count} value={count}>{count}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {!editing && Number(formValues.group_size) > 1 ? (
+                  <div className="rounded-lg border border-brand-100 bg-brand-50 p-3 text-sm text-brand-800" data-testid="reservation-group-auto-assignment">
+                    {t("page.form.groupAutoAssign", { count: Number(formValues.group_size) })}
+                  </div>
+                ) : (
+                  <label className="text-xs font-semibold text-slate-600">
+                    {t("page.form.room")}
+                    <select
+                      value={collaborativeFormValues.room_id}
+                      onChange={(e) => setReservationField("room_id", e.target.value)}
+                      onFocus={() => editing && collaborativeReservation.focusField("room_id")}
+                      onBlur={() => editing && collaborativeReservation.blurField("room_id")}
+                      disabled={metadataOnlyEdit}
+                      title={metadataOnlyEdit ? t("page.form.metadataOnlyEditTitle") : undefined}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
+                    >
+                      <option value="">{t("page.common.unassigned")}</option>
+                      {availableRooms.map((room) => (
+                        <option key={room.id} value={room.id}>
+                          {t("page.form.roomOption", { number: room.room_number || t("page.common.informationUnavailable"), category: categoryNameById.get(room.category_id) ?? t("page.common.informationUnavailable") })}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label className="text-xs font-semibold text-slate-600">
                   {t("page.form.source")}
                   <select
                     value={formValues.source}
-                    onChange={(e) => setFormValues((prev) => ({ ...prev, source: e.target.value as ReservationSource }))}
+                    onChange={(e) => {
+                      const source = e.target.value as ReservationSource;
+                      setFormValues((prev) => ({
+                        ...prev,
+                        source,
+                        group_size: "1",
+                        company_id: source === "direct" ? prev.company_id : ""
+                      }));
+                    }}
                     disabled={Boolean(editing)}
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                   >
@@ -2677,32 +3033,38 @@ export function ReservationsPage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="text-xs font-semibold text-slate-600">
-                  {t("page.form.checkIn")}
-                  <input
-                    type="date"
-                    value={collaborativeFormValues.check_in_date}
-                    onChange={(e) => setReservationField("check_in_date", e.target.value)}
-                    onFocus={() => editing && collaborativeReservation.focusField("check_in_date")}
-                    onBlur={() => editing && collaborativeReservation.blurField("check_in_date")}
-                    disabled={metadataOnlyEdit}
-                    title={metadataOnlyEdit ? t("page.form.metadataOnlyEditTitle") : undefined}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
-                  />
-                </label>
-                <label className="text-xs font-semibold text-slate-600">
-                  {t("page.form.checkOut")}
-                  <input
-                    type="date"
-                    value={collaborativeFormValues.check_out_date}
-                    onChange={(e) => setReservationField("check_out_date", e.target.value)}
-                    onFocus={() => editing && collaborativeReservation.focusField("check_out_date")}
-                    onBlur={() => editing && collaborativeReservation.blurField("check_out_date")}
-                    disabled={metadataOnlyEdit}
-                    title={metadataOnlyEdit ? t("page.form.metadataOnlyEditTitle") : undefined}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
-                  />
-                </label>
+                <LocalizedDateField
+                  id="reservation-form-check-in"
+                  label={t("page.form.checkIn")}
+                  value={collaborativeFormValues.check_in_date}
+                  onChange={(value) => setReservationField("check_in_date", value)}
+                  onFocus={() => editing && collaborativeReservation.focusField("check_in_date")}
+                  onBlur={() => editing && collaborativeReservation.blurField("check_in_date")}
+                  disabled={metadataOnlyEdit}
+                  title={metadataOnlyEdit ? t("page.form.metadataOnlyEditTitle") : undefined}
+                  className="w-full"
+                  labelClassName="text-xs font-semibold text-slate-600"
+                  inputClassName="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
+                  placeholder={t("page.dateInput.datePlaceholder")}
+                  chooseDateLabel={t("page.dateInput.chooseDate")}
+                  invalidMessage={t("page.dateInput.invalidDate")}
+                />
+                <LocalizedDateField
+                  id="reservation-form-check-out"
+                  label={t("page.form.checkOut")}
+                  value={collaborativeFormValues.check_out_date}
+                  onChange={(value) => setReservationField("check_out_date", value)}
+                  onFocus={() => editing && collaborativeReservation.focusField("check_out_date")}
+                  onBlur={() => editing && collaborativeReservation.blurField("check_out_date")}
+                  disabled={metadataOnlyEdit}
+                  title={metadataOnlyEdit ? t("page.form.metadataOnlyEditTitle") : undefined}
+                  className="w-full"
+                  labelClassName="text-xs font-semibold text-slate-600"
+                  inputClassName="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
+                  placeholder={t("page.dateInput.datePlaceholder")}
+                  chooseDateLabel={t("page.dateInput.chooseDate")}
+                  invalidMessage={t("page.dateInput.invalidDate")}
+                />
               </div>
 
               {!editing && (
@@ -2736,44 +3098,101 @@ export function ReservationsPage() {
                     </label>
                   </div>
 
-                  {canSetManualRate && (
+                  {canSetManualRate && Number(formValues.group_size) > 1 && (
+                    <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      {t("page.form.groupManualRateUnsupported")}
+                    </p>
+                  )}
+
+                  {canSetManualRate && Number(formValues.group_size) === 1 && (
                     <div className="mt-3 rounded-lg border border-brand-200 bg-brand-50/60 p-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">{t("page.form.manualRateTitle")}</p>
                       <p className="mt-1 text-xs text-slate-600">
                         {t("page.form.manualRateHint")}
                       </p>
+                      {isBoundedManualRate && !boundedManualRateContextAllowed ? (
+                        <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                          {t("page.form.boundedManualRateDirectOnly")}
+                        </p>
+                      ) : null}
+                      {isBoundedManualRate && boundedManualRateContextAllowed && quoteQuery.isFetching ? (
+                        <p className="mt-2 text-xs text-slate-600">{t("page.form.boundedManualRateCalculating")}</p>
+                      ) : null}
+                      {isBoundedManualRate && boundedManualRateContextAllowed && quoteQuery.isError ? (
+                        <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                          {t("page.form.boundedManualRateQuoteUnavailable")}
+                        </p>
+                      ) : null}
+                      {isBoundedManualRate && boundedManualRateContextAllowed && !quoteQuery.isFetching && !quoteQuery.isError && quoteQuery.data && !boundedManualRateRange ? (
+                        <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                          {t("page.form.boundedManualRatePolicyUnconfigured")}
+                        </p>
+                      ) : null}
+                      {isBoundedManualRate && boundedManualRateRange ? (
+                        <p className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-900">
+                          {t("page.form.boundedManualRateAllowedRange", {
+                            minimum: formatMoney(boundedManualRateRange.minimum, manualRateCurrencyCode),
+                            maximum: formatMoney(boundedManualRateRange.maximum, manualRateCurrencyCode)
+                          })}
+                        </p>
+                      ) : null}
                       <div className="mt-2 grid gap-3 sm:grid-cols-2">
                         <label className="text-xs font-semibold text-slate-600">
                           {t("page.form.manualAmount")}
                           <input
                             type="number"
                             min={0}
+                            max={isBoundedManualRate ? boundedManualRateRange?.maximum : undefined}
                             step="0.01"
                             value={manualTotalAmountInput}
                             onChange={(e) => setManualTotalAmountInput(e.target.value)}
                             placeholder={t("page.form.manualAmountPlaceholder")}
+                            disabled={isBoundedManualRate && !boundedManualRateReady}
                             className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                           />
                         </label>
-                        <label className="text-xs font-semibold text-slate-600">
-                          {t("page.form.currency")}
-                          <select
-                            value={manualTargetCurrency}
-                            onChange={(e) => setManualTargetCurrency(e.target.value as "ARS" | "USD")}
-                            disabled={manualTotalAmountInput.trim() === ""}
-                            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
-                          >
-                            <option value="ARS">ARS</option>
-                            <option value="USD">USD</option>
-                          </select>
-                        </label>
+                        {isBoundedManualRate ? (
+                          <label className="text-xs font-semibold text-slate-600">
+                            {t("page.form.currency")}
+                            <input
+                              value={quoteQuery.data?.currency_code ?? ""}
+                              readOnly
+                              className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+                            />
+                          </label>
+                        ) : (
+                          <label className="text-xs font-semibold text-slate-600">
+                            {t("page.form.currency")}
+                            <select
+                              value={manualTargetCurrency}
+                              onChange={(e) => setManualTargetCurrency(e.target.value as "ARS" | "USD")}
+                              disabled={manualTotalAmountInput.trim() === ""}
+                              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
+                            >
+                              <option value="ARS">ARS</option>
+                              <option value="USD">USD</option>
+                            </select>
+                          </label>
+                        )}
                       </div>
+                      <label className="mt-3 block text-xs font-semibold text-slate-600">
+                        {t("page.form.manualRateReason")}
+                        <textarea
+                          rows={2}
+                          maxLength={500}
+                          value={manualRateReasonInput}
+                          onChange={(event) => setManualRateReasonInput(event.target.value)}
+                          placeholder={t("page.form.manualRateReasonPlaceholder")}
+                          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                        />
+                        <span className="mt-1 block text-xs font-normal text-slate-500">{t("page.form.manualRateReasonHint")}</span>
+                      </label>
                     </div>
                   )}
 
                   {manualTotalAmountInput.trim() !== "" ? (
                     <div className="mt-3 rounded-lg border border-brand-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
-                      {t("page.form.manualTotalPreview", { amount: formatMoney(Number(manualTotalAmountInput) || 0, manualTargetCurrency) })}
+                      {t("page.form.manualTotalPreview", { amount: formatMoney(Number(manualTotalAmountInput) || 0, manualRateCurrencyCode) })}
                     </div>
                   ) : (
                     <>
@@ -2892,7 +3311,7 @@ export function ReservationsPage() {
                               {reservationQuote.rows.slice(0, 6).map((row) => (
                                 <tr key={row.date} className="border-t border-brand-100">
                                   <td className="px-3 py-2 text-slate-700">{row.date}</td>
-                                  <td className="px-3 py-2 text-slate-500">{row.source}</td>
+                                  <td className="px-3 py-2 text-slate-500">{translatedEnum("rateSource", row.source)}</td>
                                   {reservationQuote.promotionsApplied.length > 0 ? (
                                     <>
                                       <td className="px-3 py-2 text-right text-slate-500">
@@ -3093,6 +3512,43 @@ export function ReservationsPage() {
                     <p className="mt-2 text-sm text-slate-600">{t("page.form.loadingSummary")}</p>
                   )}
 
+                  {canAdjustPaidReservationTotal && (
+                    Number(editing.amount_paid || 0) > 0 ||
+                    Number(editing.external_paid_amount || 0) > 0 ||
+                    editing.status === "deposit_paid" ||
+                    editing.status === "fully_paid"
+                  ) ? (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-sm font-semibold text-amber-950">{t("page.form.paidTotalAdjustmentTitle")}</p>
+                      <p className="mt-1 text-xs text-amber-900">{t("page.form.paidTotalAdjustmentHint")}</p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <label className="text-xs font-semibold text-slate-700">
+                          {t("page.form.paidTotalAdjustmentAmount")}
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={paidTotalAmountInput}
+                            onChange={(event) => setPaidTotalAmountInput(event.target.value)}
+                            className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-slate-800"
+                          />
+                        </label>
+                        <label className="text-xs font-semibold text-slate-700">
+                          {t("page.form.paidTotalAdjustmentReason")}
+                          <textarea
+                            maxLength={500}
+                            required
+                            value={paidTotalChangeReasonInput}
+                            onChange={(event) => setPaidTotalChangeReasonInput(event.target.value)}
+                            placeholder={t("page.form.paidTotalAdjustmentReasonPlaceholder")}
+                            rows={2}
+                            className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-slate-800"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="mt-3 grid gap-2 sm:grid-cols-6 sm:items-end">
                     <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
                       {t("page.form.paymentMethod")}
@@ -3101,6 +3557,11 @@ export function ReservationsPage() {
                         onChange={(e) => {
                           setPaymentMethod(e.target.value as PaymentMethod);
                           setPaymentReferenceInput("");
+                          if (e.target.value !== "cash") {
+                            setCollectedBefore(false);
+                            setCollectedOn("");
+                            setPriorReceiptNote("");
+                          }
                         }}
                         className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                       >
@@ -3130,6 +3591,54 @@ export function ReservationsPage() {
                         className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
                       />
                     </label>
+                    {paymentMethod === "cash" && canRecordPriorReceipt ? (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 sm:col-span-6">
+                        <label className="flex items-start gap-2 text-sm font-semibold text-slate-800">
+                          <input
+                            type="checkbox"
+                            checked={collectedBefore}
+                            onChange={(event) => setCollectedBefore(event.target.checked)}
+                            className="mt-0.5"
+                            data-testid="prior-receipt-toggle"
+                          />
+                          <span>{t("page.form.collectedBeforeSystem")}</span>
+                        </label>
+                        {collectedBefore ? (
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <LocalizedDateField
+                              id="prior-receipt-date"
+                              label={t("page.form.priorReceiptDate")}
+                              value={collectedOn}
+                              onChange={setCollectedOn}
+                              required
+                              className="w-full"
+                              labelClassName="text-xs font-semibold text-slate-600"
+                              inputClassName="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 pr-10 text-sm font-normal text-slate-800 shadow-sm"
+                              placeholder={t("page.dateInput.datePlaceholder")}
+                              chooseDateLabel={t("page.dateInput.chooseDate")}
+                              invalidMessage={t("page.dateInput.invalidDate")}
+                              testId="prior-receipt-date"
+                            />
+                            <label className="text-xs font-semibold text-slate-600">
+                              {t("page.form.priorReceiptReason")}
+                              <input
+                                type="text"
+                                required
+                                maxLength={240}
+                                value={priorReceiptNote}
+                                onChange={(event) => setPriorReceiptNote(event.target.value)}
+                                placeholder={t("page.form.priorReceiptReasonPlaceholder")}
+                                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
+                                data-testid="prior-receipt-reason"
+                              />
+                            </label>
+                            <p className="text-xs font-normal text-amber-900 sm:col-span-2">
+                              {t("page.form.priorReceiptCashHint")}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {paymentMethod === "cash" && canRefundPayment ? (
                       <>
                         <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
@@ -3196,7 +3705,11 @@ export function ReservationsPage() {
                       disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || !canRegisterSelectedPayment}
                       className="rounded-lg border border-amber-200 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800 hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {t("page.form.registerDeposit")}
+                      {depositAmountPreview === null
+                        ? t("page.form.registerDeposit")
+                        : t("page.form.registerDepositAmount", {
+                            amount: formatMoney(depositAmountPreview, editingCurrencyCode)
+                          })}
                     </button>
                     <button
                       type="button"
@@ -3216,6 +3729,11 @@ export function ReservationsPage() {
                     </button>
                     {paymentMutation.isError && (
                       <p className="text-xs text-rose-600">{t("page.form.paymentError")}</p>
+                    )}
+                    {paymentMutation.isPending && (
+                      <p className="text-sm text-sky-800 sm:col-span-6" role="status" aria-live="polite">
+                        {t("page.form.paymentProcessing")}
+                      </p>
                     )}
                     {!canOperateCash ? (
                       <p className="text-xs text-amber-700 sm:col-span-6">{t("page.form.paymentPermissionRequired")}</p>
@@ -3437,6 +3955,14 @@ export function ReservationsPage() {
                           <li key={tx.id} className="flex items-center justify-between">
                             <span>
                               {tx.type} · {tx.method}
+                              {tx.collected_before ? (
+                                <span className="block text-amber-800">
+                                  {t("page.form.priorReceiptRecorded", {
+                                    date: tx.collected_on ?? "",
+                                    reason: tx.prior_receipt_note ?? ""
+                                  })}
+                                </span>
+                              ) : null}
                               {tx.manual_reference ? <span className="block text-slate-500">{t("page.form.manualPaymentReferenceRecorded", { reference: tx.manual_reference })}</span> : null}
                               {tx.fee_amount && tx.fee_amount > 0 ? (
                                 <span className="text-amber-700">{t("page.form.feeSuffix", { amount: formatMoney(tx.fee_amount, tx.currency) })}</span>
@@ -3455,6 +3981,21 @@ export function ReservationsPage() {
                 </div>
               )}
 
+              </fieldset>
+              {formError && (
+                <div
+                  className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800"
+                  data-testid="reservation-submit-error"
+                  role="alert"
+                >
+                  {formError}
+                </div>
+              )}
+              {reservationSavePending && (
+                <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900" data-testid="reservation-save-status" role="status" aria-live="polite">
+                  {t("page.form.savingReservation")}
+                </p>
+              )}
               <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -3469,6 +4010,7 @@ export function ReservationsPage() {
                   className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                   disabled={
                     createMutation.isPending ||
+                    createGroupMutation.isPending ||
                     updateMutation.isPending ||
                     collaborativeReservation.isSaving ||
                     subscriptionBlocked ||
@@ -3478,7 +4020,15 @@ export function ReservationsPage() {
                       (quoteQuery.isFetching || !reservationQuote?.quoteToken))
                   }
                 >
-                  {editing ? t("page.form.saveChanges") : quoteQuery.isFetching && manualTotalAmountInput.trim() === "" ? t("page.form.updating") : t("page.form.create")}
+                  {reservationSavePending
+                    ? t("page.form.savingReservation")
+                    : editing
+                    ? t("page.form.saveChanges")
+                    : quoteQuery.isFetching && manualTotalAmountInput.trim() === ""
+                      ? t("page.form.updating")
+                      : Number(formValues.group_size) > 1
+                        ? t("page.form.createGroup", { count: Number(formValues.group_size) })
+                        : t("page.form.create")}
                 </button>
               </div>
             </form>
@@ -3493,7 +4043,7 @@ export function ReservationsPage() {
           phase={restrictionOverridePrompt.phase}
           onSubmit={restrictionOverridePrompt.submit}
           onCancel={restrictionOverridePrompt.dismiss}
-          isPending={createMutation.isPending || updateMutation.isPending || checkInMutation.isPending}
+          isPending={createMutation.isPending || createGroupMutation.isPending || updateMutation.isPending || checkInMutation.isPending}
         />
       ) : null}
 
@@ -3623,6 +4173,12 @@ export function ReservationsPage() {
                   <li>
                     <span className="font-semibold">{t("page.details.timelineStatus")}</span> {statusConfig[detailsReservation.status]?.label ?? detailsReservation.status}
                   </li>
+                  {detailsReservation.manual_rate_reason ? (
+                    <li className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1.5">
+                      <span className="font-semibold">{t("page.details.manualRateLabel")}</span>{" "}
+                      {detailsReservation.manual_rate_reason}
+                    </li>
+                  ) : null}
                   {detailsSummary?.transactions?.length ? (
                     <li>
                       <span className="font-semibold">{t("page.details.timelineLastPayment")}</span>{" "}
@@ -3718,7 +4274,7 @@ export function ReservationsPage() {
                 <div className="grid grid-cols-2 gap-2 text-sm text-slate-800">
                   <div>
                     <p className="text-xs text-slate-500">{t("page.details.operationAllocation")}</p>
-                    <p className="font-semibold">{detailsOperations?.allocation_status ?? detailsReservation.allocation_status ?? "-"}</p>
+                    <p className="font-semibold">{translatedEnum("allocationStatus", detailsOperations?.allocation_status ?? detailsReservation.allocation_status)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500">{t("page.details.operationManualReview")}</p>
@@ -4083,11 +4639,13 @@ export function ReservationsPage() {
                   {detailsOperations.open_adjustments.map((adjustment) => (
                     <div key={adjustment.id} className="flex items-start justify-between gap-3 py-2 text-sm">
                       <div>
-                        <p className="font-semibold text-slate-900">{adjustment.kind}</p>
+                        <p className="font-semibold text-slate-900">{translatedEnum("adjustmentKind", adjustment.kind)}</p>
                         <p className="text-xs text-slate-600">
                           {t("page.details.adjustmentStatusLine", {
-                            status: adjustment.status,
-                            external: adjustment.external_resolution_status ?? "-"
+                            status: translatedEnum("adjustmentStatus", adjustment.status),
+                            external: adjustment.external_resolution_status
+                              ? translatedEnum("externalResolution", adjustment.external_resolution_status)
+                              : "-"
                           })}
                         </p>
                         {adjustment.notes ? <p className="mt-1 text-xs text-slate-500">{adjustment.notes}</p> : null}
@@ -4114,12 +4672,18 @@ export function ReservationsPage() {
                         <div>
                           <p className="font-semibold">{formatMoney(tx.amount, tx.currency)}</p>
                           <p className="text-xs text-slate-500">
-                            {t("page.details.transactionLine", { type: tx.type, method: tx.method, status: tx.status })}
+                            {t("page.details.transactionLine", {
+                              type: translatedEnum("transactionType", tx.type),
+                              method: t(`page.paymentMethods.${tx.method}`, { defaultValue: t("page.enums.unknownValue") }),
+                              status: translatedEnum("transactionStatus", tx.status)
+                            })}
                           </p>
                           {tx.manual_reference ? <p className="text-xs text-slate-500">{t("page.form.manualPaymentReferenceRecorded", { reference: tx.manual_reference })}</p> : null}
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                          <span className="text-xs text-slate-500">{tx.created_at}</span>
+                          <span className="text-xs text-slate-500">
+                            {formatHotelDateTime(tx.created_at, hotelConfigQuery.data?.hotel_timezone, i18n.language === "en" ? "en-US" : "es-AR")}
+                          </span>
                           {canPrintPaymentReceipt(tx.status, canOperateCash) ? (
                             <button
                               type="button"
@@ -4143,26 +4707,40 @@ export function ReservationsPage() {
             {hasPermission("operations:audit:view") ? (
               <div className="mt-4 rounded-lg border border-brand-100 bg-brand-50/30 p-3" data-testid="reservation-audit-activity">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs uppercase tracking-wide text-brand-700">Actividad auditada</p>
-                  {detailsAuditQuery.isFetching ? <span className="text-xs text-slate-500">Actualizando...</span> : null}
+                  <p className="text-xs uppercase tracking-wide text-brand-700">{t("page.details.auditActivityTitle")}</p>
+                  {detailsAuditQuery.isFetching ? <span className="text-xs text-slate-500">{t("page.details.auditActivityUpdating")}</span> : null}
                 </div>
-                {detailsAuditQuery.isError ? <p className="mt-2 text-sm text-rose-700">No se pudo cargar la actividad.</p> : detailsAuditQuery.data?.items.length ? (
+                {detailsAuditQuery.isError ? <p className="mt-2 text-sm text-rose-700">{t("page.details.auditActivityLoadError")}</p> : detailsAuditQuery.data?.items.length ? (
                   <ul className="mt-2 divide-y divide-brand-100">
                     {detailsAuditQuery.data.items.map((item) => (
                       <li key={`${item.source}-${item.source_id}`} className="py-2 text-sm">
                         <p className="font-semibold text-slate-900">{item.summary}</p>
-                        <p className="text-xs text-slate-600">{item.action} · {item.actor_name} · {new Date(item.occurred_at).toLocaleString("es-AR")}</p>
+                        <p className="text-xs text-slate-600">{item.action} · {item.actor_name} · {formatHotelDateTime(item.occurred_at, hotelConfigQuery.data?.hotel_timezone)}</p>
                         {auditMetadataLines(item.details, {
                           arrival: t("page.details.timelineArrivalTime"),
                           comment: t("page.details.reservationComment"),
                           empty: t("page.form.collab.emptyValue")
                         }).map((line) => <p key={line} className="text-xs text-amber-700">{line}</p>)}
-                        {item.origin_room_disposition ? <p className="text-xs text-brand-700">Origen: {item.origin_room_disposition} ({item.origin_room_status_before ?? "?"} → {item.origin_room_status_after ?? "?"})</p> : null}
-                        {item.payment_method ? <p className="text-xs text-slate-500">Medio: {item.payment_method}{item.amount !== null && item.amount !== undefined ? ` · ${formatMoney(item.amount, item.currency_code)}` : ""}</p> : null}
+                        {item.origin_room_disposition ? (
+                          <p className="text-xs text-brand-700">
+                            {t("page.details.auditOriginRoom", {
+                              disposition: translatedEnum("roomDisposition", item.origin_room_disposition),
+                              before: item.origin_room_status_before ? translatedEnum("roomStatus", item.origin_room_status_before) : "-",
+                              after: item.origin_room_status_after ? translatedEnum("roomStatus", item.origin_room_status_after) : "-"
+                            })}
+                          </p>
+                        ) : null}
+                        {item.payment_method ? (
+                          <p className="text-xs text-slate-500">
+                            {t("page.details.auditPaymentMethod", {
+                              method: t(`page.paymentMethods.${item.payment_method}`, { defaultValue: t("page.enums.unknownValue") })
+                            })}{item.amount !== null && item.amount !== undefined ? ` · ${formatMoney(item.amount, item.currency_code)}` : ""}
+                          </p>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
-                ) : <p className="mt-2 text-sm text-slate-600">No hay actividad registrada para esta reserva.</p>}
+                ) : <p className="mt-2 text-sm text-slate-600">{t("page.details.auditActivityEmpty")}</p>}
               </div>
             ) : null}
           </div>

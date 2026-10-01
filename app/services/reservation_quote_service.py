@@ -10,7 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.services.pricing_service import build_pricing_revision
 from app.services.quote_token_service import issue_quote_token
-from app.services.reservation_service import calculate_reservation_pricing, normalize_pricing_payment_method
+from app.services.reservation_service import (
+    _apply_corporate_pricing,
+    _resolve_reservation_company,
+    calculate_reservation_pricing,
+    normalize_pricing_payment_method,
+)
 
 
 def build_reservation_quote(
@@ -49,6 +54,15 @@ def build_reservation_quote(
         guest_id=guest_id,
         company_id=company_id,
     )
+    if company_id is not None:
+        company = _resolve_reservation_company(db, hotel_id=hotel_id, company_id=company_id)
+        pricing = _apply_corporate_pricing(
+            db,
+            hotel_id=hotel_id,
+            pricing=pricing,
+            company=company,
+            explicit_total=None,
+        )
     revision = build_pricing_revision(
         db,
         hotel_id=hotel_id,
@@ -63,6 +77,7 @@ def build_reservation_quote(
         guest_scope=guest_scope,
         target_currency=target_currency,
         occupancy=occupancy,
+        company_id=company_id,
     )
 
     snapshot: dict[str, Any] = {}
@@ -101,6 +116,7 @@ def build_reservation_quote(
         "guest_scope": guest_scope,
         "target_currency": target_currency,
         "occupancy": occupancy,
+        "company_id": company_id,
         "pricing_revision": revision,
         "total_amount": pricing.total_amount,
         "deposit_amount": pricing.deposit_amount,

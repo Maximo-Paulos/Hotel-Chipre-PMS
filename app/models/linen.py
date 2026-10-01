@@ -99,6 +99,7 @@ class LinenMovement(Base):
     quantity = Column(Numeric(12, 2), nullable=False)
     reason = Column(Text, nullable=True)
     reservation_id = Column(Integer, nullable=True)
+    transfer_reference = Column(String(36), nullable=True)
     created_by_user_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL", name="fk_linen_movements_created_by_user_id"), nullable=True
     )
@@ -113,6 +114,10 @@ class LinenMovement(Base):
             name="ck_linen_movements_type_valid",
         ),
         CheckConstraint("quantity > 0", name="ck_linen_movements_quantity_positive"),
+        CheckConstraint(
+            "transfer_reference IS NULL OR movement_type IN ('in', 'out')",
+            name="ck_linen_movements_transfer_direction_valid",
+        ),
         ForeignKeyConstraint(
             ["hotel_id", "item_id"], ["linen_items.hotel_id", "linen_items.id"],
             name="fk_linen_movements_hotel_item", ondelete="CASCADE",
@@ -126,4 +131,46 @@ class LinenMovement(Base):
             name="fk_linen_movements_hotel_reservation",
         ),
         Index("ix_linen_movements_hotel_id", "hotel_id"),
+        Index(
+            "uq_linen_movement_transfer_direction",
+            "hotel_id",
+            "transfer_reference",
+            "movement_type",
+            unique=True,
+            sqlite_where=text("transfer_reference IS NOT NULL"),
+            postgresql_where=text("transfer_reference IS NOT NULL"),
+        ),
+    )
+
+
+class LinenParLevel(Base):
+    """Configured minimum quantity for one linen item at one hotel location."""
+
+    __tablename__ = "linen_par_levels"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    location_id = Column(Integer, nullable=False)
+    min_quantity = Column(Numeric(12, 2), nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["hotel_id", "item_id"],
+            ["linen_items.hotel_id", "linen_items.id"],
+            name="fk_linen_par_levels_hotel_item",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "location_id"],
+            ["linen_locations.hotel_id", "linen_locations.id"],
+            name="fk_linen_par_levels_hotel_location",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("hotel_id", "item_id", "location_id", name="uq_linen_par_levels_hotel_item_location"),
+        CheckConstraint("min_quantity >= 0", name="ck_linen_par_levels_min_quantity_nonnegative"),
+        Index("ix_linen_par_levels_hotel_location", "hotel_id", "location_id"),
     )

@@ -63,8 +63,8 @@ test("owner records a reservation consumption from the guest stay file", async (
   const categoryOption = categorySelect.locator("option").filter({ hasText: "Standard E2E" });
   await expect(categoryOption).toHaveCount(1);
   await categorySelect.selectOption((await categoryOption.getAttribute("value"))!);
-  await reservationForm.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(localIsoDate(30 + salt));
-  await reservationForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(localIsoDate(32 + salt));
+  await reservationForm.getByLabel("Check-in", { exact: true }).fill(localIsoDate(30 + salt));
+  await reservationForm.getByLabel("Check-out", { exact: true }).fill(localIsoDate(32 + salt));
 
   const createButton = reservationForm.getByRole("button", { name: "Crear", exact: true });
   await expect(createButton).toBeEnabled();

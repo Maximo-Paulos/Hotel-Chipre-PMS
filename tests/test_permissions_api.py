@@ -160,11 +160,14 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         legacy_codes = set(LEGACY_PERMISSION_ALIASES)
 
         # New role-only business actions are named capabilities in the catalog.
-        assert len(canonical_codes) == 101
+        assert len(canonical_codes) == 108
         assert {"payment:proof:view", "payment:proof:review"} <= canonical_codes
         assert {"payment:refund", "reservation:cancel_paid"} <= canonical_codes
+        assert {"reservation:manual_rate_limited", "reservation:manual_rate_policy_manage"} <= canonical_codes
+        assert "reservation:rate_adjust" in canonical_codes
         assert "cash:expense" in canonical_codes
         assert "payment:ota_confirm" in canonical_codes
+        assert "reservation:ota_record" in canonical_codes
         assert {code for code in canonical_codes if code.startswith("whatsapp:")} == {
             "whatsapp:inbox:view", "whatsapp:inbox:all", "whatsapp:message:send",
             "whatsapp:note:manage", "whatsapp:conversation:assign", "whatsapp:conversation:close",
@@ -186,13 +189,29 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         assert matrix["manager"]["reservation:cancel_paid"]["allowed"] is True
         assert matrix["manager"]["cash:expense"]["allowed"] is True
         assert matrix["co_owner"]["cash:expense"]["allowed"] is True
+        assert matrix["manager"]["reservation:manual_rate_limited"]["allowed"] is True
+        assert matrix["co_owner"]["reservation:manual_rate_limited"]["allowed"] is True
+        assert matrix["owner"]["reservation:rate_adjust"]["allowed"] is False
+        assert matrix["manager"]["reservation:rate_adjust"]["allowed"] is True
+        assert matrix["co_owner"]["reservation:rate_adjust"]["allowed"] is False
+        assert matrix["receptionist"]["reservation:rate_adjust"]["allowed"] is False
+        assert matrix["manager"]["reservation:rate_adjust"]["help_es"]
+        assert matrix["manager"]["reservation:manual_rate"]["allowed"] is False
+        assert matrix["co_owner"]["reservation:manual_rate"]["allowed"] is False
+        assert matrix["owner"]["reservation:manual_rate_policy_manage"]["allowed"] is True
+        assert matrix["co_owner"]["reservation:manual_rate_policy_manage"]["allowed"] is False
+        assert matrix["manager"]["reservation:manual_rate_policy_manage"]["allowed"] is False
         assert matrix["manager"]["payment:ota_confirm"]["allowed"] is True
         assert matrix["co_owner"]["payment:ota_confirm"]["allowed"] is True
+        for role in ("owner", "co_owner", "manager", "receptionist"):
+            assert matrix[role]["reservation:ota_record"]["allowed"] is True
+        assert matrix["housekeeping"]["reservation:ota_record"]["allowed"] is False
         for role in ("receptionist", "housekeeping"):
             assert matrix[role]["payment:proof:review"]["allowed"] is False
             assert matrix[role]["payment:refund"]["allowed"] is False
             assert matrix[role]["reservation:cancel_paid"]["allowed"] is False
             assert matrix[role]["payment:ota_confirm"]["allowed"] is False
+            assert matrix[role]["reservation:manual_rate_limited"]["allowed"] is False
         assert matrix["housekeeping"]["whatsapp:inbox:view"]["allowed"] is False
         assert matrix["housekeeping"]["whatsapp:note:manage"]["allowed"] is False
     finally:
@@ -261,7 +280,6 @@ def test_permission_catalog_exposes_owner_only_normal_metadata_and_help_text():
             PERMISSION_HOTEL_PROPERTY_MANAGE,
             PERMISSION_HOTEL_SECURITY_MANAGE,
             PERMISSION_APIKEY_MANAGE,
-            PERMISSION_CASH_CUSTODY_RECEIVE,
         ):
             assert catalog[code]["critical"] is True
             assert catalog[code]["step_up_required"] is True
@@ -270,6 +288,9 @@ def test_permission_catalog_exposes_owner_only_normal_metadata_and_help_text():
         assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["critical"] is False
         assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["step_up_required"] is True
         assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["delegable"] is True
+        assert catalog[PERMISSION_CASH_CUSTODY_RECEIVE]["critical"] is False
+        assert catalog[PERMISSION_CASH_CUSTODY_RECEIVE]["step_up_required"] is True
+        assert catalog[PERMISSION_CASH_CUSTODY_RECEIVE]["delegable"] is True
         assert catalog["cash:expense"]["step_up_required"] is True
         assert catalog["payment:ota_confirm"]["step_up_required"] is True
 
@@ -368,6 +389,43 @@ def test_permission_override_can_deny_receptionist_guest_edit():
         effective = client.get("/api/permissions/effective")
         assert effective.status_code == 200
         assert PERMISSION_GUEST_EDIT not in effective.json()["permissions"]
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_owner_rate_adjust_is_denied_by_default_and_can_be_explicitly_granted():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=99)
+    try:
+        matrix_path = "/api/permissions/matrix"
+        default_matrix = client.get(
+            matrix_path,
+            headers=_step_up_headers(matrix_path, method="GET", user_id=99),
+        )
+        assert default_matrix.status_code == 200, default_matrix.text
+        assert default_matrix.json()["matrix"]["owner"]["reservation:rate_adjust"]["allowed"] is False
+        assert default_matrix.json()["matrix"]["manager"]["reservation:rate_adjust"]["allowed"] is True
+
+        override_path = "/api/permissions/override"
+        granted = client.put(
+            override_path,
+            json={
+                "role": "owner",
+                "permission_code": "reservation:rate_adjust",
+                "allowed": True,
+                "expected_version": 0,
+            },
+            headers=_step_up_headers(override_path, method="PUT", user_id=99),
+        )
+        assert granted.status_code == 200, granted.text
+        assert granted.json()["allowed"] is True
+        assert granted.json()["source"] == "role_override"
+
+        effective = client.get("/api/permissions/effective")
+        assert effective.status_code == 200, effective.text
+        assert "reservation:rate_adjust" in effective.json()["permissions"]
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

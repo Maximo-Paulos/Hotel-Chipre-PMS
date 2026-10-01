@@ -17,6 +17,7 @@ from uuid import uuid4
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.services.row_locks import lock_query
 from app.config import get_settings
 from app.models.payment import Payment, PaymentLink
 from app.models.reservation import Reservation, ReservationStatusEnum
@@ -182,12 +183,10 @@ def resolve_signed_external_reference(external_reference: str) -> tuple[int, str
 
 
 def _get_reservation_for_hotel(db: Session, hotel_id: int, reservation_id: int) -> Reservation:
-    reservation = (
-        db.query(Reservation)
-        .filter(Reservation.id == reservation_id, Reservation.hotel_id == hotel_id)
-        .with_for_update()
-        .first()
-    )
+    reservation = lock_query(
+        db.query(Reservation).filter(Reservation.id == reservation_id, Reservation.hotel_id == hotel_id),
+        Reservation,
+    ).first()
     if not reservation:
         raise PaymentLinkError("Reserva no encontrada para este hotel")
     return reservation

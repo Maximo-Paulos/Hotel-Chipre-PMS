@@ -4,7 +4,10 @@ import { downloadCashLedgerCsv, type CashCloseReport, type CashMovementPayload }
 import {
   cashMovementTypeLabel,
   cashSessionStatusLabel,
+  useCashSessionCloseReport,
   useLatestCashCloseReport,
+  usePendingCashCloseReports,
+  usePendingCashCustodyReports,
   useCashMovements,
   useCashDailySummary,
   useCashRegisterMutations,
@@ -13,8 +16,9 @@ import {
 } from "../../hooks/useCashRegister";
 import { useSession } from "../../state/session";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
+import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
-import { todayIso } from "../../utils/date";
+import { formatHotelDateTime, formatHotelTime, todayIso } from "../../utils/date";
 
 const emptyMovementForm: CashMovementPayload = {
   movement_type: "income",
@@ -28,12 +32,14 @@ const money = (value?: number | string | null, currency = "ARS") =>
 export function CashRegisterPage() {
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
+  const hotelConfigQuery = useHotelConfig();
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [openingBalance, setOpeningBalance] = useState<number | null>(null);
   const [openingCurrency, setOpeningCurrency] = useState("ARS");
   const [openingNotes, setOpeningNotes] = useState("");
   const [movementForm, setMovementForm] = useState<CashMovementPayload>(emptyMovementForm);
   const [countedBalance, setCountedBalance] = useState(0);
+  const [successorFloatAmounts, setSuccessorFloatAmounts] = useState<Record<number, string>>({});
   const [closeNotes, setCloseNotes] = useState("");
   const [approveOnClose, setApproveOnClose] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -43,17 +49,30 @@ export function CashRegisterPage() {
 
   const sessionsQuery = useCashSessions();
   const latestCloseReportQuery = useLatestCashCloseReport();
+  const pendingCloseReportsQuery = usePendingCashCloseReports();
+  const canReceiveCustody = hasPermission("cash:custody:receive");
+  const pendingCashCustodyReportsQuery = usePendingCashCustodyReports({ enabled: canReceiveCustody });
   const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
-  const availableCurrencies = useMemo(
-    () => Array.from(new Set(sessions.map((item) => item.currency_code.toUpperCase()))).sort(),
-    [sessions]
+  const pendingCloseReports = useMemo(() => pendingCloseReportsQuery.data ?? [], [pendingCloseReportsQuery.data]);
+  const pendingCashCustodyReports = useMemo(
+    () => pendingCashCustodyReportsQuery.data ?? [],
+    [pendingCashCustodyReportsQuery.data]
   );
   const dailySummaryQuery = useCashDailySummary(reportDate, reportCurrency || undefined);
+  const hotelTimeZone = dailySummaryQuery.data?.timezone ?? hotelConfigQuery.data?.hotel_timezone;
+  const availableCurrencies = useMemo(
+    () => Array.from(new Set([
+      ...sessions.map((item) => item.currency_code.toUpperCase()),
+      ...(dailySummaryQuery.data?.prior_receipt_totals ?? []).map((item) => item.currency_code.toUpperCase())
+    ])).sort(),
+    [dailySummaryQuery.data?.prior_receipt_totals, sessions]
+  );
   const openSession = useMemo(() => sessions.find((session) => session.status === "open") ?? null, [sessions]);
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedSessionId) ?? openSession ?? sessions[0] ?? null,
     [openSession, selectedSessionId, sessions]
   );
+  const selectedSessionCloseReportQuery = useCashSessionCloseReport(selectedSession?.id);
   const collaborativeCashSession = useCollaborativeResource({
     resourceType: "cash_session",
     resourceId: selectedSession?.id,
@@ -65,15 +84,13 @@ export function CashRegisterPage() {
   const mutations = useCashRegisterMutations(selectedSession?.id);
   const movements = useMemo(() => movementsQuery.data ?? [], [movementsQuery.data]);
   const latestCloseReport = latestCloseReportQuery.data;
-  const successorNeedsApproval = Boolean(
-    !openSession && latestCloseReport && Number(latestCloseReport.difference) !== 0 && !latestCloseReport.difference_approved
-  );
-  const successorOpeningBalance =
-    latestCloseReport && (!Number(latestCloseReport.difference) || latestCloseReport.difference_approved)
-      ? Number(latestCloseReport.declared_balance)
-      : 0;
-  const canApproveDifference = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
-  const canReceiveCustody = session.baseRole === "owner";
+  const selectedSessionCloseReport =
+    closeReport?.session_id === selectedSession?.id
+      ? closeReport
+      : selectedSessionCloseReportQuery.data ?? null;
+  const successorNeedsApproval = pendingCloseReports.length > 0 && !openSession;
+  const successorOpeningBalance = Number(latestCloseReport?.successor_opening_balance ?? 0);
+  const canApproveDifference = hasPermission("cash:approve_difference");
   const canOperateCash = hasPermission("cash:operate");
   const canRecordCashExpense = hasPermission("cash:expense");
 
@@ -91,6 +108,7 @@ export function CashRegisterPage() {
 
   const expectedBalance = Number(summary?.expected_balance ?? selectedSession?.opening_balance ?? 0);
   const currency = selectedSession?.currency_code ?? "ARS";
+  const closeReportCurrency = selectedSessionCloseReport?.currency_code ?? currency;
   const busy =
     mutations.openSessionMutation.isPending ||
     mutations.addMovementMutation.isPending ||
@@ -111,6 +129,7 @@ export function CashRegisterPage() {
       setSelectedSessionId(session.id);
       setOpeningBalance(null);
       setOpeningNotes("");
+      setCountedBalance(0);
       setMessage("Caja abierta.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo abrir la caja.");
@@ -145,6 +164,8 @@ export function CashRegisterPage() {
         approve_difference: approveOnClose
       });
       setCloseReport(report);
+      setSelectedSessionId(report.session_id);
+      setCountedBalance(0);
       setCloseNotes("");
       setApproveOnClose(false);
       setMessage("Caja cerrada.");
@@ -153,26 +174,35 @@ export function CashRegisterPage() {
     }
   };
 
-  const handleApproveDifference = async () => {
-    const reportToApprove = closeReport ?? latestCloseReport;
+  const handleApproveDifference = async (reportId?: number) => {
+    const reportToApprove = reportId
+      ? pendingCloseReports.find((report) => report.id === reportId) ??
+        (selectedSessionCloseReport?.id === reportId ? selectedSessionCloseReport : null) ??
+        (closeReport?.id === reportId ? closeReport : null) ??
+        (latestCloseReport?.id === reportId ? latestCloseReport : null)
+      : selectedSessionCloseReport ?? closeReport ?? latestCloseReport;
     if (!reportToApprove) return;
     setMessage(null);
     try {
       const approved = await mutations.approveDifferenceMutation.mutateAsync(reportToApprove.id);
       setCloseReport(approved);
+      setSelectedSessionId(approved.session_id);
       setMessage("Diferencia aprobada.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo aprobar la diferencia.");
     }
   };
 
-  const handleConfirmCustody = async () => {
-    if (!closeReport) return;
+  const handleConfirmCustody = async (reportToConfirm: CashCloseReport) => {
     setMessage(null);
+    const floatAmount = Number(successorFloatAmounts[reportToConfirm.id] ?? "0");
     try {
-      const confirmed = await mutations.confirmCustodyMutation.mutateAsync(closeReport.id);
+      const confirmed = await mutations.confirmCustodyMutation.mutateAsync({
+        reportId: reportToConfirm.id,
+        successor_float_amount: floatAmount
+      });
       setCloseReport(confirmed);
-      setMessage("Recepción de custodia confirmada.");
+      setMessage(`Recepción confirmada. Fondo de cambio para la sucesora: ${money(floatAmount, reportToConfirm.currency_code)}.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo confirmar la custodia.");
     }
@@ -305,6 +335,55 @@ export function CashRegisterPage() {
                 </div>
               </div>
             </div>
+            <div className="overflow-hidden rounded-lg border border-amber-200 bg-amber-50/50" data-testid="cash-prior-receipts">
+              <div className="border-b border-amber-200 px-4 py-3">
+                <h3 className="font-semibold text-slate-900">Cobros previos</h3>
+                <p className="text-xs text-slate-600">
+                  Cobros ingresados con su fecha real. No se suman al esperado ni al cobrado del día; conciliá la custodia física por separado.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {dailySummaryQuery.data.prior_receipt_totals.map((total) => (
+                    <span key={total.currency_code} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-800">
+                      {total.transaction_count} cobro(s) · {money(total.amount, total.currency_code)}
+                    </span>
+                  ))}
+                  {dailySummaryQuery.data.prior_receipt_totals.length === 0 ? (
+                    <span className="text-xs text-slate-500">Sin cobros previos registrados.</span>
+                  ) : null}
+                </div>
+              </div>
+              {dailySummaryQuery.data.prior_receipts.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-white/70 text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3">Fecha cobrada</th>
+                        <th className="px-4 py-3">Reserva</th>
+                        <th className="px-4 py-3">Importe</th>
+                        <th className="px-4 py-3">Motivo / referencia</th>
+                        <th className="px-4 py-3">Registrado por</th>
+                        <th className="px-4 py-3">Cargado el</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-amber-100">
+                      {dailySummaryQuery.data.prior_receipts.map((receipt) => (
+                        <tr key={receipt.transaction_id}>
+                          <td className="whitespace-nowrap px-4 py-3">{new Date(`${receipt.collected_on}T12:00:00`).toLocaleDateString("es-AR")}</td>
+                          <td className="px-4 py-3 font-medium text-slate-800">{receipt.confirmation_code}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-semibold">{money(receipt.amount, receipt.currency_code)}</td>
+                          <td className="max-w-sm px-4 py-3 text-slate-600">{receipt.prior_receipt_note}</td>
+                          <td className="px-4 py-3 text-slate-600">{receipt.recorded_by_name}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-slate-500">{formatHotelDateTime(receipt.recorded_at, hotelTimeZone)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+              {dailySummaryQuery.data.prior_receipts_truncated ? (
+                <p className="px-4 py-3 text-xs text-amber-900">Se muestran los primeros 500 registros; los totales incluyen todos los cobros previos.</p>
+              ) : null}
+            </div>
             <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
               <div className="border-b border-slate-200 px-4 py-3">
                 <h3 className="font-semibold text-slate-900">Resumen por cobrador</h3>
@@ -341,7 +420,7 @@ export function CashRegisterPage() {
                       <td className="px-4 py-3 text-slate-600">{entry.reservation_id ? `#${entry.reservation_id}` : "-"}</td>
                       <td className="px-4 py-3 text-slate-600">{entry.entry_type === "manual_movement" ? movementLabel(entry.movement_type) : entry.transaction_type === "refund" ? "Devolución" : "Cobro"}</td>
                       <td className={`px-4 py-3 font-semibold ${entry.signed_amount < 0 ? "text-rose-700" : "text-slate-900"}`}>{money(entry.signed_amount, entry.currency_code)}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-500">{new Date(entry.occurred_at).toLocaleTimeString("es-AR")}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-500">{formatHotelTime(entry.occurred_at, hotelTimeZone)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -352,23 +431,74 @@ export function CashRegisterPage() {
         ) : null}
       </section>
 
-      {successorNeedsApproval ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
-          <p>
-            La caja anterior tiene una diferencia de {money(latestCloseReport?.difference, currency)}.
-            Aprobala antes de abrir la caja sucesora.
-          </p>
-          {canApproveDifference ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={handleApproveDifference}
-              className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60"
-            >
-              Aprobar diferencia
-            </button>
-          ) : null}
-        </div>
+      {pendingCloseReports.length > 0 ? (
+        <section className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" data-testid="cash-pending-approvals">
+          <div>
+            <h2 className="font-semibold">Diferencias de caja pendientes</h2>
+            <p className="text-amber-900">El turno sucesor puede seguir operando. Revisá cada arqueo pendiente y aprobalo con MFA.</p>
+          </div>
+          <ul className="divide-y divide-amber-200">
+            {pendingCloseReports.map((report) => (
+              <li key={report.id} className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  Caja #{report.session_id} · diferencia {money(report.difference, report.currency_code || currency)}
+                </span>
+                {canApproveDifference ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handleApproveDifference(report.id)}
+                    className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+                  >
+                    Aprobar diferencia
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {canReceiveCustody && pendingCashCustodyReports.length > 0 ? (
+        <section
+          className="space-y-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950"
+          data-testid="cash-pending-custodies"
+        >
+          <div>
+            <h2 className="font-semibold">Custodias pendientes de recepción</h2>
+            <p className="text-sky-900">Confirmá la recepción después de cotejar el efectivo entregado.</p>
+          </div>
+          <ul className="divide-y divide-sky-200">
+            {pendingCashCustodyReports.map((report) => (
+              <li key={report.id} className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_220px_auto] sm:items-end">
+                <span className="sm:pb-2">
+                  Caja #{report.session_id} · {money(report.custody_handoff?.delivered_amount, report.currency_code || currency)} entregados
+                </span>
+                <label className="space-y-1 text-xs">
+                  <span className="text-sky-900">Efectivo que dejo como cambio en la sucesora</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={9999999999.99}
+                    step="0.01"
+                    value={successorFloatAmounts[report.id] ?? "0"}
+                    onChange={(event) => setSuccessorFloatAmounts((current) => ({ ...current, [report.id]: event.target.value }))}
+                    className="w-full rounded-lg border border-sky-300 bg-white px-3 py-2 text-sm"
+                    aria-label={`Cambio para caja sucesora de caja ${report.session_id}`}
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={busy || Number(successorFloatAmounts[report.id] ?? "0") < 0 || Number(successorFloatAmounts[report.id] ?? "0") > 9999999999.99}
+                  onClick={() => void handleConfirmCustody(report)}
+                  className="rounded-lg border border-sky-300 bg-white px-3 py-2 text-sm font-semibold text-sky-900 hover:bg-sky-100 disabled:opacity-60"
+                >
+                  Confirmar custodia y cambio
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-4">
@@ -398,18 +528,26 @@ export function CashRegisterPage() {
                       <button
                         key={session.id}
                         type="button"
-                        onClick={() => setSelectedSessionId(session.id)}
+                        onClick={() => {
+                          setSelectedSessionId(session.id);
+                          setCloseReport(null);
+                        }}
                         className={`w-full px-4 py-3 text-left hover:bg-slate-50 ${isActive ? "bg-brand-50" : "bg-white"}`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="font-semibold text-slate-900">Caja #{session.id}</p>
-                            <p className="text-xs text-slate-500">{new Date(session.opened_at).toLocaleString("es-AR")}</p>
+                            <p className="text-xs text-slate-500">{formatHotelDateTime(session.opened_at, hotelTimeZone)}</p>
                           </div>
                           <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${session.status === "open" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
                             {cashSessionStatusLabel[session.status] || session.status}
                           </span>
                         </div>
+                        {pendingCloseReports.some((report) => report.session_id === session.id) ? (
+                          <span className="mt-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900">
+                            Diferencia pendiente
+                          </span>
+                        ) : null}
                       </button>
                     );
                   })}
@@ -601,7 +739,7 @@ export function CashRegisterPage() {
                       <div>
                         <p className="font-semibold text-slate-900">{cashMovementTypeLabel[movement.movement_type]}</p>
                         <p className="text-xs text-slate-500">
-                          {movement.description || "Sin descripción"} - {new Date(movement.recorded_at).toLocaleString("es-AR")}
+                          {movement.description || "Sin descripción"} - {formatHotelDateTime(movement.recorded_at, hotelTimeZone)}
                         </p>
                       </div>
                       <p className="font-semibold text-slate-900">{money(movement.amount, currency)}</p>
@@ -648,6 +786,9 @@ export function CashRegisterPage() {
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 />
               </label>
+              <p className="text-xs text-slate-500 md:col-span-2">
+                El arqueo incluye todo el efectivo contado. Después del cierre, Dueño o Codueña confirma la custodia y registra por separado el cambio que deja en la caja sucesora.
+              </p>
             </div>
             <div className="flex justify-end">
               <button
@@ -660,26 +801,26 @@ export function CashRegisterPage() {
             </div>
           </form>
 
-          {closeReport ? (
+          {selectedSessionCloseReport ? (
             <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">Reporte de cierre</p>
-                <h2 className="text-lg font-semibold text-slate-900">Arqueo #{closeReport.id}</h2>
+                <h2 className="text-lg font-semibold text-slate-900">Arqueo #{selectedSessionCloseReport.id}</h2>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
-                <Metric label="Esperado" value={money(closeReport.expected_balance, currency)} />
-                <Metric label="Declarado" value={money(closeReport.declared_balance, currency)} />
-                <Metric label="Diferencia" value={money(closeReport.difference, currency)} />
+                <Metric label="Esperado" value={money(selectedSessionCloseReport.expected_balance, closeReportCurrency)} />
+                <Metric label="Declarado" value={money(selectedSessionCloseReport.declared_balance, closeReportCurrency)} />
+                <Metric label="Diferencia" value={money(selectedSessionCloseReport.difference, closeReportCurrency)} />
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-slate-600">
-                  Estado: {Number(closeReport.difference) === 0 ? "sin diferencia" : closeReport.difference_approved ? "diferencia aprobada" : "pendiente de aprobación"}
+                  Estado: {Number(selectedSessionCloseReport.difference) === 0 ? "sin diferencia" : selectedSessionCloseReport.difference_approved ? "diferencia aprobada" : "pendiente de aprobación"}
                 </p>
-                {canApproveDifference && !closeReport.difference_approved && Number(closeReport.difference) !== 0 ? (
+                {canApproveDifference && !selectedSessionCloseReport.difference_approved && Number(selectedSessionCloseReport.difference) !== 0 ? (
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={handleApproveDifference}
+                    onClick={() => void handleApproveDifference(selectedSessionCloseReport.id)}
                     className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                   >
                     Aprobar diferencia
@@ -688,19 +829,46 @@ export function CashRegisterPage() {
               </div>
               <div className="border-t border-slate-200 pt-3 text-sm text-slate-600">
                 <p>
-                  Caja sucesora: {closeReport.successor_session_id ? `#${closeReport.successor_session_id} abierta con saldo $0` : "pendiente de creación"}.
+                  Caja sucesora: {selectedSessionCloseReport.successor_session_id
+                    ? `#${selectedSessionCloseReport.successor_session_id} abierta con saldo ${money(selectedSessionCloseReport.successor_opening_balance, closeReportCurrency)}`
+                    : "pendiente de creación"}.
                 </p>
                 <p className="mt-1">
-                  Custodia: {closeReport.custody_handoff?.status === "confirmed" ? "recepción confirmada" : "pendiente de recepción del dueño"}.
+                  Custodia: {selectedSessionCloseReport.custody_handoff?.status === "confirmed"
+                    ? `recepción confirmada de ${money(selectedSessionCloseReport.custody_handoff.delivered_amount, closeReportCurrency)}`
+                    : `pendiente de recepción del dueño o la codueña por ${money(selectedSessionCloseReport.custody_handoff?.delivered_amount, closeReportCurrency)}`}.
                 </p>
-                {canReceiveCustody && closeReport.custody_handoff?.status === "pending" ? (
+                <p className="mt-1">
+                  Fondo de cambio declarado: {selectedSessionCloseReport.successor_float_declared_amount == null
+                    ? "pendiente"
+                    : `${money(selectedSessionCloseReport.successor_float_declared_amount, closeReportCurrency)} para la caja sucesora`}
+                  {selectedSessionCloseReport.successor_float_declared_by_user_id
+                    ? ` · usuario ${selectedSessionCloseReport.successor_float_declared_by_user_id}`
+                    : ""}.
+                </p>
+                {canReceiveCustody && selectedSessionCloseReport.custody_handoff?.status === "pending" ? (
+                  <label className="mt-3 block max-w-sm space-y-1 text-xs">
+                    <span className="text-slate-600">Efectivo que dejo como cambio en la sucesora</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={9999999999.99}
+                      step="0.01"
+                      value={successorFloatAmounts[selectedSessionCloseReport.id] ?? "0"}
+                      onChange={(event) => setSuccessorFloatAmounts((current) => ({ ...current, [selectedSessionCloseReport.id]: event.target.value }))}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      aria-label={`Cambio para caja sucesora de caja ${selectedSessionCloseReport.session_id}`}
+                    />
+                  </label>
+                ) : null}
+                {canReceiveCustody && selectedSessionCloseReport.custody_handoff?.status === "pending" ? (
                   <button
                     type="button"
-                    disabled={busy}
-                    onClick={handleConfirmCustody}
+                    disabled={busy || Number(successorFloatAmounts[selectedSessionCloseReport.id] ?? "0") < 0 || Number(successorFloatAmounts[selectedSessionCloseReport.id] ?? "0") > 9999999999.99}
+                    onClick={() => void handleConfirmCustody(selectedSessionCloseReport)}
                     className="mt-3 rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                   >
-                    Confirmar recepción de custodia
+                    Confirmar custodia y cambio
                   </button>
                 ) : null}
               </div>

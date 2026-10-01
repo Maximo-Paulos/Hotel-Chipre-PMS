@@ -79,6 +79,15 @@ COMPOSITE_FKS = (
     ("fact_room_occupancy_daily", "fk_fact_room_occupancy_daily_hotel_reservation", ("hotel_id", "reservation_id"), "reservations", ("hotel_id", "id"), None),
 )
 
+# These named unique constraints are created by earlier migrations.  The
+# forward hardening pass below recognizes them by column shape and leaves them
+# in place; its downgrade must likewise leave them to their original owner.
+PREEXISTING_UNIQUES = {
+    ("reservations", "uq_reservation_hotel_id_id"),
+    ("payment_links", "uq_payment_link_hotel_id_id"),
+    ("payments", "uq_payment_hotel_id_id"),
+}
+
 
 def _has_unique(inspector, table_name: str, columns: tuple[str, ...]) -> bool:
     wanted = list(columns)
@@ -140,5 +149,7 @@ def downgrade() -> None:
 
     inspector = sa.inspect(bind)
     for table_name, constraint_name in reversed(UNIQUE_TARGETS):
+        if (table_name, constraint_name) in PREEXISTING_UNIQUES:
+            continue
         if any(item.get("name") == constraint_name for item in inspector.get_unique_constraints(table_name)):
             op.drop_constraint(constraint_name, table_name, type_="unique")

@@ -58,6 +58,9 @@ const builtinRoleLabels: Record<BuiltinPermissionRole, string> = {
   housekeeping: "Housekeeping"
 };
 
+const retryPermissionAdminQuery = (failureCount: number, error: unknown) =>
+  !(error instanceof ApiError && error.status === 428) && failureCount < 3;
+
 const visibilityOptions = [
   { value: "12", label: "12 h" },
   { value: "24", label: "24 h" },
@@ -95,7 +98,10 @@ type PermissionRoleColumn = {
   code: string;
   label: string;
   editable: boolean;
+  editablePermissions?: string[];
 };
+
+const OWNER_CONFIGURABLE_PERMISSION = "reservation:rate_adjust";
 
 const visibilityValue = (window?: VisibilityWindow): VisibilityOptionValue | "custom" => {
   if (!window || (window.past_hours === null && window.future_hours === null)) return "always";
@@ -154,6 +160,7 @@ function PermissionTable({
         const restoreVersion = currentVersion ?? 1;
         const versionUnavailable = hasOverride && currentVersion === undefined;
         const locked = permission.locked || Boolean(cell?.locked);
+        const permissionEditable = role.editable || role.editablePermissions?.includes(permission.code) === true;
         return (
           <td key={role.code} className="min-w-[126px] px-2 py-3 text-center align-top">
             <div className="flex flex-col items-center gap-1.5">
@@ -162,7 +169,7 @@ function PermissionTable({
                 data-testid={`permission-toggle-${role.code}-${permission.code}`}
                 aria-label={`${permission.description} para ${role.label}`}
                 checked={Boolean(cell?.allowed)}
-                disabled={!cell || locked || versionUnavailable || isBusy || !role.editable}
+                disabled={!cell || locked || versionUnavailable || isBusy || !permissionEditable}
                 onChange={(event) => onToggle(role.code, permission.code, event.target.checked, expectedVersion)}
                 className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50"
               />
@@ -177,11 +184,11 @@ function PermissionTable({
               >
                 {locked ? "Bloqueado" : formatPermissionSource(cell?.source ?? "deny")}
               </span>
-              {hasOverride && !locked ? (
+              {hasOverride && !locked && permissionEditable ? (
                 <button
                   type="button"
                   className="text-[11px] font-semibold text-brand-700 underline underline-offset-2 disabled:opacity-50"
-                  disabled={versionUnavailable || isBusy || !role.editable}
+                  disabled={versionUnavailable || isBusy || !permissionEditable}
                   onClick={() => onRestorePermission(role.code, permission.code, restoreVersion)}
                 >
                   Restaurar
@@ -489,37 +496,44 @@ export function SettingsPermissionsPage() {
   const rolesQuery = useQuery<HotelRolesResponse>({
     queryKey: hotelRolesQueryKey(session.hotelId),
     enabled,
-    queryFn: () => fetchHotelRoles(session)
+    queryFn: () => fetchHotelRoles(session),
+    retry: retryPermissionAdminQuery
   });
   const catalogQuery = useQuery({
     queryKey: ["permissions-catalog", session.hotelId],
     enabled,
-    queryFn: () => fetchPermissionCatalog(session)
+    queryFn: () => fetchPermissionCatalog(session),
+    retry: retryPermissionAdminQuery
   });
   const matrixQuery = useQuery({
     queryKey: ["permissions-matrix", session.hotelId],
     enabled,
-    queryFn: () => fetchPermissionMatrix(session)
+    queryFn: () => fetchPermissionMatrix(session),
+    retry: retryPermissionAdminQuery
   });
   const roleProfilesQuery = useQuery({
     queryKey: ["permissions-role-profiles", session.hotelId],
     enabled,
-    queryFn: () => fetchRolePermissionProfiles(session)
+    queryFn: () => fetchRolePermissionProfiles(session),
+    retry: retryPermissionAdminQuery
   });
   const visibilityQuery = useQuery({
     queryKey: ["permissions-visibility-windows", session.hotelId],
     enabled,
-    queryFn: () => fetchVisibilityWindows(session)
+    queryFn: () => fetchVisibilityWindows(session),
+    retry: retryPermissionAdminQuery
   });
   const usersQuery = useQuery({
     queryKey: ["permissions-users", session.hotelId],
     enabled,
-    queryFn: () => listUsers(session)
+    queryFn: () => listUsers(session),
+    retry: retryPermissionAdminQuery
   });
   const userOverridesQuery = useQuery<UserPermissionOverrideResponse>({
     queryKey: ["permissions-user-overrides", session.hotelId, selectedUserId],
     enabled: enabled && selectedUserId !== null,
-    queryFn: () => fetchUserPermissionOverrides(selectedUserId as number, session)
+    queryFn: () => fetchUserPermissionOverrides(selectedUserId as number, session),
+    retry: retryPermissionAdminQuery
   });
 
   useEffect(() => {
@@ -556,6 +570,12 @@ export function SettingsPermissionsPage() {
   };
   const isRoleEditable = (roleCode: string) =>
     roleCode !== "owner" && roleCode !== "co_owner" && rolesQuery.isSuccess && !rolesQuery.isError && isRoleActive(roleCode);
+  const isRolePermissionEditable = (roleCode: string, permissionCode: string) =>
+    isRoleEditable(roleCode) || (
+      session.baseRole === "owner" &&
+      roleCode === "owner" &&
+      permissionCode === OWNER_CONFIGURABLE_PERMISSION
+    );
 
   const roleColumns: PermissionRoleColumn[] = [
     ...builtinRoleOrder,
@@ -570,7 +590,10 @@ export function SettingsPermissionsPage() {
     return {
       code,
       label: roleName(code),
-      editable: isRoleEditable(code) && matrixExists && profileExists && windowExists
+      editable: isRoleEditable(code) && matrixExists && profileExists && windowExists,
+      editablePermissions: code === "owner" && canManage && matrixExists && profileExists
+        ? [OWNER_CONFIGURABLE_PERMISSION]
+        : []
     };
   });
   const customRoleContractMismatch = roleColumns.some((role) =>
@@ -587,7 +610,7 @@ export function SettingsPermissionsPage() {
 
   const roleOverrideMutation = useGuardedMutation<PermissionOverrideResponse, Error, { role: PermissionRole; code: string; allowed: boolean; expectedVersion: number }>({
     mutationFn: ({ role, code, allowed, expectedVersion }) => {
-      ensureEditableRole(role);
+      if (!isRolePermissionEditable(role, code)) throw new Error(t("hotelRoles.readOnlyRoleError", { role: roleName(role) }));
       return updatePermissionOverride({ role, permission_code: code, allowed, expected_version: expectedVersion }, session);
     },
     onSuccess: async (response, variables) => {
@@ -600,7 +623,7 @@ export function SettingsPermissionsPage() {
 
   const restoreRolePermissionMutation = useGuardedMutation<RestoreRolePermissionResponse, Error, { role: PermissionRole; code: string; expectedVersion: number }>({
     mutationFn: ({ role, code, expectedVersion }) => {
-      ensureEditableRole(role);
+      if (!isRolePermissionEditable(role, code)) throw new Error(t("hotelRoles.readOnlyRoleError", { role: roleName(role) }));
       return restoreRolePermissionOverride(role, code, expectedVersion, session);
     },
     onSuccess: async (_response, variables) => {
@@ -761,11 +784,11 @@ export function SettingsPermissionsPage() {
             roleVersions={roleVersions}
             isBusy={isBusy || matrixIsFetching}
             onToggle={(role, code, allowed, expectedVersion) => {
-              if (!isRoleEditable(role)) return;
+              if (!isRolePermissionEditable(role, code)) return;
               void roleOverrideMutation.mutateAsync({ role, code, allowed, expectedVersion }).catch(() => undefined);
             }}
             onRestorePermission={(role, code, expectedVersion) => {
-              if (!isRoleEditable(role)) return;
+              if (!isRolePermissionEditable(role, code)) return;
               void restoreRolePermissionMutation.mutateAsync({ role, code, expectedVersion }).catch(() => undefined);
             }}
             onRestoreRole={(role) => {

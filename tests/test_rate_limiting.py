@@ -245,6 +245,25 @@ def test_invite_rate_limited(authed_client, monkeypatch):
     assert r2.status_code == 429
 
 
+def test_failed_invite_attempt_does_not_consume_successful_invite_quota(authed_client, monkeypatch):
+    client, db, ctx = authed_client
+    invite_key = f"user:{ctx['user_id']}"
+    monkeypatch.setattr(invite_limiter, "limit", 1)
+    invite_limiter.reset(invite_key, db=db)
+    db.commit()
+
+    invalid = client.post("/api/users/invite", json={"email": "bad-role@test.com", "role": "owner"})
+    first_success = client.post("/api/users/invite", json={"email": "first-good@test.com", "role": "manager"})
+    over_limit = client.post("/api/users/invite", json={"email": "second-good@test.com", "role": "manager"})
+
+    invite_limiter.reset(invite_key, db=db)
+    db.commit()
+
+    assert invalid.status_code == 400
+    assert first_success.status_code == 201, first_success.text
+    assert over_limit.status_code == 429
+
+
 def test_invitation_preview_and_acceptance_are_rate_limited(client_with_db, monkeypatch):
     client, db = client_with_db
     monkeypatch.setattr(invitation_preview_limiter, "limit", 1)

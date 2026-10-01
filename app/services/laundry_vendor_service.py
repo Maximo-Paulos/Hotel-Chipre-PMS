@@ -11,6 +11,7 @@ app/services/stock_service.py's general-supplies inventory).
 from __future__ import annotations
 
 import calendar
+import json
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
 
@@ -18,6 +19,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.hotel_config import HotelConfiguration
+from app.models.hotel_membership import HotelMembership
 from app.models.laundry_vendor import (
     LaundryRemito,
     LaundryRemitoLine,
@@ -25,6 +27,8 @@ from app.models.laundry_vendor import (
     LaundryVendorPrice,
     LaundryVendorSettlement,
 )
+from app.models.security_audit_log import SecurityAuditLog
+from app.models.user import User
 from app.services import linen_service
 
 DIRECTIONS = {"outbound", "inbound"}
@@ -89,29 +93,40 @@ def set_vendor_price(
     vendor_id: int,
     linen_item_id: int,
     unit_price: Decimal,
+    effective_from: date | None = None,
     currency_code: str | None = None,
+    actor_user_id: int | None = None,
 ) -> LaundryVendorPrice:
-    """Upsert the single current price for a (vendor, item) pair."""
+    """Create or revise the price for one vendor, item and effective date."""
 
     if unit_price < 0:
         raise LaundryVendorError("Unit price cannot be negative")
+    effective_from = effective_from or date.today()
     _get_vendor(db, hotel_id=hotel_id, vendor_id=vendor_id)
     linen_service.get_linen_item(db, hotel_id=hotel_id, item_id=linen_item_id)
 
     price = (
         db.query(LaundryVendorPrice)
-        .filter(LaundryVendorPrice.vendor_id == vendor_id, LaundryVendorPrice.linen_item_id == linen_item_id)
+        .filter(
+            LaundryVendorPrice.hotel_id == hotel_id,
+            LaundryVendorPrice.vendor_id == vendor_id,
+            LaundryVendorPrice.linen_item_id == linen_item_id,
+            LaundryVendorPrice.effective_from == effective_from,
+        )
+        .with_for_update()
         .one_or_none()
     )
     if currency_code is None:
         currency_code = price.currency_code if price is not None else _default_currency(db, hotel_id=hotel_id)
 
+    previous_amount = price.unit_price if price is not None else None
     if price is None:
         price = LaundryVendorPrice(
             hotel_id=hotel_id,
             vendor_id=vendor_id,
             linen_item_id=linen_item_id,
             unit_price=unit_price,
+            effective_from=effective_from,
             currency_code=currency_code,
         )
         db.add(price)
@@ -120,6 +135,26 @@ def set_vendor_price(
         price.currency_code = currency_code
         price.updated_at = datetime.now(timezone.utc)
     db.flush()
+    db.add(
+        SecurityAuditLog(
+            hotel_id=hotel_id,
+            user_id=actor_user_id,
+            action="laundry.vendor_price.set",
+            resource_type="laundry_vendor_price",
+            resource_id=str(price.id),
+            details=json.dumps(
+                {
+                    "vendor_id": vendor_id,
+                    "linen_item_id": linen_item_id,
+                    "effective_from": effective_from.isoformat(),
+                    "previous_unit_price": str(previous_amount) if previous_amount is not None else None,
+                    "unit_price": str(unit_price),
+                    "currency_code": currency_code,
+                },
+                sort_keys=True,
+            ),
+        )
+    )
     return price
 
 
@@ -128,7 +163,7 @@ def list_vendor_prices(db: Session, *, hotel_id: int, vendor_id: int) -> list[La
     return (
         db.query(LaundryVendorPrice)
         .filter(LaundryVendorPrice.hotel_id == hotel_id, LaundryVendorPrice.vendor_id == vendor_id)
-        .order_by(LaundryVendorPrice.id.asc())
+        .order_by(LaundryVendorPrice.linen_item_id.asc(), LaundryVendorPrice.effective_from.asc(), LaundryVendorPrice.id.asc())
         .all()
     )
 
@@ -175,6 +210,7 @@ def create_remito(
             hotel_id=hotel_id,
             vendor_id=vendor_id,
             direction=direction,
+            house_location_id=house_location_id,
             remito_number=remito_number,
             remito_date=remito_date,
             notes=notes,
@@ -223,10 +259,13 @@ def create_remito(
             price = (
                 db.query(LaundryVendorPrice)
                 .filter(
+                    LaundryVendorPrice.hotel_id == hotel_id,
                     LaundryVendorPrice.vendor_id == vendor_id,
                     LaundryVendorPrice.linen_item_id == linen_item_id,
+                    LaundryVendorPrice.effective_from <= remito_date.date(),
                 )
-                .one_or_none()
+                .order_by(LaundryVendorPrice.effective_from.desc(), LaundryVendorPrice.id.desc())
+                .first()
             )
             db.add(
                 LaundryRemitoLine(
@@ -261,6 +300,25 @@ def list_remitos(
     if date_to is not None:
         query = query.filter(LaundryRemito.remito_date <= date_to)
     return query.order_by(LaundryRemito.remito_date.desc(), LaundryRemito.id.desc()).all()
+
+
+def remito_creator_labels(db: Session, *, hotel_id: int, remitos: list[LaundryRemito]) -> dict[int, str]:
+    """Resolve hotel aliases for history without returning email addresses."""
+    creator_ids = {remito.created_by_user_id for remito in remitos if remito.created_by_user_id is not None}
+    if not creator_ids:
+        return {}
+    rows = (
+        db.query(HotelMembership.user_id, HotelMembership.alias, User.display_name)
+        .outerjoin(User, User.id == HotelMembership.user_id)
+        .filter(HotelMembership.hotel_id == hotel_id, HotelMembership.user_id.in_(creator_ids))
+        .all()
+    )
+    labels: dict[int, str] = {}
+    for user_id, alias, display_name in rows:
+        label = (alias or "").strip() or (display_name or "").strip()
+        if label:
+            labels[user_id] = label
+    return labels
 
 
 def vendor_balance(db: Session, *, hotel_id: int, vendor_id: int) -> list[dict]:

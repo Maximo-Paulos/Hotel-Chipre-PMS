@@ -33,6 +33,11 @@ export type RoomBlockCreatePayload = {
   reason_note?: string | null;
 };
 
+export type RoomBlockConflictPreview = {
+  reservation_count: number;
+  protected_reservation_count: number;
+};
+
 export const listActiveRoomBlocks = (
   params: { start_date?: string; end_date?: string } = {},
   session?: SessionLike
@@ -46,6 +51,19 @@ export const listActiveRoomBlocks = (
 
 export const createRoomBlock = (payload: RoomBlockCreatePayload, session?: SessionLike) =>
   apiFetch<RoomBlock>("/api/room-blocks/", { method: "POST", data: payload, session });
+
+export const previewRoomBlockConflicts = (
+  params: { room_id: number; starts_at: string; ends_at?: string | null; is_indefinite: boolean },
+  session?: SessionLike
+) => {
+  const search = new URLSearchParams({
+    room_id: String(params.room_id),
+    starts_at: params.starts_at,
+    is_indefinite: String(params.is_indefinite)
+  });
+  if (params.ends_at) search.set("ends_at", params.ends_at);
+  return apiFetch<RoomBlockConflictPreview>(`/api/room-blocks/conflicts/preview?${search.toString()}`, { session });
+};
 
 export const resolveRoomBlock = (blockId: number, session?: SessionLike) =>
   apiFetch<RoomBlock>(`/api/room-blocks/${blockId}/resolve`, { method: "POST", session });

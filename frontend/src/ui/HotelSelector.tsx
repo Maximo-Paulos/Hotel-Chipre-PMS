@@ -4,14 +4,20 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getHotelConfig } from "../api/config";
 import { safeHotelId, useSession } from "../state/session";
 import { hasValidSession } from "../api/client";
+import { useEffectivePermissions } from "../hooks/usePermissions";
 
 type HotelOption = { id: number; hotel_name?: string };
 
 export function HotelSelector() {
   const queryClient = useQueryClient();
   const { session, setHotelId } = useSession();
+  const { hasPermission } = useEffectivePermissions();
   const [value, setValue] = useState(session.hotelId ? String(session.hotelId) : "");
-  const shouldLoadHotelNames = session.baseRole !== "housekeeping";
+  const hotelIds = session.hotelIds?.length ? session.hotelIds : session.hotelId ? [session.hotelId] : [];
+  const shouldLoadHotelNames =
+    hotelIds.length > 1
+    && session.baseRole !== "housekeeping"
+    && hasPermission("hotel_settings:read");
 
   useEffect(() => {
     setValue(session.hotelId ? String(session.hotelId) : "");
@@ -21,9 +27,8 @@ export function HotelSelector() {
     queryKey: ["hotels-list", session.hotelIds?.join(",") || session.hotelId || "none"],
     enabled: hasValidSession(session) && shouldLoadHotelNames,
     queryFn: async () => {
-      const ids = session.hotelIds?.length ? session.hotelIds : session.hotelId ? [session.hotelId] : [];
       const results: HotelOption[] = [];
-      for (const id of ids) {
+      for (const id of hotelIds) {
         try {
           const cfg = await getHotelConfig({ ...session, hotelId: id });
           results.push({ id, hotel_name: cfg.hotel_name });

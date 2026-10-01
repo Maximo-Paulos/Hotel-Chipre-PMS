@@ -44,6 +44,7 @@
       "reservations": "Reservations",
       "guests": "Guests",
       "rooms": "Rooms",
+      "housekeepingToday": "Housekeeping today",
       "tasks": "Tasks",
       "cashRegister": "Cash register"
     },

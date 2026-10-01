@@ -17,6 +17,7 @@ import {
   partialCheckInReservation,
   resolveReservationExternal,
   updateReservation,
+  updateCompanyExtensionRequest,
   type CheckInPayload,
   type ManualOtaReservationPayload,
   type OccupancyGridResponse,
@@ -32,12 +33,13 @@ import {
   type ReservationPayload,
   type ReservationPendingAction,
   type ReservationStatus,
-  type ReservationUpdatePayload
+  type ReservationUpdatePayload,
+  type CompanyExtensionRequestPayload
 } from "../api/reservations";
 import { validateGuestForCheckin, type GuestCheckinValidation } from "../api/guests";
 import type { SessionState } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
-import { refreshReservationGuestState, refreshReservationState } from "../api/queryInvalidation";
+import { refreshReservationCreatedState, refreshReservationGuestState, refreshReservationState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -96,7 +98,10 @@ export function useValidateGuestCheckin(guestId?: number) {
     queryKey: guestId ? ["guest-checkin-validation", session.hotelId, guestId] : ["guest-checkin-validation", "none"],
     queryFn: () => validateGuestForCheckin(guestId!, session),
     enabled: Boolean(guestId) && hasValidSession(session),
-    staleTime: 0
+    staleTime: 0,
+    // Do not silently retry a prerequisite that gates check-in. Show the
+    // error and let the operator retry explicitly.
+    retry: false
   });
 }
 
@@ -111,11 +116,12 @@ export function useReservationQuote(params: ReservationQuoteParams | null) {
       params?.check_out_date ?? null,
       params?.pricing_payment_method ?? null,
       params?.occupancy ?? null,
-      params?.guest_id ?? null
+      params?.guest_id ?? null,
+      params?.company_id ?? null
     ],
     queryFn: () => getReservationQuote(params!, session),
     enabled: Boolean(params) && hasValidSession(session),
-    staleTime: 0,
+    staleTime: 30 * 1000,
     gcTime: 1000 * 60 * 10,
     // price-quote 4xx (no active rate plan, invalid date range, etc.) is a
     // deterministic business rejection -- retrying the identical request
@@ -155,6 +161,12 @@ export function useReservationMutations(filters?: ReservationFilters) {
   const { session } = useSession();
 
   const invalidate = () => refreshReservationState(queryClient, session.hotelId);
+  // Creating a reservation changes reservation-facing views, but recording a
+  // required deposit amount does not create a cash movement. Keep active cash
+  // sessions and room-movement groups fresh through their own mutations
+  // instead of refetching them for each new booking.
+  const invalidateCreatedReservation = () =>
+    refreshReservationCreatedState(queryClient, session.hotelId);
 
   // Check-in/check-out/companion changes are read by the drawer's own
   // single-reservation query, not just the list, and they write guest data
@@ -174,20 +186,26 @@ export function useReservationMutations(filters?: ReservationFilters) {
   // them twice would double-apply their side effects.
   const createMutation = useGuardedMutation({
     mutationFn: (payload: ReservationPayload) => createReservation(payload, session),
-    onSuccess: async () => invalidate()
+    onSuccess: async () => invalidateCreatedReservation()
   });
 
   // B4: "Cargar reserva de OTA" -- upsert by (channel, external_id), see
   // createManualOtaReservation.
   const createManualOtaMutation = useGuardedMutation({
     mutationFn: (payload: ManualOtaReservationPayload) => createManualOtaReservation(payload, session),
-    onSuccess: async () => invalidate()
+    onSuccess: async () => invalidateCreatedReservation()
   });
 
   const updateMutation = useGuardedMutation({
     mutationFn: ({ id, payload }: { id: number; payload: ReservationUpdatePayload }) =>
       updateReservation(id, payload, session),
     onSuccess: async () => invalidate()
+  });
+
+  const companyExtensionRequestMutation = useGuardedMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: CompanyExtensionRequestPayload }) =>
+      updateCompanyExtensionRequest(id, payload, session),
+    onSuccess: async (_, variables) => invalidateReservationDetail(variables.id)
   });
 
   const cancelMutation = useGuardedMutation({
@@ -238,6 +256,7 @@ export function useReservationMutations(filters?: ReservationFilters) {
     createMutation,
     createManualOtaMutation,
     updateMutation,
+    companyExtensionRequestMutation,
     cancelMutation,
     checkInMutation,
     partialCheckInMutation,

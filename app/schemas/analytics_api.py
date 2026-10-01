@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
@@ -25,9 +26,10 @@ class CompanyBase(BaseModel):
         serialization_alias="phone",
     )
     administrative_contact: str | None = None
-    base_price: float | None = None
+    base_price: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    extra_person_nightly_surcharge: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
     payment_deferred: bool = False
-    deferred_days: int = 0
+    deferred_days: int = Field(default=0, ge=0, le=365)
     requires_voucher: bool = False
     requires_signature: bool = False
     notes: str | None = None
@@ -69,9 +71,10 @@ class CompanyUpdate(BaseModel):
         serialization_alias="phone",
     )
     administrative_contact: str | None = None
-    base_price: float | None = None
+    base_price: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    extra_person_nightly_surcharge: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
     payment_deferred: bool | None = None
-    deferred_days: int | None = None
+    deferred_days: int | None = Field(default=None, ge=0, le=365)
     requires_voucher: bool | None = None
     requires_signature: bool | None = None
     notes: str | None = None

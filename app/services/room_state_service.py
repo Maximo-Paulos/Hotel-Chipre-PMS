@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditActionEnum
-from app.models.room import Room, RoomStatusEnum
+from app.models.room import Room, RoomHousekeepingStatusEnum, RoomStatusEnum
 from app.services import audit_log_service
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.read_model_cache import invalidate_hotel_operational_caches
@@ -43,6 +43,8 @@ def change_room_status(
     """
     before = audit_log_service.model_snapshot(room)
     room.status = status
+    if status == RoomStatusEnum.CLEANING:
+        room.housekeeping_status = RoomHousekeepingStatusEnum.DIRTY
     if notes is not None:
         room.notes = notes
 

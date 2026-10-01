@@ -26,6 +26,7 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   const suffix = Date.now().toString();
   const itemName = `QA-Sabanas ${suffix}`;
   const locationName = `QA-Deposito ${suffix}`;
+  const destinationLocationName = `QA-Piso ${suffix}`;
   const categoryName = `QA-Stock ${suffix}`;
   const categoryCode = `QS${suffix.slice(-6)}`;
   const roomNumber = `QS${suffix.slice(-5)}`;
@@ -77,8 +78,8 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
     const pad = (part: number) => String(part).padStart(2, "0");
     return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
   };
-  await reservationForm.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(localIsoDate(50));
-  await reservationForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(localIsoDate(52));
+  await reservationForm.getByLabel("Check-in", { exact: true }).fill(localIsoDate(50));
+  await reservationForm.getByLabel("Check-out", { exact: true }).fill(localIsoDate(52));
   await reservationForm.getByRole("button", { name: "Crear", exact: true }).click();
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
 
@@ -97,6 +98,10 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   await locationForm.getByRole("button", { name: "Crear ubicación", exact: true }).click();
   await expect(page.getByText("Ubicación creada.", { exact: true })).toBeVisible();
 
+  await locationForm.getByLabel("Nombre").fill(destinationLocationName);
+  await locationForm.getByRole("button", { name: "Crear ubicación", exact: true }).click();
+  await expect(page.getByText("Ubicación creada.", { exact: true })).toBeVisible();
+
   const itemForm = page.locator("form").filter({ hasText: "Alta de stock" });
   await itemForm.getByLabel("Nombre").fill(itemName);
   await itemForm.getByLabel("Mínimo").fill("5");
@@ -106,18 +111,23 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   const movementForm = page.locator("#stock-movement-form");
   const movementHistory = page.getByRole("region", { name: "Historial reciente", exact: true });
 
-  // --- Camino rapido por default (D4 parte 1): item -> tipo -> cantidad -> confirmar,
-  // sin tocar "Opciones avanzadas". Ubicacion y reserva quedan colapsadas y no deben
-  // hacer falta para un movimiento simple (item 2, con previsualizacion, item 5).
+  // La ubicación queda visible y se limpia después de guardar, para evitar que
+  // un movimiento siguiente reutilice el último depósito por accidente.
   const advancedOptionsToggle = movementForm.getByText("Opciones avanzadas", { exact: true });
   await page.getByRole("button", { name: `Registrar ingreso de ${itemName}`, exact: true }).click();
   await movementForm.getByLabel("Item").selectOption({ label: itemName });
-  await expect(movementForm.getByLabel("Ubicación")).toBeHidden();
+  const locationSelect = movementForm.getByLabel("Ubicación (opcional)");
+  await expect(locationSelect).toBeVisible();
+  await locationSelect.selectOption({ label: locationName });
   await movementForm.getByLabel("Cantidad").fill("10");
   await movementForm.getByLabel("Motivo").fill("Compra inicial QA");
   await expect(movementForm.getByText("Resultado previsto:", { exact: false })).toContainText("10.00 unidad");
   await movementForm.getByRole("button", { name: "Registrar Ingreso", exact: true }).click();
   await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
+  await expect(locationSelect).toHaveValue("");
+  await expect(page.getByRole("list", { name: `Stock de ${itemName} por ubicación`, exact: true })).toContainText(
+    "10.00 unidad"
+  );
   await expect(movementForm.getByText(/^(?:10|10\.00) unidad$/, { exact: true })).toBeVisible();
 
   // --- Egreso (item 3), abriendo "Opciones avanzadas" para vincular a una reserva
@@ -126,16 +136,10 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   await page.getByRole("button", { name: `Registrar egreso de ${itemName}`, exact: true }).click();
   await movementForm.getByLabel("Cantidad").fill("4");
   await movementForm.getByLabel("Motivo").fill("Consumo huésped QA");
+  await locationSelect.selectOption({ label: locationName });
   await advancedOptionsToggle.click();
-  // Not selecting locationName here: the ingreso above deliberately used the
-  // quick default path (no location, see D4 parte 1), and register_movement
-  // now validates an outbound movement against ONLY the location it names
-  // (stock_service.py's "an outbound movement scoped to one location must
-  // only be checked against THAT location's balance" fix) -- so drawing this
-  // egreso from a named location that never received stock would correctly
-  // fail as "would make stock negative". Stay on "Sin ubicacion" (the same
-  // hotel-wide bucket the ingreso wrote to) to keep exercising the advanced
-  // options' reservation-search field without that false negative.
+  // The reservation association remains an optional audit link; the balance
+  // and negative-stock preview are now scoped to the chosen location.
   const reservationSearchInput = movementForm.getByPlaceholder("Buscar huésped o código");
   await reservationSearchInput.fill(guestLastName);
   const reservationSelect = movementForm.locator("select").filter({ hasText: "Sin reserva asociada" });
@@ -200,16 +204,15 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
     .filter({ hasText: itemName });
   await expect(itemCard.getByText("Bajo", { exact: true })).toBeVisible();
 
-  // --- D5 (Via D): reporte de consumo por periodo refleja los egresos/ajustes
-  // de baja de esta sesion (4 egreso + 3 ajuste a la baja + 1 egreso = 8), no
-  // los 10 de ingreso ni los 2 de ajuste al alza. Rango explicito y amplio
+  // --- D5 (Via D): reporte de consumo por periodo refleja solo los egresos
+  // ordinarios (4 + 1 = 5), no los ajustes. Rango explicito y amplio
   // (en vez del preset "Semana actual") para no depender de a que lado de la
   // medianoche UTC/local cae "hoy" en el navegador de e2e.
   const consumptionSection = page.locator("section").filter({ hasText: "Consumo de stock por periodo" });
   await consumptionSection.getByLabel("Desde").fill(localIsoDate(-10));
   await consumptionSection.getByLabel("Hasta").fill(localIsoDate(1));
   const consumptionRow = consumptionSection.locator("tbody tr").filter({ hasText: itemName });
-  await expect(consumptionRow).toContainText("8.00 unidad");
+  await expect(consumptionRow).toContainText("5.00 unidad");
 
   // --- Editar item completo (owner: "editar el producto por las dudas"):
   // nombre, SKU, unidad y minimo, no solo el costo por unidad (ese ya tenia
@@ -249,4 +252,64 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   await confirmDialog.getByRole("button", { name: "Eliminar", exact: true }).click();
   await expect(page.getByText("Item eliminado.", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: editedItemName, exact: true })).toHaveCount(0);
+
+  // --- F-022: alta por grilla y traspaso entre ubicaciones ---
+  const transferItemName = `QA-Toallas ${suffix}`;
+  await itemForm.getByLabel("Nombre").fill(transferItemName);
+  await itemForm.getByRole("button", { name: "Crear item", exact: true }).click();
+  await expect(page.getByRole("heading", { name: transferItemName, exact: true })).toBeVisible();
+
+  const openingCountForm = page.locator("#stock-opening-count-form");
+  await openingCountForm.getByLabel("Ubicación del conteo inicial").selectOption({ label: locationName });
+  await openingCountForm.getByLabel(`Conteo inicial ${transferItemName}`).fill("10");
+  await openingCountForm.getByLabel("Motivo").fill("Inventario inicial QA");
+  await openingCountForm.getByRole("button", { name: "Guardar conteo inicial", exact: true }).click();
+  await expect(page.getByText("Conteo inicial guardado para 1 item.", { exact: true })).toBeVisible();
+
+  const transferForm = page.locator("#stock-transfer-form");
+  await transferForm.getByLabel("Item del traspaso").selectOption({ label: transferItemName });
+  await transferForm.getByLabel("Ubicación de origen").selectOption({ label: locationName });
+  await transferForm.getByLabel("Ubicación de destino").selectOption({ label: destinationLocationName });
+  await transferForm.getByLabel("Cantidad").fill("3");
+  await transferForm.getByLabel("Motivo").fill("Reposición de piso QA");
+  await expect(transferForm.getByText("Resultado previsto:", { exact: false })).toContainText("7.00");
+  await expect(transferForm.getByText("Resultado previsto:", { exact: false })).toContainText("3.00");
+  await transferForm.getByRole("button", { name: "Registrar traspaso", exact: true }).click();
+  await expect(page.getByText("Traspaso registrado.", { exact: true })).toBeVisible();
+
+  const transferItemCard = page
+    .locator("div.rounded-xl.border.border-slate-200.bg-white.p-4.shadow-sm")
+    .filter({ hasText: transferItemName });
+  const transferLocationBalances = transferItemCard.getByRole("list", {
+    name: `Stock de ${transferItemName} por ubicación`, exact: true
+  });
+  await expect(transferItemCard).toContainText("10.00");
+  await expect(transferLocationBalances).toContainText("7.00 unidad");
+  await expect(transferLocationBalances).toContainText("3.00 unidad");
+
+  // The same transfer flow is available on the task-based mobile tab.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const transferTab = page.getByRole("tab", { name: "Traspaso", exact: true });
+  await expect(transferTab).toBeVisible();
+  await transferTab.click();
+  await expect(transferForm).toBeVisible();
+  await transferForm.getByLabel("Ubicación de origen").selectOption({ label: destinationLocationName });
+  await transferForm.getByLabel("Ubicación de destino").selectOption({ label: locationName });
+  await transferForm.getByLabel("Cantidad").fill("1");
+  await transferForm.getByLabel("Motivo").fill("Retorno desde móvil QA");
+  await transferForm.getByRole("button", { name: "Registrar traspaso", exact: true }).click();
+  await expect(page.getByText("Traspaso registrado.", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Resumen", exact: true }).click();
+  await expect(transferItemCard.getByRole("list", { name: `Stock de ${transferItemName} por ubicación`, exact: true }))
+    .toContainText("8.00 unidad");
+  await expect(transferItemCard.getByRole("list", { name: `Stock de ${transferItemName} por ubicación`, exact: true }))
+    .toContainText("2.00 unidad");
+
+  await page.getByRole("tab", { name: "Historial", exact: true }).click();
+  await expect(movementHistory).toContainText(`Traspaso · salida · ${transferItemName}`);
+  await expect(movementHistory).toContainText(`Traspaso · ingreso · ${transferItemName}`);
+
+  await page.getByRole("tab", { name: "Carga inicial", exact: true }).click();
+  await openingCountForm.getByLabel("Ubicación del conteo inicial").selectOption({ label: locationName });
+  await expect(openingCountForm.getByLabel(`Conteo inicial ${transferItemName}`)).toBeDisabled();
 });

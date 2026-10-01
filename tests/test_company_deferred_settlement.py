@@ -45,6 +45,15 @@ def test_deferred_company_reservation_sets_settlement(db, sample_guest, sample_r
 
     assert reservation.settlement_status == "deferred"
     assert reservation.settlement_due_date == check_out + timedelta(days=30)
+    assert reservation.total_amount == 0
+    assert reservation.deposit_amount == 0
+    assert reservation.subtotal_amount == 0
+    assert reservation.tax_amount == 0
+    assert reservation.fee_amount == 0
+    assert reservation.commission_amount == 0
+    assert reservation.net_amount == 0
+    assert '"amount_recorded_in_pms": false' in reservation.pricing_snapshot
+    assert "525" not in reservation.pricing_snapshot
 
 
 def test_register_settlement_marks_settled(db, sample_guest, sample_rooms, sample_categories, hotel_config):

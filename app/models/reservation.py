@@ -190,6 +190,7 @@ class Reservation(Base):
     room_id = Column(Integer, nullable=True)  # Nullable until assigned
     category_id = Column(Integer, nullable=False)
     company_id = Column(Integer, nullable=True)
+    group_id = Column(Integer, nullable=True)
     sellable_product_id = Column(Integer, nullable=True)
     rate_plan_id = Column(Integer, nullable=True)
     tax_policy_id = Column(Integer, nullable=True)
@@ -323,6 +324,8 @@ class Reservation(Base):
     external_confirmation_code = Column(String(120), nullable=True)
     requested_attributes_json = Column(Text, nullable=True)
     pricing_snapshot = Column(Text, nullable=True)
+    manual_rate_reason = Column(String(500), nullable=True)
+    manual_rate_scope = Column(String(16), nullable=True)
     allocation_status = Column(String(30), nullable=False, default="unassigned")
     allocation_locked = Column(Boolean, nullable=False, default=False)
     requires_manual_review = Column(Boolean, nullable=False, default=False)
@@ -347,6 +350,10 @@ class Reservation(Base):
     # Internal hotel-team comment/request. Kept separate from the legacy
     # `notes` field so existing integrations retain their meaning.
     reservation_comment = Column(Text, nullable=True)
+    # A company may request a later checkout before sending formal confirmation.
+    # This marker never changes the stay dates or reservation amount.
+    company_extension_request_pending = Column(Boolean, nullable=False, default=False, server_default="false")
+    company_extension_request_note = Column(Text, nullable=True)
 
     # Metadata
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
@@ -384,10 +391,19 @@ class Reservation(Base):
         CheckConstraint("subtotal_amount >= 0", name="ck_reservation_subtotal_positive"),
         CheckConstraint("tax_amount >= 0", name="ck_reservation_tax_positive"),
         CheckConstraint("fee_amount >= 0", name="ck_reservation_fee_positive"),
+        CheckConstraint(
+            "manual_rate_scope IS NULL OR manual_rate_scope IN ('bounded', 'unbounded')",
+            name="ck_reservation_manual_rate_scope",
+        ),
+        CheckConstraint(
+            "manual_rate_scope IS NULL OR (manual_rate_reason IS NOT NULL AND length(trim(manual_rate_reason)) > 0)",
+            name="ck_reservation_manual_rate_reason_required",
+        ),
         CheckConstraint("num_adults > 0", name="ck_reservation_adults_positive"),
         CheckConstraint("num_children >= 0", name="ck_reservation_children_positive"),
         Index("ix_reservation_dates", "check_in_date", "check_out_date"),
         Index("ix_reservation_hotel_id", "hotel_id"),
+        Index("ix_reservations_hotel_group", "hotel_id", "group_id"),
         Index("ix_reservation_hotel_deleted_at", "hotel_id", "deleted_at"),
         # A2: recent-order paging (created_at DESC) scoped per hotel.
         Index("ix_reservation_hotel_created_at", "hotel_id", "created_at"),
@@ -427,6 +443,10 @@ class Reservation(Base):
         ForeignKeyConstraint(
             ["hotel_id", "company_id"], ["companies.hotel_id", "companies.id"],
             name="fk_reservations_hotel_company",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "group_id"], ["reservation_groups.hotel_id", "reservation_groups.id"],
+            name="fk_reservations_hotel_group",
         ),
         ForeignKeyConstraint(
             ["hotel_id", "sellable_product_id"], ["sellable_products.hotel_id", "sellable_products.id"],

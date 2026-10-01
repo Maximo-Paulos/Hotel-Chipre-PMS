@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 
 import {
   createStockItem,
   createStockLocation,
   createStockMovement,
+  createStockOpeningCount,
+  createStockTransfer,
   deleteStockItem,
   getStockConsumptionReport,
   getStockSummary,
@@ -19,7 +21,9 @@ import {
   type StockItemUpdate,
   type StockMovement,
   type StockMovementCreate,
-  type StockMovementType
+  type StockMovementType,
+  type StockOpeningCountCreate,
+  type StockTransferCreate
 } from "../../api/stock";
 import { formatMoney } from "../../utils/currency";
 import { listReservations, type Reservation } from "../../api/reservations";
@@ -29,20 +33,24 @@ import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useIsDesktopViewport } from "../../hooks/useIsDesktopViewport";
 import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useSession } from "../../state/session";
-import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
+import { formatHotelDateTime, startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
 import { refreshStockState } from "../../api/queryInvalidation";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
+import { useHotelConfig } from "../../hooks/useHotelConfig";
+import { useEffectivePermissions } from "../../hooks/usePermissions";
 
 // Mobile task-based tabs (see the useIsDesktopViewport docstring for why this
 // is JS state, not a CSS breakpoint split): "movement" and "adjustment" both
 // render the SAME <form id="stock-movement-form"> (filtered to a subset of
 // availableMovementModeOptions), not two copies -- there is exactly one
 // movement form in the DOM at all times, same as desktop always had.
-type StockMobileTab = "summary" | "movement" | "adjustment" | "alerts" | "history";
+type StockMobileTab = "summary" | "movement" | "adjustment" | "transfer" | "opening" | "alerts" | "history";
 const STOCK_MOBILE_TABS: Array<{ tab: StockMobileTab; label: string }> = [
   { tab: "summary", label: "Resumen" },
   { tab: "movement", label: "Movimiento" },
   { tab: "adjustment", label: "Ajuste" },
+  { tab: "transfer", label: "Traspaso" },
+  { tab: "opening", label: "Carga inicial" },
   { tab: "alerts", label: "Alertas" },
   { tab: "history", label: "Historial" }
 ];
@@ -93,14 +101,25 @@ const emptyMovementForm = {
   reservation_id: ""
 };
 
+const emptyTransferForm = {
+  item_id: "",
+  source_location_id: "",
+  destination_location_id: "",
+  quantity: "1",
+  reason: ""
+};
+
 export function StockPage() {
   const { session } = useSession();
+  const hotelConfigQuery = useHotelConfig();
+  const effectivePermissions = useEffectivePermissions();
   // PERMISSION_STOCK_ADJUST is owner/co_owner only (see
   // _ensure_adjustment_permission in app/api/stock.py); manager only has
   // PERMISSION_STOCK_OPERATE (in/out movements).
   // C4: reads baseRole, not the "Cambiar vista" preview role -- this hides a
   // real inventory-correcting action, so it must reflect the real user.
   const canAdjustStock = ["owner", "co_owner"].includes(session.baseRole ?? "");
+  const canMoveStock = effectivePermissions.hasPermission("stock:movement");
   const availableMovementModeOptions = useMemo(
     () => (canAdjustStock ? movementModeOptions : movementModeOptions.filter((option) => option.type !== "adjustment")),
     [canAdjustStock]
@@ -119,10 +138,21 @@ export function StockPage() {
   }, [availableMovementModeOptions, isDesktop, mobileTab]);
   const showSection = (tab: StockMobileTab) => isDesktop || mobileTab === tab;
   const movementFormVisible = isDesktop || mobileTab === "movement" || (mobileTab === "adjustment" && canAdjustStock);
+  const transferFormVisible = showSection("transfer") && canMoveStock;
+  const openingFormVisible = showSection("opening") && canAdjustStock;
+  const visibleMobileTabs = STOCK_MOBILE_TABS.filter(({ tab }) =>
+    tab === "transfer" ? canMoveStock : tab === "opening" ? canAdjustStock : true
+  );
   const queryClient = useQueryClient();
   const [itemForm, setItemForm] = useState(emptyItemForm);
   const [locationForm, setLocationForm] = useState(emptyLocationForm);
   const [movementForm, setMovementForm] = useState(emptyMovementForm);
+  const [transferForm, setTransferForm] = useState(emptyTransferForm);
+  const transferAttemptRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(null);
+  const [openingLocationId, setOpeningLocationId] = useState("");
+  const [openingReason, setOpeningReason] = useState("Conteo inicial");
+  const [openingCounts, setOpeningCounts] = useState<Record<number, string>>({});
+  const [openingCountsSubmitting, setOpeningCountsSubmitting] = useState(false);
   const [adjustmentDirection, setAdjustmentDirection] = useState<"increase" | "decrease">("increase");
   const [reservationSearch, setReservationSearch] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -204,12 +234,47 @@ export function StockPage() {
     (stockSummaryQuery.data ?? []).forEach((entry) => map.set(entry.item.id, String(entry.current_quantity)));
     return map;
   }, [stockSummaryQuery.data]);
+  const stockSummaryByItemId = useMemo(
+    () => new Map((stockSummaryQuery.data ?? []).map((entry) => [entry.item.id, entry])),
+    [stockSummaryQuery.data]
+  );
+  const locationById = useMemo(() => new Map(locations.map((location) => [location.id, location])), [locations]);
 
   const selectedItem = useMemo(
     () => items.find((item) => String(item.id) === movementForm.item_id),
     [items, movementForm.item_id]
   );
-  const selectedCurrentStock = selectedItem ? currentByItemId.get(selectedItem.id) : null;
+  const selectedLocation = movementForm.location_id ? locationById.get(Number(movementForm.location_id)) : undefined;
+  const selectedCurrentStock = selectedItem
+    ? selectedLocation
+      ? stockSummaryByItemId
+          .get(selectedItem.id)
+          ?.location_balances.find((balance) => balance.location_id === selectedLocation.id)?.current_quantity
+      : currentByItemId.get(selectedItem.id)
+    : null;
+  const selectedTransferItem = items.find((item) => String(item.id) === transferForm.item_id);
+  const transferSourceLocation = locationById.get(Number(transferForm.source_location_id));
+  const transferDestinationLocation = locationById.get(Number(transferForm.destination_location_id));
+  const transferSourceBalance = selectedTransferItem && transferSourceLocation
+    ? stockSummaryByItemId
+        .get(selectedTransferItem.id)
+        ?.location_balances.find((balance) => balance.location_id === transferSourceLocation.id)?.current_quantity
+    : null;
+  const transferDestinationBalance = selectedTransferItem && transferDestinationLocation
+    ? stockSummaryByItemId
+        .get(selectedTransferItem.id)
+        ?.location_balances.find((balance) => balance.location_id === transferDestinationLocation.id)?.current_quantity
+    : null;
+  const transferQuantity = Number(transferForm.quantity);
+  const transferWillGoNegative =
+    transferSourceBalance !== null &&
+    transferSourceBalance !== undefined &&
+    Number.isFinite(transferQuantity) &&
+    transferQuantity > Number(transferSourceBalance);
+  const transferSameLocation =
+    transferForm.source_location_id !== "" &&
+    transferForm.source_location_id === transferForm.destination_location_id;
+  const openingSelectedLocation = openingLocationId ? locationById.get(Number(openingLocationId)) : undefined;
   const historyItemId = movementForm.item_id ? Number(movementForm.item_id) : undefined;
   const movementHistoryQuery = useQuery({
     queryKey: ["stock-movements", session.hotelId, historyItemId, historyLimit],
@@ -219,7 +284,6 @@ export function StockPage() {
   });
   const movementHistory = useMemo(() => movementHistoryQuery.data ?? [], [movementHistoryQuery.data]);
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
-  const locationById = useMemo(() => new Map(locations.map((location) => [location.id, location])), [locations]);
   const reservationById = useMemo(() => new Map(reservations.map((reservation) => [reservation.id, reservation])), [reservations]);
   const requestedQuantity = Number(movementForm.quantity);
   const currentQuantity = selectedCurrentStock ? Number(selectedCurrentStock) : null;
@@ -360,12 +424,28 @@ export function StockPage() {
       setMovementForm((current) => ({
         ...emptyMovementForm,
         item_id: current.item_id,
-        location_id: current.location_id,
         movement_type: current.movement_type
       }));
       setAdjustmentDirection("increase");
       setMessage("Movimiento registrado.");
     }
+  });
+
+  const createTransferMutation = useGuardedMutation({
+    mutationFn: ({ payload, idempotencyKey }: { payload: StockTransferCreate; idempotencyKey: string }) =>
+      createStockTransfer(payload, { idempotencyKey }, session),
+    onSuccess: async ({ outbound }) => {
+      transferAttemptRef.current = null;
+      await invalidateStock();
+      setMovementForm((current) => ({ ...current, item_id: String(outbound.item_id), location_id: "" }));
+      setTransferForm((current) => ({ ...emptyTransferForm, item_id: current.item_id }));
+      setMessage("Traspaso registrado.");
+    }
+  });
+
+  const createOpeningCountMutation = useGuardedMutation({
+    mutationFn: ({ payload, idempotencyKey }: { payload: StockOpeningCountCreate; idempotencyKey: string }) =>
+      createStockOpeningCount(payload, { idempotencyKey }, session)
   });
 
   const handleCreateItem = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -422,6 +502,99 @@ export function StockPage() {
     }
   };
 
+  const handleCreateTransfer = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage(null);
+    if (!isOnline) {
+      setMessage("Sin conexión. Conectate para registrar el traspaso.");
+      return;
+    }
+    try {
+      const payload: StockTransferCreate = {
+        item_id: Number(transferForm.item_id),
+        source_location_id: Number(transferForm.source_location_id),
+        destination_location_id: Number(transferForm.destination_location_id),
+        quantity: Number(transferForm.quantity).toFixed(2),
+        reason: transferForm.reason.trim()
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (transferAttemptRef.current?.fingerprint !== fingerprint) {
+        transferAttemptRef.current = {
+          fingerprint,
+          idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        };
+      }
+      await createTransferMutation.mutateAsync({
+        payload,
+        idempotencyKey: transferAttemptRef.current.idempotencyKey
+      });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo registrar el traspaso.");
+    }
+  };
+
+  const handleCreateOpeningCounts = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage(null);
+    if (!isOnline) {
+      setMessage("Sin conexión. Conectate para guardar el conteo inicial.");
+      return;
+    }
+    if (!openingLocationId || !openingReason.trim()) {
+      setMessage("Elegí una ubicación y escribí el motivo del conteo.");
+      return;
+    }
+
+    const pendingCounts = items.flatMap((item) => {
+      const rawQuantity = openingCounts[item.id];
+      const quantity = Number(rawQuantity);
+      const currentAtLocation = Number(
+        stockSummaryByItemId
+          .get(item.id)
+          ?.location_balances.find((balance) => balance.location_id === Number(openingLocationId))?.current_quantity ?? 0
+      );
+      if (!rawQuantity || !Number.isFinite(quantity) || quantity <= 0 || currentAtLocation > 0) return [];
+      return [{ item, quantity: rawQuantity }];
+    });
+    if (pendingCounts.length === 0) {
+      setMessage("Ingresá una cantidad mayor que cero para un item sin movimientos en esta ubicación.");
+      return;
+    }
+
+    setOpeningCountsSubmitting(true);
+    let saved = 0;
+    const failedItems: string[] = [];
+    try {
+      for (const { item, quantity } of pendingCounts) {
+        try {
+          await createOpeningCountMutation.mutateAsync({
+            payload: {
+              item_id: item.id,
+              location_id: Number(openingLocationId),
+              quantity,
+              reason: openingReason.trim()
+            },
+            idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${item.id}-${Math.random().toString(36).slice(2)}`
+          });
+          saved += 1;
+        } catch {
+          failedItems.push(item.name);
+        }
+      }
+      await invalidateStock();
+      if (failedItems.length > 0) {
+        setMessage(
+          `Se guardaron ${saved} conteos. No se pudieron guardar: ${failedItems.join(", ")}. Revisá los saldos actualizados antes de reintentar.`
+        );
+      } else {
+        setOpeningCounts({});
+        setMessage(`Conteo inicial guardado para ${saved} ${saved === 1 ? "item" : "items"}.`);
+      }
+    } finally {
+      setOpeningCountsSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -452,7 +625,7 @@ export function StockPage() {
       {/* Mobile task-based tabs -- desktop (md+) ignores mobileTab entirely
           and keeps showing every section at once, same as before this task. */}
       <div className="flex gap-2 overflow-x-auto pb-1 md:hidden" role="tablist" aria-label="Secciones de stock">
-        {STOCK_MOBILE_TABS.map(({ tab, label }) => (
+        {visibleMobileTabs.map(({ tab, label }) => (
           <button
             key={tab}
             type="button"
@@ -483,6 +656,7 @@ export function StockPage() {
           <div className="grid gap-4 md:grid-cols-2">
             {items.map((item) => {
               const current = currentByItemId.get(item.id) ?? "...";
+              const locationBalances = stockSummaryByItemId.get(item.id)?.location_balances ?? [];
               const isLow = lowStock.some((lowItem) => lowItem.id === item.id);
               return (
                 <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -511,6 +685,19 @@ export function StockPage() {
                       saving={updateItemCostMutation.isPending}
                     />
                   </div>
+                  {locationBalances.length > 0 && (
+                    <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Por ubicación</p>
+                      <ul className="mt-1 space-y-1 text-xs text-slate-700" aria-label={`Stock de ${item.name} por ubicación`}>
+                        {locationBalances.map((balance) => (
+                          <li key={balance.location_id} className="flex items-center justify-between gap-3">
+                            <span className="truncate">{balance.location_name}</span>
+                            <span className="shrink-0 font-semibold">{balance.current_quantity} {item.unit}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <div className="mt-3 flex gap-2">
                     <button
                       type="button"
@@ -642,9 +829,27 @@ export function StockPage() {
                 ))}
               </select>
             </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">Ubicación (opcional)</span>
+              <select
+                value={movementForm.location_id}
+                onChange={(event) => setMovementForm((current) => ({ ...current, location_id: event.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              >
+                <option value="">Sin ubicación · usar total del hotel</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </select>
+              <span className="block text-xs text-slate-500">Se limpia después de guardar para evitar reutilizar una ubicación por error.</span>
+            </label>
             {selectedItem && (
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                <span className="text-slate-500">Stock actual: </span>
+                <span className="text-slate-500">
+                  {selectedLocation ? `Stock en ${selectedLocation.name}: ` : "Stock total del hotel: "}
+                </span>
                 <span className="font-semibold text-slate-900">
                   {selectedCurrentStock ?? "..."} {selectedItem.unit}
                 </span>
@@ -684,29 +889,12 @@ export function StockPage() {
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               />
             </label>
-            {/* Ubicacion y reserva son opcionales en el backend para el caso comun
-                (insumos generales: se compra -> sube, se usa -> baja). Se ocultan
-                por default para no pesar como obligatorias; el caso puntual
-                (ej: minibar de una habitacion, o vincular a una estadia) sigue
-                disponible al abrir "Opciones avanzadas". */}
+            {/* La ubicación queda visible para evitar movimientos accidentales
+                hacia la última ubicación usada. La reserva sigue siendo un
+                dato avanzado hasta que exista el flujo de cargo al huésped. */}
             <details className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
               <summary className="cursor-pointer text-sm font-medium text-slate-600">Opciones avanzadas</summary>
               <div className="mt-3 space-y-4">
-                <label className="space-y-1 text-sm">
-                  <span className="text-slate-600">Ubicación</span>
-                  <select
-                    value={movementForm.location_id}
-                    onChange={(event) => setMovementForm((current) => ({ ...current, location_id: event.target.value }))}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                  >
-                    <option value="">Sin ubicación</option>
-                    {locations.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 <label className="space-y-1 text-sm">
                   <span className="text-slate-600">Reserva asociada (opcional)</span>
                   <input
@@ -740,11 +928,119 @@ export function StockPage() {
             </button>
           </form>
 
+          <form
+            id="stock-transfer-form"
+            className={transferFormVisible ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}
+            onSubmit={handleCreateTransfer}
+          >
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Movimiento entre ubicaciones</p>
+              <h2 className="text-lg font-semibold text-slate-900">Registrar traspaso</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                El depósito de origen baja y el de destino sube en una sola operación. El total del hotel se mantiene.
+              </p>
+            </div>
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">Item</span>
+              <select
+                aria-label="Item del traspaso"
+                value={transferForm.item_id}
+                onChange={(event) => setTransferForm((current) => ({ ...current, item_id: event.target.value }))}
+                required
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              >
+                <option value="">Seleccionar</option>
+                {items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Desde</span>
+                <select
+                  aria-label="Ubicación de origen"
+                  value={transferForm.source_location_id}
+                  onChange={(event) => setTransferForm((current) => ({ ...current, source_location_id: event.target.value }))}
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                >
+                  <option value="">Seleccionar origen</option>
+                  {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Hacia</span>
+                <select
+                  aria-label="Ubicación de destino"
+                  value={transferForm.destination_location_id}
+                  onChange={(event) => setTransferForm((current) => ({ ...current, destination_location_id: event.target.value }))}
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                >
+                  <option value="">Seleccionar destino</option>
+                  {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                </select>
+              </label>
+            </div>
+            {selectedTransferItem && transferSourceLocation && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                <p>
+                  Stock en {transferSourceLocation.name}: <strong>{transferSourceBalance ?? "..."} {selectedTransferItem.unit}</strong>
+                </p>
+                {transferWillGoNegative && (
+                  <p className="mt-1 text-xs font-medium text-rose-700" role="alert">
+                    La cantidad supera el saldo de origen. Reducila antes de confirmar.
+                  </p>
+                )}
+                {transferSameLocation && (
+                  <p className="mt-1 text-xs font-medium text-rose-700" role="alert">
+                    Elegí dos ubicaciones diferentes.
+                  </p>
+                )}
+                {transferDestinationLocation && !transferWillGoNegative && !transferSameLocation && (
+                  <p className="mt-1 text-xs text-slate-600">
+                    Resultado previsto: {transferSourceLocation.name} {transferSourceBalance === null || transferSourceBalance === undefined ? "..." : (Number(transferSourceBalance) - transferQuantity).toFixed(2)} · {transferDestinationLocation.name} {transferDestinationBalance === null || transferDestinationBalance === undefined ? "..." : (Number(transferDestinationBalance) + transferQuantity).toFixed(2)} {selectedTransferItem.unit}.
+                    {" "}El total del hotel queda en {stockSummaryByItemId.get(selectedTransferItem.id)?.current_quantity ?? "..."} {selectedTransferItem.unit}.
+                  </p>
+                )}
+              </div>
+            )}
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">Cantidad</span>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={transferForm.quantity}
+                onChange={(event) => setTransferForm((current) => ({ ...current, quantity: event.target.value }))}
+                required
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">Motivo</span>
+              <input
+                value={transferForm.reason}
+                onChange={(event) => setTransferForm((current) => ({ ...current, reason: event.target.value }))}
+                placeholder="Reposición de piso"
+                required
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={createTransferMutation.isPending || transferWillGoNegative || transferSameLocation || !isOnline}
+              className="w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+            >
+              Registrar traspaso
+            </button>
+          </form>
+
           <div className={showSection("history") ? "space-y-3" : "hidden"}>
             <StockMovementHistory
               movements={movementHistory}
               isLoading={movementHistoryQuery.isLoading}
               selectedItem={selectedItem?.name}
+              hotelTimeZone={hotelConfigQuery.data?.hotel_timezone}
               itemById={itemById}
               locationById={locationById}
               reservationById={reservationById}
@@ -849,6 +1145,100 @@ export function StockPage() {
               className="w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
               Crear ubicación
+            </button>
+          </form>
+
+          <form
+            id="stock-opening-count-form"
+            className={openingFormVisible ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}
+            onSubmit={handleCreateOpeningCounts}
+          >
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Preparación de inventario</p>
+              <h2 className="text-lg font-semibold text-slate-900">Carga inicial por grilla</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Solo aparece disponible para items sin movimientos previos en la ubicación. Cada fila queda registrada en el historial.
+              </p>
+            </div>
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">Ubicación del conteo</span>
+              <select
+                aria-label="Ubicación del conteo inicial"
+                value={openingLocationId}
+                onChange={(event) => {
+                  setOpeningLocationId(event.target.value);
+                  setOpeningCounts({});
+                }}
+                required
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              >
+                <option value="">Seleccionar ubicación</option>
+                {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">Motivo</span>
+              <input
+                value={openingReason}
+                onChange={(event) => setOpeningReason(event.target.value)}
+                required
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              />
+            </label>
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50">
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th className="px-3 py-2">Item</th>
+                    <th className="px-3 py-2">Actual</th>
+                    <th className="px-3 py-2">Conteo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {items.map((item) => {
+                    const balance = openingSelectedLocation
+                      ? stockSummaryByItemId
+                          .get(item.id)
+                          ?.location_balances.find((entry) => entry.location_id === openingSelectedLocation.id)
+                      : undefined;
+                    const hasHistory = balance?.has_movements ?? false;
+                    const currentQuantity = balance?.current_quantity ?? "0.00";
+                    const disabled = !openingSelectedLocation || !balance || hasHistory || stockSummaryQuery.isLoading;
+                    return (
+                      <tr key={item.id}>
+                        <td className="px-3 py-2 font-medium text-slate-800">{item.name} <span className="text-xs text-slate-500">({item.unit})</span></td>
+                        <td className="px-3 py-2 text-slate-600">
+                          {currentQuantity}{hasHistory ? " · ya registrado" : " · sin movimientos"}
+                        </td>
+                        <td className="px-3 py-2">
+                          <label className="sr-only" htmlFor={`opening-count-${item.id}`}>Conteo inicial {item.name}</label>
+                          <input
+                            id={`opening-count-${item.id}`}
+                            aria-label={`Conteo inicial ${item.name}`}
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={openingCounts[item.id] ?? ""}
+                            onChange={(event) => setOpeningCounts((current) => ({ ...current, [item.id]: event.target.value }))}
+                            disabled={disabled}
+                            className="w-28 rounded-lg border border-slate-300 px-3 py-2 disabled:bg-slate-100 disabled:text-slate-500"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!itemsQuery.isLoading && items.length === 0 && (
+                    <tr><td colSpan={3} className="px-3 py-3 text-xs text-slate-500">Primero creá los items del inventario.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <button
+              type="submit"
+              disabled={openingCountsSubmitting || !openingSelectedLocation || items.length === 0 || !isOnline}
+              className="w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+            >
+              Guardar conteo inicial
             </button>
           </form>
         </aside>
@@ -1398,6 +1788,7 @@ function StockMovementHistory({
   movements,
   isLoading,
   selectedItem,
+  hotelTimeZone,
   itemById,
   locationById,
   reservationById
@@ -1405,6 +1796,7 @@ function StockMovementHistory({
   movements: StockMovement[];
   isLoading: boolean;
   selectedItem?: string;
+  hotelTimeZone?: string;
   itemById: Map<number, { name: string; unit: string }>;
   locationById: Map<number, { name: string }>;
   reservationById: Map<number, Reservation>;
@@ -1430,7 +1822,9 @@ function StockMovementHistory({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-semibold text-slate-900">
-                    {movementHistoryLabel[movement.movement_type]} · {item?.name ?? "Item eliminado"}
+                    {movement.transfer_reference
+                      ? `Traspaso · ${movement.movement_type === "out" ? "salida" : "ingreso"}`
+                      : movementHistoryLabel[movement.movement_type]} · {item?.name ?? "Item eliminado"}
                   </p>
                   <p className="text-xs text-slate-600">
                     {movement.quantity} {item?.unit ?? "unidad"}
@@ -1439,7 +1833,7 @@ function StockMovementHistory({
                   </p>
                 </div>
                 <time className="shrink-0 text-xs text-slate-500" dateTime={movement.created_at}>
-                  {new Date(movement.created_at).toLocaleString("es-AR")}
+                  {formatHotelDateTime(movement.created_at, hotelTimeZone)}
                 </time>
               </div>
               {movement.reason ? <p className="mt-1 text-xs text-slate-600">Motivo: {movement.reason}</p> : null}

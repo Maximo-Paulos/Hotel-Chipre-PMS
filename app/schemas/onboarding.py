@@ -1,7 +1,7 @@
 """
 Pydantic schemas for the onboarding flow.
 """
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -95,10 +95,25 @@ class RoomsPayload(BaseModel):
 
 
 class StaffMember(BaseModel):
-    name: str = Field(..., min_length=1, max_length=150)
+    name: str = Field(..., max_length=150)
     role: Optional[str] = Field(default=None, max_length=120)
     email: Optional[str] = Field(default=None, max_length=200)
     phone: Optional[str] = Field(default=None, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Completá el nombre de la persona o quitá esta fila")
+        return normalized
+
+
+class StaffInvitationDelivery(BaseModel):
+    invitation_id: int
+    email: str
+    role: str
+    email_delivery: Literal["sent", "failed", "not_configured"]
 
 
 class StaffPayload(BaseModel):
@@ -122,5 +137,6 @@ class OnboardingStatus(BaseModel):
     categories: List[dict] = Field(default_factory=list)
     rooms: List[dict] = Field(default_factory=list)
     staff: List[dict] = Field(default_factory=list)
+    staff_invitations: List[StaffInvitationDelivery] = Field(default_factory=list)
     readiness_checklist: List[dict] = Field(default_factory=list)
     readiness_complete: bool = False

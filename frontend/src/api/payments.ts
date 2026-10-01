@@ -14,6 +14,10 @@ export type PaymentRequest = {
   manual_reference?: string;
   refund_of_transaction_id?: number;
   refund_reason?: string;
+  collected_before?: boolean;
+  collected_on?: string;
+  prior_receipt_note?: string;
+  company_night_charge_ids?: number[];
 };
 
 export type PaymentSummary = {
@@ -44,6 +48,9 @@ export type PaymentSummary = {
     manual_reference?: string | null;
     refund_of_transaction_id?: number | null;
     refund_reason?: string | null;
+    collected_before?: boolean;
+    collected_on?: string | null;
+    prior_receipt_note?: string | null;
     created_at: string;
   }>;
 };

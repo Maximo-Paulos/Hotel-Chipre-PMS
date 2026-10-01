@@ -174,7 +174,7 @@ def test_partial_checkin_reaches_pre_check_in_then_final_checkin(monkeypatch):
         engine.dispose()
 
 
-def test_partial_checkin_requires_configured_deposit(monkeypatch):
+def test_partial_checkin_requires_full_payment_under_default_policy(monkeypatch):
     client, db, engine = _client_with_db()
     monkeypatch.setattr(checkin_service, "hotel_today", lambda *_: date(2026, 3, 1))
     try:
@@ -186,7 +186,7 @@ def test_partial_checkin_requires_configured_deposit(monkeypatch):
 
         response = client.post(f"/api/checkin/{reservation.id}/partial")
         assert response.status_code == 400
-        assert "configured deposit" in response.json()["detail"]
+        assert "full reservation amount" in response.json()["detail"]
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

@@ -10,6 +10,7 @@ from app.models.subscription import SubscriptionPlan, HotelSubscription
 from app.config import get_settings
 from app.services.user_lookup_service import find_user_by_email
 from app.services.subscription_entitlements import PLAN_CATALOG, ensure_subscription_seed
+from app.services.tenant_context import set_tenant_hotel_context
 
 
 def ensure_plans_seeded(db: Session):
@@ -59,6 +60,10 @@ def get_or_create_hotel_for_owner(db: Session, owner_email: str) -> HotelConfigu
         subscription_active=True,
     )
     db.add(hotel)
+    # The hotel id is known before the first flush. Bind the transaction now
+    # so PostgreSQL RLS accepts the tenant's membership, subscription, and
+    # outbox rows produced by the bootstrap flushes below.
+    set_tenant_hotel_context(db, hotel.id)
     db.flush()
     _ensure_membership_and_subscription(db, hotel.id, owner_email)
     return hotel

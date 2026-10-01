@@ -3,24 +3,27 @@ import { useEffectivePermissions } from "../hooks/usePermissions";
 
 type Props = {
   guestId: number;
+  hasActiveRestriction?: boolean;
   className?: string;
 };
 
-// Small "restricted" indicator for guest search/list rows and the guest
-// detail header. The underlying query is gated on
-// guest:prohibition_read/manage (see useGuestActiveRestrictions) so it never
-// fires -- and the badge renders nothing -- for an actor without permission,
-// including an actor who 403s the list call. reason/detail are only shown to
-// guest:prohibition_manage holders (guest:prohibition_read alone can see
-// *that* a restriction exists, not why).
-export function GuestRestrictionBadge({ guestId, className = "" }: Props) {
+// Small "restricted" indicator for guest rows and the detail header. Guest
+// list rows receive a batched ID-only summary; the selected detail header may
+// fetch its own restriction data, gated on guest:prohibition_read/manage.
+// Reasons are shown only in the detail header to guest:prohibition_manage.
+export function GuestRestrictionBadge({ guestId, hasActiveRestriction, className = "" }: Props) {
   const { hasPermission } = useEffectivePermissions();
   const canSeeReason = hasPermission("guest:prohibition_manage");
-  const { data, isSuccess } = useGuestActiveRestrictions(guestId, true);
+  const { data, isSuccess } = useGuestActiveRestrictions(guestId, true, {
+    enabled: hasActiveRestriction === undefined
+  });
 
-  if (!isSuccess || !data || data.length === 0) return null;
+  const isRestricted = hasActiveRestriction ?? (isSuccess && Boolean(data?.length));
+  if (!isRestricted) return null;
 
-  const reasons = canSeeReason ? data.map((restriction) => restriction.reason).join(" · ") : null;
+  const reasons = canSeeReason && hasActiveRestriction === undefined
+    ? data?.map((restriction) => restriction.reason).join(" · ")
+    : null;
 
   return (
     <span

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
-import { getAuthProviders } from "../api/auth";
+import { useAuthProviders } from "../hooks/useAuthProviders";
 
 // Google Identity Services (GIS) ID-token flow: no backend redirect, Google
 // hands the frontend a signed JWT directly and we forward it to
@@ -45,25 +45,11 @@ function loadGsiScript(): Promise<void> {
 export function GoogleSignInButton({ onCredential }: { onCredential: (idToken: string) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const credentialRef = useRef(onCredential);
-  const [clientId, setClientId] = useState<string | null>(null);
+  const providersQuery = useAuthProviders();
+  const clientId = providersQuery.data?.google?.enabled
+    ? providersQuery.data.google.client_id
+    : null;
   credentialRef.current = onCredential;
-
-  useEffect(() => {
-    let cancelled = false;
-    getAuthProviders()
-      .then((providers) => {
-        if (!cancelled && providers.google.enabled && providers.google.client_id) {
-          setClientId(providers.google.client_id);
-        }
-      })
-      .catch(() => {
-        // Keep password login available if the provider-capabilities endpoint
-        // is temporarily unavailable.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!clientId || !containerRef.current) return;

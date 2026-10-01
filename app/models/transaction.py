@@ -4,7 +4,7 @@ Supports: Efectivo (Cash), MercadoPago, PayPal, Credit/Debit Card.
 """
 import enum
 from sqlalchemy import (
-    Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime,
+    Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime, Date, Boolean,
     CheckConstraint, ForeignKeyConstraint, Index, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
@@ -101,6 +101,13 @@ class Transaction(Base):
     manual_reference = Column(String(120), nullable=True)
     refund_of_transaction_id = Column(Integer, nullable=True)
     refund_reason = Column(String(240), nullable=True)
+    # Prior cash receipts update the reservation ledger without entering the
+    # currently open cash session. The transaction remains the financial source
+    # of truth; these fields explain when the cash was collected and why it was
+    # entered later.
+    collected_before = Column(Boolean, nullable=False, default=False, server_default="false")
+    collected_on = Column(Date, nullable=True)
+    prior_receipt_note = Column(String(240), nullable=True)
     gateway_response = Column(Text, nullable=True)            # Full JSON response from gateway
     # Idempotency: dedupe gateway-driven transactions (hotel_id, reservation_id, idempotency_key)
     idempotency_key = Column(String(100), nullable=True)
@@ -128,6 +135,18 @@ class Transaction(Base):
 
     __table_args__ = (
         CheckConstraint("amount != 0", name="ck_transaction_amount_nonzero"),
+        CheckConstraint(
+            "(collected_before = false AND collected_on IS NULL AND prior_receipt_note IS NULL) OR "
+            "(collected_before = true AND collected_on IS NOT NULL AND prior_receipt_note IS NOT NULL "
+            "AND payment_method = 'cash' AND transaction_type != 'refund' AND status = 'completed')",
+            name="ck_transaction_prior_receipt_consistent",
+        ),
+        Index(
+            "ix_transactions_hotel_prior_receipt_date",
+            "hotel_id",
+            "collected_before",
+            "collected_on",
+        ),
         # Gateway idempotency: at most one transaction per idempotency_key per reservation.
         # Partial index (key NOT NULL) so cash/manual transactions (null key) are unconstrained.
         Index(

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 
 from pydantic import BaseModel, Field
+from app.schemas.datetime_types import UTCDateTime
 
 
 class OperationalReservationSummary(BaseModel):
@@ -50,7 +51,7 @@ class ActiveRoomBlockItem(BaseModel):
 class CashSessionStatusRead(BaseModel):
     status: str
     session_id: int | None = None
-    opened_at: datetime | None = None
+    opened_at: UTCDateTime | None = None
     opened_by_user_id: int | None = None
     currency_code: str | None = None
 
@@ -68,7 +69,7 @@ class OperationalAlertRead(BaseModel):
 class DailyOperationalReportRead(BaseModel):
     hotel_id: int
     report_date: date
-    generated_at: datetime
+    generated_at: UTCDateTime
     arrivals: OperationalReservationGroup
     departures: OperationalReservationGroup
     pending_payments: OperationalReservationGroup
@@ -82,7 +83,7 @@ class DailyOperationalReportRead(BaseModel):
 class NightlyOperationalSummaryRead(BaseModel):
     hotel_id: int
     report_date: date
-    generated_at: datetime
+    generated_at: UTCDateTime
     alert_count: int
     pending_payment_count: int
     late_arrival_count: int

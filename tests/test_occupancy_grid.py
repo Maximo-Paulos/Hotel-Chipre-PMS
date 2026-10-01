@@ -89,6 +89,24 @@ def test_cancelled_reservation_is_excluded(db, sample_guest, sample_rooms, hotel
     assert grid["reservations"] == []
 
 
+def test_checked_out_reservation_does_not_reduce_free_room_count(db, sample_guest, sample_rooms, hotel_config):
+    from app.models.reservation import ReservationStatusEnum
+
+    reservation = _reserve(
+        db,
+        sample_guest,
+        sample_rooms[0],
+        date(2027, 1, 1),
+        date(2027, 1, 5),
+    )
+    reservation.status = ReservationStatusEnum.CHECKED_OUT
+    db.flush()
+
+    grid = get_occupancy_grid(db, hotel_id=1, date_from=date(2027, 1, 1), date_to=date(2027, 1, 8))
+
+    assert all(row["id"] != reservation.id for row in grid["reservations"])
+
+
 def test_unassigned_reservation_has_no_room_and_lands_in_unassigned(db, sample_guest, sample_categories, hotel_config):
     reservation = create_reservation(
         db,

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { hasValidSession } from "../../api/client";
+import LocalizedDateField from "../../components/LocalizedDateField";
 import {
   acknowledgeShiftHandoff,
   createOperationalTask,
@@ -54,9 +55,9 @@ type TaskForm = {
   due_at: string;
 };
 
-const emptyForm = (): TaskForm => ({
+const emptyForm = (taskType: OperationalTaskType = "general"): TaskForm => ({
   title: "",
-  task_type: "general",
+  task_type: taskType,
   priority: "medium",
   description: "",
   room_id: "",
@@ -76,13 +77,16 @@ export function OperationalTasksPage() {
   const { hasPermission, hasAnyPermission } = useEffectivePermissions();
   const enabled = hasValidSession(session);
   const canManage = hasPermission("operations:tasks:manage");
+  const canWork = hasAnyPermission(["operations:tasks:report", "operations:tasks:manage"]);
+  const defaultTaskType: OperationalTaskType = session.baseRole === "housekeeping" ? "housekeeping" : "general";
   const canHandoff = hasPermission("operations:handoff:manage");
   const { roomsQuery } = useRooms({ includeCategories: false });
   const { blocksQuery } = useRoomBlocks({ enabled: canManage });
   const latestCloseReportQuery = useLatestCashCloseReport({ enabled: canHandoff });
-  const [form, setForm] = useState<TaskForm>(() => emptyForm());
+  const [form, setForm] = useState<TaskForm>(() => emptyForm(defaultTaskType));
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [historyTaskId, setHistoryTaskId] = useState<number | null>(null);
+  const [taskComments, setTaskComments] = useState<Record<number, string>>({});
   const [includeLatestClose, setIncludeLatestClose] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -139,7 +143,7 @@ export function OperationalTasksPage() {
     mutationFn: () => createOperationalTask(taskPayload(), session),
     onSuccess: async () => {
       await refresh();
-      setForm(emptyForm());
+      setForm(emptyForm(defaultTaskType));
       setMessage("Tarea agregada al turno.");
     }
   });
@@ -147,6 +151,15 @@ export function OperationalTasksPage() {
     mutationFn: ({ id, version, status }: { id: number; version: number; status: OperationalTaskStatus }) =>
       updateOperationalTask(id, { client_version: version, status }, session),
     onSuccess: refresh
+  });
+  const commentMutation = useGuardedMutation({
+    mutationFn: ({ id, version, comment }: { id: number; version: number; comment: string }) =>
+      updateOperationalTask(id, { client_version: version, comment }, session),
+    onSuccess: async (_task, variables) => {
+      setTaskComments((current) => ({ ...current, [variables.id]: "" }));
+      await refresh();
+      setMessage("Comentario agregado al historial.");
+    }
   });
   const resolveMutation = useGuardedMutation({
     mutationFn: ({ id, version }: { id: number; version: number }) => resolveOperationalTask(id, version, undefined, session),
@@ -277,10 +290,19 @@ export function OperationalTasksPage() {
                 </select>
               </label>
             )}
-            <label className="text-sm text-slate-700">
-              Vencimiento (opcional)
-              <input type="datetime-local" value={form.due_at} onChange={(event) => setForm((current) => ({ ...current, due_at: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
-            </label>
+            <LocalizedDateField
+              id="operational-task-due-at"
+              label="Vencimiento (opcional)"
+              value={form.due_at}
+              onChange={(value) => setForm((current) => ({ ...current, due_at: value }))}
+              mode="datetime-local"
+              className="text-sm text-slate-700"
+              labelClassName="text-sm text-slate-700"
+              inputClassName="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 pr-10"
+              placeholder="DD/MM/AAAA HH:MM"
+              chooseDateLabel="Elegir fecha y hora"
+              invalidMessage="Ingresá una fecha y hora válidas con formato DD/MM/AAAA HH:MM."
+            />
             <label className="text-sm text-slate-700 md:col-span-2 lg:col-span-3">
               Comentario para el siguiente turno (opcional)
               <textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} className="mt-1 min-h-20 w-full rounded-lg border border-slate-300 px-3 py-2" maxLength={5000} />
@@ -340,10 +362,10 @@ export function OperationalTasksPage() {
                     <p className="mt-1 text-xs text-slate-500">{typeLabels[task.task_type]} · {task.room_number ? `Habitación ${task.room_number}` : "Sin habitación"} · {formatDate(task.due_at)}</p>
                   </div>
                   <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                    {task.status === "pending" && (
+                    {canWork && task.status === "pending" && (
                       <button type="button" onClick={() => void run(() => statusMutation.mutateAsync({ id: task.id, version: task.version, status: "in_progress" }), "Tarea tomada por el turno.")} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Tomar</button>
                     )}
-                    {task.status === "in_progress" && (
+                    {canWork && task.status === "in_progress" && (
                       <button type="button" onClick={() => void run(() => statusMutation.mutateAsync({ id: task.id, version: task.version, status: "pending_review" }), "Tarea enviada a revisión.")} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Enviar a revisión</button>
                     )}
                     {canManage && task.status !== "resolved" && (
@@ -358,6 +380,32 @@ export function OperationalTasksPage() {
                     </button>
                   </div>
                 </div>
+                {canWork && task.status !== "resolved" && (
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <label className="min-w-0 flex-1 text-xs font-medium text-slate-600">
+                      Comentario de seguimiento
+                      <textarea
+                        value={taskComments[task.id] ?? ""}
+                        onChange={(event) => setTaskComments((current) => ({ ...current, [task.id]: event.target.value }))}
+                        maxLength={2000}
+                        rows={2}
+                        aria-label={`Comentario para ${task.title}`}
+                        className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={!taskComments[task.id]?.trim() || commentMutation.isPending}
+                      onClick={() => void run(() => commentMutation.mutateAsync({ id: task.id, version: task.version, comment: taskComments[task.id].trim() }))}
+                      className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50"
+                    >
+                      {commentMutation.isPending ? "Guardando…" : "Agregar comentario"}
+                    </button>
+                  </div>
+                )}
+                {!canManage && task.status === "pending_review" && (
+                  <p className="mt-2 text-xs text-slate-500">La gerencia revisa y cierra este pendiente.</p>
+                )}
                 {historyTaskId === task.id && (
                   <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
                     {historyQuery.isLoading ? <p role="status">Cargando historial…</p> : historyQuery.isError ? (

@@ -548,6 +548,44 @@ test("concurrent RBAC reads reuse one short read-only grant without weakening wr
   assert.equal(requests.some(({ method, ticket }) => method !== "GET" && ticket === "permission-admin-read-grant"), false);
 });
 
+test("concurrent RBAC reads share one canceled prompt and do not replay the protected requests", async () => {
+  const requests = [];
+  const client = loadClient(async (url) => {
+    const path = new URL(String(url)).pathname;
+    requests.push(path);
+    return permissionAdminReadStepUpRequired(path);
+  }).client;
+  client.setClientSession(session);
+
+  const prompt = deferred();
+  let promptCount = 0;
+  client.setActionStepUpHandler(() => {
+    promptCount += 1;
+    return prompt.promise;
+  });
+
+  const readPaths = [
+    "/api/permissions/catalog",
+    "/api/permissions/matrix",
+    "/api/permissions/role-overrides",
+    "/api/permissions/visibility-windows",
+    "/api/permissions/user-overrides/20"
+  ];
+  const pendingReads = readPaths.map((path) => client.apiFetch(path));
+  await waitFor(() => promptCount === 1);
+  await tick();
+  prompt.resolve(null);
+
+  const results = await Promise.allSettled(pendingReads);
+  assert.equal(promptCount, 1);
+  assert.equal(requests.length, readPaths.length);
+  assert.deepEqual(results.map((result) => result.status), readPaths.map(() => "rejected"));
+  for (const result of results) {
+    assert.equal(result.status, "rejected");
+    assert.equal(result.reason.status, 428);
+  }
+});
+
 test("an RBAC read grant is cleared when the active account or hotel changes", async (t) => {
   const nextSessions = [
     { name: "account change", session: { ...session, userId: "staff@example.test", accessToken: "staff-token" } },

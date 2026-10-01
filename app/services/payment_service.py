@@ -30,6 +30,11 @@ from app.services.financial_ledger import (
     paid_amount_with_legacy_fallback,
     reconciled_paid_amounts_by_reservation,
 )
+from app.services.company_night_charge_service import (
+    CompanyNightChargeError,
+    prepare_company_night_charge_payment,
+    record_company_night_charge_payment_allocations,
+)
 
 
 class PaymentError(Exception):
@@ -56,6 +61,9 @@ def _same_idempotent_payment(existing: Transaction, request: PaymentRequest, cur
         and existing.manual_reference == request.manual_reference
         and existing.refund_of_transaction_id == request.refund_of_transaction_id
         and existing.refund_reason == request.refund_reason
+        and bool(existing.collected_before) == request.collected_before
+        and existing.collected_on == request.collected_on
+        and existing.prior_receipt_note == request.prior_receipt_note
     )
 
 
@@ -297,6 +305,20 @@ def process_payment(
 
     is_refund = request.transaction_type == TransactionTypeEnum.REFUND
     transaction_currency = _resolve_payment_currency(reservation, request.currency)
+    allocation_plan = None
+    if not is_refund:
+        try:
+            allocation_plan = prepare_company_night_charge_payment(
+                db,
+                hotel_id=resolved_hotel_id,
+                reservation_id=request.reservation_id,
+                amount=Decimal(str(request.amount)),
+                charge_ids=request.company_night_charge_ids,
+                idempotency_key=idempotency_key,
+            )
+        except CompanyNightChargeError as exc:
+            raise PaymentError(str(exc)) from exc
+
     if idempotency_key is not None:
         existing_by_key = (
             db.query(Transaction)
@@ -387,7 +409,7 @@ def process_payment(
 
     # 2. Validate payment method
     validate_payment_method_enabled(db, request.payment_method, resolved_hotel_id)
-    if apply_surcharge and not is_refund:
+    if apply_surcharge and not is_refund and not request.collected_before:
         surcharge_info = calculate_payment_surcharge(
             db,
             hotel_id=resolved_hotel_id,
@@ -420,7 +442,7 @@ def process_payment(
                 f"Payment amount ${request.amount:.2f} exceeds balance due ${balance:.2f}"
             )
 
-    if request.payment_method == PaymentMethodEnum.CASH:
+    if request.payment_method == PaymentMethodEnum.CASH and not request.collected_before:
         from app.services import cash_register_service
 
         try:
@@ -476,6 +498,9 @@ def process_payment(
         manual_reference=request.manual_reference,
         refund_of_transaction_id=request.refund_of_transaction_id,
         refund_reason=request.refund_reason,
+        collected_before=request.collected_before,
+        collected_on=request.collected_on,
+        prior_receipt_note=request.prior_receipt_note,
         gateway_response=raw_response,
         description=request.description,
         processed_at=processed_at,
@@ -521,6 +546,17 @@ def process_payment(
         db.add(transaction)
         db.flush()
 
+    if allocation_plan is not None:
+        try:
+            record_company_night_charge_payment_allocations(
+                db,
+                hotel_id=resolved_hotel_id,
+                transaction=transaction,
+                allocation_plan=allocation_plan,
+            )
+        except CompanyNightChargeError as exc:
+            raise PaymentError(str(exc)) from exc
+
     # 5. If completed, update reservation financial state
     if tx_status == TransactionStatusEnum.COMPLETED:
         _update_reservation_financials(
@@ -536,7 +572,7 @@ def process_payment(
         # 6. Physical cash must land in an explicitly opened caja so the
         #    arqueo reconciles. The cash-register service rejects the payment
         #    if there is no open session.
-        if request.payment_method == PaymentMethodEnum.CASH:
+        if request.payment_method == PaymentMethodEnum.CASH and not request.collected_before:
             from app.services import cash_register_service
 
             try:
@@ -615,11 +651,11 @@ def _update_reservation_financials(
     - If fully paid (balance_due == 0) → fully_paid
     """
     reservation.amount_paid = paid_amount_with_legacy_fallback(db, hotel_id, reservation)
-    _sync_reservation_financial_status(db, reservation, hotel_id=hotel_id, reason_code=tx_type.value)
+    sync_reservation_financial_status(db, reservation, hotel_id=hotel_id, reason_code=tx_type.value)
     db.flush()
 
 
-def _sync_reservation_financial_status(
+def sync_reservation_financial_status(
     db: Session,
     reservation: Reservation,
     *,
@@ -636,7 +672,15 @@ def _sync_reservation_financial_status(
 
     _TOL = Decimal("0.01")
     d_paid = Decimal(str(reservation.amount_paid or 0))
-    d_total = Decimal(str(reservation.total_amount or 0))
+    adjustment_total = (
+        db.query(func.coalesce(func.sum(BillingAdjustment.total_amount), 0))
+        .filter(
+            BillingAdjustment.hotel_id == hotel_id,
+            BillingAdjustment.reservation_id == reservation.id,
+        )
+        .scalar()
+    )
+    d_total = Decimal(str(reservation.total_amount or 0)) + Decimal(str(adjustment_total or 0))
     d_deposit = Decimal(str(reservation.deposit_amount or 0))
     if d_paid >= d_total - _TOL:
         target_status = ReservationStatusEnum.FULLY_PAID
@@ -763,6 +807,9 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
                 "status": t.status.value,
                 "manual_reference": t.manual_reference,
                 "refund_of_transaction_id": t.refund_of_transaction_id,
+                "collected_before": bool(t.collected_before),
+                "collected_on": t.collected_on,
+                "prior_receipt_note": t.prior_receipt_note,
                 "created_at": str(t.created_at),
             }
             for t in transactions

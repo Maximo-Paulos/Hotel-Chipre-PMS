@@ -48,6 +48,12 @@ export const listGuestRestrictions = (guestId: number, activeOnly = true, sessio
     { session }
   );
 
+export const listActiveGuestRestrictionGuestIds = (guestIds: number[], session?: SessionLike) => {
+  const params = new URLSearchParams();
+  guestIds.forEach((guestId) => params.append("guest_ids", String(guestId)));
+  return apiFetch<number[]>(`/api/guests/active-restrictions/summary?${params.toString()}`, { session });
+};
+
 export const createGuestRestriction = (
   guestId: number,
   payload: GuestRestrictionCreatePayload,

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.company import Company
 from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
 from app.schemas.analytics_api import CompanyCreate, CompanyRead, CompanyUpdate
 from app.services.analytics_service import (
@@ -15,10 +17,42 @@ from app.services.analytics_service import (
     reactivate_company,
     update_company,
 )
-from app.services.permission_service import PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW
+from app.services.permission_service import (
+    PERMISSION_COMPANY_MANAGE,
+    PERMISSION_COMPANY_VIEW,
+    PERMISSION_RESERVATION_READ,
+)
 
 
 router = APIRouter(prefix="/api/companies", tags=["Companies"])
+
+
+class CompanyOptionRead(BaseModel):
+    id: int
+    display_name: str
+    legal_name: str
+    is_active: bool
+
+
+@router.get("/options", response_model=list[CompanyOptionRead])
+def get_company_options(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
+):
+    """Return only the names needed to link a reservation to a company."""
+    require_analytics_plan(db, context.hotel_id, "pro")
+    return [
+        {
+            "id": row.id,
+            "display_name": row.display_name,
+            "legal_name": row.legal_name,
+            "is_active": row.is_active,
+        }
+        for row in db.query(Company)
+        .filter(Company.hotel_id == context.hotel_id)
+        .order_by(Company.is_active.desc(), Company.display_name.asc(), Company.id.asc())
+        .all()
+    ]
 
 
 @router.get("", response_model=list[CompanyRead])

@@ -29,6 +29,8 @@ export type Reservation = {
   room_number?: string | null;
   category_id: number;
   category_name?: string | null;
+  company_id?: number | null;
+  group_id?: number | null;
   check_in_date: string;
   check_out_date: string;
   actual_check_in?: string | null;
@@ -63,9 +65,12 @@ export type Reservation = {
   requires_manual_review?: boolean;
   payment_collection_model?: string;
   settlement_status?: string;
+  manual_rate_reason?: string | null;
   notes?: string | null;
   arrival_time_hint?: string | null;
   reservation_comment?: string | null;
+  company_extension_request_pending?: boolean;
+  company_extension_request_note?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   version?: number;
@@ -225,6 +230,7 @@ export type ReservationFilters = {
   search?: string;
   skip?: number;
   limit?: number;
+  companyId?: number;
   /**
    * "recent" (created_at DESC, newest first) is the backend default -- used
    * for dashboards / "recent activity" views. "check_in" preserves the
@@ -248,6 +254,7 @@ export type ReservationPayload = {
   arrival_time_hint?: string | null;
   reservation_comment?: string | null;
   source?: ReservationSource;
+  company_id?: number | null;
   external_id?: string | null;
   pricing_payment_method?: string | null;
   deposit_amount?: number | null;
@@ -261,6 +268,8 @@ export type ReservationPayload = {
   // stays null otherwise -- show it only when present).
   total_amount?: number | null;
   target_currency?: string | null;
+  manual_rate_reason?: string | null;
+  paid_total_change_reason?: string | null;
   // Authorizes bypassing an active guest restriction after the operator
   // confirms an override reason -- see RestrictionOverrideModal. Only
   // actors with reservation:prohibition_override can use it; others get a
@@ -294,6 +303,8 @@ export type ReservationQuote = {
   total_amount: number;
   deposit_amount: number;
   currency_code: string;
+  manual_rate_min_adjustment_pct?: string | number | null;
+  manual_rate_max_adjustment_pct?: string | number | null;
   pricing_payment_method?: string | null;
   pricing_revision: string;
   breakdown: Array<{
@@ -320,7 +331,39 @@ export type ReservationQuoteParams = {
   // active restriction (see app/api/bookings.py price_quote) -- the quote
   // endpoint never accepts an override, this is a preview-time warning only.
   guest_id?: number | null;
+  company_id?: number | null;
 };
+
+export type ReservationGroupSummary = {
+  id: number;
+  hotel_id: number;
+  guest_id: number;
+  guest_name: string;
+  company_id?: number | null;
+  company_name?: string | null;
+  check_in_date: string;
+  check_out_date: string;
+  notes?: string | null;
+  reservation_count: number;
+  room_count: number;
+  reservation_ids: number[];
+  reservation_codes: string[];
+  total_amount: number;
+  amount_paid: number;
+  balance_due: number;
+  currency_code: string;
+  created_at: string;
+};
+
+export const listReservationGroups = (session?: SessionLike) =>
+  apiFetch<ReservationGroupSummary[]>("/api/reservation-groups?limit=50", { session });
+
+export const createReservationGroup = (reservations: ReservationPayload[], session?: SessionLike) =>
+  apiFetch<ReservationGroupSummary>("/api/reservation-groups", {
+    method: "POST",
+    data: { reservations },
+    session
+  });
 
 export type ReservationUpdatePayload = Partial<ReservationPayload> & {
   status?: ReservationStatus;
@@ -374,6 +417,7 @@ const buildQueryString = (filters: ReservationFilters = {}) => {
   if (typeof filters.limit === "number") params.set("limit", String(filters.limit));
   if (filters.order) params.set("order", filters.order);
   if (filters.upcomingOnly) params.set("upcoming_only", "true");
+  if (typeof filters.companyId === "number") params.set("company_id", String(filters.companyId));
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 };
@@ -436,6 +480,7 @@ export const getReservationQuote = (params: ReservationQuoteParams, session?: Se
   if (params.pricing_payment_method) query.set("pricing_payment_method", params.pricing_payment_method);
   if (params.occupancy && params.occupancy > 0) query.set("occupancy", String(params.occupancy));
   if (params.guest_id) query.set("guest_id", String(params.guest_id));
+  if (params.company_id) query.set("company_id", String(params.company_id));
   return apiFetch<ReservationQuote>(`/api/bookings/price-quote?${query.toString()}`, { session });
 };
 
@@ -516,6 +561,22 @@ export const clearReservationManualReview = (
     data: payload,
     session
   });
+
+export type CompanyExtensionRequestPayload = {
+  pending: boolean;
+  note?: string | null;
+  client_version: number;
+};
+
+export const updateCompanyExtensionRequest = (
+  id: number,
+  payload: CompanyExtensionRequestPayload,
+  session?: SessionLike
+) => apiFetch<Reservation>(`/api/reservations/${id}/extension-request`, {
+  method: "PUT",
+  data: payload,
+  session
+});
 
 // ── B2: occupancy grid (planilla de ocupación) ──────────────────────────────
 

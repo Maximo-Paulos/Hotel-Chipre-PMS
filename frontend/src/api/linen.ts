@@ -52,6 +52,7 @@ export type LinenMovement = {
   reason?: string | null;
   created_by_user_id?: number | null;
   created_at: string;
+  transfer_reference?: string | null;
 };
 
 export type CurrentLinenStock = {
@@ -65,6 +66,45 @@ export type CurrentLinenStock = {
 export type LinenSummaryEntry = {
   item: LinenItem;
   current_quantity: DecimalValue;
+  min_quantity?: DecimalValue | null;
+  location_balances: Array<{
+    location_id: number;
+    current_quantity: DecimalValue;
+    has_movements: boolean;
+  }>;
+};
+
+export type LinenOpeningCountLine = {
+  linen_item_id: number;
+  location_id: number;
+  quantity: DecimalValue;
+};
+
+export type LinenOpeningCountBatch = {
+  counts: LinenOpeningCountLine[];
+  reason: string;
+};
+
+export type LinenTransferCreate = {
+  linen_item_id: number;
+  source_location_id: number;
+  destination_location_id: number;
+  quantity: DecimalValue;
+  reason: string;
+};
+
+export type LinenTransferResult = {
+  transfer_reference: string;
+  outbound: LinenMovement;
+  inbound: LinenMovement;
+};
+
+export type LinenParLevel = {
+  id: number;
+  hotel_id: number;
+  item_id: number;
+  location_id: number;
+  min_quantity: DecimalValue;
 };
 
 export const listLinenItems = (session?: SessionLike) =>
@@ -85,6 +125,21 @@ export const createLinenLocation = (payload: LinenLocationCreate, session?: Sess
 export const createLinenMovement = (payload: LinenMovementCreate, session?: SessionLike) =>
   apiFetch<LinenMovement>("/api/laundry/movements", { method: "POST", data: payload, session });
 
+export const createLinenOpeningCounts = (payload: LinenOpeningCountBatch, session?: SessionLike) =>
+  apiFetch<LinenMovement[]>("/api/laundry/opening-counts", { method: "POST", data: payload, session });
+
+export const createLinenTransfer = (
+  payload: LinenTransferCreate,
+  { idempotencyKey }: { idempotencyKey: string },
+  session?: SessionLike
+) =>
+  apiFetch<LinenTransferResult>("/api/laundry/transfers", {
+    method: "POST",
+    data: payload,
+    headers: { "Idempotency-Key": idempotencyKey },
+    session
+  });
+
 export const getCurrentLinenStock = (
   itemId: number,
   { locationId }: { locationId?: number } = {},
@@ -98,3 +153,13 @@ export const getLinenSummary = ({ locationId }: { locationId?: number } = {}, se
   const query = locationId ? `?location_id=${locationId}` : "";
   return apiFetch<LinenSummaryEntry[]>(`/api/laundry/items/summary${query}`, { session });
 };
+
+export const setLinenLocationMinimum = (
+  itemId: number,
+  locationId: number,
+  min_quantity: DecimalValue,
+  session?: SessionLike
+) => apiFetch<LinenParLevel>(
+  `/api/laundry/items/${itemId}/locations/${locationId}/minimum`,
+  { method: "PUT", data: { min_quantity }, session }
+);

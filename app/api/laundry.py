@@ -1,7 +1,6 @@
 """
 FastAPI routes for laundry operations.
 """
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -10,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
+from app.schemas.datetime_types import UTCDateTime
 from app.services.permission_service import PERMISSION_LAUNDRY_MOVE, PERMISSION_LAUNDRY_READ
 from app.services.laundry_service import (
     LaundryError,
@@ -51,11 +51,11 @@ class LaundryBatchRead(BaseModel):
     hotel_id: int
     batch_code: str
     status: str
-    sent_at: Optional[datetime] = None
-    received_at: Optional[datetime] = None
+    sent_at: Optional[UTCDateTime] = None
+    received_at: Optional[UTCDateTime] = None
     notes: Optional[str] = None
     created_by_user_id: Optional[int] = None
-    created_at: datetime
+    created_at: UTCDateTime
     items: list[LaundryItemRead] = Field(default_factory=list)
 
 

@@ -137,8 +137,8 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   expect(roomValue).toBeTruthy();
   await roomSelect.selectOption(roomValue!);
 
-  const checkIn = reservationForm.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]');
-  const checkOut = reservationForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]');
+  const checkIn = reservationForm.getByLabel("Check-in", { exact: true });
+  const checkOut = reservationForm.getByLabel("Check-out", { exact: true });
   await checkIn.fill(localIsoDate(0));
   await checkOut.fill(localIsoDate(1));
   await reservationForm.getByPlaceholder("Usar configuración del hotel").fill("1000");
@@ -250,10 +250,10 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await closeCashForm.getByRole("button", { name: "Cerrar caja", exact: true }).click();
   await expect(page.getByText("Caja cerrada.", { exact: true })).toBeVisible();
   await expect(page.getByText(/Caja sucesora: .* abierta con saldo \$0/)).toBeVisible();
-  await expect(page.getByText(/Custodia: pendiente de recepción del dueño\./)).toBeVisible();
+  await expect(page.getByText(/Custodia: pendiente de recepción del dueño o la codueña\./)).toBeVisible();
   await page.getByRole("button", { name: "Confirmar recepción de custodia", exact: true }).click();
   const custodyTotpStep = await completeStepUpPrompt(page, ownerSession.lastTotpStep, ownerSession.auth.user.email);
-  await expect(page.getByText("Recepción de custodia confirmada.", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Recepción confirmada\. Fondo de cambio para la sucesora:/)).toBeVisible();
   expect(custodyTotpStep).toBeGreaterThan(ownerSession.lastTotpStep);
   await expect(page.getByText(/Custodia: recepción confirmada\./)).toBeVisible();
 });
@@ -412,8 +412,8 @@ test("owner manages a room move and no-show from the reservation ficha", async (
   const roomValue = await roomOption.getAttribute("value");
   expect(roomValue).toBeTruthy();
   await roomSelect.selectOption(roomValue!);
-  await reservationForm.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(localIsoDate(2));
-  await reservationForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(localIsoDate(4));
+  await reservationForm.getByLabel("Check-in", { exact: true }).fill(localIsoDate(2));
+  await reservationForm.getByLabel("Check-out", { exact: true }).fill(localIsoDate(4));
   await expect(reservationForm.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
   await reservationForm.getByRole("button", { name: "Crear", exact: true }).click();
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();

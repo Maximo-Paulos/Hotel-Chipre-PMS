@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -6,8 +6,11 @@ import pytest
 from app.models.cash_register import CashCloseReport, CashMovementTypeEnum, CashSessionStatusEnum
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.hotel_membership import HotelMembership
+from app.models.notification import NotificationChannelEnum, NotificationOutbox
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.models.user import User
 from app.schemas.transaction import PaymentRequest
@@ -16,6 +19,8 @@ from app.services.cash_register_service import (
     add_movement,
     approve_close_difference,
     close_session,
+    confirm_cash_custody,
+    enqueue_pending_difference_notification,
     open_session,
 )
 from app.services.payment_service import process_payment
@@ -254,7 +259,7 @@ def test_close_with_positive_difference_also_requires_approval(db):
     assert session.status == CashSessionStatusEnum.CLOSED
 
 
-def test_successor_cash_session_starts_even_with_pending_difference(db):
+def test_successor_cash_session_starts_at_zero_when_no_carry_over_is_requested(db):
     _hotel(db, 1)
     _user(db, 10)
     session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100.00"))
@@ -272,6 +277,56 @@ def test_successor_cash_session_starts_even_with_pending_difference(db):
 
     approve_close_difference(db, hotel_id=1, report_id=report.id, approved_by_user_id=10)
     assert session.status == CashSessionStatusEnum.CLOSED
+
+
+def test_cash_difference_approval_is_idempotent_and_keeps_first_approver_audited(db):
+    _hotel(db, 1)
+    _user(db, 10)
+    _user(db, 20)
+    session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100.00"))
+    report = close_session(
+        db,
+        hotel_id=1,
+        session_id=session.id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("99.00"),
+    )
+
+    approve_close_difference(db, hotel_id=1, report_id=report.id, approved_by_user_id=10)
+    approve_close_difference(db, hotel_id=1, report_id=report.id, approved_by_user_id=20)
+
+    assert report.difference_approved is True
+    assert report.approved_by_user_id == 10
+    audit_rows = (
+        db.query(SecurityAuditLog)
+        .filter_by(hotel_id=1, action="cash.close_difference.approved", resource_id=str(report.id))
+        .all()
+    )
+    assert len(audit_rows) == 1
+    assert audit_rows[0].user_id == 10
+
+
+def test_pending_difference_notification_targets_only_owner_roles_in_app(db):
+    _hotel(db, 1)
+    for user_id, role in ((10, "owner"), (11, "co_owner"), (12, "manager")):
+        _user(db, user_id)
+        db.add(HotelMembership(hotel_id=1, user_id=user_id, role=role, status="active"))
+    db.flush()
+    session = open_session(db, hotel_id=1, opened_by_user_id=12, opening_balance=Decimal("100.00"))
+    report = close_session(
+        db,
+        hotel_id=1,
+        session_id=session.id,
+        closed_by_user_id=12,
+        counted_balance=Decimal("99.00"),
+    )
+
+    enqueue_pending_difference_notification(db, report)
+
+    rows = db.query(NotificationOutbox).filter_by(hotel_id=1).all()
+    assert {row.recipient_user_id for row in rows} == {10, 11}
+    assert {row.channel for row in rows} == {NotificationChannelEnum.IN_APP}
+    assert all(row.dedupe_key == f"cash-close-difference-pending:{report.id}" for row in rows)
 
 
 def test_cross_hotel_isolation(db):
@@ -463,26 +518,107 @@ def test_non_cash_payments_never_increase_physical_cash_in_the_open_session(db):
     assert len(list_movements(db, hotel_id=1, session_id=session.id)) == 1
 
 
-def test_close_creates_zero_balance_successor_and_custody_handoff(db):
+def test_close_counts_full_cash_then_records_successor_float_as_a_separate_action(db):
     _hotel(db, 1)
     _user(db, 10)
-    session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100.00"))
+    session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100000.00"))
 
     report = close_session(
         db,
         hotel_id=1,
         session_id=session.id,
         closed_by_user_id=10,
-        counted_balance=Decimal("100.00"),
-        received_by_user_id=10,
+        counted_balance=Decimal("100000.00"),
     )
 
     assert report.successor_session_id is not None
     assert report.successor_session.status == CashSessionStatusEnum.OPEN
+    assert report.declared_balance == Decimal("100000.00")
     assert report.successor_session.opening_balance == Decimal("0.00")
+    assert report.custody_handoff.delivered_amount == Decimal("100000.00")
     assert report.custody_handoff.delivered_by_user_id == 10
+
+    confirmed = confirm_cash_custody(
+        db,
+        hotel_id=1,
+        report_id=report.id,
+        received_by_user_id=10,
+        successor_float_amount=Decimal("10000.00"),
+    )
+
+    assert confirmed.successor_session.opening_balance == Decimal("10000.00")
+    assert confirmed.successor_opening_balance == Decimal("10000.00")
+    assert confirmed.successor_float_declared_amount == Decimal("10000.00")
+    assert confirmed.successor_float_declared_by_user_id == 10
+    assert confirmed.successor_float_declared_at is not None
+    assert confirmed.custody_handoff.delivered_amount == Decimal("100000.00")
     assert report.custody_handoff.received_by_user_id == 10
     assert report.custody_handoff.received_at is not None
+    audit_actions = {
+        row.action
+        for row in db.query(SecurityAuditLog).filter_by(hotel_id=1, resource_id=str(report.id)).all()
+    }
+    assert "cash.custody.received" in audit_actions
+    assert "cash.successor_float.declared" in audit_actions
+    confirm_cash_custody(
+        db,
+        hotel_id=1,
+        report_id=report.id,
+        received_by_user_id=10,
+        successor_float_amount=Decimal("10000.00"),
+    )
+    assert db.query(SecurityAuditLog).filter_by(
+        hotel_id=1,
+        action="cash.successor_float.declared",
+        resource_id=str(report.id),
+    ).count() == 1
+    with pytest.raises(CashRegisterError, match="different successor float"):
+        confirm_cash_custody(
+            db,
+            hotel_id=1,
+            report_id=report.id,
+            received_by_user_id=10,
+            successor_float_amount=Decimal("9000.00"),
+        )
+
+
+def test_cash_custody_cannot_rewrite_float_after_successor_is_closed(db):
+    _hotel(db, 1)
+    _user(db, 10)
+    original = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100.00"))
+    report = close_session(
+        db,
+        hotel_id=1,
+        session_id=original.id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("100.00"),
+    )
+    successor = report.successor_session
+
+    close_session(
+        db,
+        hotel_id=1,
+        session_id=successor.id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("0.00"),
+    )
+    successor_close_report = db.query(CashCloseReport).filter_by(session_id=successor.id).one()
+
+    with pytest.raises(CashRegisterError, match="[Ss]uccessor cash session is not open"):
+        confirm_cash_custody(
+            db,
+            hotel_id=1,
+            report_id=report.id,
+            received_by_user_id=10,
+            successor_float_amount=Decimal("25.00"),
+        )
+
+    db.refresh(successor)
+    db.refresh(report.custody_handoff)
+    assert successor.opening_balance == Decimal("0.00")
+    assert successor_close_report.expected_balance == Decimal("0.00")
+    assert report.successor_float_declared_amount is None
+    assert report.custody_handoff.status.value == "pending"
 
 
 def test_session_summary_expected_balance_matches_arqueo(db):
@@ -582,3 +718,110 @@ def test_cash_payment_with_surcharge_posts_gross_amount_to_caja(db):
     # Caja holds the gross cash received (100 + 5% surcharge).
     assert movements[0].amount == Decimal("105.00")
     assert "recargo" in (movements[0].description or "")
+
+
+def test_twenty_seven_prior_receipts_do_not_inflate_the_open_cash_session(db):
+    from app.models.cash_register import CashMovement
+    from app.services.cash_daily_summary_service import get_daily_summary
+    from app.services.payment_service import PaymentError
+    from app.services.cash_register_service import get_session_summary
+    from app.services.timezones import hotel_today
+
+    _hotel(db, 1)
+    _user(db, 10)
+    session = open_session(
+        db,
+        hotel_id=1,
+        opened_by_user_id=10,
+        opening_balance=Decimal("50000.00"),
+    )
+    collected_on = hotel_today(db, 1) - timedelta(days=1)
+    amounts = [Decimal("50000.00")] * 26 + [Decimal("410000.00")]
+    category = RoomCategory(
+        hotel_id=1,
+        name="Prior receipt room",
+        code="PRIOR-RECEIPTS",
+        base_price_per_night=Decimal("100.00"),
+        max_occupancy=2,
+    )
+    db.add(category)
+    db.flush()
+
+    for index, amount in enumerate(amounts):
+        guest = Guest(first_name="Prior", last_name=f"Receipt {index:02d}", hotel_id=1)
+        db.add(guest)
+        db.flush()
+        reservation = Reservation(
+            hotel_id=1,
+            confirmation_code=f"PRIOR-RECEIPT-{index:02d}",
+            guest_id=guest.id,
+            category_id=category.id,
+            check_in_date=collected_on,
+            check_out_date=collected_on + timedelta(days=1),
+            total_amount=Decimal("1000000.00"),
+            deposit_amount=Decimal("300000.00"),
+            currency_code="ARS",
+            status=ReservationStatusEnum.PENDING,
+        )
+        db.add(reservation)
+        db.flush()
+        request = PaymentRequest(
+            reservation_id=reservation.id,
+            amount=float(amount),
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            collected_before=True,
+            collected_on=collected_on,
+            prior_receipt_note=f"Seña del cuaderno {index + 1}",
+        )
+        key = f"prior-receipt-{index:02d}"
+        transaction = process_payment(
+            db,
+            request,
+            hotel_id=1,
+            actor_user_id=10,
+            idempotency_key=key,
+        )
+        if index == 0:
+            retry = process_payment(
+                db,
+                request,
+                hotel_id=1,
+                actor_user_id=10,
+                idempotency_key=key,
+            )
+            assert retry.id == transaction.id
+            mismatched_retry = request.model_copy(update={"prior_receipt_note": "Motivo distinto"})
+            with pytest.raises(PaymentError, match="different payment request"):
+                process_payment(
+                    db,
+                    mismatched_retry,
+                    hotel_id=1,
+                    actor_user_id=10,
+                    idempotency_key=key,
+                )
+        db.flush()
+
+    assert db.query(Transaction).filter(Transaction.hotel_id == 1).count() == 27
+    assert db.query(CashMovement).filter(CashMovement.hotel_id == 1).count() == 0
+
+    summary = get_daily_summary(db, hotel_id=1, report_date=hotel_today(db, 1), currency_code="ARS")
+    assert summary["gross_collected"] == Decimal("0.00")
+    assert summary["entries"] == []
+    assert summary["physical_cash"]["expected_balance"] == Decimal("50000.00")
+    assert len(summary["prior_receipts"]) == 27
+    assert summary["prior_receipt_totals"] == [
+        {"currency_code": "ARS", "amount": Decimal("1710000.00"), "transaction_count": 27}
+    ]
+
+    live = get_session_summary(db, hotel_id=1, session_id=session.id)
+    assert live["expected_balance"] == Decimal("50000.00")
+    closed = close_session(
+        db,
+        hotel_id=1,
+        session_id=session.id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("50000.00"),
+    )
+    assert closed.expected_balance == Decimal("50000.00")
+    assert closed.difference == Decimal("0.00")

@@ -8,6 +8,26 @@ import pytest
 
 from scripts import seed_e2e_backend, serve_e2e_backend
 
+LOCAL_POSTGRES_E2E_URL = (
+    "postgresql+psycopg2://hotel_chipre_e2e_local_app_runner:test-only-password"
+    "@127.0.0.1:5432/hotel_chipre_e2e_local"
+)
+LOCAL_POSTGRES_E2E_SEED_URL = (
+    "postgresql+psycopg2://hotel_chipre_e2e_local_seed_runner:test-only-seed-password"
+    "@127.0.0.1:5432/hotel_chipre_e2e_local"
+)
+
+
+def _postgres_e2e_environment(url: str = LOCAL_POSTGRES_E2E_URL) -> dict[str, str]:
+    return {
+        "APP_ENV": "test",
+        "DATABASE_URL": url,
+        seed_e2e_backend.E2E_POSTGRES_ISOLATED: "true",
+        seed_e2e_backend.E2E_POSTGRES_DATABASE_URL_EXPLICIT: url,
+        "E2E_POSTGRES_SEED_DATABASE_URL": LOCAL_POSTGRES_E2E_SEED_URL,
+        seed_e2e_backend.E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT: LOCAL_POSTGRES_E2E_SEED_URL,
+    }
+
 
 def test_seed_guard_accepts_only_explicit_test_and_repository_e2e_database():
     env = {"APP_ENV": "test", "DATABASE_URL": seed_e2e_backend.E2E_DATABASE_URL}
@@ -17,6 +37,82 @@ def test_seed_guard_accepts_only_explicit_test_and_repository_e2e_database():
     assert env["APP_ENV"] == "test"
     assert env["DATABASE_URL"] == seed_e2e_backend.E2E_DATABASE_URL
     assert normalized == seed_e2e_backend.E2E_DATABASE_URL
+
+
+def test_seed_guard_accepts_only_explicit_loopback_postgres_e2e_database():
+    env = _postgres_e2e_environment()
+
+    normalized = seed_e2e_backend.prepare_e2e_environment(env)
+
+    assert env["APP_ENV"] == "test"
+    assert env["DATABASE_URL"] == LOCAL_POSTGRES_E2E_URL
+    assert normalized == LOCAL_POSTGRES_E2E_URL
+
+
+@pytest.mark.parametrize(
+    "seed_url, explicit_seed_url",
+    [
+        ("", ""),
+        (LOCAL_POSTGRES_E2E_SEED_URL, ""),
+        (LOCAL_POSTGRES_E2E_SEED_URL, LOCAL_POSTGRES_E2E_SEED_URL + "?other=1"),
+        (
+            LOCAL_POSTGRES_E2E_SEED_URL.replace("127.0.0.1", "db.example.test"),
+            LOCAL_POSTGRES_E2E_SEED_URL.replace("127.0.0.1", "db.example.test"),
+        ),
+        (
+            LOCAL_POSTGRES_E2E_SEED_URL.replace("hotel_chipre_e2e_local", "hotel_chipre_e2e_other"),
+            LOCAL_POSTGRES_E2E_SEED_URL.replace("hotel_chipre_e2e_local", "hotel_chipre_e2e_other"),
+        ),
+        (
+            LOCAL_POSTGRES_E2E_SEED_URL.replace("_seed_runner", "_app_runner"),
+            LOCAL_POSTGRES_E2E_SEED_URL.replace("_seed_runner", "_app_runner"),
+        ),
+    ],
+)
+def test_seed_guard_requires_a_distinct_explicit_seed_role_on_the_same_local_database(seed_url, explicit_seed_url):
+    env = _postgres_e2e_environment()
+    env["E2E_POSTGRES_SEED_DATABASE_URL"] = seed_url
+    env[seed_e2e_backend.E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT] = explicit_seed_url
+
+    with pytest.raises(seed_e2e_backend.E2ESafetyError):
+        seed_e2e_backend.prepare_e2e_environment(env)
+
+
+@pytest.mark.parametrize(
+    "url, explicit_url, opt_in",
+    [
+        (LOCAL_POSTGRES_E2E_URL, LOCAL_POSTGRES_E2E_URL, "false"),
+        (LOCAL_POSTGRES_E2E_URL, "", "true"),
+        (LOCAL_POSTGRES_E2E_URL, LOCAL_POSTGRES_E2E_URL + "?different=1", "true"),
+        (
+            LOCAL_POSTGRES_E2E_URL.replace("127.0.0.1", "db.example.test"),
+            LOCAL_POSTGRES_E2E_URL.replace("127.0.0.1", "db.example.test"),
+            "true",
+        ),
+        (
+            LOCAL_POSTGRES_E2E_URL.replace("hotel_chipre_e2e_local", "postgres"),
+            LOCAL_POSTGRES_E2E_URL.replace("hotel_chipre_e2e_local", "postgres"),
+            "true",
+        ),
+        (
+            LOCAL_POSTGRES_E2E_URL.replace("_runner", "_operator"),
+            LOCAL_POSTGRES_E2E_URL.replace("_runner", "_operator"),
+            "true",
+        ),
+        (
+            LOCAL_POSTGRES_E2E_URL.replace(":5432/", ":5433/"),
+            LOCAL_POSTGRES_E2E_URL.replace(":5432/", ":5433/"),
+            "true",
+        ),
+    ],
+)
+def test_seed_guard_rejects_postgres_without_the_dedicated_local_test_boundary(url, explicit_url, opt_in):
+    env = _postgres_e2e_environment(url)
+    env[seed_e2e_backend.E2E_POSTGRES_DATABASE_URL_EXPLICIT] = explicit_url
+    env[seed_e2e_backend.E2E_POSTGRES_ISOLATED] = opt_in
+
+    with pytest.raises(seed_e2e_backend.E2ESafetyError):
+        seed_e2e_backend.prepare_e2e_environment(env)
 
 
 def test_reset_e2e_database_only_removes_the_explicit_generated_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -30,6 +126,19 @@ def test_reset_e2e_database_only_removes_the_explicit_generated_database(monkeyp
 
     assert not db_path.exists()
     assert not (tmp_path / "_e2e.db-wal").exists()
+
+
+def test_reset_e2e_database_never_deletes_postgres_target_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    db_path = tmp_path / "_e2e.db"
+    db_path.write_bytes(b"preserve while Postgres is selected")
+    monkeypatch.setattr(seed_e2e_backend, "E2E_DATABASE_PATH", db_path)
+    monkeypatch.setenv("E2E_RESET_DATABASE", "true")
+    for key, value in _postgres_e2e_environment().items():
+        monkeypatch.setenv(key, value)
+
+    seed_e2e_backend.reset_e2e_database()
+
+    assert db_path.read_bytes() == b"preserve while Postgres is selected"
 
 
 @pytest.mark.parametrize(

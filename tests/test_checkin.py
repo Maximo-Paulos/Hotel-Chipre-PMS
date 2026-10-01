@@ -5,10 +5,14 @@ Validates guest data requirements before allowing check-in.
 import pytest
 from datetime import date
 from sqlalchemy import func
+from app.models.company import Company
+from app.models.company_document import CompanyDocumentTypeEnum, CompanyDocumentStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.stored_object import StoredObject, StoredObjectStatusEnum
 from app.models.guest import Guest
 from app.schemas.reservation import ReservationCreate
 from app.services.reservation_service import create_reservation
+from app.services.company_document_service import create_document, set_signature_status
 from app.services.payment_service import process_payment
 from app.services import checkin_service
 from app.services.checkin_service import perform_checkin, perform_checkout, validate_guest_for_checkin, CheckInError
@@ -95,7 +99,7 @@ class TestCheckIn:
         )
         res = create_reservation(db, data)
         db.flush()
-        with pytest.raises(CheckInError, match="configured deposit"):
+        with pytest.raises(CheckInError, match="full reservation amount"):
             perform_checkin(db, res.id)
 
     def test_checkin_blocked_missing_documents(self, db, sample_guest_incomplete, sample_rooms, sample_categories, hotel_config):
@@ -115,6 +119,73 @@ class TestCheckIn:
         db.refresh(res)
         with pytest.raises(CheckInError, match="missing required guest data"):
             perform_checkin(db, res.id)
+
+    def test_company_checkin_requires_private_voucher_and_signed_document(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        company = Company(
+            hotel_id=hotel_config.id,
+            legal_name="Check-in Voucher SA",
+            display_name="Check-in Voucher",
+            payment_deferred=True,
+            requires_voucher=True,
+            requires_signature=True,
+        )
+        db.add(company)
+        db.flush()
+        reservation = create_reservation(
+            db,
+            ReservationCreate(
+                guest_id=sample_guest.id,
+                category_id=sample_categories[0].id,
+                room_id=sample_rooms[0].id,
+                company_id=company.id,
+                check_in_date=date(2026, 4, 1),
+                check_out_date=date(2026, 4, 3),
+            ),
+            hotel_id=hotel_config.id,
+        )
+        db.flush()
+
+        with pytest.raises(CheckInError, match="requires an uploaded reservation voucher"):
+            perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+        stored_object = StoredObject(
+            hotel_id=hotel_config.id,
+            purpose="company_voucher",
+            object_key="company-vouchers/test/checkin.pdf",
+            backend="local",
+            content_type="application/pdf",
+            byte_size=8,
+            sha256_hex="0" * 64,
+            status=StoredObjectStatusEnum.READY.value,
+        )
+        db.add(stored_object)
+        db.flush()
+        voucher = create_document(
+            db,
+            hotel_id=hotel_config.id,
+            user_id=None,
+            reservation_id=reservation.id,
+            company_id=company.id,
+            doc_type=CompanyDocumentTypeEnum.VOUCHER_PDF,
+            file_name="voucher.pdf",
+            stored_object_id=stored_object.id,
+            requires_signature=True,
+        )
+
+        with pytest.raises(CheckInError, match="requires a signed reservation document"):
+            perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+        set_signature_status(
+            db,
+            hotel_id=hotel_config.id,
+            user_id=None,
+            document_id=voucher.id,
+            status=CompanyDocumentStatusEnum.SIGNED,
+        )
+        checked_in = perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+        assert checked_in.status == ReservationStatusEnum.CHECKED_IN
 
 
 class TestCheckOut:

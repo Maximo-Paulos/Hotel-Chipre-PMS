@@ -185,6 +185,7 @@ def test_companies_schema():
         "administrative_contact",
         # v72 §3.4-3.5 commercial conditions
         "base_price",
+        "extra_person_nightly_surcharge",
         "payment_deferred",
         "deferred_days",
         "requires_voucher",

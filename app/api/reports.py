@@ -163,6 +163,7 @@ def daily_report(
         db.query(Transaction)
         .filter(
             Transaction.status == TransactionStatusEnum.COMPLETED,
+            Transaction.collected_before.is_(False),
             Transaction.created_at >= day_start,
             Transaction.created_at <= day_end,
             Transaction.hotel_id == context.hotel_id,
@@ -345,6 +346,7 @@ def revenue_report(
         db.query(Transaction)
         .filter(
             Transaction.status == TransactionStatusEnum.COMPLETED,
+            Transaction.collected_before.is_(False),
             Transaction.created_at >= day_start,
             Transaction.created_at <= day_end,
             Transaction.hotel_id == context.hotel_id,
