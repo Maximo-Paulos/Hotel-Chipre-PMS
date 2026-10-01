@@ -12,6 +12,7 @@ import {
   listShiftHandoffs,
   resolveOperationalTask,
   updateOperationalTask,
+  type OperationalTask,
   type OperationalTaskCreate,
   type OperationalTaskPriority,
   type OperationalTaskStatus,
@@ -138,6 +139,11 @@ export function OperationalTasksPage() {
     await queryClient.invalidateQueries({ queryKey: ["operational-tasks", session.hotelId] });
     if (canHandoff) await queryClient.invalidateQueries({ queryKey: ["operational-handoffs", session.hotelId] });
   };
+  const updateTaskSnapshot = (updatedTask: OperationalTask) => {
+    queryClient.setQueryData<OperationalTask[]>(["operational-tasks", session.hotelId], (current) =>
+      current?.map((task) => task.id === updatedTask.id ? updatedTask : task)
+    );
+  };
 
   const createMutation = useGuardedMutation({
     mutationFn: () => createOperationalTask(taskPayload(), session),
@@ -150,12 +156,16 @@ export function OperationalTasksPage() {
   const statusMutation = useGuardedMutation({
     mutationFn: ({ id, version, status }: { id: number; version: number; status: OperationalTaskStatus }) =>
       updateOperationalTask(id, { client_version: version, status }, session),
-    onSuccess: refresh
+    onSuccess: async (updatedTask) => {
+      updateTaskSnapshot(updatedTask);
+      await refresh();
+    }
   });
   const commentMutation = useGuardedMutation({
     mutationFn: ({ id, version, comment }: { id: number; version: number; comment: string }) =>
       updateOperationalTask(id, { client_version: version, comment }, session),
-    onSuccess: async (_task, variables) => {
+    onSuccess: async (updatedTask, variables) => {
+      updateTaskSnapshot(updatedTask);
       setTaskComments((current) => ({ ...current, [variables.id]: "" }));
       await refresh();
       setMessage("Comentario agregado al historial.");
@@ -163,7 +173,10 @@ export function OperationalTasksPage() {
   });
   const resolveMutation = useGuardedMutation({
     mutationFn: ({ id, version }: { id: number; version: number }) => resolveOperationalTask(id, version, undefined, session),
-    onSuccess: refresh
+    onSuccess: async (updatedTask) => {
+      updateTaskSnapshot(updatedTask);
+      await refresh();
+    }
   });
   const handoffMutation = useGuardedMutation({
     mutationFn: () => createShiftHandoff({

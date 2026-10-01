@@ -3236,8 +3236,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1790833626114.5876,
-    "hash": "f0560039939f5beda8d5292679719031"
+    "mtime": 1790858537055.7725,
+    "hash": "f5228cf8ade20e920f7b096d2db13e57"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1790711594135.33,
@@ -5336,8 +5336,8 @@
     "hash": "0f332ec66332f30cb4d556bd9d3a2311"
   },
   "frontend/src/views/protected/OperationalTasksPage.tsx": {
-    "mtime": 1790786445716.8088,
-    "hash": "203e72a23f34bb6a67c3b898f9e206ee"
+    "mtime": 1790860115300.0818,
+    "hash": "da62108e42963ed8ad9d862c34c92f61"
   },
   "tests/test_booking_adapter.py": {
     "mtime": 1790711594143.2722,
@@ -6100,8 +6100,8 @@
     "hash": "fae4b85eea7dc6b0961476e07482b0df"
   },
   "docs/audits/simulacion-hotel/ESTADO-D0-D1.md": {
-    "mtime": 1790854824275.6843,
-    "hash": "1352f77c06e3b459b5548a009ae7e71e"
+    "mtime": 1790860524684.853,
+    "hash": "5aeb59c1a6f8e73e13cc0a4fc7214b49"
   },
   "docs/operations/staff-invitations.md": {
     "mtime": 1790732963614.038,
