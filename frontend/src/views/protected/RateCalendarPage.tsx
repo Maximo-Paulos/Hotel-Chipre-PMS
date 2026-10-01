@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { RateCalendarGrid } from "../../components/RateCalendarGrid";
 import { RateEditorGrid, type PriceField } from "../../components/RateEditorGrid";
 import { RateEditorMobileCards } from "../../components/RateEditorMobileCards";
+import type { DailyRatePrices } from "../../api/rate-calendar";
 import { useCategories } from "../../hooks/useCategories";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import {
@@ -14,6 +15,7 @@ import {
   usePricePeriods,
   usePricePeriodMutations,
   useRateCalendar,
+  useRatePaymentMethodOptions,
   useUpsertDailyRate,
   type SingleRateInput,
   type PricePeriodInput
@@ -120,6 +122,21 @@ export function RateCalendarPage() {
 
   const calendarQuery = useRateCalendar(categoryId, dateFrom, dateTo);
   const dailyRatesQuery = useCategoryDailyRates(categoryId, dateFrom, dateTo);
+  const paymentMethodOptionsQuery = useRatePaymentMethodOptions();
+  const visiblePriceFields = useMemo<PriceField[]>(() => {
+    const enabled = paymentMethodOptionsQuery.data;
+    const fields: PriceField[] = ["price"];
+    if (enabled?.enable_cash) fields.push("price_cash");
+    if (enabled?.enable_bank_transfer) fields.push("price_transfer");
+    if (enabled?.enable_mercado_pago) fields.push("price_mercadopago");
+    if (enabled?.enable_paypal) fields.push("price_paypal");
+    if (enabled?.enable_credit_card) fields.push("price_credit_card");
+    return fields;
+  }, [paymentMethodOptionsQuery.data]);
+  const visibleBulkFieldOptions = useMemo(
+    () => BULK_FIELD_OPTIONS.filter((option) => visiblePriceFields.includes(option.value)),
+    [visiblePriceFields]
+  );
   const cellSave = useUpsertDailyRate(categoryId);
   const bulkSave = useBulkUpsertRates(categoryId);
   const bulkFieldSave = useBulkUpdateRateField(categoryId);
@@ -166,6 +183,12 @@ export function RateCalendarPage() {
     startDate: string;
     endDate: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (!visiblePriceFields.includes(bulkField)) {
+      setBulkField(visiblePriceFields[0] ?? "price");
+    }
+  }, [bulkField, visiblePriceFields]);
 
   useEffect(() => {
     setFromDate(dateFrom);
@@ -283,15 +306,19 @@ export function RateCalendarPage() {
       return;
     }
 
+    const optionalPrices: Partial<Omit<DailyRatePrices, "price">> = {};
+    if (visiblePriceFields.includes("price_cash")) optionalPrices.price_cash = toNumberOrNull(priceCash);
+    if (visiblePriceFields.includes("price_transfer")) optionalPrices.price_transfer = toNumberOrNull(priceTransfer);
+    if (visiblePriceFields.includes("price_mercadopago")) optionalPrices.price_mercadopago = toNumberOrNull(priceMercadopago);
+    if (visiblePriceFields.includes("price_paypal")) optionalPrices.price_paypal = toNumberOrNull(pricePaypal);
+    if (visiblePriceFields.includes("price_credit_card")) optionalPrices.price_credit_card = toNumberOrNull(priceCreditCard);
+
     try {
       await bulkSave.mutateAsync({
         from_date: fromDate,
         to_date: toDate,
         price,
-        price_cash: toNumberOrNull(priceCash),
-        price_transfer: toNumberOrNull(priceTransfer),
-        price_mercadopago: toNumberOrNull(priceMercadopago),
-        price_credit_card: toNumberOrNull(priceCreditCard),
+        ...optionalPrices,
         exclude_dates: excludedDates
       });
     } catch (err: unknown) {
@@ -359,6 +386,12 @@ export function RateCalendarPage() {
       {categoriesQuery.isError ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           No se pudieron cargar las categorías: {(categoriesQuery.error as Error).message}
+        </div>
+      ) : null}
+
+      {paymentMethodOptionsQuery.isError ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          No se pudieron consultar los medios de pago habilitados. Se muestra solo el precio base; los demás importes quedan sin cambios.
         </div>
       ) : null}
 
@@ -433,6 +466,7 @@ export function RateCalendarPage() {
                 onSaveCell={handleSaveCell}
                 onSelectCell={handleSelectCell}
                 selectedRange={selectedRange}
+                visibleFields={visiblePriceFields}
                 disabled={!canEditRates || cellSave.isPending}
               />
             </div>
@@ -441,6 +475,7 @@ export function RateCalendarPage() {
               <RateEditorMobileCards
                 dailyRates={dailyRatesQuery.data}
                 currencyCode={currencyCode}
+                visibleFields={visiblePriceFields}
                 onSaveCell={handleSaveCell}
                 disabled={!canEditRates || cellSave.isPending}
               />
@@ -584,7 +619,7 @@ export function RateCalendarPage() {
                         onChange={(e) => setBulkField(e.target.value as PriceField)}
                         className={`${inputClass} normal-case tracking-normal text-slate-900`}
                       >
-                        {BULK_FIELD_OPTIONS.map((option) => (
+                        {visibleBulkFieldOptions.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
                           </option>
@@ -633,26 +668,36 @@ export function RateCalendarPage() {
                       Precio base *
                       <input type="number" min={0} step="0.01" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="0.00" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
                     </label>
-                    <label className={labelClass}>
-                      Efectivo
-                      <input type="number" min={0} step="0.01" value={priceCash} onChange={(e) => setPriceCash(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
-                    </label>
-                    <label className={labelClass}>
-                      Transferencia
-                      <input type="number" min={0} step="0.01" value={priceTransfer} onChange={(e) => setPriceTransfer(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
-                    </label>
-                    <label className={labelClass}>
-                      Mercado Pago
-                      <input type="number" min={0} step="0.01" value={priceMercadopago} onChange={(e) => setPriceMercadopago(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
-                    </label>
-                    <label className={labelClass}>
-                      PayPal
-                      <input type="number" min={0} step="0.01" value={pricePaypal} onChange={(e) => setPricePaypal(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
-                    </label>
-                    <label className={labelClass}>
-                      Tarjeta de crédito
-                      <input type="number" min={0} step="0.01" value={priceCreditCard} onChange={(e) => setPriceCreditCard(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
-                    </label>
+                    {visiblePriceFields.includes("price_cash") ? (
+                      <label className={labelClass}>
+                        Efectivo
+                        <input type="number" min={0} step="0.01" value={priceCash} onChange={(e) => setPriceCash(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                      </label>
+                    ) : null}
+                    {visiblePriceFields.includes("price_transfer") ? (
+                      <label className={labelClass}>
+                        Transferencia
+                        <input type="number" min={0} step="0.01" value={priceTransfer} onChange={(e) => setPriceTransfer(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                      </label>
+                    ) : null}
+                    {visiblePriceFields.includes("price_mercadopago") ? (
+                      <label className={labelClass}>
+                        Mercado Pago
+                        <input type="number" min={0} step="0.01" value={priceMercadopago} onChange={(e) => setPriceMercadopago(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                      </label>
+                    ) : null}
+                    {visiblePriceFields.includes("price_paypal") ? (
+                      <label className={labelClass}>
+                        PayPal
+                        <input type="number" min={0} step="0.01" value={pricePaypal} onChange={(e) => setPricePaypal(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                      </label>
+                    ) : null}
+                    {visiblePriceFields.includes("price_credit_card") ? (
+                      <label className={labelClass}>
+                        Tarjeta de crédito
+                        <input type="number" min={0} step="0.01" value={priceCreditCard} onChange={(e) => setPriceCreditCard(e.target.value)} placeholder="opcional" className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                      </label>
+                    ) : null}
                   </>
                 )}
               </div>

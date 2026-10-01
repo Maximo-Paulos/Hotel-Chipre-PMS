@@ -138,7 +138,7 @@ def test_receptionist_cannot_set_manual_total_amount():
         _cleanup_client(db, engine)
 
 
-def test_co_owner_uses_bounded_manual_rate_and_needs_owner_policy():
+def test_co_owner_uses_confirmed_owner_level_manual_rate_access():
     client, db, engine = _build_client()
     try:
         hotel_id = 506
@@ -155,8 +155,10 @@ def test_co_owner_uses_bounded_manual_rate_and_needs_owner_policy():
             ),
         )
 
-        assert response.status_code == 422, response.text
-        assert "configurar el rango" in response.json()["detail"].lower()
+        assert response.status_code == 201, response.text
+        assert response.json()["total_amount"] == 170.0
+        created = db.query(Reservation).filter(Reservation.id == response.json()["id"]).one()
+        assert created.manual_rate_scope == "unbounded"
     finally:
         _cleanup_client(db, engine)
 

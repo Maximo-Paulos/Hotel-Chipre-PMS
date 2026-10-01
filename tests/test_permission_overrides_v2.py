@@ -165,6 +165,11 @@ def test_owner_and_co_owner_admin_sections_ignore_legacy_deny_overrides(db):
         PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,
         PERMISSION_SETTINGS_SECURITY_VIEW,
         PERMISSION_SETTINGS_FX_MANAGE,
+        "reservation:manual_rate",
+        "reservation:manual_rate_policy_manage",
+        "reservation:paid_total_adjust",
+        "apikey:manage",
+        "hotel_settings:security_manage",
     )
     for code in admin_access_codes:
         db.add(HotelPermissionOverride(hotel_id=1, role="co_owner", permission_code=code, allowed=False))

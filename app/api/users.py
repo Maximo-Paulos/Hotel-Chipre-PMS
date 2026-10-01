@@ -49,6 +49,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.services import audit_log_service
 from app.services.staff_invitation_service import (
     StaffAliasConflict,
+    normalize_staff_role,
     provision_staff_invitation,
     set_membership_alias,
 )
@@ -112,6 +113,28 @@ def _membership_user_info(user: User, role: str) -> UserInfo:
         role=role,
         is_verified=user.is_verified,
         is_active=user.is_active,
+    )
+
+
+def _membership_for_invitation(
+    db: Session,
+    *,
+    hotel_id: int,
+    invitation: StaffInvitation,
+) -> HotelMembership | None:
+    user_id = invitation.user_id
+    if user_id is None:
+        # Older invitations can have no user FK even though provisioning had
+        # already created a hotel membership. Resolve by email, then keep the
+        # membership lookup strictly scoped to this hotel.
+        matching_user = find_user_by_email(db, invitation.email)
+        user_id = matching_user.id if matching_user is not None else None
+    if user_id is None:
+        return None
+    return (
+        db.query(HotelMembership)
+        .filter(HotelMembership.hotel_id == hotel_id, HotelMembership.user_id == user_id)
+        .first()
     )
 
 
@@ -206,7 +229,12 @@ def invite_user(
     if not email:
         raise HTTPException(status_code=400, detail="Email requerido")
 
-    role = payload.role
+    # Accept the same built-in role labels as onboarding. Unknown values are
+    # kept intact here so hotel-scoped custom role codes still resolve below.
+    try:
+        role = normalize_staff_role(payload.role)
+    except ValueError:
+        role = payload.role.strip()
     try:
         custom_role = require_active_hotel_role(db, context.hotel_id, role, lock=True)
     except HotelRoleNotFound as exc:
@@ -486,15 +514,10 @@ def revoke_invitation(
     if invitation.status != "pending":
         raise HTTPException(status_code=409, detail="La invitación ya no está pendiente")
 
-    membership = (
-        db.query(HotelMembership)
-        .filter(
-            HotelMembership.hotel_id == context.hotel_id,
-            HotelMembership.user_id == invitation.user_id,
-        )
-        .first()
-        if invitation.user_id is not None
-        else None
+    membership = _membership_for_invitation(
+        db,
+        hotel_id=context.hotel_id,
+        invitation=invitation,
     )
     if invitation.role == "owner":
         if context.user_role != "owner":

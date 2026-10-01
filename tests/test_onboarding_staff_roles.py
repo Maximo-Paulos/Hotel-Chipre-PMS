@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -14,7 +15,8 @@ from app.models.user import User
 from app.services.security import hash_password
 
 
-def test_co_owner_cannot_create_an_owner_invitation_from_onboarding():
+@pytest.mark.parametrize("actor_role", ["owner", "co_owner"])
+def test_owner_roles_cannot_create_a_second_owner_invitation_from_onboarding(actor_role):
     engine = create_engine(
         "sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
@@ -31,11 +33,12 @@ def test_co_owner_cannot_create_an_owner_invitation_from_onboarding():
         ]
     )
     db.commit()
+    actor = owner if actor_role == "owner" else co_owner
     context = AuthContext(
         hotel_id=91,
-        user_id=co_owner.id,
-        user_email=co_owner.email,
-        user_role="co_owner",
+        user_id=actor.id,
+        user_email=actor.email,
+        user_role=actor_role,
         is_verified=True,
         permissions=set(),
     )

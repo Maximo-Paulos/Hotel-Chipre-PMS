@@ -12,6 +12,7 @@ from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.guest import Guest
+from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
 from app.models.permission import HotelPermissionOverride
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
@@ -296,6 +297,136 @@ def test_manager_capacity_permission_does_not_bypass_occupancy_validation(room_m
     assert "hasta 2" in response.json()["detail"]
     db.refresh(reservation)
     assert reservation.category_id == different_capacity.id
+
+
+def test_company_move_preserves_contracted_category_and_extra_guest_capacity_is_physical(
+    room_move_api_client, monkeypatch
+):
+    client, db, role_state = room_move_api_client
+    role_state["role"] = "manager"
+    monkeypatch.setattr("app.api.reservations._trigger_reoptimization_bg", lambda **_kwargs: None)
+    reservation, rooms, contracted_category, _same_capacity, physical_category = _seed_move_shapes(db, guests=2)
+    physical_category.max_occupancy = 3
+    company = Company(hotel_id=1, legal_name="Empresa de prueba", display_name="Empresa de prueba")
+    db.add(company)
+    db.flush()
+    reservation.company_id = company.id
+    original_total = reservation.total_amount
+    db.commit()
+
+    moved = _move(client, reservation, rooms["different_capacity"])
+    assert moved.status_code == 200, moved.text
+    db.refresh(reservation)
+    assert reservation.room_id == rooms["different_capacity"].id
+    assert reservation.category_id == contracted_category.id
+    assert reservation.total_amount == original_total
+    assert moved.json()["quoted_total_amount"] == str(original_total)
+    assert moved.json()["amount_delta"] == "0.00"
+
+    # Reception may record the arriving guests after management assigns the
+    # larger physical room, even though the company still pays the contracted
+    # double category.
+    role_state["role"] = "receptionist"
+    guests = client.post(
+        f"/api/reservations/{reservation.id}/guests",
+        json=[
+            {"first_name": "Pasajera", "last_name": "Dos"},
+            {"first_name": "Pasajero", "last_name": "Tres"},
+        ],
+    )
+    assert guests.status_code == 200, guests.text
+    db.refresh(reservation)
+    assert len(reservation.additional_guests) == 2
+    assert reservation.category_id == contracted_category.id
+
+    # The same receptionist cannot move or edit the company booking itself.
+    denied_move = _move(client, reservation, rooms["same"])
+    assert denied_move.status_code == 403, denied_move.text
+    assert "empresa" in denied_move.json()["detail"].lower()
+
+    # An authorized manager still cannot move the three actual guests back to
+    # a physical double room just because the sold category remains double.
+    role_state["role"] = "manager"
+    too_small = _move(client, reservation, rooms["same"])
+    assert too_small.status_code == 400, too_small.text
+    assert "hasta 2" in too_small.json()["detail"]
+    db.refresh(reservation)
+    assert reservation.room_id == rooms["different_capacity"].id
+    assert reservation.category_id == contracted_category.id
+
+
+def test_receptionist_cannot_move_company_reservation_even_with_same_category_move_permission(
+    room_move_api_client, monkeypatch
+):
+    client, db, role_state = room_move_api_client
+    role_state["role"] = "receptionist"
+    monkeypatch.setattr("app.api.reservations._trigger_reoptimization_bg", lambda **_kwargs: None)
+    reservation, rooms, contracted_category, *_ = _seed_move_shapes(db)
+    company = Company(hotel_id=1, legal_name="Otra empresa", display_name="Otra empresa")
+    db.add(company)
+    db.flush()
+    reservation.company_id = company.id
+    db.commit()
+
+    response = _move(client, reservation, rooms["same_category"])
+
+    assert response.status_code == 403, response.text
+    assert "empresa" in response.json()["detail"].lower()
+    db.refresh(reservation)
+    assert reservation.room_id == rooms["same"].id
+    assert reservation.category_id == contracted_category.id
+
+
+def test_receptionist_can_complete_company_guest_records_and_extension_request_but_cannot_edit_booking_terms(
+    room_move_api_client,
+):
+    client, db, role_state = room_move_api_client
+    role_state["role"] = "receptionist"
+    reservation, _rooms, _category, *_ = _seed_move_shapes(db)
+    company = Company(hotel_id=1, legal_name="Empresa edit guard", display_name="Empresa edit guard")
+    db.add(company)
+    db.flush()
+    reservation.company_id = company.id
+    db.commit()
+
+    guest_response = client.post(
+        f"/api/reservations/{reservation.id}/guests",
+        json=[{"first_name": "Guest", "last_name": "With Document", "document_number": "DOC-123"}],
+    )
+    assert guest_response.status_code == 200, guest_response.text
+
+    version = reservation.version
+    original_check_out = reservation.check_out_date
+    original_notes = reservation.notes
+    booking_edits = [
+        client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={"client_version": version, "notes": "Reception edit attempt"},
+        ),
+        client.post(
+            f"/api/reservations/{reservation.id}/date-change",
+            json={
+                "client_version": version,
+                "check_in_date": reservation.check_in_date.isoformat(),
+                "check_out_date": "2027-08-04",
+            },
+        ),
+    ]
+    assert [response.status_code for response in booking_edits] == [403, 403]
+
+    # Recording a requested extension is operational metadata. It must not
+    # change the stay dates or reservation terms.
+    extension_request = client.put(
+        f"/api/reservations/{reservation.id}/extension-request",
+        json={"pending": True, "note": "Extension requested", "client_version": version},
+    )
+    assert extension_request.status_code == 200, extension_request.text
+    db.refresh(reservation)
+    assert reservation.check_out_date == original_check_out
+    assert reservation.notes == original_notes
+    assert reservation.company_extension_request_pending is True
+    assert reservation.company_extension_request_note == "Extension requested"
+    assert reservation.version == version + 1
 
 
 def test_room_move_default_matrix_matches_the_three_tier_contract():

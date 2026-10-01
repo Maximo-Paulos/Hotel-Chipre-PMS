@@ -97,6 +97,10 @@ ADDITIVE_RLS_TABLE_CONTRACT = (
         "20261010_company_night_charge_tenant_keys.py",
         ("company_night_charges", "company_night_charge_payment_allocations"),
     ),
+    (
+        "20261015_company_nightly_rate_history.py",
+        ("company_nightly_surcharge_rates", "company_night_charge_amount_adjustments"),
+    ),
 )
 
 

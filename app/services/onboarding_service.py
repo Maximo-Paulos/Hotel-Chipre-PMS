@@ -172,6 +172,23 @@ def _current_subscription_context(db: Session, hotel_id: int) -> dict:
     }
 
 
+def _payment_method_options(db: Session, hotel_id: int) -> dict[str, bool]:
+    config = db.get(HotelConfiguration, hotel_id)
+    if config is None:
+        return {
+            "enable_cash": True,
+            "enable_bank_transfer": False,
+            "enable_debit_card": False,
+            "enable_credit_card": False,
+        }
+    return {
+        "enable_cash": bool(config.enable_cash),
+        "enable_bank_transfer": bool(config.enable_bank_transfer),
+        "enable_debit_card": bool(config.enable_debit_card),
+        "enable_credit_card": bool(config.enable_credit_card),
+    }
+
+
 def _build_finish_gates(status_payload: dict, actor_role: str | None = None) -> dict:
     missing: list[str] = []
 
@@ -304,6 +321,7 @@ def _status_from_state(db: Session, state: OnboardingState, actor_role: str | No
             state.get_payment_methods(),
             ("mercado_pago", "paypal", "stripe"),
         ),
+        "payment_method_options": _payment_method_options(db, state.hotel_id),
         "ota_channels": _summarize_provider_payload(
             state.get_ota_channels(),
             ("booking", "expedia", "despegar"),
@@ -407,12 +425,26 @@ def upsert_payment_methods(db: Session, payload: PaymentMethodsPayload, hotel_id
     state = get_or_create_state(db, hid)
     config = _get_or_create_config(db, hid)
 
+    if not any((
+        payload.enable_cash,
+        payload.enable_bank_transfer,
+        payload.enable_debit_card,
+        payload.enable_credit_card,
+        payload.mercado_pago.enabled,
+        payload.paypal.enabled,
+        payload.stripe.enabled,
+    )):
+        raise OnboardingError("Elegí al menos un medio de cobro o conectá un proveedor online")
+
     payment_payload = payload.model_dump()
     state.set_payment_methods(payment_payload)
     state.payments_set = True
 
     set_payment_methods(
         config,
+        cash=payload.enable_cash,
+        bank_transfer=payload.enable_bank_transfer,
+        debit_card=payload.enable_debit_card,
         mercado_pago=payload.mercado_pago.enabled,
         paypal=payload.paypal.enabled,
         credit_card=payload.stripe.enabled,

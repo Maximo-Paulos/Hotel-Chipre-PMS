@@ -1,13 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import {
   type Company,
   type CompanyDocumentPayload,
   type CompanyDocumentStatus,
   type CompanyDocumentType,
+  type CompanyNightlyRatesResponse,
   type CompanyPayload,
-  fetchCompanyDocumentFile
+  createCompanyNightlyRate,
+  fetchCompanyDocumentFile,
+  listCompanyNightlyRates
 } from "../../api/companies";
+import { hasValidSession } from "../../api/client";
 import {
   companyDocumentStatusLabel,
   companyDocumentTypeLabel,
@@ -16,8 +22,11 @@ import {
   useCompanyDocuments,
   useCompanyMutations
 } from "../../hooks/useCompanies";
+import { useEffectivePermissions } from "../../hooks/usePermissions";
+import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { formatHotelDateTime } from "../../utils/date";
+import { interfaceLanguageToLocale } from "../../i18n";
 import { useSession } from "../../state/session";
 
 const documentTypes: CompanyDocumentType[] = ["voucher_pdf", "signature_required", "authorization", "extension", "other"];
@@ -33,7 +42,6 @@ const emptyCompanyForm: CompanyPayload = {
   phone: "",
   administrative_contact: "",
   base_price: null,
-  extra_person_nightly_surcharge: null,
   payment_deferred: false,
   deferred_days: 0,
   requires_voucher: false,
@@ -51,21 +59,60 @@ const emptyDocumentForm: CompanyDocumentPayload = {
   notes: ""
 };
 
+function formatRateDate(value: string, locale: string): string {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(
+    new Date(Date.UTC(year, month - 1, day))
+  );
+}
+
+function formatNightlyRateAmount(amount: number | string, currencyCode: string | undefined, locale: string): string {
+  const numericAmount = Number(amount);
+  const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+  if (!currencyCode) {
+    return new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(safeAmount);
+  }
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: currencyCode,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(safeAmount);
+  } catch {
+    return `${numericAmount.toFixed(2)} ${currencyCode}`;
+  }
+}
+
 export function CompaniesPage() {
   const { session } = useSession();
+  const { t, i18n } = useTranslation("companies");
   const hotelConfigQuery = useHotelConfig();
+  const queryClient = useQueryClient();
+  const { hasPermission, hasAllPermissions, permissionsKnown } = useEffectivePermissions();
+  const canManageCompanies = permissionsKnown && hasPermission("company:manage");
+  const canManageNightlyRates = permissionsKnown && hasAllPermissions([
+    "company:manage",
+    "company:night_rate_manage"
+  ]);
+  const locale = interfaceLanguageToLocale(i18n.language);
+  const currencyCode = hotelConfigQuery.data?.default_currency;
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  const [isCreatingNewCompany, setIsCreatingNewCompany] = useState(false);
   const [companyForm, setCompanyForm] = useState<CompanyPayload>(emptyCompanyForm);
   const [documentForm, setDocumentForm] = useState<CompanyDocumentPayload>(emptyDocumentForm);
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [companyMessage, setCompanyMessage] = useState<string | null>(null);
   const [documentMessage, setDocumentMessage] = useState<string | null>(null);
+  const [nightlyRateAmount, setNightlyRateAmount] = useState("");
+  const [nightlyRateEffectiveFrom, setNightlyRateEffectiveFrom] = useState("");
+  const [nightlyRateMessage, setNightlyRateMessage] = useState<string | null>(null);
 
   const companiesQuery = useCompanies();
   const companies = useMemo(() => companiesQuery.data ?? [], [companiesQuery.data]);
   const selectedCompany = useMemo(
-    () => companies.find((company) => company.id === selectedCompanyId) ?? companies[0] ?? null,
-    [companies, selectedCompanyId]
+    () => isCreatingNewCompany ? null : companies.find((company) => company.id === selectedCompanyId) ?? companies[0] ?? null,
+    [companies, selectedCompanyId, isCreatingNewCompany]
   );
   const documentsQuery = useCompanyDocuments(selectedCompany?.id);
   const companyMutations = useCompanyMutations();
@@ -90,9 +137,6 @@ export function CompaniesPage() {
       phone: selectedCompany.phone ?? "",
       administrative_contact: selectedCompany.administrative_contact ?? "",
       base_price: selectedCompany.base_price == null ? null : Number(selectedCompany.base_price),
-      extra_person_nightly_surcharge: selectedCompany.extra_person_nightly_surcharge == null
-        ? null
-        : Number(selectedCompany.extra_person_nightly_surcharge),
       payment_deferred: selectedCompany.payment_deferred,
       deferred_days: selectedCompany.deferred_days ?? 0,
       requires_voucher: selectedCompany.requires_voucher,
@@ -126,7 +170,6 @@ export function CompaniesPage() {
     phone: companyForm.phone?.trim() || null,
     administrative_contact: companyForm.administrative_contact?.trim() || null,
     base_price: companyForm.payment_deferred ? null : companyForm.base_price,
-    extra_person_nightly_surcharge: companyForm.extra_person_nightly_surcharge,
     payment_deferred: Boolean(companyForm.payment_deferred),
     deferred_days: Number(companyForm.deferred_days ?? 0),
     requires_voucher: Boolean(companyForm.requires_voucher),
@@ -137,12 +180,14 @@ export function CompaniesPage() {
   const handleCompanySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setCompanyMessage(null);
+    if (!canManageCompanies) return;
     try {
       const payload = cleanCompanyPayload();
       const saved = selectedCompanyId
         ? await companyMutations.updateMutation.mutateAsync({ companyId: selectedCompanyId, payload })
         : await companyMutations.createMutation.mutateAsync(payload);
       setSelectedCompanyId(saved.id);
+      setIsCreatingNewCompany(false);
       setCompanyMessage("Empresa guardada.");
     } catch (error) {
       setCompanyMessage(error instanceof Error ? error.message : "No se pudo guardar la empresa.");
@@ -151,6 +196,7 @@ export function CompaniesPage() {
 
   const handleActiveToggle = async (company: Company) => {
     setCompanyMessage(null);
+    if (!canManageCompanies) return;
     try {
       if (company.is_active) {
         await companyMutations.deactivateMutation.mutateAsync(company.id);
@@ -166,7 +212,7 @@ export function CompaniesPage() {
 
   const handleDocumentSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedCompany || !documentFile) return;
+    if (!canManageCompanies || !selectedCompany || !documentFile) return;
     setDocumentMessage(null);
     try {
       const contentBase64 = await new Promise<string>((resolve, reject) => {
@@ -209,6 +255,7 @@ export function CompaniesPage() {
 
   const handleStatusChange = async (documentId: number, status: CompanyDocumentStatus) => {
     setDocumentMessage(null);
+    if (!canManageCompanies) return;
     try {
       await documentMutations.updateStatusMutation.mutateAsync({ documentId, status });
       setDocumentMessage("Estado de firma actualizado.");
@@ -219,6 +266,7 @@ export function CompaniesPage() {
 
   const handleDocumentDelete = async (documentId: number) => {
     setDocumentMessage(null);
+    if (!canManageCompanies) return;
     try {
       await documentMutations.deleteDocumentMutation.mutateAsync(documentId);
       setDocumentMessage("Documento eliminado.");
@@ -228,6 +276,56 @@ export function CompaniesPage() {
   };
 
   const documents = documentsQuery.data ?? [];
+  const nightlyRatesQuery = useQuery<CompanyNightlyRatesResponse>({
+    queryKey: ["company-nightly-rates", session.hotelId, selectedCompany?.id],
+    queryFn: () => listCompanyNightlyRates(selectedCompany!.id, session),
+    enabled: Boolean(selectedCompany?.id) && hasValidSession(session),
+    staleTime: 30 * 1000
+  });
+  const hotelToday = nightlyRatesQuery.data?.hotel_today;
+  const nightlyRates = useMemo(
+    () => [...(nightlyRatesQuery.data?.rates ?? [])].sort(
+      (left, right) => right.effective_from.localeCompare(left.effective_from) || right.id - left.id
+    ),
+    [nightlyRatesQuery.data?.rates]
+  );
+  useEffect(() => {
+    setNightlyRateAmount("");
+    setNightlyRateEffectiveFrom(hotelToday ?? "");
+    setNightlyRateMessage(null);
+  }, [selectedCompany?.id, hotelToday]);
+  const createNightlyRateMutation = useGuardedMutation({
+    mutationFn: ({ companyId, effective_from, amount }: { companyId: number; effective_from: string; amount: number }) =>
+      createCompanyNightlyRate(companyId, { effective_from, amount }, session),
+    onSuccess: async (_savedRate, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["company-nightly-rates", session.hotelId, variables.companyId] });
+    }
+  });
+  const handleNightlyRateSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setNightlyRateMessage(null);
+    if (!selectedCompany || !canManageNightlyRates) return;
+    const amount = Number(nightlyRateAmount);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setNightlyRateMessage(t("nightlyRates.invalidAmount"));
+      return;
+    }
+    if (!hotelToday || !nightlyRateEffectiveFrom || nightlyRateEffectiveFrom < hotelToday) {
+      setNightlyRateMessage(t("nightlyRates.invalidDate"));
+      return;
+    }
+    try {
+      await createNightlyRateMutation.mutateAsync({
+        companyId: selectedCompany.id,
+        effective_from: nightlyRateEffectiveFrom,
+        amount
+      });
+      setNightlyRateAmount("");
+      setNightlyRateMessage(t("nightlyRates.saved"));
+    } catch (error) {
+      setNightlyRateMessage(error instanceof Error ? error.message : t("nightlyRates.saveError"));
+    }
+  };
   const companyBusy =
     companyMutations.createMutation.isPending ||
     companyMutations.updateMutation.isPending ||
@@ -247,13 +345,18 @@ export function CompaniesPage() {
           <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Empresas</h1>
           <p className="text-sm text-slate-600">Gestion de cuentas corporativas, vouchers y documentos con firma.</p>
         </div>
-        <button
-          type="button"
-          onClick={resetForNewCompany}
-          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          Nueva empresa
-        </button>
+        {canManageCompanies ? (
+          <button
+            type="button"
+            onClick={() => {
+              resetForNewCompany();
+              setIsCreatingNewCompany(true);
+            }}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Nueva empresa
+          </button>
+        ) : null}
       </header>
 
       <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
@@ -276,7 +379,10 @@ export function CompaniesPage() {
                     <button
                       key={company.id}
                       type="button"
-                      onClick={() => setSelectedCompanyId(company.id)}
+                      onClick={() => {
+                        setIsCreatingNewCompany(false);
+                        setSelectedCompanyId(company.id);
+                      }}
                       className={`w-full px-4 py-3 text-left hover:bg-slate-50 ${isActive ? "bg-brand-50" : "bg-white"}`}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -308,7 +414,7 @@ export function CompaniesPage() {
                   {selectedCompany?.updated_at ? `Actualizada ${formatHotelDateTime(selectedCompany.updated_at, hotelConfigQuery.data?.hotel_timezone)}` : "Sin guardar"}
                 </p>
               </div>
-              {selectedCompany ? (
+              {selectedCompany && canManageCompanies ? (
                 <button
                   type="button"
                   disabled={companyBusy}
@@ -320,6 +426,13 @@ export function CompaniesPage() {
               ) : null}
             </div>
 
+            {!canManageCompanies ? (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600" role="status">
+                {t("nightlyRates.readOnly")}
+              </p>
+            ) : null}
+
+            <fieldset disabled={!canManageCompanies} className="contents">
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1 text-sm">
                 <span className="text-slate-600">Nombre legal</span>
@@ -420,18 +533,6 @@ export function CompaniesPage() {
                   />
                 </label>
               )}
-              <label className="space-y-1 text-sm">
-                <span className="text-slate-600">Adicional por huésped extra y noche</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={companyForm.extra_person_nightly_surcharge ?? ""}
-                  onChange={(event) => handleCompanyChange("extra_person_nightly_surcharge", event.target.value === "" ? null : Number(event.target.value))}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
-                <span className="block text-xs font-normal text-slate-500">Lo configura Gerencia; Recepción solo registra el cobro de las noches elegidas.</span>
-              </label>
               <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
                 <input
                   type="checkbox"
@@ -458,21 +559,123 @@ export function CompaniesPage() {
                 />
               </label>
             </div>
+            </fieldset>
 
             {companyMessage ? (
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{companyMessage}</div>
             ) : null}
 
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={companyBusy || !companyForm.legal_name.trim() || !companyForm.display_name.trim()}
-                className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-              >
-                {companyBusy ? "Guardando..." : "Guardar empresa"}
-              </button>
-            </div>
+            {canManageCompanies ? (
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={companyBusy || !companyForm.legal_name.trim() || !companyForm.display_name.trim()}
+                  className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                >
+                  {companyBusy ? "Guardando..." : "Guardar empresa"}
+                </button>
+              </div>
+            ) : null}
           </form>
+
+          {selectedCompany ? (
+            <section className="space-y-4 border-t border-slate-200 pt-4" data-testid="company-nightly-rate-panel">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t("nightlyRates.historyTitle")}</p>
+                <h3 className="text-base font-semibold text-slate-900">{t("nightlyRates.title")}</h3>
+                <p className="mt-1 text-sm text-slate-600">{t("nightlyRates.description")}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {currencyCode
+                    ? t("nightlyRates.currency", { currency: currencyCode.toUpperCase() })
+                    : t("nightlyRates.currencyUnavailable")}
+                </p>
+              </div>
+
+              {canManageNightlyRates ? (
+                <form className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end" onSubmit={handleNightlyRateSubmit}>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-slate-700">{t("nightlyRates.effectiveFrom")}</span>
+                    <input
+                      type="date"
+                      min={hotelToday ?? ""}
+                      required
+                      value={nightlyRateEffectiveFrom}
+                      onChange={(event) => setNightlyRateEffectiveFrom(event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                      data-testid="company-nightly-rate-effective-date"
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-slate-700">{t("nightlyRates.amount")}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      required
+                      value={nightlyRateAmount}
+                      onChange={(event) => setNightlyRateAmount(event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                      data-testid="company-nightly-rate-amount"
+                    />
+                    <span className="block text-xs text-slate-500">{t("nightlyRates.zeroAmountHint")}</span>
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={!hotelToday || createNightlyRateMutation.isPending || !nightlyRateAmount || !nightlyRateEffectiveFrom || nightlyRateEffectiveFrom < hotelToday}
+                    className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    data-testid="company-nightly-rate-submit"
+                  >
+                    {createNightlyRateMutation.isPending ? t("nightlyRates.saving") : t("nightlyRates.save")}
+                  </button>
+                </form>
+              ) : (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+                  {canManageCompanies ? t("nightlyRates.ratePermissionMissing") : t("nightlyRates.readOnly")}
+                </p>
+              )}
+
+              {nightlyRateMessage ? (
+                <p
+                  className={`rounded-lg border px-3 py-2 text-sm ${createNightlyRateMutation.isError ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}
+                  role={createNightlyRateMutation.isError ? "alert" : "status"}
+                  aria-live="polite"
+                >
+                  {nightlyRateMessage}
+                </p>
+              ) : null}
+
+              <div aria-live="polite">
+                {nightlyRatesQuery.isLoading ? (
+                  <p className="text-sm text-slate-500" role="status">{t("nightlyRates.loading")}</p>
+                ) : nightlyRatesQuery.isError ? (
+                  <div className="flex flex-col gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between" role="alert">
+                    <span>{t("nightlyRates.historyLoadError")}</span>
+                    <button
+                      type="button"
+                      onClick={() => void nightlyRatesQuery.refetch()}
+                      className="self-start rounded-md border border-rose-300 bg-white px-3 py-1.5 font-semibold text-rose-800 hover:bg-rose-100 sm:self-auto"
+                    >
+                      {t("nightlyRates.retry")}
+                    </button>
+                  </div>
+                ) : nightlyRates.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-sm text-slate-500">{t("nightlyRates.historyEmpty")}</p>
+                ) : (
+                  <ol className="divide-y divide-slate-200 rounded-lg border border-slate-200" data-testid="company-nightly-rate-history">
+                    {nightlyRates.map((rate) => (
+                      <li key={rate.id} className="flex flex-col gap-1 px-3 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="company-nightly-rate-row">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">{formatRateDate(rate.effective_from, locale)}</p>
+                          {Number(rate.amount) === 0 ? <p className="text-xs text-slate-500">{t("nightlyRates.zeroRate")}</p> : null}
+                        </div>
+                        <span className="text-sm font-semibold text-slate-900">{formatNightlyRateAmount(rate.amount, currencyCode, locale)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            </section>
+          ) : null}
 
           <section className="space-y-4 border-t border-slate-200 pt-4">
             <div>
@@ -506,7 +709,7 @@ export function CompaniesPage() {
                             <div className="flex flex-col gap-2 sm:w-48">
                               <select
                                 value={document.status}
-                                disabled={documentBusy}
+                                disabled={documentBusy || !canManageCompanies}
                                 onChange={(event) => handleStatusChange(document.id, event.target.value as CompanyDocumentStatus)}
                                 className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800"
                               >
@@ -516,14 +719,16 @@ export function CompaniesPage() {
                                   </option>
                                 ))}
                               </select>
-                              <button
-                                type="button"
-                                disabled={documentBusy}
-                                onClick={() => handleDocumentDelete(document.id)}
-                                className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
-                              >
-                                Eliminar
-                              </button>
+                              {canManageCompanies ? (
+                                <button
+                                  type="button"
+                                  disabled={documentBusy}
+                                  onClick={() => handleDocumentDelete(document.id)}
+                                  className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                                >
+                                  Eliminar
+                                </button>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -532,7 +737,7 @@ export function CompaniesPage() {
                   )}
                 </div>
 
-                <form className="grid gap-4 md:grid-cols-2" onSubmit={handleDocumentSubmit}>
+                {canManageCompanies ? <form className="grid gap-4 md:grid-cols-2" onSubmit={handleDocumentSubmit}>
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Reserva ID</span>
                     <input
@@ -599,7 +804,7 @@ export function CompaniesPage() {
                       {documentBusy ? "Subiendo..." : "Subir PDF privado"}
                     </button>
                   </div>
-                </form>
+                </form> : null}
               </>
             ) : (
               <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">

@@ -19,7 +19,12 @@ from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
 from app.models.hotel_role import HotelRole
 from app.models.action_step_up_ticket_use import ActionStepUpTicketUse
 from app.models.company import Company
-from app.models.company_night_charge import CompanyNightCharge, CompanyNightChargePaymentAllocation
+from app.models.company_night_charge import (
+    CompanyNightCharge,
+    CompanyNightChargeAmountAdjustment,
+    CompanyNightChargePaymentAllocation,
+    CompanyNightlySurchargeRate,
+)
 from app.models.domain_event_outbox import DomainEventOutbox
 from app.models.domain_event_retention_watermark import DomainEventRetentionWatermark
 from app.models.stored_object import StoredObject, StoredObjectStatusEnum

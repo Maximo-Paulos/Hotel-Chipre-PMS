@@ -69,14 +69,19 @@ def make_payment(
         }
         manual_confirmation = not is_refund and data.payment_method in manual_methods
         if manual_confirmation and not data.manual_reference:
+            reference_label = (
+                "número de operación bancaria"
+                if data.payment_method == PaymentMethodEnum.BANK_TRANSFER
+                else "cupón verificado del posnet"
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A verified card coupon or transfer operation reference is required.",
+                detail=f"Ingresá el {reference_label} antes de registrar el pago.",
             )
         if not manual_confirmation and data.manual_reference:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Manual references are only accepted for verified in-person payment methods.",
+                detail="El comprobante solo se acepta para cobros presenciales con verificación manual.",
             )
         transaction = process_payment(
             db,

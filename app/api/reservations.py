@@ -14,7 +14,7 @@ from app.database import get_db
 from app.models.audit_log import AuditActionEnum
 from app.models.company import Company
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.room import RoomCategory
+from app.models.room import Room, RoomCategory
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.reservation import (
     ReservationCreate,
@@ -296,6 +296,45 @@ def _project_reservation_graph(hotel_id: int, reservation: Reservation) -> None:
     )
     if reservation.company_id is not None:
         project_company_link(hotel_id, reservation.company_id, reservation.id)
+
+
+def _authorize_company_reservation_management(
+    request: Request,
+    db: Session,
+    context: AuthContext,
+    reservation: Reservation,
+) -> None:
+    """Require company management for edits to a company booking.
+
+    Reception's separate stay, guest-document and payment flows remain
+    available; this guard applies to reservation/company mutation routes.
+    """
+    if reservation.company_id is not None:
+        authorize_permission(request, db, context, PERMISSION_COMPANY_MANAGE)
+
+
+def _reservation_room_capacity_category(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation: Reservation,
+) -> RoomCategory | None:
+    """Return the assigned room's physical category, falling back if unassigned."""
+    category_id = reservation.category_id
+    if reservation.room_id is not None:
+        room = (
+            db.query(Room)
+            .filter(Room.id == reservation.room_id, Room.hotel_id == hotel_id)
+            .first()
+        )
+        if room is None:
+            return None
+        category_id = room.category_id
+    return (
+        db.query(RoomCategory)
+        .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
+        .first()
+    )
 
 
 # Accept with and without trailing slash to avoid 405 when the FE omits it.
@@ -698,10 +737,11 @@ def add_reservation_guests(
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
 
-    category = reservation.category or db.query(RoomCategory).filter(
-        RoomCategory.id == reservation.category_id,
-        RoomCategory.hotel_id == context.hotel_id,
-    ).first()
+    category = _reservation_room_capacity_category(
+        db,
+        hotel_id=context.hotel_id,
+        reservation=reservation,
+    )
     if not category:
         raise HTTPException(status_code=400, detail="Room category not found for reservation")
 
@@ -853,6 +893,8 @@ def cancel_reservation(
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(status_code=404, detail="Reservation not found")
 
+    _authorize_company_reservation_management(request, db, context, r)
+
     if r.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
@@ -963,6 +1005,7 @@ def cancel_reservation(
 def create_reservation_charge(
     reservation_id: int,
     payload: ReservationChargeCreate,
+    request: Request,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CHARGE)),
 ):
@@ -970,6 +1013,7 @@ def create_reservation_charge(
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
+    _authorize_company_reservation_management(request, db, context, reservation)
     try:
         charge = add_reservation_charge(
             db,
@@ -1047,6 +1091,7 @@ def release_no_guarantee_reservation(
 def mark_no_show(
     reservation_id: int,
     payload: ReservationNoShowRequest,
+    request: Request,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CANCEL)),
 ):
@@ -1054,6 +1099,7 @@ def mark_no_show(
     r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
+    _authorize_company_reservation_management(request, db, context, r)
     before = audit_log_service.model_snapshot(r)
     try:
         mark_reservation_no_show(
@@ -1088,6 +1134,7 @@ def mark_no_show(
 def change_dates(
     reservation_id: int,
     payload: ReservationDateChangeRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
@@ -1111,6 +1158,7 @@ def change_dates(
     r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
+    _authorize_company_reservation_management(request, db, context, r)
     before = audit_log_service.model_snapshot(r)
     try:
         result = change_reservation_dates(
@@ -1186,6 +1234,8 @@ def modify_reservation(
         and not (field == "room_id" and value is None)
         and getattr(r, field, None) != value
     }
+    if r.company_id is not None and effective_data:
+        _authorize_company_reservation_management(request, db, context, r)
     if "total_amount" in effective_data:
         if reservation_has_deferred_company_billing(
             db,
@@ -1329,6 +1379,9 @@ def extend_stay(
     if not r:
         raise HTTPException(status_code=404, detail="Reservation not found")
 
+    if r.company_id is not None:
+        require_all_permissions(PERMISSION_COMPANY_MANAGE)(request, db, context)
+
     company_uses_deferred_settlement = False
     if r.company_id is not None:
         company = (
@@ -1343,10 +1396,9 @@ def extend_stay(
     )
 
     if payload.payment_action == "company_account":
-        require_all_permissions(PERMISSION_COMPANY_MANAGE)(request, db, context)
-    else:
-        if is_deferred_company_reservation:
+        if r.company_id is None:
             require_all_permissions(PERMISSION_COMPANY_MANAGE)(request, db, context)
+    else:
         # Preserve the dependency's all-or-nothing permission and step-up
         # handling for every action that creates or requests a payment.
         require_all_permissions(
@@ -1384,6 +1436,13 @@ def extend_stay(
             payment_link=payload.payment_link,
             changed_by_user_id=context.user_id,
             notes=payload.notes,
+            can_manage_company_reservations=resolve(
+                db,
+                context.hotel_id,
+                context.user_role,
+                PERMISSION_COMPANY_MANAGE,
+                user_id=context.user_id,
+            ),
         )
         if not result.success:
             db.rollback()
@@ -1427,7 +1486,7 @@ def update_company_extension_request(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
-    """Record a pending company extension without changing the stay."""
+    """Record a pending company extension without changing the stay or terms."""
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
         raise HTTPException(

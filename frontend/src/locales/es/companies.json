@@ -1,0 +1,25 @@
+{
+  "nightlyRates": {
+    "title": "Adicional por huésped extra y noche",
+    "description": "Definí el importe y desde qué fecha rige. La nueva tarifa se aplica a cargos que se creen para esas noches; no modifica cargos ya creados.",
+    "currency": "Moneda de referencia del hotel: {{currency}}.",
+    "currencyUnavailable": "No se pudo consultar la moneda del hotel; el importe se muestra sin símbolo monetario.",
+    "effectiveFrom": "Vigente desde",
+    "amount": "Importe por huésped y noche",
+    "zeroAmountHint": "Con $0 no se genera un cargo adicional para esa vigencia.",
+    "save": "Guardar nueva tarifa",
+    "saving": "Guardando tarifa…",
+    "historyTitle": "Historial de tarifas",
+    "loading": "Cargando historial…",
+    "historyEmpty": "Todavía no hay tarifas adicionales configuradas.",
+    "historyLoadError": "No se pudo cargar el historial de tarifas.",
+    "retry": "Reintentar",
+    "saved": "Nueva tarifa registrada.",
+    "saveError": "No se pudo guardar la tarifa.",
+    "invalidAmount": "Ingresá un importe igual o mayor a cero.",
+    "invalidDate": "Elegí hoy o una fecha futura.",
+    "readOnly": "Podés consultar esta empresa. La configuración de tarifas requiere permiso de gestión de empresas y tarifas.",
+    "ratePermissionMissing": "Podés consultar el historial. Registrar tarifas requiere un permiso adicional.",
+    "zeroRate": "Sin cargo adicional"
+  }
+}

@@ -21,6 +21,12 @@ export type OnboardingStatus = {
   hotel_identity?: Record<string, unknown> | null;
   deposit_policy?: Record<string, unknown> | null;
   payment_methods?: Record<string, OnboardingProviderSetup> | null;
+  payment_method_options?: {
+    enable_cash: boolean;
+    enable_bank_transfer: boolean;
+    enable_debit_card: boolean;
+    enable_credit_card: boolean;
+  } | null;
   ota_channels?: Record<string, OnboardingProviderSetup> | null;
   subscription_choice?: Record<string, unknown> | null;
   current_subscription?: OnboardingSubscription | null;
@@ -98,6 +104,10 @@ export type StaffPayload = {
 };
 
 export type PaymentMethodsPayload = {
+  enable_cash: boolean;
+  enable_bank_transfer: boolean;
+  enable_debit_card: boolean;
+  enable_credit_card: boolean;
   mercado_pago: OnboardingProviderSetup;
   paypal: OnboardingProviderSetup;
   stripe: OnboardingProviderSetup;

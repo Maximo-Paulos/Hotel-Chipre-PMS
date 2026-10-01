@@ -5,6 +5,7 @@ import pytest
 
 from app.models.daily_rate import DailyRate
 from app.models.company import Company
+from app.models.commercial import RatePlan, SellableProduct
 from app.schemas.reservation import ReservationCreate
 from app.services.pricing_service import build_pricing_revision
 from app.services.quote_token_service import QuoteTokenError, issue_quote_token, verify_quote_token
@@ -52,6 +53,74 @@ def test_quote_rejects_occupancy_above_category_capacity(db, sample_categories):
             check_in_date=date(2030, 1, 10),
             check_out_date=date(2030, 1, 12),
             occupancy=3,
+        )
+
+
+def test_quote_uses_visible_daily_rates_when_only_inferred_rate_plan_has_no_prices(
+    db, sample_categories, hotel_config
+):
+    category = sample_categories[0]
+    product = SellableProduct(
+        hotel_id=hotel_config.id,
+        primary_room_category_id=category.id,
+        code="LEGACY_DAILY_RATE",
+        name="Tarifa diaria visible",
+        min_occupancy=1,
+        max_occupancy=2,
+    )
+    db.add(product)
+    db.flush()
+    plan = RatePlan(
+        hotel_id=hotel_config.id,
+        sellable_product_id=product.id,
+        code="EMPTY_IMPLICIT_PLAN",
+        name="Plan sin precios cargados",
+        currency_code="ARS",
+        is_active=True,
+    )
+    db.add_all(
+        [
+            plan,
+            DailyRate(
+                hotel_id=hotel_config.id,
+                category_id=category.id,
+                date=date(2030, 1, 10),
+                price=120.0,
+            ),
+            DailyRate(
+                hotel_id=hotel_config.id,
+                category_id=category.id,
+                date=date(2030, 1, 11),
+                price=180.0,
+            ),
+        ]
+    )
+    db.flush()
+
+    quote = build_reservation_quote(
+        db,
+        hotel_id=hotel_config.id,
+        category_id=category.id,
+        check_in_date=date(2030, 1, 10),
+        check_out_date=date(2030, 1, 12),
+        occupancy=2,
+    )
+
+    assert quote["total_amount"] == 300.0
+    assert [night["price"] for night in quote["breakdown"]] == [120.0, 180.0]
+    assert verify_quote_token(quote["quote_token"])["rate_plan_id"] is None
+
+    # An explicitly selected plan is a deliberate commercial choice and must
+    # continue to fail closed when it has no applicable RatePlanPrice.
+    with pytest.raises(ReservationError, match="No active prices found for rate plan"):
+        build_reservation_quote(
+            db,
+            hotel_id=hotel_config.id,
+            category_id=category.id,
+            check_in_date=date(2030, 1, 10),
+            check_out_date=date(2030, 1, 12),
+            rate_plan_id=plan.id,
+            occupancy=2,
         )
 
 

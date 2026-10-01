@@ -25,6 +25,7 @@ const WINDOW_SIZE = 7;
 type RateEditorMobileCardsProps = {
   dailyRates: DailyRateRangeRow[];
   currencyCode: string;
+  visibleFields: PriceField[];
   onSaveCell: (payload: SingleRateInput) => void;
   disabled?: boolean;
 };
@@ -41,11 +42,13 @@ function parseField(raw: string): { value: number | null; valid: boolean } {
 function RateDayCard({
   row,
   currencyCode,
+  visibleFields,
   onSaveCell,
   disabled
 }: {
   row: DailyRateRangeRow;
   currencyCode: string;
+  visibleFields: PriceField[];
   onSaveCell: (payload: SingleRateInput) => void;
   disabled?: boolean;
 }) {
@@ -65,8 +68,8 @@ function RateDayCard({
   const handleSave = () => {
     setError(null);
     setSaved(false);
-    const parsed: Record<PriceField, number | null> = {} as Record<PriceField, number | null>;
-    for (const { field } of PRICE_FIELDS) {
+    const parsed: Partial<Record<PriceField, number | null>> = {};
+    for (const { field } of PRICE_FIELDS.filter(({ field }) => visibleFields.includes(field))) {
       const { value, valid } = parseField(values[field]);
       if (!valid) {
         setError(`Valor inválido en "${PRICE_FIELDS.find((f) => f.field === field)?.label}".`);
@@ -74,19 +77,18 @@ function RateDayCard({
       }
       parsed[field] = value;
     }
-    if (parsed.price === null) {
+    if (typeof parsed.price !== "number") {
       setError("El precio base es obligatorio.");
       return;
     }
-    onSaveCell({
+    const payload: SingleRateInput = {
       date: row.date,
-      price: parsed.price,
-      price_cash: parsed.price_cash,
-      price_transfer: parsed.price_transfer,
-      price_mercadopago: parsed.price_mercadopago,
-      price_paypal: parsed.price_paypal,
-      price_credit_card: parsed.price_credit_card
-    });
+      price: parsed.price as number
+    };
+    for (const field of visibleFields) {
+      if (field !== "price") Object.assign(payload, { [field]: parsed[field] });
+    }
+    onSaveCell(payload);
     setSaved(true);
   };
 
@@ -107,7 +109,7 @@ function RateDayCard({
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">
-        {PRICE_FIELDS.map(({ field, label, required }) => (
+        {PRICE_FIELDS.filter(({ field }) => visibleFields.includes(field)).map(({ field, label, required }) => (
           <label key={field} className="text-xs font-semibold text-slate-600">
             {label}
             {required ? <span className="ml-0.5 text-brand-500">*</span> : null}
@@ -145,7 +147,7 @@ function RateDayCard({
   );
 }
 
-export function RateEditorMobileCards({ dailyRates, currencyCode, onSaveCell, disabled }: RateEditorMobileCardsProps) {
+export function RateEditorMobileCards({ dailyRates, currencyCode, visibleFields, onSaveCell, disabled }: RateEditorMobileCardsProps) {
   const [offset, setOffset] = useState(0);
   const firstDate = dailyRates[0]?.date;
 
@@ -188,7 +190,7 @@ export function RateEditorMobileCards({ dailyRates, currencyCode, onSaveCell, di
       </div>
 
       {visible.map((row) => (
-        <RateDayCard key={row.date} row={row} currencyCode={currencyCode} onSaveCell={onSaveCell} disabled={disabled} />
+        <RateDayCard key={row.date} row={row} currencyCode={currencyCode} visibleFields={visibleFields} onSaveCell={onSaveCell} disabled={disabled} />
       ))}
     </div>
   );

@@ -13,13 +13,17 @@ import app.main as main_module
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.models.guest import DocumentTypeEnum, Guest
+from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
 from app.models.operations import RoomMoveEvent, RoomMoveTypeEnum, RoomMovementGroup
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
-from app.services.room_movement_group_service import revert_group
+from app.services.room_movement_group_service import (
+    create_grouped_room_move,
+    revert_group,
+)
 
 
 @pytest.fixture
@@ -301,6 +305,81 @@ def test_revert_group_refuses_original_room_with_insufficient_capacity(movement_
         assert result["conflicts"][0]["original_room_capacity"] == 2
         assert reservation.room_id == to_room_id
         assert group.is_reverted is False
+
+
+def test_company_grouped_move_preserves_sold_category_and_revert_checks_physical_capacity(
+    movement_api_client,
+):
+    _, SessionLocal, _ = movement_api_client
+    with SessionLocal() as db:
+        seeded = _seed_group(
+            db,
+            hotel_id=1,
+            suffix="COMPANY_CAPACITY",
+            trigger_reason="allocation_run",
+            from_capacity=2,
+            to_capacity=3,
+            num_adults=2,
+        )
+        reservation = seeded["reservation"]
+        source_room = seeded["from_room"]
+        destination_room = seeded["to_room"]
+        sold_category_id = source_room.category_id
+        reservation.room_id = source_room.id
+        reservation.category_id = sold_category_id
+        company = Company(
+            hotel_id=1,
+            legal_name="Company Capacity Test",
+            display_name="Company Capacity Test",
+        )
+        db.add(company)
+        db.flush()
+        reservation.company_id = company.id
+        # The primary guest plus two linked additional guests exceeds the
+        # contracted double but fits the larger physical room.
+        for suffix in ("EXTRA1", "EXTRA2"):
+            guest = Guest(
+                hotel_id=1,
+                first_name="Extra",
+                last_name=suffix,
+                document_type=DocumentTypeEnum.DNI,
+                document_number=f"COMPANY-{suffix}",
+                terms_accepted=True,
+            )
+            db.add(guest)
+            db.flush()
+            reservation.additional_guests.append(guest)
+        db.flush()
+
+        movement_group, _event = create_grouped_room_move(
+            db,
+            hotel_id=1,
+            reservation=reservation,
+            to_room=destination_room,
+            trigger_reason="company_capacity_upgrade",
+            reason_code="company_guest_count",
+            reason_note="Assign a larger physical room while preserving the contracted double",
+            move_type=RoomMoveTypeEnum.AUTO_ASSIGNMENT,
+            trigger_event="test_company_capacity_upgrade",
+            created_by_user_id=10,
+        )
+
+        assert reservation.room_id == destination_room.id
+        assert reservation.category_id == sold_category_id
+        assert reservation.total_amount == 100
+
+        result = revert_group(
+            db,
+            hotel_id=1,
+            group_id=movement_group.id,
+            reverted_by_user_id=10,
+        )
+
+        assert result["reverted"] == []
+        assert result["conflicts"][0]["reason"] == "original_room_capacity_insufficient"
+        assert reservation.room_id == destination_room.id
+        assert reservation.category_id == sold_category_id
+        assert movement_group.is_reverted is False
 
 
 @pytest.mark.parametrize(

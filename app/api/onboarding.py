@@ -102,9 +102,12 @@ def set_payments(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_UPDATE)),
 ):
-    status_data = onboarding_service.upsert_payment_methods(db, payload, hotel_id=context.hotel_id)
-    db.commit()
-    return status_data
+    try:
+        status_data = onboarding_service.upsert_payment_methods(db, payload, hotel_id=context.hotel_id)
+        db.commit()
+        return status_data
+    except OnboardingError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/ota", response_model=OnboardingStatus)

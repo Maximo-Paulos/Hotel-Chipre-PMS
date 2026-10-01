@@ -98,9 +98,9 @@ def test_manual_rate_permissions_keep_owner_policy_separate_from_bounded_entry(c
     _client, db = ctx
     assert resolve(db, 1, "owner", PERMISSION_RESERVATION_MANUAL_RATE) is True
     assert resolve(db, 1, "owner", PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE) is True
-    assert resolve(db, 1, "co_owner", PERMISSION_RESERVATION_MANUAL_RATE) is False
+    assert resolve(db, 1, "co_owner", PERMISSION_RESERVATION_MANUAL_RATE) is True
     assert resolve(db, 1, "co_owner", PERMISSION_RESERVATION_MANUAL_RATE_LIMITED) is True
-    assert resolve(db, 1, "co_owner", PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE) is False
+    assert resolve(db, 1, "co_owner", PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE) is True
     assert resolve(db, 1, "manager", PERMISSION_RESERVATION_MANUAL_RATE_LIMITED) is True
     assert resolve(db, 1, "manager", PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE) is False
     assert resolve(db, 1, "receptionist", PERMISSION_RESERVATION_MANUAL_RATE_LIMITED) is False

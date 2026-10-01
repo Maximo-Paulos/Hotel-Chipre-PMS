@@ -13,15 +13,15 @@
       "helper_other": "{{count}} llegadas"
     },
     "adr": {
-      "label": "ADR",
-      "helperSingle": "Tarifa promedio mes",
-      "helperMulti": "Mes con reservas en distintas monedas"
+      "label": "Promedio reservado por noche",
+      "helperSingle": "Importe de reservas dividido por noches reservadas",
+      "helperMulti": "Hay reservas en distintas monedas",
+      "helperEmpty": "No hay reservas elegibles este mes"
     },
     "revenue": {
-      "label": "Revenue mes",
-      "helperSingle_one": "{{count}} salida hoy",
-      "helperSingle_other": "{{count}} salidas hoy",
-      "helperMulti": "Revisar detalle por reserva"
+      "label": "Importe de reservas del mes",
+      "helperSingle": "Valor reservado; no equivale a cobros de caja",
+      "helperEmpty": "No hay reservas elegibles este mes"
     },
     "pendingActions": {
       "label": "Acciones pendientes",
@@ -30,7 +30,8 @@
       "helperNone": "Sin críticas",
       "helperError": "No se pudo consultar la bandeja"
     },
-    "multiCurrency": "Multimoneda"
+    "multiCurrency": "Varias monedas",
+    "noReservations": "Sin reservas"
   },
   "cashApprovals": {
     "title": "Diferencias de caja pendientes",

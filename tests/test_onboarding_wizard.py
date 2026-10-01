@@ -189,6 +189,10 @@ def test_each_step_persists(client: TestClient):
     payments = client.post(
         "/api/onboarding/payments",
         json={
+            "enable_cash": True,
+            "enable_bank_transfer": True,
+            "enable_debit_card": False,
+            "enable_credit_card": False,
             "mercado_pago": {"enabled": True, "credentials": {"account_id": "mp-user"}},
             "paypal": {"enabled": False, "credentials": {}},
             "stripe": {"enabled": False, "credentials": {}},
@@ -198,6 +202,18 @@ def test_each_step_persists(client: TestClient):
     assert payments.status_code == 200, payments.text
     assert payments.json()["payment_methods"]["mercado_pago"]["enabled"] is True
     assert payments.json()["payment_methods"]["mercado_pago"]["has_credentials"] is True
+    assert payments.json()["payment_method_options"] == {
+        "enable_cash": True,
+        "enable_bank_transfer": True,
+        "enable_debit_card": False,
+        "enable_credit_card": False,
+    }
+    saved_config = client.get("/api/config/", headers=headers)
+    assert saved_config.status_code == 200, saved_config.text
+    assert saved_config.json()["enable_cash"] is True
+    assert saved_config.json()["enable_bank_transfer"] is True
+    assert saved_config.json()["enable_debit_card"] is False
+    assert saved_config.json()["enable_credit_card"] is False
 
     ota = client.post(
         "/api/onboarding/ota",
@@ -228,6 +244,21 @@ def test_invalid_data_blocks_advancement(client: TestClient):
     )
     assert invalid_identity.status_code == 422
 
+    no_payment_method = client.post(
+        "/api/onboarding/payments",
+        json={
+            "enable_cash": False,
+            "enable_bank_transfer": False,
+            "enable_debit_card": False,
+            "enable_credit_card": False,
+            "mercado_pago": {"enabled": False, "credentials": {}},
+            "paypal": {"enabled": False, "credentials": {}},
+            "stripe": {"enabled": False, "credentials": {}},
+        },
+        headers=headers,
+    )
+    assert no_payment_method.status_code == 400, no_payment_method.text
+
     client.post(
         "/api/onboarding/payments",
         json={
@@ -245,6 +276,19 @@ def test_invalid_data_blocks_advancement(client: TestClient):
     )
     assert invalid_subscription.status_code == 400
     assert "Stripe" in invalid_subscription.json()["detail"]
+
+
+def test_new_hotel_starts_with_cash_only(client: TestClient):
+    headers = _register_owner(client, "cash-default@test.com")
+
+    config = client.get("/api/config/", headers=headers)
+    assert config.status_code == 200, config.text
+    assert config.json()["enable_cash"] is True
+    assert config.json()["enable_bank_transfer"] is False
+    assert config.json()["enable_debit_card"] is False
+    assert config.json()["enable_credit_card"] is False
+    assert config.json()["enable_mercado_pago"] is False
+    assert config.json()["enable_paypal"] is False
 
 
 def test_onboarding_cannot_activate_paid_plan_without_checkout(client: TestClient):

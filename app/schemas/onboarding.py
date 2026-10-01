@@ -59,6 +59,10 @@ class ProviderSetupPayload(BaseModel):
 
 
 class PaymentMethodsPayload(BaseModel):
+    enable_cash: bool = True
+    enable_bank_transfer: bool = False
+    enable_debit_card: bool = False
+    enable_credit_card: bool = False
     mercado_pago: ProviderSetupPayload = Field(default_factory=ProviderSetupPayload)
     paypal: ProviderSetupPayload = Field(default_factory=ProviderSetupPayload)
     stripe: ProviderSetupPayload = Field(default_factory=ProviderSetupPayload)
@@ -131,6 +135,7 @@ class OnboardingStatus(BaseModel):
     hotel_identity: Optional[dict] = None
     deposit_policy: Optional[dict] = None
     payment_methods: Optional[dict] = None
+    payment_method_options: Optional[dict] = None
     ota_channels: Optional[dict] = None
     subscription_choice: Optional[dict] = None
     current_subscription: Optional[dict] = None

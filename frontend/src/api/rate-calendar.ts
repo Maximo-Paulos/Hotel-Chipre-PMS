@@ -87,6 +87,18 @@ export type DailyRatePrices = {
   price_credit_card?: number | null;
 };
 
+export type RatePaymentMethodOptions = {
+  enable_cash: boolean;
+  enable_bank_transfer: boolean;
+  enable_debit_card: boolean;
+  enable_credit_card: boolean;
+  enable_mercado_pago: boolean;
+  enable_paypal: boolean;
+};
+
+export const getRatePaymentMethodOptions = (session?: SessionLike) =>
+  apiFetch<RatePaymentMethodOptions>("/api/rates/payment-method-options", { method: "GET", session });
+
 export type DailyRateOut = DailyRatePrices & {
   id: number;
   hotel_id: number;

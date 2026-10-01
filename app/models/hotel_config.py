@@ -42,11 +42,13 @@ class HotelConfiguration(Base):
     enable_deposit_payment = Column(Boolean, nullable=False, default=True)
 
     # Payment gateways toggles
+    # New hotels start with cash as the only enabled collection method. The
+    # owner selects other methods during onboarding; existing rows are untouched.
     enable_cash = Column(Boolean, nullable=False, default=True)
-    enable_mercado_pago = Column(Boolean, nullable=False, default=True)
-    enable_paypal = Column(Boolean, nullable=False, default=True)
-    enable_credit_card = Column(Boolean, nullable=False, default=True)
-    enable_debit_card = Column(Boolean, nullable=False, default=True)
+    enable_mercado_pago = Column(Boolean, nullable=False, default=False)
+    enable_paypal = Column(Boolean, nullable=False, default=False)
+    enable_credit_card = Column(Boolean, nullable=False, default=False)
+    enable_debit_card = Column(Boolean, nullable=False, default=False)
     enable_bank_transfer = Column(Boolean, nullable=False, default=False)
 
     # Cancellation policies

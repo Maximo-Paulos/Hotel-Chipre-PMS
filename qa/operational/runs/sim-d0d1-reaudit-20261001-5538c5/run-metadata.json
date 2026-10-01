@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "run_id": "sim-d0d1-reaudit-20261001-5538c5",
+  "created_at": "2026-10-01T15:27:03-03:00",
+  "run_type": "operational_shared_sandbox",
+  "status": "in_progress",
+  "environment": {
+    "classification": "production-labelled-shared-sandbox-operational",
+    "app_origin": "https://app.hotels-pms.com",
+    "api_origin": "https://api.hotels-pms.com",
+    "code_sha": "377196c6ba076e14525c5bd79edfec7eab1f1c46",
+    "release_gate_eligible": false
+  },
+  "scope": {
+    "source_reports": [
+      "PRUEBA 1 DIA 0.md",
+      "PRUEBA 1 DIA 1.md",
+      "registro-hallazgos-parcial-dia0-dia1.md"
+    ],
+    "reported_days": [
+      0,
+      1
+    ],
+    "requested_personas": [
+      "owner",
+      "manager",
+      "reception"
+    ],
+    "additional_personas_to_observe": [
+      "housekeeping",
+      "co_owner"
+    ],
+    "channels_to_simulate": [
+      "direct",
+      "booking_manual",
+      "expedia_manual",
+      "company"
+    ],
+    "synthetic_marker": "sim-d0d1-reaudit-20261001-5538c5",
+    "existing_records_mutated": false
+  },
+  "external_effects": {
+    "email_sent": false,
+    "gateway_payment_or_transfer": false,
+    "ota_sync_triggered": false,
+    "webhook_triggered": false
+  },
+  "environment_observation": {
+    "postgres": "ok",
+    "redis": "error; distributed locks and realtime are configured as required",
+    "observed_at": "2026-10-01T15:27:03-03:00"
+  }
+}

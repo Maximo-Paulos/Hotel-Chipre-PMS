@@ -304,6 +304,26 @@ def test_housekeeping_status_can_change_without_changing_active_room_availabilit
     assert room.status == RoomStatusEnum.CLEANING
     assert room.housekeeping_status == RoomHousekeepingStatusEnum.CLEAN
 
+    # A housekeeper may record cleaning progress, but must not block or otherwise
+    # change the operational room state: that path can reallocate active and
+    # future reservations. Keep both the dedicated status endpoint and the
+    # generic room update endpoint behind the manager lane.
+    for path in (f"/api/rooms/{room.id}/status", f"/api/rooms/{room.id}"):
+        denied = client.patch(path, json={"status": "maintenance"})
+        assert denied.status_code == 403, denied.text
+
+    db.refresh(room)
+    assert room.status == RoomStatusEnum.CLEANING
+    reservations = (
+        db.query(Reservation)
+        .filter(Reservation.confirmation_code.in_(["HK-ACTIVE", "HK-FUTURE"]))
+        .order_by(Reservation.confirmation_code)
+        .all()
+    )
+    assert [reservation.confirmation_code for reservation in reservations] == ["HK-ACTIVE", "HK-FUTURE"]
+    assert all(reservation.room_id == room.id for reservation in reservations)
+    assert all(reservation.status == ReservationStatusEnum.PENDING for reservation in reservations)
+
 
 def test_housekeeping_today_board_is_hotel_scoped_and_has_no_guest_or_free_text_data(role_client):
     client, db, auth, room, guest, category = role_client

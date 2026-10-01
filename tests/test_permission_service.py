@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 
+import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
@@ -10,6 +11,12 @@ from app.services.permission_service import (
     DEFAULT_MATRIX,
     PERMISSION_CASH_APPROVE_DIFFERENCE,
     PERMISSION_CASH_OPERATE,
+    PERMISSION_COMPANY_NIGHT_RATE_MANAGE,
+    PERMISSION_HOTEL_PROPERTY_MANAGE,
+    PERMISSION_HOTEL_SECURITY_MANAGE,
+    PERMISSION_APIKEY_MANAGE,
+    PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
+    PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
     PERMISSION_PAYMENT_REFUND,
     PERMISSION_CHECKIN_PERFORM,
     PERMISSION_GUEST_CREATE,
@@ -117,6 +124,41 @@ def test_default_permissions_seeded_for_owner_manager_reception_housekeeping(db)
     assert rows[("manager", PERMISSION_STOCK_ADJUST)] is False
     assert can_role_hold_permission("manager", PERMISSION_STOCK_ADJUST) is True
     assert can_role_hold_permission("manager", PERMISSION_RESERVATION_MANUAL_RATE) is True
+    assert resolve(db, 1, "co_owner", PERMISSION_RESERVATION_MANUAL_RATE) is True
+    assert resolve(db, 1, "co_owner", PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE) is True
+    assert resolve(db, 1, "co_owner", PERMISSION_RESERVATION_PAID_TOTAL_ADJUST) is True
+    assert resolve(db, 1, "co_owner", PERMISSION_APIKEY_MANAGE) is True
+    assert resolve(db, 1, "co_owner", PERMISSION_HOTEL_SECURITY_MANAGE) is True
+    assert resolve(db, 1, "co_owner", PERMISSION_HOTEL_PROPERTY_MANAGE) is False
+
+
+def test_company_night_rate_permission_defaults_allow_management_roles(db):
+    _seed_hotel(db, 1)
+    seed_default_permissions(db)
+
+    rows = {
+        (row.role, row.permission_code): row.allowed
+        for row in db.query(RolePermissionDefault).all()
+    }
+    assert rows[("owner", PERMISSION_COMPANY_NIGHT_RATE_MANAGE)] is True
+    assert rows[("co_owner", PERMISSION_COMPANY_NIGHT_RATE_MANAGE)] is True
+    assert rows[("manager", PERMISSION_COMPANY_NIGHT_RATE_MANAGE)] is True
+    assert rows[("receptionist", PERMISSION_COMPANY_NIGHT_RATE_MANAGE)] is False
+    assert can_role_hold_permission("manager", PERMISSION_COMPANY_NIGHT_RATE_MANAGE) is True
+    assert can_role_hold_permission("receptionist", PERMISSION_COMPANY_NIGHT_RATE_MANAGE) is False
+
+    set_override(db, 1, "manager", PERMISSION_COMPANY_NIGHT_RATE_MANAGE, False, user_id=None)
+    assert resolve(db, 1, "manager", PERMISSION_COMPANY_NIGHT_RATE_MANAGE) is False
+
+    with pytest.raises(ValueError, match="bloqueado"):
+        set_override(
+            db,
+            1,
+            "receptionist",
+            PERMISSION_COMPANY_NIGHT_RATE_MANAGE,
+            True,
+            user_id=None,
+        )
 
 
 def test_permission_override_can_deny_receptionist_guest_edit(db):

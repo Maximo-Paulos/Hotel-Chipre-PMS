@@ -8,7 +8,7 @@ Implements the booking cart flow:
 Coordinates with payment gateway adapters (MercadoPago, PayPal) and cash.
 """
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from sqlalchemy import func
@@ -37,7 +37,9 @@ from app.services.financial_ledger import (
 )
 from app.services.company_night_charge_service import (
     CompanyNightChargeError,
+    prepare_company_night_charge_refund,
     prepare_company_night_charge_payment,
+    record_company_night_charge_refund_allocations,
     record_company_night_charge_payment_allocations,
 )
 from app.services.fx_service import SUPPORTED_CONVERSION_CURRENCIES
@@ -59,11 +61,40 @@ MANUAL_REFERENCE_METHODS = frozenset(
 )
 
 
-def _same_idempotent_payment(existing: Transaction, request: PaymentRequest, currency: str) -> bool:
+def _same_idempotent_payment(
+    db: Session,
+    existing: Transaction,
+    request: PaymentRequest,
+    currency: str,
+    hotel_id: int,
+) -> bool:
     requested_amount = Decimal(str(request.amount)).quantize(Decimal("0.01"))
     existing_tender_amount = Decimal(
         str(existing.tender_amount if existing.tender_amount is not None else existing.amount)
     ).quantize(Decimal("0.01"))
+    existing_allocations = {
+        int(charge_id): Decimal(str(amount)).quantize(Decimal("0.01"))
+        for charge_id, amount in db.query(
+            CompanyNightChargePaymentAllocation.company_night_charge_id,
+            CompanyNightChargePaymentAllocation.amount,
+        )
+        .filter(
+            CompanyNightChargePaymentAllocation.hotel_id == hotel_id,
+            CompanyNightChargePaymentAllocation.transaction_id == existing.id,
+        )
+        .all()
+    }
+    if request.transaction_type == TransactionTypeEnum.REFUND:
+        requested_allocations = {
+            int(getattr(item, "charge_id", item.get("charge_id") if isinstance(item, dict) else 0)):
+            Decimal(str(getattr(item, "amount", item.get("amount") if isinstance(item, dict) else 0))).quantize(
+                Decimal("0.01")
+            )
+            for item in request.company_night_charge_refund_allocations
+        }
+        allocation_matches = existing_allocations == requested_allocations
+    else:
+        allocation_matches = set(existing_allocations) == set(request.company_night_charge_ids)
     return (
         existing_tender_amount == requested_amount
         and existing.payment_method == request.payment_method
@@ -75,6 +106,7 @@ def _same_idempotent_payment(existing: Transaction, request: PaymentRequest, cur
         and bool(existing.collected_before) == request.collected_before
         and existing.collected_on == request.collected_on
         and existing.prior_receipt_note == request.prior_receipt_note
+        and allocation_matches
     )
 
 
@@ -367,6 +399,7 @@ def process_payment(
     if tender_amount <= Decimal("0.00"):
         raise PaymentError("El importe del cobro debe ser mayor a cero")
     allocation_plan = None
+    refund_allocation_plan = None
     if idempotency_key is not None:
         existing_by_key = (
             db.query(Transaction)
@@ -378,7 +411,13 @@ def process_payment(
             .first()
         )
         if existing_by_key is not None:
-            if not _same_idempotent_payment(existing_by_key, request, transaction_currency):
+            if not _same_idempotent_payment(
+                db,
+                existing_by_key,
+                request,
+                transaction_currency,
+                resolved_hotel_id,
+            ):
                 raise PaymentError("Idempotency key was already used for a different payment request")
             return existing_by_key
 
@@ -442,6 +481,29 @@ def process_payment(
         tender_currency=transaction_currency,
         refund_source=refund_source,
     )
+    if is_refund and refund_source is not None:
+        try:
+            refund_allocation_plan = prepare_company_night_charge_refund(
+                db,
+                hotel_id=resolved_hotel_id,
+                reservation_id=request.reservation_id,
+                source_transaction=refund_source,
+                amount=applied_amount,
+                refund_allocations=request.company_night_charge_refund_allocations,
+            )
+            if refund_allocation_plan:
+                selected_night_refund_total = sum(
+                    (Decimal(str(item["amount"])) for item in refund_allocation_plan),
+                    Decimal("0.00"),
+                ).quantize(Decimal("0.01"))
+                # Tender is rounded to its currency's minor unit. If the frozen
+                # FX conversion differs from the selected company-night amount
+                # by at most one cent, preserve the operator's explicit night
+                # allocation and record that applied amount in the ledger.
+                if abs(selected_night_refund_total - applied_amount) <= Decimal("0.01"):
+                    applied_amount = selected_night_refund_total
+        except CompanyNightChargeError as exc:
+            raise PaymentError(str(exc)) from exc
     if not is_refund:
         try:
             allocation_plan = prepare_company_night_charge_payment(
@@ -632,7 +694,13 @@ def process_payment(
                 .first()
             )
             if existing is not None:
-                if _same_idempotent_payment(existing, request, transaction_currency):
+                if _same_idempotent_payment(
+                    db,
+                    existing,
+                    request,
+                    transaction_currency,
+                    resolved_hotel_id,
+                ):
                     return existing
                 raise PaymentError("Idempotency key was already used for a different payment request")
             if manual_confirmation and request.manual_reference:
@@ -662,6 +730,14 @@ def process_payment(
             )
         except CompanyNightChargeError as exc:
             raise PaymentError(str(exc)) from exc
+
+    if refund_allocation_plan:
+        record_company_night_charge_refund_allocations(
+            db,
+            hotel_id=resolved_hotel_id,
+            transaction=transaction,
+            allocation_plan=refund_allocation_plan,
+        )
 
     # 5. If completed, update reservation financial state
     if tx_status == TransactionStatusEnum.COMPLETED:
@@ -816,6 +892,98 @@ def sync_reservation_financial_status(
     )
 
 
+def _company_night_charge_refund_options(
+    *,
+    transactions: list[Transaction],
+    night_charges: list[CompanyNightCharge],
+    allocations: list[tuple[CompanyNightChargePaymentAllocation, Transaction]],
+) -> dict[int, list[dict[str, object]]]:
+    """Return still-refundable source allocations in reservation currency.
+
+    New refunds carry explicit per-night allocations. Historical refunds with no
+    allocation rows retain their former proportional treatment for compatibility.
+    """
+    if not allocations or not night_charges:
+        return {}
+    charges_by_id = {row.id: row for row in night_charges}
+    allocation_rows_by_transaction: dict[int, list[CompanyNightChargePaymentAllocation]] = {}
+    for allocation, _transaction in allocations:
+        allocation_rows_by_transaction.setdefault(allocation.transaction_id, []).append(allocation)
+
+    legacy_refunds_by_source: dict[int, Decimal] = {}
+    explicit_refunds_by_source_charge: dict[tuple[int, int], Decimal] = {}
+    for refund in transactions:
+        if (
+            refund.status != TransactionStatusEnum.COMPLETED
+            or refund.transaction_type != TransactionTypeEnum.REFUND
+            or refund.refund_of_transaction_id is None
+        ):
+            continue
+        refund_allocations = allocation_rows_by_transaction.get(refund.id, [])
+        if refund_allocations:
+            for allocation in refund_allocations:
+                key = (refund.refund_of_transaction_id, allocation.company_night_charge_id)
+                explicit_refunds_by_source_charge[key] = (
+                    explicit_refunds_by_source_charge.get(key, Decimal("0.00"))
+                    + Decimal(str(allocation.amount or 0))
+                )
+        else:
+            source_id = refund.refund_of_transaction_id
+            legacy_refunds_by_source[source_id] = (
+                legacy_refunds_by_source.get(source_id, Decimal("0.00"))
+                + Decimal(str(refund.amount or 0))
+            )
+
+    options: dict[int, list[dict[str, object]]] = {}
+    transaction_by_id = {row.id: row for row in transactions}
+    for source_id, source_allocations in allocation_rows_by_transaction.items():
+        source = transaction_by_id.get(source_id)
+        if (
+            source is None
+            or source.status != TransactionStatusEnum.COMPLETED
+            or source.transaction_type == TransactionTypeEnum.REFUND
+        ):
+            continue
+        source_amount = Decimal(str(source.amount or 0)).quantize(Decimal("0.01"))
+        allocated_total = sum(
+            (Decimal(str(row.amount or 0)) for row in source_allocations),
+            Decimal("0.00"),
+        ).quantize(Decimal("0.01"))
+        if source_amount <= 0 or allocated_total != source_amount:
+            continue
+        legacy_fraction = min(
+            Decimal("1"),
+            legacy_refunds_by_source.get(source.id, Decimal("0.00")) / source_amount,
+        )
+        source_options: list[dict[str, object]] = []
+        for allocation in source_allocations:
+            charge = charges_by_id.get(allocation.company_night_charge_id)
+            if charge is None:
+                continue
+            original_amount = Decimal(str(allocation.amount or 0)).quantize(Decimal("0.01"))
+            legacy_refund_amount = (original_amount * legacy_fraction).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            explicit_refund_amount = explicit_refunds_by_source_charge.get(
+                (source.id, charge.id), Decimal("0.00")
+            )
+            remaining = max(
+                Decimal("0.00"),
+                original_amount - legacy_refund_amount - explicit_refund_amount,
+            ).quantize(Decimal("0.01"))
+            if remaining > 0:
+                source_options.append(
+                    {
+                        "charge_id": charge.id,
+                        "stay_date": charge.stay_date,
+                        "remaining_amount": remaining,
+                    }
+                )
+        if source_options:
+            options[source.id] = sorted(source_options, key=lambda item: (item["stay_date"], item["charge_id"]))
+    return options
+
+
 def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], reservation_id: int) -> dict:
     """
     Get a full financial summary for a reservation.
@@ -871,36 +1039,41 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
     )
     visible_transactions = transactions
     visible_adjustments = billing_adjustments
+    night_charges = (
+        db.query(CompanyNightCharge)
+        .filter(
+            CompanyNightCharge.hotel_id == resolved_hotel_id,
+            CompanyNightCharge.reservation_id == reservation.id,
+        )
+        .all()
+    )
+    night_charge_ids = {row.id for row in night_charges}
+    allocations = (
+        db.query(CompanyNightChargePaymentAllocation, Transaction)
+        .join(
+            Transaction,
+            (Transaction.id == CompanyNightChargePaymentAllocation.transaction_id)
+            & (Transaction.hotel_id == CompanyNightChargePaymentAllocation.hotel_id),
+        )
+        .filter(
+            CompanyNightChargePaymentAllocation.hotel_id == resolved_hotel_id,
+            CompanyNightChargePaymentAllocation.company_night_charge_id.in_(night_charge_ids),
+        )
+        .all()
+        if night_charge_ids
+        else []
+    )
+    charge_refund_options = _company_night_charge_refund_options(
+        transactions=transactions,
+        night_charges=night_charges,
+        allocations=allocations,
+    )
     if deferred_company_billing:
         # Only specifically selected company-night extras are collectible
         # through the PMS. Keep their ledger evidence, while hiding any legacy
         # lodging receipts/amounts from this reservation summary.
-        night_charges = (
-            db.query(CompanyNightCharge)
-            .filter(
-                CompanyNightCharge.hotel_id == resolved_hotel_id,
-                CompanyNightCharge.reservation_id == reservation.id,
-            )
-            .all()
-        )
-        night_charge_ids = {row.id for row in night_charges}
         adjustment_ids = {row.billing_adjustment_id for row in night_charges}
         visible_adjustments = [row for row in billing_adjustments if row.id in adjustment_ids]
-        allocations = (
-            db.query(CompanyNightChargePaymentAllocation, Transaction)
-            .join(
-                Transaction,
-                (Transaction.id == CompanyNightChargePaymentAllocation.transaction_id)
-                & (Transaction.hotel_id == CompanyNightChargePaymentAllocation.hotel_id),
-            )
-            .filter(
-                CompanyNightChargePaymentAllocation.hotel_id == resolved_hotel_id,
-                CompanyNightChargePaymentAllocation.company_night_charge_id.in_(night_charge_ids),
-            )
-            .all()
-            if night_charge_ids
-            else []
-        )
         allocations_by_transaction: dict[int, Decimal] = {}
         for allocation, _transaction in allocations:
             allocations_by_transaction[allocation.transaction_id] = (
@@ -929,9 +1102,23 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
             for row in night_charges
         }
         paid_by_charge: dict[int, Decimal] = {}
-        transaction_charge_ids: dict[int, list[int]] = {}
-        for allocation, transaction in allocations:
-            transaction_charge_ids.setdefault(transaction.id, []).append(allocation.company_night_charge_id)
+        legacy_refunds_by_source: dict[int, Decimal] = {}
+        explicitly_allocated_refund_ids = {
+            transaction.id
+            for allocation, transaction in allocations
+            if transaction.transaction_type == TransactionTypeEnum.REFUND
+        }
+        for transaction in visible_transactions:
+            if (
+                transaction.status == TransactionStatusEnum.COMPLETED
+                and transaction.transaction_type == TransactionTypeEnum.REFUND
+                and transaction.id not in explicitly_allocated_refund_ids
+                and transaction.refund_of_transaction_id is not None
+            ):
+                legacy_refunds_by_source[transaction.refund_of_transaction_id] = (
+                    legacy_refunds_by_source.get(transaction.refund_of_transaction_id, Decimal("0.00"))
+                    + Decimal(str(transaction.amount or 0))
+                )
         completed_extra_payment_total = Decimal("0.00")
         for transaction in visible_transactions:
             if transaction.status != TransactionStatusEnum.COMPLETED:
@@ -939,37 +1126,30 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
             signed_amount = Decimal(str(_signed_transaction_amount(transaction.transaction_type, transaction.amount)))
             completed_extra_payment_total += signed_amount
             if transaction.transaction_type == TransactionTypeEnum.REFUND:
-                # Refunds affect only the charge allocation(s) of their source.
-                original = transaction_by_id.get(transaction.refund_of_transaction_id)
-                if original is not None:
-                    source_charge_ids = transaction_charge_ids.get(original.id, [])
-                    source_amount = Decimal(str(original.amount or 0))
-                    refund_amount = Decimal(str(transaction.amount or 0))
-                    refund_ratio = min(Decimal("1"), refund_amount / source_amount) if source_amount > 0 else Decimal("0")
-                    for charge_id in source_charge_ids:
-                        original_allocation = next(
-                            (
-                                Decimal(str(allocation.amount or 0))
-                                for allocation, _row in allocations
-                                if allocation.transaction_id == original.id
-                                and allocation.company_night_charge_id == charge_id
-                            ),
-                            Decimal("0.00"),
-                        )
-                        paid_by_charge[charge_id] = max(
-                            Decimal("0.00"),
-                            paid_by_charge.get(charge_id, Decimal("0.00")) - original_allocation * refund_ratio,
+                # New refunds have an explicit charge allocation row; legacy
+                # refunds are applied proportionally below for compatibility.
+                for allocation, _row in allocations:
+                    if allocation.transaction_id == transaction.id:
+                        paid_by_charge[allocation.company_night_charge_id] = (
+                            paid_by_charge.get(allocation.company_night_charge_id, Decimal("0.00"))
+                            - Decimal(str(allocation.amount or 0))
                         )
                 continue
             tx_amount = Decimal(str(transaction.amount or 0))
             allocated_amount = allocations_by_transaction.get(transaction.id, Decimal("0.00"))
             if tx_amount <= 0 or allocated_amount.quantize(Decimal("0.01")) != tx_amount.quantize(Decimal("0.01")):
                 continue
+            legacy_refund = min(
+                legacy_refunds_by_source.get(transaction.id, Decimal("0.00")),
+                tx_amount,
+            )
+            legacy_fraction = legacy_refund / tx_amount if tx_amount > 0 else Decimal("0")
             for allocation, _row in allocations:
                 if allocation.transaction_id == transaction.id:
+                    net_allocation = Decimal(str(allocation.amount or 0)) * (Decimal("1") - legacy_fraction)
                     paid_by_charge[allocation.company_night_charge_id] = (
                         paid_by_charge.get(allocation.company_night_charge_id, Decimal("0.00"))
-                        + Decimal(str(allocation.amount or 0))
+                        + net_allocation
                     )
         extra_total = sum(charge_totals.values(), Decimal("0.00"))
         billing_adjustment_total = extra_total
@@ -1044,6 +1224,7 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
                 "collected_before": bool(t.collected_before),
                 "collected_on": t.collected_on,
                 "prior_receipt_note": t.prior_receipt_note,
+                "company_night_charge_refundable_allocations": charge_refund_options.get(t.id, []),
                 "created_at": str(t.created_at),
             }
             for t in visible_transactions

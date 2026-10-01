@@ -44,6 +44,9 @@ from app.services.permission_service import (
     PERMISSION_GUEST_READ,
     PERMISSION_OCCUPANCY_VIEW,
     PERMISSION_RESERVATION_CREATE,
+    PERMISSION_RESERVATION_MANUAL_RATE,
+    PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
+    PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
     PERMISSION_PERMISSION_MANAGE,
     PERMISSION_ROOM_STATUS_UPDATE,
     PERMISSION_SETTINGS_INTEGRATIONS_VIEW,
@@ -168,7 +171,7 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         legacy_codes = set(LEGACY_PERMISSION_ALIASES)
 
         # New role-only business actions are named capabilities in the catalog.
-        assert len(canonical_codes) == 110
+        assert len(canonical_codes) == 111
         assert {"payment:proof:view", "payment:proof:review"} <= canonical_codes
         assert {"payment:refund", "reservation:cancel_paid"} <= canonical_codes
         assert {"reservation:manual_rate_limited", "reservation:manual_rate_policy_manage"} <= canonical_codes
@@ -176,6 +179,7 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         assert "cash:expense" in canonical_codes
         assert "payment:ota_confirm" in canonical_codes
         assert "reservation:ota_record" in canonical_codes
+        assert "company:night_rate_manage" in canonical_codes
         assert {code for code in canonical_codes if code.startswith("whatsapp:")} == {
             "whatsapp:inbox:view", "whatsapp:inbox:all", "whatsapp:message:send",
             "whatsapp:note:manage", "whatsapp:conversation:assign", "whatsapp:conversation:close",
@@ -208,11 +212,28 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         assert matrix["co_owner"]["reservation:rate_adjust"]["allowed"] is False
         assert matrix["receptionist"]["reservation:rate_adjust"]["allowed"] is False
         assert matrix["manager"]["reservation:rate_adjust"]["help_es"]
-        assert matrix["manager"]["reservation:manual_rate"]["allowed"] is False
-        assert matrix["co_owner"]["reservation:manual_rate"]["allowed"] is False
-        assert matrix["owner"]["reservation:manual_rate_policy_manage"]["allowed"] is True
-        assert matrix["co_owner"]["reservation:manual_rate_policy_manage"]["allowed"] is False
-        assert matrix["manager"]["reservation:manual_rate_policy_manage"]["allowed"] is False
+        assert matrix["owner"][PERMISSION_RESERVATION_MANUAL_RATE]["allowed"] is True
+        assert matrix["co_owner"][PERMISSION_RESERVATION_MANUAL_RATE]["allowed"] is True
+        assert matrix["manager"][PERMISSION_RESERVATION_MANUAL_RATE]["allowed"] is False
+        assert matrix["owner"][PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE]["allowed"] is True
+        assert matrix["co_owner"][PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE]["allowed"] is True
+        assert matrix["manager"][PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE]["allowed"] is False
+        assert matrix["owner"][PERMISSION_RESERVATION_PAID_TOTAL_ADJUST]["allowed"] is True
+        assert matrix["co_owner"][PERMISSION_RESERVATION_PAID_TOTAL_ADJUST]["allowed"] is True
+        assert matrix["manager"][PERMISSION_RESERVATION_PAID_TOTAL_ADJUST]["allowed"] is False
+        assert matrix["owner"][PERMISSION_APIKEY_MANAGE]["allowed"] is True
+        assert matrix["co_owner"][PERMISSION_APIKEY_MANAGE]["allowed"] is True
+        assert matrix["manager"][PERMISSION_APIKEY_MANAGE]["allowed"] is False
+        assert matrix["owner"][PERMISSION_HOTEL_SECURITY_MANAGE]["allowed"] is True
+        assert matrix["co_owner"][PERMISSION_HOTEL_SECURITY_MANAGE]["allowed"] is True
+        assert matrix["manager"][PERMISSION_HOTEL_SECURITY_MANAGE]["allowed"] is False
+        assert matrix["owner"][PERMISSION_HOTEL_PROPERTY_MANAGE]["allowed"] is True
+        assert matrix["co_owner"][PERMISSION_HOTEL_PROPERTY_MANAGE]["allowed"] is False
+        assert matrix["manager"][PERMISSION_HOTEL_PROPERTY_MANAGE]["allowed"] is False
+        assert matrix["owner"]["company:night_rate_manage"]["allowed"] is True
+        assert matrix["co_owner"]["company:night_rate_manage"]["allowed"] is True
+        assert matrix["manager"]["company:night_rate_manage"]["allowed"] is True
+        assert matrix["receptionist"]["company:night_rate_manage"]["allowed"] is False
         assert matrix["manager"]["payment:ota_confirm"]["allowed"] is True
         assert matrix["co_owner"]["payment:ota_confirm"]["allowed"] is True
         for role in ("owner", "co_owner", "manager", "receptionist"):
@@ -312,6 +333,7 @@ def test_permission_catalog_exposes_administrator_and_owner_only_metadata_and_he
             PERMISSION_HOTEL_PROPERTY_MANAGE,
             PERMISSION_HOTEL_SECURITY_MANAGE,
             PERMISSION_APIKEY_MANAGE,
+            PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
         ):
             assert catalog[code]["critical"] is True
             assert catalog[code]["step_up_required"] is True
@@ -327,6 +349,9 @@ def test_permission_catalog_exposes_administrator_and_owner_only_metadata_and_he
 
         assert catalog["settings:users:manage"]["step_up_required"] is True
         assert catalog["settings:subscription:manage"]["step_up_required"] is True
+        assert catalog["company:night_rate_manage"]["critical"] is False
+        assert catalog["company:night_rate_manage"]["step_up_required"] is False
+        assert catalog["company:night_rate_manage"]["delegable"] is True
 
         assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["critical"] is False
         assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["step_up_required"] is True

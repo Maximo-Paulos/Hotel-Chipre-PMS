@@ -68,7 +68,8 @@ def test_manual_in_person_payment_requires_reference_and_records_actor(client_wi
 
     missing_reference = _manual_payment(client, reservation.id, method=method, key=f"manual-{method}-payment-001")
     assert missing_reference.status_code == 400
-    assert "reference" in missing_reference.json()["detail"].lower()
+    expected_hint = "número de operación bancaria" if method == "bank_transfer" else "cupón verificado"
+    assert expected_hint in missing_reference.json()["detail"].lower()
     assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 0
 
     recorded = _manual_payment(

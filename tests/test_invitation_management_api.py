@@ -9,6 +9,7 @@ import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app
+from app.models.audit_log import AuditLog
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.user import User
@@ -70,13 +71,16 @@ def test_pending_invitation_list_is_scoped_redacted_and_owner_can_recover_legacy
             HotelMembership(hotel_id=61, user_id=co_owner.id, role="co_owner", status="active"),
             HotelMembership(hotel_id=61, user_id=legacy_user.id, role="owner", status="invited"),
             HotelMembership(hotel_id=62, user_id=foreign_owner.id, role="owner", status="active", is_primary_owner=True),
+            HotelMembership(hotel_id=62, user_id=legacy_user.id, role="manager", status="active"),
             HotelMembership(hotel_id=62, user_id=foreign_staff.id, role="manager", status="invited"),
         ]
     )
     legacy_invitation, _legacy_token, _ = issue_invitation(
         db,
         hotel_id=61,
-        user_id=legacy_user.id,
+        # Legacy rows may have lost their nullable user FK while the scoped
+        # membership remains pending.
+        user_id=None,
         email=legacy_user.email,
         role="owner",
         inviter_user_id=owner.id,
@@ -137,15 +141,36 @@ def test_pending_invitation_list_is_scoped_redacted_and_owner_can_recover_legacy
         assert revoked.status_code == 204, revoked.text
         db.refresh(legacy_invitation)
         assert legacy_invitation.status == "revoked"
+        legacy_membership = db.query(HotelMembership).filter_by(
+            hotel_id=61, user_id=legacy_user.id
+        ).one()
+        db.refresh(legacy_membership)
+        assert legacy_membership.status == "revoked"
+        foreign_membership = db.query(HotelMembership).filter_by(
+            hotel_id=62, user_id=legacy_user.id
+        ).one()
+        assert foreign_membership.role == "manager"
+        assert foreign_membership.status == "active"
+        assert db.query(AuditLog).filter_by(
+            hotel_id=61,
+            table_name="hotel_memberships",
+            record_id=legacy_membership.id,
+        ).count() >= 1
+        assert db.query(AuditLog).filter_by(
+            hotel_id=61,
+            table_name="staff_invitations",
+            record_id=legacy_invitation.id,
+        ).count() >= 1
 
         reinvited = client.post(
             "/api/users/invite",
-            json={"email": legacy_user.email, "role": "co_owner"},
+            json={"email": legacy_user.email, "role": "Copropietaria"},
             headers=_step_up_headers(owner, 61, "POST", "/api/users/invite"),
         )
         assert reinvited.status_code == 201, reinvited.text
-        db.refresh(db.query(HotelMembership).filter_by(hotel_id=61, user_id=legacy_user.id).one())
-        assert db.query(HotelMembership).filter_by(hotel_id=61, user_id=legacy_user.id).one().role == "co_owner"
+        db.refresh(legacy_membership)
+        assert legacy_membership.role == "co_owner"
+        assert legacy_membership.status == "invited"
 
         set_actor(foreign_owner, "owner", 62)
         foreign_list = client.get(
