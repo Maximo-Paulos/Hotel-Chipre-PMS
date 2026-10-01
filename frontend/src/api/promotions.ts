@@ -118,8 +118,11 @@ export type FxQuoteDetails = {
     currency: string;
     rate_type: string;
     market: string;
+    conversion_market?: "oficial" | "blue";
     usd_market: "oficial" | "blue" | null;
     direct_currency_market: string | null;
+    is_derived_blue?: boolean;
+    derivation_sources?: Record<string, unknown> | null;
     side: "venta";
     ars_per_unit: number;
     provider_updated_at: string;
@@ -128,8 +131,11 @@ export type FxQuoteDetails = {
     currency: string;
     rate_type: string;
     market: string;
+    conversion_market?: "oficial" | "blue";
     usd_market: "oficial" | "blue" | null;
     direct_currency_market: string | null;
+    is_derived_blue?: boolean;
+    derivation_sources?: Record<string, unknown> | null;
     side: "compra";
     ars_per_unit: number;
     provider_updated_at: string;

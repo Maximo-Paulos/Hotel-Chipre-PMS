@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-01T06:37:29.147Z",
+  "generatedAt": "2026-10-01T07:38:48.921Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -11573,6 +11573,56 @@
       "warnings": []
     },
     {
+      "id": "flow:services_fx_service_get_usd_official_rate",
+      "name": "get_usd_official_rate",
+      "entryPoint": "services_fx_service_get_usd_official_rate",
+      "entryPointId": "services_fx_service_get_usd_official_rate",
+      "path": [
+        "services_fx_service_get_usd_official_rate",
+        "services_fx_service_get_usd_rate_for_type",
+        "services_fx_service_fetch_rate",
+        "services_fx_service_is_cache_fresh",
+        "services_fx_service_cache_key",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_extract_direct_quotes",
+        "services_fx_service_get_async",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_refresh_supported_rates",
+        "services_fx_service_store_rate",
+        "services_fx_service_quote_matches_conversion_market",
+        "services_fx_service_derive_blue_equivalent",
+        "services_fx_service_parse_provider_updated_at",
+        "services_fx_service_quote_is_fresh"
+      ],
+      "qualifiedPath": [
+        "services_fx_service_get_usd_official_rate",
+        "services_fx_service_get_usd_rate_for_type",
+        "services_fx_service_fetch_rate",
+        "services_fx_service_is_cache_fresh",
+        "services_fx_service_cache_key",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_extract_direct_quotes",
+        "services_fx_service_get_async",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_refresh_supported_rates",
+        "services_fx_service_store_rate",
+        "services_fx_service_quote_matches_conversion_market",
+        "services_fx_service_derive_blue_equivalent",
+        "services_fx_service_parse_provider_updated_at",
+        "services_fx_service_quote_is_fresh"
+      ],
+      "depth": 5,
+      "nodeCount": 16,
+      "fileCount": 1,
+      "files": [
+        "app/services/fx_service.py"
+      ],
+      "criticality": 0.2,
+      "warnings": []
+    },
+    {
       "id": "flow:services_temporary_action_grant_service_deny_grant",
       "name": "deny_grant",
       "entryPoint": "services_temporary_action_grant_service_deny_grant",
@@ -12202,6 +12252,56 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
+      ],
+      "criticality": 0.19,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_fx_service_get_all_rates_snapshot",
+      "name": "get_all_rates_snapshot",
+      "entryPoint": "services_fx_service_get_all_rates_snapshot",
+      "entryPointId": "services_fx_service_get_all_rates_snapshot",
+      "path": [
+        "services_fx_service_get_all_rates_snapshot",
+        "services_fx_service_fetch_all_rates",
+        "services_fx_service_cache_key_for_display_rate",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_cached_supported_rates",
+        "services_fx_service_get_async",
+        "services_fx_service_refresh_supported_rates",
+        "services_fx_service_cache_key",
+        "services_fx_service_quote_matches_conversion_market",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_derive_blue_equivalent",
+        "services_fx_service_extract_direct_quotes",
+        "services_fx_service_store_rate",
+        "services_fx_service_parse_provider_updated_at",
+        "services_fx_service_quote_is_fresh"
+      ],
+      "qualifiedPath": [
+        "services_fx_service_get_all_rates_snapshot",
+        "services_fx_service_fetch_all_rates",
+        "services_fx_service_cache_key_for_display_rate",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_cached_supported_rates",
+        "services_fx_service_get_async",
+        "services_fx_service_refresh_supported_rates",
+        "services_fx_service_cache_key",
+        "services_fx_service_quote_matches_conversion_market",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_derive_blue_equivalent",
+        "services_fx_service_extract_direct_quotes",
+        "services_fx_service_store_rate",
+        "services_fx_service_parse_provider_updated_at",
+        "services_fx_service_quote_is_fresh"
+      ],
+      "depth": 4,
+      "nodeCount": 16,
+      "fileCount": 1,
+      "files": [
+        "app/services/fx_service.py"
       ],
       "criticality": 0.19,
       "warnings": []
@@ -12905,46 +13005,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_fx_service_get_all_rates_snapshot",
-      "name": "get_all_rates_snapshot",
-      "entryPoint": "services_fx_service_get_all_rates_snapshot",
-      "entryPointId": "services_fx_service_get_all_rates_snapshot",
-      "path": [
-        "services_fx_service_get_all_rates_snapshot",
-        "services_fx_service_fetch_all_rates",
-        "services_fx_service_cached_quote_matches",
-        "services_fx_service_cached_rate",
-        "services_fx_service_cached_supported_rates",
-        "services_fx_service_get_async",
-        "services_fx_service_refresh_supported_rates",
-        "services_fx_service_quote_matches_supported_market",
-        "services_fx_service_cache_key",
-        "services_fx_service_extract_direct_quotes",
-        "services_fx_service_store_rate"
-      ],
-      "qualifiedPath": [
-        "services_fx_service_get_all_rates_snapshot",
-        "services_fx_service_fetch_all_rates",
-        "services_fx_service_cached_quote_matches",
-        "services_fx_service_cached_rate",
-        "services_fx_service_cached_supported_rates",
-        "services_fx_service_get_async",
-        "services_fx_service_refresh_supported_rates",
-        "services_fx_service_quote_matches_supported_market",
-        "services_fx_service_cache_key",
-        "services_fx_service_extract_direct_quotes",
-        "services_fx_service_store_rate"
-      ],
-      "depth": 3,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/fx_service.py"
-      ],
-      "criticality": 0.18,
-      "warnings": []
-    },
-    {
       "id": "flow:services_read_model_cache_get_cached_availability_payload",
       "name": "get_cached_availability_payload",
       "entryPoint": "services_read_model_cache_get_cached_availability_payload",
@@ -13100,46 +13160,6 @@
       "fileCount": 1,
       "files": [
         "app/services/read_model_cache.py"
-      ],
-      "criticality": 0.18,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_fx_service_get_usd_official_rate",
-      "name": "get_usd_official_rate",
-      "entryPoint": "services_fx_service_get_usd_official_rate",
-      "entryPointId": "services_fx_service_get_usd_official_rate",
-      "path": [
-        "services_fx_service_get_usd_official_rate",
-        "services_fx_service_get_usd_rate_for_type",
-        "services_fx_service_fetch_rate",
-        "services_fx_service_is_cache_fresh",
-        "services_fx_service_cache_key",
-        "services_fx_service_cached_quote_matches",
-        "services_fx_service_cached_rate",
-        "services_fx_service_extract_direct_quotes",
-        "services_fx_service_get_async",
-        "services_fx_service_quote_matches_supported_market",
-        "services_fx_service_store_rate"
-      ],
-      "qualifiedPath": [
-        "services_fx_service_get_usd_official_rate",
-        "services_fx_service_get_usd_rate_for_type",
-        "services_fx_service_fetch_rate",
-        "services_fx_service_is_cache_fresh",
-        "services_fx_service_cache_key",
-        "services_fx_service_cached_quote_matches",
-        "services_fx_service_cached_rate",
-        "services_fx_service_extract_direct_quotes",
-        "services_fx_service_get_async",
-        "services_fx_service_quote_matches_supported_market",
-        "services_fx_service_store_rate"
-      ],
-      "depth": 3,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/fx_service.py"
       ],
       "criticality": 0.18,
       "warnings": []
@@ -15003,6 +15023,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_fx_service_get_cached_rates",
+      "name": "get_cached_rates",
+      "entryPoint": "services_fx_service_get_cached_rates",
+      "entryPointId": "services_fx_service_get_cached_rates",
+      "path": [
+        "services_fx_service_get_cached_rates",
+        "services_fx_service_cache_key_for_display_rate",
+        "services_fx_service_cached_rate",
+        "services_fx_service_is_cache_fresh",
+        "services_fx_service_cache_key"
+      ],
+      "qualifiedPath": [
+        "services_fx_service_get_cached_rates",
+        "services_fx_service_cache_key_for_display_rate",
+        "services_fx_service_cached_rate",
+        "services_fx_service_is_cache_fresh",
+        "services_fx_service_cache_key"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/fx_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:api_gemma_chat_get_chat_insights",
       "name": "get_chat_insights",
       "entryPoint": "api_gemma_chat_get_chat_insights",
@@ -15036,8 +15084,10 @@
         "services_fx_service_cache_key",
         "services_fx_service_cached_quote_matches",
         "services_fx_service_cached_rate",
+        "services_fx_service_derive_blue_equivalent",
         "services_fx_service_extract_direct_quotes",
         "services_fx_service_quote_is_fresh",
+        "services_fx_service_quote_matches_conversion_market",
         "services_fx_service_quote_matches_supported_market",
         "services_fx_service_store_rate",
         "services_fx_service_parse_provider_updated_at"
@@ -15047,14 +15097,16 @@
         "services_fx_service_cache_key",
         "services_fx_service_cached_quote_matches",
         "services_fx_service_cached_rate",
+        "services_fx_service_derive_blue_equivalent",
         "services_fx_service_extract_direct_quotes",
         "services_fx_service_quote_is_fresh",
+        "services_fx_service_quote_matches_conversion_market",
         "services_fx_service_quote_matches_supported_market",
         "services_fx_service_store_rate",
         "services_fx_service_parse_provider_updated_at"
       ],
       "depth": 2,
-      "nodeCount": 9,
+      "nodeCount": 11,
       "fileCount": 1,
       "files": [
         "app/services/fx_service.py"
@@ -15316,6 +15368,38 @@
       "fileCount": 1,
       "files": [
         "app/services/promotion_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_fx_service_get_rate_sync",
+      "name": "get_rate_sync",
+      "entryPoint": "services_fx_service_get_rate_sync",
+      "entryPointId": "services_fx_service_get_rate_sync",
+      "path": [
+        "services_fx_service_get_rate_sync",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_is_cache_fresh",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_store_rate",
+        "services_fx_service_quote_matches_conversion_market"
+      ],
+      "qualifiedPath": [
+        "services_fx_service_get_rate_sync",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_is_cache_fresh",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_store_rate",
+        "services_fx_service_quote_matches_conversion_market"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/fx_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -22063,30 +22147,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_fx_service_get_cached_rates",
-      "name": "get_cached_rates",
-      "entryPoint": "services_fx_service_get_cached_rates",
-      "entryPointId": "services_fx_service_get_cached_rates",
-      "path": [
-        "services_fx_service_get_cached_rates",
-        "services_fx_service_cached_rate",
-        "services_fx_service_is_cache_fresh"
-      ],
-      "qualifiedPath": [
-        "services_fx_service_get_cached_rates",
-        "services_fx_service_cached_rate",
-        "services_fx_service_is_cache_fresh"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/fx_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:api_rooms_get_category",
       "name": "get_category",
       "entryPoint": "api_rooms_get_category",
@@ -22548,36 +22608,6 @@
       "fileCount": 1,
       "files": [
         "app/adapters/paypal_adapter.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_fx_service_get_rate_sync",
-      "name": "get_rate_sync",
-      "entryPoint": "services_fx_service_get_rate_sync",
-      "entryPointId": "services_fx_service_get_rate_sync",
-      "path": [
-        "services_fx_service_get_rate_sync",
-        "services_fx_service_cached_quote_matches",
-        "services_fx_service_cached_rate",
-        "services_fx_service_is_cache_fresh",
-        "services_fx_service_quote_matches_supported_market",
-        "services_fx_service_store_rate"
-      ],
-      "qualifiedPath": [
-        "services_fx_service_get_rate_sync",
-        "services_fx_service_cached_quote_matches",
-        "services_fx_service_cached_rate",
-        "services_fx_service_is_cache_fresh",
-        "services_fx_service_quote_matches_supported_market",
-        "services_fx_service_store_rate"
-      ],
-      "depth": 1,
-      "nodeCount": 6,
-      "fileCount": 1,
-      "files": [
-        "app/services/fx_service.py"
       ],
       "criticality": 0.16,
       "warnings": []

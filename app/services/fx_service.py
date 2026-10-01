@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -19,6 +20,15 @@ USD_RATE_TYPES: tuple[str, ...] = ("oficial", "blue")
 DIRECT_CURRENCY_CODES: tuple[str, ...] = ("EUR", "BRL", "CLP", "UYU")
 OTHER_CURRENCIES: list[str] = [currency.lower() for currency in DIRECT_CURRENCY_CODES]
 SUPPORTED_CONVERSION_CURRENCIES = frozenset({"ARS", "USD", *DIRECT_CURRENCY_CODES})
+DERIVED_BLUE_MARKET = "blue_derivado"
+DIRECT_CURRENCY_BLUE_RATE_TYPES: tuple[str, ...] = tuple(
+    f"{currency.lower()}_blue" for currency in DIRECT_CURRENCY_CODES
+)
+SUPPORTED_DISPLAY_RATE_TYPES: tuple[str, ...] = (
+    *USD_RATE_TYPES,
+    *(currency.lower() for currency in DIRECT_CURRENCY_CODES),
+    *DIRECT_CURRENCY_BLUE_RATE_TYPES,
+)
 # Kept as a compatibility name for API callers, but intentionally excludes
 # tarjeta, MEP, CCL, cripto, mayorista and other USD markets.
 RATE_TYPES: list[str] = list(USD_RATE_TYPES)
@@ -31,7 +41,21 @@ _cache: dict = {"data": {}, "fetched_at_by_key": {}}
 
 def _cache_key(currency_code: str, rate_type: str = "oficial") -> str:
     currency = currency_code.strip().upper()
-    return rate_type if currency == "USD" else f"currency:{currency}"
+    if currency == "USD":
+        return rate_type
+    if rate_type == "oficial":
+        # Preserve the original direct-quote cache key for compatibility.
+        return f"currency:{currency}"
+    return f"currency:{currency}:{rate_type}"
+
+
+def _cache_key_for_display_rate(rate_type: str) -> str:
+    normalized = rate_type.strip().lower()
+    if normalized in USD_RATE_TYPES:
+        return normalized
+    if normalized.endswith("_blue"):
+        return _cache_key(normalized[:-5], "blue")
+    return _cache_key(normalized.upper(), "oficial")
 
 
 def _cached_rate(key: str, *, allow_stale: bool = False) -> Optional[dict]:
@@ -69,13 +93,16 @@ def quote_is_fresh(quote: object, *, now: datetime | None = None) -> bool:
         sell = float(quote.get("venta"))
     except (TypeError, ValueError):
         return False
-    if buy <= 0 or sell <= 0:
+    if not math.isfinite(buy) or not math.isfinite(sell) or buy <= 0 or sell <= 0:
         return False
     updated_at = parse_provider_updated_at(quote.get("fechaActualizacion") or quote.get("fecha"))
     if updated_at is None:
         return False
     current = now or datetime.now(timezone.utc)
-    return current - MAX_PROVIDER_QUOTE_AGE <= updated_at <= current + MAX_PROVIDER_FUTURE_SKEW
+    return (
+        buy <= sell
+        and current - MAX_PROVIDER_QUOTE_AGE <= updated_at <= current + MAX_PROVIDER_FUTURE_SKEW
+    )
 
 
 def _quote_matches_supported_market(
@@ -90,6 +117,106 @@ def _quote_matches_supported_market(
         str(quote.get("moneda") or "").strip().upper() == currency
         and str(quote.get("casa") or "").strip().lower() == market
     )
+
+
+def _quote_matches_conversion_market(
+    quote: object,
+    *,
+    currency: str,
+    market: str,
+) -> bool:
+    if currency == "USD":
+        return _quote_matches_supported_market(quote, currency="USD", market=market)
+    if market == "oficial":
+        return _quote_matches_supported_market(quote, currency=currency, market="oficial")
+    return (
+        isinstance(quote, dict)
+        and str(quote.get("moneda") or "").strip().upper() == currency
+        and str(quote.get("casa") or "").strip().lower() == DERIVED_BLUE_MARKET
+        and str(quote.get("_selected_market") or "blue").strip().lower() == "blue"
+    )
+
+
+def _derive_blue_equivalent(
+    currency: str,
+    *,
+    direct_quote: object,
+    usd_official_quote: object,
+    usd_blue_quote: object,
+) -> dict | None:
+    """Scale a direct DolarAPI quote by the USD blue/official relationship.
+
+    DolarAPI provides blue-market rows only for USD. Other supported currencies
+    therefore keep their direct official quote as the source and expose a
+    separately labeled blue equivalent derived from the same provider's USD
+    official and blue rows.
+    """
+    if (
+        not _quote_matches_supported_market(direct_quote, currency=currency, market="oficial")
+        or not _quote_matches_supported_market(usd_official_quote, currency="USD", market="oficial")
+        or not _quote_matches_supported_market(usd_blue_quote, currency="USD", market="blue")
+        or not quote_is_fresh(direct_quote)
+        or not quote_is_fresh(usd_official_quote)
+        or not quote_is_fresh(usd_blue_quote)
+    ):
+        return None
+    try:
+        direct_buy = float(direct_quote["compra"])
+        direct_sell = float(direct_quote["venta"])
+        official_buy = float(usd_official_quote["compra"])
+        official_sell = float(usd_official_quote["venta"])
+        blue_buy = float(usd_blue_quote["compra"])
+        blue_sell = float(usd_blue_quote["venta"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    inputs = (direct_buy, direct_sell, official_buy, official_sell, blue_buy, blue_sell)
+    if any(not math.isfinite(value) or value <= 0 for value in inputs):
+        return None
+
+    update_times = [
+        parse_provider_updated_at(item.get("fechaActualizacion") or item.get("fecha"))
+        for item in (direct_quote, usd_official_quote, usd_blue_quote)
+    ]
+    if any(item is None for item in update_times):
+        return None
+    # A derived quote is only as current as its oldest input.
+    effective_update = min(item for item in update_times if item is not None)
+    derived_buy = direct_buy * blue_buy / official_buy
+    derived_sell = direct_sell * blue_sell / official_sell
+    if not math.isfinite(derived_buy) or not math.isfinite(derived_sell) or derived_buy <= 0 or derived_sell <= 0:
+        return None
+    if derived_buy > derived_sell:
+        return None
+    return {
+        "moneda": currency,
+        "casa": DERIVED_BLUE_MARKET,
+        "nombre": f"{direct_quote.get('nombre') or currency} (equivalente blue derivado)",
+        "compra": derived_buy,
+        "venta": derived_sell,
+        "fechaActualizacion": effective_update.isoformat(),
+        "_selected_market": "blue",
+        "_rate_type": f"{currency.lower()}_blue",
+        "_derived_blue": True,
+        "_source_quotes": {
+            "formula_version": "1",
+            "formula": "currency_official * usd_blue / usd_official",
+            "currency_official": {
+                "compra": direct_buy,
+                "venta": direct_sell,
+                "updated_at": update_times[0].isoformat(),
+            },
+            "usd_official": {
+                "compra": official_buy,
+                "venta": official_sell,
+                "updated_at": update_times[1].isoformat(),
+            },
+            "usd_blue": {
+                "compra": blue_buy,
+                "venta": blue_sell,
+                "updated_at": update_times[2].isoformat(),
+            },
+        },
+    }
 
 
 async def _get_async(url: str) -> Optional[dict | list]:
@@ -113,8 +240,9 @@ def _extract_direct_quotes(payload: object) -> dict[str, dict]:
         if not isinstance(item, dict):
             continue
         currency = str(item.get("moneda") or "").strip().upper()
-        # DolarAPI publishes the supported non-USD quotes as casa=oficial.
-        # Never invent a blue/M.E.P. equivalent for these currencies.
+        # DolarAPI publishes supported non-USD source quotes as casa=oficial.
+        # A blue equivalent is derived separately from exact USD official/blue
+        # inputs and is never presented as a direct provider quote.
         quote_type = str(item.get("casa") or "").strip().lower()
         if currency in DIRECT_CURRENCY_CODES and quote_type == "oficial":
             extracted[currency] = item
@@ -134,24 +262,32 @@ async def _refresh_supported_rates() -> dict[str, dict]:
         if _quote_matches_supported_market(payload, currency="USD", market=key):
             rates[key] = payload
             _store_rate(key, payload)
-    for currency, quote in _extract_direct_quotes(currencies).items():
+    direct_quotes = _extract_direct_quotes(currencies)
+    for currency, quote in direct_quotes.items():
         key = currency.lower()
         rates[key] = quote
         _store_rate(_cache_key(currency), quote)
+        derived_blue = _derive_blue_equivalent(
+            currency,
+            direct_quote=quote,
+            usd_official_quote=rates.get("oficial"),
+            usd_blue_quote=rates.get("blue"),
+        )
+        if derived_blue is not None:
+            blue_key = f"{key}_blue"
+            rates[blue_key] = derived_blue
+            _store_rate(_cache_key(currency, "blue"), derived_blue)
     return rates
 
 
 async def fetch_all_rates() -> dict:
-    """Fetch only supported USD markets and direct supported-currency quotes."""
+    """Fetch USD official/blue quotes and direct/derived supported currencies."""
     if not external_connections_enabled():
         # The display endpoint may use last-known in-process values, but only
         # for the explicitly supported quote set. Conversions check freshness.
         return await _cached_supported_rates()
 
-    cached = {
-        key: _cached_rate(key if key in USD_RATE_TYPES else f"currency:{key.upper()}")
-        for key in (*USD_RATE_TYPES, *(code.lower() for code in DIRECT_CURRENCY_CODES))
-    }
+    cached = {key: _cached_rate(_cache_key_for_display_rate(key)) for key in SUPPORTED_DISPLAY_RATE_TYPES}
     if all(_cached_quote_matches(key, quote) for key, quote in cached.items()):
         return {key: quote for key, quote in cached.items() if quote is not None}
 
@@ -165,8 +301,8 @@ async def fetch_all_rates() -> dict:
 
 async def _cached_supported_rates() -> dict[str, dict]:
     result: dict[str, dict] = {}
-    for key in (*USD_RATE_TYPES, *(code.lower() for code in DIRECT_CURRENCY_CODES)):
-        cached = _cached_rate(key if key in USD_RATE_TYPES else f"currency:{key.upper()}", allow_stale=True)
+    for key in SUPPORTED_DISPLAY_RATE_TYPES:
+        cached = _cached_rate(_cache_key_for_display_rate(key), allow_stale=True)
         if _cached_quote_matches(key, cached):
             result[key] = cached
     return result
@@ -175,6 +311,12 @@ async def _cached_supported_rates() -> dict[str, dict]:
 def _cached_quote_matches(rate_type: str, quote: object) -> bool:
     if rate_type in USD_RATE_TYPES:
         return _quote_matches_supported_market(quote, currency="USD", market=rate_type)
+    if rate_type.endswith("_blue"):
+        currency = rate_type[:-5].upper()
+        return (
+            currency in DIRECT_CURRENCY_CODES
+            and _quote_matches_conversion_market(quote, currency=currency, market="blue")
+        )
     currency = rate_type.upper()
     return (
         currency in DIRECT_CURRENCY_CODES
@@ -183,7 +325,7 @@ def _cached_quote_matches(rate_type: str, quote: object) -> bool:
 
 
 async def fetch_rate(rate_type: str) -> Optional[dict]:
-    """Fetch an allowed USD market or direct-currency row by its short code."""
+    """Fetch a USD market, direct official quote, or derived blue equivalent."""
     normalized = str(rate_type or "").strip().lower()
     if normalized in USD_RATE_TYPES:
         currency = "USD"
@@ -193,6 +335,16 @@ async def fetch_rate(rate_type: str) -> Optional[dict]:
         currency = normalized.upper()
         cache_key = _cache_key(currency)
         url = f"{DOLAR_API_BASE}/cotizaciones"
+    elif normalized.endswith("_blue") and normalized[:-5].upper() in DIRECT_CURRENCY_CODES:
+        currency = normalized[:-5].upper()
+        cache_key = _cache_key(currency, "blue")
+        cached = _cached_rate(cache_key)
+        if cached and _cached_quote_matches(normalized, cached):
+            return cached
+        if not external_connections_enabled():
+            stale = _cached_rate(cache_key, allow_stale=True)
+            return stale if _cached_quote_matches(normalized, stale) else None
+        return (await _refresh_supported_rates()).get(normalized)
     else:
         return None
 
@@ -216,27 +368,49 @@ def get_conversion_quote_sync(currency_code: str, rate_type: str = "oficial") ->
     """Get a fresh exact-market quote for automatic conversion.
 
     USD uses only the selected `/dolares/oficial` or `/dolares/blue` endpoint.
-    EUR/BRL/CLP/UYU are read only from their matching `/cotizaciones` row.
+    EUR/BRL/CLP/UYU use their direct official row or a clearly labeled blue
+    equivalent derived from that row and the USD blue/official ratio.
     """
     currency = str(currency_code or "").strip().upper()
+    market = str(rate_type or "").strip().lower()
     if currency not in SUPPORTED_CONVERSION_CURRENCIES - {"ARS"}:
         return None
-    if currency == "USD" and rate_type not in USD_RATE_TYPES:
+    if market not in USD_RATE_TYPES:
         return None
 
-    cache_key = _cache_key(currency, rate_type)
+    cache_key = _cache_key(currency, market)
     cached = _cached_rate(cache_key)
-    expected_market = rate_type if currency == "USD" else "oficial"
-    cache_identifier = rate_type if currency == "USD" else currency.lower()
-    if cached and _cached_quote_matches(cache_identifier, cached) and quote_is_fresh(cached):
+    expected_market = market if currency == "USD" or market == "oficial" else DERIVED_BLUE_MARKET
+    if (
+        cached
+        and _quote_matches_conversion_market(cached, currency=currency, market=market)
+        and quote_is_fresh(cached)
+    ):
         return cached
+
+    if currency != "USD" and market == "blue":
+        if not external_connections_enabled():
+            return None
+        direct_quote = get_conversion_quote_sync(currency, "oficial")
+        official_usd = get_conversion_quote_sync("USD", "oficial")
+        blue_usd = get_conversion_quote_sync("USD", "blue")
+        derived = _derive_blue_equivalent(
+            currency,
+            direct_quote=direct_quote,
+            usd_official_quote=official_usd,
+            usd_blue_quote=blue_usd,
+        )
+        if derived is not None:
+            _store_rate(cache_key, derived)
+        return derived
+
     if not external_connections_enabled():
         return None
 
     try:
         require_external_connections("DolarAPI FX conversion quote")
         url = (
-            f"{DOLAR_API_BASE}/dolares/{rate_type}"
+            f"{DOLAR_API_BASE}/dolares/{market}"
             if currency == "USD"
             else f"{DOLAR_API_BASE}/cotizaciones"
         )
@@ -245,14 +419,13 @@ def get_conversion_quote_sync(currency_code: str, rate_type: str = "oficial") ->
         payload = response.json()
         quote = (
             payload
-            if currency == "USD" and _quote_matches_supported_market(payload, currency="USD", market=rate_type)
+            if currency == "USD" and _quote_matches_supported_market(payload, currency="USD", market=market)
             else None
         )
         if currency != "USD":
             quote = _extract_direct_quotes(payload).get(currency)
         if not quote_is_fresh(quote) or (
-            currency != "USD"
-            and not _quote_matches_supported_market(quote, currency=currency, market=expected_market)
+            not _quote_matches_supported_market(quote, currency=currency, market=expected_market)
         ):
             return None
         _store_rate(cache_key, quote)
@@ -265,7 +438,7 @@ def get_conversion_quote_sync(currency_code: str, rate_type: str = "oficial") ->
         logger.warning(
             "DolarAPI conversion fetch failed currency=%s rate_type=%s error_type=%s",
             currency,
-            rate_type,
+            market,
             type(exc).__name__,
         )
         return None
@@ -304,8 +477,8 @@ async def get_all_rates_snapshot() -> dict:
 
 def get_cached_rates() -> Optional[dict]:
     if all(
-        _cached_rate(key)
-        for key in (*USD_RATE_TYPES, *(f"currency:{code}" for code in DIRECT_CURRENCY_CODES))
+        _cached_rate(_cache_key_for_display_rate(key))
+        for key in SUPPORTED_DISPLAY_RATE_TYPES
     ):
         return _cache.get("data")
     return None

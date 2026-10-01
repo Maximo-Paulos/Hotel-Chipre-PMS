@@ -1328,14 +1328,14 @@ Monedas habilitadas para conversión automática:
 
 ### 37.2 Conversión configurable
 
-Para USD, cada hotel puede seleccionar solo una de estas cotizaciones para las conversiones:
+Para todas las monedas, cada hotel selecciona un solo mercado de referencia para las conversiones:
 
 - dólar oficial;
 - dólar blue.
 
-Dueño o codueña puede decidir si la pantalla muestra la cotización USD seleccionada o ambas (oficial y blue). Mostrar ambas no cambia el mercado utilizado para convertir.
+Dueño o codueña puede decidir si la pantalla muestra uno o ambos mercados (oficial y blue) para las cotizaciones disponibles. Mostrar ambos no cambia el mercado elegido para convertir.
 
-EUR, BRL, CLP y UYU usan únicamente su fila directa `casa=oficial` de DolarAPI. Las conversiones entre cualquier par de monedas soportadas pasan por ARS y conservan la cotización, mercado, lado y fecha usados. El lado de origen se toma de `venta` y el lado de destino de `compra`; un spread solo puede ser cero o positivo.
+USD usa el endpoint directo oficial o blue de DolarAPI. EUR, BRL, CLP y UYU usan su fila oficial directa; cuando el mercado elegido es blue, su equivalente se estima a partir de la fila oficial de esa moneda y de las relaciones compra/compra y venta/venta entre USD blue y oficial. La interfaz y la auditoría identifican esos valores como derivados, no como cotizaciones blue directas. Las conversiones entre cualquier par de monedas soportadas pasan por ARS y conservan mercado, cotización, lado y fechas de origen. El lado de origen se toma de `venta` y el lado de destino de `compra`; un spread solo puede ser cero o positivo.
 
 No se usa, deriva ni sustituye por dólar tarjeta, MEP, CCL, cripto, mayorista ni otra variante. Si falta o está vencida la cotización exacta configurada, la conversión falla explícitamente y no cambia de mercado automáticamente.
 
@@ -2055,15 +2055,15 @@ El Sprint 1 se considera funcionalmente completo cuando permite:
 
 ### Q116. ¿Fuente de cotización?
 
-**Respuesta IA:** DolarAPI detrás de un servicio. El único mercado configurable para USD es oficial o blue; el hotel puede mostrar una o ambas cotizaciones. EUR, BRL, CLP y UYU usan únicamente su fila directa `casa=oficial` de `/v1/cotizaciones`. No se ofrece, deriva ni etiqueta como blue una cotización no USD. En ningún par se usan dólar tarjeta, MEP, CCL, cripto, mayorista ni otras variantes. Fuentes vigentes: [Dólar oficial](https://dolarapi.com/docs/argentina/operations/get-dolar-oficial), [Dólar blue](https://dolarapi.com/docs/argentina/operations/get-dolar-blue) y [cotizaciones](https://dolarapi.com/docs/argentina/operations/get-cotizaciones).
+**Respuesta IA:** DolarAPI detrás de un servicio. El mercado configurable rige para todas las monedas y solo puede ser oficial o blue; el hotel puede mostrar uno o ambos. DolarAPI ofrece filas directas oficial/blue para USD y filas oficiales para EUR, BRL, CLP y UYU. Para la opción blue no USD, la app deriva un equivalente con la relación USD blue/oficial y lo etiqueta como estimado. En ningún par se usan dólar tarjeta, MEP, CCL, cripto, mayorista ni otras variantes. Fuentes: [Dólar oficial](https://dolarapi.com/docs/argentina/operations/get-dolar-oficial), [Dólar blue](https://dolarapi.com/docs/argentina/operations/get-dolar-blue) y [cotizaciones](https://dolarapi.com/docs/argentina/operations/get-cotizaciones).
 
 ### Q117. ¿Qué criterio favorece al hotel?
 
-**Respuesta IA:** Todas las conversiones cruzadas pasan por ARS. La moneda de origen se valora con venta y el destino con compra; ARS→destino usa compra y origen→ARS usa venta. La selección oficial/blue aplica solo al lado USD; una conversión entre otras dos monedas usa las dos filas directas `casa=oficial`, sin cotización USD implícita. Cada lado conserva por separado tipo/mercado/fecha de DolarAPI. El spread FX no puede ser negativo; los campos legados `preferred_source`/`preferred_side` solo admiten official/blue y buy/sell, y no cambian mercado ni lados de la conversión automática.
+**Respuesta IA:** Todas las conversiones cruzadas pasan por ARS y usan el mercado elegido en la configuración para ambos lados. La moneda de origen se valora con venta y el destino con compra; el spread FX no puede ser negativo. Cada lado conserva la moneda, mercado de conversión, valor aplicado y fecha; las tasas blue no USD conservan además la procedencia y fórmula de derivación. Esta conversión de precios no registra compra o venta de efectivo en caja.
 
 ### Q118. ¿Puede el dueño elegir otra cotización?
 
-**Respuesta IA:** Dueño y codueña configuran el mercado USD usado en conversiones y cuáles cotizaciones USD se muestran desde Ajustes del hotel; el cambio requiere MFA reciente. El selector de mercado solo acepta oficial o blue.
+**Respuesta IA:** Dueño y codueña configuran el mercado de referencia de todas las conversiones y cuáles cotizaciones se muestran desde Ajustes del hotel; el cambio requiere MFA reciente. El selector de mercado solo acepta oficial o blue.
 
 ### Q119. ¿El recepcionista puede cambiarla?
 

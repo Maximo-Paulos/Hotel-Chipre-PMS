@@ -384,13 +384,30 @@ def test_global_blue_market_dominates_fx_policy_source_and_side(db, monkeypatch)
         seen_markets.append(market)
         if currency == "USD" and market == "blue":
             values = {"compra": 1200.0, "venta": 1250.0}
+            casa = "blue"
+            rate_type = "blue"
+            derived = False
+        elif currency != "USD" and market == "blue":
+            direct = _FX_TEST_RATES[currency]
+            values = {
+                "compra": direct["compra"] * 1200.0 / _FX_TEST_RATES["USD"]["compra"],
+                "venta": direct["venta"] * 1250.0 / _FX_TEST_RATES["USD"]["venta"],
+            }
+            casa = "blue_derivado"
+            rate_type = f"{currency.lower()}_blue"
+            derived = True
         else:
             values = _FX_TEST_RATES[currency]
+            casa = "oficial"
+            rate_type = f"{currency.lower()}_oficial" if currency != "USD" else "oficial"
+            derived = False
         return {
             "moneda": currency,
-            "casa": market if currency == "USD" else "oficial",
+            "casa": casa,
             **values,
             "fechaActualizacion": now,
+            "_rate_type": rate_type,
+            "_derived_blue": derived,
         }
 
     monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", conversion_quote)
@@ -429,13 +446,15 @@ def test_global_blue_market_dominates_fx_policy_source_and_side(db, monkeypatch)
         fx_policy_id=None,
         provider_code=None,
     )
-    assert cross_rate == pytest.approx(1250.0 / 1200.0 * 1.05)
+    euro_blue_buy = _FX_TEST_RATES["EUR"]["compra"] * 1200.0 / _FX_TEST_RATES["USD"]["compra"]
+    assert cross_rate == pytest.approx(1250.0 / euro_blue_buy * 1.05)
     assert cross_details["source_quote"]["market"] == "blue"
     assert cross_details["source_quote"]["usd_market"] == "blue"
     assert cross_details["source_quote"]["rate_type"] == "blue"
-    assert cross_details["target_quote"]["market"] == "oficial"
-    assert cross_details["target_quote"]["direct_currency_market"] == "oficial"
-    assert cross_details["target_quote"]["rate_type"] == "eur_oficial"
+    assert cross_details["target_quote"]["market"] == "blue_derivado"
+    assert cross_details["target_quote"]["conversion_market"] == "blue"
+    assert cross_details["target_quote"]["is_derived_blue"] is True
+    assert cross_details["target_quote"]["rate_type"] == "eur_blue"
 
     _, _, direct_only_details = pricing_policy_service._convert_amount(
         db,
@@ -448,8 +467,10 @@ def test_global_blue_market_dominates_fx_policy_source_and_side(db, monkeypatch)
     )
     assert direct_only_details["configured_usd_market"] == "blue"
     assert direct_only_details["usd_market"] is None
-    assert direct_only_details["source_quote"]["direct_currency_market"] == "oficial"
-    assert direct_only_details["target_quote"]["direct_currency_market"] == "oficial"
+    assert direct_only_details["source_quote"]["market"] == "blue_derivado"
+    assert direct_only_details["source_quote"]["conversion_market"] == "blue"
+    assert direct_only_details["target_quote"]["market"] == "blue_derivado"
+    assert direct_only_details["target_quote"]["conversion_market"] == "blue"
 
 
 def test_missing_selected_blue_market_does_not_fall_back_to_official_snapshot(db, monkeypatch):
@@ -467,6 +488,7 @@ def test_missing_selected_blue_market_does_not_fall_back_to_official_snapshot(db
             provider_updated_at=fresh_time,
         )
     )
+    db.flush()
     monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", lambda *_: None)
 
     with pytest.raises(ValueError, match="blue.*USD.*no se usará otro mercado"):
@@ -479,6 +501,110 @@ def test_missing_selected_blue_market_does_not_fall_back_to_official_snapshot(db
             fx_policy_id=None,
             provider_code=None,
         )
+
+
+def test_blue_non_usd_conversion_uses_only_matching_derived_snapshot(db, monkeypatch):
+    _seed_pricing_foundation(db)
+    config = db.get(HotelConfiguration, 51)
+    config.fx_conversion_rate_type = "blue"
+    fresh_time = datetime.now(timezone.utc)
+    db.add(
+        FxRateSnapshot(
+            hotel_id=51,
+            rate_type="eur_blue",
+            provider_market="blue_derivado",
+            moneda="EUR",
+            compra=1200,
+            venta=1300,
+            provider_updated_at=fresh_time,
+        )
+    )
+    db.flush()
+    monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", lambda *_: None)
+
+    _, _, details = pricing_policy_service._convert_amount(
+        db,
+        hotel_id=51,
+        amount=1,
+        from_currency="EUR",
+        to_currency="ARS",
+        fx_policy_id=None,
+        provider_code=None,
+    )
+
+    assert details["source_quote"]["rate_type"] == "eur_blue"
+    assert details["source_quote"]["market"] == "blue_derivado"
+    assert details["source_quote"]["direct_currency_market"] == "oficial"
+    assert details["source_quote"]["is_derived_blue"] is True
+
+
+def test_blue_non_usd_conversion_does_not_use_official_currency_snapshot(db, monkeypatch):
+    _seed_pricing_foundation(db)
+    config = db.get(HotelConfiguration, 51)
+    config.fx_conversion_rate_type = "blue"
+    db.add(
+        FxRateSnapshot(
+            hotel_id=51,
+            rate_type="eur_oficial",
+            provider_market="oficial",
+            moneda="EUR",
+            compra=1200,
+            venta=1300,
+            provider_updated_at=datetime.now(timezone.utc),
+        )
+    )
+    monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", lambda *_: None)
+
+    with pytest.raises(ValueError, match="eur_blue.*no se usará otro mercado"):
+        pricing_policy_service._convert_amount(
+            db,
+            hotel_id=51,
+            amount=1,
+            from_currency="EUR",
+            to_currency="ARS",
+            fx_policy_id=None,
+            provider_code=None,
+        )
+
+
+def test_conversion_returns_the_full_precision_rate_used_for_amount(db, monkeypatch):
+    _seed_pricing_foundation(db)
+    now = datetime.now(timezone.utc).isoformat()
+    quotes = {
+        "EUR": {
+            "moneda": "EUR",
+            "casa": "oficial",
+            "compra": 1321.234567,
+            "venta": 1330.987654,
+            "fechaActualizacion": now,
+        },
+        "BRL": {
+            "moneda": "BRL",
+            "casa": "oficial",
+            "compra": 221.123456,
+            "venta": 222.456789,
+            "fechaActualizacion": now,
+        },
+    }
+    monkeypatch.setattr(
+        pricing_policy_service,
+        "get_conversion_quote_sync",
+        lambda currency, _market="oficial": quotes[currency],
+    )
+
+    converted_amount, applied_rate, details = pricing_policy_service._convert_amount(
+        db,
+        hotel_id=51,
+        amount=17.0,
+        from_currency="EUR",
+        to_currency="BRL",
+        fx_policy_id=None,
+        provider_code=None,
+    )
+
+    assert applied_rate == details["applied_rate"]
+    assert applied_rate != round(applied_rate, 6)
+    assert converted_amount == round(17.0 * applied_rate, 2)
 
 
 def test_negative_fx_spread_is_rejected_instead_of_reducing_hotel_quote(db, monkeypatch):

@@ -531,27 +531,27 @@ export function SettingsHotelPage() {
             <section className="rounded-lg border border-slate-200 p-4">
               <h3 className="text-sm font-semibold text-slate-800">Cotizaciones y conversiones</h3>
               <p className="mt-1 text-xs text-slate-600">
-                Solo se usan cotizaciones oficiales o dólar blue. Para USD, elegí oficial o blue; no se usan dólar tarjeta, MEP, CCL ni otras variantes. EUR, BRL, CLP y UYU usan su cotización oficial directa de DolarAPI; no se inventan cotizaciones blue para esas monedas. Los pares se convierten vía ARS con venta para la moneda de origen y compra para la de destino, aplicando el spread de la política FX. Si falta una cotización fresca, el cálculo se detiene sin cambiar de mercado.
+                Solo se usan mercados oficial y blue, sin dólar tarjeta, MEP, CCL ni otras variantes. El mercado elegido rige para todas las monedas: USD usa la cotización directa de DolarAPI; EUR, BRL, CLP y UYU usan su cotización oficial directa, o un equivalente blue derivado de la relación USD blue/oficial, identificado como estimado. Los pares se convierten vía ARS con venta para la moneda de origen y compra para la de destino, aplicando el spread de la política FX. Si falta una cotización fresca, el cálculo se detiene sin cambiar de mercado.
               </p>
               <p className="mt-1 text-xs text-slate-600">Cambiar estas preferencias requiere MFA reciente.</p>
               <div className="mt-3 grid gap-4 lg:grid-cols-2">
                 <label className="text-sm font-semibold text-slate-700">
-                  Cotización USD usada en conversiones
+                  Mercado de referencia para conversiones
                   <select
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                     value={form.fx_conversion_rate_type ?? "oficial"}
                     onChange={(event) => handleChange("fx_conversion_rate_type", event.target.value as "oficial" | "blue")}
                   >
-                    <option value="oficial">Dólar oficial</option>
-                    <option value="blue">Dólar blue</option>
+                    <option value="oficial">Oficial para todas las monedas</option>
+                    <option value="blue">Blue para todas las monedas</option>
                   </select>
                 </label>
                 <fieldset>
-                  <legend className="text-sm font-semibold text-slate-700">Cotizaciones USD visibles</legend>
+                  <legend className="text-sm font-semibold text-slate-700">Mercados visibles en cotizaciones</legend>
                   <div className="mt-1 grid gap-2 sm:grid-cols-2">
                     {([
-                      ["oficial", "Dólar oficial"],
-                      ["blue", "Dólar blue"]
+                      ["oficial", "Oficial"],
+                      ["blue", "Blue"]
                     ] as const).map(([rateType, label]) => {
                       const quote = fxRatesQuery.data?.find((item) => item.type === rateType);
                       const selected = (form.fx_display_rate_types ?? ["oficial"]).includes(rateType);
@@ -566,7 +566,7 @@ export function SettingsHotelPage() {
                                 ? Array.from(new Set([...current, rateType]))
                                 : current.filter((item) => item !== rateType);
                               if (next.length === 0) {
-                                setError("Dejá visible al menos una cotización USD.");
+                                setError("Dejá visible al menos un mercado de cotización.");
                                 return;
                               }
                               handleChange("fx_display_rate_types", next);
@@ -593,7 +593,10 @@ export function SettingsHotelPage() {
                 </fieldset>
               </div>
               <div className="mt-3 rounded-lg bg-slate-50 p-3">
-                <p className="text-xs font-semibold text-slate-700">Cotizaciones directas usadas para otras monedas</p>
+                <p className="text-xs font-semibold text-slate-700">Cotizaciones de EUR, BRL, CLP y UYU</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  DolarAPI publica estas monedas en mercado oficial. El equivalente blue se deriva con la relación entre dólar blue y oficial, y se identifica como estimado.
+                </p>
                 {fxRatesQuery.isLoading ? (
                   <p className="mt-1 text-xs text-slate-500">Cargando cotizaciones de DolarAPI...</p>
                 ) : fxRatesQuery.isError ? (
@@ -601,10 +604,22 @@ export function SettingsHotelPage() {
                 ) : (
                   <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                     {(["EUR", "BRL", "CLP", "UYU"] as const).map((currency) => {
-                      const quote = fxRatesQuery.data?.find((item) => item.type === currency.toLowerCase());
+                      const marketLabels: Record<"oficial" | "blue", string> = {
+                        oficial: "Oficial",
+                        blue: "Blue derivado",
+                      };
                       return (
                         <p key={currency} className="text-xs text-slate-600">
-                          <span className="font-semibold text-slate-800">{currency}:</span> {quote?.casa ?? "—"} · compra {quote?.compra ?? "—"} · venta {quote?.venta ?? "—"}
+                          <span className="font-semibold text-slate-800">{currency}:</span>{" "}
+                          {(form.fx_display_rate_types ?? ["oficial"]).map((market) => {
+                            const quoteType = market === "blue" ? `${currency.toLowerCase()}_blue` : currency.toLowerCase();
+                            const quote = fxRatesQuery.data?.find((item) => item.type === quoteType);
+                            return (
+                              <span key={market} className="block">
+                                {marketLabels[market]} · compra {quote?.compra ?? "—"} · venta {quote?.venta ?? "—"}
+                              </span>
+                            );
+                          })}
                         </p>
                       );
                     })}
@@ -612,7 +627,7 @@ export function SettingsHotelPage() {
                 )}
               </div>
               <p className="mt-2 text-xs text-slate-500">
-                Las tarifas y reservas ya creadas conservan sus importes. El mercado USD de este ajuste gobierna todas las conversiones; las políticas FX aportan el spread, mientras que su fuente y lado quedan legados. La dirección determina compra o venta.
+                Las tarifas y reservas ya creadas conservan sus importes. El mercado elegido gobierna todas las conversiones; las cotizaciones blue de EUR, BRL, CLP y UYU son equivalentes derivadas de la relación blue/oficial del USD. Las políticas FX aportan el spread y la dirección determina compra o venta.
               </p>
             </section>
           )}

@@ -82,13 +82,15 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   await page.getByRole("button", { name: "Aprobar diferencia", exact: true }).last().click();
   const lastTotpStep = await completeStepUpPrompt(page, ownerSession.lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText("Diferencia aprobada.", { exact: true })).toBeVisible();
-  await expect(page.getByText("Custodia: pendiente de recepción del dueño o la codueña.", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Confirmar recepción de custodia", exact: true }).click();
+  await expect(page.getByText(/^Custodia: pendiente de recepción del dueño o la codueña por /)).toBeVisible();
+  await page.getByTestId("cash-pending-custodies")
+    .getByRole("button", { name: "Confirmar custodia y cambio", exact: true })
+    .click();
   const custodyTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText(/Recepción confirmada\. Fondo de cambio para la sucesora:/)).toBeVisible();
   expect(lastTotpStep).toBeGreaterThan(ownerSession.lastTotpStep);
   expect(custodyTotpStep).toBeGreaterThan(lastTotpStep);
-  await expect(page.getByText(/Caja sucesora: .* abierta con saldo \$0/)).toBeVisible();
+  await expect(page.getByText(/^Caja sucesora: .* abierta con saldo \$\s*0(?:,00)?\.$/)).toBeVisible();
 });
 
 // Cash-difference approval is owner/co-owner only (see permission_service.py);

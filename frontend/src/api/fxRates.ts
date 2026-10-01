@@ -1,7 +1,17 @@
 import { apiFetch, type SessionLike } from "./client";
 
 export type FxRateItem = {
-  type: "oficial" | "blue" | "eur" | "brl" | "clp" | "uyu";
+  type:
+    | "oficial"
+    | "blue"
+    | "eur"
+    | "brl"
+    | "clp"
+    | "uyu"
+    | "eur_blue"
+    | "brl_blue"
+    | "clp_blue"
+    | "uyu_blue";
   nombre?: string | null;
   moneda?: string | null;
   casa?: string | null;

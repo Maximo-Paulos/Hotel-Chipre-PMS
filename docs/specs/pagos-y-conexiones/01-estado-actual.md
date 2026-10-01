@@ -20,7 +20,7 @@ Todo lo de este archivo es `confirmed` por lectura de código, salvo donde se in
 | PayPal | No conectado | `app/adapters/paypal_adapter.py` | Usa `paypalrestsdk==1.13.3` (SDK v1 discontinuado). Ninguna ruta lo usa. |
 | Recargo por medio de pago | Existe, con error de cálculo | `app/services/payment_service.py:144` (`calculate_payment_surcharge`), `app/models/payment_surcharge.py` | Calcula `base × %`, que cobra de menos. Ver fórmula correcta en `04`. |
 | Precios por medio en tarifas | Existe, carga manual | `app/models/daily_rate.py` (`price_cash`, `price_transfer`, `price_mercadopago`, `price_paypal`, `price_credit_card`; `price_periods` además `price_debit_card`, `price_booking`, `price_expedia`) | Tipo `Float` (dinero en punto flotante). No hay cálculo automático. |
-| Cotización del dólar | Existe | `app/services/fx_service.py`, `app/models/fx_rate_snapshot.py` | Fuente dolarapi.com (oficial, blue, MEP, etc.), caché y snapshots. No es una fuente oficial. |
+| Cotizaciones y conversión FX | Existe | `app/services/fx_service.py`, `app/models/fx_rate_snapshot.py` | DolarAPI: USD oficial/blue y cotizaciones oficiales directas de EUR, BRL, CLP y UYU; blue no USD se deriva y se identifica como estimado. El código de conversión excluye tarjeta, MEP, CCL, cripto y otros mercados. Caché y snapshots. |
 | Cierre diario por medio | Existe | `app/services/cash_daily_summary_service.py:457` (`by_payment_method`) | — |
 | Seña y no-show | Parcial | `hotel_configuration.deposit_percentage`, `enable_deposit_payment`, `free_cancellation_hours`, `cancellation_penalty_percentage`, `no_show_cutoff_hours`; `reservations.deposit_amount`, `no_show_policy_applied` | Hay política; no hay tarjeta en garantía ni cobro automático de no-show. |
 

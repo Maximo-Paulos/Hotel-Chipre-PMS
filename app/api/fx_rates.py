@@ -14,6 +14,8 @@ from app.dependencies.auth import AuthContext, require_permission
 from app.models.fx_rate_snapshot import FxRateSnapshot
 from app.services.fx_service import (
     DIRECT_CURRENCY_CODES,
+    DIRECT_CURRENCY_BLUE_RATE_TYPES,
+    USD_RATE_TYPES,
     fetch_all_rates,
     fetch_rate,
     get_all_rates_snapshot,
@@ -24,7 +26,11 @@ from app.services.permission_service import PERMISSION_REPORTS_FINANCIAL_VIEW
 
 router = APIRouter(prefix="/fx", tags=["FX Rates"])
 logger = logging.getLogger(__name__)
-ALLOWED_RATE_IDENTIFIERS = {"oficial", "blue", *(currency.lower() for currency in DIRECT_CURRENCY_CODES)}
+ALLOWED_RATE_IDENTIFIERS = {
+    *USD_RATE_TYPES,
+    *(currency.lower() for currency in DIRECT_CURRENCY_CODES),
+    *DIRECT_CURRENCY_BLUE_RATE_TYPES,
+}
 ALLOWED_SNAPSHOT_TYPES = ALLOWED_RATE_IDENTIFIERS | {
     f"{currency.lower()}_oficial" for currency in DIRECT_CURRENCY_CODES
 }
@@ -122,7 +128,7 @@ async def get_usd_oficial_rate(
     )
 
 
-@router.get("/rates/{rate_type}", response_model=FxRateItem, summary="Single USD rate type")
+@router.get("/rates/{rate_type}", response_model=FxRateItem, summary="Single supported FX quote")
 async def get_single_rate(
     rate_type: str,
     context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
@@ -185,7 +191,7 @@ async def create_fx_snapshot(
                 hotel_id=context.hotel_id,
                 rate_type=(
                     rate_type
-                    if rate_type in {"oficial", "blue"}
+                    if rate_type in USD_RATE_TYPES or rate_type in DIRECT_CURRENCY_BLUE_RATE_TYPES
                     else f"{str(rate_data.get('moneda') or rate_type).strip().lower()}_oficial"
                 ),
                 provider_market=(

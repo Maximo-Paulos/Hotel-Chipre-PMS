@@ -40,6 +40,7 @@ def fx_client(monkeypatch: pytest.MonkeyPatch):
             "oficial": {"moneda": "USD", "compra": 900.0, "venta": 920.0},
             "blue": {"moneda": "USD", "compra": 1000.0, "venta": 1020.0},
             "eur": {"moneda": "EUR", "casa": "oficial", "compra": 1000.0, "venta": 1010.0},
+            "eur_blue": {"moneda": "EUR", "casa": "blue_derivado", "compra": 1100.0, "venta": 1120.0},
             "brl": {"moneda": "BRL", "casa": "oficial", "compra": 200.0, "venta": 210.0},
             "clp": {"moneda": "CLP", "casa": "oficial", "compra": 1.0, "venta": 1.1},
             "uyu": {"moneda": "UYU", "casa": "oficial", "compra": 25.0, "venta": 26.0},
@@ -98,11 +99,11 @@ def test_create_fx_snapshot(fx_client):
     response = client.post("/fx/snapshot")
 
     assert response.status_code == 201, response.text
-    assert response.json()["stored"] == 6
+    assert response.json()["stored"] == 7
     with SessionLocal() as db:
         rows = db.query(FxRateSnapshot).filter(FxRateSnapshot.hotel_id == 1).all()
         assert {row.rate_type for row in rows} == {
-            "oficial", "blue", "eur_oficial", "brl_oficial", "clp_oficial", "uyu_oficial"
+            "oficial", "blue", "eur_oficial", "eur_blue", "brl_oficial", "clp_oficial", "uyu_oficial"
         }
 
 
@@ -131,6 +132,12 @@ def test_get_rate_snapshot_by_date(fx_client):
     assert len(direct_currency.json()) == 1
     assert direct_currency.json()[0]["rate_type"] == "eur_oficial"
     assert direct_currency.json()[0]["provider_market"] == "oficial"
+
+    derived_currency = client.get("/fx/snapshots", params={"rate_type": "eur_blue"})
+    assert derived_currency.status_code == 200, derived_currency.text
+    assert len(derived_currency.json()) == 1
+    assert derived_currency.json()[0]["rate_type"] == "eur_blue"
+    assert derived_currency.json()[0]["provider_market"] == "blue_derivado"
 
     disallowed_usd_market = client.get("/fx/snapshots", params={"rate_type": "tarjeta"})
     assert disallowed_usd_market.status_code == 422
@@ -175,6 +182,10 @@ def test_generic_fx_list_exposes_only_supported_conversion_quotes(fx_client, mon
             "brl": {"moneda": "BRL", "compra": 200, "venta": 210},
             "clp": {"moneda": "CLP", "compra": 1, "venta": 1.1},
             "uyu": {"moneda": "UYU", "compra": 25, "venta": 26},
+            "eur_blue": {"moneda": "EUR", "casa": "blue_derivado", "compra": 2200, "venta": 2210},
+            "brl_blue": {"moneda": "BRL", "casa": "blue_derivado", "compra": 400, "venta": 410},
+            "clp_blue": {"moneda": "CLP", "casa": "blue_derivado", "compra": 2, "venta": 2.1},
+            "uyu_blue": {"moneda": "UYU", "casa": "blue_derivado", "compra": 50, "venta": 51},
             "tarjeta": {"moneda": "USD", "compra": 1400, "venta": 1500},
             "bolsa": {"moneda": "USD", "compra": 1300, "venta": 1310},
             "contadoconliqui": {"moneda": "USD", "compra": 1300, "venta": 1310},
@@ -187,7 +198,8 @@ def test_generic_fx_list_exposes_only_supported_conversion_quotes(fx_client, mon
 
     assert response.status_code == 200, response.text
     assert {item["type"] for item in response.json()} == {
-        "oficial", "blue", "eur", "brl", "clp", "uyu"
+        "oficial", "blue", "eur", "brl", "clp", "uyu",
+        "eur_blue", "brl_blue", "clp_blue", "uyu_blue",
     }
 
 
@@ -197,3 +209,24 @@ def test_single_fx_quote_endpoint_rejects_other_usd_markets(fx_client):
     response = client.get("/fx/rates/tarjeta")
 
     assert response.status_code == 422
+
+
+def test_single_fx_quote_endpoint_exposes_derived_blue_currency(fx_client, monkeypatch):
+    client, _, _ = fx_client
+
+    async def fake_quote(rate_type):
+        assert rate_type == "eur_blue"
+        return {
+            "type": "eur_blue",
+            "moneda": "EUR",
+            "casa": "blue_derivado",
+            "compra": 1100,
+            "venta": 1120,
+        }
+
+    monkeypatch.setattr(fx_rates_module, "fetch_rate", fake_quote)
+    response = client.get("/fx/rates/eur_blue")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["type"] == "eur_blue"
+    assert response.json()["casa"] == "blue_derivado"

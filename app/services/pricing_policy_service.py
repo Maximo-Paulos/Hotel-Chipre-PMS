@@ -379,9 +379,9 @@ def _convert_amount(
             raise PricingPolicyError(
                 "El spread FX debe ser cero o mayor para conservar una cotización favorable al hotel."
             )
-        # The hotel's global market always governs USD quotes. FxPolicy still
-        # supplies spread; preferred_source/preferred_side are legacy fields
-        # and intentionally do not override market or directional side.
+        # The hotel's selected market governs every currency quote. Non-USD
+        # blue equivalents are derived in the provider adapter. FxPolicy still
+        # supplies spread; legacy source/side fields cannot override either.
         effective_rate = raw_rate * (1 + (spread_pct / 100.0))
         if not math.isfinite(effective_rate) or effective_rate <= 0:
             raise PricingPolicyError("La tasa FX resultante no es válida")
@@ -397,13 +397,13 @@ def _convert_amount(
             "source_ars_per_unit": source_ars_per_unit,
             "target_ars_per_unit": target_ars_per_unit,
             "spread_pct": spread_pct,
-            "applied_rate": round(effective_rate, 8),
+            "applied_rate": effective_rate,
             "source_updated_at": source_quote.get("_provider_updated_at") if source_quote else None,
             "target_updated_at": target_quote.get("_provider_updated_at") if target_quote else None,
-            "source_quote": _quote_provenance(source_quote, from_code, "venta") if source_quote else None,
-            "target_quote": _quote_provenance(target_quote, to_code, "compra") if target_quote else None,
+            "source_quote": _quote_provenance(source_quote, from_code, "venta", selected_market) if source_quote else None,
+            "target_quote": _quote_provenance(target_quote, to_code, "compra", selected_market) if target_quote else None,
         }
-        return round(amount * effective_rate, 2), round(effective_rate, 6), details
+        return round(amount * effective_rate, 2), effective_rate, details
 
 
 def _resolve_conversion_quote(
@@ -413,9 +413,9 @@ def _resolve_conversion_quote(
     currency: str,
     market: str,
 ) -> dict:
-    selected_type = market if currency == "USD" else f"{currency.lower()}_oficial"
+    selected_type = market if currency == "USD" else f"{currency.lower()}_{market}"
     quote = get_conversion_quote_sync(currency, market)
-    expected_market = market if currency == "USD" else "oficial"
+    expected_market = market if currency == "USD" or market == "oficial" else "blue_derivado"
     if (
         not quote_is_fresh(quote)
         or not isinstance(quote, dict)
@@ -454,6 +454,9 @@ def _resolve_conversion_quote(
     quote = dict(quote)
     quote["_provider_updated_at"] = provider_updated_at.isoformat() if provider_updated_at else None
     quote["_rate_type"] = selected_type
+    if currency != "USD" and market == "blue":
+        quote["_selected_market"] = "blue"
+        quote["_derived_blue"] = True
     return quote
 
 
@@ -469,7 +472,7 @@ def _record_conversion_snapshot(
     provider_updated_at = parse_provider_updated_at(
         quote.get("fechaActualizacion") or quote.get("fecha")
     )
-    rate_type = market if currency == "USD" else f"{currency.lower()}_oficial"
+    rate_type = market if currency == "USD" else f"{currency.lower()}_{market}"
     db.add(
         FxRateSnapshot(
             hotel_id=hotel_id,
@@ -489,14 +492,19 @@ def _record_conversion_snapshot(
     )
 
 
-def _quote_provenance(quote: dict, currency: str, side: str) -> dict:
+def _quote_provenance(quote: dict, currency: str, side: str, selected_market: str) -> dict:
     provider_market = quote.get("casa")
     return {
         "currency": currency,
         "rate_type": quote.get("_rate_type"),
         "market": provider_market,
+        "conversion_market": selected_market,
         "usd_market": provider_market if currency == "USD" else None,
-        "direct_currency_market": provider_market if currency != "USD" else None,
+        "direct_currency_market": (
+            "oficial" if quote.get("_derived_blue") else provider_market
+        ) if currency != "USD" else None,
+        "is_derived_blue": bool(quote.get("_derived_blue")),
+        "derivation_sources": quote.get("_source_quotes"),
         "side": side,
         "ars_per_unit": float(quote[side]),
         "provider_updated_at": quote.get("_provider_updated_at"),
