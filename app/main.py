@@ -383,6 +383,9 @@ app.include_router(room_state_events.router)
 app.include_router(rate_calendar.router)
 app.include_router(daily_rates.router)
 app.include_router(fx_rates.router)
+# The frontend API client is rooted at /api. Keep the existing /fx paths while
+# exposing the same authenticated routes under /api/fx for PMS clients.
+app.include_router(fx_rates.router, prefix="/api")
 app.include_router(room_blocks.router)
 app.include_router(cash_register.router)
 app.include_router(movement_groups.router)

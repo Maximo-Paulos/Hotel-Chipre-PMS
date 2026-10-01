@@ -154,3 +154,22 @@ def test_reservation_company_options_return_only_minimal_fields(api_client):
     assert "tax_id" not in response.text
     assert "contact_name" not in response.text
     assert "contact_email" not in response.text
+
+
+def test_company_list_normalizes_legacy_null_deferred_days(api_client):
+    client, SessionLocal = api_client
+    with SessionLocal() as db:
+        db.add(
+            Company(
+                hotel_id=1,
+                legal_name="Legacy Travel SRL",
+                display_name="Legacy Travel",
+                deferred_days=None,
+            )
+        )
+        db.commit()
+
+    response = client.get("/api/companies")
+
+    assert response.status_code == 200, response.text
+    assert response.json()[0]["deferred_days"] == 0
