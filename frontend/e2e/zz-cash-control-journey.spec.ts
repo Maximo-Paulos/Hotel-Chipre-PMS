@@ -75,7 +75,14 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   expect(expectedBalance).toBeGreaterThanOrEqual(300);
   const countedBalance = Math.max(0, expectedBalance - 50);
   await closeForm.getByText("Saldo contado", { exact: true }).locator("..").locator("input").fill(String(countedBalance));
+  const closeResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === "POST" && /\/api\/cash-register\/sessions\/\d+\/close$/.test(url.pathname);
+  });
   await closeForm.getByRole("button", { name: "Cerrar caja", exact: true }).click();
+  const closedReport = await closeResponse.then((response) =>
+    response.json() as Promise<{ session_id: number }>
+  );
   await expect(page.getByText("Caja cerrada.", { exact: true })).toBeVisible();
   await expect(page.getByText(/Estado: pendiente de aprobación/, { exact: true })).toBeVisible();
 
@@ -83,7 +90,11 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   const lastTotpStep = await completeStepUpPrompt(page, ownerSession.lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText("Diferencia aprobada.", { exact: true })).toBeVisible();
   await expect(page.getByText(/^Custodia: pendiente de recepción del dueño o la codueña por /)).toBeVisible();
-  await page.getByTestId("cash-pending-custodies")
+  const currentCustody = page.getByTestId("cash-pending-custodies")
+    .getByRole("listitem")
+    .filter({ hasText: new RegExp(`Caja #${closedReport.session_id} ·`) });
+  await expect(currentCustody).toHaveCount(1);
+  await currentCustody
     .getByRole("button", { name: "Confirmar custodia y cambio", exact: true })
     .click();
   const custodyTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);

@@ -82,8 +82,9 @@ test("owner creates a lodging restriction, it blocks booking, override unblocks 
   // The restriction badge must show on the search result row itself.
   await expect(searchResult.locator('[data-testid^="guest-restriction-badge-"]')).toBeVisible();
   await searchResult.click();
-  await reservationForm.getByTestId("guest-confirm-button").click();
-  await expect(reservationForm.getByTestId("guest-confirm-card").locator('[data-testid^="guest-restriction-badge-"]')).toBeVisible();
+  const selectedGuest = reservationForm.getByTestId("guest-confirm-card");
+  await expect(selectedGuest).toBeVisible();
+  await expect(selectedGuest.locator('[data-testid^="guest-restriction-badge-"]')).toBeVisible();
 
   const categorySelect = reservationForm.locator("label").filter({ hasText: "Categoría" }).locator("select");
   const categoryOption = categorySelect.locator("option").filter({ hasText: "Standard E2E" });
@@ -100,6 +101,7 @@ test("owner creates a lodging restriction, it blocks booking, override unblocks 
   // Manual total skips the quote_token requirement -- "Crear reserva" itself
   // still enforces the restriction and surfaces the override modal.
   await reservationForm.locator("label").filter({ hasText: "Monto total manual" }).locator("input").fill("15000");
+  await reservationForm.getByPlaceholder("Explicá brevemente el acuerdo comercial").fill("Tarifa manual autorizada para QA");
   await expect(reservationForm.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
   await reservationForm.getByRole("button", { name: "Crear", exact: true }).click();
 

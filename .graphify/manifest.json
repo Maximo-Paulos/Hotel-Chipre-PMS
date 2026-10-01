@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1790818949380.4587,
-    "hash": "cc9ed4ef406d21d002d504fc69ee17fe"
+    "mtime": 1790855799667.6106,
+    "hash": "aac2c335e74d466356292bf144463f61"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1790818948834.7166,
-    "hash": "3f044290510f5d740096900baf440d6f"
+    "mtime": 1790855799093.9216,
+    "hash": "cbf16a16793a4825d0322a15d97dc5f2"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1790818949370.3235,
-    "hash": "3ef47f3013c0e83245348955fed37018"
+    "mtime": 1790855799657.5564,
+    "hash": "722399e902eaedd5a960bfbe96c3662d"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1790818948845.7014,
-    "hash": "572ca70206c55582396ddc4e570ad183"
+    "mtime": 1790855799104.6248,
+    "hash": "dc0e62208fe27b4d23aece0347cf70da"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1790818949359.5945,
-    "hash": "e7f00cdb03bdc6143652a975847ece92"
+    "mtime": 1790855799646.8345,
+    "hash": "198cc94e572c5c263029ee19e516d2af"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1790818948993.7842,
-    "hash": "f7b6015d73fd9a9647762c6e695a01c8"
+    "mtime": 1790855799273.5063,
+    "hash": "a3eda770e9163edbf7b09d28e5afd554"
   },
   "qa/evidence/README.md": {
     "mtime": 1790711594130.478,
@@ -3516,8 +3516,8 @@
     "hash": "3151da4a6272ba4fe04060e9f5453829"
   },
   "frontend/e2e/zz-cash-control-journey.spec.ts": {
-    "mtime": 1790839903938.503,
-    "hash": "9f58ab824b27c86a4da61030fd1c64d3"
+    "mtime": 1790857631200.9753,
+    "hash": "e0d5e931dd89f10efe541119fa75b27f"
   },
   "alembic/versions/20260724_billing_adjustment_enum_values.py": {
     "mtime": 1790711593916.4165,
@@ -4128,8 +4128,8 @@
     "hash": "789a8232da8e7976c0d616f01e0f54cc"
   },
   "frontend/e2e/guest-restriction-journey.spec.ts": {
-    "mtime": 1790786917719.8643,
-    "hash": "08abc1221d9e610a2d8c693af91a8e08"
+    "mtime": 1790858371383.8523,
+    "hash": "9813b0ea64d95a6fc3dc0c258844951c"
   },
   "frontend/e2e/promotions-builder.spec.ts": {
     "mtime": 1790835671523.8625,
@@ -4860,8 +4860,8 @@
     "hash": "d2345df96b2bd641417c95f1d0a26ad4"
   },
   "frontend/src/api/queryKeys.ts": {
-    "mtime": 1790772767197.8374,
-    "hash": "6495bef3b7a0f7b7b2c10c6408dd5ea8"
+    "mtime": 1790858444866.8926,
+    "hash": "0a43a7b7322b217467a74ec76990df5e"
   },
   "tests/migration_helpers.py": {
     "mtime": 1790711594138.7485,

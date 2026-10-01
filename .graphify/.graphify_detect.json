@@ -1446,9 +1446,9 @@
     "video": []
   },
   "total_files": 1436,
-  "total_words": 2018785,
+  "total_words": 2018860,
   "needs_graph": true,
-  "warning": "Large corpus: 1436 files · ~2,018,785 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1436 files · ~2,018,860 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1469,7 +1469,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "51738e1be471cca6ad6164adca7ec0af93bbf83c",
+    "source_hash": "b3291991c1ac02527017e2e3f6be13a1c505b503",
     "branches": [
       "fix/hotel-sim-day0-day1",
       "main"
@@ -1483,7 +1483,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "51738e1be471cca6ad6164adca7ec0af93bbf83c",
+    "head": "b3291991c1ac02527017e2e3f6be13a1c505b503",
     "candidate_count": null,
     "included_count": 1436,
     "excluded_untracked_count": 0,

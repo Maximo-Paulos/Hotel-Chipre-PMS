@@ -74,6 +74,7 @@ export const HOTEL_ID_INDEX_BY_QUERY_PREFIX: Readonly<Record<string, number>> = 
   "daily-rates": 1,
   "guest-checkin-validation": 1,
   "guest-quick-profile": 1,
+  "guest-restriction-summary": 1,
   "guest-restrictions": 1,
   "guest-search": 1,
   "guest-tags": 1,
@@ -163,6 +164,7 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
     "guest-tags",
     "guest-quick-profile",
     "guest-search",
+    "guest-restriction-summary",
     "guest-restrictions",
     "guest-checkin-validation",
     "operational-audit"
