@@ -16,17 +16,18 @@ function decodeBase32(secret: string): Buffer {
   return Buffer.from(bytes.map((byte) => parseInt(byte, 2)));
 }
 
-const secretBytes = () => decodeBase32(process.env.E2E_STEP_UP_OWNER_TOTP_SECRET || DEFAULT_SECRET);
+const secretBytes = (secret?: string) =>
+  decodeBase32(secret || process.env.E2E_STEP_UP_OWNER_TOTP_SECRET || DEFAULT_SECRET);
 
-export function totpAtStep(step: number): string {
+export function totpAtStep(step: number, secret?: string): string {
   const counter = Buffer.alloc(8);
   counter.writeBigUInt64BE(BigInt(step));
-  const digest = createHmac("sha1", secretBytes()).update(counter).digest();
+  const digest = createHmac("sha1", secretBytes(secret)).update(counter).digest();
   const offset = digest[digest.length - 1] & 0x0f;
   return String((digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, "0");
 }
 
-export async function nextTotpAfter(lastUsedStep: number): Promise<{ step: number; code: string }> {
+export async function nextTotpAfter(lastUsedStep: number, secret?: string): Promise<{ step: number; code: string }> {
   // pyotp validates the current 30-second counter plus one step of clock skew.
   // A code from the next counter is safe to use early, which avoids flaky
   // waits at a boundary while preserving the server's replay protection.
@@ -35,5 +36,5 @@ export async function nextTotpAfter(lastUsedStep: number): Promise<{ step: numbe
     await new Promise((resolve) => setTimeout(resolve, 100));
     step = Math.max(Math.floor(Date.now() / 30_000), lastUsedStep + 1);
   }
-  return { step, code: totpAtStep(step) };
+  return { step, code: totpAtStep(step, secret) };
 }

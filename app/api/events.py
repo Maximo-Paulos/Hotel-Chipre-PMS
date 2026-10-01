@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -25,6 +27,54 @@ from app.services.tenant_context import set_tenant_user_context
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/events", tags=["Realtime events"])
+_AUTHORIZATION_DB_FAILURE_GRACE_SECONDS = 60.0
+
+
+def _build_authorization_check(hotel_id: int, user_id: int | None):
+    """Revalidate stream access while tolerating a brief database pool outage.
+
+    The stream route has already authenticated the active member. A database
+    error may reuse that last positive result for at most one revalidation
+    interval; an explicit inactive membership still closes the stream at once.
+    """
+    if user_id is None:
+        return lambda: False
+
+    last_authorized = True
+    last_checked_at = time.monotonic()
+
+    def check() -> bool:
+        nonlocal last_authorized, last_checked_at
+        check_db: Session | None = None
+        try:
+            check_db = get_session_factory()()
+            set_tenant_user_context(check_db, user_id)
+            user = check_db.query(User).filter(User.id == user_id, User.is_active.is_(True)).one_or_none()
+            membership = (
+                check_db.query(HotelMembership)
+                .filter(
+                    HotelMembership.hotel_id == hotel_id,
+                    HotelMembership.user_id == user_id,
+                    HotelMembership.status == "active",
+                )
+                .one_or_none()
+            )
+            last_authorized = user is not None and membership is not None
+            last_checked_at = time.monotonic()
+            return last_authorized
+        except SQLAlchemyError as exc:
+            if last_authorized and time.monotonic() - last_checked_at <= _AUTHORIZATION_DB_FAILURE_GRACE_SECONDS:
+                logger.warning(
+                    "realtime_events.authorization_check_transient_failure",
+                    extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
+                )
+                return True
+            return False
+        finally:
+            if check_db is not None:
+                check_db.close()
+
+    return check
 
 
 @router.get("/recovery", response_model=DomainEventRecoveryResponse)
@@ -90,25 +140,7 @@ def stream_domain_events(
 
     heartbeat_seconds = max(5, min(int(settings.REALTIME_EVENTS_HEARTBEAT_SECONDS), 60))
 
-    def authorization_check() -> bool:
-        # A short-lived session is opened only during periodic stream checks;
-        # the request/session dependency is not held for the SSE lifetime.
-        check_db = get_session_factory()()
-        try:
-            set_tenant_user_context(check_db, context.user_id)
-            user = check_db.query(User).filter(User.id == context.user_id, User.is_active.is_(True)).one_or_none()
-            membership = (
-                check_db.query(HotelMembership)
-                .filter(
-                    HotelMembership.hotel_id == context.hotel_id,
-                    HotelMembership.user_id == context.user_id,
-                    HotelMembership.status == "active",
-                )
-                .one_or_none()
-            )
-            return user is not None and membership is not None
-        finally:
-            check_db.close()
+    authorization_check = _build_authorization_check(context.hotel_id, context.user_id)
 
     stream = (
         iter_event_stream(

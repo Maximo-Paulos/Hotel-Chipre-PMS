@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { completeStepUpPrompt, loginAsStepUpOwner } from "./support/step-up-owner";
 
 // Fase 4 (Fase master): full payments/balance journey, real backend, real UI.
 // Standard E2E category prices at $100/night (see manager-reports-journey.spec.ts),
@@ -72,8 +73,8 @@ async function createReservation(page: Page, guestLastName: string, suffix: stri
   const categoryOption = categorySelect.locator("option").filter({ hasText: "Standard E2E" });
   await expect(categoryOption).toHaveCount(1);
   await categorySelect.selectOption((await categoryOption.getAttribute("value"))!);
-  await reservationForm.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(localIsoDate(offsetIn));
-  await reservationForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(localIsoDate(offsetOut));
+  await reservationForm.getByLabel("Check-in", { exact: true }).fill(localIsoDate(offsetIn));
+  await reservationForm.getByLabel("Check-out", { exact: true }).fill(localIsoDate(offsetOut));
 
   const createButton = reservationForm.getByRole("button", { name: "Crear", exact: true });
   await expect(createButton).toBeEnabled();
@@ -103,15 +104,19 @@ async function readStat(editForm: ReturnType<Page["locator"]>, label: string) {
   return parseMoney(value);
 }
 
+// The first journey enters a synthetic step-up code. Disable persisted browser
+// artifacts for this financial test file so failures cannot retain that code.
+test.use({ trace: "off", screenshot: "off", video: "off" });
 test.describe.configure({ mode: "serial" });
 
 test("owner pays deposit in cash, blocks an overpayment, settles the rest by approved bank transfer with a different method", async ({
   page
-}) => {
+}, testInfo) => {
   const suffix = `${Date.now()}a`;
   const guestLastName = `QA-Pay-Mix ${suffix}`;
 
-  await login(page);
+  const ownerSession = await loginAsStepUpOwner(page, "cash", testInfo.project.name);
+  let lastTotpStep = ownerSession.lastTotpStep;
   await ensureCashSessionOpen(page);
 
   const { reservationTable, reservationRow } = await createReservation(page, guestLastName, suffix, 60, 63);
@@ -123,21 +128,21 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
   expect(depositRequired).toBe(90);
 
   // 1) Seña manual en efectivo.
-  await editForm.getByRole("button", { name: "Registrar Seña", exact: true }).click();
+  await editForm.getByRole("button", { name: /Registrar Seña/ }).click();
   await expect(page.getByText("Se registró la Seña", { exact: true })).toBeVisible();
   await expect.poll(() => readStat(editForm, "Pagado")).toBe(90);
   await expect.poll(() => readStat(editForm, "Saldo")).toBe(210);
 
   // 12) Intento de sobrepago: pedir más que el saldo pendiente debe rechazarse
   // client-side, sin llegar a cobrar nada de más.
-  await editForm.getByLabel("Monto a cobrar").fill("999999");
+  await editForm.getByLabel(/Monto del movimiento|Monto a cobrar/).fill("999999");
   await editForm.getByRole("button", { name: "Cobro parcial", exact: true }).click();
   await expect(page.getByText("Ingresá un importe positivo que no supere el saldo pendiente.", { exact: true })).toBeVisible();
   expect(await readStat(editForm, "Pagado")).toBe(90);
 
   // 9) Saldo final con un método DISTINTO al de la seña: transferencia + comprobante.
   await editForm.locator("label").filter({ hasText: "Medio de pago" }).locator("select").selectOption("bank_transfer");
-  await editForm.getByLabel("Monto a cobrar").fill("210");
+  await editForm.getByLabel(/Monto del movimiento|Monto a cobrar/).fill("210");
   await editForm.getByLabel("Imagen del comprobante").setInputFiles({
     name: "comprobante.png",
     mimeType: "image/png",
@@ -159,22 +164,103 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
 
   // 10) Reembolso: devolución parcial en efectivo sobre lo cobrado.
   await editForm.locator("label").filter({ hasText: "Medio de pago" }).locator("select").selectOption("cash");
-  await editForm.getByLabel("Monto a cobrar").fill("50");
+  await editForm.getByLabel(/Monto del movimiento|Monto a cobrar/).fill("50");
+  await editForm.getByLabel("Motivo de la devolución").fill("Ajuste de prueba E2E");
   page.once("dialog", (dialog) => dialog.accept());
   await editForm.getByRole("button", { name: "Registrar devolución", exact: true }).click();
+  lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText("Devolución registrada", { exact: true })).toBeVisible();
   await expect.poll(() => readStat(editForm, "Pagado")).toBe(250);
   await expect.poll(() => readStat(editForm, "Saldo")).toBe(50);
 
   // Refund beyond what was actually paid must be rejected client-side too, never
   // leaving a negative balance/paid amount.
-  await editForm.getByLabel("Monto a cobrar").fill("999999");
+  await editForm.getByLabel(/Monto del movimiento|Monto a cobrar/).fill("999999");
+  await editForm.getByLabel("Motivo de la devolución").fill("Intento de sobre-devolución E2E");
   await editForm.getByRole("button", { name: "Registrar devolución", exact: true }).click();
   await expect(page.getByText("Ingresá un importe positivo que no supere el total pagado.", { exact: true })).toBeVisible();
   expect(await readStat(editForm, "Pagado")).toBe(250);
 
   await editModal.getByRole("button", { name: "Cerrar", exact: true }).click();
   void reservationTable;
+});
+
+test("owner registers the entered deposit amount with confirmation and keeps the deposit transaction type", async ({ page }) => {
+  const suffix = `${Date.now()}deposit`;
+  const guestLastName = `QA-Pay-Deposit-Amount ${suffix}`;
+
+  await login(page);
+  await ensureCashSessionOpen(page);
+  const { reservationRow } = await createReservation(page, guestLastName, suffix, 68, 71);
+  const { editForm } = await openPaymentsPanel(reservationRow, page);
+  expect(await readStat(editForm, "Seña requerida")).toBe(90);
+
+  const amountInput = editForm.getByLabel(/Monto del movimiento|Monto a cobrar/);
+  const depositButton = editForm.getByRole("button", { name: /Registrar Seña/ });
+  await expect(depositButton).toContainText("90");
+  await amountInput.fill("51");
+  await expect(depositButton).toContainText("51");
+
+  const paymentRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/payments" && request.method() === "POST") {
+      paymentRequests.push(request.url());
+    }
+  });
+  let confirmationMessage = "";
+  page.once("dialog", async (dialog) => {
+    confirmationMessage = dialog.message();
+    await dialog.accept();
+  });
+  const manualDepositRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/payments" && request.method() === "POST";
+  });
+  await depositButton.click();
+  const manualDepositPayload = manualDepositRequest.then((request) => request.postDataJSON()) as Promise<{
+    amount: number;
+    transaction_type: string;
+  }>;
+  const registeredDeposit = await manualDepositPayload;
+  expect(registeredDeposit.amount).toBe(51);
+  expect(registeredDeposit.transaction_type).toBe("deposit");
+  expect(confirmationMessage).toContain("90");
+  expect(confirmationMessage).toContain("51");
+  await expect(page.getByText("Se registró la Seña", { exact: true })).toBeVisible();
+  await expect.poll(() => readStat(editForm, "Pagado")).toBe(51);
+  await expect.poll(() => readStat(editForm, "Saldo")).toBe(249);
+
+  // An amount above the remaining balance is rejected before any payment request.
+  await amountInput.fill("999999");
+  await depositButton.click();
+  await expect(page.getByText("Ingresá un importe positivo que no supere el saldo pendiente.", { exact: true })).toBeVisible();
+  expect(paymentRequests).toHaveLength(1);
+  expect(await readStat(editForm, "Pagado")).toBe(51);
+
+  // Declining the confirmation must also leave the ledger untouched.
+  await amountInput.fill("20");
+  page.once("dialog", async (dialog) => dialog.dismiss());
+  await depositButton.click();
+  expect(paymentRequests).toHaveLength(1);
+  expect(await readStat(editForm, "Pagado")).toBe(51);
+
+  // Clearing the field uses the remaining deposit amount (90 - 51) by default.
+  await amountInput.fill("");
+  const remainingDepositRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/payments" && request.method() === "POST";
+  });
+  await depositButton.click();
+  const defaultDeposit = await remainingDepositRequest.then((request) => request.postDataJSON()) as {
+    amount: number;
+    transaction_type: string;
+  };
+  expect(defaultDeposit.amount).toBe(39);
+  expect(defaultDeposit.transaction_type).toBe("deposit");
+  await expect(page.getByText("Se registró la Seña", { exact: true })).toBeVisible();
+  await expect.poll(() => readStat(editForm, "Pagado")).toBe(90);
+  await expect.poll(() => readStat(editForm, "Saldo")).toBe(210);
 });
 
 test("owner rejects a transfer proof with a reason and the proof cannot be approved afterwards", async ({ page }) => {
@@ -221,7 +307,7 @@ test("a rapid double-click on a cash partial payment must not double the charge"
   const { editModal, editForm } = await openPaymentsPanel(reservationRow, page);
 
   expect(await readStat(editForm, "Total")).toBe(300);
-  await editForm.getByLabel("Monto a cobrar").fill("50");
+  await editForm.getByLabel(/Monto del movimiento|Monto a cobrar/).fill("50");
 
   // Fire two native clicks back-to-back in the SAME JS turn (no await between
   // them), before React has a chance to re-render the button as disabled from

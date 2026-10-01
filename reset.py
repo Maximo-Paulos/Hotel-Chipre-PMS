@@ -1,19 +1,28 @@
-﻿import sys, os
-sys.path.append(os.getcwd())
-from app.database import init_db, get_session_factory, Base
-from app.models.room import Room, RoomCategory
-from app.models.guest import Guest, GuestCompanion
-from app.models.reservation import Reservation
-from app.models.transaction import Transaction
-from app.models.hotel_config import HotelConfiguration
-engine = init_db()
-Base.metadata.drop_all(bind=engine)
-Base.metadata.create_all(bind=engine)
-from app.main import seed_database
-factory = get_session_factory()
-db = factory()
-try:
-    print(seed_database(db))
-    db.commit()
-finally:
-    db.close()
+"""Compatibility entrypoint for the guarded local E2E database seed.
+
+The former script dropped every table reachable through ``DATABASE_URL`` and
+imported a removed application seed function. This entrypoint now delegates
+to the E2E workflow, which accepts only the fixed repository ``_e2e.db`` file
+or an explicitly isolated loopback PostgreSQL target.
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from scripts.seed_e2e_backend import E2ESafetyError, main as seed_local_e2e_database  # noqa: E402
+
+
+def main() -> None:
+    try:
+        seed_local_e2e_database()
+    except E2ESafetyError as exc:
+        raise SystemExit(f"reset.py stopped by the E2E safety check: {exc}") from exc
+
+
+if __name__ == "__main__":
+    main()

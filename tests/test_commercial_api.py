@@ -191,6 +191,33 @@ def test_owner_can_create_and_update_commercial_configuration():
         )
         assert fx_policy_resp.status_code == 201, fx_policy_resp.text
         assert fx_policy_resp.json()["preferred_side"] == "sell"
+
+        policy_id = fx_policy_resp.json()["id"]
+        unsupported_market = client.patch(
+            f"/api/commercial/fx-policies/{policy_id}",
+            json={"preferred_source": "tarjeta"},
+        )
+        assert unsupported_market.status_code == 422, unsupported_market.text
+
+        unsupported_market = client.post(
+            "/api/commercial/fx-policies",
+            json={
+                "code": "UNSUPPORTED_MARKET",
+                "name": "Mercado no permitido",
+                "preferred_source": "MEP",
+            },
+        )
+        assert unsupported_market.status_code == 422, unsupported_market.text
+
+        negative_spread = client.post(
+            "/api/commercial/fx-policies",
+            json={
+                "code": "NEGATIVE_SPREAD",
+                "name": "Spread negativo",
+                "spread_pct": -0.01,
+            },
+        )
+        assert negative_spread.status_code == 422, negative_spread.text
     finally:
         _cleanup_client(db, engine)
 

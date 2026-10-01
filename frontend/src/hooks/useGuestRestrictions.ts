@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   createGuestRestriction,
+  listActiveGuestRestrictionGuestIds,
   listGuestRestrictions,
   resolveGuestRestriction,
   type GuestRestriction,
@@ -28,7 +29,11 @@ const guestRestrictionsKey = (hotelId: number | null, guestId: number, activeOnl
 // actors. A 403 from an actor whose permission changed mid-session is
 // swallowed (retry: false) so callers can just treat "no data" as "don't
 // show the indicator", per the frontend task's instructions.
-export function useGuestActiveRestrictions(guestId?: number, activeOnly = true) {
+export function useGuestActiveRestrictions(
+  guestId?: number,
+  activeOnly = true,
+  options?: { enabled?: boolean }
+) {
   const { session } = useSession();
   const { hasAnyPermission, permissionsKnown } = useEffectivePermissions();
   const canRead = permissionsKnown && hasAnyPermission(["guest:prohibition_read", "guest:prohibition_manage"]);
@@ -36,7 +41,25 @@ export function useGuestActiveRestrictions(guestId?: number, activeOnly = true) 
   return useQuery<GuestRestriction[]>({
     queryKey: guestId ? guestRestrictionsKey(session.hotelId, guestId, activeOnly) : ["guest-restrictions", "none"],
     queryFn: () => listGuestRestrictions(guestId!, activeOnly, session),
-    enabled: Boolean(guestId) && hasValidSession(session) && canRead,
+    enabled: options?.enabled !== false && Boolean(guestId) && hasValidSession(session) && canRead,
+    staleTime: 30 * 1000,
+    retry: false
+  });
+}
+
+export function useGuestActiveRestrictionGuestIds(guestIds: number[]) {
+  const { session } = useSession();
+  const { hasAnyPermission, permissionsKnown } = useEffectivePermissions();
+  const normalizedGuestIds = Array.from(new Set(guestIds.filter((guestId) => Number.isInteger(guestId) && guestId > 0)))
+    .sort((left, right) => left - right);
+
+  return useQuery<number[]>({
+    queryKey: ["guest-restriction-summary", session.hotelId, normalizedGuestIds.join(",")],
+    queryFn: () => listActiveGuestRestrictionGuestIds(normalizedGuestIds, session),
+    enabled: normalizedGuestIds.length > 0
+      && hasValidSession(session)
+      && permissionsKnown
+      && hasAnyPermission(["guest:prohibition_read", "guest:prohibition_manage"]),
     staleTime: 30 * 1000,
     retry: false
   });

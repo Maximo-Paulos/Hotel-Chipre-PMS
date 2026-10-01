@@ -135,9 +135,15 @@ let clientSession: SessionLike | null = null;
 let authResponseHandler: ((response: AuthResponsePayload) => void) | null = null;
 let unauthorizedHandler: (() => void) | null = null;
 let refreshInFlight: { session: SessionLike | null; promise: Promise<AuthResponsePayload> } | null = null;
+const SESSION_REFRESH_LOCK_NAME = "hotel-pms-user-session-refresh";
+const REFRESH_RACE_RETRY_DELAY_MS = 100;
 let unauthorizedHandled = false;
 let actionStepUpHandler: ActionStepUpHandler | null = null;
 let actionStepUpQueue: Promise<void> = Promise.resolve();
+let permissionAdminReadStepUpInFlight: {
+  session: SessionLike | null;
+  promise: Promise<ActionStepUpTicket | null>;
+} | null = null;
 let permissionAdminReadStepUpCache: {
   ticket: string;
   expiresAt: number;
@@ -198,8 +204,25 @@ const isRefreshResponseForSession = (response: AuthResponsePayload, session: Ses
   normalizedSessionUserId(response.user.email) === normalizedSessionUserId(session.userId) &&
   normalizeHotelId(response.hotel_id) === normalizeHotelId(session.hotelId);
 
-const isSameRefreshContext = (left: SessionLike | null, right: SessionLike | null) =>
-  left === null || right === null ? left === right : hasSameSession(left, right);
+const isSameRefreshContext = (left: SessionLike | null, right: SessionLike | null) => {
+  if (left === null || right === null) return left === right;
+
+  const leftToken = left.accessToken?.trim() || "";
+  const rightToken = right.accessToken?.trim() || "";
+  if (!leftToken && !rightToken) {
+    // React StrictMode can mount the session provider twice during startup.
+    // Both anonymous contexts share the same browser cookie, even though
+    // hasSameSession() intentionally requires a bearer token. Coalesce their
+    // cookie refresh so a rotating session cookie is never consumed twice.
+    return (
+      normalizedSessionUserId(left.userId) === normalizedSessionUserId(right.userId) &&
+      normalizeHotelId(left.hotelId) === normalizeHotelId(right.hotelId) &&
+      (left.csrfToken?.trim() || "") === (right.csrfToken?.trim() || "")
+    );
+  }
+
+  return hasSameSession(left, right);
+};
 
 export const setClientSession = (session?: SessionLike | null) => {
   if (!session || !hasSameSessionIdentity(clientSession, session)) {
@@ -235,9 +258,27 @@ const requestActionStepUpTicket = (
   session: SessionLike | null,
   signal?: AbortSignal
 ): Promise<ActionStepUpTicket | null> => {
+  const isPermissionAdminRead = isPermissionAdminReadAction(challenge.method, challenge.path);
+  if (isPermissionAdminRead) {
+    const cachedTicket = getPermissionAdminReadStepUpTicket(challenge.method, challenge.path, session);
+    if (cachedTicket) {
+      return Promise.resolve({
+        ticket: cachedTicket,
+        scope: "permission_admin_read",
+        expiresInSeconds: 0
+      });
+    }
+    if (
+      permissionAdminReadStepUpInFlight &&
+      hasSameSession(permissionAdminReadStepUpInFlight.session, session)
+    ) {
+      return permissionAdminReadStepUpInFlight.promise;
+    }
+  }
+
   const queuedRequest = actionStepUpQueue.then(async () => {
     if (signal?.aborted || !isCurrentSession(session)) return null;
-    if (isPermissionAdminReadAction(challenge.method, challenge.path)) {
+    if (isPermissionAdminRead) {
       const cachedTicket = getPermissionAdminReadStepUpTicket(challenge.method, challenge.path, session);
       if (cachedTicket) {
         return {
@@ -264,13 +305,21 @@ const requestActionStepUpTicket = (
     }
     return normalizedTicket;
   });
+  const trackedRequest = queuedRequest.finally(() => {
+    if (permissionAdminReadStepUpInFlight?.promise === trackedRequest) {
+      permissionAdminReadStepUpInFlight = null;
+    }
+  });
+  if (isPermissionAdminRead) {
+    permissionAdminReadStepUpInFlight = { session: session ? { ...session } : null, promise: trackedRequest };
+  }
   // Keep the queue alive even when a UI handler rejects unexpectedly. The
   // original protected request will surface its own 428 in that case.
-  actionStepUpQueue = queuedRequest.then(
+  actionStepUpQueue = trackedRequest.then(
     () => undefined,
     () => undefined
   );
-  return queuedRequest;
+  return trackedRequest;
 };
 
 // Clear the in-memory session and redirect to /login. Guarded so a burst of
@@ -420,18 +469,54 @@ export async function refreshSession(session?: SessionLike): Promise<AuthRespons
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
 
-    const response = await fetch(buildUrl("/api/auth/session/refresh"), {
-      method: "POST",
-      headers,
-      credentials: "include"
-    });
-    const text = await response.text();
-    const payload = text ? safeJson(text) : null;
-    if (!response.ok) throw makeApiError(response, payload);
-    if (!isAuthResponsePayload(payload)) {
-      throw new ApiError(500, "La respuesta de renovación de sesión es inválida", payload);
+    const requestRefresh = async () => {
+      const response = await fetch(buildUrl("/api/auth/session/refresh"), {
+        method: "POST",
+        headers,
+        credentials: "include"
+      });
+      const text = await response.text();
+      const payload = text ? safeJson(text) : null;
+      if (!response.ok) throw makeApiError(response, payload);
+      if (!isAuthResponsePayload(payload)) {
+        throw new ApiError(500, "La respuesta de renovación de sesión es inválida", payload);
+      }
+      return payload;
+    };
+
+    const retryAfterRotationRace = async () => {
+      try {
+        return await requestRefresh();
+      } catch (error) {
+        // Without cross-tab locks, another tab may rotate the shared HttpOnly
+        // cookie after this request was sent. Retry once so the browser sends
+        // that new cookie before treating a 401 as an expired session.
+        const canRetry =
+          error instanceof ApiError &&
+          error.status === 401 &&
+          (!refreshSessionState?.accessToken || isCurrentSession(refreshSessionState));
+        if (!canRetry) throw error;
+        await new Promise<void>((resolve) => setTimeout(resolve, REFRESH_RACE_RETRY_DELAY_MS));
+        return requestRefresh();
+      }
+    };
+
+    const lockManager = typeof navigator !== "undefined" ? navigator.locks : undefined;
+    if (!lockManager) return retryAfterRotationRace();
+
+    let requestStartedUnderLock = false;
+    try {
+      return await lockManager.request(SESSION_REFRESH_LOCK_NAME, { mode: "exclusive" }, () => {
+        requestStartedUnderLock = true;
+        return requestRefresh();
+      });
+    } catch (error) {
+      // Some browsers or embedded contexts expose the API but cannot acquire
+      // locks. Fall back only when the callback never ran; request failures
+      // must keep their original status and should not issue extra refreshes.
+      if (requestStartedUnderLock) throw error;
+      return retryAfterRotationRace();
     }
-    return payload;
   })();
 
   const trackedPromise = promise.finally(() => {
@@ -491,7 +576,7 @@ async function requestWithRefresh<T>(
       try {
         refreshed = await refreshSession(requestSession ?? undefined);
       } catch (refreshError) {
-        if (refreshError instanceof ApiError && refreshError.status >= 400 && refreshError.status < 500) {
+        if (refreshError instanceof ApiError && refreshError.status === 401) {
           handleUnauthorized(requestSession);
         }
       }

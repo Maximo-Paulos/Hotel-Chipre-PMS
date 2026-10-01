@@ -21,6 +21,7 @@ import { GuestRestrictionBadge } from "../../components/GuestRestrictionBadge";
 import { GuestRestrictionsPanel } from "../../components/GuestRestrictionsPanel";
 import { RestrictionOverrideModal } from "../../components/RestrictionOverrideModal";
 import { GUEST_PAGE_SIZE, useGuestCompanionAdd, useGuestUpdate, useGuests } from "../../hooks/useGuests";
+import { useGuestActiveRestrictionGuestIds } from "../../hooks/useGuestRestrictions";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { useRestrictionOverridePrompt } from "../../hooks/useRestrictionOverridePrompt";
@@ -120,6 +121,11 @@ export function GuestsPage() {
   const updateGuestMutation = useGuestUpdate();
   const addCompanionMutation = useGuestCompanionAdd();
   const guests = useMemo(() => guestsQuery.data ?? [], [guestsQuery.data]);
+  const activeRestrictionGuestIdsQuery = useGuestActiveRestrictionGuestIds(guests.map((guest) => guest.id));
+  const activeRestrictionGuestIds = useMemo(
+    () => new Set(activeRestrictionGuestIdsQuery.data ?? []),
+    [activeRestrictionGuestIdsQuery.data]
+  );
   // No exact total from the backend (deliberate -- see api/guests.ts):
   // a full page is the only signal that a next page might exist.
   const hasNextPage = guests.length === GUEST_PAGE_SIZE;
@@ -418,7 +424,11 @@ export function GuestsPage() {
                           <p className="text-xs text-slate-500">
                             {guest.document_number || guest.email || guest.phone || t("list.noContact")}
                           </p>
-                          <GuestRestrictionBadge guestId={guest.id} className="mt-1" />
+                          <GuestRestrictionBadge
+                            guestId={guest.id}
+                            hasActiveRestriction={activeRestrictionGuestIds.has(guest.id)}
+                            className="mt-1"
+                          />
                         </div>
                         <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">
                           #{guest.id}

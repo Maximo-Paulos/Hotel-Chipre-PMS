@@ -233,6 +233,7 @@ def test_refund_requires_manager_permission_and_one_use_step_up(client_with_db):
     assert refund_receipt_response.status_code == 200, refund_receipt_response.text
     refund_receipt = refund_receipt_response.json()
     assert refund_receipt["type"] == "refund"
+    assert refund_receipt["created_at"].endswith("Z") or refund_receipt["created_at"].endswith("+00:00")
     assert refund_receipt["refund_of_transaction_id"] == paid.json()["id"]
     assert float(refund_receipt["amount"]) == 30
     assert "refund_reason" not in refund_receipt

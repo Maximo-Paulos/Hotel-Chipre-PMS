@@ -168,11 +168,12 @@ def get_engine(database_url: str | None = None):
 
     else:
         # PostgreSQL / Supabase: use a bounded, configurable pool suitable for
-        # web workers. Defaults are the API budget in TECH-0140 (5 + 2).
+        # web workers. Defaults provide eight steady connections plus four
+        # bounded overflow connections, with a 15-second checkout wait.
         settings = get_settings()
-        pool_size = max(1, min(int(getattr(settings, "DB_POOL_SIZE", 5)), 50))
-        max_overflow = max(0, min(int(getattr(settings, "DB_MAX_OVERFLOW", 2)), 50))
-        pool_timeout = max(float(getattr(settings, "DB_POOL_TIMEOUT_SECONDS", 5.0)), 0.1)
+        pool_size = max(1, min(int(getattr(settings, "DB_POOL_SIZE", 8)), 50))
+        max_overflow = max(0, min(int(getattr(settings, "DB_MAX_OVERFLOW", 4)), 50))
+        pool_timeout = max(float(getattr(settings, "DB_POOL_TIMEOUT_SECONDS", 15.0)), 0.1)
         connect_timeout = max(int(getattr(settings, "DB_CONNECT_TIMEOUT_SECONDS", 5)), 1)
         pool_recycle = max(int(getattr(settings, "DB_POOL_RECYCLE_SECONDS", 1800)), 60)
         engine = create_engine(

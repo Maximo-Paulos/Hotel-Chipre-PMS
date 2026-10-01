@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 
 from app.models.hotel_config import HotelConfiguration
+from app.models.security_audit_log import SecurityAuditLog
 from app.services.laundry_vendor_service import (
     LaundryVendorError,
     create_remito,
@@ -163,7 +164,10 @@ def test_remito_line_snapshots_price_and_flags_missing_price(db):
     _seed_house_stock(db, hotel_id=1, item=unpriced_item, house_location=house, quantity=Decimal("10.00"))
     db.commit()
 
-    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, linen_item_id=priced_item.id, unit_price=Decimal("200.00"))
+    set_vendor_price(
+        db, hotel_id=1, vendor_id=vendor.id, linen_item_id=priced_item.id,
+        unit_price=Decimal("200.00"), effective_from=date(2026, 7, 1),
+    )
     db.commit()
 
     remito = create_remito(
@@ -188,13 +192,62 @@ def test_set_vendor_price_upserts_a_single_current_price(db):
     vendor = create_vendor(db, hotel_id=1, name="Lavadero Precio Unico")
     db.flush()
 
-    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id, unit_price=Decimal("100.00"))
-    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id, unit_price=Decimal("150.00"))
+    set_vendor_price(
+        db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id,
+        unit_price=Decimal("100.00"), effective_from=date(2026, 7, 1),
+    )
+    set_vendor_price(
+        db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id,
+        unit_price=Decimal("150.00"), effective_from=date(2026, 7, 1),
+    )
     db.commit()
 
     prices = list_vendor_prices(db, hotel_id=1, vendor_id=vendor.id)
     assert len(prices) == 1
     assert prices[0].unit_price == Decimal("150.00")
+
+
+def test_vendor_price_history_applies_from_date_without_repricing_prior_remitos(db):
+    _seed_hotels(db)
+    item = create_linen_item(db, hotel_id=1, name="Sabanas", unit="unit", min_quantity=None, active=True)
+    house = create_location(db, hotel_id=1, name="Deposito casa")
+    vendor = create_vendor(db, hotel_id=1, name="Lavadero Vigencias")
+    db.flush()
+    _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("20.00"))
+    db.commit()
+
+    set_vendor_price(
+        db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id,
+        unit_price=Decimal("100.00"), effective_from=date(2026, 7, 1),
+    )
+    db.commit()
+    first = create_remito(
+        db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-VIG-1",
+        remito_date=datetime(2026, 7, 15, tzinfo=timezone.utc), house_location_id=house.id,
+        lines=[{"linen_item_id": item.id, "quantity": Decimal("2.00")}], actor_user_id=None,
+    )
+    db.commit()
+
+    set_vendor_price(
+        db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id,
+        unit_price=Decimal("200.00"), effective_from=date(2026, 8, 1),
+    )
+    db.commit()
+    second = create_remito(
+        db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-VIG-2",
+        remito_date=datetime(2026, 8, 1, tzinfo=timezone.utc), house_location_id=house.id,
+        lines=[{"linen_item_id": item.id, "quantity": Decimal("3.00")}], actor_user_id=None,
+    )
+    db.commit()
+
+    assert first.lines[0].unit_price_snapshot == Decimal("100.00")
+    assert second.lines[0].unit_price_snapshot == Decimal("200.00")
+    assert [row.effective_from for row in list_vendor_prices(db, hotel_id=1, vendor_id=vendor.id)] == [
+        date(2026, 7, 1), date(2026, 8, 1)
+    ]
+    assert db.query(SecurityAuditLog).filter_by(
+        hotel_id=1, action="laundry.vendor_price.set"
+    ).count() == 2
 
 
 def test_vendor_balance_reflects_partial_return(db):
@@ -233,7 +286,10 @@ def test_vendor_spend_sums_outbound_lines_in_period(db):
     db.flush()
     _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("100.00"))
     db.commit()
-    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id, unit_price=Decimal("100.00"))
+    set_vendor_price(
+        db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id,
+        unit_price=Decimal("100.00"), effective_from=date(2026, 7, 5),
+    )
     db.commit()
 
     create_remito(
@@ -243,7 +299,10 @@ def test_vendor_spend_sums_outbound_lines_in_period(db):
     )
     db.commit()
 
-    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id, unit_price=Decimal("120.00"))
+    set_vendor_price(
+        db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id,
+        unit_price=Decimal("120.00"), effective_from=date(2026, 7, 15),
+    )
     db.commit()
     create_remito(
         db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-061",
@@ -282,7 +341,10 @@ def test_remito_price_snapshot_is_frozen_when_vendor_price_changes_later(db):
     _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("100.00"))
     db.commit()
 
-    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id, unit_price=Decimal("100.00"))
+    set_vendor_price(
+        db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id,
+        unit_price=Decimal("100.00"), effective_from=date(2026, 7, 1),
+    )
     db.commit()
 
     first_remito = create_remito(
@@ -295,7 +357,10 @@ def test_remito_price_snapshot_is_frozen_when_vendor_price_changes_later(db):
     assert first_line.unit_price_snapshot == Decimal("100.00")
 
     # Price hike takes effect for the vendor going forward.
-    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id, unit_price=Decimal("200.00"))
+    set_vendor_price(
+        db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id,
+        unit_price=Decimal("200.00"), effective_from=date(2026, 8, 1),
+    )
     db.commit()
 
     second_remito = create_remito(
@@ -320,7 +385,10 @@ def test_vendor_settlements_groups_by_calendar_quarter_and_defaults_unpaid(db):
     _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("100.00"))
     db.commit()
 
-    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id, unit_price=Decimal("100.00"))
+    set_vendor_price(
+        db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id,
+        unit_price=Decimal("100.00"), effective_from=date(2026, 2, 10),
+    )
     db.commit()
     create_remito(
         db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-Q1",
@@ -329,7 +397,10 @@ def test_vendor_settlements_groups_by_calendar_quarter_and_defaults_unpaid(db):
     )
     db.commit()
 
-    set_vendor_price(db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id, unit_price=Decimal("200.00"))
+    set_vendor_price(
+        db, hotel_id=1, vendor_id=vendor.id, linen_item_id=item.id,
+        unit_price=Decimal("200.00"), effective_from=date(2026, 7, 15),
+    )
     db.commit()
     create_remito(
         db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-Q3",

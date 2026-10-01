@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
@@ -177,6 +177,64 @@ def test_restriction_api_permissions_tenant_isolation_and_event(monkeypatch):
         engine.dispose()
 
 
+def test_active_restriction_summary_is_batched_tenant_scoped_and_nondisclosing():
+    client, db, engine, guest_a, guest_b, *_ = _client()
+    db.add_all(
+        [
+            GuestRestriction(
+                hotel_id=7201,
+                guest_id=guest_a.id,
+                status="active",
+                reason="Private active reason",
+            ),
+            GuestRestriction(
+                hotel_id=7201,
+                guest_id=guest_a.id,
+                status="active",
+                reason="Private expired reason",
+                valid_until=datetime.now(timezone.utc) - timedelta(days=1),
+            ),
+            GuestRestriction(
+                hotel_id=7202,
+                guest_id=guest_b.id,
+                status="active",
+                reason="Other hotel reason",
+            ),
+        ]
+    )
+    db.commit()
+    fastapi_app.dependency_overrides[get_auth_context] = _auth(7201, "receptionist", 202)
+    try:
+        summary = client.get(
+            "/api/guests/active-restrictions/summary",
+            params=[("guest_ids", str(guest_a.id)), ("guest_ids", str(guest_b.id))],
+        )
+        assert summary.status_code == 200
+        assert summary.json() == [guest_a.id]
+        assert "Private active reason" not in summary.text
+        assert "Private expired reason" not in summary.text
+        assert "Other hotel reason" not in summary.text
+
+        assert client.get(
+            "/api/guests/active-restrictions/summary",
+            params=[("guest_ids", str(guest_a.id))] * 51,
+        ).status_code == 422
+        assert client.get(
+            "/api/guests/active-restrictions/summary",
+            params=[("guest_ids", "-1")],
+        ).status_code == 422
+
+        fastapi_app.dependency_overrides[get_auth_context] = _auth(7201, "housekeeping", 203)
+        assert client.get(
+            "/api/guests/active-restrictions/summary",
+            params=[("guest_ids", str(guest_a.id))],
+        ).status_code == 403
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
 def test_internal_reservation_and_quote_return_stable_nondisclosing_409_then_audit_override():
     client, db, engine, guest, _, category, room, _ = _client()
     fastapi_app.dependency_overrides[get_auth_context] = _auth(7201, "owner", 201)
@@ -209,9 +267,10 @@ def test_internal_reservation_and_quote_return_stable_nondisclosing_409_then_aud
             "check_in_date": (date.today() + timedelta(days=10)).isoformat(),
             "check_out_date": (date.today() + timedelta(days=12)).isoformat(),
             "total_amount": "200.00",
+            "manual_rate_reason": "Synthetic rate for the API test",
         }
         blocked = client.post("/api/reservations", json=payload)
-        assert blocked.status_code == 409
+        assert blocked.status_code == 409, blocked.text
         assert blocked.json()["detail"] == {
             "code": "GUEST_PROHIBITED",
             "message": "Guest has an active lodging restriction",

@@ -336,6 +336,9 @@ def test_register_verify_and_reset_use_resend_provider(client_and_db, fixed_code
         "accepted": True,
         "message": "Si el email es elegible, recibiras instrucciones por correo.",
     }
+    hotel_id = db.query(HotelConfiguration.id).filter_by(owner_email="owner@example.com").scalar()
+    tenant_settings = db.info.get("_tenant_settings", {})
+    assert tenant_settings.get("app.hotel_id") == str(hotel_id)
 
     request_verify = client.post("/api/auth/request-verify", json={"email": "owner@example.com"})
     assert request_verify.status_code == 200
@@ -368,6 +371,9 @@ def test_register_verify_and_reset_use_resend_provider(client_and_db, fixed_code
     login = client.post("/api/auth/login", json={"email": "owner@example.com", "password": "Demo1234!pass"})
     assert login.status_code == 200, login.text
     assert login.json()["user"]["email"] == "owner@example.com"
+    tenant_settings = db.info.get("_tenant_settings", {})
+    assert tenant_settings.get("app.user_id") == str(login.json()["user"]["id"])
+    assert tenant_settings.get("app.hotel_id") == str(hotel_id)
 
     assert len(sent_payloads) >= 4
     assert sent_payloads[0]["from"] == "Hotels-PMS <noreply@auth.hotels-pms.com>"
@@ -1557,6 +1563,38 @@ def _enroll_and_confirm_mfa(
     assert audit.hotel_id == auth["hotel_id"]
     assert json.loads(audit.details) == {"factor": "totp"}
     return auth, secret, recovery_codes
+
+
+def test_mfa_status_reports_only_active_state_for_the_authenticated_user(client_and_db, monkeypatch, fixed_code_patch):
+    client, _db, _session_local = client_and_db
+    assert client.get("/api/auth/mfa/status").status_code == 401
+
+    auth = _verified_auth(client, "mfa-status@example.com", monkeypatch)
+    headers = _auth_headers(auth)
+    initial = client.get("/api/auth/mfa/status", headers=headers)
+    assert initial.status_code == 200
+    assert initial.json() == {"enabled": False}
+
+    enrollment = client.post(
+        "/api/auth/mfa/enroll",
+        headers=headers,
+        json={"current_password": "Demo123!pass"},
+    )
+    assert enrollment.status_code == 200, enrollment.text
+    secret = enrollment.json()["secret"]
+    pending = client.get("/api/auth/mfa/status", headers=headers)
+    assert pending.status_code == 200
+    assert pending.json() == {"enabled": False}
+
+    confirmation = client.post(
+        "/api/auth/mfa/enroll/confirm",
+        headers=headers,
+        json={"code": pyotp.TOTP(secret).now()},
+    )
+    assert confirmation.status_code == 200, confirmation.text
+    active = client.get("/api/auth/mfa/status", headers=headers)
+    assert active.status_code == 200
+    assert active.json() == {"enabled": True}
 
 
 def test_mfa_guess_budgets_are_shared_across_factor_actions():

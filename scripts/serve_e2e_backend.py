@@ -6,6 +6,7 @@ developer wants to boot the backend as a single command.
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -14,11 +15,14 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from scripts.seed_e2e_backend import main as seed_main, prepare_e2e_environment  # noqa: E402
+from scripts.seed_f003_load_scenario import seed_f003_load_scenario  # noqa: E402
 
 
 def main() -> None:
     prepare_e2e_environment()
     seed_main()
+    if os.environ.get("E2E_F003_LOAD", "").strip().casefold() in {"1", "true", "yes", "on"}:
+        seed_f003_load_scenario()
 
     import uvicorn
 

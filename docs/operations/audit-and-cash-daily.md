@@ -46,3 +46,16 @@ ajustes, esperado, arqueo y diferencia; tarjetas, transferencias, Mercado Pago,
 PayPal y otros medios no inflan el efectivo. La pantalla `/caja` conserva las
 mutaciones protegidas por `cash:operate` y permite el consolidado de lectura a
 los roles con `cash:view`.
+
+Al cerrar un turno, `Saldo contado` registra todo el efectivo físico del cajón.
+`Fondo que queda en el cajón para el próximo turno` selecciona qué parte abre la
+caja sucesora (sugerido: el saldo inicial del turno que cierra); no puede
+superar el total contado. El remanente se registra como entrega de custodia y
+su recepción sigue siendo una confirmación separada del dueño o la codueña. El campo de
+saldo contado se limpia después del cierre. La aprobación de una diferencia y
+la recepción de custodia son decisiones independientes.
+
+Los timestamps operativos almacenados como UTC se exponen con zona explícita en
+las respuestas de caja y pagos. La interfaz interpreta como UTC los timestamps
+legados sin sufijo y los muestra en el huso horario configurado en el hotel, con
+reloj de 24 horas; las fechas de calendario no pasan por esa conversión.

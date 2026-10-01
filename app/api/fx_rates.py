@@ -5,25 +5,44 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
 from app.models.fx_rate_snapshot import FxRateSnapshot
-from app.services.fx_service import RATE_TYPES, fetch_all_rates, fetch_rate, get_all_rates_snapshot
+from app.services.fx_service import (
+    DIRECT_CURRENCY_CODES,
+    DIRECT_CURRENCY_BLUE_RATE_TYPES,
+    USD_RATE_TYPES,
+    fetch_all_rates,
+    fetch_rate,
+    get_all_rates_snapshot,
+    parse_provider_updated_at,
+)
 from app.services.permission_service import PERMISSION_REPORTS_FINANCIAL_VIEW
+from app.services.permission_service import PERMISSION_CASH_OPERATE
+from app.services.pricing_policy_service import PricingPolicyError, _convert_amount
 
 
 router = APIRouter(prefix="/fx", tags=["FX Rates"])
 logger = logging.getLogger(__name__)
+ALLOWED_RATE_IDENTIFIERS = {
+    *USD_RATE_TYPES,
+    *(currency.lower() for currency in DIRECT_CURRENCY_CODES),
+    *DIRECT_CURRENCY_BLUE_RATE_TYPES,
+}
+ALLOWED_SNAPSHOT_TYPES = ALLOWED_RATE_IDENTIFIERS | {
+    f"{currency.lower()}_oficial" for currency in DIRECT_CURRENCY_CODES
+}
 
 
 class FxRateItem(BaseModel):
     type: str
     nombre: Optional[str] = None
     moneda: Optional[str] = None
+    casa: Optional[str] = None
     compra: Optional[float] = None
     venta: Optional[float] = None
     fechaActualizacion: Optional[str] = None
@@ -39,10 +58,16 @@ class FxSnapshotRead(BaseModel):
     id: int
     hotel_id: Optional[int] = None
     rate_type: str
+    provider_market: Optional[str] = None
     moneda: str
     compra: Optional[float] = None
     venta: Optional[float] = None
     fetched_at: datetime
+    provider_updated_at: Optional[datetime] = None
+    selected_side: Optional[str] = None
+    base_currency: Optional[str] = None
+    quote_currency: Optional[str] = None
+    applied_rate: Optional[float] = None
     source: str
 
     model_config = {"from_attributes": True}
@@ -51,6 +76,28 @@ class FxSnapshotRead(BaseModel):
 class FxSnapshotCreateResponse(BaseModel):
     stored: int
     message: str
+
+
+class FxConversionQuoteRequest(BaseModel):
+    from_currency: str = Field(..., min_length=3, max_length=3)
+    to_currency: str = Field(..., min_length=3, max_length=3)
+
+    @field_validator("from_currency", "to_currency")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if len(normalized) != 3 or not normalized.isascii() or not normalized.isalpha():
+            raise ValueError("La moneda debe ser un código de tres letras")
+        return normalized
+
+
+class FxConversionQuoteRead(BaseModel):
+    from_currency: str
+    to_currency: str
+    rate: float
+    provider: str
+    configured_market: str
+    quote_details: Optional[dict] = None
 
 
 @router.get("/rates", response_model=list[FxRateItem], summary="All current FX rates")
@@ -68,6 +115,10 @@ async def get_all_rates(
 
     items: list[FxRateItem] = []
     for key, data in rates.items():
+        # Keep the public endpoint aligned with the conversion contract. No
+        # card, MEP, CCL, crypto, wholesale or other USD quote is exposed.
+        if key not in ALLOWED_RATE_IDENTIFIERS:
+            continue
         if not isinstance(data, dict):
             continue
         items.append(
@@ -75,12 +126,56 @@ async def get_all_rates(
                 type=key,
                 nombre=data.get("nombre"),
                 moneda=data.get("moneda"),
+                casa=data.get("casa"),
                 compra=data.get("compra"),
                 venta=data.get("venta"),
                 fechaActualizacion=data.get("fechaActualizacion"),
             )
         )
     return items
+
+
+@router.post(
+    "/conversion-quote",
+    response_model=FxConversionQuoteRead,
+    summary="Current hotel-favorable cross-currency conversion quote",
+)
+def get_conversion_quote(
+    payload: FxConversionQuoteRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+):
+    """Return the configured official/blue conversion for any supported pair."""
+    try:
+        _converted_amount, rate, details = _convert_amount(
+            db,
+            hotel_id=context.hotel_id,
+            amount=1.0,
+            from_currency=payload.from_currency,
+            to_currency=payload.to_currency,
+            fx_policy_id=None,
+            provider_code=None,
+            persist_snapshots=False,
+        )
+    except PricingPolicyError as exc:
+        message = str(exc)
+        error_status = (
+            status.HTTP_422_UNPROCESSABLE_ENTITY
+            if "no soportada" in message.lower() or "no es válida" in message.lower()
+            else status.HTTP_502_BAD_GATEWAY
+        )
+        raise HTTPException(status_code=error_status, detail=message) from exc
+    market = str((details or {}).get("configured_usd_market") or "oficial").lower()
+    if market not in {"oficial", "blue"}:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="La cotización configurada no es válida.")
+    return FxConversionQuoteRead(
+        from_currency=payload.from_currency,
+        to_currency=payload.to_currency,
+        rate=float(rate),
+        provider="dolarapi.com",
+        configured_market=market,
+        quote_details=details,
+    )
 
 
 @router.get("/rates/usd/oficial", response_model=FxRateUsdOficial, summary="Official USD rate shortcut")
@@ -100,26 +195,28 @@ async def get_usd_oficial_rate(
     )
 
 
-@router.get("/rates/{rate_type}", response_model=FxRateItem, summary="Single USD rate type")
+@router.get("/rates/{rate_type}", response_model=FxRateItem, summary="Single supported FX quote")
 async def get_single_rate(
     rate_type: str,
     context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
-    if rate_type not in RATE_TYPES:
+    normalized_rate_type = str(rate_type or "").strip().lower()
+    if normalized_rate_type not in ALLOWED_RATE_IDENTIFIERS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Tipo de cambio '{rate_type}' no válido. Opciones: {', '.join(RATE_TYPES)}",
+            detail=f"Cotización '{rate_type}' no válida. Opciones: {', '.join(sorted(ALLOWED_RATE_IDENTIFIERS))}",
         )
-    data = await fetch_rate(rate_type)
+    data = await fetch_rate(normalized_rate_type)
     if not data:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"No se pudo obtener el tipo de cambio '{rate_type}'.",
+            detail=f"No se pudo obtener la cotización '{rate_type}'.",
         )
     return FxRateItem(
-        type=rate_type,
+        type=normalized_rate_type,
         nombre=data.get("nombre"),
         moneda=data.get("moneda"),
+        casa=data.get("casa"),
         compra=data.get("compra"),
         venta=data.get("venta"),
         fechaActualizacion=data.get("fechaActualizacion"),
@@ -159,11 +256,21 @@ async def create_fx_snapshot(
         rows.append(
             FxRateSnapshot(
                 hotel_id=context.hotel_id,
-                rate_type=rate_type,
+                rate_type=(
+                    rate_type
+                    if rate_type in USD_RATE_TYPES or rate_type in DIRECT_CURRENCY_BLUE_RATE_TYPES
+                    else f"{str(rate_data.get('moneda') or rate_type).strip().lower()}_oficial"
+                ),
+                provider_market=(
+                    str(rate_data.get("casa") or rate_type).strip().lower()
+                ),
                 moneda=(rate_data.get("moneda") or "USD").upper(),
                 compra=rate_data.get("compra"),
                 venta=rate_data.get("venta"),
                 fetched_at=fetched_at,
+                provider_updated_at=parse_provider_updated_at(
+                    rate_data.get("fechaActualizacion") or rate_data.get("fecha")
+                ),
                 source="dolarapi.com",
             )
         )
@@ -186,7 +293,8 @@ def list_fx_snapshots(
     context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
 ):
     query = db.query(FxRateSnapshot).filter(
-        or_(FxRateSnapshot.hotel_id == context.hotel_id, FxRateSnapshot.hotel_id.is_(None))
+        or_(FxRateSnapshot.hotel_id == context.hotel_id, FxRateSnapshot.hotel_id.is_(None)),
+        FxRateSnapshot.rate_type.in_(ALLOWED_SNAPSHOT_TYPES),
     )
 
     if from_date:
@@ -212,7 +320,12 @@ def list_fx_snapshots(
             ) from exc
 
     if rate_type:
-        query = query.filter(FxRateSnapshot.rate_type == rate_type)
+        if rate_type.strip().lower() not in ALLOWED_SNAPSHOT_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Tipo de snapshot no permitido.",
+            )
+        query = query.filter(FxRateSnapshot.rate_type == rate_type.strip().lower())
 
     snapshots = query.order_by(FxRateSnapshot.fetched_at.desc()).limit(limit).all()
     return [FxSnapshotRead.model_validate(snapshot) for snapshot in snapshots]

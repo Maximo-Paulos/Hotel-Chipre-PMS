@@ -27,6 +27,8 @@ export type PaymentReceiptContent = {
   status: string;
   appliedAmountLabel?: string;
   appliedAmount?: string | null;
+  fxRateLabel?: string;
+  fxRate?: string | null;
   surchargeLabel?: string;
   surcharge?: string | null;
   amountLabel: string;
@@ -45,6 +47,9 @@ export function buildPaymentReceiptHtml(receipt: PaymentReceiptContent): string 
   const referenceRow = reference ? row(receipt.referenceLabel, reference) : "";
   const appliedAmountRow = receipt.appliedAmount
     ? row(receipt.appliedAmountLabel || "", receipt.appliedAmount)
+    : "";
+  const fxRateRow = receipt.fxRate
+    ? row(receipt.fxRateLabel || "", receipt.fxRate)
     : "";
   const surchargeRow = receipt.surcharge
     ? row(receipt.surchargeLabel || "", receipt.surcharge)
@@ -90,6 +95,7 @@ export function buildPaymentReceiptHtml(receipt: PaymentReceiptContent): string 
     row(receipt.paymentMethodLabel, receipt.paymentMethod),
     row(receipt.statusLabel, receipt.status),
     appliedAmountRow,
+    fxRateRow,
     surchargeRow,
     referenceRow,
     refundRow,

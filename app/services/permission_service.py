@@ -83,6 +83,8 @@ PERMISSION_GUEST_EXPORT = "guest:export"
 PERMISSION_RESERVATION_READ = "reservation:read"
 PERMISSION_RESERVATION_CREATE = "reservation:create"
 PERMISSION_RESERVATION_UPDATE = "reservation:update"
+PERMISSION_RESERVATION_PAID_TOTAL_ADJUST = "reservation:paid_total_adjust"
+PERMISSION_RESERVATION_RATE_ADJUST = "reservation:rate_adjust"
 PERMISSION_RESERVATION_CANCEL = "reservation:cancel"
 PERMISSION_RESERVATION_CANCEL_PAID = "reservation:cancel_paid"
 PERMISSION_RESERVATION_DELETE = "reservation:delete"
@@ -93,9 +95,13 @@ PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT = "reservation:movement_group_rever
 PERMISSION_RESERVATION_MOVE_CATEGORY = "reservation:move_category"
 PERMISSION_RESERVATION_MOVE_CAPACITY = "reservation:move_capacity"
 PERMISSION_RESERVATION_MANUAL_RATE = "reservation:manual_rate"
+PERMISSION_RESERVATION_MANUAL_RATE_LIMITED = "reservation:manual_rate_limited"
+PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE = "reservation:manual_rate_policy_manage"
+PERMISSION_RESERVATION_OTA_RECORD = "reservation:ota_record"
 PERMISSION_RESERVATION_PROHIBITION_OVERRIDE = "reservation:prohibition_override"
 PERMISSION_ROOM_READ = "room:read"
 PERMISSION_ROOM_STATUS_UPDATE = "room:status_update"
+PERMISSION_HOUSEKEEPING_BOARD_VIEW = "housekeeping:board_view"
 PERMISSION_ROOM_BLOCK_CREATE = "room:block_create"
 PERMISSION_ROOM_BLOCK_RELEASE = "room:block_release"
 PERMISSION_CHECKIN_PERFORM = "checkin:perform"
@@ -122,7 +128,9 @@ PERMISSION_HOTEL_SECURITY_MANAGE = "hotel_settings:security_manage"
 # Existing capabilities outside the split modules stay canonical.
 PERMISSION_COMPANY_MANAGE = "company:manage"
 PERMISSION_CASH_OPERATE = "cash:operate"
+PERMISSION_CASH_ADJUSTMENT_MANAGE = "cash:adjustment_manage"
 PERMISSION_CASH_EXPENSE = "cash:expense"
+PERMISSION_CASH_RECORD_PRIOR_RECEIPT = "cash:record_prior_receipt"
 PERMISSION_CASH_APPROVE_DIFFERENCE = "cash:approve_difference"
 PERMISSION_CASH_CUSTODY_RECEIVE = "cash:custody:receive"
 PERMISSION_OPERATIONAL_TASK_READ = "operations:tasks:view"
@@ -156,6 +164,7 @@ PERMISSION_SETTINGS_INTEGRATIONS_MANAGE = "settings:integrations:manage"
 PERMISSION_SETTINGS_SUBSCRIPTION_VIEW = "settings:subscription:view"
 PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE = "settings:subscription:manage"
 PERMISSION_SETTINGS_SECURITY_VIEW = "settings:security:view"
+PERMISSION_SETTINGS_FX_MANAGE = "settings:fx:manage"
 PERMISSION_SETTINGS_NOTIFICATIONS_VIEW = "settings:notifications:view"
 PERMISSION_SETTINGS_DAILY_REPORT_VIEW = "settings:notifications:daily_report:view"
 PERMISSION_SETTINGS_DAILY_REPORT_MANAGE = "settings:notifications:daily_report:manage"
@@ -279,6 +288,14 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "reservations", "Update reservations",
         "Permite editar datos de reservas. No permite cancelarlas, moverlas ni fijar una tarifa manual salvo que tengas esos permisos.",
     ),
+    PERMISSION_RESERVATION_PAID_TOTAL_ADJUST: (
+        "reservations", "Correct paid reservation totals",
+        "Permite corregir el total de una reserva que ya recibió pagos. Requiere un motivo y conserva intactos los movimientos de pago existentes.",
+    ),
+    PERMISSION_RESERVATION_RATE_ADJUST: (
+        "reservations", "Apply reservation price changes and complimentary upgrades",
+        "Permite aplicar descuentos de cortesía, cambios de tarifa o mejoras de habitación sin cargo cuando cambian el precio de la reserva. Se puede conceder o quitar por rol desde Configuración.",
+    ),
     PERMISSION_RESERVATION_CANCEL: (
         "reservations", "Cancel reservations",
         "Permite cancelar reservas. No permite crearlas, editarlas ni moverlas.",
@@ -319,6 +336,18 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "rates", "Override the quoted reservation rate",
         "Permite fijar una tarifa manual al cotizar o editar una reserva. No permite cambiar la configuración general de tarifas.",
     ),
+    PERMISSION_RESERVATION_MANUAL_RATE_LIMITED: (
+        "rates", "Set a reservation rate within the hotel's configured range",
+        "Permite fijar el total de una reserva directa dentro del rango que configuró el owner, con un motivo obligatorio y auditado. No permite modificar límites, usar precios de OTA ni superar el rango.",
+    ),
+    PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE: (
+        "rates", "Configure the permitted manual reservation rate range",
+        "Permite al owner configurar el rango porcentual aplicado a las tarifas manuales de reservas directas. Cada cambio requiere verificación en dos pasos. No permite crear reservas ni fijar precios.",
+    ),
+    PERMISSION_RESERVATION_OTA_RECORD: (
+        "reservations", "Record OTA reservations and reported prices",
+        "Permite cargar o actualizar una reserva recibida de Booking, Expedia, Despegar u otra OTA con el precio informado por ese canal. No permite fijar tarifas manuales en reservas directas ni confirmar prepagos de la OTA; eso requiere 'Confirmar prepago de OTA' y MFA.",
+    ),
     PERMISSION_RESERVATION_PROHIBITION_OVERRIDE: (
         "guests", "Override a lodging prohibition with reason",
         "Permite alojar excepcionalmente a un huésped con prohibición, dejando el motivo correspondiente. No permite crear ni resolver la prohibición.",
@@ -330,6 +359,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     PERMISSION_ROOM_STATUS_UPDATE: (
         "rooms", "Update room cleaning status",
         "Permite actualizar el estado de limpieza de una habitación. No permite modificar reservas ni administrar bloqueos.",
+    ),
+    PERMISSION_HOUSEKEEPING_BOARD_VIEW: (
+        "rooms", "Read the privacy-safe housekeeping daily board",
+        "Permite consultar la operación diaria de limpieza con número y tipo de habitación, estados, llegadas/salidas y bloqueos de mantenimiento. No muestra datos de huéspedes ni modifica habitaciones.",
     ),
     PERMISSION_ROOM_BLOCK_CREATE: (
         "rooms", "Create room blocks",
@@ -427,9 +460,17 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "cash", "Operate cash register sessions and movements",
         "Permite abrir, operar y cerrar sesiones de caja y registrar movimientos. No permite aprobar diferencias de cierre.",
     ),
+    PERMISSION_CASH_ADJUSTMENT_MANAGE: (
+        "cash", "Manage manual cash balance adjustments",
+        "Permite registrar ajustes manuales que cambian el saldo esperado de caja. Requiere también cash:operate y MFA reciente; no habilita ingresos ni egresos manuales.",
+    ),
     PERMISSION_CASH_EXPENSE: (
         "cash", "Record manual cash expenses",
         "Permite registrar egresos manuales de caja. Requiere permiso explícito y MFA reciente; los reembolsos de huéspedes deben usar el flujo de devoluciones.",
+    ),
+    PERMISSION_CASH_RECORD_PRIOR_RECEIPT: (
+        "cash", "Record cash collected before using the system",
+        "Permite registrar una seña en efectivo cobrada antes de cargarla en el sistema, con fecha y motivo. Actualiza el saldo de la reserva y queda separada del arqueo de la caja abierta.",
     ),
     PERMISSION_PAYMENT_REFUND: (
         "payments", "Issue reservation refunds",
@@ -441,11 +482,11 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_CASH_APPROVE_DIFFERENCE: (
         "cash", "Approve cash close differences",
-        "Permite aprobar diferencias al cerrar caja. Cada aprobación requiere MFA reciente y un ticket de un solo uso ligado a la sesión, el permiso y la ruta. No permite operar sesiones ni registrar movimientos por sí solo.",
+        "Permite a owner y co-owner aprobar diferencias al cerrar caja. Cada aprobación requiere MFA reciente y un ticket de un solo uso ligado a la sesión, el permiso y la ruta. No permite operar sesiones ni registrar movimientos por sí solo.",
     ),
     PERMISSION_CASH_CUSTODY_RECEIVE: (
         "cash", "Confirm cash custody receipt",
-        "Permite al owner confirmar la recepción de una custodia de caja. Requiere MFA reciente y no permite aprobar otras diferencias ni operar sesiones.",
+        "Permite a owner y co-owner confirmar la recepción de una custodia de caja. Requiere MFA reciente y no permite aprobar otras diferencias ni operar sesiones.",
     ),
     PERMISSION_OPERATIONAL_TASK_READ: (
         "operations", "Read shared operational tasks",
@@ -554,6 +595,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     PERMISSION_SETTINGS_SECURITY_VIEW: (
         "settings", "Read security settings",
         "Permite abrir la configuración de seguridad y consultar su estado. No permite modificar secretos, sesiones ni políticas.",
+    ),
+    PERMISSION_SETTINGS_FX_MANAGE: (
+        "settings", "Manage currency conversion market",
+        "Permite elegir dólar oficial o blue para cotizaciones USD y las monedas visibles. Está limitado a Dueña/Codueña y cada cambio requiere MFA reciente.",
     ),
     PERMISSION_SETTINGS_NOTIFICATIONS_VIEW: (
         "settings", "Read notifications",
@@ -688,36 +733,47 @@ _OPERATIONS = tuple(
         PERMISSION_HOTEL_SECURITY_MANAGE,
         PERMISSION_APIKEY_MANAGE,
         PERMISSION_RESERVATION_MANUAL_RATE,
+        PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
+        PERMISSION_RESERVATION_MANUAL_RATE_LIMITED,
+        PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
+        PERMISSION_RESERVATION_RATE_ADJUST,
     }
 )
 DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
-    ROLE_OWNER: _role_permissions(*_CANONICAL_DEFINITIONS),
-    ROLE_CO_OWNER: _role_permissions(*_OPERATIONS),
+    ROLE_OWNER: _role_permissions(
+        *(code for code in _CANONICAL_DEFINITIONS if code != PERMISSION_RESERVATION_RATE_ADJUST)
+    ),
+    ROLE_CO_OWNER: _role_permissions(*_OPERATIONS, PERMISSION_RESERVATION_MANUAL_RATE_LIMITED),
     ROLE_MANAGER: _role_permissions(
         PERMISSION_GUEST_READ, PERMISSION_GUEST_CREATE, PERMISSION_GUEST_UPDATE,
         PERMISSION_GUEST_TAGS_MANAGE, PERMISSION_GUEST_PROHIBITION_READ,
         PERMISSION_GUEST_PROHIBITION_MANAGE, PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE,
         PERMISSION_GUEST_EXPORT,
         PERMISSION_RESERVATION_READ, PERMISSION_RESERVATION_CREATE,
-        PERMISSION_RESERVATION_UPDATE, PERMISSION_RESERVATION_CANCEL,
+        PERMISSION_RESERVATION_UPDATE, PERMISSION_RESERVATION_OTA_RECORD,
+        PERMISSION_RESERVATION_MANUAL_RATE_LIMITED,
+        PERMISSION_RESERVATION_RATE_ADJUST,
+        PERMISSION_RESERVATION_CANCEL,
         PERMISSION_RESERVATION_CANCEL_PAID,
         PERMISSION_RESERVATION_DELETE, PERMISSION_RESERVATION_DEMO_SEED,
         PERMISSION_RESERVATION_MOVE, PERMISSION_RESERVATION_MOVE_CATEGORY,
         PERMISSION_RESERVATION_MOVE_CAPACITY, PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
         PERMISSION_RESERVATION_PROHIBITION_OVERRIDE,
         PERMISSION_ROOM_READ, PERMISSION_ROOM_STATUS_UPDATE,
+        PERMISSION_HOUSEKEEPING_BOARD_VIEW,
         PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_ROOM_BLOCK_RELEASE,
         PERMISSION_CHECKIN_PERFORM, PERMISSION_CHECKOUT_PERFORM,
         PERMISSION_STOCK_READ, PERMISSION_STOCK_MOVE, PERMISSION_STOCK_ADMIN,
         PERMISSION_LAUNDRY_READ, PERMISSION_LAUNDRY_MOVE,
         PERMISSION_LAUNDRY_VENDOR_MANAGE, PERMISSION_LAUNDRY_REMITO_MANAGE,
-        PERMISSION_LAUNDRY_PRICE_MANAGE, PERMISSION_RATES_READ,
+        PERMISSION_RATES_READ,
         PERMISSION_RATES_UPDATE, PERMISSION_PROMOTIONS_READ,
         PERMISSION_PROMOTIONS_MANAGE, PERMISSION_REPORTS_OPERATIONAL_VIEW,
         PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW,
         PERMISSION_PAYMENT_PROOF_VIEW, PERMISSION_PAYMENT_PROOF_REVIEW,
         PERMISSION_RESERVATION_CHARGE, PERMISSION_CASH_OPERATE,
         PERMISSION_CASH_EXPENSE,
+        PERMISSION_CASH_RECORD_PRIOR_RECEIPT,
         PERMISSION_PAYMENT_REFUND,
         PERMISSION_OTA_PAYMENT_CONFIRM,
         PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
@@ -736,7 +792,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_GUEST_READ, PERMISSION_GUEST_CREATE, PERMISSION_GUEST_UPDATE,
         PERMISSION_GUEST_TAGS_MANAGE, PERMISSION_GUEST_PROHIBITION_READ,
         PERMISSION_RESERVATION_READ, PERMISSION_RESERVATION_CREATE,
-        PERMISSION_RESERVATION_UPDATE, PERMISSION_RESERVATION_CANCEL,
+        PERMISSION_RESERVATION_UPDATE, PERMISSION_RESERVATION_OTA_RECORD,
+        PERMISSION_RESERVATION_CANCEL,
         PERMISSION_RESERVATION_CHARGE, PERMISSION_RESERVATION_MOVE, PERMISSION_ROOM_READ,
         PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_CHECKIN_PERFORM,
         PERMISSION_CHECKOUT_PERFORM, PERMISSION_CASH_OPERATE,
@@ -749,7 +806,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_WHATSAPP_CONTEXT_RESERVATION, PERMISSION_WHATSAPP_ACTION_QUOTE,
     ),
     ROLE_HOUSEKEEPING: _role_permissions(
-        PERMISSION_ROOM_READ, PERMISSION_ROOM_STATUS_UPDATE, PERMISSION_LAUNDRY_READ,
+        PERMISSION_ROOM_READ, PERMISSION_ROOM_STATUS_UPDATE, PERMISSION_HOUSEKEEPING_BOARD_VIEW,
+        PERMISSION_LAUNDRY_READ,
         PERMISSION_LAUNDRY_MOVE, PERMISSION_LAUNDRY_REMITO_MANAGE,
         PERMISSION_OPERATIONAL_TASK_READ, PERMISSION_OPERATIONAL_TASK_REPORT,
     ),
@@ -757,28 +815,36 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
 
 _OWNER_ONLY = frozenset(
     {
-        PERMISSION_PERMISSION_MANAGE,
         PERMISSION_HOTEL_PROPERTY_MANAGE,
         PERMISSION_HOTEL_SECURITY_MANAGE,
         PERMISSION_APIKEY_MANAGE,
-        PERMISSION_CASH_CUSTODY_RECEIVE,
+        PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
     }
 )
-_STEP_UP_REQUIRED = _OWNER_ONLY | frozenset(
+_CRITICAL_PERMISSION_CODES = _OWNER_ONLY | frozenset(
+    {PERMISSION_PERMISSION_MANAGE, PERMISSION_SETTINGS_FX_MANAGE}
+)
+_STEP_UP_REQUIRED = _CRITICAL_PERMISSION_CODES | frozenset(
     {
         PERMISSION_CASH_APPROVE_DIFFERENCE,
+        PERMISSION_CASH_CUSTODY_RECEIVE,
+        PERMISSION_CASH_ADJUSTMENT_MANAGE,
         PERMISSION_CASH_EXPENSE,
         PERMISSION_PAYMENT_REFUND,
         PERMISSION_OTA_PAYMENT_CONFIRM,
         PERMISSION_RESERVATION_CANCEL_PAID,
+        PERMISSION_SETTINGS_USERS_MANAGE,
+        PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,
     }
 )
 _ROLE_SCOPES: dict[str, frozenset[str]] = {
+    PERMISSION_PERMISSION_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_USERS_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_USERS_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_SUBSCRIPTION_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_SECURITY_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_SETTINGS_FX_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_TESTS_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_TESTS_EXECUTE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_DAILY_REPORT_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
@@ -789,7 +855,18 @@ _ROLE_SCOPES: dict[str, frozenset[str]] = {
     PERMISSION_COMMERCIAL_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_RESERVATION_DELETE: frozenset({ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER}),
     PERMISSION_RESERVATION_DEMO_SEED: frozenset({ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER}),
+    PERMISSION_CASH_APPROVE_DIFFERENCE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_CASH_CUSTODY_RECEIVE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
 }
+_CO_OWNER_ADMIN_ACCESS_PERMISSIONS = frozenset(
+    {
+        PERMISSION_SETTINGS_USERS_VIEW,
+        PERMISSION_SETTINGS_USERS_MANAGE,
+        PERMISSION_SETTINGS_SUBSCRIPTION_VIEW,
+        PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,
+        PERMISSION_SETTINGS_SECURITY_VIEW,
+    }
+)
 
 
 def immutable_permission_decision(role: str | None, code: str) -> tuple[bool, str] | None:
@@ -797,6 +874,31 @@ def immutable_permission_decision(role: str | None, code: str) -> tuple[bool, st
     if canonical in _OWNER_ONLY:
         return role == ROLE_OWNER, "owner_only"
     scoped_roles = _ROLE_SCOPES.get(canonical)
+    # The hotel confirmed that Co-owner receives the same default access to
+    # these administrative sections. Keep historical denials from silently
+    # removing the second administrator's access; Owner overrides remain intact.
+    if canonical in _CO_OWNER_ADMIN_ACCESS_PERMISSIONS and role == ROLE_CO_OWNER:
+        return True, "role_scope"
+    if canonical == PERMISSION_SETTINGS_FX_MANAGE and role in {ROLE_OWNER, ROLE_CO_OWNER}:
+        return True, "role_scope"
+    # Permission administration is an immutable baseline for both accountable
+    # owners. They can manage operational roles, but this grant cannot be
+    # revoked and leave the hotel without an administrator.
+    if (
+        canonical == PERMISSION_PERMISSION_MANAGE
+        and scoped_roles is not None
+        and role in scoped_roles
+    ):
+        return True, "role_scope"
+    # Custody receipt is an independent step-up action for the two accountable
+    # owners. Hotel overrides may disable difference approval, but must not
+    # make a delivered-cash handoff impossible to acknowledge.
+    if (
+        canonical == PERMISSION_CASH_CUSTODY_RECEIVE
+        and scoped_roles is not None
+        and role in scoped_roles
+    ):
+        return True, "role_scope"
     if scoped_roles is not None and role not in scoped_roles:
         return False, "role_scope"
     return None
@@ -910,9 +1012,9 @@ def seed_default_permissions(db: Session) -> None:
             {
                 "code": code,
                 "description": description,
-                "critical": code in _OWNER_ONLY,
+                "critical": code in _CRITICAL_PERMISSION_CODES,
                 "step_up_required": code in _STEP_UP_REQUIRED,
-                "delegable": code not in _OWNER_ONLY,
+                "delegable": code not in _CRITICAL_PERMISSION_CODES,
             }
             for code, description in PERMISSION_DEFINITIONS.items()
         ],
@@ -921,9 +1023,9 @@ def seed_default_permissions(db: Session) -> None:
     rows = {row.code: row for row in db.query(Permission).filter(Permission.code.in_(PERMISSION_DEFINITIONS)).all()}
     for code, description in PERMISSION_DEFINITIONS.items():
         rows[code].description = description
-        rows[code].critical = code in _OWNER_ONLY
+        rows[code].critical = code in _CRITICAL_PERMISSION_CODES
         rows[code].step_up_required = code in _STEP_UP_REQUIRED
-        rows[code].delegable = code not in _OWNER_ONLY
+        rows[code].delegable = code not in _CRITICAL_PERMISSION_CODES
     db.flush()
     values = [
         {"role": role, "permission_code": code, "allowed": allowed}
@@ -1824,11 +1926,15 @@ def get_permission_catalog(db: Session | None = None) -> list[dict[str, object]]
                 "description": description,
                 "help_es": help_es,
                 "legacy_aliases": sorted(alias for alias, target in LEGACY_PERMISSION_ALIASES.items() if target == code),
-                "locked": code in _OWNER_ONLY,
-                "lock_reason": "owner_only" if code in _OWNER_ONLY else None,
-                "critical": bool(metadata.critical) if metadata is not None else code in _OWNER_ONLY,
-                "step_up_required": bool(metadata.step_up_required) if metadata is not None else code in _OWNER_ONLY,
-                "delegable": bool(metadata.delegable) if metadata is not None else code not in _OWNER_ONLY,
+                "locked": code in _CRITICAL_PERMISSION_CODES,
+                "lock_reason": (
+                    "owner_only" if code in _OWNER_ONLY
+                    else "role_scope" if code in _ROLE_SCOPES
+                    else None
+                ),
+                "critical": bool(metadata.critical) if metadata is not None else code in _CRITICAL_PERMISSION_CODES,
+                "step_up_required": bool(metadata.step_up_required) if metadata is not None else code in _STEP_UP_REQUIRED,
+                "delegable": bool(metadata.delegable) if metadata is not None else code not in _CRITICAL_PERMISSION_CODES,
             }
         )
     return sorted(result, key=lambda row: (str(row["module"]), str(row["code"])))

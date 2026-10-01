@@ -4,6 +4,9 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
 import { usePendingReservationActions, useReservations } from "../../hooks/useReservations";
+import { isDeferredCompanyReservation } from "../../api/reservations";
+import { usePendingCashCloseReports } from "../../hooks/useCashRegister";
+import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { useRooms } from "../../hooks/useRooms";
 import { formatMoney, resolveSingleCurrencyCode } from "../../utils/currency";
@@ -46,6 +49,10 @@ export function DashboardPage() {
   // reservations were created afterwards.
   const { data: upcomingReservations = [] } = useReservations({ upcomingOnly: true, order: "check_in", limit: 5 });
   const pendingActionsQuery = usePendingReservationActions(8);
+  const { hasPermission } = useEffectivePermissions();
+  const canApproveCashDifferences = hasPermission("cash:approve_difference");
+  const pendingCashApprovalsQuery = usePendingCashCloseReports({ enabled: canApproveCashDifferences });
+  const pendingCashApprovals = pendingCashApprovalsQuery.data ?? [];
   const { openReservation } = useReservationDrawer();
   const { roomsQuery } = useRooms();
   const rooms = useMemo(() => roomsQuery.data || [], [roomsQuery.data]);
@@ -57,7 +64,9 @@ export function DashboardPage() {
     const occupancy = rooms.length > 0 ? Math.round((occupied / rooms.length) * 100) : 0;
 
     const currentMonth = new Date(today).getMonth();
-    const adrBase = reservations.filter((r) => new Date(r.check_in_date).getMonth() === currentMonth);
+    const adrBase = reservations.filter((r) =>
+      new Date(r.check_in_date).getMonth() === currentMonth && !isDeferredCompanyReservation(r)
+    );
     const monthCurrencyCode = resolveSingleCurrencyCode(adrBase.map((r) => r.currency_code));
     const adr =
       adrBase.length > 0
@@ -148,6 +157,22 @@ export function DashboardPage() {
         ))}
       </div>
 
+      {canApproveCashDifferences && (pendingCashApprovalsQuery.isError || pendingCashApprovals.length > 0) ? (
+        <section className="flex flex-col gap-3 rounded-panel border border-amber-200 bg-amber-50 p-5 shadow-raise sm:flex-row sm:items-center sm:justify-between" data-testid="dashboard-cash-approvals">
+          <div>
+            <h2 className="font-semibold text-amber-950">{t("cashApprovals.title")}</h2>
+            <p className="text-sm text-amber-900">
+              {pendingCashApprovalsQuery.isError
+                ? t("cashApprovals.error")
+                : t("cashApprovals.count", { count: pendingCashApprovals.length })}
+            </p>
+          </div>
+          <Link to="/caja" className="inline-flex min-h-11 items-center justify-center rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100">
+            {t("cashApprovals.view")}
+          </Link>
+        </section>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="min-w-0 rounded-panel bg-white p-5 shadow-raise ring-1 ring-slate-900/5 lg:col-span-2">
           <div className="flex items-center justify-between">
@@ -194,7 +219,9 @@ export function DashboardPage() {
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 text-right font-semibold text-slate-900">
-                      {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
+                      {isDeferredCompanyReservation(reservation)
+                        ? t("pipeline.deferredCompanyBilling")
+                        : formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
                     </td>
                   </tr>
                 ))}
@@ -238,7 +265,9 @@ export function DashboardPage() {
                   <div className="text-right">
                     <dt className="text-slate-500">{t("pipeline.table.amount")}</dt>
                     <dd className="mt-1 font-semibold text-slate-900">
-                      {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
+                      {isDeferredCompanyReservation(reservation)
+                        ? t("pipeline.deferredCompanyBilling")
+                        : formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
                     </dd>
                   </div>
                 </dl>

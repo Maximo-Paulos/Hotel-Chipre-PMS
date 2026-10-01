@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 
 from app.database import Base
 
@@ -28,6 +28,7 @@ class Company(Base):
 
     # Commercial conditions (v72 §3.4-3.5)
     base_price = Column(Numeric(12, 2), nullable=True)          # negotiated base rate override
+    extra_person_nightly_surcharge = Column(Numeric(12, 2), nullable=True)
     payment_deferred = Column(Boolean, nullable=False, default=False)  # invoice after stay
     deferred_days = Column(Integer, nullable=True)              # net-X days for deferred billing
     requires_voucher = Column(Boolean, nullable=False, default=False)
@@ -41,6 +42,10 @@ class Company(Base):
     deactivated_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     __table_args__ = (
+        CheckConstraint(
+            "extra_person_nightly_surcharge IS NULL OR extra_person_nightly_surcharge >= 0",
+            name="ck_companies_extra_person_surcharge_nonnegative",
+        ),
         UniqueConstraint("hotel_id", "display_name", name="uq_companies_hotel_display_name"),
         UniqueConstraint("hotel_id", "id", name="uq_companies_hotel_id_id"),
         Index("ix_companies_hotel_id", "hotel_id"),

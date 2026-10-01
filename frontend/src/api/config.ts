@@ -4,7 +4,11 @@ export type HotelConfig = {
   id: number;
   hotel_name: string;
   hotel_timezone: string;
+  check_in_time?: string | null;
+  check_out_time?: string | null;
   default_currency: string;
+  fx_conversion_rate_type: "oficial" | "blue";
+  fx_display_rate_types: Array<"oficial" | "blue">;
   deposit_percentage: number;
   checkin_payment_policy: "deposit" | "total" | "free";
   free_cancellation_hours: number;
@@ -26,6 +30,8 @@ export type HotelConfig = {
   interface_language: string;
   allow_overbooking?: boolean;
   no_show_cutoff_hours?: number;
+  manual_rate_min_adjustment_pct?: string | number | null;
+  manual_rate_max_adjustment_pct?: string | number | null;
   require_document_for_checkin: boolean;
   require_terms_acceptance: boolean;
   extra_policies?: string | null;
@@ -34,8 +40,15 @@ export type HotelConfig = {
 
 export type HotelConfigUpdate = Partial<HotelConfig>;
 
+export type HotelInterfaceLanguage = {
+  interface_language: "es" | "en";
+};
+
 export const getHotelConfig = (session?: SessionLike) =>
   apiFetch<HotelConfig>("/api/config/", { session, method: "GET" });
+
+export const getHotelInterfaceLanguage = (session?: SessionLike) =>
+  apiFetch<HotelInterfaceLanguage>("/api/config/interface-language", { session, method: "GET" });
 
 export const updateHotelConfig = (payload: HotelConfigUpdate, session?: SessionLike) =>
   apiFetch<HotelConfig>("/api/config/", { session, method: "PATCH", data: payload });

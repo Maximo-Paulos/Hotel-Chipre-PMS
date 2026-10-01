@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
-import { OccupancyGrid, type RoomDropTarget } from "../../components/OccupancyGrid";
+import { OccupancyGrid, type OccupancyRoomSortMode, type RoomDropTarget } from "../../components/OccupancyGrid";
 import { moveReservationRoom } from "../../api/reservations";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useRooms } from "../../hooks/useRooms";
@@ -14,20 +15,24 @@ import { useOccupancyGrid, usePrefetchOccupancyGrid } from "../../hooks/useReser
 import { refreshReservationState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
-const WINDOW_DAYS = 30;
+const WINDOW_DAYS = 14;
 
 function buildDayRange(from: string, count: number): string[] {
   return Array.from({ length: count }, (_, i) => addDaysIso(from, i));
 }
 
-const RANGE_LABEL = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short", year: "numeric" });
-
 export function OccupancyPlanningPage() {
-  const { t } = useTranslation("reservations");
+  const { t, i18n } = useTranslation("reservations");
+  const navigate = useNavigate();
+  const [sortMode, setSortMode] = useState<OccupancyRoomSortMode>("floor");
   const [windowStart, setWindowStart] = useState(todayIso());
   const windowEnd = useMemo(() => addDaysIso(windowStart, WINDOW_DAYS), [windowStart]);
   const days = useMemo(() => buildDayRange(windowStart, WINDOW_DAYS), [windowStart]);
   const today = todayIso();
+  const rangeLabel = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language === "en" ? "en-US" : "es-AR", { day: "2-digit", month: "short", year: "numeric" }),
+    [i18n.language]
+  );
 
   const gridQuery = useOccupancyGrid(windowStart, windowEnd);
   const prefetch = usePrefetchOccupancyGrid();
@@ -111,7 +116,7 @@ export function OccupancyPlanningPage() {
   };
 
 
-  // Prefetch the previous/next windows so ±30 navigation feels instant --
+  // Prefetch the previous/next two-week windows so navigation feels instant --
   // the "infinite calendar" the plan asks for, without virtualized scroll.
   useEffect(() => {
     const prevStart = addDaysIso(windowStart, -WINDOW_DAYS);
@@ -127,11 +132,23 @@ export function OccupancyPlanningPage() {
           <p className="text-xs uppercase tracking-wide text-slate-500">{t("occupancy.operationLabel")}</p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{t("occupancy.title")}</h1>
           <p className="mt-1 text-sm text-slate-600">
-            {RANGE_LABEL.format(new Date(`${windowStart}T00:00:00`))} — {RANGE_LABEL.format(new Date(`${addDaysIso(windowStart, WINDOW_DAYS - 1)}T00:00:00`))}
+            {rangeLabel.format(new Date(`${windowStart}T00:00:00`))} — {rangeLabel.format(new Date(`${addDaysIso(windowStart, WINDOW_DAYS - 1)}T00:00:00`))}
             {gridQuery.isFetching ? t("occupancy.updatingSuffix") : ""}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="space-y-1 text-xs font-medium text-slate-600">
+            <span>{t("occupancy.sortBy")}</span>
+            <select
+              data-testid="occupancy-sort"
+              value={sortMode}
+              onChange={(event) => setSortMode(event.target.value as OccupancyRoomSortMode)}
+              className="block rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm"
+            >
+              <option value="floor">{t("occupancy.sortByFloor")}</option>
+              <option value="category">{t("occupancy.sortByCategory")}</option>
+            </select>
+          </label>
           <button
             type="button"
             data-testid="occupancy-prev-window"
@@ -179,7 +196,18 @@ export function OccupancyPlanningPage() {
           data={gridQuery.data}
           days={days}
           todayIso={today}
+          sortMode={sortMode}
           onSelectReservation={openReservation}
+          onSelectEmptyCell={(room, day) => {
+            const params = new URLSearchParams({
+              crear: "1",
+              room_id: String(room.id),
+              category_id: String(room.category_id),
+              check_in_date: day,
+              check_out_date: addDaysIso(day, 1)
+            });
+            navigate(`/reservas?${params.toString()}`);
+          }}
           onDropReservation={canMoveAtAll ? (target) => { setMoveError(null); setPendingMove(target); } : undefined}
           onDragReservationChange={setDraggingId}
           roomDropBlockedReason={(roomId) => {

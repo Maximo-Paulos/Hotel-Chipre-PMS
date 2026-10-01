@@ -60,6 +60,8 @@ class SubscriptionEnforcementMiddleware:
 
         SessionLocal = get_session_factory()
         db = SessionLocal()
+        decision = None
+        snapshot = None
         try:
             set_tenant_hotel_context(db, hotel_id)
             snapshot = get_subscription_snapshot(db, hotel_id)
@@ -68,24 +70,23 @@ class SubscriptionEnforcementMiddleware:
             if user_id is not None:
                 snapshot["user_id"] = user_id
             decision = evaluate_hotel_write_access(db, hotel_id, snapshot=snapshot)
-            if decision.can_write:
-                await self.app(scope, receive, send)
-                return
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()
+
+        if decision is not None and not decision.can_write:
             response = JSONResponse(
                 status_code=402,
                 content={
                     "detail": "SuscripciÃ³n en pausa o vencida",
-                    "plan": snapshot.get("plan"),
-                    "status": snapshot.get("status"),
+                    "plan": snapshot.get("plan") if snapshot else None,
+                    "status": snapshot.get("status") if snapshot else None,
                     "hotel_id": hotel_id,
                     "billing_reason": decision.reason,
                 },
             )
             await response(scope, receive, send)
             return
-        except Exception:
-            db.rollback()
-        finally:
-            db.close()
 
         await self.app(scope, receive, send)

@@ -1,9 +1,10 @@
 """
 Pydantic schemas for Room and RoomCategory.
 """
+from datetime import date
 from pydantic import BaseModel, Field
 from typing import Optional
-from app.models.room import RoomStatusEnum
+from app.models.room import RoomHousekeepingStatusEnum, RoomStatusEnum
 
 
 # ── RoomCategory ──
@@ -76,6 +77,7 @@ class RoomCreate(RoomBase):
 
 class RoomRead(RoomBase):
     id: int
+    housekeeping_status: RoomHousekeepingStatusEnum = RoomHousekeepingStatusEnum.CLEAN
     score: Optional[int] = Field(default=None, ge=1, le=10)
     is_accessible: bool = False
     description: Optional[str] = None
@@ -91,6 +93,7 @@ class RoomHousekeepingRead(BaseModel):
     floor: int
     category_id: int
     status: RoomStatusEnum
+    housekeeping_status: RoomHousekeepingStatusEnum
     is_active: bool
     is_accessible: bool = False
     category: Optional[RoomCategoryOperationalRead] = None
@@ -114,3 +117,25 @@ class RoomUpdate(BaseModel):
 class RoomStatusUpdateResponse(BaseModel):
     room: RoomRead | RoomHousekeepingRead
     reallocation: Optional[dict] = None
+
+
+class RoomHousekeepingStatusUpdate(BaseModel):
+    status: RoomHousekeepingStatusEnum
+    notes: Optional[str] = None
+
+
+class HousekeepingBoardRoomRead(BaseModel):
+    room_id: int
+    room_number: str
+    floor: int
+    category_name: str
+    operational_status: RoomStatusEnum
+    housekeeping_status: RoomHousekeepingStatusEnum
+    has_arrival_today: bool
+    has_departure_today: bool
+    maintenance_blocked: bool
+
+
+class HousekeepingBoardRead(BaseModel):
+    date: date
+    rooms: list[HousekeepingBoardRoomRead]

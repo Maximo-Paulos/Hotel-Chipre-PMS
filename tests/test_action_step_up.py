@@ -459,7 +459,7 @@ def test_require_any_keeps_a_valid_non_sensitive_alternative(step_up_client):
     assert response.status_code == 200
 
 
-def test_permission_administrator_keeps_reads_owner_only_and_requires_step_up_for_writes(step_up_client):
+def test_permission_administrator_allows_owner_and_co_owner_and_requires_step_up_for_writes(step_up_client):
     client, _db, secret, current = step_up_client
 
     read = client.get("/api/test/permission-admin")
@@ -478,6 +478,22 @@ def test_permission_administrator_keeps_reads_owner_only_and_requires_step_up_fo
     current["context"] = replace(current["context"], user_role="manager")
     denied_read = client.get("/api/test/permission-admin")
     assert denied_read.status_code == 403
+
+    current["context"] = replace(_auth_context(), user_role="co_owner")
+    co_owner_read = client.get("/api/test/permission-admin")
+    assert co_owner_read.status_code == 428
+    co_owner_ticket = _issue_ticket(
+        client,
+        secret,
+        path="/api/test/permission-admin",
+        code=_code_at(secret, step_offset=1),
+    )
+    assert co_owner_ticket.status_code == 200
+    co_owner_read = client.get(
+        "/api/test/permission-admin",
+        headers={"X-Action-Step-Up-Ticket": co_owner_ticket.json()["ticket"]},
+    )
+    assert co_owner_read.status_code == 200
 
     current["context"] = _auth_context()
     missing_ticket = client.post("/api/test/permission-admin")

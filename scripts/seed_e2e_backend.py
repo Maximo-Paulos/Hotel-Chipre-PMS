@@ -1,4 +1,4 @@
-"""Prepare the fixed local SQLite database used by Playwright E2E tests.
+"""Prepare the fixed local SQLite or explicitly isolated PostgreSQL E2E database.
 
 The safety check intentionally runs before importing Alembic or any ``app``
 module.  An inherited PostgreSQL URL or any SQLite path other than the fixed
@@ -7,15 +7,24 @@ repository ``_e2e.db`` target is refused.
 from __future__ import annotations
 
 import json
+import hmac
 import os
+import re
 import sys
 from collections.abc import MutableMapping
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 E2E_DATABASE_PATH = ROOT_DIR / "_e2e.db"
 E2E_DATABASE_URL = f"sqlite:///{E2E_DATABASE_PATH.as_posix()}"
+E2E_POSTGRES_DATABASE_URL_EXPLICIT = "E2E_POSTGRES_DATABASE_URL_EXPLICIT"
+E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT = "E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT"
+E2E_POSTGRES_ISOLATED = "E2E_POSTGRES_ISOLATED"
+POSTGRES_E2E_DATABASE_PREFIX = "hotel_chipre_e2e_"
+POSTGRES_E2E_ROLE_PREFIX = "hotel_chipre_e2e_"
+_POSTGRES_E2E_MIGRATED_DATABASES: set[str] = set()
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
@@ -24,12 +33,121 @@ class E2ESafetyError(RuntimeError):
     """Raised before any database-capable dependency is imported."""
 
 
+def _enabled(value: str | None) -> bool:
+    return (value or "").strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def _postgres_e2e_connection(url: str, env: MutableMapping[str, str]) -> dict[str, object]:
+    """Validate and decode the narrowly allowlisted loopback PostgreSQL target."""
+    if not _enabled(env.get(E2E_POSTGRES_ISOLATED)):
+        raise E2ESafetyError("PostgreSQL E2E requires explicit isolated-target opt-in")
+    explicit_url = (env.get(E2E_POSTGRES_DATABASE_URL_EXPLICIT) or "").strip()
+    if not explicit_url or not hmac.compare_digest(url.encode("utf-8"), explicit_url.encode("utf-8")):
+        raise E2ESafetyError("PostgreSQL E2E requires a matching explicit database URL")
+
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except ValueError as exc:
+        raise E2ESafetyError("PostgreSQL E2E database URL is malformed") from exc
+
+    host = (parsed.hostname or "").casefold()
+    if parsed.scheme not in {"postgresql", "postgresql+psycopg2"}:
+        raise E2ESafetyError("PostgreSQL E2E requires the psycopg2 PostgreSQL driver")
+    if host not in {"localhost", "127.0.0.1", "::1"} or port != 5432:
+        raise E2ESafetyError("PostgreSQL E2E target must use the local PostgreSQL 16 endpoint")
+    if parsed.query or parsed.fragment:
+        raise E2ESafetyError("PostgreSQL E2E database URL cannot contain query or fragment")
+
+    database = unquote(parsed.path.lstrip("/"))
+    username = unquote(parsed.username or "")
+    password = unquote(parsed.password or "")
+    if not re.fullmatch(r"hotel_chipre_e2e_[a-z0-9_]+", database) or database == POSTGRES_E2E_DATABASE_PREFIX:
+        raise E2ESafetyError("PostgreSQL E2E requires a dedicated disposable database name")
+    if not username.startswith(POSTGRES_E2E_ROLE_PREFIX) or not username.endswith(("_app_runner", "_seed_runner")):
+        raise E2ESafetyError("PostgreSQL E2E requires a dedicated disposable role name")
+    if not password:
+        raise E2ESafetyError("PostgreSQL E2E requires a password for the disposable role")
+
+    return {"host": host, "port": port, "dbname": database, "user": username, "password": password}
+
+
+def _postgres_e2e_seed_connection(
+    runtime_url: str,
+    runtime_parameters: dict[str, object],
+    env: MutableMapping[str, str],
+) -> tuple[str, dict[str, object]]:
+    """Validate the separate local role used only to load synthetic fixtures.
+
+    The API/browser process always uses the regular app role so PostgreSQL RLS
+    remains active during user flows. The seed role is a disposable local test
+    role with BYPASSRLS because fixtures intentionally create system and
+    cross-tenant setup rows before any request context exists.
+    """
+    seed_url = (env.get("E2E_POSTGRES_SEED_DATABASE_URL") or "").strip()
+    explicit_seed_url = (env.get(E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT) or "").strip()
+    if not seed_url or not hmac.compare_digest(seed_url.encode("utf-8"), explicit_seed_url.encode("utf-8")):
+        raise E2ESafetyError("PostgreSQL E2E requires a matching explicit seed database URL")
+
+    seed_env = dict(env)
+    seed_env["DATABASE_URL"] = seed_url
+    seed_env[E2E_POSTGRES_DATABASE_URL_EXPLICIT] = seed_url
+    seed_parameters = _postgres_e2e_connection(seed_url, seed_env)
+    expected_seed_user = str(runtime_parameters["user"]).removesuffix("_app_runner") + "_seed_runner"
+    if (
+        seed_url == runtime_url
+        or seed_parameters["host"] != runtime_parameters["host"]
+        or seed_parameters["port"] != runtime_parameters["port"]
+        or seed_parameters["dbname"] != runtime_parameters["dbname"]
+        or seed_parameters["user"] != expected_seed_user
+    ):
+        raise E2ESafetyError("PostgreSQL E2E seed role must be distinct and target the same local test database")
+    return seed_url, seed_parameters
+
+
+def _is_postgres_e2e_target(env: MutableMapping[str, str] | None = None) -> bool:
+    target = os.environ if env is None else env
+    return (target.get("DATABASE_URL") or "").startswith(("postgresql://", "postgresql+psycopg2://"))
+
+
+def _assert_postgres_e2e_database_empty() -> str:
+    """Refuse migrations unless the dedicated database has no user objects."""
+    target = os.environ
+    url = target.get("DATABASE_URL") or ""
+    connection_parameters = _postgres_e2e_connection(url, target)
+    import psycopg2
+
+    try:
+        connection = psycopg2.connect(**connection_parameters, connect_timeout=5)
+    except Exception as exc:
+        raise E2ESafetyError("isolated local PostgreSQL E2E database is not reachable") from exc
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_class AS relation
+                    JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+                    WHERE namespace.nspname = 'public'
+                      AND relation.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
+                )
+                """
+            )
+            has_user_objects = bool(cursor.fetchone()[0])
+        if has_user_objects:
+            raise E2ESafetyError("PostgreSQL E2E target must be empty before migrations")
+    finally:
+        connection.close()
+    return str(connection_parameters["dbname"])
+
+
 def prepare_e2e_environment(env: MutableMapping[str, str] | None = None) -> str:
     """Validate and normalize the only database target allowed for local E2E.
 
-    Both values must be explicit. Existing values are never overwritten before
-    validation, so a missing or inherited production environment fails closed
-    rather than being silently redirected.
+    Database URLs must be explicit. Existing values are never overwritten
+    before validation, so a missing or inherited production environment fails
+    closed rather than being silently redirected.
     """
 
     target = os.environ if env is None else env
@@ -38,8 +156,16 @@ def prepare_e2e_environment(env: MutableMapping[str, str] | None = None) -> str:
         raise E2ESafetyError("local E2E requires APP_ENV=test")
 
     url = target.get("DATABASE_URL") or ""
+    if url.startswith(("postgresql://", "postgresql+psycopg2://")):
+        runtime_parameters = _postgres_e2e_connection(url, target)
+        if not str(runtime_parameters["user"]).endswith("_app_runner"):
+            raise E2ESafetyError("PostgreSQL E2E DATABASE_URL must use the regular app role")
+        _postgres_e2e_seed_connection(url, runtime_parameters, target)
+        target["APP_ENV"] = "test"
+        target.setdefault("JWT_SECRET", "e2e-local-jwt-secret-change-me-32chars")
+        return url
     if not url.startswith("sqlite:///") or url.startswith("sqlite://///"):
-        raise E2ESafetyError("local E2E requires the fixed SQLite database")
+        raise E2ESafetyError("local E2E requires the fixed SQLite database or an explicitly isolated loopback PostgreSQL 16 database")
     if "?" in url or "#" in url:
         raise E2ESafetyError("local E2E SQLite URL cannot contain query or fragment")
     raw_path = url.removeprefix("sqlite:///").replace("\\", "/")
@@ -64,6 +190,9 @@ def prepare_e2e_environment(env: MutableMapping[str, str] | None = None) -> str:
 def reset_e2e_database() -> None:
     """Remove only the generated repository E2E database when explicitly requested."""
 
+    if _is_postgres_e2e_target():
+        prepare_e2e_environment()
+        return
     if os.environ.get("E2E_RESET_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
         return
     if E2E_DATABASE_PATH.is_symlink():
@@ -110,7 +239,11 @@ def _step_up_test_projects() -> tuple[str, ...]:
 
 
 def run_migrations() -> None:
-    prepare_e2e_environment()
+    database_url = prepare_e2e_environment()
+    if database_url.startswith(("postgresql://", "postgresql+psycopg2://")):
+        database_name = _assert_postgres_e2e_database_empty()
+    else:
+        database_name = ""
     print("Running local E2E database migrations", file=sys.stderr, flush=True)
     from alembic import command
     from alembic.config import Config
@@ -119,14 +252,57 @@ def run_migrations() -> None:
     config.set_main_option("script_location", str(ROOT_DIR / "alembic"))
     config.set_main_option("prepend_sys_path", str(ROOT_DIR))
     command.upgrade(config, "head")
+    if database_name:
+        runtime_parameters = _postgres_e2e_connection(os.environ["DATABASE_URL"], os.environ)
+        _, seed_parameters = _postgres_e2e_seed_connection(
+            os.environ["DATABASE_URL"], runtime_parameters, os.environ
+        )
+        seed_role = str(seed_parameters["user"])
+        if not re.fullmatch(r"hotel_chipre_e2e_[a-z0-9_]+_seed_runner", seed_role):
+            raise E2ESafetyError("PostgreSQL E2E seed role name is invalid")
+        import psycopg2
+
+        try:
+            with psycopg2.connect(**runtime_parameters, connect_timeout=5) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(f'GRANT USAGE ON SCHEMA public TO "{seed_role}"')
+                    cursor.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "{seed_role}"')
+                    cursor.execute(f'GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO "{seed_role}"')
+        except Exception:
+            raise E2ESafetyError("could not grant disposable local seed-role access to migrated E2E tables") from None
+        _POSTGRES_E2E_MIGRATED_DATABASES.add(database_name)
 
 
 def upsert_seed_data() -> None:
     database_url = prepare_e2e_environment()
+    seed_engine = None
+    if database_url.startswith(("postgresql://", "postgresql+psycopg2://")):
+        runtime_parameters = _postgres_e2e_connection(database_url, os.environ)
+        _, seed_parameters = _postgres_e2e_seed_connection(database_url, runtime_parameters, os.environ)
+        database_name = str(runtime_parameters["dbname"])
+        if database_name not in _POSTGRES_E2E_MIGRATED_DATABASES:
+            raise E2ESafetyError("PostgreSQL E2E seed requires fresh migrations in this process")
+        from app.database import get_engine
+        from sqlalchemy import text
+        from sqlalchemy.orm import sessionmaker
+
+        seed_engine = get_engine(str(os.environ["E2E_POSTGRES_SEED_DATABASE_URL"]))
+        with seed_engine.connect() as connection:
+            bypasses_rls = connection.execute(
+                text("SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user")
+            ).scalar_one_or_none()
+        if bypasses_rls is not True:
+            seed_engine.dispose()
+            raise E2ESafetyError("PostgreSQL E2E seed role must be a dedicated local BYPASSRLS fixture role")
+        session_factory = sessionmaker(autocommit=False, autoflush=False, bind=seed_engine)
+    else:
+        from app.database import get_session_factory, init_db
+
+        init_db(database_url)
+        session_factory = get_session_factory()
     owner_email, owner_password = _credentials()
     role_credentials = _role_credentials()
 
-    from app.database import get_session_factory, init_db
     from app.models import (
         CategoryPricing,
         Guest,
@@ -146,8 +322,6 @@ def upsert_seed_data() -> None:
     from app.services.mfa_service import MFA_ACTIVE, encrypt_totp_secret
     from app.services.security import hash_password
 
-    init_db(database_url)
-    session_factory = get_session_factory()
     with session_factory() as db:
         now = datetime.now(timezone.utc)
 
@@ -204,7 +378,7 @@ def upsert_seed_data() -> None:
             "E2E_STEP_UP_OWNER_TOTP_SECRET",
             "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
         )
-        for purpose in ("cash", "cash-business", "rbac", "rbac-info"):
+        for purpose in ("cash", "cash-business", "rbac", "rbac-info", "rate-policy"):
             for project_name in _step_up_test_projects():
                 step_up_email = f"owner-stepup-{purpose}+{project_name}@e2e.com"
                 step_up_user = db.query(User).filter(User.email.ilike(step_up_email)).first()
@@ -386,6 +560,8 @@ def upsert_seed_data() -> None:
             master_mfa.confirmed_at = master_mfa.confirmed_at or now
 
         db.commit()
+    if seed_engine is not None:
+        seed_engine.dispose()
 
 
 def main() -> None:

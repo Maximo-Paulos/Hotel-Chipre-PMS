@@ -16,6 +16,17 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _restore_reservations_hotel_index() -> None:
+    """Restore the legacy index even if a later downgrade already did so."""
+    bind = op.get_bind()
+    if any(
+        index.get("name") == "ix_reservations_hotel_id"
+        for index in sa.inspect(bind).get_indexes("reservations")
+    ):
+        op.drop_index("ix_reservations_hotel_id", table_name="reservations")
+    op.create_index("ix_reservations_hotel_id", "reservations", ["hotel_id"], unique=False)
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     dialect_name = bind.dialect.name if bind is not None else "sqlite"
@@ -119,7 +130,7 @@ def downgrade() -> None:
         # Reverse only what the SQLite upgrade branch did
         op.create_index('ix_subscriptions_hotel_id', 'subscriptions', ['hotel_id'], unique=False)
         op.drop_index('ix_reservation_hotel_id', table_name='reservations')
-        op.create_index('ix_reservations_hotel_id', 'reservations', ['hotel_id'], unique=False)
+        _restore_reservations_hotel_index()
         with op.batch_alter_table('hotel_configuration', recreate='always') as batch_op:
             for col in _hotel_config_cols:
                 batch_op.drop_column(col)
@@ -132,7 +143,7 @@ def downgrade() -> None:
         op.create_unique_constraint('users_email_key', 'users', ['email'])
         op.create_index('ix_subscriptions_hotel_id', 'subscriptions', ['hotel_id'], unique=False)
         op.drop_index('ix_reservation_hotel_id', table_name='reservations')
-        op.create_index('ix_reservations_hotel_id', 'reservations', ['hotel_id'], unique=False)
+        _restore_reservations_hotel_index()
         op.drop_index(op.f('ix_payment_link_tests_external_reference'), table_name='payment_link_tests')
         op.create_unique_constraint('uq_payment_link_tests_external_reference', 'payment_link_tests', ['external_reference'])
         for col in _hotel_config_cols:

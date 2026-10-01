@@ -10,6 +10,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -51,6 +52,16 @@ MONEY_QUANTUM = Decimal("0.01")
 PLAN_ORDER = {"starter": 0, "pro": 1, "ultra": 2}
 AI_MONTHLY_QUOTA_FALLBACK = 20
 logger = logging.getLogger(__name__)
+
+_FACT_CURRENCY_PAIRS = (
+    ("revenue_gross_ars", "revenue_gross_usd"),
+    ("revenue_net_ars", "revenue_net_usd"),
+    ("tax_ars", "tax_usd"),
+    ("fee_ars", "fee_usd"),
+    ("commission_ars", "commission_usd"),
+    ("variable_cost_ars", "variable_cost_usd"),
+    ("margin_operating_ars", "margin_operating_usd"),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,12 +218,15 @@ def metric_card(
     label: str,
     *,
     value_ars: Decimal | float | int | str | None = None,
+    value_ars_available: bool | None = None,
     value_pct: float | None = None,
     value_count: int | None = None,
 ) -> AnalyticsMetricCardRead:
     payload: dict[str, Any] = {"card_code": card_code, "label": label}
     if value_ars is not None:
         payload["value_ars"] = _money_str(value_ars)
+        if value_ars_available is not None:
+            payload["value_ars_available"] = value_ars_available
     if value_pct is not None:
         payload["value_pct"] = round(float(value_pct), 2)
     if value_count is not None:
@@ -378,7 +392,10 @@ def create_company(db: Session, *, hotel_id: int, user_id: int, payload: Company
         contact_email=payload.email,
         contact_phone=payload.phone,
         administrative_contact=payload.administrative_contact,
-        base_price=payload.base_price,
+        # Off-system invoicing is intentionally not represented as a stored
+        # reservation or company amount in the PMS.
+        base_price=None if payload.payment_deferred else payload.base_price,
+        extra_person_nightly_surcharge=payload.extra_person_nightly_surcharge,
         payment_deferred=payload.payment_deferred,
         deferred_days=payload.deferred_days,
         requires_voucher=payload.requires_voucher,
@@ -414,6 +431,8 @@ def update_company(db: Session, *, hotel_id: int, user_id: int, company_id: int,
     }
     for field, value in update_data.items():
         setattr(company, field_map.get(field, field), value)
+    if company.payment_deferred:
+        company.base_price = None
     db.flush()
     _record_audit_event(
         db,
@@ -504,6 +523,7 @@ def get_company_fact_detail(db: Session, *, hotel_id: int, company_id: int, date
                 "revenue_net_usd": _money_str(fact.revenue_net_usd),
                 "margin_operating_ars": _money_str(fact.margin_operating_ars),
                 "margin_operating_usd": _money_str(fact.margin_operating_usd),
+                "unavailable_currencies": _unavailable_currencies([fact]),
             }
             for fact in facts
         ],
@@ -523,7 +543,12 @@ def get_company_fact_detail(db: Session, *, hotel_id: int, company_id: int, date
         ],
         "cards": [
             metric_card("company_nights", "Noches del período", value_count=len(facts)).model_dump(),
-            metric_card("company_revenue_net", "Revenue neto del período", value_ars=sum((_money(f.revenue_net_ars) for f in facts), Decimal("0"))).model_dump(),
+            metric_card(
+                "company_revenue_net",
+                "Revenue neto del período",
+                value_ars=sum((_money(f.revenue_net_ars) for f in facts), Decimal("0")),
+                value_ars_available=not _currency_unavailable_for(facts, "ARS"),
+            ).model_dump(),
             metric_card("company_reservations", "Reservas asociadas", value_count=len(reservations)).model_dump(),
         ],
         # Internal-only: consumed and popped by the /companies/{id} endpoint to
@@ -859,34 +884,61 @@ def _company_lookup_map(db: Session, hotel_id: int) -> dict[int, Company]:
 
 
 def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date_to: date) -> None:
-    """Optionally self-heal empty fact windows for free/single-service hosts.
+    """Optionally self-heal empty or stale FX fact windows for single-service hosts.
 
     These tables are meant to be kept fresh by a scheduled job (Celery beat
     -> analytics.refresh_fact_*). Until that worker exists, the bounded
     synchronous fallback keeps the free single-service deployment useful.
-    It is explicitly configurable and only runs when both fact tables are
-    empty for the requested window. A concurrent loser is harmless because
-    both fact tables have a unique constraint and the refresh is idempotent.
+    It is explicitly configurable and refreshes a bounded requested window
+    when its facts are missing or contain a converted amount without a saved
+    FX snapshot. A concurrent loser is harmless because both fact tables have
+    a unique constraint and the refresh is idempotent.
     """
     settings = get_settings()
     if not bool(getattr(settings, "SYNC_FACT_REFRESH_ENABLED", True)):
         return
 
-    already_materialized = (
-        db.query(FactReservationDaily.id)
-        .filter(FactReservationDaily.hotel_id == hotel_id, FactReservationDaily.stay_date.between(date_from, date_to))
-        .first()
-        or db.query(FactRoomOccupancyDaily.id)
-        .filter(FactRoomOccupancyDaily.hotel_id == hotel_id, FactRoomOccupancyDaily.stay_date.between(date_from, date_to))
-        .first()
-    )
-    if already_materialized:
-        return
-
     max_days = max(int(getattr(settings, "SYNC_FACT_REFRESH_MAX_DAYS", 31)), 1)
     refresh_date_from = max(date_from, date_to - timedelta(days=max_days - 1))
+    already_materialized = (
+        db.query(FactReservationDaily.id)
+        .filter(
+            FactReservationDaily.hotel_id == hotel_id,
+            FactReservationDaily.stay_date.between(refresh_date_from, date_to),
+        )
+        .first()
+        or db.query(FactRoomOccupancyDaily.id)
+        .filter(
+            FactRoomOccupancyDaily.hotel_id == hotel_id,
+            FactRoomOccupancyDaily.stay_date.between(refresh_date_from, date_to),
+        )
+        .first()
+    )
+    ars_amounts = [getattr(FactReservationDaily, ars) for ars, _usd in _FACT_CURRENCY_PAIRS]
+    usd_amounts = [getattr(FactReservationDaily, usd) for _ars, usd in _FACT_CURRENCY_PAIRS]
+    has_nonzero_ars = or_(*(column != 0 for column in ars_amounts))
+    has_nonzero_usd = or_(*(column != 0 for column in usd_amounts))
+    has_any_money = or_(has_nonzero_ars, has_nonzero_usd)
+    missing_fx = or_(FactReservationDaily.fx_rate_snapshot.is_(None), FactReservationDaily.fx_rate_snapshot <= 0)
+    stale_fx_fact = (
+        db.query(FactReservationDaily.id)
+        .filter(
+            FactReservationDaily.hotel_id == hotel_id,
+            FactReservationDaily.stay_date.between(refresh_date_from, date_to),
+            missing_fx,
+            or_(
+                and_(FactReservationDaily.source_currency == "ARS", has_nonzero_usd),
+                and_(FactReservationDaily.source_currency == "USD", has_nonzero_ars),
+                and_(FactReservationDaily.source_currency.notin_(["ARS", "USD"]), has_any_money),
+            ),
+        )
+        .first()
+    )
+    if already_materialized and not stale_fx_fact:
+        return
+
     logger.warning(
-        "analytics.sync_fact_refresh.inline",
+        "analytics.sync_fact_currency_refresh.inline" if stale_fx_fact else "analytics.sync_fact_refresh.inline",
         extra={
             "hotel_id": hotel_id,
             "requested_date_from": date_from.isoformat(),
@@ -894,6 +946,7 @@ def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date
             "refresh_date_from": refresh_date_from.isoformat(),
             "refresh_date_to": date_to.isoformat(),
             "max_days": max_days,
+            "reason": "missing_fx_snapshot_on_converted_fact" if stale_fx_fact else "empty_window",
         },
     )
     try:
@@ -934,6 +987,36 @@ def _sum_money(rows: list[Any], attr: str) -> Decimal:
     return sum((_money(getattr(row, attr)) for row in rows), Decimal("0.00"))
 
 
+def _currency_unavailable_for(rows: list[Any], target_currency: str) -> bool:
+    target = target_currency.upper()
+    if target not in {"ARS", "USD"}:
+        return True
+    money_fields = ("revenue_gross", "revenue_net", "tax", "fee", "commission", "variable_cost", "margin_operating")
+    for row in rows:
+        source = str(getattr(row, "source_currency", "") or "").strip().upper()
+        if source not in {"ARS", "USD"}:
+            return True
+        if source == target:
+            continue
+        fx_rate = _money(getattr(row, "fx_rate_snapshot", None))
+        if fx_rate > 0:
+            continue
+        source_fields = (
+            (f"{field}_{source.lower()}" for field in money_fields)
+        )
+        if any(_money(getattr(row, field, None)) != 0 for field in source_fields):
+            return True
+    return False
+
+
+def _unavailable_currencies(rows: list[Any]) -> list[str]:
+    return [currency for currency in ("ARS", "USD") if _currency_unavailable_for(rows, currency)]
+
+
+def _unavailable_currency_metadata(rows: list[Any]) -> dict[str, list[str]]:
+    return {"unavailable_currencies": _unavailable_currencies(rows)}
+
+
 def build_starter_summary_payload(db: Session, *, hotel_id: int, date_from: date | None, date_to: date | None) -> dict[str, Any]:
     window = _utc_date_range(db, hotel_id, date_from, date_to)
     facts = _load_reservation_facts(db, hotel_id, window.date_from, window.date_to)
@@ -960,7 +1043,12 @@ def build_starter_summary_payload(db: Session, *, hotel_id: int, date_from: date
     occupancy_pct = (occupied_rooms / total_rooms * 100.0) if total_rooms else 0.0
     revenue = _sum_money(facts, "revenue_gross_ars")
     cards = [
-        metric_card("starter_revenue_month", "Revenue del mes", value_ars=revenue).model_dump(),
+        metric_card(
+            "starter_revenue_month",
+            "Revenue del mes",
+            value_ars=revenue,
+            value_ars_available=not _currency_unavailable_for(facts, "ARS"),
+        ).model_dump(),
         metric_card("starter_occupancy_today", "Ocupación hoy", value_pct=occupancy_pct).model_dump(),
         metric_card("starter_arrivals_today", "Llegadas hoy", value_count=arrivals).model_dump(),
     ]
@@ -997,8 +1085,18 @@ def build_home_payload(
     pickup_30d = calculate_pickup_30d_count(db, hotel_id=hotel_id, date_from=window.date_from, date_to=window.date_to)
     physical_room_nights = calculate_physical_room_nights_for_hotel(db, hotel_id=hotel_id, date_from=window.date_from, date_to=window.date_to)
     cards = [
-        metric_card("home_revenue_gross", "Revenue bruto", value_ars=_sum_money(facts, "revenue_gross_ars")).model_dump(),
-        metric_card("home_revenue_net", "Revenue neto", value_ars=_sum_money(facts, "revenue_net_ars")).model_dump(),
+        metric_card(
+            "home_revenue_gross",
+            "Revenue bruto",
+            value_ars=_sum_money(facts, "revenue_gross_ars"),
+            value_ars_available=not _currency_unavailable_for(facts, "ARS"),
+        ).model_dump(),
+        metric_card(
+            "home_revenue_net",
+            "Revenue neto",
+            value_ars=_sum_money(facts, "revenue_net_ars"),
+            value_ars_available=not _currency_unavailable_for(facts, "ARS"),
+        ).model_dump(),
         metric_card(
             "home_occupancy",
             "Ocupación promedio",
@@ -1043,6 +1141,8 @@ def build_rooms_overview_payload(
     categories = _category_lookup_map(db, hotel_id)
     facts = _load_room_facts(db, hotel_id, window.date_from, window.date_to)
     facts_by_room = _group_rows(facts, "room_id")
+    currency_facts = _load_reservation_facts(db, hotel_id, window.date_from, window.date_to)
+    currency_facts_by_room = _group_rows(currency_facts, "room_id")
     payload_rooms = []
     for room in rooms.values():
         room_facts = facts_by_room.get(room.id, [])
@@ -1060,6 +1160,7 @@ def build_rooms_overview_payload(
                 "revenue_net_usd": _money_str(_sum_money(room_facts, "revenue_net_usd")),
                 "margin_operating_ars": _money_str(_sum_money(room_facts, "margin_operating_ars")),
                 "margin_operating_usd": _money_str(_sum_money(room_facts, "margin_operating_usd")),
+                **_unavailable_currency_metadata(currency_facts_by_room.get(room.id, [])),
             }
         )
     cards = [
@@ -1078,7 +1179,7 @@ def build_rooms_overview_payload(
             "rooms": payload_rooms,
         },
         "generated_at": _now(),
-        "data_as_of": _facts_data_as_of(facts),
+        "data_as_of": _facts_data_as_of(facts, currency_facts),
     }
 
 
@@ -1109,6 +1210,12 @@ def build_room_detail_payload(
         .order_by(FactRoomOccupancyDaily.stay_date.asc())
         .all()
     )
+    currency_facts = _load_reservation_facts(db, hotel_id, window.date_from, window.date_to)
+    currency_facts_by_night = {
+        (fact.reservation_id, fact.stay_date): fact
+        for fact in currency_facts
+        if fact.room_id == room_id
+    }
     events = _fetch_room_state_events(db, hotel_id=hotel_id, room_id=room_id)
     return {
         "hotel_id": hotel_id,
@@ -1138,13 +1245,18 @@ def build_room_detail_payload(
                     "revenue_net_usd": _money_str(fact.revenue_net_usd),
                     "margin_operating_ars": _money_str(fact.margin_operating_ars),
                     "margin_operating_usd": _money_str(fact.margin_operating_usd),
+                    **_unavailable_currency_metadata(
+                        [currency_facts_by_night[(fact.reservation_id, fact.stay_date)]]
+                        if (fact.reservation_id, fact.stay_date) in currency_facts_by_night
+                        else []
+                    ),
                 }
                 for fact in facts
             ],
             "events": [_serialize_room_state_event(event) for event in events],
         },
         "generated_at": _now(),
-        "data_as_of": _facts_data_as_of(facts),
+        "data_as_of": _facts_data_as_of(facts, currency_facts),
     }
 
 
@@ -1214,6 +1326,7 @@ def build_category_detail_payload(
                     "outcome": fact.outcome.value if hasattr(fact.outcome, "value") else str(fact.outcome),
                     "revenue_net_ars": _money_str(fact.revenue_net_ars),
                     "revenue_net_usd": _money_str(fact.revenue_net_usd),
+                    **_unavailable_currency_metadata([fact]),
                 }
                 for fact in facts
             ],
@@ -1235,6 +1348,7 @@ def build_segments_breakdown(db: Session, *, hotel_id: int, date_from: date, dat
                 "nights_count": len(rows),
                 "revenue_gross_ars": _money_str(_sum_money(rows, "revenue_gross_ars")),
                 "revenue_net_ars": _money_str(_sum_money(rows, "revenue_net_ars")),
+                **_unavailable_currency_metadata(rows),
             }
         )
     return sorted(result, key=lambda item: item["guest_segment"])
@@ -1252,6 +1366,7 @@ def build_channels_breakdown(db: Session, *, hotel_id: int, date_from: date, dat
                 "nights_count": len(rows),
                 "revenue_gross_ars": _money_str(_sum_money(rows, "revenue_gross_ars")),
                 "revenue_net_ars": _money_str(_sum_money(rows, "revenue_net_ars")),
+                **_unavailable_currency_metadata(rows),
             }
         )
     return sorted(result, key=lambda item: item["channel_code"])
@@ -1378,6 +1493,7 @@ def build_operations_payload(
                     "row_kind": fact.row_kind.value if hasattr(fact.row_kind, "value") else str(fact.row_kind),
                     "revenue_net_ars": _money_str(fact.revenue_net_ars),
                     "margin_operating_ars": _money_str(fact.margin_operating_ars),
+                    **_unavailable_currency_metadata([fact]),
                 }
                 for fact in facts
             ],
@@ -1390,6 +1506,8 @@ def build_operations_payload(
 def build_rooms_detail_breakdown(db: Session, *, hotel_id: int, date_from: date, date_to: date) -> list[dict[str, Any]]:
     facts = _load_room_facts(db, hotel_id, date_from, date_to)
     grouped = _group_rows(facts, "room_id")
+    currency_facts = _load_reservation_facts(db, hotel_id, date_from, date_to)
+    currency_facts_by_room = _group_rows(currency_facts, "room_id")
     rooms = _room_lookup_map(db, hotel_id)
     result = []
     for room_id, rows in grouped.items():
@@ -1401,6 +1519,7 @@ def build_rooms_detail_breakdown(db: Session, *, hotel_id: int, date_from: date,
                 "occupied_nights": len([row for row in rows if row.is_occupied]),
                 "revenue_net_ars": _money_str(_sum_money(rows, "revenue_net_ars")),
                 "margin_operating_ars": _money_str(_sum_money(rows, "margin_operating_ars")),
+                **_unavailable_currency_metadata(currency_facts_by_room.get(room_id, [])),
             }
         )
     return sorted(result, key=lambda item: item["room_number"] or "")

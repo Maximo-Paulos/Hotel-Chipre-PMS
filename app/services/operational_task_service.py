@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy import case
 from sqlalchemy.orm import Session
 
+from app.services.row_locks import lock_query
 from app.models.cash_register import CashCloseReport
 from app.models.hotel_membership import HotelMembership
 from app.models.operational_task import (
@@ -72,7 +73,7 @@ def _get_task(db: Session, hotel_id: int, task_id: int, *, for_update: bool = Fa
         # PostgreSQL serializes two transitions for the same task. SQLite
         # ignores FOR UPDATE, but the version check remains the conflict
         # contract used by the API and tests there.
-        query = query.with_for_update()
+        query = lock_query(query, OperationalTask)
     task = query.first()
     if task is None:
         raise OperationalTaskError("Tarea no encontrada")
@@ -439,12 +440,10 @@ def acknowledge_handoff(
     received_by_user_id: int,
     client_version: int,
 ) -> ShiftHandoff:
-    handoff = (
-        db.query(ShiftHandoff)
-        .filter(ShiftHandoff.id == handoff_id, ShiftHandoff.hotel_id == hotel_id)
-        .with_for_update()
-        .first()
-    )
+    handoff = lock_query(
+        db.query(ShiftHandoff).filter(ShiftHandoff.id == handoff_id, ShiftHandoff.hotel_id == hotel_id),
+        ShiftHandoff,
+    ).first()
     if handoff is None:
         raise OperationalTaskError("Pase de turno no encontrado")
     if handoff.version != client_version:

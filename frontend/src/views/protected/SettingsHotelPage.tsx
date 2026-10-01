@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getHotelConfig, updateHotelConfig, type HotelConfig } from "../../api/config";
+import { getFxRates } from "../../api/fxRates";
 import {
   createRoomCategory,
   updateRoomCategory,
@@ -143,6 +144,12 @@ export function SettingsHotelPage() {
     queryKey: ["hotel-config", session.hotelId],
     enabled: hasValidSession(session),
     queryFn: () => getHotelConfig(session)
+  });
+  const fxRatesQuery = useQuery({
+    queryKey: ["fx-rates", session.hotelId],
+    enabled: hasValidSession(session) && permissionsKnown && hasPermission("settings:fx:manage"),
+    queryFn: () => getFxRates(session),
+    staleTime: 5 * 60 * 1000
   });
 
   useEffect(() => {
@@ -364,6 +371,22 @@ export function SettingsHotelPage() {
   };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const minAdjustment = form.manual_rate_min_adjustment_pct == null || form.manual_rate_min_adjustment_pct === ""
+      ? null
+      : Number(form.manual_rate_min_adjustment_pct);
+    const maxAdjustment = form.manual_rate_max_adjustment_pct == null || form.manual_rate_max_adjustment_pct === ""
+      ? null
+      : Number(form.manual_rate_max_adjustment_pct);
+    if ((minAdjustment === null) !== (maxAdjustment === null)) {
+      setError("Definí ambos límites de tarifa manual o dejá ambos vacíos.");
+      return;
+    }
+    if (minAdjustment !== null && maxAdjustment !== null) {
+      if (!Number.isFinite(minAdjustment) || !Number.isFinite(maxAdjustment) || minAdjustment < -100 || minAdjustment > maxAdjustment) {
+        setError("Revisá los límites: el mínimo debe ser al menos -100% y no puede superar al máximo.");
+        return;
+      }
+    }
     try {
       await updateConfigMutation.mutateAsync(form);
     } catch (cause) {
@@ -372,7 +395,9 @@ export function SettingsHotelPage() {
   };
 
   const ownerOnly = session.baseRole === "owner";
+  const canManageFxSettings = permissionsKnown && hasPermission("settings:fx:manage");
   const canDeleteRooms = permissionsKnown && hasPermission("hotel_settings:update");
+  const canManageManualRatePolicy = permissionsKnown && hasPermission("reservation:manual_rate_policy_manage");
 
   if (!hasValidSession(session)) return <p className="text-sm text-slate-600">Iniciá sesión con un hotel activo para editar la configuración.</p>;
 
@@ -425,6 +450,30 @@ export function SettingsHotelPage() {
               </datalist>
             </label>
           </div>
+          <div className="rounded-lg border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-800">Horarios habituales</h3>
+            <p className="mt-1 text-xs text-slate-500">Se guardan en la zona horaria del hotel. Dejá un campo vacío si todavía no definiste ese horario.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="text-sm font-semibold text-slate-700">
+                Check-in desde
+                <input
+                  type="time"
+                  value={form.check_in_time ?? ""}
+                  onChange={(event) => handleChange("check_in_time", event.target.value || null)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="text-sm font-semibold text-slate-700">
+                Check-out hasta
+                <input
+                  type="time"
+                  value={form.check_out_time ?? ""}
+                  onChange={(event) => handleChange("check_out_time", event.target.value || null)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+          </div>
           <div className="grid gap-3 md:grid-cols-3">
             <label className="text-sm font-semibold text-slate-700">
               Moneda
@@ -449,11 +498,11 @@ export function SettingsHotelPage() {
               Requisito de pago para el check-in
               <select
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                value={form.checkin_payment_policy ?? "deposit"}
+                value={form.checkin_payment_policy ?? "total"}
                 onChange={(e) => handleChange("checkin_payment_policy", e.target.value as HotelConfig["checkin_payment_policy"])}
               >
-                <option value="deposit">Seña configurada (recomendado)</option>
-                <option value="total">Estadía completamente pagada</option>
+                <option value="total">Estadía completamente pagada (predeterminado)</option>
+                <option value="deposit">Seña configurada</option>
                 <option value="free">Sin requisito de pago al ingresar</option>
               </select>
               <span className="mt-1 block text-xs font-normal text-slate-500">
@@ -477,6 +526,143 @@ export function SettingsHotelPage() {
               <input maxLength={3} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase" value={form.jurisdiction_code ?? "AR"} onChange={(e) => handleChange("jurisdiction_code", e.target.value.toUpperCase())} />
             </label>
           </div>
+
+          {canManageFxSettings && (
+            <section className="rounded-lg border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-800">Cotizaciones y conversiones</h3>
+              <p className="mt-1 text-xs text-slate-600">
+                Solo se usan mercados oficial y blue, sin dólar tarjeta, MEP, CCL ni otras variantes. El mercado elegido rige para todas las monedas: USD usa la cotización directa de DolarAPI; EUR, BRL, CLP y UYU usan su cotización oficial directa, o un equivalente blue derivado de la relación USD blue/oficial, identificado como estimado. Los pares se convierten vía ARS con venta para la moneda de origen y compra para la de destino, aplicando el spread de la política FX. Si falta una cotización fresca, el cálculo se detiene sin cambiar de mercado.
+              </p>
+              <p className="mt-1 text-xs text-slate-600">Cambiar estas preferencias requiere MFA reciente.</p>
+              <div className="mt-3 grid gap-4 lg:grid-cols-2">
+                <label className="text-sm font-semibold text-slate-700">
+                  Mercado de referencia para conversiones
+                  <select
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    value={form.fx_conversion_rate_type ?? "oficial"}
+                    onChange={(event) => handleChange("fx_conversion_rate_type", event.target.value as "oficial" | "blue")}
+                  >
+                    <option value="oficial">Oficial para todas las monedas</option>
+                    <option value="blue">Blue para todas las monedas</option>
+                  </select>
+                </label>
+                <fieldset>
+                  <legend className="text-sm font-semibold text-slate-700">Mercados visibles en cotizaciones</legend>
+                  <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                    {([
+                      ["oficial", "Oficial"],
+                      ["blue", "Blue"]
+                    ] as const).map(([rateType, label]) => {
+                      const quote = fxRatesQuery.data?.find((item) => item.type === rateType);
+                      const selected = (form.fx_display_rate_types ?? ["oficial"]).includes(rateType);
+                      return (
+                        <label key={rateType} className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={(event) => {
+                              const current = form.fx_display_rate_types ?? ["oficial"];
+                              const next = event.target.checked
+                                ? Array.from(new Set([...current, rateType]))
+                                : current.filter((item) => item !== rateType);
+                              if (next.length === 0) {
+                                setError("Dejá visible al menos un mercado de cotización.");
+                                return;
+                              }
+                              handleChange("fx_display_rate_types", next);
+                              setError(null);
+                            }}
+                            className="mt-0.5"
+                          />
+                          <span className="min-w-0">
+                              <span className="block font-semibold text-slate-800">{label}</span>
+                            {selected && quote ? (
+                              <span className="mt-1 block text-xs font-normal text-slate-500">
+                                Compra {quote.compra ?? "—"} · Venta {quote.venta ?? "—"}{quote.fechaActualizacion ? ` · ${quote.fechaActualizacion}` : ""}
+                              </span>
+                            ) : selected ? (
+                              <span className="mt-1 block text-xs font-normal text-slate-500">Cotización no disponible ahora.</span>
+                            ) : (
+                              <span className="mt-1 block text-xs font-normal text-slate-500">Oculta según la preferencia del hotel.</span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              </div>
+              <div className="mt-3 rounded-lg bg-slate-50 p-3">
+                <p className="text-xs font-semibold text-slate-700">Cotizaciones de EUR, BRL, CLP y UYU</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  DolarAPI publica estas monedas en mercado oficial. El equivalente blue se deriva con la relación entre dólar blue y oficial, y se identifica como estimado.
+                </p>
+                {fxRatesQuery.isLoading ? (
+                  <p className="mt-1 text-xs text-slate-500">Cargando cotizaciones de DolarAPI...</p>
+                ) : fxRatesQuery.isError ? (
+                  <p className="mt-1 text-xs text-amber-700">No se pudieron actualizar las cotizaciones ahora. Las conversiones requieren una cotización fresca o un snapshot válido.</p>
+                ) : (
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    {(["EUR", "BRL", "CLP", "UYU"] as const).map((currency) => {
+                      const marketLabels: Record<"oficial" | "blue", string> = {
+                        oficial: "Oficial",
+                        blue: "Blue derivado",
+                      };
+                      return (
+                        <p key={currency} className="text-xs text-slate-600">
+                          <span className="font-semibold text-slate-800">{currency}:</span>{" "}
+                          {(form.fx_display_rate_types ?? ["oficial"]).map((market) => {
+                            const quoteType = market === "blue" ? `${currency.toLowerCase()}_blue` : currency.toLowerCase();
+                            const quote = fxRatesQuery.data?.find((item) => item.type === quoteType);
+                            return (
+                              <span key={market} className="block">
+                                {marketLabels[market]} · compra {quote?.compra ?? "—"} · venta {quote?.venta ?? "—"}
+                              </span>
+                            );
+                          })}
+                        </p>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Las tarifas y reservas ya creadas conservan sus importes. El mercado elegido gobierna todas las conversiones; las cotizaciones blue de EUR, BRL, CLP y UYU son equivalentes derivadas de la relación blue/oficial del USD. Las políticas FX aportan el spread y la dirección determina compra o venta.
+              </p>
+            </section>
+          )}
+
+          {canManageManualRatePolicy && (
+            <div className="rounded-lg border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-800">Límites de tarifa manual directa</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Se comparan con la cotización automática de la estadía. El equipo autorizado debe indicar el motivo; estos límites no modifican Tarifas. Dejá ambos campos vacíos para deshabilitar tarifas manuales limitadas. Guardar este cambio requiere revalidación y queda auditado.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="text-sm font-semibold text-slate-700">
+                  Ajuste mínimo (%)
+                  <input
+                    type="number"
+                    min={-100}
+                    step="0.01"
+                    value={form.manual_rate_min_adjustment_pct ?? ""}
+                    onChange={(event) => handleChange("manual_rate_min_adjustment_pct", event.target.value === "" ? null : Number(event.target.value))}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Ajuste máximo (%)
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.manual_rate_max_adjustment_pct ?? ""}
+                    onChange={(event) => handleChange("manual_rate_max_adjustment_pct", event.target.value === "" ? null : Number(event.target.value))}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
 
           {ownerOnly && (
             <div className="rounded-lg border border-slate-200 p-4">

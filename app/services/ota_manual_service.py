@@ -12,6 +12,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.services.row_locks import lock_query
 from app.models.reservation import (
     Reservation,
     ReservationChannelCodeEnum,
@@ -142,7 +143,7 @@ def release_no_guarantee(
     actor_user_id: int | None = None,
     reason: str | None = None,
 ) -> Reservation:
-    reservation = (
+    reservation_query = (
         db.query(Reservation)
         .filter(
             Reservation.id == reservation.id,
@@ -150,9 +151,8 @@ def release_no_guarantee(
             Reservation.deleted_at.is_(None),
         )
         .populate_existing()
-        .with_for_update()
-        .first()
     )
+    reservation = lock_query(reservation_query, Reservation).first()
     if reservation is None:
         raise OTAManualReservationError("OTA reservation was not found or is no longer active")
     if not reservation.source_provider_code or not reservation.external_id:

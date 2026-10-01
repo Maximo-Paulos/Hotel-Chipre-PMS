@@ -36,6 +36,18 @@ test("MFA login explains where to get the code and that no email is sent", async
 });
 
 test("password login explains that Google and Hotels-PMS passwords are different", async ({ page }) => {
+  await page.route("**/api/auth/providers", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      google: {
+        enabled: true,
+        client_id: "e2e.apps.googleusercontent.com",
+        self_signup_enabled: true,
+        allowed_domains: []
+      }
+    })
+  }));
   await page.route("**/api/auth/login", (route) => route.fulfill({
     status: 401,
     contentType: "application/json",
@@ -50,6 +62,43 @@ test("password login explains that Google and Hotels-PMS passwords are different
   await expect(page.getByRole("alert")).toHaveText("Credenciales invalidas");
   await expect(page.getByRole("note")).toContainText("La contraseña de Google no sirve");
   await expect(page.getByRole("link", { name: "Restablecer contraseña de Hotels-PMS" })).toHaveAttribute("href", "/reset-password");
+});
+
+test("disabled Google login leaves no provider copy or separator on the password login form", async ({ page }) => {
+  await page.route("**/api/auth/providers", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      google: { enabled: false, client_id: null, self_signup_enabled: false, allowed_domains: [] }
+    })
+  }));
+  await page.route("**/api/auth/login", (route) => route.fulfill({
+    status: 401,
+    contentType: "application/json",
+    body: JSON.stringify({ detail: "Credenciales invalidas" })
+  }));
+
+  await page.goto("/login");
+  await expect(page.getByText("Ingresá con la contraseña de tu cuenta de Hotels-PMS.")).toBeVisible();
+  await expect(page.getByTestId("google-signin-button")).toHaveCount(0);
+  await expect(page.getByText("o", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Google|Google password/i)).toHaveCount(0);
+
+  await page.getByLabel("Email", { exact: true }).fill("owner@example.test");
+  await page.locator('input[type="password"]').fill("synthetic-password");
+  await page.getByTestId("login-submit").click();
+  await expect(page.getByRole("note")).toContainText("Ingresá la contraseña de Hotels-PMS asociada a esta cuenta.");
+  await expect(page.getByRole("note")).not.toContainText(/Google/i);
+});
+
+test("unavailable provider capabilities keep password login usable and hide Google controls", async ({ page }) => {
+  await page.route("**/api/auth/providers", (route) => route.fulfill({ status: 503, body: "" }));
+
+  await page.goto("/login");
+  await expect(page.getByRole("heading", { name: "Ingresa a tu cuenta" })).toBeVisible();
+  await expect(page.getByText("Ingresá con la contraseña de tu cuenta de Hotels-PMS.")).toBeVisible();
+  await expect(page.getByTestId("google-signin-button")).toHaveCount(0);
+  await expect(page.getByText("o", { exact: true })).toHaveCount(0);
 });
 
 test("Google sign-in button follows the configured E2E client id", async ({ page }) => {

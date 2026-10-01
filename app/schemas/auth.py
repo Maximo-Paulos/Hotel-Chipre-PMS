@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import is_test_mode
+from app.schemas.datetime_types import UTCDateTime
 
 
 class RegisterRequest(BaseModel):
@@ -244,6 +245,10 @@ class MfaEnrollmentResponse(BaseModel):
     otpauth_uri: str
 
 
+class MfaStatusResponse(BaseModel):
+    enabled: bool
+
+
 class MfaRecoveryCodesResponse(BaseModel):
     recovery_codes: list[str]
 
@@ -254,7 +259,7 @@ class ResetCodeValidationResponse(BaseModel):
 
 class UserSessionRead(BaseModel):
     id: int
-    created_at: datetime
-    last_seen_at: datetime
+    created_at: UTCDateTime
+    last_seen_at: UTCDateTime
     device_label: str
     current: bool = False

@@ -99,6 +99,49 @@ export type PromotionSimulateNight = {
   post_promotion_amount: string;
 };
 
+export type FxQuoteDetails = {
+  provider: string;
+  configured_usd_market: "oficial" | "blue";
+  usd_market: "oficial" | "blue" | null;
+  path: "via_ars";
+  from_currency: string;
+  to_currency: string;
+  source_side: "venta" | null;
+  target_side: "compra" | null;
+  source_ars_per_unit: number;
+  target_ars_per_unit: number;
+  spread_pct: number;
+  applied_rate: number;
+  source_updated_at: string | null;
+  target_updated_at: string | null;
+  source_quote: {
+    currency: string;
+    rate_type: string;
+    market: string;
+    conversion_market?: "oficial" | "blue";
+    usd_market: "oficial" | "blue" | null;
+    direct_currency_market: string | null;
+    is_derived_blue?: boolean;
+    derivation_sources?: Record<string, unknown> | null;
+    side: "venta";
+    ars_per_unit: number;
+    provider_updated_at: string;
+  } | null;
+  target_quote: {
+    currency: string;
+    rate_type: string;
+    market: string;
+    conversion_market?: "oficial" | "blue";
+    usd_market: "oficial" | "blue" | null;
+    direct_currency_market: string | null;
+    is_derived_blue?: boolean;
+    derivation_sources?: Record<string, unknown> | null;
+    side: "compra";
+    ars_per_unit: number;
+    provider_updated_at: string;
+  } | null;
+};
+
 export type PromotionSimulateResult = {
   pricing_source: string;
   hotel_id: number;
@@ -114,6 +157,7 @@ export type PromotionSimulateResult = {
   tax_amount: string;
   fee_amount: string;
   fx_rate_snapshot: string | null;
+  fx_quote_details: FxQuoteDetails | null;
   booking_total: string;
   payment_adjustment: {
     payment_method: string;

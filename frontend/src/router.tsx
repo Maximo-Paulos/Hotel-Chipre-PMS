@@ -72,6 +72,7 @@ const OperationalAuditPage = lazy(() => import("./views/protected/OperationalAud
 const OperationalTasksPage = lazy(() => import("./views/protected/OperationalTasksPage").then((m) => ({ default: m.OperationalTasksPage })));
 const WhatsAppInboxPage = lazy(() => import("./views/protected/WhatsAppInboxPage").then((m) => ({ default: m.WhatsAppInboxPage })));
 const RoomsPage = lazy(() => import("./views/protected/RoomsPage").then((m) => ({ default: m.RoomsPage })));
+const HousekeepingTodayPage = lazy(() => import("./views/protected/HousekeepingTodayPage").then((m) => ({ default: m.HousekeepingTodayPage })));
 const SettingsAssistantPage = lazy(() => import("./views/protected/SettingsAssistantPage"));
 const SettingsSubscriptionPage = lazy(() => import("./views/protected/SettingsSubscriptionPage"));
 const SettingsConnectionsPage = lazy(() =>
@@ -213,7 +214,9 @@ function AppHostOnly({ children }: { children: ReactNode }) {
 function OnboardingGate() {
   const { session } = useSession();
   const { data, isFetching } = useOnboardingStatus({ enabled: Boolean(session.accessToken) });
-  if (isFetching) return null;
+  // Keep the wizard mounted during mutation-triggered status refetches so
+  // local form state and delivery feedback survive navigation between steps.
+  if (isFetching && !data) return null;
   if (data?.completed) return <Navigate to="/dashboard" replace />;
   return <OnboardingWizard />;
 }
@@ -235,6 +238,7 @@ const appRoutes = APP_HOST
           { path: "analytics/operations", element: <PermissionGate anyPermission={["reports:operational:view"]}><AnalyticsOperationsPage /></PermissionGate> },
           { path: "operacion/auditoria", element: <PermissionGate anyPermission={["operations:audit:view"]}><OperationalAuditPage /></PermissionGate> },
           { path: "operacion/tareas", element: <PermissionGate anyPermission={["operations:tasks:view", "operations:tasks:report", "operations:tasks:manage"]}><OperationalTasksPage /></PermissionGate> },
+          { path: "operacion/limpieza-hoy", element: <PermissionGate anyPermission={["housekeeping:board_view"]}><HousekeepingTodayPage /></PermissionGate> },
           { path: "operacion/whatsapp", element: <PermissionGate anyPermission={["whatsapp:inbox:view"]}><WhatsAppInboxPage /></PermissionGate> },
           { path: "analytics/ai-chat", element: <PermissionGate anyPermission={["analytics:ai:view"]}><AnalyticsAIChatPage /></PermissionGate> },
           { path: "settings/companies", element: <PermissionGate anyPermission={["company:view"]}><CompaniesPage /></PermissionGate> },

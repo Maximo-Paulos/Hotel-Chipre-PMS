@@ -3,8 +3,8 @@ Pydantic schemas for Reservation.
 """
 import re
 
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional
+from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import Literal, Optional
 from datetime import date, datetime
 from decimal import Decimal
 from app.models.reservation import ReservationChannelCodeEnum, ReservationStatusEnum, ReservationSourceEnum
@@ -67,6 +67,7 @@ class ReservationCreate(BaseModel):
     guest_scope: str = Field(default="all", max_length=30)
     target_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     total_amount: Optional[Decimal] = Field(default=None, ge=0)
+    manual_rate_reason: Optional[str] = Field(default=None, max_length=500)
     deposit_amount: Optional[Decimal] = Field(default=None, ge=0)
     quote_token: Optional[str] = Field(default=None, min_length=20, max_length=24000)
     mobility_restriction: bool = False
@@ -85,6 +86,16 @@ class ReservationCreate(BaseModel):
     def normalize_reservation_comment(cls, value: object) -> str | None:
         return _normalize_reservation_comment(value)
 
+    @field_validator("manual_rate_reason", mode="before")
+    @classmethod
+    def normalize_manual_rate_reason(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("El motivo de la tarifa manual debe ser texto")
+        cleaned = value.strip()
+        return cleaned or None
+
 
 class ReservationRead(BaseModel):
     id: int
@@ -99,6 +110,7 @@ class ReservationRead(BaseModel):
     # filters; operators should not have to interpret internal identifiers.
     category_name: Optional[str] = None
     company_id: Optional[int] = None
+    group_id: Optional[int] = None
     sellable_product_id: Optional[int] = None
     rate_plan_id: Optional[int] = None
     tax_policy_id: Optional[int] = None
@@ -106,17 +118,19 @@ class ReservationRead(BaseModel):
     check_out_date: date
     actual_check_in: Optional[datetime]
     actual_check_out: Optional[datetime]
-    total_amount: float
-    amount_paid: float
-    external_paid_amount: float = 0.0
+    # Deferred-company lodging is invoiced outside the PMS, so amount fields
+    # are nullable in reads and can be masked without suggesting a zero charge.
+    total_amount: float | None
+    amount_paid: float | None
+    external_paid_amount: float | None = 0.0
     external_paid_reference: Optional[str] = None
     external_paid_confirmed: bool = False
-    deposit_amount: float
-    subtotal_amount: float = 0.0
-    tax_amount: float = 0.0
-    fee_amount: float = 0.0
-    commission_amount: float = 0.0
-    net_amount: float = 0.0
+    deposit_amount: float | None
+    subtotal_amount: float | None = 0.0
+    tax_amount: float | None = 0.0
+    fee_amount: float | None = 0.0
+    commission_amount: float | None = 0.0
+    net_amount: float | None = 0.0
     currency_code: str = "ARS"
     fx_rate_snapshot: Optional[float] = None
     quoted_amount_ars: Optional[float] = None
@@ -128,14 +142,17 @@ class ReservationRead(BaseModel):
     external_confirmation_code: Optional[str] = None
     payment_collection_model: str = "hotel_collect"
     settlement_status: str = "not_applicable"
+    company_billing_deferred: bool = False
     num_adults: int
     num_children: int
     notes: Optional[str]
     arrival_time_hint: Optional[str] = None
     reservation_comment: Optional[str] = None
+    company_extension_request_pending: bool = False
+    company_extension_request_note: Optional[str] = None
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
-    balance_due: float = 0.0
+    balance_due: float | None = 0.0
     nights: int = 0
     additional_guests: list[GuestSummary] = []
     allocation_status: str = "unassigned"
@@ -143,7 +160,45 @@ class ReservationRead(BaseModel):
     mobility_restriction: bool = False
     is_wait_listed: bool = False
     wait_list_reason: Optional[str] = None
+    manual_rate_reason: Optional[str] = None
     version: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class ReservationGroupCreate(BaseModel):
+    reservations: list[ReservationCreate] = Field(min_length=2, max_length=10)
+
+    @model_validator(mode="after")
+    def reject_manual_rates(self):
+        if any(
+            reservation.total_amount is not None or reservation.manual_rate_reason is not None
+            for reservation in self.reservations
+        ):
+            raise ValueError("Las reservas de grupo usan la cotización de Tarifas; no aceptan tarifas manuales.")
+        return self
+
+
+class ReservationGroupRead(BaseModel):
+    id: int
+    hotel_id: int
+    guest_id: int
+    guest_name: str
+    company_id: int | None = None
+    company_name: str | None = None
+    check_in_date: date
+    check_out_date: date
+    notes: str | None = None
+    reservation_count: int
+    room_count: int
+    reservation_ids: list[int]
+    reservation_codes: list[str]
+    total_amount: Decimal | None
+    amount_paid: Decimal | None
+    balance_due: Decimal | None
+    company_billing_deferred: bool = False
+    currency_code: str
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -152,6 +207,8 @@ class ReservationUpdate(BaseModel):
     room_id: Optional[int] = None
     check_in_date: Optional[date] = None
     check_out_date: Optional[date] = None
+    total_amount: Optional[Decimal] = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    paid_total_change_reason: Optional[str] = Field(default=None, max_length=500)
     num_adults: Optional[int] = None
     num_children: Optional[int] = None
     notes: Optional[str] = None
@@ -160,6 +217,24 @@ class ReservationUpdate(BaseModel):
     mobility_restriction: Optional[bool] = None
     client_version: Optional[int] = None
     restriction_override: Optional[GuestRestrictionOverrideRequest] = None
+
+    @field_validator("paid_total_change_reason", mode="before")
+    @classmethod
+    def normalize_paid_total_change_reason(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("paid_total_change_reason must be text")
+        cleaned = value.strip()
+        return cleaned or None
+
+    @model_validator(mode="after")
+    def validate_paid_total_change(self):
+        if self.total_amount is not None and not self.paid_total_change_reason:
+            raise ValueError("El motivo es obligatorio para corregir el total de una reserva con pagos.")
+        if self.total_amount is None and self.paid_total_change_reason is not None:
+            raise ValueError("El motivo solo corresponde cuando se corrige el total de la reserva.")
+        return self
 
     @field_validator("arrival_time_hint", mode="before")
     @classmethod
@@ -197,10 +272,19 @@ class ReservationExtensionRequest(BaseModel):
     new_checkout_date: date
     client_version: int
     pricing_mode: str = Field(default="current_rate", pattern="^(current_rate|original_average)$")
-    payment_action: str = Field(default="payment_link", pattern="^(immediate_payment|payment_link)$")
+    payment_action: Literal["immediate_payment", "payment_link", "company_account"] = "payment_link"
     immediate_payment: Optional[PaymentRequest] = None
     payment_link: Optional[PaymentLinkCreate] = None
     notes: Optional[str] = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_company_account_extension(self):
+        if self.payment_action == "company_account":
+            if self.immediate_payment is not None or self.payment_link is not None:
+                raise ValueError("La extensión a cuenta empresa no admite datos de cobro")
+            if self.pricing_mode != "current_rate":
+                raise ValueError("La extensión a cuenta empresa usa la tarifa vigente")
+        return self
 
 
 class ReservationExtensionResponse(BaseModel):
@@ -208,3 +292,27 @@ class ReservationExtensionResponse(BaseModel):
     extension_amount: Decimal
     transaction: Optional[TransactionRead] = None
     payment_link: Optional[PaymentLinkRead] = None
+
+
+class CompanyExtensionRequestUpdate(BaseModel):
+    pending: bool
+    note: Optional[str] = Field(default=None, max_length=1000)
+    client_version: int = Field(..., ge=0)
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def normalize_note(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("note must be text")
+        normalized = value.strip()
+        return normalized or None
+
+    @model_validator(mode="after")
+    def validate_request_note(self):
+        if self.pending and not self.note:
+            raise ValueError("Indicá qué extensión pidió la empresa o qué falta confirmar.")
+        if not self.pending and self.note is not None:
+            raise ValueError("No se admite una nota al quitar la solicitud pendiente.")
+        return self

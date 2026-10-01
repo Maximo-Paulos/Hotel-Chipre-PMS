@@ -1,10 +1,10 @@
 """Contracts for the owner/co-owner operational audit projection."""
 
-from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
+from app.schemas.datetime_types import UTCDateTime
 
 
 class OperationalAuditItemRead(BaseModel):
@@ -15,7 +15,7 @@ class OperationalAuditItemRead(BaseModel):
     summary: str
     actor_user_id: Optional[int] = None
     actor_name: str
-    occurred_at: datetime
+    occurred_at: UTCDateTime
     reservation_id: Optional[int] = None
     room_id: Optional[int] = None
     from_room_id: Optional[int] = None

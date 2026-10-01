@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 
 from app.config import get_settings
@@ -7,6 +9,20 @@ from app.models.commercial import ProductRoomCompatibility, SellableProduct
 from app.models.room import RoomStatusEnum
 from app.models.ota_core import OTAReservationLink
 from app.services.ota_service import OTAIntegrationService
+
+
+@pytest.fixture(autouse=True)
+def _provide_fresh_fx_quotes_for_reservations(monkeypatch):
+    def quote(currency: str, market: str = "oficial"):
+        return {
+            "moneda": currency,
+            "casa": market if currency == "USD" else "oficial",
+            "compra": 1000.0,
+            "venta": 1100.0,
+            "fechaActualizacion": datetime.now(timezone.utc).isoformat(),
+        }
+
+    monkeypatch.setattr("app.services.pricing_policy_service.get_conversion_quote_sync", quote)
 
 
 @pytest.fixture(autouse=True)

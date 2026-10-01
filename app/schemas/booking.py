@@ -34,8 +34,9 @@ class BookingCreate(BaseModel):
     guest_scope: str = Field(default="all", max_length=30)
     target_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     total_amount: Optional[Decimal] = Field(default=None, ge=0)
+    manual_rate_reason: Optional[str] = Field(default=None, max_length=500)
     deposit_amount: Optional[Decimal] = Field(default=None, ge=0)
-    quote_token: str = Field(..., min_length=20, max_length=24000)
+    quote_token: Optional[str] = Field(default=None, min_length=20, max_length=24000)
 
     @field_validator("arrival_time_hint", mode="before")
     @classmethod

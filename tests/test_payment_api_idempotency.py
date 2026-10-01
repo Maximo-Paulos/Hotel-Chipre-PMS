@@ -42,5 +42,6 @@ def test_direct_payment_requires_and_reuses_idempotency_key(client_with_db):
 
     assert first.status_code == 201, first.text
     assert second.status_code == 201, second.text
+    assert first.json()["created_at"].endswith("Z") or first.json()["created_at"].endswith("+00:00")
     assert second.json()["id"] == first.json()["id"]
     assert db.query(Transaction).filter(Transaction.reservation_id == reservation.id).count() == 1

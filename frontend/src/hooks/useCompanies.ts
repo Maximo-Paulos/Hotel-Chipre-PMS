@@ -7,12 +7,16 @@ import {
   deleteCompanyDocument,
   listCompanies,
   listCompanyDocuments,
+  listReservationCompanyDocuments,
   reactivateCompany,
   updateCompany,
   updateCompanyDocumentStatus,
+  uploadCompanyDocument,
+  markReservationCompanyDocumentSigned,
   type Company,
   type CompanyDocument,
   type CompanyDocumentPayload,
+  type CompanyDocumentUploadPayload,
   type CompanyDocumentStatus,
   type CompanyPayload
 } from "../api/companies";
@@ -24,6 +28,7 @@ import { useGuardedMutation } from "./useGuardedMutation";
 
 const companiesKey = (hotelId: number | null) => ["companies", hotelId];
 const companyDocumentsKey = (hotelId: number | null, companyId: number) => ["company-documents", hotelId, companyId];
+const reservationCompanyDocumentsKey = (hotelId: number | null, reservationId: number) => ["reservation-company-documents", hotelId, reservationId];
 
 export function useCompanies() {
   const { session } = useSession();
@@ -42,6 +47,28 @@ export function useCompanyDocuments(companyId?: number) {
     queryFn: () => listCompanyDocuments(companyId!, session),
     enabled: Boolean(companyId) && hasValidSession(session),
     staleTime: 30 * 1000
+  });
+}
+
+export function useReservationCompanyDocuments(reservationId?: number) {
+  const { session } = useSession();
+  return useQuery({
+    queryKey: reservationId ? reservationCompanyDocumentsKey(session.hotelId, reservationId) : ["reservation-company-documents", "none"],
+    queryFn: () => listReservationCompanyDocuments(reservationId!, session),
+    enabled: Boolean(reservationId) && hasValidSession(session),
+    staleTime: 30 * 1000
+  });
+}
+
+export function useMarkCompanyDocumentSigned() {
+  const queryClient = useQueryClient();
+  const { session } = useSession();
+  return useGuardedMutation({
+    mutationFn: (documentId: number) => markReservationCompanyDocumentSigned(documentId, session),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["reservation-company-documents", session.hotelId] });
+      await queryClient.invalidateQueries({ queryKey: ["company-documents", session.hotelId] });
+    }
   });
 }
 
@@ -86,18 +113,38 @@ export function useCompanyDocumentMutations(companyId?: number) {
     onSuccess: async () => invalidateDocuments()
   });
 
+  const uploadDocumentMutation = useGuardedMutation({
+    mutationFn: (payload: CompanyDocumentUploadPayload) => uploadCompanyDocument(payload, session),
+    onSuccess: async (_document, payload) => {
+      await Promise.all([
+        invalidateDocuments(),
+        queryClient.invalidateQueries({ queryKey: reservationCompanyDocumentsKey(session.hotelId, payload.reservation_id) })
+      ]);
+    }
+  });
+
   const updateStatusMutation = useGuardedMutation({
     mutationFn: ({ documentId, status }: { documentId: number; status: CompanyDocumentStatus }) =>
       updateCompanyDocumentStatus(documentId, status, session),
-    onSuccess: async () => invalidateDocuments()
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateDocuments(),
+        queryClient.invalidateQueries({ queryKey: ["reservation-company-documents", session.hotelId] })
+      ]);
+    }
   });
 
   const deleteDocumentMutation = useGuardedMutation({
     mutationFn: (documentId: number) => deleteCompanyDocument(documentId, session),
-    onSuccess: async () => invalidateDocuments()
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateDocuments(),
+        queryClient.invalidateQueries({ queryKey: ["reservation-company-documents", session.hotelId] })
+      ]);
+    }
   });
 
-  return { createDocumentMutation, updateStatusMutation, deleteDocumentMutation };
+  return { createDocumentMutation, uploadDocumentMutation, updateStatusMutation, deleteDocumentMutation };
 }
 
 export const companyDocumentTypeLabel: Record<string, string> = {

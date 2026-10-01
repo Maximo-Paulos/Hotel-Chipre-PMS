@@ -1,4 +1,4 @@
-import { apiFetch, type SessionLike } from "./client";
+import { API_BASE, apiFetch, buildAuthHeaders, type SessionLike } from "./client";
 
 export type Company = {
   id: number;
@@ -7,6 +7,16 @@ export type Company = {
   display_name: string;
   tax_id?: string | null;
   country_code?: string | null;
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  administrative_contact?: string | null;
+  base_price?: string | null;
+  extra_person_nightly_surcharge?: string | null;
+  payment_deferred: boolean;
+  deferred_days: number;
+  requires_voucher: boolean;
+  requires_signature: boolean;
   notes?: string | null;
   is_active: boolean;
   created_at: string;
@@ -20,8 +30,29 @@ export type CompanyPayload = {
   display_name: string;
   tax_id?: string | null;
   country_code?: string | null;
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  administrative_contact?: string | null;
+  base_price?: number | null;
+  extra_person_nightly_surcharge?: number | null;
+  payment_deferred?: boolean;
+  deferred_days?: number;
+  requires_voucher?: boolean;
+  requires_signature?: boolean;
   notes?: string | null;
 };
+
+export type CompanyOption = {
+  id: number;
+  display_name: string;
+  legal_name: string;
+  is_active: boolean;
+  payment_deferred: boolean;
+};
+
+export const listCompanyOptions = (session?: SessionLike) =>
+  apiFetch<CompanyOption[]>("/api/companies/options", { session });
 
 export type CompanyDocumentType =
   | "voucher_pdf"
@@ -41,6 +72,7 @@ export type CompanyDocument = {
   status: CompanyDocumentStatus;
   file_name?: string | null;
   file_url?: string | null;
+  stored_object_id?: string | null;
   requires_signature: boolean;
   signed_at?: string | null;
   signed_by_user_id?: number | null;
@@ -60,6 +92,28 @@ export type CompanyDocumentPayload = {
   notes?: string | null;
 };
 
+export type CompanyDocumentUploadPayload = {
+  reservation_id: number;
+  company_id?: number | null;
+  doc_type: CompanyDocumentType;
+  file_name: string;
+  content_base64: string;
+  requires_signature?: boolean;
+  notes?: string | null;
+};
+
+export const uploadCompanyDocument = (payload: CompanyDocumentUploadPayload, session?: SessionLike) =>
+  apiFetch<CompanyDocument>("/api/company-documents/upload", { method: "POST", data: payload, session });
+
+export const fetchCompanyDocumentFile = async (documentId: number, session?: SessionLike) => {
+  const response = await fetch(`${API_BASE}/company-documents/${documentId}/file`, {
+    headers: buildAuthHeaders(session),
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error("No se pudo abrir el documento.");
+  return URL.createObjectURL(await response.blob());
+};
+
 export const listCompanies = (session?: SessionLike) =>
   apiFetch<Company[]>("/api/companies", { session });
 
@@ -77,6 +131,12 @@ export const reactivateCompany = (companyId: number, session?: SessionLike) =>
 
 export const listCompanyDocuments = (companyId: number, session?: SessionLike) =>
   apiFetch<CompanyDocument[]>(`/api/company-documents/company/${companyId}`, { session });
+
+export const listReservationCompanyDocuments = (reservationId: number, session?: SessionLike) =>
+  apiFetch<CompanyDocument[]>(`/api/company-documents/reservation/${reservationId}`, { session });
+
+export const markReservationCompanyDocumentSigned = (documentId: number, session?: SessionLike) =>
+  apiFetch<CompanyDocument>(`/api/company-documents/${documentId}/mark-signed`, { method: "POST", session });
 
 export const createCompanyDocument = (payload: CompanyDocumentPayload, session?: SessionLike) =>
   apiFetch<CompanyDocument>("/api/company-documents", { method: "POST", data: payload, session });

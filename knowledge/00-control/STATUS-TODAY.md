@@ -89,7 +89,7 @@ La línea base de `main` (mis cambios en stash) daba **13 failed / 16 passed** e
 
 - La deriva de tokens sigue en el resto de las páginas (2199 `slate-`): esta pasada cubrió el shell y el dashboard, que enmarcan todo. Seguir página por página.
 - **Agregar Playwright a CI** (`pr-validation.yml`): es la causa de los 13 rojos.
-- `.env.local` fija `VITE_API_URL=http://127.0.0.1:8040/api` mientras se navega en `localhost:5173`: son hosts distintos para cookies, así que en local recargar la página pierde la sesión. Con `VITE_API_URL` sin definir el proxy de Vite resuelve same-origin.
+- Corrección de S02 (2026-09-30): si `VITE_API_URL` está vacío, `frontend/src/api/client.ts` usa el origen absoluto `http://127.0.0.1:8040/api`; no usa el proxy de Vite. Para pasar por el proxy same-origin de `frontend/vite.config.mjs`, configurar `VITE_API_URL=/api`. Si se usa la URL absoluta, abrir también el frontend con el host `127.0.0.1` y verificar CORS/cookies con ese origen; `localhost` y `127.0.0.1` no son intercambiables para el navegador.
 
 ---
 

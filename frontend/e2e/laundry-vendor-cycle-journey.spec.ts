@@ -21,6 +21,12 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 20_000 });
 }
 
+function nextIsoDay(value: string) {
+  const nextDay = new Date(`${value}T12:00:00.000Z`);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  return nextDay.toISOString().slice(0, 10);
+}
+
 test("owner runs the full vendor/remito cycle: pricing, outbound, partial inbound, and an insufficient-stock rejection", async ({
   page
 }) => {
@@ -78,6 +84,7 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
     await priceForm.getByRole("button", { name: "Guardar precio", exact: true }).click();
     await expect(page.getByText("Precio guardado.", { exact: true })).toBeVisible();
   }
+  const historicalEffectiveFrom = await priceForm.getByLabel("Vigente desde").inputValue();
 
   // Combined entry: one row per item with a Retiro (sale sucia) and an
   // Entrego (vuelve limpia) quantity side by side, mirroring the vendor's
@@ -87,6 +94,9 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
   // --- Remito de salida: 6 sabanas + 4 toallas, total estimado 6*150 + 4*250 = 1900 ---
   await remitoForm.getByLabel("Lavadero").selectOption({ label: vendorName });
   await remitoForm.getByLabel("Ubicación casa (origen/destino en el hotel)").selectOption({ label: locationName });
+  // Keep the first outbound remito tied to the original price's effective
+  // date, so the later future-price change has a stable historical baseline.
+  await remitoForm.getByLabel("Fecha").fill(historicalEffectiveFrom);
   await remitoForm.getByLabel("N° de remito (papel)").fill(`R-OUT-${suffix}`);
   await remitoForm.getByLabel(`Retiro ${sheetsName}`, { exact: true }).fill("6");
   await remitoForm.getByLabel(`Retiro ${towelsName}`, { exact: true }).fill("4");
@@ -129,6 +139,32 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
   await expect(remitoForm.getByRole("alert")).toContainText(towelsName);
   // No exitoso: el remito invalido no queda en el historial.
   await expect(page.getByText(`Remito R-FAIL-${suffix} guardado.`, { exact: true })).toHaveCount(0);
+
+  // F-048: a price change starts on its configured date. Keep both effective
+  // rows visible, preview the future price for a remito dated tomorrow, then
+  // return to the historical date and confirm the original price still wins.
+  // The spend report below also verifies that the already-saved remito keeps
+  // its frozen unit-price snapshot after this new row is added.
+  const futureEffectiveFrom = nextIsoDay(historicalEffectiveFrom);
+  await priceForm.getByLabel("Ítem").selectOption({ label: sheetsName });
+  await priceForm.getByLabel("Precio por unidad").fill("175");
+  await priceForm.getByLabel("Vigente desde").fill(futureEffectiveFrom);
+  await priceForm.getByRole("button", { name: "Guardar precio", exact: true }).click();
+  await expect(page.getByText("Precio guardado.", { exact: true })).toBeVisible();
+
+  const priceHistory = page.getByText(`Precios de ${vendorName}`, { exact: true }).locator("..").getByRole("list");
+  const sheetPriceRows = priceHistory.getByRole("listitem").filter({ hasText: sheetsName });
+  await expect(sheetPriceRows).toHaveCount(2);
+  await expect(sheetPriceRows.filter({ hasText: `desde ${historicalEffectiveFrom}` })).toContainText(/\$\s*150/);
+  await expect(sheetPriceRows.filter({ hasText: `desde ${futureEffectiveFrom}` })).toContainText(/\$\s*175/);
+
+  await remitoForm.getByLabel("Fecha").fill(futureEffectiveFrom);
+  await remitoForm.getByLabel(`Retiro ${sheetsName}`, { exact: true }).fill("1");
+  await remitoForm.getByLabel(`Retiro ${towelsName}`, { exact: true }).fill("0");
+  await expect(remitoForm.getByText(/Total estimado \(retiro\):\s*\$\s*175/)).toBeVisible();
+
+  await remitoForm.getByLabel("Fecha").fill(historicalEffectiveFrom);
+  await expect(remitoForm.getByText(/Total estimado \(retiro\):\s*\$\s*150/)).toBeVisible();
 
   // --- D3: reporte de gasto del mes actual cubre el remito de salida (6
   // sabanas * 150 + 4 toallas * 250 = 1900) y no el remito de entrada (no

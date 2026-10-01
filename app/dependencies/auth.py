@@ -481,20 +481,38 @@ def require_permission_administrator(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
 ) -> AuthContext:
-    """Keep RBAC owner-only; require a short read scope or an action ticket."""
+    """Require the owner or co-owner RBAC capability plus fresh step-up proof."""
 
     if not context.is_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Verifica tu email para usar el sistema",
         )
-    if context.user_role != "owner":
+    from app.services.permission_service import (
+        PERMISSION_PERMISSION_MANAGE,
+        audit_permission_denied,
+        resolve,
+    )
+
+    if not resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        PERMISSION_PERMISSION_MANAGE,
+        user_id=context.user_id,
+    ):
+        audit_permission_denied(
+            db,
+            hotel_id=context.hotel_id,
+            user_id=context.user_id,
+            role=context.user_role,
+            permission_code=PERMISSION_PERMISSION_MANAGE,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tenes permisos para esta accion",
         )
     from app.services.action_step_up_service import permission_admin_read_step_up_ticket_matches
-    from app.services.permission_service import PERMISSION_PERMISSION_MANAGE
 
     if request.method.upper() in {"GET", "HEAD"}:
         if context.user_id is not None and any(

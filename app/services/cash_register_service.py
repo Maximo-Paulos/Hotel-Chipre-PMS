@@ -1,23 +1,26 @@
 """Cash register service for hotel-scoped caja sessions and arqueo."""
 from __future__ import annotations
 
+import json
+import logging
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.cash_register import (
-    CashCloseReport,
     CashCustodyHandoff,
     CashCustodyStatusEnum,
+    CashCloseReport,
     CashMovement,
     CashMovementTypeEnum,
     CashSession,
     CashSessionStatusEnum,
 )
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum
 from app.services.distributed_lock import with_distributed_lock
 
@@ -27,6 +30,7 @@ class CashRegisterError(Exception):
 
 
 TWOPLACES = Decimal("0.01")
+logger = logging.getLogger(__name__)
 
 
 def _money(value: Decimal | int | float | str) -> Decimal:
@@ -34,15 +38,19 @@ def _money(value: Decimal | int | float | str) -> Decimal:
 
 
 def _require_open_session(db: Session, hotel_id: int, session_id: int) -> CashSession:
-    session = (
-        db.query(CashSession)
-        .filter(
+    # Serialize every ledger write against close_session, which locks this
+    # same row before it calculates the expected balance. Under PostgreSQL's
+    # READ COMMITTED isolation, a waiter rechecks the OPEN predicate after a
+    # concurrent close commits and therefore cannot append after the arqueo.
+    session = db.execute(
+        select(CashSession)
+        .where(
             CashSession.id == session_id,
             CashSession.hotel_id == hotel_id,
             CashSession.status == CashSessionStatusEnum.OPEN,
         )
-        .one_or_none()
-    )
+        .with_for_update(of=CashSession)
+    ).scalar_one_or_none()
     if session is None:
         raise CashRegisterError("Cash session is not open for this hotel")
     return session
@@ -57,41 +65,145 @@ def open_session(
     currency_code: str = "ARS",
     notes: str | None = None,
 ) -> CashSession:
-    """Open one hotel-scoped cash session, enforcing at most one open session."""
+    """Open one hotel-scoped cash session per currency."""
+
+    normalized_currency = currency_code.strip().upper()[:3]
 
     existing = (
         db.query(CashSession)
         .filter(
             CashSession.hotel_id == hotel_id,
             CashSession.status == CashSessionStatusEnum.OPEN,
+            CashSession.currency_code == normalized_currency,
         )
         .one_or_none()
     )
     if existing is not None:
-        raise CashRegisterError("Hotel already has an open cash session")
+        raise CashRegisterError("Hotel already has an open cash session for this currency")
 
     session = CashSession(
         hotel_id=hotel_id,
         opened_by_user_id=opened_by_user_id,
         opening_balance=_money(opening_balance),
-        currency_code=currency_code.strip().upper()[:3],
+        currency_code=normalized_currency,
         notes=notes,
     )
     db.add(session)
     try:
         db.flush()
     except IntegrityError as exc:
-        raise CashRegisterError("Hotel already has an open cash session") from exc
+        raise CashRegisterError("Hotel already has an open cash session for this currency") from exc
     return session
 
 
-def get_latest_close_report(db: Session, *, hotel_id: int) -> CashCloseReport | None:
+def get_latest_close_report(
+    db: Session,
+    *,
+    hotel_id: int,
+    currency_code: str | None = None,
+) -> CashCloseReport | None:
+    query = (
+        db.query(CashCloseReport)
+        .options(
+            joinedload(CashCloseReport.session),
+            joinedload(CashCloseReport.successor_session),
+            joinedload(CashCloseReport.custody_handoff),
+        )
+        .filter(CashCloseReport.hotel_id == hotel_id)
+    )
+    if currency_code:
+        query = query.join(CashSession, CashSession.id == CashCloseReport.session_id).filter(
+            CashSession.currency_code == currency_code.strip().upper()
+        )
+    return query.order_by(CashCloseReport.closed_at.desc(), CashCloseReport.id.desc()).first()
+
+
+def list_pending_close_reports(db: Session, *, hotel_id: int) -> list[CashCloseReport]:
+    """Return every unresolved cash difference, even when a successor is open."""
     return (
         db.query(CashCloseReport)
-        .filter(CashCloseReport.hotel_id == hotel_id)
-        .order_by(CashCloseReport.closed_at.desc(), CashCloseReport.id.desc())
-        .first()
+        .options(
+            joinedload(CashCloseReport.session),
+            joinedload(CashCloseReport.successor_session),
+            joinedload(CashCloseReport.custody_handoff),
+        )
+        .filter(
+            CashCloseReport.hotel_id == hotel_id,
+            CashCloseReport.difference != Decimal("0.00"),
+            CashCloseReport.difference_approved.is_(False),
+        )
+        .order_by(CashCloseReport.closed_at.asc(), CashCloseReport.id.asc())
+        .all()
     )
+
+
+def list_pending_cash_custody_reports(db: Session, *, hotel_id: int) -> list[CashCloseReport]:
+    """Return closed reports whose delivered cash has not been received yet."""
+    return (
+        db.query(CashCloseReport)
+        .options(
+            joinedload(CashCloseReport.session),
+            joinedload(CashCloseReport.successor_session),
+            joinedload(CashCloseReport.custody_handoff),
+        )
+        .filter(
+            CashCloseReport.hotel_id == hotel_id,
+            CashCloseReport.custody_handoff.has(
+                CashCustodyHandoff.status == CashCustodyStatusEnum.PENDING
+            ),
+        )
+        .order_by(CashCloseReport.closed_at.asc(), CashCloseReport.id.asc())
+        .all()
+    )
+
+
+def get_close_report_for_session(
+    db: Session, *, hotel_id: int, session_id: int
+) -> CashCloseReport | None:
+    return (
+        db.query(CashCloseReport)
+        .options(
+            joinedload(CashCloseReport.session),
+            joinedload(CashCloseReport.successor_session),
+            joinedload(CashCloseReport.custody_handoff),
+        )
+        .filter(
+            CashCloseReport.hotel_id == hotel_id,
+            CashCloseReport.session_id == session_id,
+        )
+        .one_or_none()
+    )
+
+
+def enqueue_pending_difference_notification(db: Session, report: CashCloseReport) -> None:
+    """Queue an in-app alert for approvers without making cash close depend on notifications."""
+    if report.difference == Decimal("0.00") or report.difference_approved:
+        return
+
+    try:
+        from app.models.notification import NotificationChannelEnum, NotificationSeverityEnum
+        from app.services.notification_service import enqueue_notifications_for_event
+
+        with db.begin_nested():
+            enqueue_notifications_for_event(
+                db,
+                hotel_id=report.hotel_id,
+                event_type="cash.close_difference_pending",
+                dedupe_key=f"cash-close-difference-pending:{report.id}",
+                title="Diferencia de caja pendiente",
+                body=f"La caja #{report.session_id} cerró con una diferencia que requiere aprobación.",
+                severity=NotificationSeverityEnum.WARNING,
+                entity_type=None,
+                entity_id=report.id,
+                payload={"close_report_id": report.id},
+                recipient_roles=("owner", "co_owner"),
+                channels=(NotificationChannelEnum.IN_APP,),
+            )
+    except Exception as exc:  # Notifications must not prevent a valid cash close.
+        logger.warning(
+            "cash_difference_notification_enqueue_failed",
+            extra={"hotel_id": report.hotel_id, "close_report_id": report.id, "error_type": type(exc).__name__},
+        )
 
 
 def add_movement(
@@ -160,16 +272,15 @@ def add_movement(
     return movement
 
 
-def get_open_session(db: Session, hotel_id: int) -> CashSession | None:
-    """Return the single open cash session for a hotel, or None if none is open."""
-    return (
-        db.query(CashSession)
-        .filter(
-            CashSession.hotel_id == hotel_id,
-            CashSession.status == CashSessionStatusEnum.OPEN,
-        )
-        .one_or_none()
+def get_open_session(db: Session, hotel_id: int, currency_code: str | None = None) -> CashSession | None:
+    """Return an open session, optionally for the requested currency."""
+    query = db.query(CashSession).filter(
+        CashSession.hotel_id == hotel_id,
+        CashSession.status == CashSessionStatusEnum.OPEN,
     )
+    if currency_code:
+        query = query.filter(CashSession.currency_code == currency_code.strip().upper())
+    return query.order_by(CashSession.id.desc()).first()
 
 
 def require_open_session_for_currency(
@@ -178,9 +289,30 @@ def require_open_session_for_currency(
     hotel_id: int,
     currency_code: str,
 ) -> CashSession:
-    """Return the active drawer only when its single currency matches a payment."""
-    session = get_open_session(db, hotel_id)
+    """Lock the active drawer for the tender currency.
+
+    Payment processing holds this lock through transaction and movement writes,
+    so closing the drawer cannot calculate an expected balance in the middle
+    of an in-flight cash payment.
+    """
+    session = db.execute(
+        select(CashSession)
+        .where(
+            CashSession.hotel_id == hotel_id,
+            CashSession.status == CashSessionStatusEnum.OPEN,
+            CashSession.currency_code == str(currency_code or "").strip().upper(),
+        )
+        .with_for_update(of=CashSession)
+    ).scalar_one_or_none()
     if session is None:
+        any_open_session = db.query(CashSession.id).filter(
+            CashSession.hotel_id == hotel_id,
+            CashSession.status == CashSessionStatusEnum.OPEN,
+        ).first()
+        if any_open_session:
+            raise CashRegisterError(
+                f"Cash session currency ({str(currency_code or '').strip().upper()}) does not have an open drawer"
+            )
         raise CashRegisterError("Cash payment requires an open cash session")
 
     session_currency = (session.currency_code or "").strip().upper()
@@ -215,7 +347,7 @@ def record_cash_payment_movement(
     session = require_open_session_for_currency(
         db,
         hotel_id=transaction.hotel_id,
-        currency_code=transaction.currency,
+        currency_code=transaction.tender_currency or transaction.currency,
     )
 
     from app.models.transaction import TransactionTypeEnum
@@ -336,7 +468,6 @@ def close_session(
     counted_balance: Decimal,
     notes: str | None = None,
     approved_by_user_id: int | None = None,
-    received_by_user_id: int | None = None,
 ) -> CashCloseReport:
     """
     Close a cash session and create its close report.
@@ -398,20 +529,13 @@ def close_session(
     db.add(successor)
     db.flush()
 
-    handoff_time = closed_at if received_by_user_id is not None else None
     handoff = CashCustodyHandoff(
         hotel_id=hotel_id,
         close_report_id=report.id,
         delivered_by_user_id=closed_by_user_id,
-        received_by_user_id=received_by_user_id,
         delivered_amount=declared_balance,
-        status=(
-            CashCustodyStatusEnum.CONFIRMED
-            if received_by_user_id is not None
-            else CashCustodyStatusEnum.PENDING
-        ),
+        status=CashCustodyStatusEnum.PENDING,
         delivered_at=closed_at,
-        received_at=handoff_time,
     )
     report.successor_session = successor
     report.custody_handoff = handoff
@@ -426,20 +550,91 @@ def confirm_cash_custody(
     hotel_id: int,
     report_id: int,
     received_by_user_id: int,
+    successor_float_amount: Decimal = Decimal("0.00"),
 ) -> CashCloseReport:
     report = (
-        db.query(CashCloseReport)
-        .filter(CashCloseReport.id == report_id, CashCloseReport.hotel_id == hotel_id)
-        .one_or_none()
+        db.execute(
+            select(CashCloseReport)
+            .where(CashCloseReport.id == report_id, CashCloseReport.hotel_id == hotel_id)
+            .with_for_update(of=CashCloseReport)
+        )
+        .scalar_one_or_none()
     )
     if report is None or report.custody_handoff is None:
         raise CashRegisterError("Cash custody handoff not found for this hotel")
     handoff = report.custody_handoff
+    amount = _money(successor_float_amount)
+    maximum_float = min(Decimal("9999999999.99"), _money(handoff.delivered_amount))
+    if amount < Decimal("0.00") or amount > maximum_float:
+        raise CashRegisterError("The successor float cannot exceed the cash delivered by the prior shift")
+
     if handoff.status == CashCustodyStatusEnum.CONFIRMED:
+        existing_amount = report.successor_float_declared_amount
+        if existing_amount is None:
+            if amount != Decimal("0.00"):
+                raise CashRegisterError("Cash custody was already confirmed without a successor float declaration")
+            return report
+        if existing_amount != amount:
+            raise CashRegisterError("Cash custody was already confirmed with a different successor float")
         return report
+
+    successor = (
+        db.execute(
+            select(CashSession)
+            .where(
+                CashSession.id == report.successor_session_id,
+                CashSession.hotel_id == hotel_id,
+            )
+            .with_for_update(of=CashSession)
+        )
+        .scalar_one_or_none()
+    )
+    if successor is None:
+        raise CashRegisterError("Successor cash session not found for this hotel")
+    if successor.status != CashSessionStatusEnum.OPEN:
+        raise CashRegisterError("Successor cash session is not open")
+
+    now = datetime.now(timezone.utc)
+    successor.opening_balance = amount
+    report.successor_float_declared_amount = amount
+    report.successor_float_declared_by_user_id = received_by_user_id
+    report.successor_float_declared_at = now
     handoff.received_by_user_id = received_by_user_id
-    handoff.received_at = datetime.now(timezone.utc)
+    handoff.received_at = now
     handoff.status = CashCustodyStatusEnum.CONFIRMED
+    db.add_all(
+        [
+            SecurityAuditLog(
+                hotel_id=hotel_id,
+                user_id=received_by_user_id,
+                action="cash.custody.received",
+                resource_type="cash_close_report",
+                resource_id=str(report.id),
+                details=json.dumps(
+                    {
+                        "session_id": report.session_id,
+                        "delivered_amount": str(handoff.delivered_amount),
+                    },
+                    sort_keys=True,
+                ),
+            ),
+            SecurityAuditLog(
+                hotel_id=hotel_id,
+                user_id=received_by_user_id,
+                action="cash.successor_float.declared",
+                resource_type="cash_close_report",
+                resource_id=str(report.id),
+                details=json.dumps(
+                    {
+                        "session_id": report.session_id,
+                        "successor_session_id": successor.id,
+                        "successor_float_amount": str(amount),
+                    },
+                    sort_keys=True,
+                ),
+            ),
+        ]
+    )
     db.flush()
     return report
 
@@ -454,12 +649,15 @@ def approve_close_difference(
     report = (
         db.query(CashCloseReport)
         .filter(CashCloseReport.id == report_id, CashCloseReport.hotel_id == hotel_id)
+        .with_for_update()
         .one_or_none()
     )
     if report is None:
         raise CashRegisterError("Cash close report not found for this hotel")
     if report.difference == Decimal("0.00"):
         raise CashRegisterError("Cash close report has no difference to approve")
+    if report.difference_approved:
+        return report
 
     session = (
         db.query(CashSession)
@@ -473,6 +671,16 @@ def approve_close_difference(
     report.difference_approved = True
     report.approved_by_user_id = approved_by_user_id
     session.status = CashSessionStatusEnum.CLOSED
+    db.add(
+        SecurityAuditLog(
+            hotel_id=hotel_id,
+            user_id=approved_by_user_id,
+            action="cash.close_difference.approved",
+            resource_type="cash_close_report",
+            resource_id=str(report.id),
+            details=json.dumps({"session_id": report.session_id}, sort_keys=True),
+        )
+    )
     db.flush()
     return report
 

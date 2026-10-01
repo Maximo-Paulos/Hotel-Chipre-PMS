@@ -639,8 +639,20 @@ export function PromotionsPage() {
               </p>
             ) : null}
 
+            {savePending ? (
+              <p
+                className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900"
+                data-testid="promotion-save-status"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                Guardando la promoción. Esperá a que termine antes de volver a enviarla.
+              </p>
+            ) : null}
+
             <div className="flex flex-wrap justify-end gap-2">
-              <button type="button" className={buttonSecondary} onClick={() => setShowForm(false)}>
+              <button type="button" className={buttonSecondary} onClick={() => setShowForm(false)} disabled={savePending}>
                 Cancelar
               </button>
               <button type="submit" className={buttonPrimary} disabled={savePending}>
@@ -820,6 +832,12 @@ function PromotionSimulator() {
               <p className="font-semibold text-brand-800">{formatMoney(Number(result.final_total_with_payment_adjustment), currency)}</p>
             </div>
           </div>
+
+          {result.fx_quote_details ? (
+            <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+              Conversión vía ARS con DolarAPI. Mercado elegido: {result.fx_quote_details.configured_usd_market} (rige para todas las monedas). Origen: {result.fx_quote_details.source_quote ? `${result.fx_quote_details.source_quote.currency} ${result.fx_quote_details.source_quote.is_derived_blue ? "blue derivado de su cotización oficial y de la relación USD blue/oficial" : result.fx_quote_details.source_quote.usd_market ? `mercado ${result.fx_quote_details.source_quote.usd_market}` : `cotización ${result.fx_quote_details.source_quote.direct_currency_market}`} (${result.fx_quote_details.source_quote.rate_type}), ${result.fx_quote_details.source_quote.side}` : "ARS"}; destino: {result.fx_quote_details.target_quote ? `${result.fx_quote_details.target_quote.currency} ${result.fx_quote_details.target_quote.is_derived_blue ? "blue derivado de su cotización oficial y de la relación USD blue/oficial" : result.fx_quote_details.target_quote.usd_market ? `mercado ${result.fx_quote_details.target_quote.usd_market}` : `cotización ${result.fx_quote_details.target_quote.direct_currency_market}`} (${result.fx_quote_details.target_quote.rate_type}), ${result.fx_quote_details.target_quote.side}` : "ARS"}. Spread {result.fx_quote_details.spread_pct}%. Cada lado conserva la fecha más antigua de sus datos fuente.
+            </p>
+          ) : null}
 
           {result.promotions_applied.length === 0 ? (
             <p className="text-xs text-slate-500">Ninguna promoción activa aplica a esta reserva hipotética.</p>

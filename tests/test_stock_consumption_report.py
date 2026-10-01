@@ -1,6 +1,6 @@
 """
-D5 (Via D): GET /api/stock/consumption-report -- per-item stock consumption
-(out + adjustment_out) for a period, plus the same-length period immediately
+D5 (Via D): GET /api/stock/consumption-report -- ordinary out movements
+for a period, excluding adjustments and inter-location transfers, plus the same-length period immediately
 before for a variation %.
 
 Service-level coverage (aggregation math) plus API-level coverage
@@ -34,7 +34,7 @@ def _seed_hotels(db):
     db.flush()
 
 
-def _movement(db, *, hotel_id, item_id, movement_type, quantity, created_at):
+def _movement(db, *, hotel_id, item_id, movement_type, quantity, created_at, transfer_reference=None):
     movement = StockMovement(
         hotel_id=hotel_id,
         item_id=item_id,
@@ -42,6 +42,7 @@ def _movement(db, *, hotel_id, item_id, movement_type, quantity, created_at):
         movement_type=movement_type,
         quantity=Decimal(quantity),
         created_at=created_at,
+        transfer_reference=transfer_reference,
     )
     db.add(movement)
     db.flush()
@@ -90,7 +91,7 @@ def test_consumption_report_totals_and_variation_between_periods(db):
     assert entry["variation_pct"] == Decimal("100.0")
 
 
-def test_consumption_report_only_counts_out_and_adjustment_out(db):
+def test_consumption_report_excludes_adjustments_and_location_transfers(db):
     _seed_hotels(db)
     item = create_stock_item(db, hotel_id=1, name="Jabon", sku=None, unit="unidad", min_quantity=None, active=True)
     db.flush()
@@ -100,15 +101,19 @@ def test_consumption_report_only_counts_out_and_adjustment_out(db):
     _movement(db, hotel_id=1, item_id=item.id, movement_type="adjustment", quantity="10.00", created_at=within)
     _movement(db, hotel_id=1, item_id=item.id, movement_type="out", quantity="3.00", created_at=within)
     _movement(db, hotel_id=1, item_id=item.id, movement_type="adjustment_out", quantity="1.00", created_at=within)
+    _movement(
+        db, hotel_id=1, item_id=item.id, movement_type="out", quantity="2.00", created_at=within,
+        transfer_reference="synthetic-transfer-reference",
+    )
     db.commit()
 
     report = consumption_report(
         db, hotel_id=1, date_from=date(2026, 7, 20), date_to=date(2026, 7, 26), group_by="week"
     )
     entry = report["items"][0]
-    # 3 (out) + 1 (adjustment_out) = 4 -- the 50 (in) and 10 (adjustment) that
-    # raised stock must not count as "consumption".
-    assert entry["current_quantity"] == Decimal("4.00")
+    # Only ordinary outbound stock counts. The adjustment and linked
+    # transfer-out are inventory corrections/transfers, not consumption.
+    assert entry["current_quantity"] == Decimal("3.00")
 
 
 def test_consumption_report_is_hotel_scoped(db):

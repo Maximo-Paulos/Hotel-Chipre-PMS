@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { useReservations } from "../hooks/useReservations";
@@ -13,6 +14,7 @@ function guestFullName(guest?: { first_name: string; last_name: string } | null,
 // Global reservation search + quick-create access (B1). Lives in the
 // AppShell header so it's reachable from every screen, not just Reservas.
 export function ReservationGlobalSearch() {
+  const { t } = useTranslation("appshell");
   const [query, setQuery] = useState("");
   const [showResults, setShowResults] = useState(false);
   const { openReservation } = useReservationDrawer();
@@ -84,7 +86,7 @@ export function ReservationGlobalSearch() {
         to="/reservas?crear=1"
         className="whitespace-nowrap rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100"
       >
-        Reserva rápida
+        {t("quickReservation")}
       </Link>
     </div>
   );

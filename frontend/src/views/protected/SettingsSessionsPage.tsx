@@ -6,16 +6,14 @@ import { listUserSessions, revokeUserSession } from "../../api/security";
 import { useSession } from "../../state/session";
 import { refreshSettingsState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
-
-const formatDate = (value: string) => {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Fecha no disponible" : date.toLocaleString("es-AR");
-};
+import { useHotelConfig } from "../../hooks/useHotelConfig";
+import { formatHotelDateTime } from "../../utils/date";
 
 export function SettingsSessionsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { session, logout } = useSession();
+  const hotelConfigQuery = useHotelConfig();
   const enabled = hasValidSession(session);
   const sessionsQuery = useQuery({
     queryKey: ["settings-sessions", session.hotelId],
@@ -103,8 +101,8 @@ export function SettingsSessionsPage() {
                         </span>
                       )}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-3 text-slate-600">{formatDate(item.created_at)}</td>
-                    <td className="whitespace-nowrap px-3 py-3 text-slate-600">{formatDate(item.last_seen_at)}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-slate-600">{formatHotelDateTime(item.created_at, hotelConfigQuery.data?.hotel_timezone)}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-slate-600">{formatHotelDateTime(item.last_seen_at, hotelConfigQuery.data?.hotel_timezone)}</td>
                     <td className="px-3 py-3 text-right">
                       <button
                         type="button"

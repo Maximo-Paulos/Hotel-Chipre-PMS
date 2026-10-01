@@ -17,6 +17,7 @@ from app.services.security import decode_signed_token
 from app.config import is_production_mode
 from app.services.external_effects_policy import (
     ExternalEffectsDisabled,
+    external_effects_enabled,
     require_external_connections,
 )
 
@@ -125,7 +126,14 @@ def get_system_email_status(db=None) -> SystemEmailStatus:
 def send_system_email(db, to, subject: str, body: str) -> dict[str, object]:
     settings = get_settings()
     dev_outbox_path = (getattr(settings, "DEV_EMAIL_OUTBOX_PATH", "") or "").strip()
-    if not is_production_mode(settings) and dev_outbox_path:
+    # A blank override selects the temp-file fallback in a non-production
+    # runtime only when external effects are closed. This keeps local signup
+    # verifiable without making the sandbox depend on a manually configured
+    # path or permitting real email to escape.
+    capture_dev_email = not is_production_mode(settings) and (
+        bool(dev_outbox_path) or not external_effects_enabled(settings)
+    )
+    if capture_dev_email:
         provider = get_email_provider()
         LOGGER.info("Email system using dev no-op delivery provider provider=%s", provider.provider_name)
         sender_email, _ = _sender_parts()

@@ -18,6 +18,16 @@ class CompanyDocumentCreate(BaseModel):
     notes: str | None = None
 
 
+class CompanyDocumentUpload(BaseModel):
+    reservation_id: int
+    company_id: int | None = None
+    doc_type: CompanyDocumentTypeEnum = CompanyDocumentTypeEnum.VOUCHER_PDF
+    file_name: str = Field(..., min_length=1, max_length=300)
+    content_base64: str = Field(..., min_length=8, max_length=7_000_000)
+    requires_signature: bool = False
+    notes: str | None = None
+
+
 class CompanyDocumentStatusUpdate(BaseModel):
     status: CompanyDocumentStatusEnum
 

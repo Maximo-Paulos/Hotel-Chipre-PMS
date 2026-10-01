@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import {
   createLaundryRemito,
@@ -24,10 +25,15 @@ import {
   createLinenItem,
   createLinenLocation,
   createLinenMovement,
+  createLinenOpeningCounts,
+  createLinenTransfer,
   getLinenSummary,
   listLinenItems,
   listLinenLocations,
-  type LinenItem
+  setLinenLocationMinimum,
+  type LinenItem,
+  type LinenOpeningCountLine,
+  type LinenTransferCreate
 } from "../../api/linen";
 import type { StockMovementType } from "../../api/stock";
 import { hasValidSession } from "../../api/client";
@@ -63,10 +69,11 @@ const dayStartIso = (day: string) => new Date(`${day}T00:00:00`).toISOString();
 const dayEndIso = (day: string) => new Date(`${day}T23:59:59.999`).toISOString();
 
 const emptyVendorForm = { name: "", contact_phone: "", contact_email: "" };
-const emptyPriceForm = { linen_item_id: "", unit_price: "" };
+const emptyPriceForm = { linen_item_id: "", unit_price: "", effective_from: todayIso() };
 const emptyLinenItemForm = { name: "", unit: "unidad" };
 const emptyLinenLocationForm = { name: "" };
 const emptyMovementForm = { linen_item_id: "", location_id: "", movement_type: "in" as StockMovementType, quantity: "1", reason: "" };
+const emptyLinenTransferForm = { linen_item_id: "", source_location_id: "", destination_location_id: "", quantity: "1", reason: "" };
 
 // Combined remito entry: one row per linen item, quantity for each direction
 // at once (mirrors the vendor's paper remito, which has a RETIRO and an
@@ -90,12 +97,14 @@ export function LaundryPage() {
   const queryClient = useQueryClient();
   const enabled = hasValidSession(session);
   const manageVendors = hasPermission("laundry:vendor_manage");
+  const manageVendorPrices = hasPermission("laundry:price_manage");
   const operateRemitos = hasPermission("laundry:remito_manage");
   // Financial visibility (spend report + settlements), not vendor operations
   // -- owner/co-owner only by default now, matching the backend gate on
   // GET .../spend, GET .../settlements and the mark-paid POST (see
   // app/api/laundry_vendor.py). A manager still holds manageVendors (vendor
-  // CRUD/prices/remitos), just not this money-visibility section.
+  // vendor CRUD/remitos), just not this money-visibility section or price
+  // changes unless laundry:price_manage was granted explicitly.
   const viewFinancial = hasPermission("reports:financial:view");
   const isDesktop = useIsDesktopViewport();
   const isOnline = useOnlineStatus();
@@ -118,6 +127,10 @@ export function LaundryPage() {
   const [linenItemForm, setLinenItemForm] = useState(emptyLinenItemForm);
   const [linenLocationForm, setLinenLocationForm] = useState(emptyLinenLocationForm);
   const [movementForm, setMovementForm] = useState(emptyMovementForm);
+  const [linenTransferForm, setLinenTransferForm] = useState(emptyLinenTransferForm);
+  const linenTransferAttemptRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(null);
+  const [openingCountReason, setOpeningCountReason] = useState("Conteo inicial");
+  const [openingCountValues, setOpeningCountValues] = useState<Record<string, string>>({});
   const [remitoForm, setRemitoForm] = useState(emptyRemitoForm);
   const [remitoQuantities, setRemitoQuantities] = useState<RemitoQuantities>({});
   const [remitoError, setRemitoError] = useState<string | null>(null);
@@ -145,6 +158,12 @@ export function LaundryPage() {
     enabled,
     staleTime: 60 * 1000
   });
+  const openingCountSummaryQuery = useQuery({
+    queryKey: ["linen-summary", session.hotelId, "opening-count-grid"],
+    queryFn: () => getLinenSummary({}, session),
+    enabled: enabled && manageVendors,
+    staleTime: 15 * 1000
+  });
   const remitosQuery = useQuery({
     queryKey: ["laundry-remitos", session.hotelId],
     queryFn: () => listLaundryRemitos({}, session),
@@ -159,6 +178,19 @@ export function LaundryPage() {
   const remitos = useMemo(() => remitosQuery.data ?? [], [remitosQuery.data]);
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const vendorById = useMemo(() => new Map(vendors.map((vendor) => [vendor.id, vendor])), [vendors]);
+  const locationById = useMemo(() => new Map(locations.map((location) => [location.id, location])), [locations]);
+  const openingCountBalanceByPair = useMemo(() => {
+    const balances = new Map<string, { quantity: string; hasMovements: boolean }>();
+    (openingCountSummaryQuery.data ?? []).forEach((entry) => {
+      entry.location_balances.forEach((balance) => {
+        balances.set(`${entry.item.id}:${balance.location_id}`, {
+          quantity: String(balance.current_quantity),
+          hasMovements: balance.has_movements
+        });
+      });
+    });
+    return balances;
+  }, [openingCountSummaryQuery.data]);
 
   // Vendor LinenLocations are administrative (created automatically with the
   // vendor to represent "what's physically at that laundry") -- exclude them
@@ -201,12 +233,20 @@ export function LaundryPage() {
     staleTime: 15 * 1000
   });
   const remitoVendorPriceByItem = useMemo(() => {
-    const map = new Map<number, { unit_price: string; currency_code: string }>();
-    (remitoVendorPricesQuery.data ?? []).forEach((price) =>
-      map.set(price.linen_item_id, { unit_price: String(price.unit_price), currency_code: price.currency_code })
-    );
+    const map = new Map<number, { unit_price: string; currency_code: string; effective_from: string }>();
+    (remitoVendorPricesQuery.data ?? []).forEach((price) => {
+      if (price.effective_from > remitoForm.remito_date) return;
+      const current = map.get(price.linen_item_id);
+      if (!current || current.effective_from < price.effective_from) {
+        map.set(price.linen_item_id, {
+          unit_price: String(price.unit_price),
+          currency_code: price.currency_code,
+          effective_from: price.effective_from
+        });
+      }
+    });
     return map;
-  }, [remitoVendorPricesQuery.data]);
+  }, [remitoVendorPricesQuery.data, remitoForm.remito_date]);
 
   const balanceQueries = useQueries({
     queries: vendors.map((vendor) => ({
@@ -309,6 +349,23 @@ export function LaundryPage() {
     (houseStockSummaryQuery.data ?? []).forEach((entry) => map.set(entry.item.id, String(entry.current_quantity)));
     return map;
   }, [houseStockSummaryQuery.data]);
+  const houseStockMinimumByItemId = useMemo(() => {
+    const map = new Map<number, string>();
+    (houseStockSummaryQuery.data ?? []).forEach((entry) => {
+      if (entry.min_quantity !== null && entry.min_quantity !== undefined) {
+        map.set(entry.item.id, String(entry.min_quantity));
+      }
+    });
+    return map;
+  }, [houseStockSummaryQuery.data]);
+
+  const minimumMutation = useGuardedMutation({
+    mutationFn: ({ itemId, locationId, minQuantity }: { itemId: number; locationId: number; minQuantity: string }) =>
+      setLinenLocationMinimum(itemId, locationId, minQuantity, session),
+    onSuccess: async () => {
+      await refreshStockState(queryClient, session.hotelId);
+    }
+  });
 
   const invalidateVendors = () => refreshStockState(queryClient, session.hotelId);
   const invalidatePrices = (vendorId: number) => {
@@ -390,11 +447,36 @@ export function LaundryPage() {
     }
   });
 
+  const createOpeningCountsMutation = useGuardedMutation({
+    mutationFn: (payload: { counts: LinenOpeningCountLine[]; reason: string }) =>
+      createLinenOpeningCounts(payload, session),
+    onSuccess: async (movements) => {
+      await refreshStockState(queryClient, session.hotelId);
+      setOpeningCountValues({});
+      setMessage(`Conteo inicial guardado para ${movements.length} ${movements.length === 1 ? "ítem" : "ítems"}.`);
+    }
+  });
+
+  const createLinenTransferMutation = useGuardedMutation({
+    mutationFn: ({ payload, idempotencyKey }: { payload: LinenTransferCreate; idempotencyKey: string }) =>
+      createLinenTransfer(payload, { idempotencyKey }, session),
+    onSuccess: async () => {
+      linenTransferAttemptRef.current = null;
+      await refreshStockState(queryClient, session.hotelId);
+      setLinenTransferForm(emptyLinenTransferForm);
+      setMessage("Traspaso de ropa blanca registrado.");
+    }
+  });
+
   const setPriceMutation = useGuardedMutation({
     mutationFn: () =>
       setLaundryVendorPrice(
         selectedVendorId as number,
-        { linen_item_id: Number(priceForm.linen_item_id), unit_price: priceForm.unit_price },
+        {
+          linen_item_id: Number(priceForm.linen_item_id),
+          unit_price: priceForm.unit_price,
+          effective_from: priceForm.effective_from
+        },
         session
       ),
     onSuccess: async () => {
@@ -562,6 +644,107 @@ export function LaundryPage() {
     }
   };
 
+  const handleCreateOpeningCounts = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage(null);
+    if (!isOnline) {
+      setMessage("Sin conexión. Conectate para guardar el conteo inicial.");
+      return;
+    }
+    if (!openingCountReason.trim()) {
+      setMessage("Escribí el motivo del conteo inicial.");
+      return;
+    }
+
+    const counts: LinenOpeningCountLine[] = [];
+    let invalidQuantity = false;
+    let staleCount = false;
+    items.forEach((item) => {
+      houseLocations.forEach((location) => {
+        const key = `${item.id}:${location.id}`;
+        const rawQuantity = openingCountValues[key]?.trim();
+        if (!rawQuantity) return;
+        const quantity = Number(rawQuantity);
+        if (!Number.isFinite(quantity) || quantity < 0) {
+          invalidQuantity = true;
+          return;
+        }
+        if (quantity === 0) return;
+        if (openingCountBalanceByPair.get(key)?.hasMovements) {
+          staleCount = true;
+          return;
+        }
+        counts.push({ linen_item_id: item.id, location_id: location.id, quantity: rawQuantity });
+      });
+    });
+    if (invalidQuantity) {
+      setMessage("Revisá las cantidades: deben ser números mayores o iguales a cero.");
+      return;
+    }
+    if (staleCount) {
+      setMessage("El stock cambió mientras cargabas. Actualizá los datos y revisá las ubicaciones con movimientos.");
+      await openingCountSummaryQuery.refetch();
+      return;
+    }
+    if (counts.length === 0) {
+      setMessage("Ingresá una cantidad mayor que cero para al menos una combinación de ítem y ubicación.");
+      return;
+    }
+
+    try {
+      await createOpeningCountsMutation.mutateAsync({ counts, reason: openingCountReason.trim() });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo guardar el conteo inicial.");
+      await openingCountSummaryQuery.refetch();
+    }
+  };
+
+  const handleCreateLinenTransfer = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage(null);
+    if (!isOnline) {
+      setMessage("Sin conexión. Conectate para guardar el traspaso.");
+      return;
+    }
+    const quantity = Number(linenTransferForm.quantity);
+    if (!linenTransferForm.linen_item_id || !linenTransferForm.source_location_id || !linenTransferForm.destination_location_id) {
+      setMessage("Elegí el tipo de ropa blanca y las dos ubicaciones.");
+      return;
+    }
+    if (linenTransferForm.source_location_id === linenTransferForm.destination_location_id) {
+      setMessage("El origen y el destino deben ser ubicaciones distintas.");
+      return;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0 || !linenTransferForm.reason.trim()) {
+      setMessage("Ingresá una cantidad positiva y el motivo del traspaso.");
+      return;
+    }
+
+    const payload: LinenTransferCreate = {
+      linen_item_id: Number(linenTransferForm.linen_item_id),
+      source_location_id: Number(linenTransferForm.source_location_id),
+      destination_location_id: Number(linenTransferForm.destination_location_id),
+      quantity: linenTransferForm.quantity,
+      reason: linenTransferForm.reason.trim()
+    };
+    const fingerprint = JSON.stringify(payload);
+    if (linenTransferAttemptRef.current?.fingerprint !== fingerprint) {
+      linenTransferAttemptRef.current = {
+        fingerprint,
+        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${payload.linen_item_id}-${Math.random().toString(36).slice(2)}`
+      };
+    }
+    try {
+      await createLinenTransferMutation.mutateAsync({
+        payload,
+        idempotencyKey: linenTransferAttemptRef.current.idempotencyKey
+      });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo guardar el traspaso.");
+      await openingCountSummaryQuery.refetch();
+    }
+  };
+
   // Billing only ever happens on the outbound side (see the spend report's
   // "según lo que se mandó a lavar" comment below) -- the running total
   // while entering a remito mirrors that, using only the retiro quantities.
@@ -720,7 +903,7 @@ export function LaundryPage() {
                         <li key={price.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 shadow-sm">
                           <span>{item?.name ?? `Ítem #${price.linen_item_id}`}</span>
                           <span className="font-semibold text-slate-900">
-                            {formatMoney(price.unit_price, price.currency_code)}
+                            {formatMoney(price.unit_price, price.currency_code)} · desde {price.effective_from}
                           </span>
                         </li>
                       );
@@ -729,7 +912,7 @@ export function LaundryPage() {
                       <li className="text-xs text-slate-500">Sin precios cargados todavía.</li>
                     )}
                   </ul>
-                  <form className="space-y-2" onSubmit={handleSetPrice}>
+                  {manageVendorPrices ? <form className="space-y-2" onSubmit={handleSetPrice}>
                     <label className="space-y-1 text-xs font-semibold text-slate-600">
                       Ítem
                       <select
@@ -758,6 +941,16 @@ export function LaundryPage() {
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                       />
                     </label>
+                    <label className="space-y-1 text-xs font-semibold text-slate-600">
+                      Vigente desde
+                      <input
+                        type="date"
+                        value={priceForm.effective_from}
+                        onChange={(event) => setPriceForm((current) => ({ ...current, effective_from: event.target.value }))}
+                        required
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      />
+                    </label>
                     <button
                       type="submit"
                       disabled={setPriceMutation.isPending || !isOnline}
@@ -765,7 +958,7 @@ export function LaundryPage() {
                     >
                       Guardar precio
                     </button>
-                  </form>
+                  </form> : <p className="text-xs text-slate-500">Solo usuarios con permiso explícito pueden cambiar precios.</p>}
                 </div>
               ) : (
                 <p className="text-xs text-slate-500">Elegí un lavadero para editar sus precios.</p>
@@ -826,6 +1019,173 @@ export function LaundryPage() {
               </button>
             </form>
           </div>
+          <form
+            className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4"
+            onSubmit={handleCreateOpeningCounts}
+            data-testid="linen-opening-count-grid"
+          >
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Carga inicial por grilla</h3>
+              <p className="mt-1 text-xs text-slate-600">
+                Completá las cantidades por tipo y ubicación. Las celdas vacías o en cero se omiten; las ubicaciones con movimientos previos quedan bloqueadas.
+              </p>
+              {openingCountSummaryQuery.error && (
+                <p className="mt-2 text-xs text-rose-700" role="alert">No se pudieron verificar los movimientos existentes.</p>
+              )}
+            </div>
+            <label className="block space-y-1 text-sm">
+              <span className="text-slate-600">Motivo</span>
+              <input
+                value={openingCountReason}
+                onChange={(event) => setOpeningCountReason(event.target.value)}
+                required
+                maxLength={500}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              />
+            </label>
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-100">
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th scope="col" className="sticky left-0 bg-slate-100 px-3 py-2">Tipo de ropa blanca</th>
+                    {houseLocations.map((location) => (
+                      <th scope="col" key={location.id} className="min-w-44 px-3 py-2">{location.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {items.map((item) => (
+                    <tr key={item.id}>
+                      <th scope="row" className="sticky left-0 bg-white px-3 py-2 text-left font-medium text-slate-800">{item.name}</th>
+                      {houseLocations.map((location) => {
+                        const key = `${item.id}:${location.id}`;
+                        const balance = openingCountBalanceByPair.get(key);
+                        const locked = Boolean(balance?.hasMovements);
+                        return (
+                          <td key={location.id} className="px-3 py-2">
+                            {locked ? (
+                              <span className="text-xs text-slate-600">
+                                {balance?.quantity ?? "0"} {item.unit} · ya tiene movimientos
+                              </span>
+                            ) : (
+                              <label className="sr-only" htmlFor={`linen-opening-${item.id}-${location.id}`}>
+                                Conteo inicial {item.name} en {location.name}
+                              </label>
+                            )}
+                            {!locked && (
+                              <input
+                                id={`linen-opening-${item.id}-${location.id}`}
+                                aria-label={`Conteo inicial ${item.name} en ${location.name}`}
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                inputMode="decimal"
+                                placeholder={`0 ${item.unit}`}
+                                value={openingCountValues[key] ?? ""}
+                                onChange={(event) => setOpeningCountValues((current) => ({ ...current, [key]: event.target.value }))}
+                                disabled={!openingCountSummaryQuery.isSuccess || openingCountSummaryQuery.isFetching || !isOnline}
+                                className="w-36 rounded-lg border border-slate-300 px-3 py-2 disabled:bg-slate-100"
+                              />
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                  {!itemsQuery.isLoading && items.length === 0 && (
+                    <tr><td colSpan={Math.max(1, houseLocations.length + 1)} className="px-3 py-4 text-xs text-slate-500">Primero creá los tipos de ropa blanca.</td></tr>
+                  )}
+                  {!locationsQuery.isLoading && houseLocations.length === 0 && (
+                    <tr><td colSpan={Math.max(1, houseLocations.length + 1)} className="px-3 py-4 text-xs text-slate-500">Primero creá una ubicación del hotel.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <button
+              type="submit"
+              disabled={createOpeningCountsMutation.isPending || !isOnline || items.length === 0 || houseLocations.length === 0 || !openingCountSummaryQuery.isSuccess || openingCountSummaryQuery.isFetching}
+              className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+            >
+              {createOpeningCountsMutation.isPending ? "Guardando conteo..." : "Guardar conteo inicial"}
+            </button>
+          </form>
+          <form
+            className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2"
+            onSubmit={handleCreateLinenTransfer}
+            data-testid="linen-transfer-form"
+          >
+            <div className="md:col-span-2">
+              <h3 className="text-sm font-semibold text-slate-800">Traspasar entre ubicaciones</h3>
+              <p className="mt-1 text-xs text-slate-600">
+                Registra salida y entrada enlazadas en una sola operación. Para mover ropa hacia o desde un lavadero, usá un remito.
+              </p>
+            </div>
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">Tipo de ropa blanca</span>
+              <select
+                value={linenTransferForm.linen_item_id}
+                onChange={(event) => setLinenTransferForm((current) => ({ ...current, linen_item_id: event.target.value }))}
+                required
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              >
+                <option value="">Seleccionar</option>
+                {items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">Cantidad</span>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={linenTransferForm.quantity}
+                onChange={(event) => setLinenTransferForm((current) => ({ ...current, quantity: event.target.value }))}
+                required
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">Desde</span>
+              <select
+                value={linenTransferForm.source_location_id}
+                onChange={(event) => setLinenTransferForm((current) => ({ ...current, source_location_id: event.target.value }))}
+                required
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              >
+                <option value="">Ubicación de origen</option>
+                {houseLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">Hacia</span>
+              <select
+                value={linenTransferForm.destination_location_id}
+                onChange={(event) => setLinenTransferForm((current) => ({ ...current, destination_location_id: event.target.value }))}
+                required
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              >
+                <option value="">Ubicación de destino</option>
+                {houseLocations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm md:col-span-2">
+              <span className="text-slate-600">Motivo</span>
+              <input
+                value={linenTransferForm.reason}
+                onChange={(event) => setLinenTransferForm((current) => ({ ...current, reason: event.target.value }))}
+                required
+                maxLength={500}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={createLinenTransferMutation.isPending || !isOnline || items.length === 0 || houseLocations.length < 2}
+              className="min-h-11 rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 md:col-span-2"
+            >
+              {createLinenTransferMutation.isPending ? "Guardando traspaso..." : "Guardar traspaso"}
+            </button>
+          </form>
         </section>
       )}
 
@@ -1079,6 +1439,10 @@ export function LaundryPage() {
                           {remito.direction === "outbound" ? "Salida" : "Entrada"} · {vendor?.name ?? `Lavadero #${remito.vendor_id}`}
                         </p>
                         <p className="text-xs text-slate-600">Remito {remito.remito_number}</p>
+                        <p className="text-xs text-slate-600">
+                          Ubicación: {remito.house_location_id ? locationById.get(remito.house_location_id)?.name ?? "no disponible" : "no registrada (remito anterior)"}
+                          {" · "}Cargó: {remito.created_by_name ?? "usuario no disponible"}
+                        </p>
                       </div>
                       <time className="shrink-0 text-xs text-slate-500" dateTime={remito.remito_date}>
                         {new Date(remito.remito_date).toLocaleDateString("es-AR")}
@@ -1281,12 +1645,20 @@ export function LaundryPage() {
                 which does not apply to this linen-specific endpoint at all). */}
             <div className={showSection("available") ? "" : "hidden"}>
               <HouseStockPanel
+                key={houseStockLocationId}
                 locations={houseLocations}
                 items={items}
                 selectedLocationId={houseStockLocationId}
                 onSelectLocation={setHouseStockLocationId}
                 currentByItemId={houseStockByItemId}
+                minimumByItemId={houseStockMinimumByItemId}
+                canManageMinimums={manageVendors}
+                savingMinimum={minimumMutation.isPending}
+                onSaveMinimum={({ itemId, locationId, minQuantity }) =>
+                  minimumMutation.mutateAsync({ itemId, locationId, minQuantity })
+                }
                 isLoading={houseStockSummaryQuery.isFetching}
+                summaryLoaded={houseStockSummaryQuery.isSuccess}
               />
             </div>
           </aside>
@@ -1548,15 +1920,62 @@ function HouseStockPanel({
   selectedLocationId,
   onSelectLocation,
   currentByItemId,
-  isLoading
+  minimumByItemId,
+  canManageMinimums,
+  savingMinimum,
+  onSaveMinimum,
+  isLoading,
+  summaryLoaded
 }: {
   locations: Array<{ id: number; name: string }>;
   items: LinenItem[];
   selectedLocationId: string;
   onSelectLocation: (value: string) => void;
   currentByItemId: Map<number, string>;
+  minimumByItemId: Map<number, string>;
+  canManageMinimums: boolean;
+  savingMinimum: boolean;
+  onSaveMinimum: (input: { itemId: number; locationId: number; minQuantity: string }) => Promise<unknown>;
   isLoading: boolean;
+  summaryLoaded: boolean;
 }) {
+  const { t, i18n } = useTranslation("common");
+  const [minimumDrafts, setMinimumDrafts] = useState<Record<number, string>>({});
+  const [minimumError, setMinimumError] = useState<string | null>(null);
+  const formatQuantity = (value: string) => {
+    const quantity = Number(value);
+    return Number.isFinite(quantity)
+      ? new Intl.NumberFormat(i18n.language === "en" ? "en-US" : "es-AR", { maximumFractionDigits: 2 }).format(quantity)
+      : value;
+  };
+  useEffect(() => {
+    if (!summaryLoaded) return;
+    setMinimumDrafts((current) => {
+      const next = { ...current };
+      items.forEach((item) => {
+        if (!(item.id in next)) next[item.id] = minimumByItemId.get(item.id) ?? "";
+      });
+      return next;
+    });
+  }, [items, minimumByItemId, summaryLoaded]);
+  const minimumDraftsReady = summaryLoaded && items.every((item) => item.id in minimumDrafts);
+  const lowStockItems = items.filter((item) => {
+    const quantity = currentByItemId.get(item.id);
+    if (quantity === undefined) return false;
+    const minimum = minimumByItemId.get(item.id);
+    return Number(quantity) <= 0 || (minimum !== undefined && Number(quantity) < Number(minimum));
+  });
+  const saveMinimum = async (itemId: number) => {
+    if (!selectedLocationId) return;
+    const minQuantity = minimumDrafts[itemId]?.trim() ?? "";
+    if (!minQuantity || !Number.isFinite(Number(minQuantity)) || Number(minQuantity) < 0) return;
+    setMinimumError(null);
+    try {
+      await onSaveMinimum({ itemId, locationId: Number(selectedLocationId), minQuantity });
+    } catch (error) {
+      setMinimumError(error instanceof Error ? error.message : t("stockAlerts.minimumFailed"));
+    }
+  };
   return (
     <section aria-labelledby="house-stock-title" className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div>
@@ -1581,13 +2000,64 @@ function HouseStockPanel({
       {selectedLocationId ? (
         <>
           {isLoading && <p className="text-xs text-slate-500">Actualizando...</p>}
+          {lowStockItems.length > 0 && (
+            <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+              <p className="font-semibold">{t("stockAlerts.linenLowTitle")}</p>
+              <ul className="mt-1 list-disc pl-5">
+                {lowStockItems.map((item) => {
+                  const quantity = currentByItemId.get(item.id) ?? "0";
+                  const minimum = minimumByItemId.get(item.id);
+                  return (
+                    <li key={item.id}>
+                      {Number(quantity) <= 0
+                        ? t("stockAlerts.linenOutItem", { item: item.name })
+                        : t("stockAlerts.linenBelowMinimum", {
+                            item: item.name,
+                            quantity: formatQuantity(quantity),
+                            minimum: formatQuantity(minimum ?? "0")
+                          })}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+          {minimumError && <p role="alert" className="text-sm text-rose-700">{minimumError}</p>}
           <ul className="space-y-1 text-sm">
             {items.map((item) => (
-              <li key={item.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                <span>{item.name}</span>
-                <span className="font-semibold text-slate-900">
-                  {currentByItemId.has(item.id) ? `${currentByItemId.get(item.id)} ${item.unit}` : "..."}
-                </span>
+              <li key={item.id} className="space-y-2 rounded-lg bg-slate-50 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span>{item.name}</span>
+                  <span className="font-semibold text-slate-900">
+                    {currentByItemId.has(item.id) ? `${formatQuantity(currentByItemId.get(item.id)!)} ${item.unit}` : "..."}
+                  </span>
+                </div>
+                {canManageMinimums ? (
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="min-w-36 flex-1 text-xs text-slate-600">
+                      {t("stockAlerts.minimumLabel")}
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        disabled={!minimumDraftsReady}
+                        value={minimumDrafts[item.id] ?? ""}
+                        onChange={(event) => setMinimumDrafts((current) => ({ ...current, [item.id]: event.target.value }))}
+                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => void saveMinimum(item.id)}
+                      disabled={!minimumDraftsReady || savingMinimum || !minimumDrafts[item.id]?.trim() || Number(minimumDrafts[item.id]) < 0}
+                      className="min-h-10 rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-semibold text-brand-800 disabled:opacity-50"
+                    >
+                      {t("stockAlerts.saveMinimum")}
+                    </button>
+                  </div>
+                ) : minimumByItemId.has(item.id) ? (
+                  <p className="text-xs text-slate-500">{t("stockAlerts.minimumValue", { minimum: minimumByItemId.get(item.id) })}</p>
+                ) : null}
               </li>
             ))}
             {items.length === 0 && <li className="text-xs text-slate-500">No hay ítems de stock cargados.</li>}

@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
 
 import { useOperationalAudit } from "../../hooks/useOperationalAudit";
+import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { useSession } from "../../state/session";
-import { todayIso } from "../../utils/date";
+import { formatHotelDateTime, todayIso } from "../../utils/date";
 
 const PAGE_SIZE = 50;
 
 export function OperationalAuditPage() {
   const { session } = useSession();
+  const hotelConfigQuery = useHotelConfig();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState(() => todayIso());
   const [category, setCategory] = useState("");
@@ -57,7 +59,7 @@ export function OperationalAuditPage() {
         {auditQuery.isLoading ? <p className="p-5 text-sm text-slate-500">Cargando actividad...</p> : items.length === 0 ? <p className="p-5 text-sm text-slate-500">No hay actividad para estos filtros.</p> : (
           <div className="divide-y divide-slate-100">
             {items.map((item) => <article key={`${item.source}-${item.source_id}`} className="grid gap-2 px-4 py-4 md:grid-cols-[150px_1fr_auto]">
-              <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.area}</p><p className="text-xs text-slate-500">{new Date(item.occurred_at).toLocaleString("es-AR")}</p></div>
+              <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.area}</p><p className="text-xs text-slate-500">{formatHotelDateTime(item.occurred_at, hotelConfigQuery.data?.hotel_timezone)}</p></div>
               <div><p className="font-semibold text-slate-900">{item.summary}</p><p className="text-sm text-slate-600">{item.action} · {item.actor_name}</p>{item.reason_code ? <p className="text-xs text-slate-500">Motivo: {item.reason_code}{item.reason_note ? ` · ${item.reason_note}` : ""}</p> : null}{item.origin_room_disposition ? <p className="text-xs text-brand-700">Habitación origen: {item.origin_room_disposition} ({item.origin_room_status_before ?? "?"} → {item.origin_room_status_after ?? "?"})</p> : null}</div>
               <div className="text-right">{item.amount !== null && item.amount !== undefined ? <p className="font-semibold text-slate-900">{Number(item.amount).toLocaleString("es-AR", { style: "currency", currency: item.currency_code ?? "ARS" })}</p> : null}<p className="text-xs text-slate-500">#{item.source_id}</p></div>
             </article>)}

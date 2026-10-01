@@ -91,6 +91,12 @@ ADDITIVE_RLS_TABLE_CONTRACT = (
         ("whatsapp_channels", "whatsapp_contacts", "whatsapp_conversations", "whatsapp_messages", "whatsapp_conversation_notes", "whatsapp_conversation_events", "whatsapp_outbound_outbox"),
     ),
     ("20260924_custom_hotel_roles.py", ("hotel_roles",)),
+    ("41d66acfb13a_linen_location_par_levels.py", ("linen_par_levels",)),
+    ("20261001_reservation_groups.py", ("reservation_groups",)),
+    (
+        "20261010_company_night_charge_tenant_keys.py",
+        ("company_night_charges", "company_night_charge_payment_allocations"),
+    ),
 )
 
 
@@ -124,6 +130,15 @@ def _load_composite_fk_migration():
 def _load_extended_composite_fk_migration():
     path = Path(__file__).parents[1] / "alembic" / "versions" / "20260724_extended_tenant_composite_fks.py"
     spec = importlib.util.spec_from_file_location("extended_tenant_composite_fks_migration", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_company_night_charge_tenant_migration():
+    path = Path(__file__).parents[1] / "alembic" / "versions" / "20261010_company_night_charge_tenant_keys.py"
+    spec = importlib.util.spec_from_file_location("company_night_charge_tenant_migration", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -184,28 +199,64 @@ def test_core_composite_fk_migration_covers_the_metadata_contract():
     assert set(CORE_COMPOSITE_FK_REQUIREMENTS) <= migrated
 
 
-def test_extended_composite_fk_migration_covers_every_remaining_scoped_fk():
-    migration = _load_extended_composite_fk_migration()
+def test_tenant_composite_fk_migrations_cover_every_scoped_relationship():
+    migrations = (
+        _load_composite_fk_migration(),
+        _load_extended_composite_fk_migration(),
+        _load_company_night_charge_tenant_migration(),
+    )
     migrated = {
         (table, columns, referred_table, referred_columns)
+        for migration in migrations
         for table, _name, columns, referred_table, referred_columns, _ondelete in migration.COMPOSITE_FKS
     }
     missing = sorted(_remaining_scoped_scalar_fks() - migrated)
-    assert not missing, f"Extended tenant composite FKs missing: {missing}"
-    assert len(migration.COMPOSITE_FKS) == len(migrated)
+    assert not missing, f"Tenant composite FKs missing from the migration chain: {missing}"
+    declared = [item for migration in migrations for item in migration.COMPOSITE_FKS]
+    assert len(declared) == len(migrated)
 
 
-def test_extended_composite_fk_migration_has_unique_target_for_every_parent():
-    migration = _load_extended_composite_fk_migration()
-    core_migration = _load_composite_fk_migration()
+def test_tenant_composite_fk_migrations_have_unique_target_for_every_parent():
+    migrations = (
+        _load_composite_fk_migration(),
+        _load_extended_composite_fk_migration(),
+        _load_company_night_charge_tenant_migration(),
+    )
     targets = {
-        table for table, _name in (*core_migration.UNIQUE_TARGETS, *migration.UNIQUE_TARGETS)
+        target[0]
+        for migration in migrations
+        for target in migration.UNIQUE_TARGETS
     }
     expected = {
         referred_table
         for _table, _columns, referred_table, _referred_columns in _remaining_scoped_scalar_fks()
     }
     assert expected <= targets
+
+
+def test_company_night_charges_keep_billing_adjustments_in_the_same_tenant():
+    migration = _load_company_night_charge_tenant_migration()
+    charge = Base.metadata.tables["company_night_charges"]
+    actual_fks = {
+        (
+            tuple(column.name for column in constraint.columns),
+            constraint.elements[0].column.table.name,
+            tuple(element.column.name for element in constraint.elements),
+        )
+        for constraint in charge.foreign_key_constraints
+    }
+    assert (("hotel_id", "billing_adjustment_id"), "billing_adjustments", ("hotel_id", "id")) in actual_fks
+    assert any(
+        table == "billing_adjustments" and columns == ("hotel_id", "id")
+        for table, _name, columns in migration.UNIQUE_TARGETS
+    )
+    assert any(
+        table == "company_night_charges"
+        and columns == ("hotel_id", "billing_adjustment_id")
+        and parent == "billing_adjustments"
+        and parent_columns == ("hotel_id", "id")
+        for table, _name, columns, parent, parent_columns, _ondelete in migration.COMPOSITE_FKS
+    )
 
 
 def test_core_parents_have_tenant_scoped_unique_targets():
@@ -275,6 +326,10 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "whatsapp_outbound_outbox",
         # Metadata-only provider routing is resolved before tenant context.
         "whatsapp_provider_routes",
+        "linen_par_levels",
+        "reservation_groups",
+        "company_night_charges",
+        "company_night_charge_payment_allocations",
     }
     assert set(migration.TENANT_TABLES) == expected
     assert "hotel_memberships" not in migration.TENANT_TABLES

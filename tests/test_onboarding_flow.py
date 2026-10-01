@@ -13,6 +13,7 @@ from sqlalchemy.pool import StaticPool
 import app.models  # Ensure all models (including onboarding) are registered
 import app.database as db_module
 import app.main as main_module
+from app.config import get_settings
 from app.database import Base, get_db
 
 
@@ -23,6 +24,7 @@ def client(monkeypatch: pytest.MonkeyPatch):
         "DEV_EMAIL_OUTBOX_PATH",
         f"{tempfile.gettempdir()}\\hotel-chipre-test-email-outbox.jsonl",
     )
+    get_settings.cache_clear()
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -55,6 +57,7 @@ def client(monkeypatch: pytest.MonkeyPatch):
         yield test_client
 
     main_module.app.dependency_overrides.clear()
+    get_settings.cache_clear()
     Base.metadata.drop_all(bind=engine)
     engine.dispose()
 
@@ -198,6 +201,20 @@ def test_dashboard_is_blocked_until_onboarding_finishes(client: TestClient):
     # Dashboard now available
     dashboard = client.get("/")
     assert dashboard.status_code == 200
+
+
+def test_owner_registration_without_outbox_override_does_not_return_503(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "false")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "false")
+    monkeypatch.setenv("DEV_EMAIL_OUTBOX_PATH", "")
+    get_settings.cache_clear()
+
+    _register_owner(client, "owner@test.com")
 
 
 def test_finish_requires_all_steps(client: TestClient):

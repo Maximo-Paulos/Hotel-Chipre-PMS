@@ -1,5 +1,14 @@
 {
   "loading": "Cargando...",
+  "stockAlerts": {
+    "linenLowTitle": "Ropa blanca bajo mínimo",
+    "linenOutItem": "No hay unidades disponibles de {{item}} en esta ubicación.",
+    "linenBelowMinimum": "{{item}}: {{quantity}} disponibles; mínimo {{minimum}}.",
+    "minimumLabel": "Mínimo en esta ubicación",
+    "minimumValue": "Mínimo configurado: {{minimum}}",
+    "saveMinimum": "Guardar mínimo",
+    "minimumFailed": "No se pudo guardar el mínimo."
+  },
   "checkingSession": "Comprobando sesión...",
   "showPassword": "Mostrar contraseña",
   "hidePassword": "Ocultar contraseña",
@@ -60,6 +69,7 @@
     "selectAssignable": "Seleccioná un rol activo",
     "roleChangePermissionNotice": "Al cambiar un rol se eliminan los permisos individuales concedidos; las restricciones individuales se conservan.",
     "roleChangePermissionConfirm": "¿Cambiar el rol a {{role}}? Se eliminarán los permisos individuales concedidos y se conservarán las restricciones.",
+    "roleChangeSuccess": "Rol de {{email}} actualizado a {{role}}.",
     "latestInvitationLinkNotice": "Cada reenvío invalida los enlaces anteriores. Usá siempre el enlace del correo más reciente.",
     "rolesLoading": "Cargando roles disponibles...",
     "rolesError": "No se pudieron cargar los roles activos. No se permite invitar ni cambiar roles hasta que el listado esté disponible.",

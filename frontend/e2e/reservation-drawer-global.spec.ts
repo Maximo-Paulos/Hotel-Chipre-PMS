@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { completeStepUpPrompt, loginAsStepUpOwner } from "./support/step-up-owner";
+
 // B1: ReservationDetailDrawer + global access (header search, "Reserva
 // rápida", and the ?reserva=<id> deep link). Covers opening the drawer from
 // three different entry points and verifies it shows the real state,
@@ -18,9 +20,11 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 20_000 });
 }
 
-test("owner opens the reservation drawer from the dashboard, global search, and a deep link", async ({ page }) => {
+test("owner opens the reservation drawer from the dashboard, global search, and a deep link", async ({ page }, testInfo) => {
   const suffix = Date.now().toString();
   const guestLastName = `DrawerQA-${suffix}`;
+  const ownerSession = await loginAsStepUpOwner(page, "cash-business", testInfo.project.name);
+  let lastTotpStep = ownerSession.lastTotpStep;
   // The dashboard lists real upcoming arrivals: check-in from today on, not
   // yet checked in, soonest first, five at most (upcomingOnly on
   // GET /api/reservations). So this reservation has to be a near arrival.
@@ -38,13 +42,10 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   const checkIn = localIsoDate(1);
   const checkOut = localIsoDate(3);
 
-  await login(page);
-
-  // Only "cash" completes a payment immediately in this backend (bank
-  // transfer/gateway methods stay pending until a proof/webhook confirms
-  // them) -- see app/services/payment_service.py:process_payment. Cash
-  // requires an open register, so open one first (idempotent: another spec
-  // may have already left this hotel's register open).
+  // Cash and a manually verified in-person card/bank operation complete at
+  // this collection point; gateway links are handled by their separate flow.
+  // Cash requires an open register, so open one first (idempotent: another
+  // spec may have already left this hotel's register open).
   const sessionsResponse = page.waitForResponse(
     (response) => response.url().includes("/api/cash-register/sessions") && response.request().method() === "GET"
   );
@@ -81,8 +82,8 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   const categoryValue = await categoryOption.getAttribute("value");
   await categorySelect.selectOption(categoryValue!);
 
-  await form.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(checkIn);
-  await form.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(checkOut);
+  await form.getByLabel("Check-in", { exact: true }).fill(checkIn);
+  await form.getByLabel("Check-out", { exact: true }).fill(checkOut);
   await expect(form.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
 
   const [createResponse] = await Promise.all([
@@ -109,6 +110,11 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   await expect(drawer.getByTestId("drawer-guest-name")).toHaveText(`Huésped ${guestLastName}`);
   await expect(drawer).toContainText(guestLastName);
   await expect(drawer.getByText("Sin acompañantes cargados.", { exact: true })).toBeVisible();
+  const drawerPaymentMethod = drawer.getByLabel("Método de pago");
+  await expect(drawerPaymentMethod.locator('option[value="mercado_pago"]')).toHaveCount(0);
+  await drawerPaymentMethod.selectOption("credit_card");
+  await expect(drawer.getByLabel("Identificador verificado del cobro")).toBeVisible();
+  await drawerPaymentMethod.selectOption("cash");
   const balanceBeforePayment = await drawer.getByTestId("drawer-balance-due").innerText();
   expect(balanceBeforePayment).toMatch(/\d/);
   expect(balanceBeforePayment).not.toMatch(/^\D*0[.,]00\D*$/);
@@ -151,6 +157,7 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
 
   // Cleanup: free tomorrow's room and dashboard slot for the next run.
   await drawer.getByRole("button", { name: "Cancelar", exact: true }).click();
+  lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
   await expect(drawer.getByText("Reserva cancelada.", { exact: true })).toBeVisible();
 });
 
@@ -202,8 +209,8 @@ test("an authenticated second context sees a committed payment through realtime 
   const roomSelect = form.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
   const roomOption = roomSelect.locator("option").filter({ hasText: "101" });
   await roomSelect.selectOption((await roomOption.getAttribute("value"))!);
-  await form.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(pastIsoDate(5000 + salt));
-  await form.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(pastIsoDate(4998 + salt));
+  await form.getByLabel("Check-in", { exact: true }).fill(pastIsoDate(5000 + salt));
+  await form.getByLabel("Check-out", { exact: true }).fill(pastIsoDate(4998 + salt));
   const [createResponse] = await Promise.all([
     page.waitForResponse((response) => response.url().includes("/api/reservations/") && response.request().method() === "POST"),
     form.getByRole("button", { name: "Crear", exact: true }).click()

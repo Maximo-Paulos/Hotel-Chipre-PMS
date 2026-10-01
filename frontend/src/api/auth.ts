@@ -11,6 +11,11 @@ export type AuthUser = {
   permissions?: string[];
 };
 
+export type MfaStatus = { enabled: boolean };
+export type MfaEnrollment = { status: "pending"; secret: string; otpauth_uri: string };
+export type MfaRecoveryCodes = { recovery_codes: string[] };
+export const mfaStatusQueryKey = (userId: string | null) => ["auth-mfa-status", userId] as const;
+
 export type AuthResponse = Omit<AuthResponsePayload, "user"> & {
   user: AuthUser;
   token_type: string;
@@ -117,7 +122,7 @@ export const resetPassword = (email: string, code: string, newPassword: string) 
 
 // Invitation bearer tokens stay in JSON bodies so HTTP access logs only see static paths.
 export const getInvitationInfo = (token: string) =>
-  apiFetch<{ email: string; hotel_name?: string; inviter_email?: string }>("/api/invitations/preview", {
+  apiFetch<{ email: string; role: string; role_name?: string | null; hotel_name?: string; inviter_email?: string }>("/api/invitations/preview", {
     method: "POST",
     data: { token }
   });
@@ -154,5 +159,49 @@ export const acceptInvitationWithGoogle = (token: string, idToken: string) =>
 export const currentUser = (session?: SessionLike) =>
   apiFetch<AuthUser>("/api/auth/me", {
     method: "GET",
+    session
+  });
+
+export const getMfaStatus = (session?: SessionLike) =>
+  apiFetch<MfaStatus>("/api/auth/mfa/status", { method: "GET", session });
+
+export const enrollMfa = (
+  proof: { currentPassword?: string; googleIdToken?: string },
+  session?: SessionLike
+) =>
+  apiFetch<MfaEnrollment>("/api/auth/mfa/enroll", {
+    method: "POST",
+    data: {
+      ...(proof.currentPassword ? { current_password: proof.currentPassword } : {}),
+      ...(proof.googleIdToken ? { google_id_token: proof.googleIdToken } : {})
+    },
+    session
+  });
+
+export const confirmMfaEnrollment = (code: string, session?: SessionLike) =>
+  apiFetch<MfaRecoveryCodes>("/api/auth/mfa/enroll/confirm", {
+    method: "POST",
+    data: { code },
+    session
+  });
+
+export const disableMfa = (
+  proof: { code: string; password?: string; googleIdToken?: string },
+  session?: SessionLike
+) =>
+  apiFetch<{ disabled: true }>("/api/auth/mfa/disable", {
+    method: "POST",
+    data: {
+      code: proof.code,
+      ...(proof.password ? { password: proof.password } : {}),
+      ...(proof.googleIdToken ? { google_id_token: proof.googleIdToken } : {})
+    },
+    session
+  });
+
+export const regenerateMfaRecoveryCodes = (code: string, session?: SessionLike) =>
+  apiFetch<MfaRecoveryCodes>("/api/auth/mfa/recovery-codes/regenerate", {
+    method: "POST",
+    data: { code },
     session
   });

@@ -2,11 +2,13 @@
 Tests for Reservation Service — booking creation, availability checks, state transitions.
 """
 import pytest
-from datetime import date
+import json
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from sqlalchemy import event
 
 from app.models.daily_rate import DailyRate
+from app.models.fx_rate_snapshot import FxRateSnapshot
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.reservation import Reservation, ReservationChannelCodeEnum, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room
@@ -19,6 +21,7 @@ from app.services.reservation_service import (
     ReservationError,
     generate_confirmation_code,
 )
+from app.services import pricing_policy_service
 
 
 class TestConfirmationCode:
@@ -159,6 +162,45 @@ class TestReservationCreation:
         assert res.balance_due == 400.0
         assert res.status == ReservationStatusEnum.PENDING
         assert res.room_id is not None  # Auto-assigned
+
+    def test_daily_rate_reservation_converts_target_currency_and_persists_fx_provenance(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch
+    ):
+        hotel_config.default_currency = "ARS"
+        monkeypatch.setattr(
+            pricing_policy_service,
+            "get_conversion_quote_sync",
+            lambda currency, market="oficial": {
+                "moneda": currency,
+                "casa": market if currency == "USD" else "oficial",
+                "compra": 1000.0,
+                "venta": 1100.0,
+                "fechaActualizacion": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        reservation = create_reservation(
+            db,
+            ReservationCreate(
+                guest_id=sample_guest.id,
+                category_id=sample_categories[0].id,
+                check_in_date=date(2026, 4, 1),
+                check_out_date=date(2026, 4, 2),
+                target_currency="EUR",
+            ),
+        )
+        db.flush()
+
+        assert reservation.currency_code == "EUR"
+        assert reservation.total_amount == pytest.approx(0.1)
+        assert reservation.fx_rate_snapshot == pytest.approx(0.001)
+        pricing_snapshot = json.loads(reservation.pricing_snapshot)
+        assert pricing_snapshot["base_currency"] == "ARS"
+        assert pricing_snapshot["output_currency"] == "EUR"
+        assert pricing_snapshot["fx_quote_details"]["target_quote"]["rate_type"] == "eur_oficial"
+        stored_quote = db.query(FxRateSnapshot).filter(FxRateSnapshot.hotel_id == reservation.hotel_id).one()
+        assert stored_quote.rate_type == "eur_oficial"
+        assert stored_quote.provider_market == "oficial"
+        assert stored_quote.selected_side == "compra"
 
     def test_create_reservation_manual_total_override_without_company(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config

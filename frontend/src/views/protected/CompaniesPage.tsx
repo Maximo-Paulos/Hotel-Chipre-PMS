@@ -5,7 +5,8 @@ import {
   type CompanyDocumentPayload,
   type CompanyDocumentStatus,
   type CompanyDocumentType,
-  type CompanyPayload
+  type CompanyPayload,
+  fetchCompanyDocumentFile
 } from "../../api/companies";
 import {
   companyDocumentStatusLabel,
@@ -15,6 +16,9 @@ import {
   useCompanyDocuments,
   useCompanyMutations
 } from "../../hooks/useCompanies";
+import { useHotelConfig } from "../../hooks/useHotelConfig";
+import { formatHotelDateTime } from "../../utils/date";
+import { useSession } from "../../state/session";
 
 const documentTypes: CompanyDocumentType[] = ["voucher_pdf", "signature_required", "authorization", "extension", "other"];
 const signatureStatuses: CompanyDocumentStatus[] = ["pending", "signed", "waived", "rejected"];
@@ -24,6 +28,16 @@ const emptyCompanyForm: CompanyPayload = {
   display_name: "",
   tax_id: "",
   country_code: "AR",
+  contact_name: "",
+  email: "",
+  phone: "",
+  administrative_contact: "",
+  base_price: null,
+  extra_person_nightly_surcharge: null,
+  payment_deferred: false,
+  deferred_days: 0,
+  requires_voucher: false,
+  requires_signature: false,
   notes: ""
 };
 
@@ -38,9 +52,12 @@ const emptyDocumentForm: CompanyDocumentPayload = {
 };
 
 export function CompaniesPage() {
+  const { session } = useSession();
+  const hotelConfigQuery = useHotelConfig();
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [companyForm, setCompanyForm] = useState<CompanyPayload>(emptyCompanyForm);
   const [documentForm, setDocumentForm] = useState<CompanyDocumentPayload>(emptyDocumentForm);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [companyMessage, setCompanyMessage] = useState<string | null>(null);
   const [documentMessage, setDocumentMessage] = useState<string | null>(null);
 
@@ -59,6 +76,7 @@ export function CompaniesPage() {
       setSelectedCompanyId(null);
       setCompanyForm(emptyCompanyForm);
       setDocumentForm(emptyDocumentForm);
+      setDocumentFile(null);
       return;
     }
     setSelectedCompanyId(selectedCompany.id);
@@ -67,6 +85,18 @@ export function CompaniesPage() {
       display_name: selectedCompany.display_name,
       tax_id: selectedCompany.tax_id ?? "",
       country_code: selectedCompany.country_code ?? "AR",
+      contact_name: selectedCompany.contact_name ?? "",
+      email: selectedCompany.email ?? "",
+      phone: selectedCompany.phone ?? "",
+      administrative_contact: selectedCompany.administrative_contact ?? "",
+      base_price: selectedCompany.base_price == null ? null : Number(selectedCompany.base_price),
+      extra_person_nightly_surcharge: selectedCompany.extra_person_nightly_surcharge == null
+        ? null
+        : Number(selectedCompany.extra_person_nightly_surcharge),
+      payment_deferred: selectedCompany.payment_deferred,
+      deferred_days: selectedCompany.deferred_days ?? 0,
+      requires_voucher: selectedCompany.requires_voucher,
+      requires_signature: selectedCompany.requires_signature,
       notes: selectedCompany.notes ?? ""
     });
     setDocumentForm((current) => ({ ...current, company_id: selectedCompany.id }));
@@ -78,7 +108,7 @@ export function CompaniesPage() {
     setCompanyMessage(null);
   };
 
-  const handleCompanyChange = (field: keyof CompanyPayload, value: string) => {
+  const handleCompanyChange = (field: keyof CompanyPayload, value: string | number | boolean | null) => {
     setCompanyForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -91,6 +121,16 @@ export function CompaniesPage() {
     display_name: companyForm.display_name.trim(),
     tax_id: companyForm.tax_id?.trim() || null,
     country_code: companyForm.country_code?.trim().toUpperCase() || null,
+    contact_name: companyForm.contact_name?.trim() || null,
+    email: companyForm.email?.trim() || null,
+    phone: companyForm.phone?.trim() || null,
+    administrative_contact: companyForm.administrative_contact?.trim() || null,
+    base_price: companyForm.payment_deferred ? null : companyForm.base_price,
+    extra_person_nightly_surcharge: companyForm.extra_person_nightly_surcharge,
+    payment_deferred: Boolean(companyForm.payment_deferred),
+    deferred_days: Number(companyForm.deferred_days ?? 0),
+    requires_voucher: Boolean(companyForm.requires_voucher),
+    requires_signature: Boolean(companyForm.requires_signature),
     notes: companyForm.notes?.trim() || null
   });
 
@@ -126,21 +166,44 @@ export function CompaniesPage() {
 
   const handleDocumentSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedCompany) return;
+    if (!selectedCompany || !documentFile) return;
     setDocumentMessage(null);
     try {
-      await documentMutations.createDocumentMutation.mutateAsync({
-        ...documentForm,
+      const contentBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error || new Error("No se pudo leer el archivo."));
+        reader.readAsDataURL(documentFile);
+      });
+      await documentMutations.uploadDocumentMutation.mutateAsync({
         company_id: selectedCompany.id,
         reservation_id: Number(documentForm.reservation_id),
-        file_name: documentForm.file_name?.trim() || null,
-        file_url: documentForm.file_url?.trim() || null,
+        doc_type: documentForm.doc_type ?? "voucher_pdf",
+        file_name: documentFile.name,
+        content_base64: contentBase64,
+        requires_signature: Boolean(documentForm.requires_signature),
         notes: documentForm.notes?.trim() || null
       });
       setDocumentForm({ ...emptyDocumentForm, company_id: selectedCompany.id });
-      setDocumentMessage("Documento agregado.");
+      setDocumentFile(null);
+      setDocumentMessage("PDF cargado en almacenamiento privado.");
     } catch (error) {
-      setDocumentMessage(error instanceof Error ? error.message : "No se pudo agregar el documento.");
+      setDocumentMessage(error instanceof Error ? error.message : "No se pudo subir el PDF.");
+    }
+  };
+
+  const handleOpenDocument = async (documentId: number) => {
+    setDocumentMessage(null);
+    try {
+      const url = await fetchCompanyDocumentFile(documentId, session);
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      setDocumentMessage(error instanceof Error ? error.message : "No se pudo abrir el PDF.");
     }
   };
 
@@ -172,6 +235,7 @@ export function CompaniesPage() {
     companyMutations.reactivateMutation.isPending;
   const documentBusy =
     documentMutations.createDocumentMutation.isPending ||
+    documentMutations.uploadDocumentMutation.isPending ||
     documentMutations.updateStatusMutation.isPending ||
     documentMutations.deleteDocumentMutation.isPending;
 
@@ -241,7 +305,7 @@ export function CompaniesPage() {
                   {selectedCompany ? selectedCompany.display_name : "Nueva empresa"}
                 </h2>
                 <p className="text-xs text-slate-500">
-                  {selectedCompany?.updated_at ? `Actualizada ${new Date(selectedCompany.updated_at).toLocaleString("es-AR")}` : "Sin guardar"}
+                  {selectedCompany?.updated_at ? `Actualizada ${formatHotelDateTime(selectedCompany.updated_at, hotelConfigQuery.data?.hotel_timezone)}` : "Sin guardar"}
                 </p>
               </div>
               {selectedCompany ? (
@@ -290,8 +354,102 @@ export function CompaniesPage() {
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 uppercase"
                 />
               </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Contacto</span>
+                <input
+                  value={companyForm.contact_name ?? ""}
+                  onChange={(event) => handleCompanyChange("contact_name", event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Email de contacto</span>
+                <input
+                  type="email"
+                  value={companyForm.email ?? ""}
+                  onChange={(event) => handleCompanyChange("email", event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Teléfono</span>
+                <input
+                  value={companyForm.phone ?? ""}
+                  onChange={(event) => handleCompanyChange("phone", event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Contacto administrativo</span>
+                <input
+                  value={companyForm.administrative_contact ?? ""}
+                  onChange={(event) => handleCompanyChange("administrative_contact", event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={Boolean(companyForm.payment_deferred)}
+                  onChange={(event) => handleCompanyChange("payment_deferred", event.target.checked)}
+                />
+                La empresa paga su factura fuera del PMS, después de la estadía
+              </label>
+              {companyForm.payment_deferred ? (
+                <label className="space-y-1 text-sm">
+                  <span className="text-slate-600">Vencimiento de factura (días después del check-out)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={365}
+                    value={companyForm.deferred_days ?? 0}
+                    onChange={(event) => handleCompanyChange("deferred_days", Number(event.target.value || 0))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  />
+                </label>
+              ) : (
+                <label className="space-y-1 text-sm">
+                  <span className="text-slate-600">Tarifa base acordada</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={companyForm.base_price ?? ""}
+                    onChange={(event) => handleCompanyChange("base_price", event.target.value === "" ? null : Number(event.target.value))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  />
+                </label>
+              )}
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">Adicional por huésped extra y noche</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={companyForm.extra_person_nightly_surcharge ?? ""}
+                  onChange={(event) => handleCompanyChange("extra_person_nightly_surcharge", event.target.value === "" ? null : Number(event.target.value))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+                <span className="block text-xs font-normal text-slate-500">Lo configura Gerencia; Recepción solo registra el cobro de las noches elegidas.</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={Boolean(companyForm.requires_voucher)}
+                  onChange={(event) => handleCompanyChange("requires_voucher", event.target.checked)}
+                />
+                Exigir voucher cargado en cada reserva
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={Boolean(companyForm.requires_signature)}
+                  onChange={(event) => handleCompanyChange("requires_signature", event.target.checked)}
+                />
+                Exigir documento de la empresa firmado antes del check-in
+              </label>
               <label className="space-y-1 text-sm md:col-span-2">
-                <span className="text-slate-600">Notas</span>
+                <span className="text-slate-600">Descripción y preferencias de habitación</span>
                 <textarea
                   value={companyForm.notes ?? ""}
                   onChange={(event) => handleCompanyChange("notes", event.target.value)}
@@ -339,10 +497,10 @@ export function CompaniesPage() {
                               <p className="text-xs text-slate-500">
                                 Reserva #{document.reservation_id} - {companyDocumentTypeLabel[document.doc_type] || document.doc_type}
                               </p>
-                              {document.file_url ? (
-                                <a className="text-xs font-semibold text-brand-700 underline" href={document.file_url} target="_blank" rel="noreferrer">
-                                  Abrir archivo
-                                </a>
+                              {document.stored_object_id ? (
+                                <button type="button" className="text-xs font-semibold text-brand-700 underline" onClick={() => void handleOpenDocument(document.id)}>
+                                  Abrir archivo privado
+                                </button>
                               ) : null}
                             </div>
                             <div className="flex flex-col gap-2 sm:w-48">
@@ -400,18 +558,11 @@ export function CompaniesPage() {
                     </select>
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">Nombre de archivo</span>
+                    <span className="text-slate-600">Voucher o documento PDF (máximo 5 MB)</span>
                     <input
-                      value={documentForm.file_name ?? ""}
-                      onChange={(event) => handleDocumentChange("file_name", event.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                    />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span className="text-slate-600">URL segura</span>
-                    <input
-                      value={documentForm.file_url ?? ""}
-                      onChange={(event) => handleDocumentChange("file_url", event.target.value)}
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
@@ -442,10 +593,10 @@ export function CompaniesPage() {
                   <div className="md:col-span-2 flex justify-end">
                     <button
                       type="submit"
-                      disabled={documentBusy || !documentForm.reservation_id}
+                      disabled={documentBusy || !documentForm.reservation_id || !documentFile}
                       className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                     >
-                      {documentBusy ? "Guardando..." : "Agregar documento"}
+                      {documentBusy ? "Subiendo..." : "Subir PDF privado"}
                     </button>
                   </div>
                 </form>

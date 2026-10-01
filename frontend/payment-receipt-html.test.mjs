@@ -82,6 +82,21 @@ test("refund receipts identify the original payment and omit empty optional refe
   assert.doesNotMatch(html, /TR-9981/);
 });
 
+test("foreign-currency receipt shows both credited amount and frozen exchange rate", () => {
+  const html = buildPaymentReceiptHtml({
+    ...receipt,
+    appliedAmountLabel: "Importe aplicado a la reserva",
+    appliedAmount: "ARS 14.000,00",
+    fxRateLabel: "Cotización aplicada al cobro",
+    fxRate: "1 ARS = 0,001 USD"
+  });
+
+  assert.match(html, /Importe aplicado a la reserva/);
+  assert.match(html, /ARS 14\.000,00/);
+  assert.match(html, /Cotización aplicada al cobro/);
+  assert.match(html, /1 ARS = 0,001 USD/);
+});
+
 test("only authorized users can print confirmed payment or refund movements", () => {
   assert.equal(canPrintPaymentReceipt("completed", true), true);
   assert.equal(canPrintPaymentReceipt("refunded", true), true);

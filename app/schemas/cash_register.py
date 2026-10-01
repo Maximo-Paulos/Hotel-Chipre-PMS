@@ -1,11 +1,12 @@
 """Pydantic schemas for cash register sessions, movements, and close reports."""
-from datetime import datetime
+from datetime import date
 from decimal import Decimal
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.cash_register import CashCustodyStatusEnum, CashMovementTypeEnum, CashSessionStatusEnum
+from app.schemas.datetime_types import UTCDateTime
 
 
 class CashSessionOpen(BaseModel):
@@ -27,8 +28,8 @@ class CashSessionRead(BaseModel):
     status: CashSessionStatusEnum
     opening_balance: Decimal
     currency_code: str
-    opened_at: datetime
-    closed_at: Optional[datetime] = None
+    opened_at: UTCDateTime
+    closed_at: Optional[UTCDateTime] = None
     notes: Optional[str] = None
 
     model_config = {"from_attributes": True}
@@ -52,7 +53,7 @@ class CashMovementRead(BaseModel):
     movement_type: CashMovementTypeEnum
     amount: Decimal
     description: Optional[str] = None
-    recorded_at: datetime
+    recorded_at: UTCDateTime
 
     model_config = {"from_attributes": True}
 
@@ -61,6 +62,18 @@ class CashSessionClose(BaseModel):
     counted_balance: Decimal = Field(..., ge=Decimal("0"))
     notes: Optional[str] = Field(default=None, max_length=1000)
     approve_difference: bool = False
+
+    model_config = {"extra": "forbid"}
+
+
+class CashCustodyReceipt(BaseModel):
+    successor_float_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        ge=Decimal("0"),
+        le=Decimal("9999999999.99"),
+    )
+
+    model_config = {"extra": "forbid"}
 
 
 class CashSessionSummaryRead(BaseModel):
@@ -107,7 +120,7 @@ class CashDailyEntryRead(BaseModel):
     transaction_type: Optional[str] = None
     transaction_status: Optional[str] = None
     movement_type: Optional[str] = None
-    occurred_at: datetime
+    occurred_at: UTCDateTime
     description: Optional[str] = None
     provider_code: Optional[str] = None
 
@@ -116,8 +129,8 @@ class CashDailySessionRead(BaseModel):
     session_id: int
     status: str
     currency_code: str
-    opened_at: datetime
-    closed_at: Optional[datetime] = None
+    opened_at: UTCDateTime
+    closed_at: Optional[UTCDateTime] = None
     opened_by_user_id: Optional[int] = None
     closed_by_user_id: Optional[int] = None
     opening_balance: Decimal
@@ -138,6 +151,25 @@ class CashDailyPhysicalRead(BaseModel):
     manual_expense_total: Decimal
 
 
+class CashDailyPriorReceiptRead(BaseModel):
+    transaction_id: int
+    reservation_id: int
+    confirmation_code: str
+    amount: Decimal
+    currency_code: str
+    collected_on: date
+    prior_receipt_note: str
+    recorded_at: UTCDateTime
+    recorded_by_user_id: Optional[int] = None
+    recorded_by_name: str
+
+
+class CashDailyPriorReceiptTotalRead(BaseModel):
+    currency_code: str
+    amount: Decimal
+    transaction_count: int
+
+
 class CashDailySummaryRead(BaseModel):
     hotel_id: int
     report_date: str
@@ -151,10 +183,13 @@ class CashDailySummaryRead(BaseModel):
     by_payment_method: list[CashDailyPaymentMethodRead] = Field(default_factory=list)
     by_collector: list[CashDailyCollectorRead] = Field(default_factory=list)
     physical_cash: CashDailyPhysicalRead
+    prior_receipts: list[CashDailyPriorReceiptRead] = Field(default_factory=list)
+    prior_receipt_totals: list[CashDailyPriorReceiptTotalRead] = Field(default_factory=list)
+    prior_receipts_truncated: bool = False
     sessions: list[CashDailySessionRead] = Field(default_factory=list)
     entries: list[CashDailyEntryRead] = Field(default_factory=list)
     entries_truncated: bool = False
-    generated_at: datetime
+    generated_at: UTCDateTime
 
 
 class CashCustodyHandoffRead(BaseModel):
@@ -165,8 +200,8 @@ class CashCustodyHandoffRead(BaseModel):
     received_by_user_id: Optional[int] = None
     delivered_amount: Decimal
     status: CashCustodyStatusEnum
-    delivered_at: datetime
-    received_at: Optional[datetime] = None
+    delivered_at: UTCDateTime
+    received_at: Optional[UTCDateTime] = None
     notes: Optional[str] = None
 
     model_config = {"from_attributes": True}
@@ -176,6 +211,7 @@ class CashCloseReportRead(BaseModel):
     id: int
     hotel_id: int
     session_id: int
+    currency_code: str
     closed_by_user_id: Optional[int] = None
     expected_balance: Decimal
     declared_balance: Decimal
@@ -183,8 +219,12 @@ class CashCloseReportRead(BaseModel):
     difference_approved: bool
     approved_by_user_id: Optional[int] = None
     successor_session_id: Optional[int] = None
+    successor_opening_balance: Optional[Decimal] = None
+    successor_float_declared_amount: Optional[Decimal] = None
+    successor_float_declared_by_user_id: Optional[int] = None
+    successor_float_declared_at: Optional[UTCDateTime] = None
     custody_handoff: Optional[CashCustodyHandoffRead] = None
     notes: Optional[str] = None
-    closed_at: datetime
+    closed_at: UTCDateTime
 
     model_config = {"from_attributes": True}

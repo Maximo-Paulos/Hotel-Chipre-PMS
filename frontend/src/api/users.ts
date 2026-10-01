@@ -18,6 +18,16 @@ export type UserAliasEntry = {
   alias: string | null;
 };
 
+export type StaffInvitationEntry = {
+  invitation_id: number;
+  email: string;
+  role: InvitePayload["role"];
+  inviter_email: string;
+  status: "pending" | "expired";
+  created_at: string;
+  expires_at: string;
+};
+
 export type InviteResponse = {
   user: UserInfo;
   invitation_id: number;
@@ -40,6 +50,12 @@ export const resendInvitation = (invitationId: number, session?: SessionLike) =>
     method: "POST",
     session
   });
+
+export const listStaffInvitations = (session?: SessionLike) =>
+  apiFetch<StaffInvitationEntry[]>("/api/users/invitations", { session });
+
+export const revokeInvitation = (invitationId: number, session?: SessionLike) =>
+  apiFetch<void>(`/api/users/invitations/${invitationId}`, { method: "DELETE", session });
 
 export const listUserAliases = (session?: SessionLike) =>
   apiFetch<{ items: UserAliasEntry[] }>("/api/users/aliases", { session });

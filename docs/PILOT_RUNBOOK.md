@@ -24,6 +24,7 @@ cd ..
 1. Confirm migrations are applied on the pilot database.
 2. Confirm an owner can register and verify email.
 3. Confirm onboarding can complete with identity, categories, rooms, policy, payments, OTA channels, subscription choice, and staff.
+   Staff invitation roles, pending-list controls, and reused-link recovery are described in [staff invitations](operations/staff-invitations.md).
 4. Confirm subscription state is operational: `active`, `trialing`, `demo`, or `comped`.
 5. Confirm at least one room category and one room exist before opening the hotel to reservations.
 

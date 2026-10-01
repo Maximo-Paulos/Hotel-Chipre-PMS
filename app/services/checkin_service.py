@@ -27,7 +27,9 @@ from app.services.reservation_service import (
     transition_reservation_status,
 )
 from app.services.jurisdiction_profile import compute_missing_guest_fields
-from app.models.room import Room, RoomStatusEnum
+from app.models.room import Room, RoomHousekeepingStatusEnum, RoomStatusEnum
+from app.models.company import Company
+from app.models.company_document import CompanyDocument, CompanyDocumentStatusEnum, CompanyDocumentTypeEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.financial_ledger import paid_amount_with_legacy_fallback
 from app.services.timezones import hotel_today
@@ -211,8 +213,46 @@ def _validate_checkin_window_and_payment(db: Session, reservation: Reservation, 
             "Cannot check in: the imported OTA prepayment needs a manager's confirmation and reference first."
         )
 
+    company = None
+    if reservation.company_id is not None:
+        company = (
+            db.query(Company)
+            .filter(Company.id == reservation.company_id, Company.hotel_id == hotel_id)
+            .one_or_none()
+        )
+        if company is None:
+            raise CheckInError("Cannot check in: the linked company is unavailable.")
+
+        documents_query = db.query(CompanyDocument).filter(
+            CompanyDocument.hotel_id == hotel_id,
+            CompanyDocument.reservation_id == reservation.id,
+            CompanyDocument.company_id == company.id,
+            CompanyDocument.deleted_at.is_(None),
+            CompanyDocument.stored_object_id.isnot(None),
+        )
+        if company.requires_voucher:
+            voucher_exists = documents_query.filter(
+                CompanyDocument.doc_type == CompanyDocumentTypeEnum.VOUCHER_PDF,
+            ).first()
+            if voucher_exists is None:
+                raise CheckInError("Cannot check in: this company requires an uploaded reservation voucher.")
+        if company.requires_signature:
+            signed_document_exists = documents_query.filter(
+                CompanyDocument.status == CompanyDocumentStatusEnum.SIGNED,
+                (CompanyDocument.doc_type == CompanyDocumentTypeEnum.SIGNATURE_REQUIRED)
+                | CompanyDocument.requires_signature.is_(True),
+            ).first()
+            if signed_document_exists is None:
+                raise CheckInError("Cannot check in: this company requires a signed reservation document.")
+
+        # Invoice-after-stay is a per-company exception to the hotel's
+        # full-payment default. Any nightly extras remain collectible and
+        # visible in the operational ledger, but unpaid nights are review-only.
+        if company.payment_deferred:
+            return
+
     config = db.get(HotelConfiguration, hotel_id)
-    policy = getattr(config, "checkin_payment_policy", "deposit") if config else "deposit"
+    policy = getattr(config, "checkin_payment_policy", "total") if config else "total"
     if policy not in {"deposit", "total", "free"}:
         raise CheckInError("Cannot check in: the hotel's payment policy is invalid.")
     if policy == "free":
@@ -441,6 +481,7 @@ def perform_checkout(
         room = db.query(Room).filter(Room.id == reservation.room_id, Room.hotel_id == hotel_id).first()
         if room:
             room.status = RoomStatusEnum.CLEANING
+            room.housekeeping_status = RoomHousekeepingStatusEnum.DIRTY
 
     db.flush()
     _notify_reservation_event(

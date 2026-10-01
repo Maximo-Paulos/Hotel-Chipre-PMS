@@ -29,8 +29,14 @@ test("owner can log out mid-onboarding, resume without losing progress, and conf
   const email = `qa-resume-${suffix}@example.test`;
   const password = "QaResume1234!";
   const hotelName = `Hotel QA Resume ${suffix}`;
-  const categoryCode = `QR${suffix.replace(/[^a-z0-9]/gi, "").slice(-8).toUpperCase()}`;
-  const roomNumber = `8${suffix.replace(/[^0-9]/g, "").slice(-3)}`;
+  const categorySuffix = suffix.replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase();
+  const categoryDefinitions = [
+    { name: "Doble QA Resume", code: `D${categorySuffix}`, price: "85000", occupancy: "2" },
+    { name: "Twin QA Resume", code: `T${categorySuffix}`, price: "85000", occupancy: "2" },
+    { name: "Superior QA Resume", code: `S${categorySuffix}`, price: "120000", occupancy: "3" },
+    { name: "Suite QA Resume", code: `F${categorySuffix}`, price: "165000", occupancy: "4" }
+  ];
+  const categoryCode = categoryDefinitions[0].code;
 
   await page.goto("/register-owner");
   await page.getByLabel("Nombre", { exact: true }).fill("Rita");
@@ -73,21 +79,74 @@ test("owner can log out mid-onboarding, resume without losing progress, and conf
   await expect(page.getByLabel("Moneda", { exact: true })).toHaveValue("ARS");
   await saveAndExpectPath(page, "/onboarding/categories");
 
-  await page.getByRole("button", { name: "+ Agregar categoría", exact: true }).click();
-  await page.getByLabel("Nombre de categoría", { exact: true }).fill("Doble QA Resume");
-  await page.getByLabel("Código interno", { exact: true }).fill(categoryCode);
-  await page.getByLabel("Amenities", { exact: true }).fill("wifi, frigobar, calefacción");
-  await page.getByLabel("Precio base por noche", { exact: true }).fill("70000");
-  await page.getByLabel("Ocupación máxima", { exact: true }).fill("2");
-  await saveAndExpectPath(page, "/onboarding/rooms");
+  for (const _category of categoryDefinitions) {
+    await page.getByRole("button", { name: "+ Agregar categoría", exact: true }).click();
+  }
+  for (const [index, category] of categoryDefinitions.entries()) {
+    await page.getByLabel("Nombre de categoría", { exact: true }).nth(index).fill(category.name);
+    await page.getByLabel("Código interno", { exact: true }).nth(index).fill(category.code);
+    await page.getByLabel("Amenities", { exact: true }).nth(index).fill("wifi, frigobar, calefacción");
+    await page.getByLabel("Precio base por noche", { exact: true }).nth(index).fill(category.price);
+    await page.getByLabel("Ocupación máxima", { exact: true }).nth(index).fill(category.occupancy);
+  }
+  await saveAndExpectPath(page, "/onboarding/subscription");
+  await expect(page.getByText("Precio a definir", { exact: true })).toHaveCount(3);
+  await expect(page.getByText("Prueba única de 14 días", { exact: true })).toBeVisible();
+  const starterPlan = page.getByRole("radio", { name: "Plan Starter, hasta 15 habitaciones", exact: true });
+  await expect(starterPlan).toBeVisible();
+  await page.goto("/onboarding/rooms");
+  await expect(page.getByTestId("onboarding-room-limit")).toContainText(/Tu plan permite hasta 15 habitaciones activas/);
+  await page.getByLabel("Cantidad de Doble QA Resume", { exact: true }).fill("16");
+  await page.getByRole("button", { name: "Agregar habitaciones", exact: true }).click();
+  await expect(page.getByText("Esta carga supera el límite de 15 habitaciones de tu plan.", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("onboarding-room-row")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "+ Agregar habitación", exact: true }).click();
-  await page.getByLabel("Número de habitación", { exact: true }).fill(roomNumber);
-  await page.getByLabel("Piso", { exact: true }).fill("2");
-  await page.getByRole("combobox", { name: "Categoría", exact: true }).selectOption({
-    label: `Doble QA Resume (${categoryCode})`
+  await page.goto("/onboarding/subscription");
+  const proPlan = page.getByRole("radio", { name: "Plan Pro, hasta 40 habitaciones", exact: true });
+  if (!(await proPlan.isChecked())) {
+    await page.getByText("Prueba única de 14 días", { exact: true }).click();
+  }
+  await expect(proPlan).toBeChecked();
+  await saveAndExpectPath(page, "/onboarding/rooms");
+  await expect(page.getByTestId("onboarding-trial-end")).toHaveText(/^Prueba Pro hasta \d{1,2}\/\d{1,2}\/\d{4}$/);
+  await expect(page.getByTestId("onboarding-room-limit")).toContainText(/Tu plan permite hasta 40 habitaciones activas/);
+
+  let roomSetupActions = 0;
+  const doRoomSetupAction = async <T,>(action: () => Promise<T>) => {
+    const result = await action();
+    roomSetupActions += 1;
+    return result;
+  };
+  await doRoomSetupAction(async () => {
+    const firstRoomNumber = page.getByLabel("Primer número de habitación", { exact: true });
+    await firstRoomNumber.click();
+    await page.keyboard.type("101");
   });
-  await saveAndExpectPath(page, "/onboarding/policy");
+  await doRoomSetupAction(() => page.getByLabel("Cantidad de Doble QA Resume", { exact: true }).fill("12"));
+  await doRoomSetupAction(() => page.getByLabel("Cantidad de Twin QA Resume", { exact: true }).fill("8"));
+  await doRoomSetupAction(() => page.getByLabel("Cantidad de Superior QA Resume", { exact: true }).fill("6"));
+  await doRoomSetupAction(() => page.getByLabel("Cantidad de Suite QA Resume", { exact: true }).fill("4"));
+  await doRoomSetupAction(() => page.getByLabel("Piso de Twin QA Resume", { exact: true }).fill("2"));
+  await doRoomSetupAction(() => page.getByLabel("Piso de Superior QA Resume", { exact: true }).fill("3"));
+  await doRoomSetupAction(() => page.getByLabel("Piso de Suite QA Resume", { exact: true }).fill("3"));
+  await expect(page.getByTestId("onboarding-room-limit")).toContainText(/Tu plan permite hasta 40 habitaciones activas/);
+  await doRoomSetupAction(() => page.getByRole("button", { name: "Agregar habitaciones", exact: true }).click());
+  await expect(page.getByTestId("onboarding-room-row")).toHaveCount(30);
+  expect(roomSetupActions).toBe(9);
+  const roomSaveResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/onboarding/rooms" && response.request().method() === "POST"
+  );
+  await doRoomSetupAction(() => page.getByRole("button", { name: "Guardar y seguir", exact: true }).click());
+  await page.waitForURL("**/onboarding/policy", { timeout: 15_000 });
+  const savedRoomStatus = await (await roomSaveResponse).json();
+  expect(savedRoomStatus.counts.rooms).toBe(30);
+  const roomCountsByCategory = Object.fromEntries(categoryDefinitions.map(({ code }) => [code, 0]));
+  for (const room of savedRoomStatus.rooms as Array<{ category_code: string; floor: number }>) {
+    roomCountsByCategory[room.category_code] += 1;
+  }
+  expect(roomCountsByCategory).toEqual(Object.fromEntries(categoryDefinitions.map(({ code }, index) => [code, [12, 8, 6, 4][index]])));
+  expect(new Set((savedRoomStatus.rooms as Array<{ floor: number }>).map((room) => room.floor))).toEqual(new Set([1, 2, 3]));
+  expect(roomSetupActions).toBeLessThanOrEqual(12);
 
   await page.getByLabel("Seña (%)", { exact: true }).fill("25");
   await page.getByLabel("Cancelación gratis hasta (horas)", { exact: true }).fill("24");
@@ -98,12 +157,11 @@ test("owner can log out mid-onboarding, resume without losing progress, and conf
     await mercadoPagoCheckbox.check();
   }
   await saveAndExpectPath(page, "/onboarding/ota");
-  await saveAndExpectPath(page, "/onboarding/subscription");
   await saveAndExpectPath(page, "/onboarding/staff");
 
   await page.getByRole("button", { name: "+ Agregar staff", exact: true }).click();
   await page.getByLabel("Nombre", { exact: true }).fill("Recepción QA Resume");
-  await page.getByLabel("Rol", { exact: true }).fill("Reception");
+  await page.getByLabel("Rol", { exact: true }).selectOption("receptionist");
   await page.getByLabel("Email", { exact: true }).fill(`reception-resume-${suffix}@example.test`);
   await saveAndExpectPath(page, "/onboarding/finish");
 

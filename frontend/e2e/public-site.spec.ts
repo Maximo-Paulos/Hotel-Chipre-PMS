@@ -62,7 +62,7 @@ test.describe("sitio público", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ email: "mfa-invitee@example.test", hotel_name: "Hotel de prueba" })
+        body: JSON.stringify({ email: "mfa-invitee@example.test", role: "manager", hotel_name: "Hotel de prueba" })
       });
     });
     await page.route("**/api/invitations/accept", async (route) => {
@@ -98,6 +98,8 @@ test.describe("sitio público", () => {
     });
 
     await page.goto(`/invitations/accept#token=${encodeURIComponent(token)}`);
+    await expect(page.locator("p").filter({ hasText: "Rol:" })).toContainText("Gerencia");
+    await page.getByText("Ya tenés una cuenta", { exact: true }).click();
     await page.getByPlaceholder("Tu contraseña actual").fill("legacy-password");
     await page.getByRole("button", { name: "Verificar y aceptar" }).click();
     await expect(page.getByLabel("Código de la app autenticadora o de recuperación")).toBeVisible();

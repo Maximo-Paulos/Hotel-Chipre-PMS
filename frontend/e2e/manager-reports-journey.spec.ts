@@ -21,6 +21,8 @@ const todayIso = (offsetDays = 0) => {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 };
 
+const displayDate = (isoDate: string) => `${isoDate.slice(8, 10)}/${isoDate.slice(5, 7)}/${isoDate.slice(0, 4)}`;
+
 async function login(page: Page) {
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(manager.email);
@@ -69,16 +71,8 @@ test("manager reads the operational arrival without receiving the reservation's 
 
   // Check-in hoy, 1 noche: el reporte diario por defecto usa la fecha de hoy,
   // y a $100/noche (Standard E2E) el total/saldo esperado es exactamente $100.
-  await reservationForm
-    .locator("label")
-    .filter({ hasText: "Check-in" })
-    .locator('input[type="date"]')
-    .fill(todayIso());
-  await reservationForm
-    .locator("label")
-    .filter({ hasText: "Check-out" })
-    .locator('input[type="date"]')
-    .fill(todayIso(1));
+  await reservationForm.getByLabel("Check-in", { exact: true }).fill(displayDate(todayIso()));
+  await reservationForm.getByLabel("Check-out", { exact: true }).fill(displayDate(todayIso(1)));
 
   const createReservationButton = reservationForm.getByRole("button", { name: "Crear", exact: true });
   await expect(createReservationButton).toBeEnabled();
@@ -90,9 +84,9 @@ test("manager reads the operational arrival without receiving the reservation's 
   await expect(reservationRow).toHaveCount(1);
   const confirmationCode = (await reservationRow.locator("td").first().innerText()).trim();
   expect(confirmationCode).toMatch(/^RES-/);
-  // Columns: code, guest, room/cat, check-in, arrival time, check-out, status, amount.
-  await expect(reservationRow.locator("td").nth(7)).toContainText("$ 100");
-  await expect(reservationRow.locator("td").nth(6)).toContainText("Pendiente");
+  // Columns: code, guest, company, room/cat, check-in, arrival time, check-out, status, amount, actions.
+  await expect(reservationRow.locator("td").nth(8)).toContainText("$ 100");
+  await expect(reservationRow.locator("td").nth(7)).toContainText("Pendiente");
 
   await page.goto("/reportes");
   await expect(page.getByRole("heading", { name: "Reportes", exact: true })).toBeVisible();

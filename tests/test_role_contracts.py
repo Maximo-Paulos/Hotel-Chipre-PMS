@@ -17,15 +17,19 @@ from app.dependencies.auth import AuthContext, get_auth_context
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.models.room_block import RoomBlock, RoomBlockReasonEnum
+from app.models.room import Room, RoomCategory, RoomHousekeepingStatusEnum, RoomStatusEnum
 from app.services.permission_service import (
     DEFAULT_MATRIX,
     PERMISSION_CASH_APPROVE_DIFFERENCE,
+    PERMISSION_CASH_CUSTODY_RECEIVE,
     PERMISSION_CASH_OPERATE,
+    PERMISSION_CASH_RECORD_PRIOR_RECEIPT,
     PERMISSION_GUEST_CREATE,
     PERMISSION_GUEST_EDIT,
     PERMISSION_GUEST_TAGS,
     PERMISSION_GUEST_VIEW,
+    PERMISSION_HOUSEKEEPING_BOARD_VIEW,
     PERMISSION_OCCUPANCY_VIEW,
     PERMISSION_OPERATIONS_AUDIT_VIEW,
     PERMISSION_PAYMENT_PROOF_REVIEW,
@@ -197,6 +201,7 @@ def test_report_permissions_split_operational_from_financial(role_client):
     assert PERMISSION_REPORTS_FINANCIAL_VIEW not in manager_permissions
     assert PERMISSION_CASH_OPERATE in manager_permissions
     assert PERMISSION_CASH_APPROVE_DIFFERENCE not in manager_permissions
+    assert PERMISSION_CASH_CUSTODY_RECEIVE not in manager_permissions
     assert client.get("/api/reports/occupancy").status_code == 200
     assert client.get("/api/reports/daily").status_code == 403
     assert client.get("/api/reports/revenue").status_code == 403
@@ -204,6 +209,10 @@ def test_report_permissions_split_operational_from_financial(role_client):
     auth["role"] = "owner"
     assert client.get("/api/reports/daily").status_code == 200
     assert client.get("/api/reports/revenue").status_code == 200
+
+    co_owner_permissions = set(get_effective_permissions(db, 1, "co_owner"))
+    assert PERMISSION_CASH_APPROVE_DIFFERENCE in co_owner_permissions
+    assert PERMISSION_CASH_CUSTODY_RECEIVE in co_owner_permissions
 
 
 def test_housekeeping_cleaning_transition_never_reallocates(role_client, monkeypatch):
@@ -222,20 +231,22 @@ def test_housekeeping_cleaning_transition_never_reallocates(role_client, monkeyp
 
     cleaning = client.patch(
         f"/api/rooms/{room.id}/cleaning-status",
-        json={"status": "cleaning"},
+        json={"status": "in_progress"},
     )
     assert cleaning.status_code == 200, cleaning.text
-    assert cleaning.json()["room"]["status"] == "cleaning"
+    assert cleaning.json()["room"]["status"] == "available"
+    assert cleaning.json()["room"]["housekeeping_status"] == "in_progress"
     assert cleaning.json()["reallocation"] is None
     assert allocation_called is False
 
     db.refresh(room)
-    available = client.patch(
+    clean = client.patch(
         f"/api/rooms/{room.id}/cleaning-status",
-        json={"status": "available"},
+        json={"status": "clean"},
     )
-    assert available.status_code == 200, available.text
-    assert available.json()["room"]["status"] == "available"
+    assert clean.status_code == 200, clean.text
+    assert clean.json()["room"]["status"] == "available"
+    assert clean.json()["room"]["housekeeping_status"] == "clean"
 
     invalid = client.patch(
         f"/api/rooms/{room.id}/cleaning-status",
@@ -244,10 +255,12 @@ def test_housekeeping_cleaning_transition_never_reallocates(role_client, monkeyp
     assert invalid.status_code == 422
 
 
-def test_housekeeping_cleaning_transition_rejects_active_reservation(role_client):
+def test_housekeeping_status_can_change_without_changing_active_room_availability(role_client):
     client, db, auth, room, guest, category = role_client
     auth["role"] = "housekeeping"
     today = date.today()
+    room.status = RoomStatusEnum.CLEANING
+    room.housekeeping_status = RoomHousekeepingStatusEnum.IN_PROGRESS
     db.add(
         Reservation(
             hotel_id=1,
@@ -262,19 +275,116 @@ def test_housekeeping_cleaning_transition_rejects_active_reservation(role_client
             num_adults=1,
         )
     )
+    db.add(
+        Reservation(
+            hotel_id=1,
+            guest_id=guest.id,
+            category_id=category.id,
+            room_id=room.id,
+            confirmation_code="HK-FUTURE",
+            check_in_date=today + timedelta(days=3),
+            check_out_date=today + timedelta(days=5),
+            status=ReservationStatusEnum.PENDING,
+            total_amount=100,
+            num_adults=1,
+        )
+    )
     db.commit()
 
     response = client.patch(
         f"/api/rooms/{room.id}/cleaning-status",
-        json={"status": "cleaning"},
+        json={"status": "clean"},
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 200, response.text
+    assert response.json()["room"]["housekeeping_status"] == "clean"
+    assert "HK-ACTIVE" not in response.text
+    assert "HK-FUTURE" not in response.text
     db.refresh(room)
-    assert room.status == RoomStatusEnum.AVAILABLE
+    assert room.status == RoomStatusEnum.CLEANING
+    assert room.housekeeping_status == RoomHousekeepingStatusEnum.CLEAN
+
+
+def test_housekeeping_today_board_is_hotel_scoped_and_has_no_guest_or_free_text_data(role_client):
+    client, db, auth, room, guest, category = role_client
+    from app.services.timezones import local_today
+
+    today = local_today(db.get(HotelConfiguration, 1).hotel_timezone)
+    room.status = RoomStatusEnum.OCCUPIED
+    db.add_all(
+        [
+            Reservation(
+                hotel_id=1,
+                guest_id=guest.id,
+                category_id=category.id,
+                room_id=room.id,
+                confirmation_code="PRIVATE-ARRIVAL-CODE",
+                check_in_date=today,
+                check_out_date=today + timedelta(days=1),
+                status=ReservationStatusEnum.PENDING,
+                total_amount=100,
+                num_adults=1,
+            ),
+            Reservation(
+                hotel_id=1,
+                guest_id=guest.id,
+                category_id=category.id,
+                room_id=room.id,
+                confirmation_code="PRIVATE-DEPARTURE-CODE",
+                check_in_date=today - timedelta(days=1),
+                check_out_date=today,
+                status=ReservationStatusEnum.CHECKED_IN,
+                total_amount=100,
+                num_adults=1,
+            ),
+            RoomBlock(
+                hotel_id=1,
+                room_id=room.id,
+                reason_code=RoomBlockReasonEnum.MAINTENANCE,
+                reason_note="PRIVATE maintenance note",
+                starts_at=today,
+                ends_at=today + timedelta(days=1),
+            ),
+        ]
+    )
+    db.commit()
+
+    auth["role"] = "housekeeping"
+    permissions = set(get_effective_permissions(db, 1, "housekeeping"))
+    assert PERMISSION_HOUSEKEEPING_BOARD_VIEW in permissions
+    response = client.get("/api/rooms/housekeeping-board")
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["date"] == today.isoformat()
+    assert set(payload) == {"date", "rooms"}
+    room_item = next(item for item in payload["rooms"] if item["room_id"] == room.id)
+    assert set(room_item) == {
+        "room_id",
+        "room_number",
+        "floor",
+        "category_name",
+        "operational_status",
+        "housekeeping_status",
+        "has_arrival_today",
+        "has_departure_today",
+        "maintenance_blocked",
+    }
+    assert room_item["operational_status"] == "occupied"
+    assert room_item["has_arrival_today"] is True
+    assert room_item["has_departure_today"] is True
+    assert room_item["maintenance_blocked"] is True
+    assert "PRIVATE-ARRIVAL-CODE" not in response.text
+    assert "PRIVATE-DEPARTURE-CODE" not in response.text
+    assert "PRIVATE maintenance note" not in response.text
+    assert guest.first_name not in response.text
+
+    auth["role"] = "receptionist"
+    denied = client.get("/api/rooms/housekeeping-board")
+    assert denied.status_code == 403
 
 
 SECTION_VIEW_PERMISSION_ROLE_CONTRACTS = (
+    (PERMISSION_HOUSEKEEPING_BOARD_VIEW, {"owner", "co_owner", "manager", "housekeeping"}),
     ("analytics:view", {"owner", "co_owner"}),
     ("analytics:advanced:view", {"owner", "co_owner"}),
     ("analytics:ai:view", {"owner", "co_owner"}),
@@ -318,3 +428,11 @@ def test_payment_proof_permissions_keep_read_and_review_separate():
     assert DEFAULT_MATRIX["manager"][PERMISSION_REPORTS_FINANCIAL_VIEW] is False
     assert DEFAULT_MATRIX["receptionist"][PERMISSION_PAYMENT_PROOF_VIEW] is False
     assert DEFAULT_MATRIX["receptionist"][PERMISSION_PAYMENT_PROOF_REVIEW] is False
+
+
+def test_prior_cash_receipt_permission_is_limited_to_management_by_default():
+    assert DEFAULT_MATRIX["owner"][PERMISSION_CASH_RECORD_PRIOR_RECEIPT] is True
+    assert DEFAULT_MATRIX["co_owner"][PERMISSION_CASH_RECORD_PRIOR_RECEIPT] is True
+    assert DEFAULT_MATRIX["manager"][PERMISSION_CASH_RECORD_PRIOR_RECEIPT] is True
+    assert DEFAULT_MATRIX["receptionist"][PERMISSION_CASH_RECORD_PRIOR_RECEIPT] is False
+    assert DEFAULT_MATRIX["housekeeping"][PERMISSION_CASH_RECORD_PRIOR_RECEIPT] is False

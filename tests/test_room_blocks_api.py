@@ -10,7 +10,9 @@ from app.api import room_blocks
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 import app.models  # noqa: F401
+from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.user import User
 from app.services.permission_service import resolve
@@ -99,6 +101,34 @@ def _seed_room(db, hotel_id: int = 1) -> Room:
     return room
 
 
+def _seed_reservation(db, room: Room, *, suffix: str, allocation_locked: bool = False) -> Reservation:
+    guest = Guest(
+        hotel_id=room.hotel_id,
+        first_name="Test",
+        last_name=f"Guest {suffix}",
+        document_type=DocumentTypeEnum.DNI,
+        document_number=f"RB-{room.hotel_id}-{suffix}",
+        terms_accepted=True,
+    )
+    db.add(guest)
+    db.flush()
+    reservation = Reservation(
+        hotel_id=room.hotel_id,
+        confirmation_code=f"RB-{room.hotel_id}-{suffix}",
+        guest_id=guest.id,
+        room_id=room.id,
+        category_id=room.category_id,
+        check_in_date=date(2026, 7, 10),
+        check_out_date=date(2026, 7, 14),
+        status=ReservationStatusEnum.PENDING,
+        total_amount=400,
+        allocation_locked=allocation_locked,
+    )
+    db.add(reservation)
+    db.flush()
+    return reservation
+
+
 def test_room_block_permission_defaults(db):
     # room_blocks.py gates create/release separately (room_block:create /
     # room_block:release) -- receptionist may create a block but not release
@@ -145,6 +175,69 @@ def test_create_and_resolve_room_block_api(client):
     resolve_response = test_client.post(f"/api/room-blocks/{block_id}/resolve")
     assert resolve_response.status_code == 200
     assert resolve_response.json()["resolved_by_user_id"] == 123
+
+
+def test_room_block_conflict_preview_returns_counts_without_reservation_identity(client):
+    test_client, db, app = client
+    room = _seed_room(db, hotel_id=1)
+    _seed_reservation(db, room, suffix="open")
+    _seed_reservation(db, room, suffix="locked", allocation_locked=True)
+    app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+
+    response = test_client.get(
+        "/api/room-blocks/conflicts/preview",
+        params={
+            "room_id": room.id,
+            "starts_at": "2026-07-11",
+            "ends_at": "2026-07-12",
+            "is_indefinite": "false",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"reservation_count": 2, "protected_reservation_count": 1}
+
+    no_overlap = test_client.get(
+        "/api/room-blocks/conflicts/preview",
+        params={
+            "room_id": room.id,
+            "starts_at": "2026-07-20",
+            "ends_at": "2026-07-21",
+            "is_indefinite": "false",
+        },
+    )
+    assert no_overlap.status_code == 200, no_overlap.text
+    assert no_overlap.json() == {"reservation_count": 0, "protected_reservation_count": 0}
+
+
+def test_room_block_conflict_preview_uses_create_permission_and_validates_dates(client):
+    test_client, db, app = client
+    room = _seed_room(db, hotel_id=1)
+    app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping")
+
+    forbidden = test_client.get(
+        "/api/room-blocks/conflicts/preview",
+        params={
+            "room_id": room.id,
+            "starts_at": "2026-07-10",
+            "ends_at": "2026-07-11",
+            "is_indefinite": "false",
+        },
+    )
+    assert forbidden.status_code == 403
+
+    app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+    invalid = test_client.get(
+        "/api/room-blocks/conflicts/preview",
+        params={
+            "room_id": room.id,
+            "starts_at": "2026-07-11",
+            "ends_at": "2026-07-11",
+            "is_indefinite": "false",
+        },
+    )
+    assert invalid.status_code == 400
+    assert invalid.json()["detail"] == "ends_at must be after starts_at"
 
 
 def test_receptionist_can_create_but_not_release_room_block_by_default(client):

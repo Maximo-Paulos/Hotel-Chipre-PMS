@@ -8,11 +8,13 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.services.row_locks import lock_query
 from app.config import is_demo_environment_allowed, is_demo_mode
 from app.database import get_db
 from app.models.hotel_config import HotelConfiguration
 from app.services.timezones import hotel_today
 from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_permission
+from app.api.manual_rate_access import authorize_manual_rate_scope
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.audit_log import AuditActionEnum
 from app.models.transaction import Transaction, TransactionStatusEnum
@@ -21,6 +23,7 @@ from app.models.guest import Guest
 from app.schemas.booking import BookingCreate, BookingRead, BookingUpdate
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.reservation_service import (
+    ManualRatePolicyError,
     ReservationError,
     ReservationVersionConflict,
     check_room_availability,
@@ -44,6 +47,7 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_CANCEL,
     PERMISSION_RESERVATION_CANCEL_PAID,
     PERMISSION_RESERVATION_CREATE,
+    PERMISSION_RESERVATION_MANUAL_RATE_LIMITED,
     PERMISSION_RESERVATION_DELETE,
     PERMISSION_RESERVATION_DEMO_SEED,
     PERMISSION_RESERVATION_READ,
@@ -202,6 +206,10 @@ def price_quote(
     """
     Calculate pricing for a potential booking without persisting it.
     Uses the canonical daily/seasonal rate resolver and then the category base price.
+
+    For deferred-billing companies, the quote retains date/category and token
+    fields required for reservation creation, marks ``company_billing_deferred``
+    true, and returns no monetary values (null amounts and empty price details).
     """
     if guest_id is not None:
         active = get_active_guest_restrictions(db, hotel_id=context.hotel_id, guest_id=guest_id)
@@ -212,7 +220,7 @@ def price_quote(
                 detail={"code": error.code, "message": str(error), "restriction_id": error.restriction_id},
             )
     try:
-        return build_reservation_quote(
+        quote = build_reservation_quote(
             db,
             hotel_id=context.hotel_id,
             category_id=category_id,
@@ -229,6 +237,25 @@ def price_quote(
             guest_id=guest_id,
             company_id=company_id,
         )
+        if resolve(
+            db,
+            context.hotel_id,
+            context.user_role,
+            PERMISSION_RESERVATION_MANUAL_RATE_LIMITED,
+            user_id=context.user_id,
+        ):
+            config = db.get(HotelConfiguration, context.hotel_id)
+            quote["manual_rate_min_adjustment_pct"] = (
+                str(config.manual_rate_min_adjustment_pct)
+                if config and config.manual_rate_min_adjustment_pct is not None
+                else None
+            )
+            quote["manual_rate_max_adjustment_pct"] = (
+                str(config.manual_rate_max_adjustment_pct)
+                if config and config.manual_rate_max_adjustment_pct is not None
+                else None
+            )
+        return quote
     except (ReservationError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -256,8 +283,33 @@ def create_booking(
     _ensure_subscription_active(db, context.hotel_id, "crear nuevas")
     # Reuse the existing ReservationCreate schema to drive business logic
     reservation_payload = ReservationCreate(**payload.model_dump())
+    manual_rate_scope = None
+    if reservation_payload.total_amount is not None:
+        manual_rate_scope = authorize_manual_rate_scope(db, context)
+        if not reservation_payload.manual_rate_reason:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Indicá el motivo de la tarifa manual.",
+            )
+    elif reservation_payload.manual_rate_reason is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El motivo solo corresponde cuando se ingresa una tarifa manual.",
+        )
+    if not reservation_payload.quote_token and reservation_payload.total_amount is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Se requiere una cotización vigente para crear la reserva.",
+        )
     try:
-        booking = create_reservation(db, reservation_payload, hotel_id=context.hotel_id)
+        booking = create_reservation(
+            db,
+            reservation_payload,
+            hotel_id=context.hotel_id,
+            actor_user_id=context.user_id,
+            actor_role=context.user_role,
+            manual_rate_scope=manual_rate_scope,
+        )
         audit_log_service.safe_create_audit_log(
             db,
             hotel_id=context.hotel_id,
@@ -274,6 +326,9 @@ def create_booking(
         db.refresh(booking)
         _project_booking_graph(context.hotel_id, booking)
         return _booking_to_read(booking)
+    except ManualRatePolicyError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
     except ReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -338,7 +393,7 @@ def cancel_booking(
             detail="Suscripción inactiva. Reactivá el plan para gestionar reservas.",
         )
 
-    booking = (
+    booking_query = (
         db.query(Reservation)
         .filter(
             Reservation.id == booking_id,
@@ -346,9 +401,8 @@ def cancel_booking(
             Reservation.deleted_at.is_(None),
         )
         .populate_existing()
-        .with_for_update()
-        .first()
     )
+    booking = lock_query(booking_query, Reservation).first()
     if not booking:
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
@@ -369,7 +423,7 @@ def cancel_booking(
         # releasing the reservation row lock. Reacquire and revalidate before
         # applying the cancellation so a concurrent state change cannot slip
         # through the MFA round-trip.
-        booking = (
+        booking_query = (
             db.query(Reservation)
             .filter(
                 Reservation.id == booking_id,
@@ -377,9 +431,8 @@ def cancel_booking(
                 Reservation.deleted_at.is_(None),
             )
             .populate_existing()
-            .with_for_update()
-            .first()
         )
+        booking = lock_query(booking_query, Reservation).first()
         if not booking:
             raise HTTPException(status_code=404, detail="Booking not found")
         if booking.status in (
@@ -490,7 +543,7 @@ def update_booking(
             detail="No se puede cambiar el estado desde esta ruta. Usá la acción específica de la reserva.",
         )
 
-    booking = (
+    booking_query = (
         db.query(Reservation)
         .filter(
             Reservation.id == booking_id,
@@ -498,9 +551,8 @@ def update_booking(
             Reservation.deleted_at.is_(None),
         )
         .populate_existing()
-        .with_for_update()
-        .first()
     )
+    booking = lock_query(booking_query, Reservation).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
@@ -824,7 +876,7 @@ def delete_booking(
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_DELETE)),
 ):
     _ensure_subscription_active(db, context.hotel_id, "gestionar")
-    booking = (
+    booking_query = (
         db.query(Reservation)
         .filter(
             Reservation.id == booking_id,
@@ -832,9 +884,8 @@ def delete_booking(
             Reservation.deleted_at.is_(None),
         )
         .populate_existing()
-        .with_for_update()
-        .first()
     )
+    booking = lock_query(booking_query, Reservation).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     # Avoid deleting checked-in/checked-out bookings to preserve history

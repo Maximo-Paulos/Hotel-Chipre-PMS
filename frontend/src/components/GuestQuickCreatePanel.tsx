@@ -134,7 +134,6 @@ export default function GuestQuickCreatePanel({
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
-  const [pendingGuest, setPendingGuest] = useState<Guest | null>(null);
   const [showQuickCreate, setShowQuickCreate] = useState(false);
 
   useEffect(() => {
@@ -163,13 +162,13 @@ export default function GuestQuickCreatePanel({
   const resetSearchState = () => {
     setQuery("");
     setDebouncedQuery("");
-    setPendingGuest(null);
   };
 
-  const handleConfirmPending = () => {
-    if (!pendingGuest) return;
-    setSelectedGuest(pendingGuest);
-    onGuestIdChange(String(pendingGuest.id));
+  const handleSelectGuest = (guest: Guest) => {
+    // Choosing an explicit search result assigns the guest. The detail card
+    // remains available for identity review and changing a mistaken choice.
+    setSelectedGuest(guest);
+    onGuestIdChange(String(guest.id));
     resetSearchState();
   };
 
@@ -217,28 +216,6 @@ export default function GuestQuickCreatePanel({
         ) : (
           <p className="text-xs text-slate-500">{t("quickCreate.loadingGuest", { id: guestId })}</p>
         )
-      ) : pendingGuest ? (
-        <div className="space-y-2">
-          <GuestSummaryCard guest={pendingGuest} />
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={handleConfirmPending}
-              data-testid="guest-confirm-button"
-              className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100"
-            >
-              {t("quickCreate.confirm")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setPendingGuest(null)}
-              data-testid="guest-search-again-button"
-              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              {t("quickCreate.searchAgain")}
-            </button>
-          </div>
-        </div>
       ) : showQuickCreate && canCreateGuests && !guestIdDisabled ? (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <div className="flex items-center justify-between">
@@ -342,7 +319,7 @@ export default function GuestQuickCreatePanel({
                   <button
                     key={guest.id}
                     type="button"
-                    onClick={() => setPendingGuest(guest)}
+                    onClick={() => handleSelectGuest(guest)}
                     data-testid={`guest-search-result-${guest.id}`}
                     className="w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
                   >

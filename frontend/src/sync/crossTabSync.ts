@@ -289,7 +289,7 @@ const recoverRealtime = async (
   const domains = (payload.domains ?? []).filter((domain): domain is SyncDomain =>
     ALL_DOMAINS.includes(domain as SyncDomain)
   );
-  if (payload.reset_required || currentCursor === 0) {
+  if (payload.reset_required && currentCursor > 0) {
     await refreshDomains(queryClient, hotelId, ALL_DOMAINS);
   } else if (domains.length) {
     await refreshDomains(queryClient, hotelId, domains);
@@ -343,7 +343,7 @@ const runEventStream = async (
       scheduledDomains.clear();
       refreshTimer = null;
       void refreshDomains(queryClient, hotelId, domains);
-    }, 75);
+    }, 1000);
   };
 
   updateRealtimeStatus(hotelId, "connecting");

@@ -1012,7 +1012,8 @@ def test_move_reservation_room_keep_price_action_does_not_change_total_but_retur
         to_room_id=superior_room.id,
         hotel_id=hotel_config.id,
         client_version=reservation.version,
-        actor_role="owner",
+        # Manager has the F-039 default for complimentary upgrades.
+        actor_role="manager",
         reason_code="upgrade",
         price_action="keep",
     )
@@ -1067,7 +1068,8 @@ def test_move_reservation_room_reprice_updates_total_amount(
         to_room_id=superior_room.id,
         hotel_id=hotel_config.id,
         client_version=reservation.version,
-        actor_role="owner",
+        # Manager has the F-039 default for repricing a reservation.
+        actor_role="manager",
         reason_code="upgrade",
         price_action="reprice",
     )

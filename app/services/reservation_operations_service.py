@@ -10,14 +10,17 @@ Handles operational scenarios that go beyond a plain reservation update:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+import json
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.services.row_locks import lock_query
 from app.models.audit_log import AuditActionEnum
 from app.models.commercial import RatePlan, SellableProduct, TaxPolicy
+from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota_core import OTAReservationLifecycleEnum, OTAReservationLink
 from app.models.operations import (
@@ -46,6 +49,7 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_RESERVATION_MOVE_CAPACITY,
     PERMISSION_RESERVATION_MOVE_CATEGORY,
+    PERMISSION_RESERVATION_RATE_ADJUST,
     RESERVATION_MOVE_TIER_PERMISSIONS,
     audit_permission_denied,
     resolve,
@@ -62,6 +66,8 @@ from app.services.reservation_service import (
     manual_override_total_for_nights,
     transition_reservation_status,
     update_reservation_fields,
+    _apply_corporate_pricing,
+    _notify_reservation_event,
     _apply_pricing_result_to_reservation,
     _validate_reservation_occupancy,
 )
@@ -371,7 +377,7 @@ def _extension_conflicts(
 ) -> list[Reservation]:
     if reservation.room_id is None:
         return []
-    return (
+    overlapping_query = (
         db.query(Reservation)
         .filter(
             Reservation.hotel_id == hotel_id,
@@ -389,9 +395,8 @@ def _extension_conflicts(
         )
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
         .populate_existing()
-        .with_for_update()
-        .all()
     )
+    return lock_query(overlapping_query, Reservation).all()
 
 
 def _is_auto_assignable_future_reservation(conflict: Reservation) -> bool:
@@ -764,6 +769,7 @@ def _extension_amount(
     hotel_id: int,
     new_checkout_date: date,
     pricing_mode: str,
+    company: Company | None = None,
 ) -> Decimal:
     extra_nights = (new_checkout_date - reservation.check_out_date).days
     if extra_nights <= 0:
@@ -784,8 +790,84 @@ def _extension_amount(
         pricing_channel_code=reservation.source_provider_code or reservation.source.value,
         target_currency=reservation.currency_code,
         occupancy=reservation.num_adults + reservation.num_children,
+        company_id=company.id if company is not None else None,
     )
+    if company is not None:
+        pricing = _apply_corporate_pricing(
+            db,
+            hotel_id=hotel_id,
+            pricing=pricing,
+            company=company,
+            explicit_total=None,
+        )
     return Decimal(str(pricing.total_amount)).quantize(Decimal("0.01"))
+
+
+def set_company_extension_request(
+    db: Session,
+    *,
+    reservation: Reservation,
+    hotel_id: int,
+    pending: bool,
+    note: str | None,
+    client_version: int,
+    actor_user_id: int | None,
+) -> Reservation:
+    """Record a company extension request without changing stay or billing data."""
+    if reservation.hotel_id != hotel_id:
+        raise ReservationOperationsError("La reserva no pertenece al hotel activo")
+    if reservation.company_id is None:
+        raise ReservationOperationsError("La solicitud de extensión solo está disponible para reservas de empresa")
+    company = (
+        db.query(Company)
+        .filter(
+            Company.id == reservation.company_id,
+            Company.hotel_id == hotel_id,
+            Company.is_active.is_(True),
+        )
+        .first()
+    )
+    if company is None:
+        raise ReservationOperationsError("La empresa no está activa en el hotel")
+    if reservation.status in (
+        ReservationStatusEnum.CHECKED_OUT,
+        ReservationStatusEnum.CANCELLED,
+        ReservationStatusEnum.NO_SHOW,
+    ):
+        raise ReservationOperationsError("Solo se puede registrar una extensión en una reserva activa")
+
+    lock_reservation_version(
+        db,
+        reservation,
+        hotel_id=hotel_id,
+        client_version=client_version,
+    )
+    normalized_note = (note or "").strip() or None
+    if pending and normalized_note is None:
+        raise ReservationOperationsError("Indicá qué extensión pidió la empresa o qué falta confirmar")
+    if not pending:
+        raise ReservationOperationsError(
+            "La solicitud solo se completa al aplicar una extensión autorizada"
+        )
+    if reservation.company_extension_request_pending == pending and (
+        not pending or reservation.company_extension_request_note == normalized_note
+    ):
+        return reservation
+
+    reservation.company_extension_request_pending = pending
+    if pending:
+        reservation.company_extension_request_note = normalized_note
+    reservation.version = (reservation.version or 0) + 1
+    db.flush()
+    _notify_reservation_event(
+        db,
+        hotel_id=hotel_id,
+        reservation=reservation,
+        event_type="reservation.company_extension_request_updated",
+        title="Extensión de empresa pendiente",
+        dedupe_suffix=f"company-extension:{reservation.version}",
+    )
+    return reservation
 
 
 def extend_reservation_stay(
@@ -804,6 +886,39 @@ def extend_reservation_stay(
 ) -> ReservationExtensionResult:
     if reservation.hotel_id != hotel_id:
         raise ReservationOperationsError("La reserva no pertenece al hotel activo")
+
+    company = None
+    if reservation.company_id is not None:
+        company = (
+            db.query(Company)
+            .filter(Company.id == reservation.company_id, Company.hotel_id == hotel_id)
+            .with_for_update()
+            .first()
+        )
+    is_deferred_company_reservation = (
+        reservation.settlement_status == "deferred"
+        or bool(company and company.payment_deferred)
+    )
+    deferred_company = None
+    if is_deferred_company_reservation and payment_action != "company_account":
+        raise ReservationOperationsError(
+            "Las extensiones de empresas con cuenta diferida deben registrarse fuera del PMS"
+        )
+    if payment_action == "company_account":
+        if reservation.company_id is None:
+            raise ReservationOperationsError("La extensión a cuenta solo está disponible para reservas de empresa")
+        if company is None or not company.is_active or not is_deferred_company_reservation:
+            raise ReservationOperationsError("La empresa no está activa o no tiene habilitada la cuenta diferida")
+        deferred_company = company
+        if int(deferred_company.deferred_days or 0) < 0:
+            raise ReservationOperationsError("La empresa tiene un plazo de cuenta diferida inválido")
+        if reservation.status != ReservationStatusEnum.CHECKED_IN:
+            raise ReservationOperationsError("La extensión a cuenta solo está disponible para una reserva activa")
+        if pricing_mode != "current_rate":
+            raise ReservationOperationsError("La extensión a cuenta debe usar la tarifa vigente")
+        if immediate_payment is not None or payment_link is not None:
+            raise ReservationOperationsError("La extensión a cuenta no admite datos de cobro")
+
     lock_reservation_version(
         db,
         reservation,
@@ -838,15 +953,21 @@ def extend_reservation_stay(
     ):
         raise ReservationOperationsError("La habitacion no esta disponible para la extension")
 
-    amount = _extension_amount(
-        db,
-        reservation=reservation,
-        hotel_id=hotel_id,
-        new_checkout_date=new_checkout_date,
-        pricing_mode=pricing_mode,
-    )
-    if amount <= Decimal("0.00"):
-        raise ReservationOperationsError("La extension debe tener importe positivo")
+    # Deferred company base nights are invoiced outside the PMS. Do not even
+    # calculate their rate here: only the explicitly selected company night
+    # extras are billable in the PMS.
+    amount = Decimal("0.00")
+    if payment_action != "company_account":
+        amount = _extension_amount(
+            db,
+            reservation=reservation,
+            hotel_id=hotel_id,
+            new_checkout_date=new_checkout_date,
+            pricing_mode=pricing_mode,
+            company=deferred_company,
+        )
+        if amount <= Decimal("0.00"):
+            raise ReservationOperationsError("La extension debe tener importe positivo")
 
     if payment_action == "immediate_payment":
         if immediate_payment is None:
@@ -875,22 +996,27 @@ def extend_reservation_stay(
             raise ReservationOperationsError("El link de pago debe pertenecer a esta reserva")
         if Decimal(str(payment_link.requested_amount)) < amount:
             raise ReservationOperationsError("El link de pago debe cubrir el importe de la extension")
-    else:
+    elif payment_action != "company_account":
         raise ReservationOperationsError("Accion de pago de extension invalida")
 
     original_status = reservation.status
     original_check_out = reservation.check_out_date
     reservation.check_out_date = new_checkout_date
-    reservation.total_amount = (Decimal(str(reservation.total_amount or 0)) + amount).quantize(Decimal("0.01"))
-    reservation.subtotal_amount = (Decimal(str(reservation.subtotal_amount or 0)) + amount).quantize(Decimal("0.01"))
-    reservation.net_amount = (Decimal(str(reservation.net_amount or 0)) + amount).quantize(Decimal("0.01"))
+    if payment_action != "company_account":
+        reservation.total_amount = (Decimal(str(reservation.total_amount or 0)) + amount).quantize(Decimal("0.01"))
+        reservation.subtotal_amount = (Decimal(str(reservation.subtotal_amount or 0)) + amount).quantize(Decimal("0.01"))
+        reservation.net_amount = (Decimal(str(reservation.net_amount or 0)) + amount).quantize(Decimal("0.01"))
     reservation.notes = ((reservation.notes or "") + f"\n[EXTENSION] {notes or f'Extended to {new_checkout_date}'}").strip()
     reservation.version = (reservation.version or 0) + 1
 
     transaction = None
     link = None
     try:
-        if payment_action == "immediate_payment":
+        if payment_action == "company_account":
+            deferred_days = int(deferred_company.deferred_days or 0)
+            reservation.settlement_status = "deferred"
+            reservation.settlement_due_date = new_checkout_date + timedelta(days=deferred_days)
+        elif payment_action == "immediate_payment":
             transaction = process_payment(
                 db,
                 immediate_payment,
@@ -900,10 +1026,19 @@ def extend_reservation_stay(
             )
             if original_status == ReservationStatusEnum.CHECKED_IN and reservation.status != ReservationStatusEnum.CHECKED_IN:
                 reservation.status = ReservationStatusEnum.CHECKED_IN
-        else:
+        elif payment_action == "payment_link":
             link = create_link(db, hotel_id, payment_link)
+        else:  # defensive for direct service callers bypassing request validation
+            raise ReservationOperationsError("Accion de pago de extension invalida")
     except (PaymentError, PaymentLinkError) as exc:
         raise ReservationOperationsError(str(exc)) from exc
+
+    # The extension request remains pending if validation, availability,
+    # pricing, or payment-link creation fails. Clear it only after this
+    # operation has successfully changed the reservation dates in memory and
+    # produced the requested payment action; the surrounding route commits
+    # both changes together.
+    reservation.company_extension_request_pending = False
 
     db.flush()
     _invalidate_availability_cache(hotel_id)
@@ -1009,6 +1144,37 @@ def move_reservation_room(
     )
     quoted_total = Decimal(str(pricing.total_amount)).quantize(Decimal("0.01"))
     amount_delta = (quoted_total - previous_total).quantize(Decimal("0.01"))
+
+    # A cross-category move that keeps a more expensive quote is a
+    # complimentary upgrade. Repricing also changes the reservation's
+    # commercial total. Both are separately configurable from the hotel's
+    # permission settings; a room-movement permission alone must not grant
+    # authority over the reservation price.
+    changes_price = amount_delta != Decimal("0.00") and price_action == "reprice"
+    complimentary_upgrade = (
+        category_changed
+        and price_action == "keep"
+        and amount_delta > Decimal("0.00")
+    )
+    if changes_price or complimentary_upgrade:
+        if not resolve(
+            db,
+            hotel_id,
+            actor_role,
+            PERMISSION_RESERVATION_RATE_ADJUST,
+            user_id=moved_by_user_id,
+        ):
+            audit_permission_denied(
+                db,
+                hotel_id=hotel_id,
+                user_id=moved_by_user_id,
+                role=actor_role,
+                permission_code=PERMISSION_RESERVATION_RATE_ADJUST,
+            )
+            raise RoomMovePermissionError(
+                "Para aplicar un cambio de tarifa o una mejora sin cargo necesitás el permiso "
+                "'Ajustar tarifa de reserva'."
+            )
 
     previous_room_id = reservation.room_id
     status_value = reservation.status.value if hasattr(reservation.status, "value") else str(reservation.status)
@@ -1231,7 +1397,7 @@ def rebook_ota_reservation_as_direct(
 ) -> OTARebookResult:
     if reservation.hotel_id != hotel_id:
         raise ReservationOperationsError("La reserva no pertenece al hotel activo")
-    reservation = (
+    reservation_query = (
         db.query(Reservation)
         .filter(
             Reservation.id == reservation.id,
@@ -1239,9 +1405,8 @@ def rebook_ota_reservation_as_direct(
             Reservation.deleted_at.is_(None),
         )
         .populate_existing()
-        .with_for_update()
-        .first()
     )
+    reservation = lock_query(reservation_query, Reservation).first()
     if reservation is None:
         raise ReservationOperationsError("La reserva no existe o ya no está activa")
     if reservation.source == ReservationSourceEnum.DIRECT:

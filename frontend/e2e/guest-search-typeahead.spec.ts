@@ -2,10 +2,9 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 // E1: the hotel owner reported that assigning a guest to a reservation was a
 // raw numeric "ID Huésped" text field -- no way to search by name/DNI, and no
-// way to tell two guests with the same name apart before confirming. This
-// spec covers the replacement: search-by-name/DNI (same pattern as
-// GuestsPage.tsx), a confirmation card (name/email/phone/DNI) before the
-// guest is actually assigned, "buscar otro" to back out before confirming,
+// way to tell two guests with the same name apart. This spec covers the
+// replacement: search-by-name/DNI (same pattern as GuestsPage.tsx), an
+// identity card (name/email/phone/DNI) after selection and a change action,
 // the "Huésped rápido" fallback when there's no match, and that editing an
 // existing reservation still can't change its guest (guestIdDisabled).
 
@@ -41,7 +40,7 @@ async function selectCategoryAndRoom(form: Locator) {
   await roomSelect.selectOption((await roomOption.getAttribute("value"))!);
 }
 
-test("buscar huésped por nombre, confirmar con tarjeta de datos, y respetar guestIdDisabled al editar", async ({
+test("seleccionar huésped al instante, revisar su tarjeta de datos y respetar guestIdDisabled al editar", async ({
   page
 }) => {
   const suffix = `${Date.now()}`;
@@ -49,13 +48,21 @@ test("buscar huésped por nombre, confirmar con tarjeta de datos, y respetar gue
   const guestEmail = `buscador.${suffix}@example.test`;
   const guestPhone = "1155667788";
   const guestDocument = `SRCH-${suffix}`;
-  const checkInA = localIsoDate(500);
-  const checkOutA = localIsoDate(502);
-  const checkInB = localIsoDate(505);
-  const checkOutB = localIsoDate(507);
+  const checkInA = localIsoDate(530);
+  const checkOutA = localIsoDate(532);
+  const checkInB = localIsoDate(535);
+  const checkOutB = localIsoDate(537);
 
   await login(page);
+  const refreshStatuses: number[] = [];
+  page.on("response", (response) => {
+    if (new URL(response.url()).pathname.endsWith("/api/auth/session/refresh")) {
+      refreshStatuses.push(response.status());
+    }
+  });
   await page.goto("/reservas");
+  await expect(page.getByRole("button", { name: "Crear reserva", exact: true })).toBeVisible();
+  expect(refreshStatuses).toEqual([200]);
 
   // 1) Create the guest once via the "Huésped rápido" fallback, so there is
   // a real match to search for afterwards.
@@ -76,8 +83,8 @@ test("buscar huésped por nombre, confirmar con tarjeta de datos, y respetar gue
   await expect(firstForm.getByTestId("guest-confirm-card")).toContainText(guestLastName);
 
   await selectCategoryAndRoom(firstForm);
-  await firstForm.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(checkInA);
-  await firstForm.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(checkOutA);
+  await firstForm.getByLabel("Check-in", { exact: true }).fill(checkInA);
+  await firstForm.getByLabel("Check-out", { exact: true }).fill(checkOutA);
   await expect(firstForm.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
   await firstForm.getByRole("button", { name: "Crear", exact: true }).click();
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
@@ -100,31 +107,28 @@ test("buscar huésped por nombre, confirmar con tarjeta de datos, y respetar gue
 
   await resultButton.click();
 
-  // 3) Confirmation card shows name/email/phone/DNI before assigning.
-  const pendingCard = form.getByTestId("guest-confirm-card");
-  await expect(pendingCard).toContainText(guestLastName);
-  await expect(pendingCard).toContainText(guestEmail);
-  await expect(pendingCard).toContainText(guestPhone);
-  await expect(pendingCard).toContainText(guestDocument);
-
-  // "Buscar otro" backs out without assigning -- back to the search box.
-  await form.getByTestId("guest-search-again-button").click();
-  await expect(searchInput).toBeVisible();
-  await expect(results).toBeVisible();
-
-  await resultButton.click();
-  await expect(pendingCard).toBeVisible();
-  await form.getByTestId("guest-confirm-button").click();
-
-  // 4) Confirmed: search UI is gone, replaced by the assigned-guest card.
-  await expect(searchInput).toBeHidden();
+  // 3) Selecting a result assigns it at once; the card lets the operator
+  // verify the identity and correct the choice without a redundant confirm.
   const confirmedCard = form.getByTestId("guest-confirm-card");
   await expect(confirmedCard).toContainText(guestLastName);
+  await expect(confirmedCard).toContainText(guestEmail);
+  await expect(confirmedCard).toContainText(guestPhone);
+  await expect(confirmedCard).toContainText(guestDocument);
+  await expect(searchInput).toBeHidden();
   await expect(form.getByTestId("guest-change-button")).toBeVisible();
 
+  // A mistaken choice remains easy to undo before saving the reservation.
+  await form.getByTestId("guest-change-button").click();
+  await expect(searchInput).toBeVisible();
+  await searchInput.fill("Buscador");
+  await expect(results).toBeVisible();
+  await resultButton.click();
+  await expect(searchInput).toBeHidden();
+  await expect(confirmedCard).toContainText(guestLastName);
+
   await selectCategoryAndRoom(form);
-  await form.locator("label").filter({ hasText: "Check-in" }).locator('input[type="date"]').fill(checkInB);
-  await form.locator("label").filter({ hasText: "Check-out" }).locator('input[type="date"]').fill(checkOutB);
+  await form.getByLabel("Check-in", { exact: true }).fill(checkInB);
+  await form.getByLabel("Check-out", { exact: true }).fill(checkOutB);
   await expect(form.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
   await form.getByRole("button", { name: "Crear", exact: true }).click();
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();

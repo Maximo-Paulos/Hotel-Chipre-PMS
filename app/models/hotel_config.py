@@ -4,7 +4,7 @@ No global/singleton: one row per hotel (id == hotel_id).
 Admin Panel controls: deposit %, enabled gateways, cancellation policy, etc.
 """
 import json
-from sqlalchemy import CheckConstraint, Column, Integer, Float, Boolean, String, Text, DateTime, JSON, text
+from sqlalchemy import CheckConstraint, Column, Integer, Float, Boolean, String, Text, DateTime, JSON, Numeric, text
 from datetime import datetime, timezone
 
 from app.database import Base
@@ -18,6 +18,13 @@ class HotelConfiguration(Base):
             "checkin_payment_policy IN ('deposit', 'total', 'free')",
             name="ck_hotel_configuration_checkin_payment_policy",
         ),
+        CheckConstraint(
+            "(manual_rate_min_adjustment_pct IS NULL AND manual_rate_max_adjustment_pct IS NULL) "
+            "OR (manual_rate_min_adjustment_pct IS NOT NULL AND manual_rate_max_adjustment_pct IS NOT NULL "
+            "AND manual_rate_min_adjustment_pct >= -100 "
+            "AND manual_rate_min_adjustment_pct <= manual_rate_max_adjustment_pct)",
+            name="ck_hotel_configuration_manual_rate_bounds",
+        ),
     )
 
     # hotel_id is the primary key; no auto-assigned default to avoid implicit singletons
@@ -25,10 +32,11 @@ class HotelConfiguration(Base):
 
     # Financial policies
     deposit_percentage = Column(Float, nullable=False, default=30.0)  # % of total required as deposit
-    # The pilot default accepts the configured deposit and collects any
-    # remaining balance before checkout.
+    # Check-in requires the full hotel-collected amount unless this hotel
+    # explicitly selects another policy. Deferred company accounts are
+    # evaluated from their company profile in checkin_service.
     checkin_payment_policy = Column(
-        String(16), nullable=False, default="deposit", server_default=text("'deposit'")
+        String(16), nullable=False, default="total", server_default=text("'total'")
     )
     enable_full_payment = Column(Boolean, nullable=False, default=True)
     enable_deposit_payment = Column(Boolean, nullable=False, default=True)
@@ -67,6 +75,23 @@ class HotelConfiguration(Base):
     hotel_name = Column(String(200), nullable=False, default="Mi Hotel")
     hotel_timezone = Column(String(100), nullable=False, default="America/Argentina/Buenos_Aires")
     default_currency = Column(String(3), nullable=False, default="ARS")
+    # Global USD market source used in automatic currency conversions. Legacy
+    # FxPolicy source/side fields cannot override it. Existing hotels keep official.
+    fx_conversion_rate_type = Column(
+        String(20), nullable=False, default="oficial", server_default=text("'oficial'")
+    )
+    # Quotes exposed for operator comparison. Selection never rewrites a
+    # reservation's stored price or FX snapshot.
+    fx_display_rate_types = Column(
+        JSON,
+        nullable=False,
+        default=lambda: ["oficial"],
+        server_default=text("'[\"oficial\"]'"),
+    )
+    check_in_time = Column(String(5), nullable=True)
+    check_out_time = Column(String(5), nullable=True)
+    manual_rate_min_adjustment_pct = Column(Numeric(7, 2), nullable=True)
+    manual_rate_max_adjustment_pct = Column(Numeric(7, 2), nullable=True)
 
     # Identity fields collected by onboarding and edited in Settings.
     languages = Column(JSON, nullable=False, default=lambda: ["es"])

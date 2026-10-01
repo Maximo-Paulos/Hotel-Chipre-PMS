@@ -66,6 +66,7 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   await movementForm.getByText("Importe", { exact: true }).locator("..").locator("input").fill("200");
   await movementForm.getByText("Descripción", { exact: true }).locator("..").locator("input").fill("Compra de insumos");
   await movementForm.getByRole("button", { name: "Registrar movimiento", exact: true }).click();
+  await completeStepUpPrompt(page, ownerSession.lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
 
   const closeForm = page.locator("form").filter({ hasText: "Saldo esperado:" }).filter({ hasText: "Cerrar caja" });
@@ -74,27 +75,38 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   expect(expectedBalance).toBeGreaterThanOrEqual(300);
   const countedBalance = Math.max(0, expectedBalance - 50);
   await closeForm.getByText("Saldo contado", { exact: true }).locator("..").locator("input").fill(String(countedBalance));
+  const closeResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === "POST" && /\/api\/cash-register\/sessions\/\d+\/close$/.test(url.pathname);
+  });
   await closeForm.getByRole("button", { name: "Cerrar caja", exact: true }).click();
+  const closedReport = await closeResponse.then((response) =>
+    response.json() as Promise<{ session_id: number }>
+  );
   await expect(page.getByText("Caja cerrada.", { exact: true })).toBeVisible();
   await expect(page.getByText(/Estado: pendiente de aprobación/, { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Aprobar diferencia", exact: true }).last().click();
   const lastTotpStep = await completeStepUpPrompt(page, ownerSession.lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText("Diferencia aprobada.", { exact: true })).toBeVisible();
-  await expect(page.getByText("Custodia: pendiente de recepción del dueño.", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Confirmar recepción de custodia", exact: true }).click();
+  await expect(page.getByText(/^Custodia: pendiente de recepción del dueño o la codueña por /)).toBeVisible();
+  const currentCustody = page.getByTestId("cash-pending-custodies")
+    .getByRole("listitem")
+    .filter({ hasText: new RegExp(`Caja #${closedReport.session_id} ·`) });
+  await expect(currentCustody).toHaveCount(1);
+  await currentCustody
+    .getByRole("button", { name: "Confirmar custodia y cambio", exact: true })
+    .click();
   const custodyTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
-  await expect(page.getByText("Recepción de custodia confirmada.", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Recepción confirmada\. Fondo de cambio para la sucesora:/)).toBeVisible();
   expect(lastTotpStep).toBeGreaterThan(ownerSession.lastTotpStep);
   expect(custodyTotpStep).toBeGreaterThan(lastTotpStep);
-  await expect(page.getByText(/Caja sucesora: .* abierta con saldo \$0/)).toBeVisible();
+  await expect(page.getByText(/^Caja sucesora: .* abierta con saldo \$\s*0(?:,00)?\.$/)).toBeVisible();
 });
 
-// PERMISSION_CASH_APPROVE_DIFFERENCE is manager+ only (see permission_service.py);
+// Cash-difference approval is owner/co-owner only (see permission_service.py);
 // receptionist can operate cash (open/close/movements) but not approve a close
-// difference. The close-report panel's "Aprobar diferencia" button was only
-// gated by canApproveDifference at the top warning banner, not in this second
-// occurrence shown right after closing -- receptionist could see and click it.
+// difference.
 test("receptionist can close cash with a difference but cannot approve it", async ({ page }) => {
   await login(page, receptionistCredentials);
   await page.goto("/caja");

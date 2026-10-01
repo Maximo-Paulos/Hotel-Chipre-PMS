@@ -47,6 +47,14 @@ class RoomBlockReleaseConflictError(RoomBlockError):
         super().__init__(reason)
 
 
+def _protected_reservation_filter():
+    return or_(
+        Reservation.status.in_([ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.PRE_CHECK_IN]),
+        Reservation.allocation_locked.is_(True),
+        Reservation.company_id.is_not(None),
+    )
+
+
 def _invalidate_availability_cache(hotel_id: int) -> None:
     try:
         invalidate_hotel_operational_caches(hotel_id)
@@ -137,11 +145,7 @@ def create_block(
             Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]),
             Reservation.check_in_date < conflict_window_end,
             Reservation.check_out_date > starts_at,
-            or_(
-                Reservation.status.in_([ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.PRE_CHECK_IN]),
-                Reservation.allocation_locked.is_(True),
-                Reservation.company_id.is_not(None),
-            ),
+            _protected_reservation_filter(),
         )
         .order_by(Reservation.id.asc())
         .all()
@@ -163,6 +167,37 @@ def create_block(
     db.flush()
     _invalidate_availability_cache(hotel_id)
     return block
+
+
+def preview_block_conflicts(
+    db: Session,
+    *,
+    hotel_id: int,
+    room_id: int,
+    starts_at: date,
+    ends_at: date | None = None,
+    is_indefinite: bool = False,
+) -> dict[str, int]:
+    """Count active reservations overlapping a proposed block without returning guest data."""
+    from app.services.reservation_service import active_reservations
+
+    _validate_range(starts_at, ends_at, is_indefinite)
+    room_exists = db.query(Room.id).filter(Room.id == room_id, Room.hotel_id == hotel_id).first()
+    if room_exists is None:
+        raise RoomBlockError("Room not found")
+
+    conflict_window_end = ends_at or date.max
+    overlapping = active_reservations(db, hotel_id).filter(
+        Reservation.room_id == room_id,
+        Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]),
+        Reservation.check_in_date < conflict_window_end,
+        Reservation.check_out_date > starts_at,
+    )
+    protected = overlapping.filter(_protected_reservation_filter())
+    return {
+        "reservation_count": overlapping.count(),
+        "protected_reservation_count": protected.count(),
+    }
 
 
 def list_active_blocks(

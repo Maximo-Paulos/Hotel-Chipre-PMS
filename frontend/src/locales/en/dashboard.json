@@ -32,6 +32,13 @@
     },
     "multiCurrency": "Multi-currency"
   },
+  "cashApprovals": {
+    "title": "Pending cash differences",
+    "count_one": "{{count}} close needs review",
+    "count_other": "{{count}} closes need review",
+    "error": "Pending cash closes could not be loaded.",
+    "view": "Review in Cash"
+  },
   "pipeline": {
     "eyebrow": "Pipeline",
     "title": "Upcoming reservations",
@@ -43,6 +50,7 @@
       "status": "Status",
       "amount": "Amount"
     },
+    "deferredCompanyBilling": "Billed outside the PMS",
     "empty": "No upcoming reservations."
   },
   "activity": {

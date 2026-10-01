@@ -1317,26 +1317,29 @@ El proceso puede ejecutarse en segundo plano.
 
 ### 37.1 Sprint 1
 
-Monedas soportadas:
+Monedas habilitadas para conversión automática:
 
 - ARS.
 - USD.
+- EUR.
+- BRL.
+- CLP.
+- UYU.
 
 ### 37.2 Conversión configurable
 
-Cada hotel puede seleccionar:
+Para todas las monedas, cada hotel selecciona un solo mercado de referencia para las conversiones:
 
-- dólar compra;
-- dólar venta;
-- oficial;
-- MEP;
-- blue;
-- tarjeta;
-- otra cotización disponible.
+- dólar oficial;
+- dólar blue.
 
-Regla:
+Dueño o codueña puede decidir si la pantalla muestra uno o ambos mercados (oficial y blue) para las cotizaciones disponibles. Mostrar ambos no cambia el mercado elegido para convertir.
 
-> El hotel puede elegir la referencia de conversión que utilizará.
+USD usa el endpoint directo oficial o blue de DolarAPI. EUR, BRL, CLP y UYU usan su fila oficial directa; cuando el mercado elegido es blue, su equivalente se estima a partir de la fila oficial de esa moneda y de las relaciones compra/compra y venta/venta entre USD blue y oficial. La interfaz y la auditoría identifican esos valores como derivados, no como cotizaciones blue directas. Las conversiones entre cualquier par de monedas soportadas pasan por ARS y conservan mercado, cotización, lado y fechas de origen. El lado de origen se toma de `venta` y el lado de destino de `compra`; un spread solo puede ser cero o positivo.
+
+No se usa, deriva ni sustituye por dólar tarjeta, MEP, CCL, cripto, mayorista ni otra variante. Si falta o está vencida la cotización exacta configurada, la conversión falla explícitamente y no cambia de mercado automáticamente.
+
+Al registrar un cobro en una moneda distinta a la reserva, el PMS consulta esa cotización en el momento del cobro, muestra cuánto se recibirá y cuánto se acreditará al saldo, y guarda ambos importes y monedas junto con la tasa y su procedencia. La devolución usa la moneda y tasa congeladas del cobro original, y queda limitada al saldo recibido pendiente de devolver. La caja se arquea por moneda recibida; los saldos de distintas monedas no se suman entre sí.
 
 ## 38. Desempates finales del motor
 
@@ -2038,7 +2041,7 @@ El Sprint 1 se considera funcionalmente completo cuando permite:
 
 ### Q112. ¿Monedas Sprint 1?
 
-**Respuesta IA:** ARS y USD.
+**Respuesta IA:** ARS y USD como base, con conversión automática entre ARS, USD, EUR, BRL, CLP y UYU.
 
 ### Q113. ¿Se guardan importes originales?
 
@@ -2054,15 +2057,15 @@ El Sprint 1 se considera funcionalmente completo cuando permite:
 
 ### Q116. ¿Fuente de cotización?
 
-**Respuesta IA:** Proveedor oficial/configurable por hotel; debe abstraerse detrás de un servicio.
+**Respuesta IA:** DolarAPI detrás de un servicio. El mercado configurable rige para todas las monedas y solo puede ser oficial o blue; el hotel puede mostrar uno o ambos. DolarAPI ofrece filas directas oficial/blue para USD y filas oficiales para EUR, BRL, CLP y UYU. Para la opción blue no USD, la app deriva un equivalente con la relación USD blue/oficial y lo etiqueta como estimado. En ningún par se usan dólar tarjeta, MEP, CCL, cripto, mayorista ni otras variantes. Fuentes: [Dólar oficial](https://dolarapi.com/docs/argentina/operations/get-dolar-oficial), [Dólar blue](https://dolarapi.com/docs/argentina/operations/get-dolar-blue) y [cotizaciones](https://dolarapi.com/docs/argentina/operations/get-cotizaciones).
 
 ### Q117. ¿Qué criterio favorece al hotel?
 
-**Respuesta IA:** Usar el lado de compra/venta que maximiza el valor recibido por el hotel según dirección de conversión.
+**Respuesta IA:** Todas las conversiones cruzadas pasan por ARS y usan el mercado elegido en la configuración para ambos lados. La moneda de origen se valora con venta y el destino con compra; el spread FX no puede ser negativo. Cada lado conserva la moneda, mercado de conversión, valor aplicado y fecha; las tasas blue no USD conservan además la procedencia y fórmula de derivación. Cotizar o convertir un precio no crea un movimiento de caja. Al cobrar, el PMS guarda por separado lo recibido y el crédito convertido al saldo de la reserva; la caja registra el importe físico en su moneda y conserva la cotización aplicada.
 
 ### Q118. ¿Puede el dueño elegir otra cotización?
 
-**Respuesta IA:** Sí.
+**Respuesta IA:** Dueño y codueña configuran el mercado de referencia de todas las conversiones y cuáles cotizaciones se muestran desde Ajustes del hotel; el cambio requiere MFA reciente. El selector de mercado solo acepta oficial o blue.
 
 ### Q119. ¿El recepcionista puede cambiarla?
 
@@ -2070,11 +2073,11 @@ El Sprint 1 se considera funcionalmente completo cuando permite:
 
 ### Q120. ¿Se guarda fecha/hora de cotización?
 
-**Respuesta IA:** Sí.
+**Respuesta IA:** Sí. La conversión conserva fuente, mercado/tipo, lado, fecha del proveedor y tasa aplicada en snapshots asociados a la transacción; las nuevas reservas guardan además la procedencia en su snapshot de precio. Cambiar Ajustes no reinterpreta reservas ya creadas.
 
 ### Q121. ¿Qué pasa si la API cae?
 
-**Respuesta IA:** Usar última cotización válida con warning y permitir override autorizado.
+**Respuesta IA:** Solo se admite una cotización fresca del mercado seleccionado o un snapshot reciente del mismo hotel, moneda y mercado. Si falta, el cálculo falla explícitamente; no cambia a otra variante de USD ni usa una cotización manual alternativa.
 
 ## M. Pagos, señas y links
 

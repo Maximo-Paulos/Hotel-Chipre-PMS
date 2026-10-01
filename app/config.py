@@ -30,9 +30,9 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "postgresql+psycopg2://pms:pms@localhost:5432/hotel_pms"
-    DB_POOL_SIZE: int = 5
-    DB_MAX_OVERFLOW: int = 2
-    DB_POOL_TIMEOUT_SECONDS: float = 5.0
+    DB_POOL_SIZE: int = 8
+    DB_MAX_OVERFLOW: int = 4
+    DB_POOL_TIMEOUT_SECONDS: float = 15.0
     DB_CONNECT_TIMEOUT_SECONDS: int = 5
     DB_POOL_RECYCLE_SECONDS: int = 1800
     DB_STATEMENT_TIMEOUT_SECONDS: float = 15.0

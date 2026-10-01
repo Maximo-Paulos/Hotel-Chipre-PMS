@@ -17,6 +17,7 @@ import {
 import { getOnboardingStatus } from "../../api/onboarding";
 import { defaultPathForRole, normalizeRole, useSession, type SessionState } from "../../state/session";
 import { BrandMark } from "../../components/brand/BrandMark";
+import { useAuthProviders } from "../../hooks/useAuthProviders";
 
 const safeInvitationReturnPath = (candidate: string | null): string | null => {
   if (!candidate) return null;
@@ -38,8 +39,11 @@ const safeInvitationHashReturnPath = (hash: string): string | null => {
 
 export function LoginPage() {
   const { t } = useTranslation("auth");
+  const authProvidersQuery = useAuthProviders();
+  const googleLoginAvailable = authProvidersQuery.data?.google?.enabled === true;
   const navigate = useNavigate();
   const location = useLocation();
+  const invitationNotice = (location.state as { invitationNotice?: unknown } | null)?.invitationNotice;
   const [searchParams] = useSearchParams();
   const invitationReturnPath = safeInvitationReturnPath(searchParams.get("returnTo"))
     || safeInvitationHashReturnPath(location.hash);
@@ -188,8 +192,15 @@ export function LoginPage() {
         <div className="mb-6 flex flex-col items-start gap-4">
           <BrandMark />
           <h1 className="text-2xl font-semibold text-slate-900">{t("login.title")}</h1>
-          <p className="text-sm text-slate-600">{t("login.description")}</p>
+          <p className="text-sm text-slate-600">
+            {t(googleLoginAvailable ? "login.description" : "login.descriptionPasswordOnly")}
+          </p>
         </div>
+        {invitationNotice === "unavailable" && (
+          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" role="status">
+            {t("login.invitationUnavailable")}
+          </p>
+        )}
         {mfaChallenge ? (
           <form className="space-y-4" onSubmit={handleMfaSubmit}>
             <div className="rounded-lg border border-brand-100 bg-brand-50 p-3 text-sm text-brand-900" role="status">
@@ -264,7 +275,7 @@ export function LoginPage() {
           {error && <p id="login-error" role="alert" className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
           {showPasswordHelp && (
             <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-900" role="note">
-              {t("login.passwordHelp")} {" "}
+              {t(googleLoginAvailable ? "login.passwordHelp" : "login.passwordHelpPasswordOnly")} {" "}
               <Link to="/reset-password" className="font-semibold underline">
                 {t("login.resetHotelPassword")}
               </Link>
@@ -284,14 +295,16 @@ export function LoginPage() {
             {loading ? t("login.connecting") : t("login.submit")}
           </button>
         </form>
-        <div className="mt-4">
-          <div className="relative flex items-center py-2">
-            <div className="flex-grow border-t border-slate-200" />
-            <span className="mx-3 text-xs uppercase text-slate-400">{t("login.socialSeparator")}</span>
-            <div className="flex-grow border-t border-slate-200" />
+        {googleLoginAvailable && (
+          <div className="mt-4">
+            <div className="relative flex items-center py-2">
+              <div className="flex-grow border-t border-slate-200" />
+              <span className="mx-3 text-xs uppercase text-slate-400">{t("login.socialSeparator")}</span>
+              <div className="flex-grow border-t border-slate-200" />
+            </div>
+            <GoogleSignInButton onCredential={handleGoogleCredential} />
           </div>
-          <GoogleSignInButton onCredential={handleGoogleCredential} />
-        </div>
+        )}
         </div>
         )}
         <div className="mt-4 flex items-center justify-between text-sm">

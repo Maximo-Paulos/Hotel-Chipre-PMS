@@ -11,6 +11,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.models.cash_register import (
@@ -21,6 +22,7 @@ from app.models.cash_register import (
     CashSession,
 )
 from app.models.hotel_config import HotelConfiguration
+from app.models.reservation import Reservation
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.services.actor_label_service import resolve_hotel_actor_labels
 from app.services.timezones import normalize_timezone
@@ -97,10 +99,46 @@ def get_daily_summary(
         .filter(
             Transaction.hotel_id == hotel_id,
             Transaction.status == TransactionStatusEnum.COMPLETED,
+            Transaction.collected_before.is_(False),
             Transaction.processed_at >= db_start,
             Transaction.processed_at < db_end,
         )
         .order_by(Transaction.processed_at.asc(), Transaction.id.asc())
+        .all()
+    )
+    prior_receipt_rows = (
+        db.query(Transaction, Reservation.confirmation_code)
+        .join(
+            Reservation,
+            and_(
+                Reservation.hotel_id == Transaction.hotel_id,
+                Reservation.id == Transaction.reservation_id,
+            ),
+        )
+        .filter(
+            Transaction.hotel_id == hotel_id,
+            Transaction.status == TransactionStatusEnum.COMPLETED,
+            Transaction.payment_method == PaymentMethodEnum.CASH,
+            Transaction.collected_before.is_(True),
+        )
+        .order_by(Transaction.collected_on.asc(), Transaction.id.asc())
+        .limit(ENTRY_LIMIT + 1)
+        .all()
+    )
+    prior_receipt_totals = (
+        db.query(
+            func.coalesce(Transaction.tender_currency, Transaction.currency),
+            func.sum(func.coalesce(Transaction.tender_amount, Transaction.amount)),
+            func.count(Transaction.id),
+        )
+        .filter(
+            Transaction.hotel_id == hotel_id,
+            Transaction.status == TransactionStatusEnum.COMPLETED,
+            Transaction.payment_method == PaymentMethodEnum.CASH,
+            Transaction.collected_before.is_(True),
+        )
+        .group_by(func.coalesce(Transaction.tender_currency, Transaction.currency))
+        .order_by(func.coalesce(Transaction.tender_currency, Transaction.currency).asc())
         .all()
     )
     movements = (
@@ -192,7 +230,7 @@ def get_daily_summary(
         and _utc(received_at or delivered_at) <= start
     }
     observed_currencies = {
-        str(transaction.currency or (hotel.default_currency if hotel else "ARS")).upper()
+        str(transaction.tender_currency or transaction.currency or (hotel.default_currency if hotel else "ARS")).upper()
         for transaction in transactions
     }
     observed_currencies.update(session_currencies.values())
@@ -208,6 +246,11 @@ def get_daily_summary(
         for transaction in transactions
         if transaction.created_by_user_id is not None
     }
+    actor_ids.update(
+        transaction.created_by_user_id
+        for transaction, _confirmation_code in prior_receipt_rows[:ENTRY_LIMIT]
+        if transaction.created_by_user_id is not None
+    )
     actor_ids.update(
         movement.recorded_by_user_id
         for movement in movements
@@ -238,13 +281,13 @@ def get_daily_summary(
     digital_net = ZERO
 
     for transaction in transactions:
-        transaction_currency = str(transaction.currency or (hotel.default_currency if hotel else "ARS")).upper()
+        transaction_currency = str(transaction.tender_currency or transaction.currency or (hotel.default_currency if hotel else "ARS")).upper()
         if transaction_currency != report_currency:
             continue
         method = _value(transaction.payment_method)
         transaction_type = _value(transaction.transaction_type)
         amount = _decimal(transaction.gross_amount if transaction.gross_amount is not None else transaction.amount)
-        base_amount = _decimal(transaction.amount)
+        base_amount = _decimal(transaction.tender_amount if transaction.tender_amount is not None else transaction.amount)
         is_refund = transaction_type == TransactionTypeEnum.REFUND.value
         positive_amount = abs(amount)
         signed_amount = -positive_amount if is_refund else positive_amount
@@ -477,6 +520,30 @@ def get_daily_summary(
             "manual_income_total": _decimal(manual_income),
             "manual_expense_total": _decimal(manual_expense),
         },
+        "prior_receipts": [
+            {
+                "transaction_id": transaction.id,
+                "reservation_id": transaction.reservation_id,
+                "confirmation_code": confirmation_code,
+                "amount": _decimal(transaction.tender_amount if transaction.tender_amount is not None else transaction.amount),
+                "currency_code": str(transaction.tender_currency or transaction.currency or "ARS").upper(),
+                "collected_on": transaction.collected_on,
+                "prior_receipt_note": transaction.prior_receipt_note,
+                "recorded_at": _utc(transaction.created_at),
+                "recorded_by_user_id": transaction.created_by_user_id,
+                "recorded_by_name": _actor_name(transaction.created_by_user_id, actor_labels),
+            }
+            for transaction, confirmation_code in prior_receipt_rows[:ENTRY_LIMIT]
+        ],
+        "prior_receipt_totals": [
+            {
+                "currency_code": str(currency or "ARS").upper(),
+                "amount": _decimal(amount),
+                "transaction_count": int(count),
+            }
+            for currency, amount, count in prior_receipt_totals
+        ],
+        "prior_receipts_truncated": len(prior_receipt_rows) > ENTRY_LIMIT,
         "sessions": session_reads,
         "entries": entries[:ENTRY_LIMIT],
         "entries_truncated": entries_truncated,

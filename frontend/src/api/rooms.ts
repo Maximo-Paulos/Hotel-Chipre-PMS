@@ -1,6 +1,19 @@
 import { apiFetch, type SessionLike } from "./client";
 
 export type RoomStatus = "available" | "occupied" | "maintenance" | "blocked" | "cleaning";
+export type HousekeepingStatus = "dirty" | "in_progress" | "clean" | "inspected";
+export type HousekeepingBoardRoom = {
+  room_id: number;
+  room_number: string;
+  floor: number;
+  category_name: string;
+  operational_status: RoomStatus;
+  housekeeping_status: HousekeepingStatus;
+  has_arrival_today: boolean;
+  has_departure_today: boolean;
+  maintenance_blocked: boolean;
+};
+export type HousekeepingBoard = { date: string; rooms: HousekeepingBoardRoom[] };
 
 export type RoomCategory = {
   id: number;
@@ -21,6 +34,7 @@ export type Room = {
   floor: number;
   category_id: number;
   status: RoomStatus;
+  housekeeping_status: HousekeepingStatus;
   is_active: boolean;
   notes?: string | null;
   category?: RoomCategory | null;
@@ -44,6 +58,9 @@ export type RoomDeleteBlockedDetail = {
 };
 
 export const listRooms = (session?: SessionLike) => apiFetch<Room[]>("/api/rooms/", { session });
+
+export const getHousekeepingBoard = (session?: SessionLike) =>
+  apiFetch<HousekeepingBoard>("/api/rooms/housekeeping-board", { session });
 
 export const listRoomCategories = (session?: SessionLike) =>
   apiFetch<RoomCategory[]>("/api/rooms/categories", { session });
@@ -80,7 +97,7 @@ export const updateRoomStatus = (roomId: number, status: RoomStatus, notes?: str
 
 export const updateRoomCleaningStatus = (
   roomId: number,
-  status: "cleaning" | "available",
+  status: HousekeepingStatus,
   notes?: string,
   session?: SessionLike
 ) =>

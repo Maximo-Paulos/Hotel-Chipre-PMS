@@ -6,11 +6,12 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
+from app.schemas.datetime_types import UTCDateTime
 from app.services.permission_service import (
     PERMISSION_STOCK_ADJUST,
     PERMISSION_STOCK_ADMIN,
@@ -21,6 +22,7 @@ from app.services.permission_service import (
 )
 from app.services.stock_service import (
     StockError,
+    StockIdempotencyConflict,
     consumption_report,
     create_location,
     create_stock_item,
@@ -34,7 +36,9 @@ from app.services.stock_service import (
     list_stock_items,
     low_stock_items,
     register_movement,
+    register_opening_count,
     stock_summary,
+    transfer_stock,
     update_location,
     update_stock_item,
 )
@@ -126,8 +130,30 @@ class StockMovementRead(BaseModel):
     reason: Optional[str] = None
     reservation_id: Optional[int] = None
     created_by_user_id: Optional[int] = None
-    created_at: datetime
+    created_at: UTCDateTime
     idempotency_key: Optional[str] = None
+    transfer_reference: Optional[str] = None
+
+
+class StockTransferCreate(BaseModel):
+    item_id: int = Field(gt=0)
+    source_location_id: int = Field(gt=0)
+    destination_location_id: int = Field(gt=0)
+    quantity: Decimal = Field(gt=0)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class StockTransferRead(BaseModel):
+    transfer_reference: str
+    outbound: StockMovementRead
+    inbound: StockMovementRead
+
+
+class StockOpeningCountCreate(BaseModel):
+    item_id: int = Field(gt=0)
+    location_id: int = Field(gt=0)
+    quantity: Decimal = Field(gt=0)
+    reason: str = Field(min_length=1, max_length=500)
 
 
 class StockConsumptionItem(BaseModel):
@@ -172,9 +198,17 @@ def list_items(
     return list_stock_items(db, hotel_id=context.hotel_id)
 
 
+class StockLocationBalanceRead(BaseModel):
+    location_id: int
+    location_name: str
+    current_quantity: Decimal
+    has_movements: bool
+
+
 class StockSummaryEntry(BaseModel):
     item: StockItemRead
     current_quantity: Decimal
+    location_balances: list[StockLocationBalanceRead] = Field(default_factory=list)
 
 
 @router.get("/summary", response_model=list[StockSummaryEntry])
@@ -340,6 +374,74 @@ def create_movement(
         )
     except StockError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    db.commit()
+    db.refresh(movement)
+    return movement
+
+
+@router.post("/transfers", response_model=StockTransferRead, status_code=status.HTTP_201_CREATED)
+def create_stock_transfer(
+    data: StockTransferCreate,
+    idempotency_key: str = Header(
+        ...,
+        alias="Idempotency-Key",
+        min_length=8,
+        max_length=100,
+    ),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_MOVE)),
+):
+    try:
+        reference, outbound, inbound = transfer_stock(
+            db,
+            hotel_id=context.hotel_id,
+            item_id=data.item_id,
+            source_location_id=data.source_location_id,
+            destination_location_id=data.destination_location_id,
+            quantity=data.quantity,
+            reason=data.reason,
+            created_by_user_id=context.user_id,
+            idempotency_key=idempotency_key,
+        )
+    except StockIdempotencyConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except StockError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    db.commit()
+    db.refresh(outbound)
+    db.refresh(inbound)
+    return {"transfer_reference": reference, "outbound": outbound, "inbound": inbound}
+
+
+@router.post("/opening-counts", response_model=StockMovementRead, status_code=status.HTTP_201_CREATED)
+def create_opening_stock_count(
+    data: StockOpeningCountCreate,
+    idempotency_key: str = Header(
+        ...,
+        alias="Idempotency-Key",
+        min_length=8,
+        max_length=100,
+    ),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_ADJUST)),
+):
+    try:
+        movement = register_opening_count(
+            db,
+            hotel_id=context.hotel_id,
+            item_id=data.item_id,
+            location_id=data.location_id,
+            quantity=data.quantity,
+            reason=data.reason,
+            created_by_user_id=context.user_id,
+            idempotency_key=idempotency_key,
+        )
+    except StockIdempotencyConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except StockError as exc:
+        # An opening count is valid only while this item/location has no
+        # movement history; stale forms are conflicts and must be refreshed.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     db.commit()
     db.refresh(movement)
     return movement

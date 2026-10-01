@@ -7,11 +7,19 @@
     "title": "Sin conexión.",
     "description": "Los datos visibles pueden estar desactualizados. Las acciones de reservas, check-in/out y cobros requieren conexión y no se guardan para reintentar automáticamente."
   },
+  "accessDenied": {
+    "title": "No tenés permiso para ver esta sección.",
+    "description": "Si necesitás acceder, pedile al dueño del hotel que revise tus permisos.",
+    "home": "Volver a mi inicio"
+  },
+  "currency": {
+    "historicalRateUnavailable": "Sin cotización histórica"
+  },
   "realtime": {
     "connected": "Conectado: cambios en tiempo real activos.",
     "connecting": "Conectando sincronización en tiempo real…",
     "reconnecting": "Reconectando sincronización en tiempo real…",
-    "degraded": "Sincronización en tiempo real degradada. Las operaciones siguen guardándose; actualizaremos al reconectar."
+    "degraded": "Sincronización en tiempo real degradada. Verificá la confirmación de cada acción antes de repetirla."
   },
   "viewingAs": {
     "banner": "Vista previa como {{role}} — no cambia permisos ni identidad; tus permisos efectivos siguen siendo los de {{baseRole}}.",
@@ -38,12 +46,14 @@
     "install": "Instalar",
     "dismiss": "Ahora no"
   },
+  "quickReservation": "Reserva rápida",
   "nav": {
     "daily": {
       "planning": "Planilla",
       "reservations": "Reservas",
       "guests": "Huéspedes",
       "rooms": "Habitaciones",
+      "housekeepingToday": "Limpieza de hoy",
       "tasks": "Pendientes",
       "cashRegister": "Caja"
     },

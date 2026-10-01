@@ -1,5 +1,14 @@
 {
   "loading": "Loading...",
+  "stockAlerts": {
+    "linenLowTitle": "Linen below minimum",
+    "linenOutItem": "No units of {{item}} are available at this location.",
+    "linenBelowMinimum": "{{item}}: {{quantity}} available; minimum {{minimum}}.",
+    "minimumLabel": "Minimum at this location",
+    "minimumValue": "Configured minimum: {{minimum}}",
+    "saveMinimum": "Save minimum",
+    "minimumFailed": "Could not save the minimum."
+  },
   "checkingSession": "Checking session...",
   "showPassword": "Show password",
   "hidePassword": "Hide password",
@@ -60,6 +69,7 @@
     "selectAssignable": "Select an active role",
     "roleChangePermissionNotice": "Changing a role removes individually granted permissions; individual restrictions remain in place.",
     "roleChangePermissionConfirm": "Change the role to {{role}}? Individually granted permissions will be removed and restrictions will remain.",
+    "roleChangeSuccess": "{{email}}'s role was updated to {{role}}.",
     "latestInvitationLinkNotice": "Each resend invalidates earlier links. Always use the link in the latest email.",
     "rolesLoading": "Loading available roles...",
     "rolesError": "Active roles could not be loaded. Invitations and role changes are disabled until the list is available.",

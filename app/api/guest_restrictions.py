@@ -18,6 +18,7 @@ from app.services.guest_restriction_service import (
     GuestRestrictionNotFoundError,
     create_guest_restriction,
     get_active_guest_restrictions,
+    get_active_guest_restriction_guest_ids,
     resolve_guest_restriction,
 )
 from app.services.permission_service import (
@@ -35,6 +36,31 @@ def _get_tenant_guest(db: Session, hotel_id: int, guest_id: int) -> Guest:
     if guest is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guest not found")
     return guest
+
+
+@router.get("/active-restrictions/summary", response_model=list[int])
+def list_active_restriction_guest_ids(
+    guest_ids: list[int] = Query(...),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(
+        require_any_permission(PERMISSION_GUEST_PROHIBITION_READ, PERMISSION_GUEST_PROHIBITION_MANAGE)
+    ),
+):
+    """Return restricted guest IDs for one page of the guest list.
+
+    The bounded summary avoids N+1 per-guest reads and excludes private
+    restriction reasons/details from this batch projection.
+    """
+    if not guest_ids or len(guest_ids) > 50 or any(guest_id <= 0 for guest_id in guest_ids):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="guest_ids must contain between 1 and 50 positive IDs",
+        )
+    return get_active_guest_restriction_guest_ids(
+        db,
+        hotel_id=context.hotel_id,
+        guest_ids=guest_ids,
+    )
 
 
 @router.post(

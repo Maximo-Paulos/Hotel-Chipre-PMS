@@ -15,9 +15,10 @@ services:
     # Production capacity profile. Render autoscaling requires a Pro
     # workspace; preview environments deliberately run minInstances only.
     plan: standard
-    # PostgreSQL budget: app/database.py defaults to pool_size=5 + max_overflow=2 = 7 connections per instance.
-    # The current Supabase free Postgres has max_connections=60, so 60 / 15 = 4 theoretical API instances;
-    # maxInstances stays at 3 to reserve the remaining connection budget for Celery, beat, and admin tools.
+    # PostgreSQL budget: 3 API instances x 12 connections = 36; the Celery
+    # prefork worker has 4 child processes x 2 = 8, and beat has 2, for 46 total.
+    # This reserves 14 connections from the documented 60 limit for migrations/admin.
+    # Verify the live database limit before changing this budget or scaling services.
     # If the Postgres plan changes, recalculate max_connections / (pool_size + max_overflow) and update this limit.
     scaling:
       minInstances: 3
@@ -29,6 +30,12 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: DB_POOL_SIZE
+        value: "8"
+      - key: DB_MAX_OVERFLOW
+        value: "4"
+      - key: DB_POOL_TIMEOUT_SECONDS
+        value: "15"
       - key: EXTERNAL_EFFECTS_ENABLED
         value: "false"
       - key: INBOUND_PROVIDER_EVENTS_ENABLED
@@ -154,6 +161,12 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: DB_POOL_SIZE
+        value: "2"
+      - key: DB_MAX_OVERFLOW
+        value: "0"
+      - key: DB_POOL_TIMEOUT_SECONDS
+        value: "15"
       - key: EXTERNAL_EFFECTS_ENABLED
         value: "false"
       - key: INBOUND_PROVIDER_EVENTS_ENABLED
@@ -223,6 +236,12 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: DB_POOL_SIZE
+        value: "2"
+      - key: DB_MAX_OVERFLOW
+        value: "0"
+      - key: DB_POOL_TIMEOUT_SECONDS
+        value: "15"
       - key: EXTERNAL_EFFECTS_ENABLED
         value: "false"
       - key: INBOUND_PROVIDER_EVENTS_ENABLED

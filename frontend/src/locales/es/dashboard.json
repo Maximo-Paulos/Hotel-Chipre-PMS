@@ -32,6 +32,13 @@
     },
     "multiCurrency": "Multimoneda"
   },
+  "cashApprovals": {
+    "title": "Diferencias de caja pendientes",
+    "count_one": "{{count}} cierre requiere revisión",
+    "count_other": "{{count}} cierres requieren revisión",
+    "error": "No se pudieron cargar los cierres pendientes.",
+    "view": "Revisar en Caja"
+  },
   "pipeline": {
     "eyebrow": "Pipeline",
     "title": "Próximas reservas",
@@ -43,6 +50,7 @@
       "status": "Estado",
       "amount": "Monto"
     },
+    "deferredCompanyBilling": "Facturado fuera del PMS",
     "empty": "Sin próximas reservas."
   },
   "activity": {

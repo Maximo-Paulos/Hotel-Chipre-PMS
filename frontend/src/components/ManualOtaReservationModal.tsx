@@ -10,6 +10,7 @@ import { formatMoney, normalizeCurrencyCode } from "../utils/currency";
 import { addDaysIso, todayIso } from "../utils/date";
 
 import GuestQuickCreatePanel, { emptyQuickGuestForm, hasQuickGuestFormData, type QuickGuestFormValues } from "./GuestQuickCreatePanel";
+import LocalizedDateField from "./LocalizedDateField";
 
 // B4: "Cargar reserva de OTA" -- POST /api/reservations/manual-ota. This is
 // an upsert keyed by (channel, external_id): submitting the same pair again
@@ -357,24 +358,30 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-semibold text-slate-600">
-                Check-in
-                <input
-                  type="date"
-                  value={form.check_in_date}
-                  onChange={(e) => setForm((prev) => ({ ...prev, check_in_date: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-                />
-              </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Check-out
-                <input
-                  type="date"
-                  value={form.check_out_date}
-                  onChange={(e) => setForm((prev) => ({ ...prev, check_out_date: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
-                />
-              </label>
+              <LocalizedDateField
+                id="manual-ota-check-in"
+                label="Check-in"
+                value={form.check_in_date}
+                onChange={(value) => setForm((prev) => ({ ...prev, check_in_date: value }))}
+                className="w-full"
+                labelClassName="text-xs font-semibold text-slate-600"
+                inputClassName="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-800 shadow-sm"
+                placeholder="DD/MM/AAAA"
+                chooseDateLabel="Elegir fecha"
+                invalidMessage="Ingresá una fecha válida con formato DD/MM/AAAA."
+              />
+              <LocalizedDateField
+                id="manual-ota-check-out"
+                label="Check-out"
+                value={form.check_out_date}
+                onChange={(value) => setForm((prev) => ({ ...prev, check_out_date: value }))}
+                className="w-full"
+                labelClassName="text-xs font-semibold text-slate-600"
+                inputClassName="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-800 shadow-sm"
+                placeholder="DD/MM/AAAA"
+                chooseDateLabel="Elegir fecha"
+                invalidMessage="Ingresá una fecha válida con formato DD/MM/AAAA."
+              />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">

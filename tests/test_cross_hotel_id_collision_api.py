@@ -40,7 +40,10 @@ from app.models.stock import StockItem, StockLocation
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.models.user import User
 from app.services.action_step_up_service import create_action_step_up_ticket
-from app.services.permission_service import PERMISSION_PERMISSION_MANAGE
+from app.services.permission_service import (
+    PERMISSION_PERMISSION_MANAGE,
+    PERMISSION_SETTINGS_USERS_MANAGE,
+)
 
 HOTEL_A = 9101
 HOTEL_B = 9102
@@ -340,7 +343,16 @@ def test_payment_link_query_param_cannot_select_foreign_reservation(two_hotel_cl
 
 def test_invitation_path_cannot_select_foreign_hotel(two_hotel_client):
     client, ids = two_hotel_client
-    resp = client.post(f"/api/users/invitations/{ids['invitation_b']}/resend")
+    path = f"/api/users/invitations/{ids['invitation_b']}/resend"
+    ticket = create_action_step_up_ticket(
+        user_id=HOTEL_A,
+        hotel_id=HOTEL_A,
+        token_version=0,
+        permission_code=PERMISSION_SETTINGS_USERS_MANAGE,
+        method="POST",
+        path=path,
+    )
+    resp = client.post(path, headers={"X-Action-Step-Up-Ticket": ticket})
     assert resp.status_code == 404, resp.text
     assert "Hotel B" not in resp.text
 

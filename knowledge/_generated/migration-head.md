@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-09-27T04:43:18.847661+00:00
-Commit: `7d81967d02b2887bf1baf3a823ee0c4f2b1c4561`
+Generado: 2026-10-01T11:56:39.260989+00:00
+Commit: `51738e1be471cca6ad6164adca7ec0af93bbf83c`
 
 ```text
-20260927_revoke_public_rls_auto_enable (head)
+20261014_payment_fx_currency (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

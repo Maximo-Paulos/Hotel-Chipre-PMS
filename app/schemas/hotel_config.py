@@ -3,13 +3,22 @@ Pydantic schemas for HotelConfiguration.
 """
 from typing import Literal, Optional, List
 from datetime import datetime
+from decimal import Decimal
+import re
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.services.fx_service import OTHER_CURRENCIES
 from app.services.timezones import normalize_timezone
 
 SUPPORTED_CURRENCIES = {c.upper() for c in OTHER_CURRENCIES} | {"ARS", "USD"}
+_LOCAL_TIME_PATTERN = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+
+class HotelInterfaceLanguageRead(BaseModel):
+    """The only hotel configuration exposed to every authenticated staff role."""
+
+    interface_language: Literal["es", "en"]
 
 
 def _normalize_currency(value: str) -> str:
@@ -41,7 +50,13 @@ class HotelConfigRead(BaseModel):
     require_terms_acceptance: bool
     hotel_name: str
     hotel_timezone: str
+    check_in_time: Optional[str] = None
+    check_out_time: Optional[str] = None
+    manual_rate_min_adjustment_pct: Optional[Decimal] = None
+    manual_rate_max_adjustment_pct: Optional[Decimal] = None
     default_currency: str
+    fx_conversion_rate_type: Literal["oficial", "blue"] = "oficial"
+    fx_display_rate_types: List[Literal["oficial", "blue"]] = Field(default_factory=lambda: ["oficial"])
     languages: List[str]
     jurisdiction_code: str
     interface_language: str
@@ -75,7 +90,13 @@ class HotelConfigUpdate(BaseModel):
     require_terms_acceptance: Optional[bool] = None
     hotel_name: Optional[str] = None
     hotel_timezone: Optional[str] = None
+    check_in_time: Optional[str] = None
+    check_out_time: Optional[str] = None
+    manual_rate_min_adjustment_pct: Optional[Decimal] = Field(default=None, ge=-100, max_digits=7, decimal_places=2)
+    manual_rate_max_adjustment_pct: Optional[Decimal] = Field(default=None, max_digits=7, decimal_places=2)
     default_currency: Optional[str] = None
+    fx_conversion_rate_type: Optional[Literal["oficial", "blue"]] = None
+    fx_display_rate_types: Optional[List[Literal["oficial", "blue"]]] = Field(default=None, min_length=1, max_length=2)
     languages: Optional[List[str]] = None
     jurisdiction_code: Optional[str] = Field(default=None, min_length=2, max_length=3)
     interface_language: Optional[str] = None
@@ -105,6 +126,19 @@ class HotelConfigUpdate(BaseModel):
             return None
         return _normalize_currency(value)
 
+    @field_validator("fx_display_rate_types")
+    @classmethod
+    def normalize_fx_display_rate_types(
+        cls,
+        value: Optional[List[Literal["oficial", "blue"]]],
+    ) -> Optional[List[Literal["oficial", "blue"]]]:
+        if value is None:
+            return None
+        if len(set(value)) != len(value):
+            raise ValueError("fx_display_rate_types no puede repetir cotizaciones")
+        # Stable order makes responses and the settings control predictable.
+        return [rate_type for rate_type in ("oficial", "blue") if rate_type in value]
+
     @field_validator("interface_language")
     @classmethod
     def normalize_interface_language(cls, value: Optional[str]) -> Optional[str]:
@@ -114,3 +148,32 @@ class HotelConfigUpdate(BaseModel):
         if candidate not in ("es", "en"):
             raise ValueError(f"Unsupported interface_language: {value}")
         return candidate
+
+    @field_validator("check_in_time", "check_out_time", mode="before")
+    @classmethod
+    def normalize_hotel_local_time(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("El horario debe tener formato HH:MM")
+        candidate = value.strip()
+        if not candidate:
+            return None
+        if not _LOCAL_TIME_PATTERN.fullmatch(candidate):
+            raise ValueError("El horario debe tener formato HH:MM")
+        return candidate
+
+    @model_validator(mode="after")
+    def validate_manual_rate_bounds(self):
+        lower_supplied = "manual_rate_min_adjustment_pct" in self.model_fields_set
+        upper_supplied = "manual_rate_max_adjustment_pct" in self.model_fields_set
+        lower = self.manual_rate_min_adjustment_pct
+        upper = self.manual_rate_max_adjustment_pct
+        if lower is not None and lower < Decimal("-100"):
+            raise ValueError("El límite inferior no puede ser menor a -100%")
+        if lower_supplied and upper_supplied:
+            if (lower is None) != (upper is None):
+                raise ValueError("Configurá o limpiá juntos los dos límites de tarifa manual")
+            if lower is not None and upper is not None and lower > upper:
+                raise ValueError("El límite inferior no puede superar al límite superior")
+        return self

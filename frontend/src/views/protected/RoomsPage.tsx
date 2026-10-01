@@ -1,10 +1,13 @@
 import { type FormEvent, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
-import { type RoomBlockCreatePayload, type RoomBlockReasonCode } from "../../api/roomBlocks";
-import { type RoomStatus } from "../../api/rooms";
+import { ApiError, hasValidSession } from "../../api/client";
+import { queryKeys } from "../../api/queryKeys";
+import { previewRoomBlockConflicts, type RoomBlockCreatePayload, type RoomBlockReasonCode } from "../../api/roomBlocks";
+import { getHousekeepingBoard, type HousekeepingStatus, type RoomStatus } from "../../api/rooms";
 import { roomBlockReasonLabel, roomBlockReasonOptions, useRoomBlocks } from "../../hooks/useRoomBlocks";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { roomStatusLabel, useRooms } from "../../hooks/useRooms";
@@ -23,7 +26,13 @@ const statusColors: Record<RoomStatus, string> = {
 };
 
 const statusOptions: RoomStatus[] = ["available", "occupied", "cleaning", "maintenance", "blocked"];
-const cleaningStatusOptions: RoomStatus[] = ["available", "cleaning"];
+const housekeepingStatusOptions: HousekeepingStatus[] = ["dirty", "in_progress", "clean", "inspected"];
+const housekeepingStatusColors: Record<HousekeepingStatus, string> = {
+  dirty: "bg-rose-100 text-rose-800",
+  in_progress: "bg-amber-100 text-amber-800",
+  clean: "bg-emerald-100 text-emerald-800",
+  inspected: "bg-sky-100 text-sky-800"
+};
 
 type BlockFormValues = {
   room_id: string;
@@ -45,6 +54,12 @@ const emptyBlockForm = (): BlockFormValues => ({
 
 export function RoomsPage() {
   const { t } = useTranslation("rooms");
+  const housekeepingStatusLabels: Record<HousekeepingStatus, string> = {
+    dirty: t("housekeepingStatus.dirty"),
+    in_progress: t("housekeepingStatus.in_progress"),
+    clean: t("housekeepingStatus.clean"),
+    inspected: t("housekeepingStatus.inspected")
+  };
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
   const isHousekeeping = session.baseRole === "housekeeping";
@@ -56,12 +71,22 @@ export function RoomsPage() {
   const { roomsQuery, categoriesQuery, updateStatusMutation, updateCleaningStatusMutation } = useRooms({
     includeCategories: !isHousekeeping
   });
+  const housekeepingBoardQuery = useQuery({
+    queryKey: queryKeys.housekeepingBoard(session.hotelId),
+    queryFn: () => getHousekeepingBoard(session),
+    enabled: isHousekeeping && hasValidSession(session),
+    staleTime: 0
+  });
   const { blocksQuery, createBlockMutation, resolveBlockMutation } = useRoomBlocks({ enabled: !isHousekeeping });
   const today = todayIso();
   // Keep the persisted physical status independent from future allocations,
   // while still showing the next/current reservation after a Planilla move.
   const occupancyQuery = useOccupancyGrid(today, addDaysIso(today, 92), showAssignments);
   const rooms = useMemo(() => roomsQuery.data || [], [roomsQuery.data]);
+  const maintenanceBlockedRoomIds = useMemo(
+    () => new Set((housekeepingBoardQuery.data?.rooms ?? []).filter((room) => room.maintenance_blocked).map((room) => room.room_id)),
+    [housekeepingBoardQuery.data?.rooms]
+  );
   const categories = useMemo(() => categoriesQuery.data || [], [categoriesQuery.data]);
   const activeBlocks = useMemo(() => blocksQuery.data || [], [blocksQuery.data]);
   const [pendingRoom, setPendingRoom] = useState<number | null>(null);
@@ -72,13 +97,37 @@ export function RoomsPage() {
   const { data: subscription } = useSubscriptionStatus({ enabled: !isHousekeeping });
 
   const writeBlocked = subscription?.can_write === false;
-  const inactiveSubscription = subscription && subscription.status !== "active";
-  const actionsBlocked = Boolean(subscription) && (writeBlocked || inactiveSubscription);
+  const actionsBlocked = Boolean(subscription) && writeBlocked;
   const blockReason = actionsBlocked
-    ? writeBlocked
-      ? t("subscription.readOnly")
-      : t("subscription.inactive")
+    ? t("subscription.readOnly")
     : null;
+
+  const selectedBlockRoomId = Number(blockForm.room_id);
+  const blockRangeReady = Boolean(
+    Number.isInteger(selectedBlockRoomId)
+    && selectedBlockRoomId > 0
+    && blockForm.starts_at
+    && (blockForm.is_indefinite || (blockForm.ends_at && blockForm.ends_at > blockForm.starts_at))
+  );
+  const blockConflictPreviewQuery = useQuery({
+    queryKey: [
+      "room-block-conflict-preview",
+      session.hotelId,
+      selectedBlockRoomId,
+      blockForm.starts_at,
+      blockForm.is_indefinite ? null : blockForm.ends_at,
+      blockForm.is_indefinite
+    ],
+    queryFn: () => previewRoomBlockConflicts({
+      room_id: selectedBlockRoomId,
+      starts_at: blockForm.starts_at,
+      ends_at: blockForm.is_indefinite ? null : blockForm.ends_at,
+      is_indefinite: blockForm.is_indefinite
+    }, session),
+    enabled: !isHousekeeping && canCreateBlocks && !actionsBlocked && blockRangeReady && hasValidSession(session),
+    staleTime: 0,
+    retry: false
+  });
 
   const categoryById = useMemo(() => {
     const map = new Map<number, { name: string; code: string; base_price_per_night: number; current_rate?: number | null }>();
@@ -125,16 +174,36 @@ export function RoomsPage() {
     );
   }, [rooms]);
 
+  const housekeepingStats = useMemo(() => {
+    return rooms.reduce(
+      (acc, room) => {
+        acc[room.housekeeping_status] = (acc[room.housekeeping_status] || 0) + 1;
+        return acc;
+      },
+      {} as Record<HousekeepingStatus, number>
+    );
+  }, [rooms]);
+
   const handleStatusUpdate = async (roomId: number, status: RoomStatus) => {
-    if (actionsBlocked || (!canManageRoomStatus && !canToggleCleaningStatus)) return;
+    if (actionsBlocked || !canManageRoomStatus) return;
     setRoomStatusError(null);
     setPendingRoom(roomId);
     try {
-      if (canManageRoomStatus) {
-        await updateStatusMutation.mutateAsync({ roomId, status });
-      } else if (status === "available" || status === "cleaning") {
-        await updateCleaningStatusMutation.mutateAsync({ roomId, status });
-      }
+      await updateStatusMutation.mutateAsync({ roomId, status });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : t("inventory.statusUpdateDefaultError");
+      setRoomStatusError({ roomId, message: detail });
+    } finally {
+      setPendingRoom(null);
+    }
+  };
+
+  const handleHousekeepingStatusUpdate = async (roomId: number, status: HousekeepingStatus) => {
+    if (actionsBlocked || !canToggleCleaningStatus) return;
+    setRoomStatusError(null);
+    setPendingRoom(roomId);
+    try {
+      await updateCleaningStatusMutation.mutateAsync({ roomId, status });
     } catch (error) {
       const detail = error instanceof Error ? error.message : t("inventory.statusUpdateDefaultError");
       setRoomStatusError({ roomId, message: detail });
@@ -176,7 +245,13 @@ export function RoomsPage() {
       setBlockForm(emptyBlockForm());
       setBlockMessage(t("blocks.createSuccess"));
     } catch (error) {
-      setBlockMessage(error instanceof Error ? error.message : t("blocks.createError"));
+      if (error instanceof ApiError && error.status === 409) {
+        const detail = (error.payload as { detail?: { reservation_ids?: unknown } } | null)?.detail;
+        const count = Array.isArray(detail?.reservation_ids) ? detail.reservation_ids.length : 1;
+        setBlockMessage(t("blocks.protectedConflictRejected", { count }));
+      } else {
+        setBlockMessage(error instanceof Error ? error.message : t("blocks.createError"));
+      }
     }
   };
 
@@ -215,11 +290,35 @@ export function RoomsPage() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatusBadge label={t("stats.available")} value={stats.available ?? 0} className={statusColors.available} />
-        <StatusBadge label={t("stats.occupied")} value={stats.occupied ?? 0} className={statusColors.occupied} />
-        <StatusBadge label={t("stats.cleaning")} value={stats.cleaning ?? 0} className={statusColors.cleaning} />
-      </div>
+      {isHousekeeping && housekeepingBoardQuery.isLoading && (
+        <p role="status" className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600">
+          {t("inventory.maintenanceStatusLoading")}
+        </p>
+      )}
+      {isHousekeeping && housekeepingBoardQuery.isError && (
+        <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          {t("inventory.maintenanceStatusError")}
+        </p>
+      )}
+
+      {isHousekeeping ? (
+        <div className="grid gap-4 sm:grid-cols-4">
+          {housekeepingStatusOptions.map((status) => (
+            <StatusBadge
+              key={status}
+              label={housekeepingStatusLabels[status]}
+              value={housekeepingStats[status] ?? 0}
+              className={housekeepingStatusColors[status]}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <StatusBadge label={t("stats.available")} value={stats.available ?? 0} className={statusColors.available} />
+          <StatusBadge label={t("stats.occupied")} value={stats.occupied ?? 0} className={statusColors.occupied} />
+          <StatusBadge label={t("stats.cleaning")} value={stats.cleaning ?? 0} className={statusColors.cleaning} />
+        </div>
+      )}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
@@ -235,10 +334,12 @@ export function RoomsPage() {
             const category = categoryById.get(room.category_id);
             const canChangeThisStatus =
               canManageRoomStatus ||
-              (canToggleCleaningStatus && cleaningStatusOptions.includes(room.status));
-            const availableStatuses = canManageRoomStatus ? statusOptions : cleaningStatusOptions;
+              (isHousekeeping && canToggleCleaningStatus && room.is_active) ||
+              (canToggleCleaningStatus && !isHousekeeping && ["available", "cleaning"].includes(room.status));
+            const availableStatuses = canManageRoomStatus || !isHousekeeping ? statusOptions : housekeepingStatusOptions;
+            const selectedStatus = isHousekeeping ? room.housekeeping_status : room.status;
             return (
-              <div key={room.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div key={room.id} data-testid="room-card" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-xs uppercase tracking-wide text-slate-500">{t("inventory.roomLabel", { number: room.room_number || t("inventory.roomFallback") })}</p>
@@ -265,31 +366,49 @@ export function RoomsPage() {
                       );
                     })() : null}
                   </div>
-                  <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusColors[room.status]}`}>
-                    {roomStatusLabel[room.status]}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusColors[room.status]}`}>
+                      {roomStatusLabel[room.status]}
+                    </span>
+                    {isHousekeeping && housekeepingBoardQuery.isSuccess && maintenanceBlockedRoomIds.has(room.id) && (
+                      <span className="rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-800">
+                        {t("housekeepingToday.maintenanceBlocked")}
+                      </span>
+                    )}
+                    {isHousekeeping && (
+                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${housekeepingStatusColors[room.housekeeping_status]}`}>
+                        {housekeepingStatusLabels[room.housekeeping_status]}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <p className="mt-3 text-sm text-slate-700">{room.notes || t("inventory.noNotes")}</p>
                 {canChangeThisStatus ? (
                   <div className="mt-4 text-xs text-slate-600">
                     <label htmlFor={`room-status-${room.id}`} className="mb-1 block font-semibold text-slate-600">
-                      {t("inventory.statusLabel")}
+                      {isHousekeeping ? t("housekeepingStatus.label") : t("inventory.statusLabel")}
                     </label>
                     <select
                       id={`room-status-${room.id}`}
-                      aria-label={t("inventory.statusAriaLabel", { number: room.room_number || t("inventory.roomFallback") })}
-                      value={room.status}
-                      onChange={(e) => void handleStatusUpdate(room.id, e.target.value as RoomStatus)}
+                      aria-label={isHousekeeping
+                        ? `${t("housekeepingStatus.label")} · ${room.room_number}`
+                        : t("inventory.statusAriaLabel", { number: room.room_number || t("inventory.roomFallback") })}
+                      value={selectedStatus}
+                      onChange={(e) => isHousekeeping
+                        ? void handleHousekeepingStatusUpdate(room.id, e.target.value as HousekeepingStatus)
+                        : void handleStatusUpdate(room.id, e.target.value as RoomStatus)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-brand-400 focus:outline-none disabled:bg-slate-50"
                       disabled={actionsBlocked || (pendingRoom === room.id && (updateStatusMutation.isPending || updateCleaningStatusMutation.isPending))}
                     >
                       {availableStatuses.map((status) => (
                         <option key={status} value={status}>
-                          {roomStatusLabel[status]}
+                          {isHousekeeping
+                            ? housekeepingStatusLabels[status as HousekeepingStatus]
+                            : roomStatusLabel[status as RoomStatus]}
                         </option>
                       ))}
                     </select>
-                    {!canManageRoomStatus && canToggleCleaningStatus && (
+                    {isHousekeeping && canToggleCleaningStatus && (
                       <p className="mt-1 text-[11px] text-slate-500">{t("inventory.housekeepingHint")}</p>
                     )}
                     {pendingRoom === room.id && (updateStatusMutation.isPending || updateCleaningStatusMutation.isPending) && (
@@ -399,6 +518,23 @@ export function RoomsPage() {
             />
           </label>
 
+          {blockConflictPreviewQuery.isFetching && (
+            <p role="status" className="text-sm text-slate-600 lg:col-span-6">{t("blocks.conflictsLoading")}</p>
+          )}
+          {blockConflictPreviewQuery.isError && (
+            <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 lg:col-span-6">
+              {t("blocks.conflictVerificationError")}
+            </p>
+          )}
+          {(blockConflictPreviewQuery.data?.reservation_count ?? 0) > 0 && (
+            <div role="alert" className="space-y-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 lg:col-span-6">
+              <p>{t("blocks.conflictWarning", { count: blockConflictPreviewQuery.data!.reservation_count })}</p>
+              {blockConflictPreviewQuery.data!.protected_reservation_count > 0 && (
+                <p>{t("blocks.protectedConflictWarning", { count: blockConflictPreviewQuery.data!.protected_reservation_count })}</p>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col gap-3 lg:col-span-6 sm:flex-row sm:items-center sm:justify-between">
             <label className="inline-flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -425,7 +561,7 @@ export function RoomsPage() {
         )}
 
         {blockMessage && (
-          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{blockMessage}</div>
+          <div role="status" className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{blockMessage}</div>
         )}
 
         <div className="mt-4 grid gap-3 lg:grid-cols-2">

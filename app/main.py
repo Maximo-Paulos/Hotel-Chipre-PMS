@@ -36,6 +36,7 @@ from app.api import (
     guest_restrictions,
     guest_room_avoidances,
     reservations,
+    reservation_groups,
     waitlist,
     payments,
     checkin,
@@ -74,6 +75,7 @@ from app.api import (
     analytics,
     companies,
     company_documents,
+    company_night_charges,
     room_state_events,
     rate_calendar,
     daily_rates,
@@ -256,7 +258,13 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    route_csp = response.headers.get("Content-Security-Policy")
     response.headers["Content-Security-Policy"] = _CSP
+    # Preserve route-level restrictions as a second CSP. Browsers enforce all
+    # policies together; this lets private document responses add `sandbox`
+    # without weakening the application-wide policy.
+    if route_csp and route_csp != _CSP:
+        response.headers.append("Content-Security-Policy", route_csp)
     if is_production_mode():
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
@@ -331,6 +339,7 @@ app.include_router(guests.router)
 app.include_router(guest_restrictions.router)
 app.include_router(guest_room_avoidances.router)
 app.include_router(reservations.router)
+app.include_router(reservation_groups.router)
 app.include_router(waitlist.router)
 app.include_router(bookings.router)
 app.include_router(payments.router)
@@ -369,6 +378,7 @@ app.include_router(gemma_chat.router)
 app.include_router(analytics.router)
 app.include_router(companies.router)
 app.include_router(company_documents.router)
+app.include_router(company_night_charges.router)
 app.include_router(room_state_events.router)
 app.include_router(rate_calendar.router)
 app.include_router(daily_rates.router)

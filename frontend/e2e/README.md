@@ -50,6 +50,34 @@ For reliable isolation, existing servers are not reused by default. Set
 `E2E_REUSE_SERVER=true` only when intentionally connecting to already-running
 servers; in that mode the runner does not reset or own their database state.
 
+### PostgreSQL 16 browser runs
+
+Use a new, empty local PostgreSQL 16 database and two dedicated login roles
+for each run. The database and both role names must begin with
+`hotel_chipre_e2e_`; the app role must end in `_app_runner`, and the seed role
+must end in `_seed_runner`. The database endpoint must be loopback on port
+5432. Keep the database synthetic-only. The seed refuses PostgreSQL unless
+both URLs are passed twice as explicit opt-ins, and it checks that the
+`public` schema has no user objects before migrations. It never drops,
+truncates, or resets a PostgreSQL database. Reusing a migrated database is
+rejected; create a fresh one for the next run and remove only the database and
+roles created for that run after validation.
+
+The browser backend always uses the regular `_app_runner` role, so RLS remains
+active during user flows. The separate `_seed_runner` role is used only to
+load fixtures before the app starts; it must have `BYPASSRLS` and receives
+table/sequence grants only on the freshly migrated synthetic test database.
+Do not use the seed role in the app URL.
+
+Set `E2E_DATABASE_URL` to that local DSN, then set
+`E2E_POSTGRES_ISOLATED=true` and
+`E2E_POSTGRES_DATABASE_URL_EXPLICIT` to the exact same app-role DSN. Set
+`E2E_POSTGRES_SEED_DATABASE_URL` and
+`E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT` to the exact same seed-role DSN. Both
+DSNs must point to the same local database. The normal test server still
+forces external effects, provider connections, and inbound provider events
+off.
+
 ## Manual boot
 
 From the repository root:
@@ -65,9 +93,14 @@ Or use the single-command wrapper:
 APP_ENV=test DATABASE_URL=sqlite:///./_e2e.db python scripts/serve_e2e_backend.py
 ```
 
-El seed/wrapper sólo admite SQLite en el path exacto `_e2e.db` del repositorio.
-Si hereda `APP_ENV=production`, un DSN PostgreSQL o cualquier otro path, termina
-antes de importar Alembic/FastAPI y no toca esa base.
+### F-003 concurrent-user load fixture
+
+`f003-concurrent-user-load.spec.ts` is an opt-in 30-minute PostgreSQL load run. Set `E2E_F003_LOAD=true` only with a fresh, loopback PostgreSQL 16 database named `hotel_chipre_e2e_f003_load_*`, plus its matching `_app_runner` and `_seed_runner` roles and explicit isolated database URL settings. The dedicated seed then creates the synthetic Hotel Mirador del Lago with 30 rooms and 45 reservations. It refuses SQLite, other database names, non-isolated targets, or a database that does not contain the untouched base E2E fixture. The shared E2E seed remains unchanged.
+
+El seed/wrapper admite SQLite sólo en el path exacto `_e2e.db` del repositorio,
+o PostgreSQL 16 local con la opt-in y el nombre de base/rol desechables
+descritos arriba. Rechaza destinos remotos, otros esquemas y cualquier
+`APP_ENV` distinto de `test` antes de importar Alembic/FastAPI.
 
 In another shell from `frontend/`:
 

@@ -19,11 +19,13 @@ from app.services.user_lookup_service import find_user_by_email
 
 
 ROLE_ALIASES = {
-    "owner": "owner",
-    "co_owner": "co_owner",
+    "co owner": "co_owner",
     "co-owner": "co_owner",
+    "copropietaria": "co_owner",
+    "copropietario": "co_owner",
     "manager": "manager",
     "gerente": "manager",
+    "gerencia": "manager",
     "reception": "receptionist",
     "receptionist": "receptionist",
     "front desk": "receptionist",
@@ -34,7 +36,7 @@ ROLE_ALIASES = {
     "housekeeper": "housekeeping",
     "limpieza": "housekeeping",
 }
-VALID_STAFF_ROLES = {"owner", "co_owner", "manager", "receptionist", "housekeeping"}
+VALID_STAFF_ROLES = {"co_owner", "manager", "receptionist", "housekeeping"}
 
 
 @dataclass
@@ -53,10 +55,14 @@ class StaffAliasConflict(ValueError):
 
 
 def normalize_staff_role(role: str | None) -> str:
-    key = " ".join((role or "receptionist").strip().lower().replace("_", " ").split())
+    raw_role = unicodedata.normalize("NFKD", (role or "receptionist").strip().casefold())
+    key = "".join(char for char in raw_role if not unicodedata.combining(char))
+    key = " ".join(key.replace("_", " ").replace("-", " ").split())
+    if key in {"owner", "dueno", "duena"}:
+        raise ValueError("El rol Dueño no se asigna desde el asistente ni desde invitaciones; usa el flujo de transferencia.")
     normalized = ROLE_ALIASES.get(key, key)
     if normalized not in VALID_STAFF_ROLES:
-        raise ValueError("Rol de staff inválido")
+        raise ValueError("Rol inválido. Elegí Copropietaria, Gerencia, Recepción o Limpieza.")
     return normalized
 
 

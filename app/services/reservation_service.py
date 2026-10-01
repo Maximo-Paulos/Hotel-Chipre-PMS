@@ -8,7 +8,7 @@ import logging
 import string
 import random
 from dataclasses import dataclass, field, replace
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Optional
 from zoneinfo import ZoneInfo
@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.services.row_locks import lock_query
 from app.models.commercial import RatePlan, SellableProduct, TaxPolicy
 from app.models.company import Company
 from app.models.daily_rate import DailyRate, PricePeriod
@@ -59,6 +60,11 @@ class ReservationVersionConflict(ReservationError):
     pass
 
 
+class ManualRatePolicyError(ReservationError):
+    """A bounded manual rate cannot be applied under the hotel's policy."""
+    pass
+
+
 @dataclass(slots=True)
 class _ReservationGuestProjection:
     id: int
@@ -82,6 +88,7 @@ class _ReservationListProjection:
     category_id: int
     category_name: str | None
     company_id: int | None
+    group_id: int | None
     sellable_product_id: int | None
     rate_plan_id: int | None
     tax_policy_id: int | None
@@ -520,6 +527,106 @@ def calculate_reservation_pricing(
     )
 
 
+def _validate_bounded_manual_rate(
+    db: Session,
+    *,
+    data: ReservationCreate,
+    hotel_id: int,
+    company: Company | None,
+    channel_code: ReservationChannelCodeEnum,
+) -> dict[str, str]:
+    """Validate a manager/co-owner direct rate against a trusted current quote."""
+    direct_channels = {
+        ReservationChannelCodeEnum.WEBSITE_DIRECT,
+        ReservationChannelCodeEnum.WHATSAPP,
+        ReservationChannelCodeEnum.PHONE,
+        ReservationChannelCodeEnum.WALK_IN,
+        ReservationChannelCodeEnum.OTHER_DIRECT,
+    }
+    pricing_channel = _reservation_channel_indicator(data.pricing_channel_code)
+    if (
+        data.source != ReservationSourceEnum.DIRECT
+        or company is not None
+        or channel_code not in direct_channels
+        or pricing_channel not in (None, "", "direct", *(item.value for item in direct_channels))
+    ):
+        raise ManualRatePolicyError(
+            "La tarifa manual acotada solo se puede usar en una reserva directa, sin empresa ni canal OTA."
+        )
+    if not data.manual_rate_reason:
+        raise ManualRatePolicyError("Indicá el motivo de la tarifa manual.")
+
+    config = db.get(HotelConfiguration, hotel_id)
+    if config is None:
+        raise ManualRatePolicyError("No se encontró la configuración del hotel.")
+    lower_pct = config.manual_rate_min_adjustment_pct
+    upper_pct = config.manual_rate_max_adjustment_pct
+    if lower_pct is None or upper_pct is None:
+        raise ManualRatePolicyError(
+            "El owner debe configurar el rango de tarifa manual antes de que Gerencia pueda usarlo."
+        )
+
+    try:
+        quote = calculate_reservation_pricing(
+            db,
+            category_id=data.category_id,
+            check_in=data.check_in_date,
+            check_out=data.check_out_date,
+            hotel_id=hotel_id,
+            sellable_product_id=data.sellable_product_id,
+            rate_plan_id=data.rate_plan_id,
+            tax_policy_id=data.tax_policy_id,
+            pricing_channel_code=data.pricing_channel_code,
+            pricing_payment_method=data.pricing_payment_method,
+            guest_scope=data.guest_scope,
+            # Compare against the canonical currency of the active rate plan.
+            # Converting first would require a live FX quote and could hide a
+            # simple currency mismatch behind an integration error.
+            target_currency=None,
+            occupancy=data.num_adults + data.num_children,
+            guest_id=data.guest_id,
+        )
+    except ReservationError as exc:
+        raise ManualRatePolicyError(
+            "No se pudo obtener una cotización automática para comprobar el rango de tarifa manual."
+        ) from exc
+
+    quote_total = Decimal(str(quote.total_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    requested_total = Decimal(str(data.total_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if quote_total <= 0:
+        raise ManualRatePolicyError(
+            "La tarifa manual acotada requiere una cotización automática mayor a cero."
+        )
+
+    requested_currency = str(data.target_currency or config.default_currency or "").upper()
+    if requested_currency != str(quote.currency_code or "").upper():
+        raise ManualRatePolicyError(
+            "Usá la misma moneda que la cotización automática para aplicar el rango de tarifa manual."
+        )
+
+    minimum = (
+        quote_total * (Decimal("100") + Decimal(str(lower_pct))) / Decimal("100")
+    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    maximum = (
+        quote_total * (Decimal("100") + Decimal(str(upper_pct))) / Decimal("100")
+    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if requested_total < minimum or requested_total > maximum:
+        raise ManualRatePolicyError(
+            "La tarifa manual debe estar entre "
+            f"{minimum:.2f} y {maximum:.2f} {quote.currency_code} "
+            f"({Decimal(str(lower_pct)):+.2f}% a {Decimal(str(upper_pct)):+.2f}% de la cotización)."
+        )
+
+    return {
+        "quote_total": str(quote_total),
+        "minimum_total": str(minimum),
+        "maximum_total": str(maximum),
+        "currency_code": str(quote.currency_code),
+        "min_adjustment_pct": str(lower_pct),
+        "max_adjustment_pct": str(upper_pct),
+    }
+
+
 def _pricing_result_for_explicit_total(
     db: Session,
     *,
@@ -651,11 +758,38 @@ def _daily_rate_pricing_result(
         })
         current += timedelta(days=1)
 
+    base_currency = _get_hotel_default_currency(db, hotel_id=hotel_id)
+    output_currency = str(target_currency or base_currency).strip().upper()
     total_amount = round(sum(row["price"] for row in breakdown), 2)
+    fx_rate_snapshot = None
+    fx_quote_details = None
+    if output_currency != base_currency:
+        from app.services.pricing_policy_service import PricingPolicyError, _convert_amount
+
+        try:
+            total_amount, fx_rate_snapshot, fx_quote_details = _convert_amount(
+                db,
+                hotel_id=hotel_id,
+                amount=total_amount,
+                from_currency=base_currency,
+                to_currency=output_currency,
+                fx_policy_id=None,
+                provider_code=None,
+            )
+        except PricingPolicyError as exc:
+            raise ReservationError(str(exc)) from exc
+        for row in breakdown:
+            row["price"] = round(float(row["price"]) * fx_rate_snapshot, 2)
+            row["output_currency"] = output_currency
+
     nightly_rate = round(total_amount / nights, 2) if nights else 0.0
     deposit_amount = _compute_deposit_amount(db, hotel_id=hotel_id, gross_total=total_amount)
     snapshot = {
         "pricing_source": "daily_rates",
+        "base_currency": base_currency,
+        "output_currency": output_currency,
+        "fx_rate_snapshot": fx_rate_snapshot,
+        "fx_quote_details": fx_quote_details,
         "category_id": category.id,
         "payment_method": payment_method,
         "pricing_channel_code": pricing_channel_code or "direct",
@@ -674,8 +808,8 @@ def _daily_rate_pricing_result(
         fee_amount=0.0,
         commission_amount=0.0,
         net_amount=total_amount,
-        currency_code=_get_hotel_default_currency(db, hotel_id=hotel_id),
-        fx_rate_snapshot=None,
+        currency_code=output_currency,
+        fx_rate_snapshot=fx_rate_snapshot,
         pricing_source="daily_rates",
         sellable_product_id=sellable_product.id if sellable_product else None,
         rate_plan_id=None,
@@ -695,6 +829,67 @@ def _resolve_reservation_company(db: Session, *, hotel_id: int, company_id: int 
     if company is None:
         raise ReservationError("Company does not belong to the active hotel")
     return company
+
+
+def deferred_company_reservation_ids(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservations: list[Reservation] | tuple[Reservation, ...],
+) -> set[int]:
+    """Return reservations whose lodging is billed outside this PMS.
+
+    The persisted reservation state protects older/settled rows even if a
+    company setting has since changed. Current company configuration is also
+    read, but only through the reservation's hotel scope.
+    """
+    rows = [
+        row
+        for row in reservations
+        if row.hotel_id == hotel_id and row.company_id is not None
+    ]
+    if not rows:
+        return set()
+
+    deferred_ids = {
+        row.id
+        for row in rows
+        if str(getattr(row.settlement_status, "value", row.settlement_status) or "").lower()
+        in {"deferred", "settled"}
+    }
+    candidate_company_ids = {
+        row.company_id for row in rows if row.id not in deferred_ids and row.company_id is not None
+    }
+    if candidate_company_ids:
+        configured_company_ids = {
+            company_id
+            for (company_id,) in (
+                db.query(Company.id)
+                .filter(
+                    Company.hotel_id == hotel_id,
+                    Company.id.in_(candidate_company_ids),
+                    Company.payment_deferred.is_(True),
+                )
+                .all()
+            )
+        }
+        deferred_ids.update(
+            row.id for row in rows if row.company_id in configured_company_ids
+        )
+    return deferred_ids
+
+
+def reservation_has_deferred_company_billing(
+    db: Session,
+    reservation: Reservation,
+    *,
+    hotel_id: int,
+) -> bool:
+    return reservation.id in deferred_company_reservation_ids(
+        db,
+        hotel_id=hotel_id,
+        reservations=[reservation],
+    )
 
 
 def _reservation_channel_indicator(value) -> str | None:
@@ -1040,6 +1235,8 @@ def create_reservation(
     *,
     actor_user_id: Optional[int] = None,
     actor_role: Optional[str] = None,
+    group_id: int | None = None,
+    manual_rate_scope: str | None = None,
 ) -> Reservation:
     """
     Create a new reservation with full validation.
@@ -1079,6 +1276,22 @@ def create_reservation(
 
     company = _resolve_reservation_company(db, hotel_id=hotel_id, company_id=data.company_id)
     channel_code = _resolve_creation_channel_code(data)
+    manual_rate_policy_context: dict[str, str] | None = None
+    if manual_rate_scope is not None:
+        if data.total_amount is None:
+            raise ManualRatePolicyError("La política de tarifa manual requiere un importe explícito.")
+        if not data.manual_rate_reason:
+            raise ManualRatePolicyError("Indicá el motivo de la tarifa manual.")
+        if manual_rate_scope == "bounded":
+            manual_rate_policy_context = _validate_bounded_manual_rate(
+                db,
+                data=data,
+                hotel_id=hotel_id,
+                company=company,
+                channel_code=channel_code,
+            )
+        elif manual_rate_scope != "unbounded":
+            raise ManualRatePolicyError("La autorización de tarifa manual no es válida.")
 
     if data.total_amount is not None:
         # Root cause of the "manual OTA load doesn't work" report: an
@@ -1155,6 +1368,7 @@ def create_reservation(
         guest_scope=data.guest_scope,
         target_currency=data.target_currency,
         occupancy=data.num_adults + data.num_children,
+        company_id=data.company_id,
     )
     _validate_quote_token_for_reservation(
         db,
@@ -1164,6 +1378,33 @@ def create_reservation(
         revision=pricing_revision,
     )
     pricing.pricing_snapshot = _with_pricing_revision(pricing.pricing_snapshot, pricing_revision)
+    if company is not None and company.payment_deferred:
+        # The invoice amount belongs to the company's external billing system.
+        # Validate the quote first, then persist neither the quoted amount nor
+        # the nominal rate snapshot in this PMS reservation.
+        pricing.total_amount = Decimal("0.00")
+        pricing.deposit_amount = Decimal("0.00")
+        pricing.subtotal_amount = Decimal("0.00")
+        pricing.tax_amount = Decimal("0.00")
+        pricing.fee_amount = Decimal("0.00")
+        pricing.commission_amount = Decimal("0.00")
+        pricing.net_amount = Decimal("0.00")
+        pricing.pricing_snapshot = json.dumps(
+            {"company_invoice": {"company_id": company.id, "amount_recorded_in_pms": False}},
+            ensure_ascii=True,
+            sort_keys=True,
+        )
+    if manual_rate_scope is not None:
+        try:
+            manual_snapshot = json.loads(pricing.pricing_snapshot or "{}")
+        except json.JSONDecodeError:
+            manual_snapshot = {}
+        manual_snapshot["manual_rate"] = {
+            "scope": manual_rate_scope,
+            "reason": data.manual_rate_reason,
+            **(manual_rate_policy_context or {}),
+        }
+        pricing.pricing_snapshot = json.dumps(manual_snapshot, ensure_ascii=True, sort_keys=True)
 
     # Waitlist / overbooking (v72 §9): a wait-listed reservation is created with
     # room_id=None and the denormalized flag set, so availability queries never
@@ -1257,6 +1498,7 @@ def create_reservation(
         room_id=room_id,
         category_id=data.category_id,
         company_id=data.company_id,
+        group_id=group_id,
         sellable_product_id=pricing.sellable_product_id,
         rate_plan_id=pricing.rate_plan_id,
         tax_policy_id=pricing.tax_policy_id,
@@ -1285,6 +1527,8 @@ def create_reservation(
         reservation_comment=data.reservation_comment,
         mobility_restriction=data.mobility_restriction,
         pricing_snapshot=pricing.pricing_snapshot,
+        manual_rate_reason=data.manual_rate_reason if manual_rate_scope is not None else None,
+        manual_rate_scope=manual_rate_scope,
         allocation_locked=bool(company and (company.requires_signature or company.payment_deferred)),
         requires_manual_review=bool(company and (company.requires_signature or company.payment_deferred)),
         payment_collection_model="hotel_collect" if data.source == ReservationSourceEnum.DIRECT else "unknown",
@@ -1423,6 +1667,7 @@ def list_reservations(
     limit: int = 50,
     order: str = "recent",
     upcoming_only: bool = False,
+    company_id: int | None = None,
     *,
     context: "AuthContext | None" = None,
 ) -> list[_ReservationListProjection]:
@@ -1450,6 +1695,8 @@ def list_reservations(
         query = query.filter(Reservation.check_in_date >= from_date)
     if to_date:
         query = query.filter(Reservation.check_out_date <= to_date)
+    if company_id is not None:
+        query = query.filter(Reservation.company_id == company_id)
     if upcoming_only:
         # Dashboard arrivals are an operational query, not recent activity:
         # use the hotel's calendar, exclude stays that already entered, and
@@ -1494,6 +1741,7 @@ def list_reservations(
         Reservation.category_id,
         RoomCategory.name.label("category_name"),
         Reservation.company_id,
+        Reservation.group_id,
         Reservation.sellable_product_id,
         Reservation.rate_plan_id,
         Reservation.tax_policy_id,
@@ -1597,6 +1845,7 @@ def list_reservations(
             category_id=row.category_id,
             category_name=row.category_name,
             company_id=row.company_id,
+            group_id=row.group_id,
             sellable_product_id=row.sellable_product_id,
             rate_plan_id=row.rate_plan_id,
             tax_policy_id=row.tax_policy_id,
@@ -1705,7 +1954,10 @@ def get_occupancy_grid(
         )
         .filter(
             Guest.hotel_id == hotel_id,
-            Reservation.status != ReservationStatusEnum.CANCELLED,
+            Reservation.status.notin_([
+                ReservationStatusEnum.CANCELLED,
+                ReservationStatusEnum.CHECKED_OUT,
+            ]),
             Reservation.check_in_date < date_to,
             Reservation.check_out_date > date_from,
         )
@@ -1781,7 +2033,7 @@ def get_reservation_by_id(
         # Refresh an identity already present in this Session before using it
         # to validate or mutate the reservation. PostgreSQL holds this row
         # lock until the request transaction commits or rolls back.
-        query = query.populate_existing().with_for_update()
+        query = lock_query(query.populate_existing(), Reservation)
     return query.first()
 
 
@@ -2052,6 +2304,88 @@ def update_reservation_fields(
         if field in update_data:
             setattr(reservation, field, update_data[field])
 
+    if "total_amount" in update_data:
+        if reservation_has_deferred_company_billing(
+            db,
+            reservation,
+            hotel_id=hotel_id,
+        ):
+            raise ReservationError(
+                "El alojamiento de esta empresa se factura fuera del PMS y no admite correcciones de importe aquí."
+            )
+        corrected_total = Decimal(str(update_data["total_amount"])).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        if corrected_total < Decimal("0.00"):
+            raise ReservationError("Reservation total must be greater than or equal to zero")
+        reason = str(update_data.get("paid_total_change_reason") or "").strip()
+        if not reason:
+            raise ReservationError("A reason is required to correct a paid reservation total")
+        category = (
+            db.query(RoomCategory)
+            .filter(RoomCategory.id == reservation.category_id, RoomCategory.hotel_id == hotel_id)
+            .first()
+        )
+        if category is None:
+            raise ReservationError("Room category not found")
+        previous_total = Decimal(str(reservation.total_amount or 0)).quantize(Decimal("0.01"))
+        previous_snapshot = _pricing_snapshot_values(reservation)
+        pricing = _pricing_result_for_explicit_total(
+            db,
+            hotel_id=hotel_id,
+            category=category,
+            check_in=reservation.check_in_date,
+            check_out=reservation.check_out_date,
+            sellable_product_id=reservation.sellable_product_id,
+            rate_plan_id=reservation.rate_plan_id,
+            tax_policy_id=reservation.tax_policy_id,
+        )
+        if reservation.company_id is not None:
+            company = _resolve_reservation_company(
+                db, hotel_id=hotel_id, company_id=reservation.company_id
+            )
+            if company is None:
+                raise ReservationError("Company not found")
+            pricing = _apply_corporate_pricing(
+                db,
+                hotel_id=hotel_id,
+                pricing=pricing,
+                company=company,
+                explicit_total=corrected_total,
+                target_currency=reservation.currency_code,
+            )
+        else:
+            pricing = _apply_manual_total_override(
+                db,
+                hotel_id=hotel_id,
+                pricing=pricing,
+                total_amount=corrected_total,
+                target_currency=reservation.currency_code,
+            )
+        try:
+            pricing_snapshot = json.loads(pricing.pricing_snapshot or "{}")
+        except (TypeError, json.JSONDecodeError):
+            pricing_snapshot = {}
+        adjustment_history = previous_snapshot.get("paid_total_adjustments", [])
+        if not isinstance(adjustment_history, list):
+            adjustment_history = []
+        adjustment_history.append(
+            {
+                "previous_total_amount": str(previous_total),
+                "updated_total_amount": str(corrected_total),
+                "reason": reason,
+                "actor_user_id": changed_by_user_id,
+                "changed_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        pricing_snapshot["paid_total_adjustments"] = adjustment_history
+        pricing = replace(
+            pricing,
+            pricing_snapshot=json.dumps(pricing_snapshot, ensure_ascii=True, sort_keys=True),
+        )
+        _apply_pricing_result_to_reservation(reservation, pricing)
+        reservation.manual_rate_reason = reason
+
     reservation.version = (reservation.version or 0) + 1
     db.flush()
     _invalidate_availability_cache(hotel_id)
@@ -2291,6 +2625,7 @@ def _pricing_result_from_quote(
         "guest_scope": guest_scope,
         "pricing_payment_method": pricing_payment_method,
         "tax_breakdown": quote.tax_breakdown,
+        "fx_quote_details": quote.fx_quote_details,
         "breakdown": [
             {
                 "date": (check_in + timedelta(days=offset)).isoformat(),
@@ -2366,7 +2701,7 @@ def _validate_quote_token_for_reservation(
     pricing: ReservationPricingResult,
     revision: str,
 ) -> None:
-    if not data.quote_token:
+    if not data.quote_token or data.total_amount is not None:
         return
     try:
         payload = verify_quote_token(data.quote_token)
@@ -2386,6 +2721,7 @@ def _validate_quote_token_for_reservation(
         "guest_scope": data.guest_scope,
         "target_currency": data.target_currency,
         "occupancy": data.num_adults + data.num_children,
+        "company_id": data.company_id,
     }
     for key, value in expected.items():
         if payload.get(key) != value:

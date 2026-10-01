@@ -14,6 +14,10 @@ export type PaymentRequest = {
   manual_reference?: string;
   refund_of_transaction_id?: number;
   refund_reason?: string;
+  collected_before?: boolean;
+  collected_on?: string;
+  prior_receipt_note?: string;
+  company_night_charge_ids?: number[];
 };
 
 export type PaymentSummary = {
@@ -21,20 +25,24 @@ export type PaymentSummary = {
   confirmation_code: string;
   status: string;
   currency_code: string;
-  total_amount: number;
-  deposit_required: number;
-  amount_paid: number;
-  balance_due: number;
+  total_amount: number | null;
+  deposit_required: number | null;
+  amount_paid: number | null;
+  balance_due: number | null;
   // total_amount/balance_due only reflect the reservation's base price; they
   // ignore consumption charges (BillingAdjustment). operational_* includes
   // them and is the amount actually owed -- use it for collecting payment.
   operational_total_amount?: number;
   operational_balance_due?: number;
   billing_adjustment_total?: number;
+  company_billing_deferred?: boolean;
   completed_payments: number;
   transactions: Array<{
     id: number;
     amount: number;
+    applied_amount?: number | null;
+    applied_currency?: string | null;
+    fx_rate_snapshot?: number | null;
     gross_amount?: number;
     fee_amount?: number;
     currency: string;
@@ -44,6 +52,9 @@ export type PaymentSummary = {
     manual_reference?: string | null;
     refund_of_transaction_id?: number | null;
     refund_reason?: string | null;
+    collected_before?: boolean;
+    collected_on?: string | null;
+    prior_receipt_note?: string | null;
     created_at: string;
   }>;
 };
@@ -55,6 +66,9 @@ export type PaymentReceiptData = {
   hotel_name: string;
   hotel_timezone: string;
   amount: number | string;
+  applied_amount?: number | string | null;
+  applied_currency?: string | null;
+  fx_rate_snapshot?: number | null;
   gross_amount: number | string;
   fee_amount: number | string;
   currency: string;

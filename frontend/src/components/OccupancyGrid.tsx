@@ -1,5 +1,6 @@
 import { Fragment, useMemo } from "react";
 import cx from "clsx";
+import { useTranslation } from "react-i18next";
 
 import type { OccupancyGridBlock, OccupancyGridReservation, OccupancyGridResponse, OccupancyGridRoom } from "../api/reservations";
 import { reservationStatusConfig } from "../utils/reservationStatus";
@@ -9,15 +10,16 @@ import { reservationStatusConfig } from "../utils/reservationStatus";
 // (dozens for this hotel), not thousands, so a plain table is plenty. If the
 // hotel ever crosses ~200 rooms or asks for continuous zoom, virtualize then.
 
-const DATE_LABEL = new Intl.DateTimeFormat("es-AR", { weekday: "short", day: "2-digit", month: "2-digit" });
-
 export type RoomDropTarget = { reservationId: number; toRoomId: number };
+export type OccupancyRoomSortMode = "floor" | "category";
 
 type OccupancyGridProps = {
   data: OccupancyGridResponse;
   days: string[];
   todayIso: string;
+  sortMode: OccupancyRoomSortMode;
   onSelectReservation: (id: number) => void;
+  onSelectEmptyCell?: (room: OccupancyGridRoom, day: string) => void;
   /** Drop handler. Absent = drag disabled (no permission, or read-only view). */
   onDropReservation?: (target: RoomDropTarget) => void;
   /**
@@ -30,23 +32,70 @@ type OccupancyGridProps = {
   roomDropBlockedReason?: (roomId: number) => string | null;
 };
 
-type CategoryGroup = {
-  categoryId: number;
-  categoryName: string;
+type RoomGroup = {
+  key: string;
+  label: string;
+  kind: OccupancyRoomSortMode;
   rooms: OccupancyGridRoom[];
 };
 
-function groupByCategory(rooms: OccupancyGridRoom[]): CategoryGroup[] {
-  const groups: CategoryGroup[] = [];
+function compareRoomNumber(a: OccupancyGridRoom, b: OccupancyGridRoom) {
+  return a.room_number.localeCompare(b.room_number, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function groupRooms(rooms: OccupancyGridRoom[], sortMode: OccupancyRoomSortMode): RoomGroup[] {
+  const byGroup = new Map<string, OccupancyGridRoom[]>();
   for (const room of rooms) {
-    const current = groups[groups.length - 1];
-    if (current && current.categoryId === room.category_id) {
-      current.rooms.push(room);
-    } else {
-      groups.push({ categoryId: room.category_id, categoryName: room.category_name, rooms: [room] });
-    }
+    const key = sortMode === "floor" ? String(room.floor) : String(room.category_id);
+    const bucket = byGroup.get(key) ?? [];
+    bucket.push(room);
+    byGroup.set(key, bucket);
   }
-  return groups;
+
+  return [...byGroup.entries()].map(([key, groupedRooms]) => {
+    const roomsInGroup = [...groupedRooms].sort((a, b) =>
+      sortMode === "floor"
+        ? a.category_name.localeCompare(b.category_name, undefined, { sensitivity: "base" }) || compareRoomNumber(a, b)
+        : a.floor - b.floor || compareRoomNumber(a, b)
+    );
+    return {
+      key,
+      label: sortMode === "floor" ? key : roomsInGroup[0].category_name,
+      kind: sortMode,
+      rooms: roomsInGroup
+    };
+  }).sort((a, b) => sortMode === "floor"
+    ? Number(a.key) - Number(b.key)
+    : a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
+  );
+}
+
+function groupByCategory(rooms: OccupancyGridRoom[]): RoomGroup[] {
+  const grouped = new Map<number, OccupancyGridRoom[]>();
+  rooms.forEach((room) => {
+    const bucket = grouped.get(room.category_id) ?? [];
+    bucket.push(room);
+    grouped.set(room.category_id, bucket);
+  });
+  return [...grouped.entries()].map(([categoryId, categoryRooms]) => ({
+    key: String(categoryId),
+    label: categoryRooms[0].category_name,
+    kind: "category" as const,
+    rooms: categoryRooms
+  })).sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+}
+
+function countFreeRooms(
+  rooms: OccupancyGridRoom[],
+  day: string,
+  reservationsByCell: Map<string, OccupancyGridReservation[]>,
+  blocksByCell: Map<string, OccupancyGridBlock[]>
+) {
+  return rooms.filter((room) =>
+    !["maintenance", "blocked"].includes(room.status)
+    && !(reservationsByCell.get(`${room.id}_${day}`)?.length)
+    && !(blocksByCell.get(`${room.id}_${day}`)?.length)
+  ).length;
 }
 
 function occupiesDay(item: { check_in_date: string; check_out_date: string }, day: string) {
@@ -96,7 +145,7 @@ function StickyLabelCell({ children, className }: { children: React.ReactNode; c
     <th
       scope="row"
       className={cx(
-        "sticky left-0 z-20 w-[220px] min-w-[220px] border-b border-r border-slate-200 px-3 py-2 text-left align-top",
+        "sticky left-0 z-20 w-[180px] min-w-[180px] border-b border-r border-slate-200 px-3 py-2 text-left align-top",
         className
       )}
     >
@@ -109,7 +158,10 @@ function Cell({
   reservationItems,
   blockItems,
   onSelectReservation,
+  onSelectEmptyCell,
   roomId,
+  room,
+  day,
   onDropReservation,
   onDragReservationChange,
   dropBlockedReason
@@ -117,11 +169,15 @@ function Cell({
   reservationItems: OccupancyGridReservation[];
   blockItems: OccupancyGridBlock[];
   onSelectReservation: (id: number) => void;
+  onSelectEmptyCell?: (room: OccupancyGridRoom, day: string) => void;
   roomId?: number;
+  room?: OccupancyGridRoom;
+  day?: string;
   onDropReservation?: (target: RoomDropTarget) => void;
   onDragReservationChange?: (reservationId: number | null) => void;
   dropBlockedReason?: string | null;
 }) {
+  const { t } = useTranslation("reservations");
   // ponytail: native HTML5 drag, no dependency. Drag is a shortcut only --
   // it does not work on touch or with a keyboard, so the picker in the
   // reservation drawer stays the primary path.
@@ -143,12 +199,35 @@ function Cell({
       }
     : {};
   const blockedTitle = dropBlockedReason ?? undefined;
+  const blockReasonLabels: Record<string, string> = {
+    maintenance: t("occupancy.blockReasons.maintenance"),
+    deep_cleaning: t("occupancy.blockReasons.deep_cleaning"),
+    owner_use: t("occupancy.blockReasons.owner_use"),
+    vip_hold: t("occupancy.blockReasons.vip_hold"),
+    overbooking_buffer: t("occupancy.blockReasons.overbooking_buffer"),
+    other: t("occupancy.blockReasons.other")
+  };
   if (reservationItems.length > 0) {
     const item = reservationItems[0];
     const status = reservationStatusConfig[item.status];
     const extra = reservationItems.length - 1;
+    const overlappingBlock = blockItems[0];
+    const hasBlockConflict = Boolean(overlappingBlock);
+    const blockReason = overlappingBlock
+      ? blockReasonLabels[overlappingBlock.reason_code] ?? t("occupancy.blocked")
+      : "";
     return (
-      <td className="min-w-[110px] border-b border-r border-slate-200 p-1 align-top" title={blockedTitle} {...dropProps}>
+      <td
+        data-testid={hasBlockConflict ? `occupancy-block-conflict-${item.id}` : undefined}
+        className={cx("min-w-[64px] border-b border-r border-slate-200 p-1 align-top", hasBlockConflict && "bg-rose-50")}
+        title={hasBlockConflict ? t("occupancy.blockConflictTitle", { reason: blockReason }) : blockedTitle}
+        {...dropProps}
+      >
+        {hasBlockConflict && (
+          <span className="mb-1 block truncate rounded-md bg-rose-100 px-2 py-1 text-[10px] font-semibold text-rose-900">
+            {t("occupancy.blockConflict", { reason: blockReason })}
+          </span>
+        )}
         <button
           type="button"
           data-testid={`occupancy-reservation-${item.id}`}
@@ -174,52 +253,84 @@ function Cell({
   }
 
   if (blockItems.length > 0) {
+    const blockReason = blockReasonLabels[blockItems[0].reason_code] ?? t("occupancy.blocked");
     return (
-      <td className="min-w-[110px] border-b border-r border-slate-200 bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_6px,#f8fafc_6px,#f8fafc_12px)] p-1 align-top">
-        <span className="block truncate px-2 py-1.5 text-xs font-medium text-slate-500" title={blockItems[0].reason_code}>
-          Bloqueada
+      <td className="min-w-[64px] border-b border-r border-slate-200 bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_6px,#f8fafc_6px,#f8fafc_12px)] p-1 align-top" title={blockReason}>
+        <span className="block truncate px-2 py-1.5 text-xs font-medium text-slate-500">
+          {t("occupancy.blocked")}
         </span>
       </td>
     );
   }
 
+  const canCreate = Boolean(
+    onSelectEmptyCell && room && day && !["maintenance", "blocked"].includes(room.status)
+  );
   return (
     <td
       className={cx(
-        "min-w-[110px] border-b border-r border-slate-200 p-1 align-top",
+        "min-w-[64px] border-b border-r border-slate-200 p-1 align-top",
         dropBlockedReason && "bg-slate-50"
       )}
       title={blockedTitle}
       {...dropProps}
-    />
+    >
+      {canCreate ? (
+        <button
+          type="button"
+          data-testid={`occupancy-create-${room!.id}-${day}`}
+          aria-label={t("occupancy.createForRoom", { room: room!.room_number, day })}
+          onClick={() => onSelectEmptyCell?.(room!, day!)}
+          className="min-h-8 w-full rounded-md px-1 text-left text-xs text-slate-400 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+        >
+          +
+        </button>
+      ) : null}
+    </td>
   );
 }
 
-export function OccupancyGrid({ data, days, todayIso, onSelectReservation, onDropReservation, onDragReservationChange, roomDropBlockedReason }: OccupancyGridProps) {
-  const groups = useMemo(() => groupByCategory(data.rooms), [data.rooms]);
+export function OccupancyGrid({ data, days, todayIso, sortMode, onSelectReservation, onSelectEmptyCell, onDropReservation, onDragReservationChange, roomDropBlockedReason }: OccupancyGridProps) {
+  const { t, i18n } = useTranslation("reservations");
+  const dateLabel = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language === "en" ? "en-US" : "es-AR", { weekday: "short", day: "2-digit", month: "2-digit" }),
+    [i18n.language]
+  );
+  const groups = useMemo(() => groupRooms(data.rooms, sortMode), [data.rooms, sortMode]);
+  const categoryGroups = useMemo(() => groupByCategory(data.rooms), [data.rooms]);
   const reservationsByCell = useMemo(
     () => buildReservationsByRoomAndDay(data.reservations, data.unassigned, days),
     [data.reservations, data.unassigned, days]
   );
   const blocksByCell = useMemo(() => buildBlocksByRoomAndDay(data.blocks, days), [data.blocks, days]);
+  const legendStatuses = ["pending", "deposit_paid", "fully_paid", "pre_check_in", "checked_in"] as const;
 
   return (
     <div data-testid="occupancy-grid" className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <table className="w-max min-w-full border-separate border-spacing-0">
+      <div aria-label={t("occupancy.legendLabel")} className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2 text-xs">
+        <span className="font-semibold text-slate-700">{t("occupancy.legendLabel")}</span>
+        {legendStatuses.map((status) => (
+          <span key={status} className={cx("rounded-full px-2 py-1 font-medium", reservationStatusConfig[status].className)}>
+            {t(`occupancy.statuses.${status}`)}
+          </span>
+        ))}
+        <span className="rounded-full bg-slate-100 px-2 py-1 font-medium text-slate-600">{t("occupancy.blocked")}</span>
+      </div>
+      <table className="w-full min-w-[1076px] table-fixed border-separate border-spacing-0">
         <thead>
           <tr>
-            <th className="sticky left-0 top-0 z-30 w-[220px] min-w-[220px] border-b border-r border-slate-200 bg-white px-3 py-2 text-left">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Habitación</span>
+            <th className="sticky left-0 top-0 z-30 w-[180px] min-w-[180px] border-b border-r border-slate-200 bg-white px-3 py-2 text-left">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("occupancy.room")}</span>
             </th>
             {days.map((day) => (
               <th
                 key={day}
                 className={cx(
-                  "sticky top-0 z-10 min-w-[110px] border-b border-r border-slate-200 bg-white px-2 py-2 text-center",
+                  "sticky top-0 z-10 w-16 min-w-[64px] border-b border-r border-slate-200 bg-white px-1 py-2 text-center",
                   day === todayIso && "bg-brand-50"
                 )}
               >
-                <span className="text-xs font-semibold text-slate-700">{DATE_LABEL.format(new Date(`${day}T00:00:00`))}</span>
+                <span className="text-[10px] font-semibold text-slate-700">{dateLabel.format(new Date(`${day}T00:00:00`))}</span>
               </th>
             ))}
           </tr>
@@ -242,16 +353,64 @@ export function OccupancyGrid({ data, days, todayIso, onSelectReservation, onDro
             </tr>
           ) : null}
 
+          {sortMode === "floor" ? (
+            <>
+              <tr data-testid="occupancy-category-availability-heading">
+                <StickyLabelCell className="bg-emerald-100 text-emerald-900">
+                  <p className="text-xs font-semibold uppercase tracking-wide">{t("occupancy.availableByCategory")}</p>
+                </StickyLabelCell>
+                {days.map((day) => <td key={`availability-heading-${day}`} className="w-16 min-w-[64px] border-b border-r border-emerald-100 bg-emerald-100" />)}
+              </tr>
+              {categoryGroups.map((category) => (
+                <tr key={`free-category-${category.key}`} data-testid={`occupancy-free-row-${category.key}`}>
+                  <StickyLabelCell className="bg-emerald-50">
+                    <p className="text-xs font-semibold text-emerald-900">{t("occupancy.freeCount", { category: category.label })}</p>
+                  </StickyLabelCell>
+                  {days.map((day) => {
+                    const free = countFreeRooms(category.rooms, day, reservationsByCell, blocksByCell);
+                    return (
+                      <td
+                        key={`free-category-${category.key}-${day}`}
+                        data-testid={`occupancy-free-count-${category.key}-${day}`}
+                        aria-label={t("occupancy.freeCountCell", { count: free, category: category.label, day })}
+                        className="w-16 min-w-[64px] border-b border-r border-emerald-100 bg-emerald-50 px-1 py-2 text-center text-xs font-bold text-emerald-900"
+                      >{free}</td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </>
+          ) : null}
           {groups.map((group) => (
-            <Fragment key={group.categoryId}>
-              <tr>
+            <Fragment key={`${group.kind}-${group.key}`}>
+              <tr data-testid={`occupancy-group-${group.kind}-${group.key}`}>
                 <StickyLabelCell className="bg-slate-100 text-slate-700">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{group.categoryName}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    {group.kind === "floor" ? t("occupancy.floorLabel", { floor: group.label }) : group.label}
+                  </p>
                 </StickyLabelCell>
                 {days.map((day) => (
-                  <td key={`${group.categoryId}-header-${day}`} className="border-b border-r border-slate-200 bg-slate-100" />
+                  <td key={`${group.kind}-${group.key}-header-${day}`} className="w-16 min-w-[64px] border-b border-r border-slate-200 bg-slate-100" />
                 ))}
               </tr>
+              {group.kind === "category" ? (
+                <tr data-testid={`occupancy-free-row-${group.key}`}>
+                  <StickyLabelCell className="bg-emerald-50">
+                    <p className="text-xs font-semibold text-emerald-900">{t("occupancy.freeCount", { category: group.label })}</p>
+                  </StickyLabelCell>
+                  {days.map((day) => {
+                    const free = countFreeRooms(group.rooms, day, reservationsByCell, blocksByCell);
+                    return (
+                      <td
+                        key={`${group.key}-free-${day}`}
+                        data-testid={`occupancy-free-count-${group.key}-${day}`}
+                        aria-label={t("occupancy.freeCountCell", { count: free, category: group.label, day })}
+                        className="w-16 min-w-[64px] border-b border-r border-emerald-100 bg-emerald-50 px-1 py-2 text-center text-xs font-bold text-emerald-900"
+                      >{free}</td>
+                    );
+                  })}
+                </tr>
+              ) : null}
               {group.rooms.map((room) => (
                 <tr key={room.id}>
                   <StickyLabelCell>
@@ -264,7 +423,10 @@ export function OccupancyGrid({ data, days, todayIso, onSelectReservation, onDro
                       reservationItems={reservationsByCell.get(`${room.id}_${day}`) ?? []}
                       blockItems={blocksByCell.get(`${room.id}_${day}`) ?? []}
                       onSelectReservation={onSelectReservation}
+                      onSelectEmptyCell={onSelectEmptyCell}
                       roomId={room.id}
+                      room={room}
+                      day={day}
                       onDropReservation={onDropReservation}
                       onDragReservationChange={onDragReservationChange}
                       dropBlockedReason={roomDropBlockedReason?.(room.id) ?? null}

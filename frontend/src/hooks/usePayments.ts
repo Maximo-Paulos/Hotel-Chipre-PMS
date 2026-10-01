@@ -54,7 +54,12 @@ export function usePaymentMutation(reservationId?: number) {
     // until all active reservation, operations, payment, cash, occupancy and
     // analytics views have refetched that committed state.
     onSuccess: async (_data, payload) => {
-      await refreshPaymentState(queryClient, session.hotelId, reservationId);
+      await Promise.all([
+        refreshPaymentState(queryClient, session.hotelId, reservationId),
+        reservationId
+          ? queryClient.invalidateQueries({ queryKey: ["company-night-charges", session.hotelId, reservationId] })
+          : Promise.resolve()
+      ]);
       intentKeysRef.current.delete(JSON.stringify(payload));
     }
   });

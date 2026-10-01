@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
@@ -21,6 +22,10 @@ logger = logging.getLogger(__name__)
 
 class StockError(ValueError):
     """Raised when a stock operation is invalid."""
+
+
+class StockIdempotencyConflict(StockError):
+    """Raised when a retry key is reused with a different transfer payload."""
 
 
 # "adjustment" raises stock (physical count found more than expected);
@@ -204,11 +209,14 @@ def register_movement(
     reservation_id: int | None = None,
     created_by_user_id: int | None = None,
     idempotency_key: str | None = None,
+    transfer_reference: str | None = None,
 ) -> StockMovement:
     if movement_type not in VALID_MOVEMENT_TYPES:
         raise StockError("Invalid stock movement type")
     if quantity <= 0:
         raise StockError("Stock movement quantity must be positive")
+    if transfer_reference is not None and movement_type not in {"in", "out"}:
+        raise StockError("Stock transfers only support inbound and outbound movements")
     item = (
         db.query(StockItem)
         .filter(StockItem.id == item_id, StockItem.hotel_id == hotel_id, StockItem.deleted_at.is_(None))
@@ -247,6 +255,7 @@ def register_movement(
         reservation_id=reservation_id,
         created_by_user_id=created_by_user_id,
         idempotency_key=idempotency_key,
+        transfer_reference=transfer_reference,
     )
     try:
         # SAVEPOINT: a retried request racing its own first attempt (both
@@ -268,6 +277,169 @@ def register_movement(
     if movement_type in _OUTBOUND_MOVEMENT_TYPES:
         _notify_if_low_stock(db, hotel_id=hotel_id, item=item)
     return movement
+
+
+def register_opening_count(
+    db: Session,
+    *,
+    hotel_id: int,
+    item_id: int,
+    location_id: int,
+    quantity: Decimal,
+    reason: str,
+    created_by_user_id: int | None,
+    idempotency_key: str,
+) -> StockMovement:
+    """Record an initial location count once, without overwriting history."""
+    if quantity <= 0:
+        raise StockError("Opening stock count must be positive")
+    normalized_reason = reason.strip()
+    if not normalized_reason:
+        raise StockError("Opening stock count reason is required")
+
+    movement_idempotency_key = str(
+        uuid5(NAMESPACE_URL, f"stock-opening-count:{hotel_id}:{idempotency_key}")
+    )
+
+    item = (
+        db.query(StockItem)
+        .filter(StockItem.id == item_id, StockItem.hotel_id == hotel_id, StockItem.deleted_at.is_(None))
+        .with_for_update()
+        .one_or_none()
+    )
+    if item is None:
+        raise StockError("Stock item not found")
+
+    existing = (
+        db.query(StockMovement)
+        .filter(StockMovement.hotel_id == hotel_id, StockMovement.idempotency_key == movement_idempotency_key)
+        .one_or_none()
+    )
+    if existing is not None:
+        if (
+            existing.item_id != item_id
+            or existing.location_id != location_id
+            or existing.movement_type != "in"
+            or existing.quantity != quantity
+            or existing.reason != normalized_reason
+        ):
+            raise StockIdempotencyConflict("Idempotency key was already used for a different opening count")
+        return existing
+
+    _get_location(db, hotel_id=hotel_id, location_id=location_id)
+    prior_movement = (
+        db.query(StockMovement.id)
+        .filter(
+            StockMovement.hotel_id == hotel_id,
+            StockMovement.item_id == item_id,
+            StockMovement.location_id == location_id,
+        )
+        .first()
+    )
+    if prior_movement is not None:
+        raise StockError("Opening count is only available before the item has movements at this location")
+
+    return register_movement(
+        db,
+        hotel_id=hotel_id,
+        item_id=item_id,
+        location_id=location_id,
+        movement_type="in",
+        quantity=quantity,
+        reason=normalized_reason,
+        created_by_user_id=created_by_user_id,
+        idempotency_key=movement_idempotency_key,
+    )
+
+
+def transfer_stock(
+    db: Session,
+    *,
+    hotel_id: int,
+    item_id: int,
+    source_location_id: int,
+    destination_location_id: int,
+    quantity: Decimal,
+    reason: str,
+    created_by_user_id: int | None,
+    idempotency_key: str,
+) -> tuple[str, StockMovement, StockMovement]:
+    """Move stock between two locations with one durable, retry-safe ledger pair.
+
+    The outer savepoint makes both movement inserts atomic even if a caller
+    handles the resulting StockError without closing its whole transaction.
+    """
+    if quantity <= 0:
+        raise StockError("Stock transfer quantity must be positive")
+    if source_location_id == destination_location_id:
+        raise StockError("Source and destination locations must be different")
+    normalized_reason = reason.strip()
+    if not normalized_reason:
+        raise StockError("Stock transfer reason is required")
+
+    transfer_reference = str(uuid5(NAMESPACE_URL, f"stock-transfer:{hotel_id}:{idempotency_key}"))
+    item = (
+        db.query(StockItem)
+        .filter(StockItem.id == item_id, StockItem.hotel_id == hotel_id, StockItem.deleted_at.is_(None))
+        .with_for_update()
+        .one_or_none()
+    )
+    if item is None:
+        raise StockError("Stock item not found")
+
+    # Locking the item serializes retries and competing transfers before this
+    # lookup, so a second concurrent request sees the committed pair.
+    existing_rows = (
+        db.query(StockMovement)
+        .filter(StockMovement.hotel_id == hotel_id, StockMovement.transfer_reference == transfer_reference)
+        .all()
+    )
+    if existing_rows:
+        by_direction = {row.movement_type: row for row in existing_rows}
+        outbound = by_direction.get("out")
+        inbound = by_direction.get("in")
+        if (
+            len(existing_rows) != 2
+            or outbound is None
+            or inbound is None
+            or outbound.item_id != item_id
+            or inbound.item_id != item_id
+            or outbound.location_id != source_location_id
+            or inbound.location_id != destination_location_id
+            or outbound.quantity != quantity
+            or inbound.quantity != quantity
+            or outbound.reason != normalized_reason
+            or inbound.reason != normalized_reason
+        ):
+            raise StockIdempotencyConflict("Idempotency key was already used for a different stock transfer")
+        return transfer_reference, outbound, inbound
+
+    _get_location(db, hotel_id=hotel_id, location_id=source_location_id)
+    _get_location(db, hotel_id=hotel_id, location_id=destination_location_id)
+    with db.begin_nested():
+        outbound = register_movement(
+            db,
+            hotel_id=hotel_id,
+            item_id=item_id,
+            location_id=source_location_id,
+            movement_type="out",
+            quantity=quantity,
+            reason=normalized_reason,
+            created_by_user_id=created_by_user_id,
+            transfer_reference=transfer_reference,
+        )
+        inbound = register_movement(
+            db,
+            hotel_id=hotel_id,
+            item_id=item_id,
+            location_id=destination_location_id,
+            movement_type="in",
+            quantity=quantity,
+            reason=normalized_reason,
+            created_by_user_id=created_by_user_id,
+            transfer_reference=transfer_reference,
+        )
+    return transfer_reference, outbound, inbound
 
 
 def list_stock_movements(
@@ -313,13 +485,16 @@ def current_stock(
 
 
 def stock_summary(db: Session, *, hotel_id: int, location_id: int | None = None) -> list[dict]:
-    """Every active item's current balance in one query pair, instead of the
-    N+1 pattern of calling current_stock() once per item (see StockPage.tsx's
-    stockQueries useQueries loop -- this is its backend counterpart).
+    """Every active item's hotel total and per-location balances in a small,
+    fixed number of queries instead of the N+1 per-item balance lookups.
     """
     items = list_stock_items(db, hotel_id=hotel_id)
     if not items:
         return []
+    if location_id is not None:
+        active_locations = [_get_location(db, hotel_id=hotel_id, location_id=location_id)]
+    else:
+        active_locations = list_locations(db, hotel_id=hotel_id)
     signed_quantity = case(
         (StockMovement.movement_type.in_(_OUTBOUND_MOVEMENT_TYPES), -StockMovement.quantity),
         else_=StockMovement.quantity,
@@ -331,8 +506,45 @@ def stock_summary(db: Session, *, hotel_id: int, location_id: int | None = None)
     if location_id is not None:
         query = query.filter(StockMovement.location_id == location_id)
     totals = {item_id: Decimal(total).quantize(Decimal("0.01")) for item_id, total in query.group_by(StockMovement.item_id).all()}
+    location_totals: dict[tuple[int, int], tuple[Decimal, bool]] = {}
+    if active_locations:
+        location_query = (
+            db.query(
+                StockMovement.item_id,
+                StockMovement.location_id,
+                func.coalesce(func.sum(signed_quantity), 0),
+                func.count(StockMovement.id),
+            )
+            .filter(
+                StockMovement.hotel_id == hotel_id,
+                StockMovement.item_id.in_([item.id for item in items]),
+                StockMovement.location_id.in_([location.id for location in active_locations]),
+            )
+            .group_by(StockMovement.item_id, StockMovement.location_id)
+        )
+        location_totals = {
+            (item_id, current_location_id): (
+                Decimal(total).quantize(Decimal("0.01")),
+                movement_count > 0,
+            )
+            for item_id, current_location_id, total, movement_count in location_query.all()
+        }
     return [
-        {"item": item, "current_quantity": totals.get(item.id, Decimal("0.00"))}
+        {
+            "item": item,
+            "current_quantity": totals.get(item.id, Decimal("0.00")),
+            "location_balances": [
+                {
+                    "location_id": location.id,
+                    "location_name": location.name,
+                    "current_quantity": location_totals.get(
+                        (item.id, location.id), (Decimal("0.00"), False)
+                    )[0],
+                    "has_movements": location_totals.get((item.id, location.id), (Decimal("0.00"), False))[1],
+                }
+                for location in active_locations
+            ],
+        }
         for item in items
     ]
 
@@ -360,7 +572,7 @@ def consumption_report(
     date_to: date,
     group_by: str,
 ) -> dict:
-    """Stock consumed (``out``/``adjustment_out``) per item in [date_from,
+    """Ordinary outbound stock (``out`` only) per item in [date_from,
     date_to], plus the same-length period immediately before it so the
     caller can show a variation % (D5 -- see plan Via D: detect anomalous
     consumption, e.g. usage doubling with flat occupancy).
@@ -427,7 +639,8 @@ def _consumption_totals_by_item(
         db.query(StockMovement.item_id, func.coalesce(func.sum(StockMovement.quantity), 0))
         .filter(
             StockMovement.hotel_id == hotel_id,
-            StockMovement.movement_type.in_(_OUTBOUND_MOVEMENT_TYPES),
+            StockMovement.movement_type == "out",
+            StockMovement.transfer_reference.is_(None),
             StockMovement.created_at >= start,
             StockMovement.created_at < end,
         )

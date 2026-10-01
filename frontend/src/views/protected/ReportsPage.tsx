@@ -3,14 +3,16 @@ import { useMemo, useState } from "react";
 import { type OperationalReservationGroup, type OperationalReservationSummary } from "../../api/reports";
 import { ApiError } from "../../api/client";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
+import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { useDailyOperationalReport, useOccupancyReport, useOperationalAlerts, useRevenueReport } from "../../hooks/useReports";
-import { todayIso as today } from "../../utils/date";
+import { formatHotelDateTime, todayIso as today } from "../../utils/date";
 
 const money = (value?: number | string | null) =>
   Number(value ?? 0).toLocaleString("es-AR", { style: "currency", currency: "ARS" });
 
 export function ReportsPage() {
   const { hasPermission } = useEffectivePermissions();
+  const hotelConfigQuery = useHotelConfig();
   const canViewFinancial = hasPermission("reports:financial:view");
   const [reportDate, setReportDate] = useState(today());
   const reportQuery = useDailyOperationalReport(reportDate);
@@ -24,7 +26,11 @@ export function ReportsPage() {
 
   const pendingTotal = useMemo(() => {
     return (report?.pending_payments.reservations ?? []).reduce((total, reservation) => {
-      return total + Number(reservation.balance_due ?? 0);
+      return total + Number(
+        reservation.company_billing_deferred
+          ? reservation.company_night_extra_due ?? 0
+          : reservation.balance_due ?? 0
+      );
     }, 0);
   }, [report?.pending_payments.reservations]);
 
@@ -125,7 +131,7 @@ export function ReportsPage() {
                     {report.cash_session.session_id ? `Caja #${report.cash_session.session_id}` : "Sin sesión abierta"}
                   </p>
                   {report.cash_session.opened_at ? (
-                    <p className="text-xs text-slate-500">Abierta {new Date(report.cash_session.opened_at).toLocaleString("es-AR")}</p>
+                    <p className="text-xs text-slate-500">Abierta {formatHotelDateTime(report.cash_session.opened_at, hotelConfigQuery.data?.hotel_timezone)}</p>
                   ) : null}
                 </div>
               </section>}
@@ -235,6 +241,7 @@ function ReservationGroup({
 }
 
 function ReservationRow({ reservation, showBalance }: { reservation: OperationalReservationSummary; showBalance: boolean }) {
+  const companyExtraDue = Number(reservation.company_night_extra_due ?? 0);
   return (
     <div className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[1fr_auto]">
       <div>
@@ -245,7 +252,14 @@ function ReservationRow({ reservation, showBalance }: { reservation: Operational
           Hab. {reservation.room_number || "Información no disponible"} - {reservation.status} - {reservation.check_in_date} a {reservation.check_out_date}
         </p>
       </div>
-      {showBalance ? <p className="font-semibold text-slate-900">{money(reservation.balance_due)}</p> : null}
+      {showBalance ? (
+        reservation.company_billing_deferred ? (
+          <div className="text-right">
+            <p className="text-xs font-medium text-slate-600">Alojamiento facturado fuera del PMS</p>
+            {companyExtraDue > 0 ? <p className="font-semibold text-amber-800">Adicional empresa pendiente: {money(companyExtraDue)}</p> : null}
+          </div>
+        ) : <p className="font-semibold text-slate-900">{money(reservation.balance_due)}</p>
+      ) : null}
     </div>
   );
 }

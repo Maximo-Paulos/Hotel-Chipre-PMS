@@ -5,7 +5,7 @@ import { nextTotpAfter } from "./totp";
 const backendURL = (process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040").replace(/\/$/, "");
 const lastUsedTotpStepByUser = new Map<string, number>();
 
-type StepUpOwnerPurpose = "cash" | "cash-business" | "rbac" | "rbac-info";
+type StepUpOwnerPurpose = "cash" | "cash-business" | "rbac" | "rbac-info" | "rate-policy";
 
 export type StepUpOwnerAuth = {
   hotel_id: number;

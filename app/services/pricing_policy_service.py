@@ -7,14 +7,23 @@ object that later OTA sync, rebook flows and billing adjustments can reuse.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.commercial import FxPolicy, RatePlan, RatePlanPrice, TaxPolicy, TaxRule
-from app.models.ota_core import OTACommissionRule, OTACurrencyRate, OTAProvider
+from app.models.fx_rate_snapshot import FxRateSnapshot
+from app.models.hotel_config import HotelConfiguration
+from app.models.ota_core import OTACommissionRule, OTAProvider
+from app.services.fx_service import (
+    SUPPORTED_CONVERSION_CURRENCIES,
+    get_conversion_quote_sync,
+    parse_provider_updated_at,
+    quote_is_fresh,
+)
 
 
 class PricingPolicyError(ValueError):
@@ -36,6 +45,7 @@ class StayPricingQuote:
     commission_amount: float
     net_amount: float
     fx_rate_snapshot: float | None
+    fx_quote_details: dict | None
     tax_breakdown: list[dict]
 
 
@@ -119,9 +129,10 @@ def quote_rate_plan_stay(
     net_amount = round(gross_total - commission_amount, 2)
 
     fx_rate_snapshot = None
+    fx_quote_details = None
     output_currency = currency_code
     if target_currency and target_currency != currency_code:
-        gross_total, fx_rate_snapshot = _convert_amount(
+        gross_total, fx_rate_snapshot, fx_quote_details = _convert_amount(
             db,
             hotel_id=hotel_id,
             amount=gross_total,
@@ -151,6 +162,7 @@ def quote_rate_plan_stay(
         commission_amount=commission_amount,
         net_amount=net_amount,
         fx_rate_snapshot=fx_rate_snapshot,
+        fx_quote_details=fx_quote_details,
         tax_breakdown=tax_breakdown,
     )
 
@@ -306,32 +318,198 @@ def _convert_amount(
     to_currency: str,
     fx_policy_id: int | None,
     provider_code: str | None,
-) -> tuple[float, float]:
+    persist_snapshots: bool = True,
+) -> tuple[float, float, dict | None]:
     policy = _select_fx_policy(db, hotel_id=hotel_id, fx_policy_id=fx_policy_id)
-    provider_id = None
-    if provider_code:
-        provider = db.query(OTAProvider).filter(OTAProvider.code == provider_code).first()
-        provider_id = provider.id if provider else None
+    from_code = str(from_currency or "").strip().upper()
+    to_code = str(to_currency or "").strip().upper()
+    if from_code == to_code:
+        return round(amount, 2), 1.0, None
 
-    rate = (
-        db.query(OTACurrencyRate)
-        .filter(
-            OTACurrencyRate.hotel_id == hotel_id,
-            OTACurrencyRate.base_currency == from_currency,
-            OTACurrencyRate.quote_currency == to_currency,
-            or_(OTACurrencyRate.provider_id == provider_id, OTACurrencyRate.provider_id == None),
+    if from_code not in SUPPORTED_CONVERSION_CURRENCIES or to_code not in SUPPORTED_CONVERSION_CURRENCIES:
+        raise PricingPolicyError(f"Conversión no soportada de {from_code} a {to_code}")
+
+    if from_code in SUPPORTED_CONVERSION_CURRENCIES and to_code in SUPPORTED_CONVERSION_CURRENCIES:
+        config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
+        configured_market = str(getattr(config, "fx_conversion_rate_type", "oficial") or "oficial").lower()
+        if configured_market not in {"oficial", "blue"}:
+            raise PricingPolicyError("La cotización USD configurada no es válida")
+
+        selected_market = configured_market
+
+        source_quote = _resolve_conversion_quote(
+            db,
+            hotel_id=hotel_id,
+            currency=from_code,
+            market=selected_market,
+        ) if from_code != "ARS" else None
+        target_quote = _resolve_conversion_quote(
+            db,
+            hotel_id=hotel_id,
+            currency=to_code,
+            market=selected_market,
+        ) if to_code != "ARS" else None
+
+        source_ars_per_unit = float(source_quote["venta"]) if source_quote else 1.0
+        target_ars_per_unit = float(target_quote["compra"]) if target_quote else 1.0
+        if source_ars_per_unit <= 0 or target_ars_per_unit <= 0:
+            raise PricingPolicyError("La cotización FX debe ser positiva")
+        raw_rate = source_ars_per_unit / target_ars_per_unit
+
+        if persist_snapshots and source_quote is not None:
+            _record_conversion_snapshot(
+                db,
+                hotel_id=hotel_id,
+                currency=from_code,
+                market=selected_market,
+                quote=source_quote,
+                side="venta",
+            )
+        if persist_snapshots and target_quote is not None:
+            _record_conversion_snapshot(
+                db,
+                hotel_id=hotel_id,
+                currency=to_code,
+                market=selected_market,
+                quote=target_quote,
+                side="compra",
+            )
+
+        spread_pct = float(policy.spread_pct or 0.0) if policy else 0.0
+        if not math.isfinite(spread_pct) or spread_pct < 0:
+            raise PricingPolicyError(
+                "El spread FX debe ser cero o mayor para conservar una cotización favorable al hotel."
+            )
+        # The hotel's selected market governs every currency quote. Non-USD
+        # blue equivalents are derived in the provider adapter. FxPolicy still
+        # supplies spread; legacy source/side fields cannot override either.
+        effective_rate = raw_rate * (1 + (spread_pct / 100.0))
+        if not math.isfinite(effective_rate) or effective_rate <= 0:
+            raise PricingPolicyError("La tasa FX resultante no es válida")
+        details = {
+            "provider": "dolarapi.com",
+            "configured_usd_market": selected_market,
+            "usd_market": selected_market if "USD" in {from_code, to_code} else None,
+            "path": "via_ars",
+            "from_currency": from_code,
+            "to_currency": to_code,
+            "source_side": "venta" if from_code != "ARS" else None,
+            "target_side": "compra" if to_code != "ARS" else None,
+            "source_ars_per_unit": source_ars_per_unit,
+            "target_ars_per_unit": target_ars_per_unit,
+            "spread_pct": spread_pct,
+            "applied_rate": effective_rate,
+            "source_updated_at": source_quote.get("_provider_updated_at") if source_quote else None,
+            "target_updated_at": target_quote.get("_provider_updated_at") if target_quote else None,
+            "source_quote": _quote_provenance(source_quote, from_code, "venta", selected_market) if source_quote else None,
+            "target_quote": _quote_provenance(target_quote, to_code, "compra", selected_market) if target_quote else None,
+        }
+        return round(amount * effective_rate, 2), effective_rate, details
+
+
+def _resolve_conversion_quote(
+    db: Session,
+    *,
+    hotel_id: int,
+    currency: str,
+    market: str,
+) -> dict:
+    selected_type = market if currency == "USD" else f"{currency.lower()}_{market}"
+    quote = get_conversion_quote_sync(currency, market)
+    expected_market = market if currency == "USD" or market == "oficial" else "blue_derivado"
+    if (
+        not quote_is_fresh(quote)
+        or not isinstance(quote, dict)
+        or str(quote.get("casa") or "").strip().lower() != expected_market
+    ):
+        quote = None
+
+    if quote is None:
+        snapshot = (
+            db.query(FxRateSnapshot)
+            .filter(
+                FxRateSnapshot.hotel_id == hotel_id,
+                FxRateSnapshot.rate_type == selected_type,
+                FxRateSnapshot.moneda == currency,
+            )
+            .order_by(FxRateSnapshot.provider_updated_at.desc(), FxRateSnapshot.fetched_at.desc())
+            .first()
         )
-        .order_by(OTACurrencyRate.captured_at.desc())
-        .first()
+        if snapshot is not None:
+            candidate_time = snapshot.provider_updated_at or snapshot.fetched_at
+            candidate = {
+                "compra": snapshot.compra,
+                "venta": snapshot.venta,
+                "fechaActualizacion": candidate_time.isoformat() if candidate_time else None,
+                "casa": snapshot.provider_market or expected_market,
+            }
+            if quote_is_fresh(candidate) and candidate["casa"] == expected_market:
+                quote = candidate
+
+    if quote is None:
+        raise PricingPolicyError(
+            f"No hay una cotización fresca de {selected_type} para {currency}; no se usará otro mercado."
+        )
+
+    provider_updated_at = parse_provider_updated_at(quote.get("fechaActualizacion") or quote.get("fecha"))
+    quote = dict(quote)
+    quote["_provider_updated_at"] = provider_updated_at.isoformat() if provider_updated_at else None
+    quote["_rate_type"] = selected_type
+    if currency != "USD" and market == "blue":
+        quote["_selected_market"] = "blue"
+        quote["_derived_blue"] = True
+    return quote
+
+
+def _record_conversion_snapshot(
+    db: Session,
+    *,
+    hotel_id: int,
+    currency: str,
+    market: str,
+    quote: dict,
+    side: str,
+) -> None:
+    provider_updated_at = parse_provider_updated_at(
+        quote.get("fechaActualizacion") or quote.get("fecha")
     )
-    if not rate:
-        raise PricingPolicyError(f"Missing FX rate from {from_currency} to {to_currency}")
+    rate_type = market if currency == "USD" else f"{currency.lower()}_{market}"
+    db.add(
+        FxRateSnapshot(
+            hotel_id=hotel_id,
+            rate_type=rate_type,
+            provider_market=str(quote.get("casa") or (market if currency == "USD" else "oficial")),
+            moneda=currency,
+            compra=float(quote["compra"]),
+            venta=float(quote["venta"]),
+            fetched_at=datetime.now(timezone.utc),
+            provider_updated_at=provider_updated_at,
+            selected_side=side,
+            base_currency="ARS",
+            quote_currency=currency,
+            applied_rate=float(quote[side]),
+            source="dolarapi.com",
+        )
+    )
 
-    effective_rate = rate.rate
-    if policy and policy.spread_pct:
-        effective_rate = effective_rate * (1 + (policy.spread_pct / 100.0))
 
-    return round(amount * effective_rate, 2), round(effective_rate, 6)
+def _quote_provenance(quote: dict, currency: str, side: str, selected_market: str) -> dict:
+    provider_market = quote.get("casa")
+    return {
+        "currency": currency,
+        "rate_type": quote.get("_rate_type"),
+        "market": provider_market,
+        "conversion_market": selected_market,
+        "usd_market": provider_market if currency == "USD" else None,
+        "direct_currency_market": (
+            "oficial" if quote.get("_derived_blue") else provider_market
+        ) if currency != "USD" else None,
+        "is_derived_blue": bool(quote.get("_derived_blue")),
+        "derivation_sources": quote.get("_source_quotes"),
+        "side": side,
+        "ars_per_unit": float(quote[side]),
+        "provider_updated_at": quote.get("_provider_updated_at"),
+    }
 
 
 def _select_fx_policy(db: Session, *, hotel_id: int, fx_policy_id: int | None) -> FxPolicy | None:

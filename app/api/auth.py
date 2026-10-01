@@ -47,6 +47,7 @@ from app.schemas.auth import (
     MfaCodeRequest,
     MfaDisableRequest,
     MfaEnrollmentResponse,
+    MfaStatusResponse,
     MfaLoginRequest,
     MfaRecoveryCodesResponse,
     PasswordLoginEnabledResponse,
@@ -99,6 +100,7 @@ from app.services.external_effects_policy import (
     require_google_login,
 )
 from app.services.permission_service import get_effective_permissions
+from app.services.tenant_context import set_tenant_hotel_context, set_tenant_user_context
 from app.services import mfa_service
 from app.services.user_session_service import (
     USER_CSRF_COOKIE_NAME,
@@ -147,6 +149,7 @@ def _pick_default_hotel_id(db: Session, hotel_ids: list[int]) -> int:
     completed_hotels: list[int] = []
     fallback_hotels: list[int] = []
     for hotel_id in hotel_ids:
+        set_tenant_hotel_context(db, hotel_id)
         try:
             status = onboarding_service.get_status(db, hotel_id=hotel_id)
         except Exception:
@@ -163,6 +166,12 @@ def _pick_default_hotel_id(db: Session, hotel_ids: list[int]) -> int:
 
 
 def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None = None) -> AuthResponse:
+    # Login is the boundary where the app learns which tenant memberships the
+    # identity may access. PostgreSQL RLS requires the user principal before
+    # that membership lookup, then the selected hotel principal for tenant
+    # settings and permission reads.
+    set_tenant_hotel_context(db, None)
+    set_tenant_user_context(db, user.id)
     memberships = get_memberships_for_user(db, user.id)
     memberships_by_hotel = {m.hotel_id: m for m in memberships if m.status == "active"}
     if not memberships_by_hotel:
@@ -174,6 +183,7 @@ def _build_auth_response(db: Session, user: User, requested_hotel_id: int | None
     if requested_hotel_id is not None and requested_hotel_id not in memberships_by_hotel:
         raise HTTPException(status_code=403, detail="No tenes acceso al hotel solicitado")
     hotel_id = requested_hotel_id if requested_hotel_id is not None else _pick_default_hotel_id(db, hotel_ids)
+    set_tenant_hotel_context(db, hotel_id)
     active_membership = memberships_by_hotel[hotel_id]
     effective_permissions = get_effective_permissions(
         db,
@@ -239,10 +249,13 @@ def _audit_security_event(
 ) -> None:
     """Project a global identity event into every hotel the user actively belongs to."""
     details_json = json.dumps(details, sort_keys=True)
+    set_tenant_hotel_context(db, None)
+    set_tenant_user_context(db, user.id)
     memberships = get_memberships_for_user(db, user.id)
     # Identity events have no single hotel; skip users without an active
     # membership because SecurityAuditLog.hotel_id is intentionally required.
     for membership in memberships:
+        set_tenant_hotel_context(db, membership.hotel_id)
         db.add(
             SecurityAuditLog(
                 hotel_id=membership.hotel_id,
@@ -253,6 +266,9 @@ def _audit_security_event(
                 details=details_json,
             )
         )
+        # Each row is scoped to its own tenant. Flushing inside the loop keeps
+        # mixed-tenant login audits from sharing one final RLS hotel setting.
+        db.flush()
 
 
 def _run_notification_cycle_best_effort() -> None:
@@ -282,6 +298,7 @@ def _issue_auth_response(
     audit_details: dict[str, object] | None = None,
     requested_hotel_id: int | None = None,
 ) -> AuthResponse:
+    set_tenant_user_context(db, user.id)
     user.last_login = datetime.now(timezone.utc)
     db.add(user)
     if audit_action is not None:
@@ -1397,6 +1414,15 @@ def reset_password(
     db.commit()
     db.refresh(user)
     return _build_login_response(db, user, request=request, response=response)
+
+
+@router.get("/mfa/status", response_model=MfaStatusResponse)
+def get_mfa_status(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> MfaStatusResponse:
+    """Return only whether the authenticated user's TOTP factor is active."""
+    return MfaStatusResponse(enabled=mfa_service.get_active_mfa_secret(db, user.id) is not None)
 
 
 @router.post("/mfa/enroll", response_model=MfaEnrollmentResponse)

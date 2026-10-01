@@ -31,6 +31,13 @@ class RoomStatusEnum(str, enum.Enum):
     CLEANING = "cleaning"
 
 
+class RoomHousekeepingStatusEnum(str, enum.Enum):
+    DIRTY = "dirty"
+    IN_PROGRESS = "in_progress"
+    CLEAN = "clean"
+    INSPECTED = "inspected"
+
+
 class RoomCategory(Base):
     """Room category/type â€” e.g. Standard, Superior, Suite, Penthouse."""
 
@@ -82,6 +89,19 @@ class Room(Base):
         nullable=False,
         default=RoomStatusEnum.AVAILABLE,
     )
+    housekeeping_status = Column(
+        Enum(
+            RoomHousekeepingStatusEnum,
+            name="room_housekeeping_status_enum",
+            native_enum=False,
+            create_constraint=False,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+            length=24,
+        ),
+        nullable=False,
+        default=RoomHousekeepingStatusEnum.CLEAN,
+        server_default=RoomHousekeepingStatusEnum.CLEAN.value,
+    )
     is_active = Column(Boolean, nullable=False, default=True)
     score = Column(Integer, nullable=True)        # 1-10 preference score for allocation
     is_accessible = Column(Boolean, nullable=False, default=False)
@@ -97,6 +117,10 @@ class Room(Base):
     __table_args__ = (
         CheckConstraint("floor >= 0", name="ck_room_floor_positive"),
         CheckConstraint("score IS NULL OR (score >= 1 AND score <= 10)", name="ck_room_score_range"),
+        CheckConstraint(
+            "housekeeping_status IN ('dirty', 'in_progress', 'clean', 'inspected')",
+            name="ck_room_housekeeping_status",
+        ),
         UniqueConstraint("hotel_id", "room_number", name="uq_room_number_hotel"),
         UniqueConstraint("hotel_id", "id", name="uq_room_hotel_id_id"),
         ForeignKeyConstraint(

@@ -157,6 +157,9 @@ class AllocationRunResponse(BaseModel):
 class ReservationTransactionSummaryRead(BaseModel):
     id: int
     amount: float
+    applied_amount: Optional[float] = None
+    applied_currency: Optional[str] = None
+    fx_rate_snapshot: Optional[float] = None
     gross_amount: Optional[float] = None
     fee_amount: Optional[float] = None
     currency: str
@@ -165,6 +168,9 @@ class ReservationTransactionSummaryRead(BaseModel):
     status: str
     manual_reference: Optional[str] = None
     refund_of_transaction_id: Optional[int] = None
+    collected_before: bool = False
+    collected_on: Optional[date] = None
+    prior_receipt_note: Optional[str] = None
     created_at: str
 
 
@@ -183,17 +189,18 @@ class ReservationFinancialSummaryRead(BaseModel):
     confirmation_code: str
     status: str
     currency_code: str
-    total_amount: float
-    deposit_required: float
-    amount_paid: float
-    balance_due: float
+    total_amount: float | None
+    deposit_required: float | None
+    amount_paid: float | None
+    balance_due: float | None
     operational_total_amount: float
     operational_balance_due: float
     billing_adjustment_total: float
+    company_billing_deferred: bool = False
     payment_collection_model: str
     settlement_status: str
     has_financial_reconciliation_gap: bool
-    financial_reconciliation_gap: float
+    financial_reconciliation_gap: float | None
     recommended_next_action: Optional[str] = None
     transactions: list[ReservationTransactionSummaryRead]
     billing_adjustments: list[ReservationBillingAdjustmentSummaryRead]

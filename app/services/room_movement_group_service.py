@@ -5,10 +5,11 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.services.row_locks import lock_query
 from app.models.audit_log import AuditActionEnum
 from app.models.operations import RoomMoveEvent, RoomMovementGroup
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.models.room import Room, RoomCategory, RoomHousekeepingStatusEnum, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.services import audit_log_service
 from app.services.reservation_service import (
@@ -68,6 +69,7 @@ def sync_room_statuses_after_move(
         source_before = before_status
         if origin_room_disposition == "cleaning":
             from_room.status = RoomStatusEnum.CLEANING
+            from_room.housekeeping_status = RoomHousekeepingStatusEnum.DIRTY
         elif origin_room_disposition == "available":
             from_room.status = RoomStatusEnum.AVAILABLE
         elif origin_room_disposition == "maintenance":
@@ -77,6 +79,7 @@ def sync_room_statuses_after_move(
             # occupied moves are validated by move_reservation_room before
             # reaching this helper and therefore always provide a choice.
             from_room.status = RoomStatusEnum.CLEANING
+            from_room.housekeeping_status = RoomHousekeepingStatusEnum.DIRTY
         after_status = from_room.status.value if hasattr(from_room.status, "value") else str(from_room.status)
         source_after = after_status
         if before_status != after_status:
@@ -240,22 +243,20 @@ def revert_group(
     for event in events:
         if event.from_room_id is None:
             raise RoomMovementGroupError("Movement without source room cannot be reverted automatically")
-        reservation = (
+        reservation_query = (
             db.query(Reservation)
             .filter(Reservation.id == event.reservation_id, Reservation.hotel_id == hotel_id)
             .populate_existing()
-            .with_for_update()
-            .first()
         )
+        reservation = lock_query(reservation_query, Reservation).first()
         if reservation is None:
             raise RoomMovementGroupError("Linked reservation no longer exists")
-        from_room = (
+        from_room_query = (
             db.query(Room)
             .filter(Room.id == event.from_room_id, Room.hotel_id == hotel_id)
             .populate_existing()
-            .with_for_update()
-            .first()
         )
+        from_room = lock_query(from_room_query, Room).first()
         if from_room is None:
             raise RoomMovementGroupError("Original room no longer exists")
 
@@ -441,7 +442,7 @@ def _active_reservation_conflicts_for_room(
     check_out,
     exclude_reservation_id: int,
 ) -> list[Reservation]:
-    return (
+    overlapping_query = (
         db.query(Reservation)
         .filter(
             Reservation.hotel_id == hotel_id,
@@ -459,6 +460,5 @@ def _active_reservation_conflicts_for_room(
         )
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
         .populate_existing()
-        .with_for_update()
-        .all()
     )
+    return lock_query(overlapping_query, Reservation).all()

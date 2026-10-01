@@ -38,12 +38,13 @@ async function installGoogleButton(page: Page) {
 
 async function installSecurityMocks(
   page: Page,
-  initialState: { googleLinked?: boolean; passwordEnabled?: boolean } = {}
+  initialState: { googleLinked?: boolean; passwordEnabled?: boolean; providerEnabled?: boolean } = {}
 ) {
   const backendURL = process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040";
   const calls: Array<{ path: string; body: Record<string, unknown> | null; authorization?: string | null }> = [];
   let googleLinked = initialState.googleLinked ?? false;
   let passwordEnabled = initialState.passwordEnabled ?? true;
+  const providerEnabled = initialState.providerEnabled ?? true;
   let googleLinkAttempts = 0;
   const email = "owner@e2e.example";
   const permissions = ["dashboard:view", "settings:security:view"];
@@ -85,9 +86,9 @@ async function installSecurityMocks(
     if (method === "GET" && path.endsWith("/api/auth/providers")) {
       return json({
         google: {
-          enabled: true,
-          client_id: "e2e.apps.googleusercontent.com",
-          self_signup_enabled: true,
+          enabled: providerEnabled,
+          client_id: providerEnabled ? "e2e.apps.googleusercontent.com" : null,
+          self_signup_enabled: providerEnabled,
           allowed_domains: []
         }
       });
@@ -186,10 +187,25 @@ test("Google-only user can add a Hotels-PMS password without email recovery", as
   await page.locator("#security-new-password-confirm").fill("NewLocalPassphrase!123");
   await page.getByRole("button", { name: "Crear contraseña" }).click();
 
-  await expect(page.getByText("Contraseña creada. Ya podés ingresar con Google o con email y contraseña.")).toBeVisible();
+  await expect(page.getByText("Contraseña creada. Ya podés ingresar con email y contraseña.")).toBeVisible();
   expect(calls).toContainEqual({
     path: "/api/auth/password/set",
     body: { id_token: syntheticGoogleIdToken, new_password: "NewLocalPassphrase!123" },
     authorization: "Bearer synthetic-owner-access-token"
   });
+});
+
+test("Google sign-in copy is hidden from Security when the provider is disabled", async ({ page }) => {
+  await installGoogleButton(page);
+  await installSecurityMocks(page, {
+    googleLinked: true,
+    passwordEnabled: false,
+    providerEnabled: false
+  });
+
+  await page.goto("/settings/security");
+  await expect(page.getByRole("heading", { name: "Seguridad", exact: true })).toBeVisible();
+  await expect(page.getByTestId("security-login-help")).toBeVisible();
+  await expect(page.getByTestId("google-signin-button")).toHaveCount(0);
+  await expect(page.getByText(/Google/i)).toHaveCount(0);
 });

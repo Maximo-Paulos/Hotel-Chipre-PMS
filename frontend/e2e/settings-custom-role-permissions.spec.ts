@@ -4,6 +4,7 @@ const builtinRoles = ["owner", "co_owner", "manager", "receptionist", "housekeep
 const customRoleCode = "night-auditor";
 const permissionCode = "guest:read";
 const assistantActionsPermissionCode = "settings:assistant:actions:manage";
+const rateAdjustPermissionCode = "reservation:rate_adjust";
 
 const roleCatalog = {
   roles: [
@@ -71,6 +72,13 @@ const matrixForRoles = Object.fromEntries(
         help_es: "Revisar y aplicar acciones sugeridas por el asistente.",
         locked: role !== "owner" && role !== "co_owner",
         lock_reason: role === "owner" || role === "co_owner" ? null : "role_scope"
+      },
+      [rateAdjustPermissionCode]: {
+        allowed: role === "manager",
+        source: "default",
+        description: "Ajustar tarifas y aplicar upgrades sin cargo",
+        module: "reservations",
+        help_es: "Permite aplicar descuentos de cortesía, cambios de tarifa o mejoras de habitación sin cargo."
       }
     }
   ])
@@ -106,6 +114,15 @@ const profilesForRoles = Object.fromEntries(
         description: "Revisar acciones del asistente",
         module: "settings",
         help_es: "Revisar y aplicar acciones sugeridas por el asistente."
+      },
+      [rateAdjustPermissionCode]: {
+        allowed: role === "manager",
+        source: "role_default",
+        locked: false,
+        lock_reason: null,
+        description: "Ajustar tarifas y aplicar upgrades sin cargo",
+        module: "reservations",
+        help_es: "Permite aplicar descuentos de cortesía, cambios de tarifa o mejoras de habitación sin cargo."
       }
     }
   ])
@@ -128,9 +145,15 @@ const authResponse = {
   }
 };
 
-async function installMocks(page: Page, options: { rolesFailure?: boolean; overrideStatus?: number; legacyUserDeny?: boolean } = {}) {
+async function installMocks(page: Page, options: {
+  rolesFailure?: boolean;
+  overrideStatus?: number;
+  legacyUserDeny?: boolean;
+  permissionReadsRequireStepUp?: boolean;
+} = {}) {
   let loggedIn = false;
   const writes: Array<{ path: string; method: string; payload: unknown }> = [];
+  const permissionReadAttempts: string[] = [];
 
   await page.route("https://fonts.googleapis.com/**", (route) => route.fulfill({ status: 200, body: "" }));
   await page.route("https://fonts.gstatic.com/**", (route) => route.abort());
@@ -163,6 +186,31 @@ async function installMocks(page: Page, options: { rolesFailure?: boolean; overr
       await json({ hotel_id: 1, role: "owner", permissions: ["permissions:manage"] });
       return;
     }
+    if (pathname.endsWith("/api/auth/mfa/status")) {
+      await json({ enabled: true });
+      return;
+    }
+    const requiresPermissionStepUp = options.permissionReadsRequireStepUp && method === "GET" && (
+      [
+        "/api/permissions/catalog",
+        "/api/permissions/matrix",
+        "/api/permissions/role-overrides",
+        "/api/permissions/visibility-windows"
+      ].includes(pathname) ||
+      /^\/api\/permissions\/user-overrides\/\d+$/.test(pathname)
+    );
+    if (requiresPermissionStepUp) {
+      permissionReadAttempts.push(pathname);
+      await json({
+        detail: {
+          code: "STEP_UP_REQUIRED",
+          permission_code: "permissions:manage",
+          method,
+          path: pathname
+        }
+      }, 428);
+      return;
+    }
     if (pathname.endsWith("/api/notifications")) {
       await json({ items: [], unread_count: 0 });
       return;
@@ -181,6 +229,7 @@ async function installMocks(page: Page, options: { rolesFailure?: boolean; overr
         permissions: [
           { code: permissionCode, module: "guests", description: "Consultar huéspedes", help_es: "Permite consultar huéspedes.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
           { code: assistantActionsPermissionCode, module: "settings", description: "Revisar acciones del asistente", help_es: "Revisar y aplicar acciones sugeridas por el asistente.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
+          { code: rateAdjustPermissionCode, module: "reservations", description: "Ajustar tarifas y aplicar upgrades sin cargo", help_es: "Permite aplicar descuentos de cortesía, cambios de tarifa o mejoras de habitación sin cargo.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
           { code: "permissions:manage", module: "permissions", description: "Administrar permisos", help_es: "Permiso crítico.", legacy_aliases: [], locked: true, lock_reason: "owner_only", critical: true, step_up_required: true, delegable: false }
         ]
       });
@@ -245,7 +294,7 @@ async function installMocks(page: Page, options: { rolesFailure?: boolean; overr
     await json({ detail: `Unhandled mock: ${method} ${pathname}` }, 404);
   });
 
-  return writes;
+  return { writes, permissionReadAttempts };
 }
 
 async function openPermissions(page: Page) {
@@ -259,7 +308,7 @@ async function openPermissions(page: Page) {
 }
 
 test("shows an active custom role by name and uses its code for permission and visibility writes", async ({ page }, testInfo) => {
-  const writes = await installMocks(page);
+  const { writes } = await installMocks(page);
   await openPermissions(page);
 
   await expect(page.getByRole("checkbox", { name: "Consultar huéspedes para Auditoría nocturna" })).toBeVisible();
@@ -267,6 +316,8 @@ test("shows an active custom role by name and uses its code for permission and v
   await expect(page.getByTestId("permission-toggle-old-auditor-guest:read")).toHaveCount(0);
   await expect(page.getByTestId(`permission-toggle-owner-${permissionCode}`)).toBeDisabled();
   await expect(page.getByTestId(`permission-toggle-co_owner-${permissionCode}`)).toBeDisabled();
+  await expect(page.getByTestId(`permission-toggle-owner-${rateAdjustPermissionCode}`)).toBeEnabled();
+  await expect(page.getByTestId(`permission-toggle-owner-${rateAdjustPermissionCode}`)).not.toBeChecked();
   await expect(page.getByTestId(`permission-toggle-${customRoleCode}-permissions:manage`)).toBeDisabled();
   const customRoleEntry = page.getByRole("listitem").filter({ hasText: "Auditoría nocturna" });
   await expect(customRoleEntry.getByRole("button", { name: "Archivar" })).toBeDisabled();
@@ -299,8 +350,49 @@ test("shows an active custom role by name and uses its code for permission and v
   });
 });
 
+test("lets the hotel configure complimentary rate adjustments by role", async ({ page }) => {
+  const { writes } = await installMocks(page);
+  await openPermissions(page);
+
+  await expect(page.getByTestId(`permission-toggle-manager-${rateAdjustPermissionCode}`)).toBeChecked();
+  const customRoleToggle = page.getByTestId(`permission-toggle-${customRoleCode}-${rateAdjustPermissionCode}`);
+  await expect(customRoleToggle).toBeEnabled();
+  await expect(customRoleToggle).not.toBeChecked();
+  await customRoleToggle.click();
+
+  await expect.poll(() => writes.some((write) => (write.payload as { permission_code?: string }).permission_code === rateAdjustPermissionCode)).toBe(true);
+  expect(writes.find((write) => (write.payload as { permission_code?: string }).permission_code === rateAdjustPermissionCode)?.payload).toMatchObject({
+    role: customRoleCode,
+    permission_code: rateAdjustPermissionCode,
+    allowed: true,
+    expected_version: 0
+  });
+});
+
+test("lets the owner explicitly opt in to complimentary rate adjustments without opening other owner permissions", async ({ page }) => {
+  const { writes } = await installMocks(page);
+  await openPermissions(page);
+
+  const ownerRateToggle = page.getByTestId(`permission-toggle-owner-${rateAdjustPermissionCode}`);
+  await expect(ownerRateToggle).toBeEnabled();
+  await expect(ownerRateToggle).not.toBeChecked();
+  await ownerRateToggle.click();
+
+  await expect.poll(() => writes.some((write) =>
+    (write.payload as { role?: string; permission_code?: string }).role === "owner" &&
+    (write.payload as { permission_code?: string }).permission_code === rateAdjustPermissionCode
+  )).toBe(true);
+  expect(writes.find((write) => write.path.endsWith("/permissions/override"))?.payload).toMatchObject({
+    role: "owner",
+    permission_code: rateAdjustPermissionCode,
+    allowed: true,
+    expected_version: 0
+  });
+  await expect(page.getByTestId(`permission-toggle-owner-${permissionCode}`)).toBeDisabled();
+});
+
 test("surfaces a 409 custom override conflict and leaves the permission unchanged", async ({ page }) => {
-  const writes = await installMocks(page, { overrideStatus: 409 });
+  const { writes } = await installMocks(page, { overrideStatus: 409 });
   await openPermissions(page);
   const toggle = page.getByTestId(`permission-toggle-${customRoleCode}-${permissionCode}`);
   await toggle.click();
@@ -311,7 +403,7 @@ test("surfaces a 409 custom override conflict and leaves the permission unchange
 });
 
 test("surfaces a 403 custom override rejection without applying it", async ({ page }) => {
-  const writes = await installMocks(page, { overrideStatus: 403 });
+  const { writes } = await installMocks(page, { overrideStatus: 403 });
   await openPermissions(page);
   const toggle = page.getByTestId(`permission-toggle-${customRoleCode}-${permissionCode}`);
   await toggle.click();
@@ -360,4 +452,27 @@ test("denies matrix editing when the hotel role catalog fails to load", async ({
   await expect(page.getByTestId("permissions-matrix")).toHaveCount(0);
   await expect(page.getByLabel("Nombre del rol")).toBeDisabled();
   await expect(page.getByRole("button", { name: "Crear rol" })).toBeDisabled();
+});
+
+test("canceling permission step-up closes one shared challenge without retrying protected reads", async ({ page }) => {
+  const { permissionReadAttempts } = await installMocks(page, { permissionReadsRequireStepUp: true });
+  await page.goto("/login", { waitUntil: "domcontentloaded" });
+  await page.locator('input[type="email"]').fill("owner@example.com");
+  await page.locator('input[type="password"]').fill("test-password");
+  await page.getByTestId("login-submit").click();
+  await page.waitForURL("**/dashboard");
+  await page.goto("/settings/permissions");
+
+  const dialog = page.getByRole("dialog", { name: "Confirmá que sos vos" });
+  await expect(dialog).toBeVisible();
+  await expect.poll(() => permissionReadAttempts.length).toBeGreaterThan(1);
+  await dialog.getByRole("button", { name: "Cancelar" }).click();
+  await expect(dialog).toHaveCount(0);
+
+  // This spans the default React Query retry delay that previously reopened
+  // the challenge after the operator had explicitly canceled it.
+  await page.waitForTimeout(1_500);
+  await expect(dialog).toHaveCount(0);
+  expect(permissionReadAttempts.length).toBeGreaterThan(1);
+  expect(new Set(permissionReadAttempts).size).toBe(permissionReadAttempts.length);
 });

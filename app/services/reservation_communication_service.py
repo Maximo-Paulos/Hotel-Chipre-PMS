@@ -10,6 +10,7 @@ from pydantic import TypeAdapter, ValidationError
 from pydantic.networks import EmailStr
 from sqlalchemy.orm import Session
 
+from app.services.row_locks import lock_query
 from app.models.reservation import Reservation
 from app.models.reservation_communication import (
     ReservationEmailDelivery,
@@ -126,12 +127,10 @@ def send_reservation_email(
     # two browser clicks both observe an empty delivery history and contact
     # the provider twice. SQLite ignores FOR UPDATE but still benefits from
     # the guarded mutation in the UI and the same deduplication query.
-    reservation = (
-        db.query(Reservation)
-        .filter(Reservation.id == reservation_id, Reservation.hotel_id == hotel_id)
-        .with_for_update()
-        .one_or_none()
-    )
+    reservation = lock_query(
+        db.query(Reservation).filter(Reservation.id == reservation_id, Reservation.hotel_id == hotel_id),
+        Reservation,
+    ).one_or_none()
     if reservation is None:
         raise ReservationCommunicationError("Reserva no encontrada")
     guest_email = _clean_email(recipient_email or getattr(reservation.guest, "email", None))

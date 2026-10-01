@@ -13,7 +13,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,7 @@ from app.services.laundry_vendor_service import (
     list_vendor_prices,
     list_vendors,
     mark_vendor_settlement_paid,
+    remito_creator_labels,
     set_vendor_price,
     update_vendor,
     vendor_balance,
@@ -42,7 +43,11 @@ from app.services.linen_service import (
     linen_summary,
     list_linen_items,
     list_locations as list_linen_locations,
+    LinenIdempotencyConflict,
     register_movement as register_linen_movement,
+    register_opening_counts,
+    set_location_minimum,
+    transfer_linen_stock,
 )
 from app.services.permission_service import (
     PERMISSION_LAUNDRY_MANAGE_VENDORS,
@@ -84,6 +89,7 @@ class VendorRead(BaseModel):
 class VendorPriceUpsert(BaseModel):
     linen_item_id: int
     unit_price: Decimal
+    effective_from: date = Field(default_factory=date.today)
     currency_code: Optional[str] = None
 
 
@@ -94,6 +100,7 @@ class VendorPriceRead(BaseModel):
     vendor_id: int
     linen_item_id: int
     unit_price: Decimal
+    effective_from: date
     currency_code: str
     updated_at: datetime
 
@@ -129,10 +136,12 @@ class RemitoRead(BaseModel):
     hotel_id: int
     vendor_id: int
     direction: str
+    house_location_id: Optional[int] = None
     remito_number: str
     remito_date: datetime
     notes: Optional[str] = None
     created_by_user_id: Optional[int] = None
+    created_by_name: Optional[str] = None
     created_at: datetime
     lines: list[RemitoLineRead] = Field(default_factory=list)
 
@@ -142,10 +151,26 @@ class RemitoCreateResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-def _housekeeping_remito(remito) -> RemitoRead:
+def _remito_reads(db: Session, *, hotel_id: int, remitos: list) -> list[RemitoRead]:
+    labels = remito_creator_labels(db, hotel_id=hotel_id, remitos=remitos)
+    results: list[RemitoRead] = []
+    for remito in remitos:
+        result = RemitoRead.model_validate(remito)
+        label = labels.get(remito.created_by_user_id) if remito.created_by_user_id is not None else None
+        if label is None and remito.created_by_user_id is not None:
+            label = "Usuario del hotel"
+        results.append(result.model_copy(update={"created_by_name": label}))
+    return results
+
+
+def _remito_read(db: Session, *, hotel_id: int, remito) -> RemitoRead:
+    return _remito_reads(db, hotel_id=hotel_id, remitos=[remito])[0]
+
+
+def _housekeeping_remito(remito: RemitoRead) -> RemitoRead:
     """Remove vendor billing snapshots and free text from an HK response."""
 
-    safe = RemitoRead.model_validate(remito)
+    safe = remito
     return safe.model_copy(
         update={
             "notes": None,
@@ -241,6 +266,32 @@ class LinenMovementRead(BaseModel):
     reason: Optional[str] = None
     created_by_user_id: Optional[int] = None
     created_at: datetime
+    transfer_reference: Optional[str] = None
+
+
+class LinenTransferCreate(BaseModel):
+    linen_item_id: int = Field(gt=0)
+    source_location_id: int = Field(gt=0)
+    destination_location_id: int = Field(gt=0)
+    quantity: Decimal = Field(gt=0)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class LinenTransferRead(BaseModel):
+    transfer_reference: str
+    outbound: LinenMovementRead
+    inbound: LinenMovementRead
+
+
+class LinenOpeningCountLineIn(BaseModel):
+    linen_item_id: int = Field(gt=0)
+    location_id: int = Field(gt=0)
+    quantity: Decimal = Field(gt=0)
+
+
+class LinenOpeningCountBatchIn(BaseModel):
+    counts: list[LinenOpeningCountLineIn] = Field(min_length=1, max_length=300)
+    reason: str = Field(min_length=1, max_length=500)
 
 
 @router.get("/items", response_model=list[LinenItemRead])
@@ -301,9 +352,31 @@ def get_current_laundry_linen_stock(
     return {"item_id": item_id, "quantity": quantity}
 
 
+class LinenLocationBalanceRead(BaseModel):
+    location_id: int
+    current_quantity: Decimal
+    has_movements: bool
+
+
 class LinenSummaryEntry(BaseModel):
     item: LinenItemRead
     current_quantity: Decimal
+    min_quantity: Optional[Decimal] = None
+    location_balances: list[LinenLocationBalanceRead] = Field(default_factory=list)
+
+
+class LinenParLevelUpsert(BaseModel):
+    min_quantity: Decimal = Field(ge=0)
+
+
+class LinenParLevelRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    hotel_id: int
+    item_id: int
+    location_id: int
+    min_quantity: Decimal
 
 
 @router.get("/items/summary", response_model=list[LinenSummaryEntry])
@@ -318,6 +391,30 @@ def get_laundry_linen_summary(
     ),
 ):
     return linen_summary(db, hotel_id=context.hotel_id, location_id=location_id)
+
+
+@router.put("/items/{item_id}/locations/{location_id}/minimum", response_model=LinenParLevelRead)
+def set_laundry_linen_location_minimum(
+    item_id: int,
+    location_id: int,
+    data: LinenParLevelUpsert,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+):
+    try:
+        par_level = set_location_minimum(
+            db,
+            hotel_id=context.hotel_id,
+            item_id=item_id,
+            location_id=location_id,
+            min_quantity=data.min_quantity,
+            actor_user_id=context.user_id,
+        )
+    except LinenError as exc:
+        raise HTTPException(status_code=404 if "not found" in str(exc).lower() else 400, detail=str(exc))
+    db.commit()
+    db.refresh(par_level)
+    return par_level
 
 
 @router.get("/locations", response_model=list[LinenLocationRead])
@@ -370,6 +467,58 @@ def create_laundry_linen_movement(
     db.commit()
     db.refresh(movement)
     return movement
+
+
+@router.post("/opening-counts", response_model=list[LinenMovementRead], status_code=status.HTTP_201_CREATED)
+def create_laundry_linen_opening_counts(
+    data: LinenOpeningCountBatchIn,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+):
+    try:
+        movements = register_opening_counts(
+            db,
+            hotel_id=context.hotel_id,
+            counts=[line.model_dump() for line in data.counts],
+            reason=data.reason,
+            created_by_user_id=context.user_id,
+        )
+    except LinenError as exc:
+        status_code = 409 if "prior movements" in str(exc).lower() or "only available" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc))
+    db.commit()
+    for movement in movements:
+        db.refresh(movement)
+    return movements
+
+
+@router.post("/transfers", response_model=LinenTransferRead, status_code=status.HTTP_201_CREATED)
+def create_laundry_linen_transfer(
+    data: LinenTransferCreate,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=100),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+):
+    try:
+        reference, outbound, inbound = transfer_linen_stock(
+            db,
+            hotel_id=context.hotel_id,
+            item_id=data.linen_item_id,
+            source_location_id=data.source_location_id,
+            destination_location_id=data.destination_location_id,
+            quantity=data.quantity,
+            reason=data.reason,
+            created_by_user_id=context.user_id,
+            idempotency_key=idempotency_key,
+        )
+    except LinenIdempotencyConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except LinenError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    db.commit()
+    db.refresh(outbound)
+    db.refresh(inbound)
+    return {"transfer_reference": reference, "outbound": outbound, "inbound": inbound}
 
 
 @router.post("/vendors", response_model=VendorRead, status_code=status.HTTP_201_CREATED)
@@ -431,7 +580,13 @@ def upsert_laundry_vendor_price(
     ),
 ):
     try:
-        price = set_vendor_price(db, hotel_id=context.hotel_id, vendor_id=vendor_id, **data.model_dump())
+        price = set_vendor_price(
+            db,
+            hotel_id=context.hotel_id,
+            vendor_id=vendor_id,
+            actor_user_id=context.user_id,
+            **data.model_dump(),
+        )
     except (LaundryVendorError, LinenError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     db.commit()
@@ -479,7 +634,8 @@ def create_laundry_remito(
         for line in remito.lines
         if line.unit_price_snapshot is None
     ]
-    safe_remito = _housekeeping_remito(remito) if context.operational_role == "housekeeping" else remito
+    remito_read = _remito_read(db, hotel_id=context.hotel_id, remito=remito)
+    safe_remito = _housekeeping_remito(remito_read) if context.operational_role == "housekeeping" else remito_read
     return {"remito": safe_remito, "warnings": warnings}
 
 
@@ -494,9 +650,10 @@ def list_laundry_remitos(
     remitos = list_remitos(
         db, hotel_id=context.hotel_id, vendor_id=vendor_id, date_from=date_from, date_to=date_to
     )
+    remito_reads = _remito_reads(db, hotel_id=context.hotel_id, remitos=remitos)
     if context.operational_role == "housekeeping":
-        return [_housekeeping_remito(remito) for remito in remitos]
-    return remitos
+        return [_housekeeping_remito(remito) for remito in remito_reads]
+    return remito_reads
 
 
 @router.get("/vendors/{vendor_id}/balance", response_model=list[VendorBalanceLine])

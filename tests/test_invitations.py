@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import json
 import time
 from datetime import datetime, timedelta, timezone
@@ -47,6 +47,7 @@ from app.services.permission_service import (
     PERMISSION_REPORTS_FINANCIAL_VIEW,
     PERMISSION_REPORTS_OPERATIONAL_VIEW,
     PERMISSION_RESERVATION_CREATE,
+    PERMISSION_SETTINGS_USERS_MANAGE,
     set_user_override,
 )
 
@@ -132,11 +133,26 @@ def owner_ctx(client_with_db):
         fastapi_app.dependency_overrides.clear()
 
 
+def _manage_users_request(client, method, path, *args, **kwargs):
+    """Issue a fresh endpoint-scoped ticket for authenticated admin-flow tests."""
+    auth_override = fastapi_app.dependency_overrides[get_auth_context_target()]
+    context = auth_override()
+    headers = dict(kwargs.pop("headers", None) or {})
+    headers["X-Action-Step-Up-Ticket"] = create_action_step_up_ticket(
+        user_id=context.user_id,
+        hotel_id=context.hotel_id,
+        token_version=context.token_version,
+        permission_code=PERMISSION_SETTINGS_USERS_MANAGE,
+        method=method,
+        path=path,
+    )
+    return getattr(client, method.lower())(path, *args, headers=headers, **kwargs)
+
+
 def test_invite_returns_token_and_accepts(owner_ctx):
     client, db, ctx = owner_ctx
 
-    resp = client.post(
-        "/api/users/invite",
+    resp = _manage_users_request(client, "post", "/api/users/invite",
         json={"email": "guest@test.com", "role": "manager", "password": "pw"},
     )
     assert resp.status_code == 201
@@ -331,8 +347,7 @@ def test_revoked_membership_cannot_be_reactivated_by_replaying_old_accept_token(
 def test_owner_can_reactivate_revoked_member_only_through_a_fresh_invitation(owner_ctx):
     client, db, ctx = owner_ctx
     email = "reactivated-member@test.com"
-    first_invite = client.post(
-        "/api/users/invite",
+    first_invite = _manage_users_request(client, "post", "/api/users/invite",
         json={"email": email, "role": "manager"},
     )
     assert first_invite.status_code == 201, first_invite.text
@@ -351,13 +366,12 @@ def test_owner_can_reactivate_revoked_member_only_through_a_fresh_invitation(own
     membership = db.query(HotelMembership).filter_by(hotel_id=ctx["hotel_id"], user_id=user.id).one()
     assert membership.status == "active"
 
-    revoked = client.delete(f"/api/users/{user.id}")
+    revoked = _manage_users_request(client, "delete", f"/api/users/{user.id}")
     assert revoked.status_code == 204, revoked.text
     db.refresh(membership)
     assert membership.status == "revoked"
 
-    fresh_invite = client.post(
-        "/api/users/invite",
+    fresh_invite = _manage_users_request(client, "post", "/api/users/invite",
         json={"email": email, "role": "manager"},
     )
     assert fresh_invite.status_code == 201, fresh_invite.text
@@ -404,7 +418,7 @@ def test_reinvitation_with_wrong_existing_password_keeps_invitation_pending(owne
     db.commit()
     original_hash = user.password_hash
 
-    invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    invite = _manage_users_request(client, "post", "/api/users/invite", json={"email": email, "role": "manager"})
     assert invite.status_code == 201, invite.text
     response = client.post(
         "/api/invitations/accept",
@@ -439,7 +453,7 @@ def test_reinvitation_accepts_an_existing_legacy_password_shorter_than_twelve(ow
     db.add(HotelMembership(hotel_id=ctx["hotel_id"], user_id=user.id, role="manager", status="revoked"))
     db.commit()
     original_hash = user.password_hash
-    invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    invite = _manage_users_request(client, "post", "/api/users/invite", json={"email": email, "role": "manager"})
     assert invite.status_code == 201, invite.text
 
     accepted = client.post(
@@ -472,7 +486,7 @@ def test_google_only_account_cannot_accept_existing_membership_with_password(own
     db.flush()
     db.add(HotelMembership(hotel_id=ctx["hotel_id"], user_id=user.id, role="manager", status="revoked"))
     db.commit()
-    invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    invite = _manage_users_request(client, "post", "/api/users/invite", json={"email": email, "role": "manager"})
     assert invite.status_code == 201, invite.text
 
     rejected = client.post(
@@ -515,7 +529,7 @@ def test_used_mfa_factor_stays_consumed_if_invitation_activation_fails(owner_ctx
     )
     db.add_all([membership, mfa_secret])
     db.commit()
-    invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    invite = _manage_users_request(client, "post", "/api/users/invite", json={"email": email, "role": "manager"})
     challenge = client.post(
         "/api/invitations/accept",
         json={
@@ -562,7 +576,7 @@ def test_reinvitation_password_guesses_share_the_normal_login_limit(owner_ctx, m
     db.flush()
     db.add(HotelMembership(hotel_id=ctx["hotel_id"], user_id=user.id, role="manager", status="revoked"))
     db.commit()
-    invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    invite = _manage_users_request(client, "post", "/api/users/invite", json={"email": email, "role": "manager"})
     assert invite.status_code == 201, invite.text
 
     login_limiter.reset(email, db=db)
@@ -604,7 +618,7 @@ def test_invitation_mfa_challenge_is_invalidated_when_owner_reissues_link(owner_
     ))
     db.commit()
 
-    first_invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    first_invite = _manage_users_request(client, "post", "/api/users/invite", json={"email": email, "role": "manager"})
     first_challenge = client.post(
         "/api/invitations/accept",
         json={
@@ -617,7 +631,7 @@ def test_invitation_mfa_challenge_is_invalidated_when_owner_reissues_link(owner_
     assert first_challenge.status_code == 200, first_challenge.text
     assert first_challenge.json()["requires_mfa"] is True
 
-    replacement_invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    replacement_invite = _manage_users_request(client, "post", "/api/users/invite", json={"email": email, "role": "manager"})
     assert replacement_invite.status_code == 201, replacement_invite.text
     assert replacement_invite.json()["invite_token"] != first_invite.json()["invite_token"]
     stale = client.post(
@@ -679,7 +693,7 @@ def test_reinvitation_with_password_requires_mfa_before_consuming_invitation(own
     ))
     db.commit()
 
-    invite = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    invite = _manage_users_request(client, "post", "/api/users/invite", json={"email": email, "role": "manager"})
     assert invite.status_code == 201, invite.text
     response = client.post(
         "/api/invitations/accept",
@@ -842,8 +856,7 @@ def test_google_invitation_claim_creates_only_a_non_owner_hotel_membership(owner
 def test_google_invitation_claim_activates_the_provisioned_placeholder(owner_ctx, monkeypatch):
     client, db, ctx = owner_ctx
     email = "google-placeholder@test.com"
-    invitation_response = client.post(
-        "/api/users/invite",
+    invitation_response = _manage_users_request(client, "post", "/api/users/invite",
         json={"email": email, "role": "receptionist"},
     )
     assert invitation_response.status_code == 201, invitation_response.text
@@ -1178,7 +1191,7 @@ def test_static_invitation_flow_keeps_bearer_out_of_urls_and_application_logs(ow
     client, db, ctx = owner_ctx
     caplog.set_level("INFO")
     email = "static-invite@example.test"
-    invited = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    invited = _manage_users_request(client, "post", "/api/users/invite", json={"email": email, "role": "manager"})
     assert invited.status_code == 201, invited.text
     token = invited.json()["invite_token"]
     assert "#token=" in invited.json()["accept_url"]
@@ -1195,6 +1208,9 @@ def test_static_invitation_flow_keeps_bearer_out_of_urls_and_application_logs(ow
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["hotel_id"] == ctx["hotel_id"]
     assert accepted.json()["user"]["role"] == "manager"
+    replayed_preview = client.post("/api/invitations/preview", json={"token": token})
+    assert replayed_preview.status_code == 400
+    assert replayed_preview.json()["detail"]["code"] == "INVITATION_ALREADY_ACCEPTED"
     assert token not in caplog.text
     assert "route=/api/invitations" in caplog.text
     assert db.query(HotelMembership).filter_by(hotel_id=ctx["hotel_id"], role="manager", status="active").count() == 1
@@ -1252,7 +1268,9 @@ def test_expired_invitation_is_not_available(owner_ctx):
     invitation.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
     db.commit()
 
-    assert client.post("/api/invitations/preview", json={"token": token}).status_code == 400
+    preview = client.post("/api/invitations/preview", json={"token": token})
+    assert preview.status_code == 400
+    assert preview.json()["detail"]["code"] == "INVITATION_EXPIRED"
     assert client.post(
         "/api/invitations/accept",
         json={"token": token, "email": email, "password": "new-account-password"},
@@ -1261,12 +1279,10 @@ def test_expired_invitation_is_not_available(owner_ctx):
 
 def test_duplicate_invite_reuses_pending_record_and_audits_resend(owner_ctx):
     client, db, _ctx = owner_ctx
-    first = client.post(
-        "/api/users/invite",
+    first = _manage_users_request(client, "post", "/api/users/invite",
         json={"email": "duplicate@test.com", "role": "manager"},
     )
-    second = client.post(
-        "/api/users/invite",
+    second = _manage_users_request(client, "post", "/api/users/invite",
         json={"email": "duplicate@test.com", "role": "manager"},
     )
     assert first.status_code == 201, first.text
@@ -1282,7 +1298,7 @@ def test_duplicate_invite_reuses_pending_record_and_audits_resend(owner_ctx):
         "/api/invitations/preview", json={"token": second.json()["invite_token"]}
     ).status_code == 200
     invitation_id = second.json()["invitation_id"]
-    resend = client.post(f"/api/users/invitations/{invitation_id}/resend")
+    resend = _manage_users_request(client, "post", f"/api/users/invitations/{invitation_id}/resend")
     assert resend.status_code == 200, resend.text
     assert resend.json()["invitation_id"] == invitation_id
     assert resend.json()["accept_url"].endswith(f"#token={resend.json()['invite_token']}")
@@ -1297,7 +1313,7 @@ def test_duplicate_invite_reuses_pending_record_and_audits_resend(owner_ctx):
     payloads = [json.loads(event.payload_after or "{}") for event in events]
     assert any(payload.get("event") == "invitation.resend" for payload in payloads)
 
-    revoked = client.delete(f"/api/users/invitations/{invitation_id}")
+    revoked = _manage_users_request(client, "delete", f"/api/users/invitations/{invitation_id}")
     assert revoked.status_code == 204, revoked.text
     invitation = db.get(StaffInvitation, invitation_id)
     assert invitation.status == "revoked"
@@ -1313,10 +1329,10 @@ def test_duplicate_invite_reuses_pending_record_and_audits_resend(owner_ctx):
 def test_resend_rejects_old_accept_link_and_accepts_latest_link(owner_ctx):
     client, db, _ctx = owner_ctx
     email = "latest-link-accept@test.com"
-    first = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+    first = _manage_users_request(client, "post", "/api/users/invite", json={"email": email, "role": "manager"})
     assert first.status_code == 201, first.text
 
-    resent = client.post(f"/api/users/invitations/{first.json()['invitation_id']}/resend")
+    resent = _manage_users_request(client, "post", f"/api/users/invitations/{first.json()['invitation_id']}/resend")
     assert resent.status_code == 200, resent.text
     assert resent.json()["invite_token"] != first.json()["invite_token"]
 
@@ -1393,7 +1409,7 @@ def test_invitation_and_resend_emails_link_to_the_current_acceptable_token(owner
         mocked_mailer.configured = True
         mocked_mailer.send.return_value = True
 
-        created = client.post("/api/users/invite", json={"email": email, "role": "manager"})
+        created = _manage_users_request(client, "post", "/api/users/invite", json={"email": email, "role": "manager"})
         assert created.status_code == 201, created.text
         created_body = created.json()
         created_token = created_body["invite_token"]
@@ -1404,7 +1420,7 @@ def test_invitation_and_resend_emails_link_to_the_current_acceptable_token(owner
         assert created_url.endswith(f"#token={created_token}")
         assert created_url in created_email_body
 
-        resent = client.post(f"/api/users/invitations/{created_body['invitation_id']}/resend")
+        resent = _manage_users_request(client, "post", f"/api/users/invitations/{created_body['invitation_id']}/resend")
         assert resent.status_code == 200, resent.text
         resent_body = resent.json()
         resent_token = resent_body["invite_token"]
@@ -1442,7 +1458,7 @@ def test_revoke_user_invalidates_jwt_version_and_all_server_sessions(owner_ctx):
     db.commit()
     access_token = create_access_token(staff.id, extra={"token_version": staff.token_version})
 
-    revoked = client.delete(f"/api/users/{staff.id}")
+    revoked = _manage_users_request(client, "delete", f"/api/users/{staff.id}")
 
     assert revoked.status_code == 204, revoked.text
     db.refresh(staff)
@@ -1462,7 +1478,7 @@ def test_update_role_requires_owner(owner_ctx):
     db.commit()
 
     # as owner: can update
-    r_ok = client.patch(f"/api/users/{mgr.id}/role", json={"role": "housekeeping"})
+    r_ok = _manage_users_request(client, "patch", f"/api/users/{mgr.id}/role", json={"role": "housekeeping"})
     assert r_ok.status_code == 200
     db.refresh(mgr)
     membership = (
@@ -1492,7 +1508,7 @@ def test_update_role_requires_owner(owner_ctx):
             permissions=set(),
         )
     fastapi_app.dependency_overrides[get_auth_context_target()] = override_auth_context_manager
-    r_forbidden = client.patch(f"/api/users/{mgr.id}/role", json={"role": "owner"})
+    r_forbidden = _manage_users_request(client, "patch", f"/api/users/{mgr.id}/role", json={"role": "owner"})
     assert r_forbidden.status_code == 403
 
 
@@ -1521,7 +1537,7 @@ def test_update_role_cannot_reactivate_invited_or_revoked_memberships(owner_ctx)
         if membership_status == "invited":
             _invitation_token(db, ctx, email, role="manager")
 
-        response = client.patch(f"/api/users/{user.id}/role", json={"role": "housekeeping"})
+        response = _manage_users_request(client, "patch", f"/api/users/{user.id}/role", json={"role": "housekeeping"})
 
         assert response.status_code == 409, response.text
         db.refresh(membership)
@@ -1571,7 +1587,7 @@ def test_role_change_clears_user_grants_but_preserves_denials(owner_ctx):
     )
     db.commit()
 
-    response = client.patch(f"/api/users/{staff.id}/role", json={"role": "housekeeping"})
+    response = _manage_users_request(client, "patch", f"/api/users/{staff.id}/role", json={"role": "housekeeping"})
 
     assert response.status_code == 200, response.text
     db.refresh(membership)
@@ -1635,8 +1651,7 @@ def test_inviting_existing_member_with_new_role_clears_carried_permission_grants
     )
     db.commit()
 
-    response = client.post(
-        "/api/users/invite",
+    response = _manage_users_request(client, "post", "/api/users/invite",
         json={"email": staff.email, "role": "housekeeping"},
     )
 
@@ -1672,14 +1687,75 @@ def test_co_owner_cannot_grant_privileged_roles(owner_ctx):
 
     fastapi_app.dependency_overrides[get_auth_context_target()] = override_auth_context_co_owner
 
-    invite = client.post("/api/users/invite", json={"email": "newco@test.com", "role": "co_owner"})
+    invite = _manage_users_request(client, "post", "/api/users/invite", json={"email": "newco@test.com", "role": "co_owner"})
     assert invite.status_code == 403
 
-    promote = client.patch(f"/api/users/{staff.id}/role", json={"role": "co_owner"})
+    promote = _manage_users_request(client, "patch", f"/api/users/{staff.id}/role", json={"role": "co_owner"})
     assert promote.status_code == 403
 
-    demote_to_manager = client.patch(f"/api/users/{staff.id}/role", json={"role": "manager"})
+    demote_to_manager = _manage_users_request(client, "patch", f"/api/users/{staff.id}/role", json={"role": "manager"})
     assert demote_to_manager.status_code == 200
+
+
+def test_owner_can_invite_co_owner_using_canonical_role_code(owner_ctx):
+    client, db, ctx = owner_ctx
+
+    response = _manage_users_request(client, "post", "/api/users/invite",
+        json={"email": "new-co-owner@test.com", "role": "co_owner"},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["user"]["role"] == "co_owner"
+    membership = db.query(HotelMembership).filter_by(
+        hotel_id=ctx["hotel_id"],
+        user_id=response.json()["user"]["id"],
+    ).one()
+    assert membership.role == "co_owner"
+    assert membership.status == "invited"
+
+
+def test_co_owner_cannot_revoke_or_change_primary_owner_membership(owner_ctx):
+    client, db, ctx = owner_ctx
+    primary_owner_membership = db.query(HotelMembership).filter_by(
+        hotel_id=ctx["hotel_id"],
+        user_id=ctx["user_id"],
+    ).one()
+    primary_owner_membership.is_primary_owner = True
+    co_owner = User(
+        email="co-owner-security@test.com",
+        password_hash=hash_password("pw"),
+        role="co_owner",
+        is_verified=True,
+    )
+    db.add(co_owner)
+    db.flush()
+    db.add(HotelMembership(
+        hotel_id=ctx["hotel_id"],
+        user_id=co_owner.id,
+        role="co_owner",
+        status="active",
+    ))
+    db.commit()
+
+    fastapi_app.dependency_overrides[get_auth_context_target()] = lambda: AuthContext(
+        hotel_id=ctx["hotel_id"],
+        user_id=co_owner.id,
+        user_email=co_owner.email,
+        user_role="co_owner",
+        is_verified=True,
+        permissions=set(),
+    )
+
+    revoke = _manage_users_request(client, "delete", f"/api/users/{ctx['user_id']}")
+    change_role = _manage_users_request(client, "patch", f"/api/users/{ctx['user_id']}/role",
+        json={"role": "manager"},
+    )
+
+    assert revoke.status_code == 403
+    assert change_role.status_code == 403
+    db.refresh(primary_owner_membership)
+    assert primary_owner_membership.role == "owner"
+    assert primary_owner_membership.status == "active"
 
 
 def test_co_owner_cannot_demote_peer_through_invitation_email(owner_ctx):
@@ -1703,8 +1779,7 @@ def test_co_owner_cannot_demote_peer_through_invitation_email(owner_ctx):
         permissions=set(),
     )
 
-    response = client.post(
-        "/api/users/invite",
+    response = _manage_users_request(client, "post", "/api/users/invite",
         json={"email": peer.email, "role": "manager"},
     )
 
@@ -1719,10 +1794,10 @@ def test_co_owner_cannot_demote_peer_through_invitation_email(owner_ctx):
 def test_owner_cannot_assign_owner_or_revoke_self(owner_ctx):
     client, db, ctx = owner_ctx
 
-    invite_owner = client.post("/api/users/invite", json={"email": "other-owner@test.com", "role": "owner"})
+    invite_owner = _manage_users_request(client, "post", "/api/users/invite", json={"email": "other-owner@test.com", "role": "owner"})
     assert invite_owner.status_code == 400
 
-    revoke_self = client.delete(f"/api/users/{ctx['user_id']}")
+    revoke_self = _manage_users_request(client, "delete", f"/api/users/{ctx['user_id']}")
     assert revoke_self.status_code == 400
     membership = db.query(HotelMembership).filter_by(hotel_id=ctx["hotel_id"], user_id=ctx["user_id"]).one()
     assert membership.role == "owner"
@@ -1841,8 +1916,7 @@ def test_primary_owner_transfer_requires_reauth_and_writes_audit(owner_ctx):
 def test_owner_and_co_owner_can_assign_receptionist(owner_ctx):
     client, db, ctx = owner_ctx
 
-    owner_invite = client.post(
-        "/api/users/invite",
+    owner_invite = _manage_users_request(client, "post", "/api/users/invite",
         json={"email": "reception-owner@test.com", "role": "receptionist"},
     )
     assert owner_invite.status_code == 201, owner_invite.text
@@ -1877,8 +1951,7 @@ def test_owner_and_co_owner_can_assign_receptionist(owner_ctx):
         )
 
     fastapi_app.dependency_overrides[get_auth_context_target()] = override_auth_context_co_owner
-    co_owner_invite = client.post(
-        "/api/users/invite",
+    co_owner_invite = _manage_users_request(client, "post", "/api/users/invite",
         json={"email": "reception-co@test.com", "role": "receptionist"},
     )
     assert co_owner_invite.status_code == 201, co_owner_invite.text

@@ -31,6 +31,7 @@ from app.services.operational_task_service import (
     list_tasks,
     serialize_handoff,
     serialize_task,
+    task_history,
     update_task,
     validate_task_operator_scope,
 )
@@ -102,6 +103,35 @@ def test_task_lifecycle_history_and_stale_version(db, hotel_config, sample_rooms
     )
     assert task.resolved_by_user_id == manager.id
     assert len(task.events) == 3
+
+
+def test_task_comment_appends_history_without_changing_task_status(db, hotel_config, sample_rooms):
+    manager = _user(db, "commenter@example.test")
+    task = create_task(
+        db,
+        hotel_id=1,
+        task_type=OperationalTaskTypeEnum.HOUSEKEEPING,
+        priority=OperationalTaskPriorityEnum.MEDIUM,
+        title="Revisar ropa blanca",
+        room_id=sample_rooms[0].id,
+        created_by_user_id=manager.id,
+    )
+
+    updated = update_task(
+        db,
+        hotel_id=1,
+        task_id=task.id,
+        actor_user_id=manager.id,
+        client_version=task.version,
+        comment="Faltan toallas en el depósito.",
+    )
+
+    events = task_history(db, hotel_id=1, task_id=task.id)
+    assert updated.status == OperationalTaskStatusEnum.PENDING
+    assert updated.version == 1
+    assert events[-1].from_status == OperationalTaskStatusEnum.PENDING
+    assert events[-1].to_status == OperationalTaskStatusEnum.PENDING
+    assert events[-1].comment == "Faltan toallas en el depósito."
 
 
 def test_maintenance_task_keeps_block_until_authorized_release(db, hotel_config, sample_rooms):

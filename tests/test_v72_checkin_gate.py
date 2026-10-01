@@ -1,11 +1,11 @@
 """
 V72 §7.1 — Check-in Payment Gate Tests.
 
-Requirement: check-in payment is configured per hotel (deposit by default, full amount, or no upfront payment).
+Requirement: check-in defaults to full payment but can be configured for deposit or no upfront payment.
 
 These tests are COMPLEMENTARY to tests/test_checkin.py.
 They focus on explicit payment-gate scenarios not covered there:
-  - deposit policy allows check-in after the configured deposit
+  - full-payment default blocks check-in after only the configured deposit
   - total policy blocks a deposit-only payment
   - free policy permits check-in without upfront payment
   - arrival date is enforced
@@ -103,20 +103,35 @@ def _pay_full(db, reservation, hotel_id=1):
 
 
 # ---------------------------------------------------------------------------
-# Hotel payment policy: deposit is the explicit configured default.
+# Hotel payment policy: full payment is the default; deposit/free remain configurable.
 # ---------------------------------------------------------------------------
 
 class TestPaymentGateDepositPaid:
     """Check-in must follow the explicit per-hotel payment policy."""
 
-    def test_default_deposit_policy_allows_checkin_after_deposit(
+    def test_default_full_payment_policy_blocks_checkin_until_full_payment(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config
     ):
-        assert hotel_config.checkin_payment_policy == "deposit"
+        assert hotel_config.checkin_payment_policy == "total"
         res = _make_reservation(db, sample_guest, sample_categories)
         _pay_deposit(db, res)
         assert res.status == ReservationStatusEnum.DEPOSIT_PAID
 
+        with pytest.raises(CheckInError, match="full reservation amount"):
+            perform_checkin(db, res.id)
+
+        remaining = res.total_amount - res.amount_paid
+        process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=res.id,
+                amount=remaining,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.BALANCE_PAYMENT,
+                currency="ARS",
+            ),
+            hotel_id=res.hotel_id,
+        )
         result = perform_checkin(db, res.id)
         assert result.status == ReservationStatusEnum.CHECKED_IN
 
@@ -230,16 +245,16 @@ class TestPaymentGateDepositPaid:
 # ---------------------------------------------------------------------------
 
 class TestPaymentGatePending:
-    """PENDING status (no payment at all) must NOT allow check-in."""
+    """The default full-payment policy blocks check-in without payment."""
 
-    def test_checkin_blocked_when_pending_error_mentions_status(
+    def test_checkin_blocked_when_pending_error_mentions_full_amount(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config
     ):
-        """§7.1: Error message mentions current status 'pending' when no payment made."""
+        """The error explains the full amount required by the default policy."""
         res = _make_reservation(db, sample_guest, sample_categories, check_in=date(2027, 5, 1), check_out=date(2027, 5, 3))
         assert res.status == ReservationStatusEnum.PENDING
 
-        with pytest.raises(CheckInError, match="configured deposit"):
+        with pytest.raises(CheckInError, match="full reservation amount"):
             perform_checkin(db, res.id)
 
     def test_checkin_blocked_cancelled_reservation(
@@ -265,17 +280,17 @@ class TestPaymentGatePending:
 class TestConfigFlag:
     """Verify payment and guest-data gates remain separate."""
 
-    def test_default_config_enforces_payment_gate(
+    def test_default_config_enforces_full_payment_gate(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config
     ):
-        """Config flag is True by default; gate is active for PENDING reservation."""
+        """Guest data and the default full-payment gate remain independent."""
         assert hotel_config.require_document_for_checkin is True
         assert hotel_config.require_terms_acceptance is True
-        assert hotel_config.checkin_payment_policy == "deposit"
+        assert hotel_config.checkin_payment_policy == "total"
 
         res = _make_reservation(db, sample_guest, sample_categories, check_in=date(2027, 7, 1), check_out=date(2027, 7, 3))
-        # Reservation is PENDING — the default deposit policy still applies.
-        with pytest.raises(CheckInError, match="configured deposit"):
+        # Reservation is PENDING — default policy requires the full amount.
+        with pytest.raises(CheckInError, match="full reservation amount"):
             perform_checkin(db, res.id)
 
     def test_payment_gate_not_bypassable_via_config(
@@ -288,7 +303,7 @@ class TestConfigFlag:
 
         res = _make_reservation(db, sample_guest, sample_categories, check_in=date(2027, 8, 1), check_out=date(2027, 8, 3))
         # Disabling guest-document checks cannot bypass the separate payment gate.
-        with pytest.raises(CheckInError, match="configured deposit"):
+        with pytest.raises(CheckInError, match="full reservation amount"):
             perform_checkin(db, res.id)
 
 
