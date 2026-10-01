@@ -96,7 +96,7 @@ def fx_client(monkeypatch: pytest.MonkeyPatch):
 def test_create_fx_snapshot(fx_client):
     client, SessionLocal, _ = fx_client
 
-    response = client.post("/fx/snapshot")
+    response = client.post("/api/fx/snapshot")
 
     assert response.status_code == 201, response.text
     assert response.json()["stored"] == 7
@@ -109,15 +109,15 @@ def test_create_fx_snapshot(fx_client):
 
 def test_get_rate_snapshot_by_date(fx_client):
     client, _, _ = fx_client
-    create = client.post("/fx/snapshot")
+    create = client.post("/api/fx/snapshot")
     assert create.status_code == 201, create.text
 
-    all_snapshots = client.get("/fx/snapshots", params={"rate_type": "oficial"})
+    all_snapshots = client.get("/api/fx/snapshots", params={"rate_type": "oficial"})
     assert all_snapshots.status_code == 200, all_snapshots.text
     fetched_date = datetime.fromisoformat(all_snapshots.json()[0]["fetched_at"]).date().isoformat()
 
     response = client.get(
-        "/fx/snapshots",
+        "/api/fx/snapshots",
         params={"from": fetched_date, "to": fetched_date, "rate_type": "oficial"},
     )
 
@@ -127,29 +127,29 @@ def test_get_rate_snapshot_by_date(fx_client):
     assert payload[0]["rate_type"] == "oficial"
     assert payload[0]["venta"] == 920.0
 
-    direct_currency = client.get("/fx/snapshots", params={"rate_type": "eur_oficial"})
+    direct_currency = client.get("/api/fx/snapshots", params={"rate_type": "eur_oficial"})
     assert direct_currency.status_code == 200, direct_currency.text
     assert len(direct_currency.json()) == 1
     assert direct_currency.json()[0]["rate_type"] == "eur_oficial"
     assert direct_currency.json()[0]["provider_market"] == "oficial"
 
-    derived_currency = client.get("/fx/snapshots", params={"rate_type": "eur_blue"})
+    derived_currency = client.get("/api/fx/snapshots", params={"rate_type": "eur_blue"})
     assert derived_currency.status_code == 200, derived_currency.text
     assert len(derived_currency.json()) == 1
     assert derived_currency.json()[0]["rate_type"] == "eur_blue"
     assert derived_currency.json()[0]["provider_market"] == "blue_derivado"
 
-    disallowed_usd_market = client.get("/fx/snapshots", params={"rate_type": "tarjeta"})
+    disallowed_usd_market = client.get("/api/fx/snapshots", params={"rate_type": "tarjeta"})
     assert disallowed_usd_market.status_code == 422
 
 
 def test_fx_snapshots_are_hotel_scoped(fx_client):
     client, SessionLocal, auth_state = fx_client
-    create = client.post("/fx/snapshot")
+    create = client.post("/api/fx/snapshot")
     assert create.status_code == 201, create.text
 
     auth_state["hotel_id"] = 2
-    response = client.get("/fx/snapshots")
+    response = client.get("/api/fx/snapshots")
 
     assert response.status_code == 200, response.text
     assert response.json() == []
@@ -167,12 +167,13 @@ def test_fx_snapshots_are_hotel_scoped(fx_client):
         )
         db.commit()
 
-    platform_response = client.get("/fx/snapshots", params={"rate_type": "oficial"})
+    platform_response = client.get("/api/fx/snapshots", params={"rate_type": "oficial"})
     assert platform_response.status_code == 200, platform_response.text
     assert [row["hotel_id"] for row in platform_response.json()] == [None]
 
 
-def test_generic_fx_list_exposes_only_supported_conversion_quotes(fx_client, monkeypatch):
+@pytest.mark.parametrize("path", ["/api/fx/rates", "/fx/rates"])
+def test_generic_fx_list_exposes_only_supported_conversion_quotes(fx_client, monkeypatch, path):
     client, _, _ = fx_client
     async def fake_rates():
         return {
@@ -194,7 +195,7 @@ def test_generic_fx_list_exposes_only_supported_conversion_quotes(fx_client, mon
         }
 
     monkeypatch.setattr(fx_rates_module, "fetch_all_rates", fake_rates)
-    response = client.get("/fx/rates")
+    response = client.get(path)
 
     assert response.status_code == 200, response.text
     assert {item["type"] for item in response.json()} == {
@@ -206,7 +207,7 @@ def test_generic_fx_list_exposes_only_supported_conversion_quotes(fx_client, mon
 def test_single_fx_quote_endpoint_rejects_other_usd_markets(fx_client):
     client, _, _ = fx_client
 
-    response = client.get("/fx/rates/tarjeta")
+    response = client.get("/api/fx/rates/tarjeta")
 
     assert response.status_code == 422
 
@@ -225,7 +226,7 @@ def test_single_fx_quote_endpoint_exposes_derived_blue_currency(fx_client, monke
         }
 
     monkeypatch.setattr(fx_rates_module, "fetch_rate", fake_quote)
-    response = client.get("/fx/rates/eur_blue")
+    response = client.get("/api/fx/rates/eur_blue")
 
     assert response.status_code == 200, response.text
     assert response.json()["type"] == "eur_blue"
@@ -259,7 +260,7 @@ def test_current_conversion_quote_returns_configured_cross_currency_rate_without
 
     monkeypatch.setattr(fx_rates_module, "_convert_amount", quote)
     response = client.post(
-        "/fx/conversion-quote",
+        "/api/fx/conversion-quote",
         json={"from_currency": "EUR", "to_currency": "UYU"},
     )
 

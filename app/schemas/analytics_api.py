@@ -96,6 +96,10 @@ class CompanyUpdate(BaseModel):
 
 
 class CompanyRead(CompanyBase):
+    # Older company rows can have NULL here because the column was added as
+    # nullable. Booking settlement already treats NULL as zero days, so keep
+    # the API representation consistent instead of failing response validation.
+    deferred_days: int = Field(default=0, ge=0, le=365)
     id: int
     hotel_id: int
     is_active: bool
@@ -103,6 +107,11 @@ class CompanyRead(CompanyBase):
     updated_at: datetime
     deactivated_at: datetime | None = None
     deactivated_by_user_id: int | None = None
+
+    @field_validator("deferred_days", mode="before")
+    @classmethod
+    def _normalize_legacy_deferred_days(cls, value: int | None) -> int:
+        return 0 if value is None else value
 
     model_config = {"from_attributes": True}
 
