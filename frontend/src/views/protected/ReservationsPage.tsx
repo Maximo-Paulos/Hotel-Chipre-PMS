@@ -451,8 +451,23 @@ export function ReservationsPage() {
     { reservationId: number; payload: ReservationRoomMovePayload }
   >({
     mutationFn: ({ reservationId, payload }) => moveReservationRoom(reservationId, payload, session),
-    onSuccess: async (result) => {
-      await invalidateAllocationState();
+    onSuccess: (result) => {
+      const updatedReservation = result.reservation;
+      queryClient.setQueryData(
+        ["reservation", session.hotelId, updatedReservation.id],
+        updatedReservation
+      );
+      queryClient.setQueriesData<Reservation[]>(
+        { queryKey: ["reservations", session.hotelId] },
+        (current) => current?.map((reservation) =>
+          reservation.id === updatedReservation.id ? updatedReservation : reservation
+        )
+      );
+      // The mutation response is authoritative for the moved room. Refresh
+      // dependent actions, payments, and cash views in the background so a
+      // slow read-model refresh does not leave the move button spinning after
+      // the server has already committed the room change.
+      void invalidateAllocationState().catch(() => undefined);
       setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep", origin_room_disposition: "", origin_room_disposition_note: "" });
       const currency = normalizeCurrencyCode(result.currency_code);
       if (!result.category_changed || result.amount_delta === 0) {

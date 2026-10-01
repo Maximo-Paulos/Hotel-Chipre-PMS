@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "record_type": "operational-observations",
+  "observations": [
+    {
+      "operational_case_id": "ops-settings-companies",
+      "persona": "manager",
+      "device_profile": "desktop-chrome-current",
+      "target_url": "https://app.hotels-pms.com/settings/companies",
+      "preconditions": "Authenticated shared-sandbox browser session; the run records base SHA 6361f7a1c40b602cd4fc8c4df3f8ef7720382177, but does not independently attest the deployed SHA.",
+      "human_actions": "Opened the Companies settings page and inspected the list without submitting the form.",
+      "expected": "Existing companies load and the empty state is distinguished from an API failure.",
+      "observed": "The list showed zero companies together with an internal-server-error message; the form rendered.",
+      "status": "FAIL",
+      "severity": "P1",
+      "artifact_ids": [
+        "manager-companies-error"
+      ],
+      "code_sha": "6361f7a1c40b602cd4fc8c4df3f8ef7720382177",
+      "created_record_refs": [],
+      "cleanup_state": "No writes; read-only navigation."
+    },
+    {
+      "operational_case_id": "ops-settings-hotel",
+      "persona": "owner",
+      "device_profile": "desktop-chrome-current",
+      "target_url": "https://app.hotels-pms.com/settings/hotel",
+      "preconditions": "Authenticated shared-sandbox browser session; the run records base SHA 6361f7a1c40b602cd4fc8c4df3f8ef7720382177, but does not independently attest the deployed SHA.",
+      "human_actions": "Opened hotel settings and inspected the FX quote status without changing preferences.",
+      "expected": "Current DolarAPI quotes load while unrelated provider integrations remain disabled.",
+      "observed": "The official quote was unavailable and the page reported that quotes could not be refreshed.",
+      "status": "FAIL",
+      "severity": "P2",
+      "artifact_ids": [
+        "owner-fx-rates-unavailable"
+      ],
+      "code_sha": "6361f7a1c40b602cd4fc8c4df3f8ef7720382177",
+      "created_record_refs": [],
+      "cleanup_state": "No writes; read-only navigation."
+    },
+    {
+      "operational_case_id": "ops-reservations",
+      "persona": "reception",
+      "device_profile": "desktop-chrome-current",
+      "target_url": "https://app.hotels-pms.com/reservas",
+      "preconditions": "Authenticated shared-sandbox browser session; synthetic OTA reservation used, with no payment recorded.",
+      "human_actions": "Created a synthetic OTA reservation and inspected its list row and detail.",
+      "expected": "The assigned room and allocation state agree between list, detail, and persisted reservation.",
+      "observed": "The list showed room 115, but detail showed no room and allocation status unassigned.",
+      "status": "FAIL",
+      "severity": "P1",
+      "artifact_ids": [
+        "reception-ota-assignment-inconsistent"
+      ],
+      "code_sha": "6361f7a1c40b602cd4fc8c4df3f8ef7720382177",
+      "created_record_refs": [
+        "RES-SW91YMVY"
+      ],
+      "cleanup_state": "Synthetic reservation retained for reproduction; no payment recorded."
+    },
+    {
+      "operational_case_id": "ops-room-state-events",
+      "persona": "reception",
+      "device_profile": "desktop-chrome-current",
+      "target_url": "https://app.hotels-pms.com/reservas",
+      "preconditions": "Authenticated shared-sandbox browser session; room-move flow exercised on a test reservation.",
+      "human_actions": "Moved the reservation room and observed the completion state twice.",
+      "expected": "The move button exits its loading state promptly after the server confirms the move.",
+      "observed": "The server committed the move, while the interface continued showing 'Moviendo…' for more than 12 seconds as related queries refreshed.",
+      "status": "FAIL",
+      "severity": "P2",
+      "artifact_ids": [
+        "reception-room-move-spinner"
+      ],
+      "code_sha": "6361f7a1c40b602cd4fc8c4df3f8ef7720382177",
+      "created_record_refs": [],
+      "cleanup_state": "Room move persisted in the shared sandbox; no payment or cash operation was performed."
+    }
+  ]
+}

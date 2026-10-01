@@ -1,0 +1,4 @@
+Browser observation, transcribed 2026-10-01
+Role: reception
+Route: https://app.hotels-pms.com/reservas
+Synthetic OTA reservation RES-SW91YMVY was created without recording a payment. The list showed room 115, while the reservation detail showed no room and allocation status unassigned. The synthetic reservation remains for reproduction.

@@ -1,0 +1,4 @@
+Browser observation, transcribed 2026-10-01
+Role: owner
+Route: https://app.hotels-pms.com/settings/hotel
+Read-only check. FX settings displayed 'Oficial Cotización no disponible ahora' and 'No se pudieron actualizar las cotizaciones ahora'. No settings were changed.

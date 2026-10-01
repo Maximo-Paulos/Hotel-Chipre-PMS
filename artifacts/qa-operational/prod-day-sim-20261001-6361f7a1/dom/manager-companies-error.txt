@@ -1,0 +1,4 @@
+Browser observation, transcribed 2026-10-01
+Role: manager
+Route: https://app.hotels-pms.com/settings/companies
+Read-only check. The company form rendered, while the list showed Empresas (0) and the message 'No se pudo cargar: Error interno del servidor'. No company was created or edited.

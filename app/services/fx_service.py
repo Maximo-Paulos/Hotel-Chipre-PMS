@@ -9,8 +9,8 @@ from typing import Optional
 import httpx
 
 from app.services.external_effects_policy import (
-    external_connections_enabled,
-    require_external_connections,
+    dolarapi_rates_enabled,
+    require_dolarapi_rates,
 )
 
 logger = logging.getLogger(__name__)
@@ -220,8 +220,9 @@ def _derive_blue_equivalent(
 
 
 async def _get_async(url: str) -> Optional[dict | list]:
-    # The gate intentionally precedes AsyncClient construction and DNS/network.
-    require_external_connections("DolarAPI FX-rate lookup")
+    # The dedicated public-market-data gate precedes DNS/network. It does not
+    # open the general provider-connection lane used by payments or OTA calls.
+    require_dolarapi_rates("DolarAPI FX-rate lookup")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(url)
@@ -282,7 +283,7 @@ async def _refresh_supported_rates() -> dict[str, dict]:
 
 async def fetch_all_rates() -> dict:
     """Fetch USD official/blue quotes and direct/derived supported currencies."""
-    if not external_connections_enabled():
+    if not dolarapi_rates_enabled():
         # The display endpoint may use last-known in-process values, but only
         # for the explicitly supported quote set. Conversions check freshness.
         return await _cached_supported_rates()
@@ -341,7 +342,7 @@ async def fetch_rate(rate_type: str) -> Optional[dict]:
         cached = _cached_rate(cache_key)
         if cached and _cached_quote_matches(normalized, cached):
             return cached
-        if not external_connections_enabled():
+        if not dolarapi_rates_enabled():
             stale = _cached_rate(cache_key, allow_stale=True)
             return stale if _cached_quote_matches(normalized, stale) else None
         return (await _refresh_supported_rates()).get(normalized)
@@ -351,7 +352,7 @@ async def fetch_rate(rate_type: str) -> Optional[dict]:
     cached = _cached_rate(cache_key)
     if _cached_quote_matches(normalized, cached):
         return cached
-    if not external_connections_enabled():
+    if not dolarapi_rates_enabled():
         stale = _cached_rate(cache_key, allow_stale=True)
         return stale if _cached_quote_matches(normalized, stale) else None
     payload = await _get_async(url)
@@ -389,7 +390,7 @@ def get_conversion_quote_sync(currency_code: str, rate_type: str = "oficial") ->
         return cached
 
     if currency != "USD" and market == "blue":
-        if not external_connections_enabled():
+        if not dolarapi_rates_enabled():
             return None
         direct_quote = get_conversion_quote_sync(currency, "oficial")
         official_usd = get_conversion_quote_sync("USD", "oficial")
@@ -404,11 +405,11 @@ def get_conversion_quote_sync(currency_code: str, rate_type: str = "oficial") ->
             _store_rate(cache_key, derived)
         return derived
 
-    if not external_connections_enabled():
+    if not dolarapi_rates_enabled():
         return None
 
     try:
-        require_external_connections("DolarAPI FX conversion quote")
+        require_dolarapi_rates("DolarAPI FX conversion quote")
         url = (
             f"{DOLAR_API_BASE}/dolares/{market}"
             if currency == "USD"
@@ -492,11 +493,11 @@ def get_rate_sync(rate_type: str = "oficial") -> Optional[float]:
     cached = _cached_rate(normalized)
     if _cached_quote_matches(normalized, cached):
         return cached.get("venta")
-    if not external_connections_enabled():
+    if not dolarapi_rates_enabled():
         cached = _cached_rate(normalized, allow_stale=True)
         return cached.get("venta") if _cached_quote_matches(normalized, cached) else None
     try:
-        require_external_connections("DolarAPI FX-rate lookup")
+        require_dolarapi_rates("DolarAPI FX-rate lookup")
         response = httpx.get(f"{DOLAR_API_BASE}/dolares/{normalized}", timeout=10.0)
         response.raise_for_status()
         data = response.json()

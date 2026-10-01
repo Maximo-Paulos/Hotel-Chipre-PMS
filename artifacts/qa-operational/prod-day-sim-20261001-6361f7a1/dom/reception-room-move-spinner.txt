@@ -1,0 +1,4 @@
+Browser observation, transcribed 2026-10-01
+Role: reception
+Route: https://app.hotels-pms.com/reservas
+A room move committed on the server, but the UI continued to show 'Moviendo…' for more than 12 seconds while dependent data refreshed. The observation was repeated twice. No payment or cash operation was performed.

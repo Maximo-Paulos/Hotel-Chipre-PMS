@@ -10,13 +10,14 @@ from app.services import fx_service
 
 
 @pytest.fixture(autouse=True)
-def _isolate_fx_provider_state():
+def _isolate_fx_provider_state(monkeypatch):
     previous = {
         "data": dict(fx_service._cache.get("data") or {}),
         "fetched_at_by_key": dict(fx_service._cache.get("fetched_at_by_key") or {}),
     }
     fx_service._cache.clear()
     fx_service._cache.update({"data": {}, "fetched_at_by_key": {}})
+    monkeypatch.setenv("DOLARAPI_RATES_ENABLED", "true")
     get_settings.cache_clear()
     yield
     fx_service._cache.clear()
