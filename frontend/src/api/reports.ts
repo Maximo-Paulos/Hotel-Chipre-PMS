@@ -13,6 +13,8 @@ export type OperationalReservationSummary = {
   total_amount?: number | null;
   amount_paid?: number | null;
   balance_due?: number | null;
+  company_billing_deferred?: boolean;
+  company_night_extra_due?: number | string | null;
 };
 
 export type OperationalReservationGroup = {

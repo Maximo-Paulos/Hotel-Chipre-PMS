@@ -7,6 +7,7 @@ import { type TFunction } from "i18next";
 import {
   addReservationCharge,
   createReservationGroup,
+  isDeferredCompanyReservation,
   listReservationGroups,
   markReservationNoShow,
   moveReservationRoom,
@@ -331,6 +332,9 @@ export function ReservationsPage() {
     staleTime: 30_000
   });
   const companyOptions = useMemo(() => companyOptionsQuery.data ?? [], [companyOptionsQuery.data]);
+  const selectedCompanyIsDeferred = Boolean(
+    !editing && companyOptions.find((company) => company.id === Number(formValues.company_id))?.payment_deferred
+  );
   const companyNameById = useMemo(
     () => new Map(companyOptions.map((company) => [company.id, company.display_name || company.legal_name])),
     [companyOptions]
@@ -576,20 +580,21 @@ export function ReservationsPage() {
         }
       : null
   );
+  const deferredCompanyBooking = selectedCompanyIsDeferred || quoteQuery.data?.company_billing_deferred === true;
   const isReservationQuoteUpdating =
-    !editing && manualTotalAmountInput.trim() === "" && quoteQuery.isFetching;
+    !editing && !deferredCompanyBooking && manualTotalAmountInput.trim() === "" && quoteQuery.isFetching;
   const reservationQuote = useMemo(() => {
     if (!quoteQuery.data || !selectedFormCategory || quoteNights <= 0) {
       return null;
     }
     return {
       nights: quoteQuery.data.nights,
-      total: quoteQuery.data.total_amount,
-      subtotal: quoteQuery.data.subtotal_amount,
-      taxAmount: quoteQuery.data.tax_amount,
-      feeAmount: quoteQuery.data.fee_amount,
+      total: quoteQuery.data.total_amount ?? 0,
+      subtotal: quoteQuery.data.subtotal_amount ?? 0,
+      taxAmount: quoteQuery.data.tax_amount ?? 0,
+      feeAmount: quoteQuery.data.fee_amount ?? 0,
       paymentMethod: quoteQuery.data.pricing_payment_method ?? null,
-      defaultDeposit: quoteQuery.data.deposit_amount,
+      defaultDeposit: quoteQuery.data.deposit_amount ?? null,
       currencyCode: quoteQuery.data.currency_code,
       quoteToken: quoteQuery.data.quote_token,
       promotionsApplied: quoteQuery.data.promotions_applied ?? [],
@@ -636,7 +641,9 @@ export function ReservationsPage() {
   const manualRateCurrencyCode = isBoundedManualRate
     ? quoteQuery.data?.currency_code ?? reservationQuote?.currencyCode ?? manualTargetCurrency
     : manualTargetCurrency;
-  const parsedDepositAmount = depositAmountInput.trim() === "" ? null : Number(depositAmountInput);
+  const parsedDepositAmount = deferredCompanyBooking
+    ? null
+    : depositAmountInput.trim() === "" ? null : Number(depositAmountInput);
   // Si el operador no escribe una seña manual, el backend aplica la seña
   // porcentual configurada por el hotel (deposit_amount de la cotización) al
   // crear la reserva: el preview tiene que mostrar ese mismo valor, no "Por
@@ -925,8 +932,9 @@ export function ReservationsPage() {
       setFormError(t("page.errors.groupRequiresDirect"));
       return;
     }
-    const manualTotalAmount =
-      manualTotalAmountInput.trim() === "" ? null : Number(manualTotalAmountInput);
+    const manualTotalAmount = deferredCompanyBooking
+      ? null
+      : manualTotalAmountInput.trim() === "" ? null : Number(manualTotalAmountInput);
     if (!editing && groupSize > 1 && manualTotalAmount !== null) {
       setFormError(t("page.errors.groupManualRateUnsupported"));
       return;
@@ -1137,7 +1145,10 @@ export function ReservationsPage() {
   const handleCheckIn = (reservation: Reservation) => {
     clearToast();
     if (!isCheckInReady(reservation.status)) {
-      const balance = reservation.balance_due ?? Math.max(0, reservation.total_amount - reservation.amount_paid);
+      const balance = reservation.balance_due ?? Math.max(
+        0,
+        Number(reservation.total_amount ?? 0) - Number(reservation.amount_paid ?? 0)
+      );
       openEdit(reservation);
       showToast(
         "info",
@@ -1155,7 +1166,7 @@ export function ReservationsPage() {
         showToast("success", t("page.messages.checkInDone"));
       } catch (err: unknown) {
         if (restrictionOverridePrompt.handleError(err, (override) => void submitCheckIn(override))) return;
-        const msg = err instanceof Error ? err.message : t("page.errors.checkInFailed");
+        const msg = err instanceof Error ? err.message : "";
         // B3.3/B3.4: this quick action has no room to show the guest-data
         // capture form inline -- send the receptionist to the reservation
         // panel, which shows that form up front, instead of leaving them
@@ -1165,7 +1176,7 @@ export function ReservationsPage() {
           showToast("info", t("page.messages.missingGuestDataForCheckIn"));
           return;
         }
-        showToast("error", msg);
+        showToast("error", t("page.errors.checkInFailed"));
       }
     };
     void submitCheckIn();
@@ -1347,6 +1358,7 @@ export function ReservationsPage() {
     paymentLinkCancel.isPending;
   const detailsSummary = detailsSummaryQuery.data;
   const detailsOperations = detailsOperationsQuery.data;
+  const detailsDeferredCompanyBilling = isDeferredCompanyReservation(detailsReservation);
   const detailsFinancialsLoading = detailsSummaryQuery.isLoading;
   const detailsGuest = useGuest(detailsReservation?.guest_id || undefined).data;
   React.useEffect(() => {
@@ -1428,7 +1440,10 @@ export function ReservationsPage() {
       showToast("error", t("page.errors.manualPaymentReferenceRequired"));
       return;
     }
-    const due = Math.max(paymentSummary.deposit_required - paymentSummary.amount_paid, 0);
+    const due = Math.max(
+      Number(paymentSummary.deposit_required ?? 0) - Number(paymentSummary.amount_paid ?? 0),
+      0
+    );
     if (due <= 0.01) {
       showToast("info", t("page.messages.depositAlreadyCovered"));
       return;
@@ -1685,7 +1700,10 @@ export function ReservationsPage() {
   const handleGenerateDepositLink = async () => {
     if (!editing || !paymentSummary) return;
     const due =
-      Math.max(paymentSummary.deposit_required - paymentSummary.amount_paid, 0) ||
+      Math.max(
+        Number(paymentSummary.deposit_required ?? 0) - Number(paymentSummary.amount_paid ?? 0),
+        0
+      ) ||
       (paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
     if (due <= 0.01) {
       showToast("info", t("page.messages.noAmountForLink"));
@@ -1830,7 +1848,7 @@ export function ReservationsPage() {
       detailsOperations?.financial_summary.operational_balance_due,
       summary?.operational_balance_due
     );
-    if (operationalBalanceDue === null) {
+    if (!isDeferredCompanyReservation(detailsReservation) && operationalBalanceDue === null) {
       showToast("error", t("page.errors.voucherFinancialSummaryUnavailable"));
       return;
     }
@@ -1871,9 +1889,11 @@ export function ReservationsPage() {
           </div>
           <div class="card" style="margin-top:12px;">
             <p class="label">${htmlText(t("page.voucher.financeLabel"))}</p>
-            <p>${htmlText(t("page.voucher.total"))} <strong>${htmlText(formatMoney(detailsOperations?.financial_summary.operational_total_amount ?? summary?.operational_total_amount ?? detailsReservation.total_amount ?? 0, detailsCurrencyCode))}</strong></p>
+            ${isDeferredCompanyReservation(detailsReservation)
+              ? `<p>${htmlText(t("page.details.deferredCompanyFinance"))}</p>`
+              : `<p>${htmlText(t("page.voucher.total"))} <strong>${htmlText(formatMoney(detailsOperations?.financial_summary.operational_total_amount ?? summary?.operational_total_amount ?? detailsReservation.total_amount ?? 0, detailsCurrencyCode))}</strong></p>
             <p>${htmlText(t("page.voucher.paid"))} <strong>${htmlText(formatMoney(detailsOperations?.financial_summary.amount_paid ?? summary?.amount_paid ?? detailsReservation.amount_paid ?? 0, detailsCurrencyCode))}</strong></p>
-            <p>${htmlText(t("page.voucher.balance"))} <strong>${htmlText(formatMoney(operationalBalanceDue, detailsCurrencyCode))}</strong></p>
+            <p>${htmlText(t("page.voucher.balance"))} <strong>${htmlText(formatMoney(operationalBalanceDue ?? 0, detailsCurrencyCode))}</strong></p>`}
           </div>
         </body>
       </html>`;
@@ -2569,8 +2589,12 @@ export function ReservationsPage() {
           <section className="border-b border-slate-200 p-4" aria-label={t("page.groups.title")}>
             <h3 className="mb-3 text-sm font-semibold text-slate-800">{t("page.groups.title")}</h3>
             <div className="grid gap-3 lg:grid-cols-2">
-              {reservationGroupsQuery.data?.slice(0, 6).map((group) => (
-                <article
+              {reservationGroupsQuery.data?.slice(0, 6).map((group) => {
+                const groupDeferredBilling = Boolean(
+                  group.company_id && companyOptions.find((company) => company.id === group.company_id)?.payment_deferred !== false
+                );
+                return (
+                  <article
                   key={group.id}
                   data-testid={`reservation-group-summary-${group.id}`}
                   className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"
@@ -2587,13 +2611,16 @@ export function ReservationsPage() {
                   <p className="mt-2 text-xs text-slate-600">
                     {group.check_in_date} → {group.check_out_date} · {group.reservation_codes.join(", ")}
                   </p>
-                  <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                  {groupDeferredBilling ? (
+                    <p className="mt-3 text-xs text-amber-900">{t("page.groups.deferredCompanyBilling")}</p>
+                  ) : <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
                     <div><dt className="text-slate-500">{t("page.groups.total")}</dt><dd className="font-semibold">{formatMoney(group.total_amount, group.currency_code)}</dd></div>
                     <div><dt className="text-slate-500">{t("page.groups.paid")}</dt><dd className="font-semibold">{formatMoney(group.amount_paid, group.currency_code)}</dd></div>
                     <div><dt className="text-slate-500">{t("page.groups.balance")}</dt><dd className="font-semibold">{formatMoney(group.balance_due, group.currency_code)}</dd></div>
-                  </dl>
-                </article>
-              ))}
+                  </dl>}
+                  </article>
+                );
+              })}
             </div>
           </section>
         )}
@@ -2652,7 +2679,9 @@ export function ReservationsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-2 text-right font-semibold text-slate-900">
-                      {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
+                      {isDeferredCompanyReservation(reservation)
+                        ? t("page.list.deferredCompanyBilling")
+                        : formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
                     </td>
                     <td className="px-4 py-2 text-right text-xs text-slate-700">
                       <div className="flex flex-wrap justify-end gap-1">
@@ -2753,7 +2782,9 @@ export function ReservationsPage() {
                   <p className="truncate text-xs text-amber-700" title={reservation.reservation_comment}>📝 {reservation.reservation_comment}</p>
                 ) : null}
                 <p className="text-sm font-semibold text-slate-900">
-                  {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
+                  {isDeferredCompanyReservation(reservation)
+                    ? t("page.list.deferredCompanyBilling")
+                    : formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1 text-xs text-slate-700">
                   <button
@@ -2942,7 +2973,16 @@ export function ReservationsPage() {
                   <select
                     data-testid="reservation-company-select"
                     value={formValues.company_id}
-                    onChange={(event) => setFormValues((previous) => ({ ...previous, company_id: event.target.value }))}
+                    onChange={(event) => {
+                      const companyId = Number(event.target.value);
+                      const selectedCompany = companyOptions.find((company) => company.id === companyId);
+                      setFormValues((previous) => ({ ...previous, company_id: event.target.value }));
+                      if (selectedCompany?.payment_deferred) {
+                        setManualTotalAmountInput("");
+                        setDepositAmountInput("");
+                        setManualRateReasonInput("");
+                      }
+                    }}
                     disabled={Boolean(editing) || companyOptionsQuery.isLoading}
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                   >
@@ -3067,7 +3107,7 @@ export function ReservationsPage() {
                 />
               </div>
 
-              {!editing && (
+              {!editing && !deferredCompanyBooking && (
                 <div className="rounded-lg border border-brand-100 bg-brand-50 p-3">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="text-xs font-semibold text-slate-600">
@@ -3349,6 +3389,12 @@ export function ReservationsPage() {
                 </div>
               )}
 
+              {!editing && deferredCompanyBooking ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" data-testid="deferred-company-booking-note">
+                  {t("page.form.deferredCompanyBilling")}
+                </p>
+              ) : null}
+
               {lastCreatedReservation ? (
                 <div
                   className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
@@ -3476,7 +3522,7 @@ export function ReservationsPage() {
                 </label>
               </div>
 
-              {editing && (
+              {editing && !isDeferredCompanyReservation(editing) && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -3980,6 +4026,11 @@ export function ReservationsPage() {
                   )}
                 </div>
               )}
+              {editing && isDeferredCompanyReservation(editing) ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                  {t("page.form.deferredCompanyBilling")}
+                </p>
+              ) : null}
 
               </fieldset>
               {formError && (
@@ -4197,7 +4248,11 @@ export function ReservationsPage() {
 
               <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">{t("page.details.financeTitle")}</p>
-                {detailsFinancialsLoading ? (
+                {detailsDeferredCompanyBilling ? (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" data-testid="deferred-company-finance-note">
+                    {t("page.details.deferredCompanyFinance")}
+                  </p>
+                ) : detailsFinancialsLoading ? (
                   <p className="rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-600">
                     {t("page.details.financeLoading")}
                   </p>
@@ -4225,7 +4280,7 @@ export function ReservationsPage() {
                     {t("page.details.financeLoadError")}
                   </p>
                 )}
-                {detailsOperations?.financial_summary ? (
+                {!detailsDeferredCompanyBilling && detailsOperations?.financial_summary ? (
                   <div className="rounded-lg border border-slate-200 bg-white/70 p-3 text-xs text-slate-700">
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -4544,7 +4599,7 @@ export function ReservationsPage() {
                     {t("page.details.chargesHint")}
                   </p>
                 </div>
-                {detailsOperations?.financial_summary ? (
+                {!detailsDeferredCompanyBilling && detailsOperations?.financial_summary ? (
                   <span className="text-xs font-semibold text-slate-700">
                     {t("page.details.operationalBalanceLabel", {
                       amount: formatMoney(detailsOperations.financial_summary.operational_balance_due ?? 0, detailsOperations.financial_summary.currency_code)

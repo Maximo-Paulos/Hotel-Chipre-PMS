@@ -8,6 +8,7 @@ import {
   checkOutReservation,
   createManualOtaReservation,
   createReservation,
+  extendReservationStay,
   getOccupancyGrid,
   getReservation,
   getReservationQuote,
@@ -34,12 +35,13 @@ import {
   type ReservationPendingAction,
   type ReservationStatus,
   type ReservationUpdatePayload,
-  type CompanyExtensionRequestPayload
+  type CompanyExtensionRequestPayload,
+  type ReservationExtensionPayload
 } from "../api/reservations";
 import { validateGuestForCheckin, type GuestCheckinValidation } from "../api/guests";
 import type { SessionState } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
-import { refreshReservationCreatedState, refreshReservationGuestState, refreshReservationState } from "../api/queryInvalidation";
+import { refreshAfterMutation, refreshReservationCreatedState, refreshReservationGuestState, refreshReservationState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -208,6 +210,14 @@ export function useReservationMutations(filters?: ReservationFilters) {
     onSuccess: async (_, variables) => invalidateReservationDetail(variables.id)
   });
 
+  const companyAccountExtensionMutation = useGuardedMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: ReservationExtensionPayload }) =>
+      extendReservationStay(id, payload, session),
+    // Extending a deferred company stay updates its dates and reservation
+    // total only. It does not create a payment or cash movement.
+    onSuccess: async () => refreshAfterMutation(queryClient, session.hotelId, ["reservations", "analytics"])
+  });
+
   const cancelMutation = useGuardedMutation({
     mutationFn: (id: number) => cancelReservation(id, session),
     onSuccess: async () => invalidate()
@@ -257,6 +267,7 @@ export function useReservationMutations(filters?: ReservationFilters) {
     createManualOtaMutation,
     updateMutation,
     companyExtensionRequestMutation,
+    companyAccountExtensionMutation,
     cancelMutation,
     checkInMutation,
     partialCheckInMutation,

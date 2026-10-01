@@ -39,6 +39,10 @@ def fx_client(monkeypatch: pytest.MonkeyPatch):
         return {
             "oficial": {"moneda": "USD", "compra": 900.0, "venta": 920.0},
             "blue": {"moneda": "USD", "compra": 1000.0, "venta": 1020.0},
+            "eur": {"moneda": "EUR", "casa": "oficial", "compra": 1000.0, "venta": 1010.0},
+            "brl": {"moneda": "BRL", "casa": "oficial", "compra": 200.0, "venta": 210.0},
+            "clp": {"moneda": "CLP", "casa": "oficial", "compra": 1.0, "venta": 1.1},
+            "uyu": {"moneda": "UYU", "casa": "oficial", "compra": 25.0, "venta": 26.0},
         }
 
     monkeypatch.setattr(db_module, "get_engine", fake_get_engine)
@@ -94,10 +98,12 @@ def test_create_fx_snapshot(fx_client):
     response = client.post("/fx/snapshot")
 
     assert response.status_code == 201, response.text
-    assert response.json()["stored"] == 2
+    assert response.json()["stored"] == 6
     with SessionLocal() as db:
         rows = db.query(FxRateSnapshot).filter(FxRateSnapshot.hotel_id == 1).all()
-        assert {row.rate_type for row in rows} == {"oficial", "blue"}
+        assert {row.rate_type for row in rows} == {
+            "oficial", "blue", "eur_oficial", "brl_oficial", "clp_oficial", "uyu_oficial"
+        }
 
 
 def test_get_rate_snapshot_by_date(fx_client):
@@ -119,6 +125,15 @@ def test_get_rate_snapshot_by_date(fx_client):
     assert len(payload) == 1
     assert payload[0]["rate_type"] == "oficial"
     assert payload[0]["venta"] == 920.0
+
+    direct_currency = client.get("/fx/snapshots", params={"rate_type": "eur_oficial"})
+    assert direct_currency.status_code == 200, direct_currency.text
+    assert len(direct_currency.json()) == 1
+    assert direct_currency.json()[0]["rate_type"] == "eur_oficial"
+    assert direct_currency.json()[0]["provider_market"] == "oficial"
+
+    disallowed_usd_market = client.get("/fx/snapshots", params={"rate_type": "tarjeta"})
+    assert disallowed_usd_market.status_code == 422
 
 
 def test_fx_snapshots_are_hotel_scoped(fx_client):
@@ -148,3 +163,37 @@ def test_fx_snapshots_are_hotel_scoped(fx_client):
     platform_response = client.get("/fx/snapshots", params={"rate_type": "oficial"})
     assert platform_response.status_code == 200, platform_response.text
     assert [row["hotel_id"] for row in platform_response.json()] == [None]
+
+
+def test_generic_fx_list_exposes_only_supported_conversion_quotes(fx_client, monkeypatch):
+    client, _, _ = fx_client
+    async def fake_rates():
+        return {
+            "oficial": {"moneda": "USD", "compra": 1000, "venta": 1010},
+            "blue": {"moneda": "USD", "compra": 1100, "venta": 1110},
+            "eur": {"moneda": "EUR", "compra": 1200, "venta": 1210},
+            "brl": {"moneda": "BRL", "compra": 200, "venta": 210},
+            "clp": {"moneda": "CLP", "compra": 1, "venta": 1.1},
+            "uyu": {"moneda": "UYU", "compra": 25, "venta": 26},
+            "tarjeta": {"moneda": "USD", "compra": 1400, "venta": 1500},
+            "bolsa": {"moneda": "USD", "compra": 1300, "venta": 1310},
+            "contadoconliqui": {"moneda": "USD", "compra": 1300, "venta": 1310},
+            "cripto": {"moneda": "USD", "compra": 1500, "venta": 1600},
+            "mayorista": {"moneda": "USD", "compra": 900, "venta": 910},
+        }
+
+    monkeypatch.setattr(fx_rates_module, "fetch_all_rates", fake_rates)
+    response = client.get("/fx/rates")
+
+    assert response.status_code == 200, response.text
+    assert {item["type"] for item in response.json()} == {
+        "oficial", "blue", "eur", "brl", "clp", "uyu"
+    }
+
+
+def test_single_fx_quote_endpoint_rejects_other_usd_markets(fx_client):
+    client, _, _ = fx_client
+
+    response = client.get("/fx/rates/tarjeta")
+
+    assert response.status_code == 422

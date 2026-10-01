@@ -21,7 +21,9 @@ from app.models.hotel_membership import HotelMembership
 from app.models.subscription import HotelSubscription, SubscriptionPlan
 from app.models.subscription_v2 import Subscription, SubscriptionAdjustment, SubscriptionEvent
 from app.models.user import User
-from app.services.security import create_access_token, hash_password
+from app.services.security import create_access_token, decode_access_token, hash_password
+from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.permission_service import PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE
 from app.services.hotel_service import _ensure_membership_and_subscription
 from app.services.subscription_entitlements import (
     get_subscription_snapshot,
@@ -123,6 +125,26 @@ def _auth_headers(db, hotel_id: int, *, membership_role: str | None = "owner", u
     if membership_role:
         headers["X-Hotel-Id"] = str(hotel_id)
     return headers
+
+
+def _step_up_headers(
+    headers: dict[str, str], *, method: str, path: str, permission_code: str
+) -> dict[str, str]:
+    claims = decode_access_token(headers["Authorization"].removeprefix("Bearer "))
+    user_id = int(claims["sub"])
+    hotel_id = int(headers["X-Hotel-Id"])
+    token_version = int(claims.get("token_version", 0))
+    return {
+        **headers,
+        "X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+            user_id=user_id,
+            hotel_id=hotel_id,
+            token_version=token_version,
+            permission_code=permission_code,
+            method=method,
+            path=path,
+        ),
+    }
 
 
 def test_subscription_catalog_has_updated_tier_limits():
@@ -286,17 +308,32 @@ def test_role_gating_for_trial_and_comped_override(client):
     owner_trial = test_client.post(
         "/api/subscription/trial",
         json={"plan_code": "pro"},
-        headers=owner_headers,
+        headers=_step_up_headers(
+            owner_headers,
+            method="POST",
+            path="/api/subscription/trial",
+            permission_code=PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,
+        ),
     )
     owner_ultra_trial = test_client.post(
         "/api/subscription/trial",
         json={"plan_code": "ultra"},
-        headers=owner_headers,
+        headers=_step_up_headers(
+            owner_headers,
+            method="POST",
+            path="/api/subscription/trial",
+            permission_code=PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,
+        ),
     )
     owner_repeated_trial = test_client.post(
         "/api/subscription/trial",
         json={"plan_code": "pro"},
-        headers=owner_headers,
+        headers=_step_up_headers(
+            owner_headers,
+            method="POST",
+            path="/api/subscription/trial",
+            permission_code=PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,
+        ),
     )
     manager_trial = test_client.post(
         "/api/subscription/trial",
@@ -340,7 +377,12 @@ def test_role_gating_for_trial_and_comped_override(client):
     owner_trial_after_admin_plan_change = test_client.post(
         "/api/subscription/trial",
         json={"plan_code": "pro"},
-        headers=owner_headers,
+        headers=_step_up_headers(
+            owner_headers,
+            method="POST",
+            path="/api/subscription/trial",
+            permission_code=PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,
+        ),
     )
 
     assert owner_trial.status_code == 200, owner_trial.text

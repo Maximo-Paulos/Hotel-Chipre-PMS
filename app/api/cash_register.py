@@ -42,6 +42,7 @@ from app.services.cash_register_service import (
     open_session,
 )
 from app.services.permission_service import (
+    PERMISSION_CASH_ADJUSTMENT_MANAGE,
     PERMISSION_CASH_APPROVE_DIFFERENCE,
     PERMISSION_CASH_CUSTODY_RECEIVE,
     PERMISSION_CASH_EXPENSE,
@@ -363,6 +364,8 @@ def add_cash_movement(
     try:
         if payload.movement_type == CashMovementTypeEnum.EXPENSE:
             authorize_permission(request, db, context, PERMISSION_CASH_EXPENSE)
+        elif payload.movement_type == CashMovementTypeEnum.ADJUSTMENT:
+            authorize_permission(request, db, context, PERMISSION_CASH_ADJUSTMENT_MANAGE)
         movement = add_movement(
             db,
             hotel_id=context.hotel_id,

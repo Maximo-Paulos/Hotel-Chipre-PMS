@@ -36,6 +36,15 @@ def build_reservation_quote(
     guest_id: int | None = None,
     company_id: int | None = None,
 ) -> dict[str, Any]:
+    """Build a quote response and its short-lived creation token.
+
+    For a company configured with deferred payment, `company_billing_deferred`
+    is true, `billing_mode` is `external_company_invoice`, `amounts_disclosed`
+    is false, all monetary
+    response fields are null, and price breakdown/promotion details are empty.
+    The encrypted token still carries the server-verified amounts needed by
+    reservation creation without making them readable to the client.
+    """
     normalized_payment_method = normalize_pricing_payment_method(pricing_payment_method)
     pricing = calculate_reservation_pricing(
         db,
@@ -54,6 +63,7 @@ def build_reservation_quote(
         guest_id=guest_id,
         company_id=company_id,
     )
+    company = None
     if company_id is not None:
         company = _resolve_reservation_company(db, hotel_id=hotel_id, company_id=company_id)
         pricing = _apply_corporate_pricing(
@@ -101,6 +111,8 @@ def build_reservation_quote(
     if not isinstance(promotions_applied, list):
         promotions_applied = []
 
+    deferred_company_invoice = bool(company and company.payment_deferred)
+
     issued_at = datetime.now(timezone.utc)
     expires_at = issued_at.timestamp() + 900
     token_payload = {
@@ -122,8 +134,12 @@ def build_reservation_quote(
         "deposit_amount": pricing.deposit_amount,
         "currency_code": pricing.currency_code,
     }
-    token = issue_quote_token(token_payload, ttl_seconds=900)
-    return {
+    token = issue_quote_token(
+        token_payload,
+        ttl_seconds=900,
+        encrypt_payload=deferred_company_invoice,
+    )
+    quote = {
         "status": "ok",
         "category_id": category_id,
         "check_in_date": check_in_date,
@@ -144,4 +160,28 @@ def build_reservation_quote(
         "promotions_applied": promotions_applied,
         "quote_token": token,
         "expires_at": datetime.fromtimestamp(expires_at, timezone.utc),
+        "company_billing_deferred": deferred_company_invoice,
+        "amounts_disclosed": not deferred_company_invoice,
     }
+    if deferred_company_invoice:
+        # The lodging invoice is handled outside this PMS. Keep the signed
+        # pricing details encrypted inside the token because reservation
+        # creation still validates the current quote, but disclose no monetary
+        # fields, per-night prices, or promotion amounts in the API response.
+        for amount_field in (
+            "nightly_rate",
+            "subtotal_amount",
+            "tax_amount",
+            "fee_amount",
+            "commission_amount",
+            "net_amount",
+            "total_amount",
+            "deposit_amount",
+        ):
+            quote[amount_field] = None
+        quote["breakdown"] = []
+        quote["promotions_applied"] = []
+        quote["billing_mode"] = "external_company_invoice"
+    else:
+        quote["billing_mode"] = "pms"
+    return quote

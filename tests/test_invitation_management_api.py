@@ -14,6 +14,8 @@ from app.models.hotel_membership import HotelMembership
 from app.models.user import User
 from app.services.invitation_service import issue_invitation
 from app.services.security import hash_password
+from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.permission_service import PERMISSION_SETTINGS_USERS_MANAGE
 
 
 def _user(email: str, role: str) -> User:
@@ -24,6 +26,19 @@ def _user(email: str, role: str) -> User:
         is_active=True,
         is_verified=True,
     )
+
+
+def _step_up_headers(user: User, hotel_id: int, method: str, path: str) -> dict[str, str]:
+    return {
+        "X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+            user_id=user.id,
+            hotel_id=hotel_id,
+            token_version=0,
+            permission_code=PERMISSION_SETTINGS_USERS_MANAGE,
+            method=method,
+            path=path,
+        )
+    }
 
 
 def test_pending_invitation_list_is_scoped_redacted_and_owner_can_recover_legacy_owner_invite():
@@ -92,7 +107,10 @@ def test_pending_invitation_list_is_scoped_redacted_and_owner_can_recover_legacy
     set_actor(owner, "owner", 61)
     client = TestClient(app)
     try:
-        listed = client.get("/api/users/invitations")
+        listed = client.get(
+            "/api/users/invitations",
+            headers=_step_up_headers(owner, 61, "GET", "/api/users/invitations"),
+        )
         assert listed.status_code == 200, listed.text
         assert len(listed.json()) == 1
         assert listed.json()[0]["invitation_id"] == legacy_invitation.id
@@ -104,11 +122,18 @@ def test_pending_invitation_list_is_scoped_redacted_and_owner_can_recover_legacy
         assert "token_hash" not in listed.text.lower()
 
         set_actor(co_owner, "co_owner", 61)
-        forbidden = client.delete(f"/api/users/invitations/{legacy_invitation.id}")
+        revoke_path = f"/api/users/invitations/{legacy_invitation.id}"
+        forbidden = client.delete(
+            revoke_path,
+            headers=_step_up_headers(co_owner, 61, "DELETE", revoke_path),
+        )
         assert forbidden.status_code == 403, forbidden.text
 
         set_actor(owner, "owner", 61)
-        revoked = client.delete(f"/api/users/invitations/{legacy_invitation.id}")
+        revoked = client.delete(
+            revoke_path,
+            headers=_step_up_headers(owner, 61, "DELETE", revoke_path),
+        )
         assert revoked.status_code == 204, revoked.text
         db.refresh(legacy_invitation)
         assert legacy_invitation.status == "revoked"
@@ -116,13 +141,17 @@ def test_pending_invitation_list_is_scoped_redacted_and_owner_can_recover_legacy
         reinvited = client.post(
             "/api/users/invite",
             json={"email": legacy_user.email, "role": "co_owner"},
+            headers=_step_up_headers(owner, 61, "POST", "/api/users/invite"),
         )
         assert reinvited.status_code == 201, reinvited.text
         db.refresh(db.query(HotelMembership).filter_by(hotel_id=61, user_id=legacy_user.id).one())
         assert db.query(HotelMembership).filter_by(hotel_id=61, user_id=legacy_user.id).one().role == "co_owner"
 
         set_actor(foreign_owner, "owner", 62)
-        foreign_list = client.get("/api/users/invitations")
+        foreign_list = client.get(
+            "/api/users/invitations",
+            headers=_step_up_headers(foreign_owner, 62, "GET", "/api/users/invitations"),
+        )
         assert foreign_list.status_code == 200, foreign_list.text
         assert [item["email"] for item in foreign_list.json()] == [foreign_staff.email]
     finally:

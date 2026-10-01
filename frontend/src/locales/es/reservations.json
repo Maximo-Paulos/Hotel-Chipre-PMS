@@ -45,7 +45,20 @@
       "birthCountry": "País de nacimiento",
       "maritalStatus": "Estado civil",
       "occupation": "Profesión",
-      "acceptTerms": "Acepta términos y condiciones"
+      "acceptTerms": "Acepta términos y condiciones",
+      "requiredFields": {
+        "firstName": "Completá el nombre.",
+        "lastName": "Completá el apellido.",
+        "documentType": "Seleccioná el tipo de documento.",
+        "documentNumber": "Completá el número de documento.",
+        "nationality": "Completá la nacionalidad.",
+        "country": "Completá el país.",
+        "birthPlace": "Completá el lugar de nacimiento.",
+        "birthCountry": "Completá el país de nacimiento.",
+        "maritalStatus": "Completá el estado civil.",
+        "occupation": "Completá la profesión.",
+        "unknown": "Hay otro dato requerido pendiente de completar."
+      }
     },
     "companyExtension": {
       "title": "Extensión de estadía de empresa",
@@ -59,10 +72,23 @@
       "update": "Actualizar solicitud",
       "saving": "Guardando…",
       "saved": "Solicitud de extensión registrada.",
-      "saveFailed": "No se pudo guardar la solicitud de extensión."
+      "saveFailed": "No se pudo guardar la solicitud de extensión.",
+      "applyTitle": "Aplicar extensión pendiente",
+      "applyHint": "Se actualizan las fechas de estadía. El alojamiento se factura fuera del PMS; no se registra una tarifa ni un movimiento de caja.",
+      "newCheckoutDate": "Nueva fecha de salida",
+      "apply": "Aplicar extensión",
+      "applying": "Aplicando…",
+      "checkoutDateMustBeLater": "La nueva fecha de salida debe ser posterior a la fecha actual.",
+      "confirmTitle": "Confirmar extensión de estadía",
+      "confirmMessage": "La estadía quedará extendida hasta el {{date}}. El alojamiento se factura fuera del PMS.",
+      "confirmApply": "Confirmar extensión",
+      "cancel": "Cancelar",
+      "applied": "Extensión aplicada. El alojamiento se factura fuera del PMS.",
+      "applyFailed": "No se pudo aplicar la extensión de estadía."
     },
     "billing": {
       "title": "Cobros",
+      "deferredCompany": "El alojamiento se factura fuera del PMS. Este panel no muestra ni cobra ese importe.",
       "updating": "Actualizando...",
       "loadingSummary": "Cargando resumen financiero...",
       "operationalTotal": "Total operativo",
@@ -131,9 +157,13 @@
     "pendingActionsTitle": "Acciones pendientes",
     "actions": {
       "partialCheckIn": "Check-in parcial",
+      "partialCheckInPending": "Registrando el check-in parcial…",
       "confirmCheckIn": "Confirmar check-in",
+      "confirmCheckInPending": "Registrando el check-in…",
       "checkOut": "Check-out",
+      "checkOutPending": "Registrando el check-out…",
       "cancel": "Cancelar",
+      "cancelPending": "Cancelando la reserva…",
       "labels": {
         "partialCheckIn": "check-in parcial",
         "checkOut": "check-out",
@@ -483,10 +513,10 @@
       "title": "Consulta rápida por Categoría",
       "querying": "Consultando disponibilidad...",
       "queryError": "Error al consultar",
-      "category": "Categoría para disponibilidad",
+      "category": "Consulta rápida: categoría",
       "categoryPlaceholder": "Elegí",
-      "checkIn": "Check-in para disponibilidad",
-      "checkOut": "Check-out para disponibilidad",
+      "checkIn": "Consulta rápida: check-in",
+      "checkOut": "Consulta rápida: check-out",
       "submit": "Consultar",
       "available": "Disponibles: {{count}}",
       "ids": "IDs: {{ids}}",
@@ -530,7 +560,8 @@
       "rooms": "{{count}} habitaciones",
       "total": "Total",
       "paid": "Pagado",
-      "balance": "Saldo"
+      "balance": "Saldo",
+      "deferredCompanyBilling": "Alojamiento facturado fuera del PMS"
     },
     "list": {
       "eyebrow": "Listado",
@@ -552,6 +583,7 @@
       },
       "noResults": "No hay reservas con los filtros actuales.",
       "companyLinked": "Empresa vinculada",
+      "deferredCompanyBilling": "Facturado fuera del PMS",
       "roomCat": "{{room}} · Cat {{category}}",
       "edit": "Editar",
       "file": "Ficha",
@@ -666,6 +698,7 @@
       "notesPlaceholder": "Notas internas (opcional)",
       "paymentsTitle": "Pagos y balance",
       "paymentsSubtitle": "Resumen financiero y acciones rápidas.",
+      "deferredCompanyBilling": "Alojamiento de empresa facturado fuera del PMS. Los adicionales nocturnos seleccionados se cobran desde el panel de reserva.",
       "updating": "Actualizando...",
       "summaryTotal": "Total",
       "summaryPaid": "Pagado",
@@ -793,6 +826,7 @@
       "financePaid": "Pagado",
       "financeDeposit": "Depósito",
       "financeBalance": "Saldo",
+      "deferredCompanyFinance": "El alojamiento de esta empresa se factura fuera del PMS. No se muestra ni se cobra aquí el importe del alojamiento.",
       "financeLoadError": "No se pudo cargar el resumen financiero. Reintentá abrir la ficha.",
       "financeOperationalTotal": "Total operativo",
       "financeOperationalBalance": "Saldo operativo",

@@ -10,10 +10,12 @@ from sqlalchemy.orm import Session
 import logging
 
 from app.models.cash_register import CashSession, CashSessionStatusEnum
+from app.models.company_night_charge import CompanyNightCharge, CompanyNightChargePaymentAllocation
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room
 from app.models.room_block import RoomBlock
+from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.schemas.reports import (
     ActiveRoomBlockItem,
     AvailableWithReviewItem,
@@ -28,7 +30,7 @@ from app.services.financial_ledger import (
     billing_adjustment_totals_by_reservation,
     paid_amounts_by_reservation,
 )
-from app.services.reservation_service import active_reservations
+from app.services.reservation_service import active_reservations, deferred_company_reservation_ids
 from app.services.timezones import hotel_today
 
 
@@ -62,6 +64,9 @@ def _reservation_summary(
     reservation: Reservation,
     paid_amount: Decimal | None = None,
     adjustment_total: Decimal | None = None,
+    *,
+    company_billing_deferred: bool = False,
+    company_night_extra_due: Decimal | None = None,
 ) -> OperationalReservationSummary:
     room = reservation.room
     paid = paid_amount if paid_amount is not None else Decimal(reservation.amount_paid or 0)
@@ -77,9 +82,11 @@ def _reservation_summary(
         status=reservation.status.value,
         check_in_date=reservation.check_in_date,
         check_out_date=reservation.check_out_date,
-        total_amount=Decimal(reservation.total_amount or 0),
-        amount_paid=paid,
-        balance_due=max(Decimal("0"), total_due - paid),
+        total_amount=None if company_billing_deferred else Decimal(reservation.total_amount or 0),
+        amount_paid=None if company_billing_deferred else paid,
+        balance_due=None if company_billing_deferred else max(Decimal("0"), total_due - paid),
+        company_billing_deferred=company_billing_deferred,
+        company_night_extra_due=company_night_extra_due if company_billing_deferred else None,
     )
 
 
@@ -87,18 +94,209 @@ def _group(
     reservations: Iterable[Reservation],
     paid_by_reservation: dict[int, Decimal] | None = None,
     adjustments_by_reservation: dict[int, Decimal] | None = None,
+    deferred_reservation_ids: set[int] | None = None,
+    company_night_extra_due_by_reservation: dict[int, Decimal] | None = None,
 ) -> OperationalReservationGroup:
     paid_by_reservation = paid_by_reservation or {}
     adjustments_by_reservation = adjustments_by_reservation or {}
+    deferred_reservation_ids = deferred_reservation_ids or set()
+    company_night_extra_due_by_reservation = company_night_extra_due_by_reservation or {}
     items = [
         _reservation_summary(
             reservation,
             paid_by_reservation.get(reservation.id),
             adjustments_by_reservation.get(reservation.id),
+            company_billing_deferred=reservation.id in deferred_reservation_ids,
+            company_night_extra_due=company_night_extra_due_by_reservation.get(reservation.id),
         )
         for reservation in reservations
     ]
     return OperationalReservationGroup(count=len(items), reservations=items)
+
+
+def company_night_extra_balances_by_reservation(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation_ids: set[int],
+    stay_date_from: date,
+    stay_date_to: date,
+) -> tuple[dict[int, Decimal], dict[int, Decimal]]:
+    """Return approved company-extra totals and remaining amounts by stay date.
+
+    Reservation base lodging is deliberately absent: only explicit
+    CompanyNightCharge rows are collectible inside the PMS. A transaction is
+    credited here only if its full amount is allocated to those extras.
+    """
+    if not reservation_ids or stay_date_to < stay_date_from:
+        return {}, {}
+    charges = (
+        db.query(CompanyNightCharge)
+        .filter(
+            CompanyNightCharge.hotel_id == hotel_id,
+            CompanyNightCharge.reservation_id.in_(reservation_ids),
+        )
+        .order_by(CompanyNightCharge.id.asc())
+        .all()
+    )
+    if not charges:
+        return {}, {}
+
+    charges_by_id = {charge.id: charge for charge in charges}
+    allocations = (
+        db.query(CompanyNightChargePaymentAllocation, Transaction)
+        .join(
+            Transaction,
+            (Transaction.id == CompanyNightChargePaymentAllocation.transaction_id)
+            & (Transaction.hotel_id == CompanyNightChargePaymentAllocation.hotel_id),
+        )
+        .filter(
+            CompanyNightChargePaymentAllocation.hotel_id == hotel_id,
+            CompanyNightChargePaymentAllocation.company_night_charge_id.in_(charges_by_id),
+        )
+        .all()
+    )
+    allocated_total_by_transaction: dict[int, Decimal] = {}
+    for allocation, _transaction in allocations:
+        allocated_total_by_transaction[allocation.transaction_id] = (
+            allocated_total_by_transaction.get(allocation.transaction_id, Decimal("0.00"))
+            + Decimal(str(allocation.amount or 0))
+        )
+
+    refunds_by_transaction: dict[int, Decimal] = {}
+    allocated_transaction_ids = set(allocated_total_by_transaction)
+    if allocated_transaction_ids:
+        for transaction_id, amount in (
+            db.query(Transaction.refund_of_transaction_id, Transaction.amount)
+            .filter(
+                Transaction.hotel_id == hotel_id,
+                Transaction.refund_of_transaction_id.in_(allocated_transaction_ids),
+                Transaction.transaction_type == TransactionTypeEnum.REFUND,
+                Transaction.status == TransactionStatusEnum.COMPLETED,
+            )
+            .all()
+        ):
+            refunds_by_transaction[transaction_id] = (
+                refunds_by_transaction.get(transaction_id, Decimal("0.00"))
+                + Decimal(str(amount or 0))
+            )
+
+    paid_by_charge: dict[int, Decimal] = {}
+    for allocation, transaction in allocations:
+        charge_id = allocation.company_night_charge_id
+        if transaction.status == TransactionStatusEnum.PENDING:
+            continue
+        if (
+            transaction.status != TransactionStatusEnum.COMPLETED
+            or transaction.transaction_type == TransactionTypeEnum.REFUND
+        ):
+            continue
+        transaction_amount = Decimal(str(transaction.amount or 0))
+        allocated_amount = allocated_total_by_transaction.get(transaction.id, Decimal("0.00"))
+        if (
+            transaction_amount <= 0
+            or allocated_amount.quantize(Decimal("0.01"))
+            != transaction_amount.quantize(Decimal("0.01"))
+        ):
+            continue
+        refunded = min(refunds_by_transaction.get(transaction.id, Decimal("0.00")), transaction_amount)
+        net_fraction = Decimal("1") - refunded / transaction_amount
+        paid_by_charge[charge_id] = paid_by_charge.get(charge_id, Decimal("0.00")) + (
+            Decimal(str(allocation.amount or 0)) * net_fraction
+        )
+
+    totals: dict[int, Decimal] = {}
+    due: dict[int, Decimal] = {}
+    for charge in charges:
+        if not stay_date_from <= charge.stay_date <= stay_date_to:
+            continue
+        amount = Decimal(str(charge.amount or 0)).quantize(Decimal("0.01"))
+        totals[charge.reservation_id] = totals.get(charge.reservation_id, Decimal("0.00")) + amount
+        remaining = max(Decimal("0.00"), amount - paid_by_charge.get(charge.id, Decimal("0.00")))
+        due[charge.reservation_id] = due.get(charge.reservation_id, Decimal("0.00")) + remaining
+    return (
+        {key: value.quantize(Decimal("0.01")) for key, value in totals.items()},
+        {key: value.quantize(Decimal("0.01")) for key, value in due.items()},
+    )
+
+
+def filter_pms_revenue_transactions(
+    db: Session,
+    *,
+    hotel_id: int,
+    transactions: list[Transaction],
+) -> list[Transaction]:
+    """Exclude deferred lodging receipts while retaining selected-extra ledger rows."""
+    if not transactions:
+        return []
+    reservation_ids = {transaction.reservation_id for transaction in transactions}
+    reservations = (
+        db.query(Reservation)
+        .filter(Reservation.hotel_id == hotel_id, Reservation.id.in_(reservation_ids))
+        .all()
+    )
+    deferred_ids = deferred_company_reservation_ids(
+        db,
+        hotel_id=hotel_id,
+        reservations=reservations,
+    )
+    if not deferred_ids:
+        return transactions
+
+    deferred_transactions = {
+        transaction.id: transaction
+        for transaction in transactions
+        if transaction.reservation_id in deferred_ids
+    }
+    if not deferred_transactions:
+        return transactions
+
+    allocation_rows = (
+        db.query(CompanyNightChargePaymentAllocation, Transaction)
+        .join(
+            CompanyNightCharge,
+            (CompanyNightCharge.id == CompanyNightChargePaymentAllocation.company_night_charge_id)
+            & (CompanyNightCharge.hotel_id == CompanyNightChargePaymentAllocation.hotel_id),
+        )
+        .join(
+            Transaction,
+            (Transaction.id == CompanyNightChargePaymentAllocation.transaction_id)
+            & (Transaction.hotel_id == CompanyNightChargePaymentAllocation.hotel_id),
+        )
+        .filter(
+            CompanyNightChargePaymentAllocation.hotel_id == hotel_id,
+            CompanyNightCharge.reservation_id.in_(deferred_ids),
+            CompanyNightChargePaymentAllocation.transaction_id.in_(deferred_transactions),
+        )
+        .all()
+    )
+    allocated_by_transaction: dict[int, Decimal] = {}
+    for allocation, _transaction in allocation_rows:
+        allocated_by_transaction[allocation.transaction_id] = (
+            allocated_by_transaction.get(allocation.transaction_id, Decimal("0.00"))
+            + Decimal(str(allocation.amount or 0))
+        )
+    eligible_extra_transactions = {
+        transaction_id
+        for transaction_id, allocated_amount in allocated_by_transaction.items()
+        if transaction_id in deferred_transactions
+        and allocated_amount.quantize(Decimal("0.01"))
+        == Decimal(str(deferred_transactions[transaction_id].amount or 0)).quantize(Decimal("0.01"))
+    }
+    eligible_refunds = {
+        transaction.id
+        for transaction in transactions
+        if transaction.reservation_id in deferred_ids
+        and transaction.transaction_type == TransactionTypeEnum.REFUND
+        and transaction.refund_of_transaction_id in eligible_extra_transactions
+    }
+    return [
+        transaction
+        for transaction in transactions
+        if transaction.reservation_id not in deferred_ids
+        or transaction.id in eligible_extra_transactions
+        or transaction.id in eligible_refunds
+    ]
 
 
 def _active_room_blocks(db: Session, hotel_id: int, report_date: date) -> list[ActiveRoomBlockItem]:
@@ -272,6 +470,18 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         reservation.id
         for reservation in (*arrivals, *departures, *balance_candidates, *late_arrivals)
     }
+    deferred_ids = deferred_company_reservation_ids(
+        db,
+        hotel_id=hotel_id,
+        reservations=[*arrivals, *departures, *balance_candidates, *late_arrivals],
+    )
+    _extra_totals, extra_due_by_reservation = company_night_extra_balances_by_reservation(
+        db,
+        hotel_id=hotel_id,
+        reservation_ids=deferred_ids,
+        stay_date_from=report_date,
+        stay_date_to=report_date,
+    )
     # The operational due reflects confirmed OTA credits as well as local
     # payments; cash/revenue totals remain transaction-only elsewhere.
     paid_by_reservation = paid_amounts_by_reservation(db, hotel_id, candidate_ids)
@@ -284,19 +494,30 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         reservation
         for reservation in balance_candidates
         if (
-            Decimal(reservation.total_amount or 0)
-            + adjustments_by_reservation.get(reservation.id, Decimal("0"))
-            - paid_by_reservation.get(reservation.id, Decimal("0"))
+            extra_due_by_reservation.get(reservation.id, Decimal("0.00")) > 0
+            if reservation.id in deferred_ids
+            else (
+                Decimal(reservation.total_amount or 0)
+                + adjustments_by_reservation.get(reservation.id, Decimal("0"))
+                - paid_by_reservation.get(reservation.id, Decimal("0"))
+            ) > 0
         )
-        > 0
     ]
 
-    pending_group = _group(pending_payments, paid_by_reservation, adjustments_by_reservation)
+    pending_group = _group(
+        pending_payments,
+        paid_by_reservation,
+        adjustments_by_reservation,
+        deferred_ids,
+        extra_due_by_reservation,
+    )
     late_items = [
         _reservation_summary(
             reservation,
             paid_by_reservation.get(reservation.id),
             adjustments_by_reservation.get(reservation.id),
+            company_billing_deferred=reservation.id in deferred_ids,
+            company_night_extra_due=extra_due_by_reservation.get(reservation.id),
         )
         for reservation in late_arrivals
     ]
@@ -308,8 +529,20 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         hotel_id=hotel_id,
         report_date=report_date,
         generated_at=datetime.now(timezone.utc),
-        arrivals=_group(arrivals, paid_by_reservation, adjustments_by_reservation),
-        departures=_group(departures, paid_by_reservation, adjustments_by_reservation),
+        arrivals=_group(
+            arrivals,
+            paid_by_reservation,
+            adjustments_by_reservation,
+            deferred_ids,
+            extra_due_by_reservation,
+        ),
+        departures=_group(
+            departures,
+            paid_by_reservation,
+            adjustments_by_reservation,
+            deferred_ids,
+            extra_due_by_reservation,
+        ),
         pending_payments=pending_group,
         late_arrivals=late_items,
         available_with_review=review_items,
@@ -336,10 +569,12 @@ def redact_daily_report_financials(
             reservation["total_amount"] = None
             reservation["amount_paid"] = None
             reservation["balance_due"] = None
+            reservation["company_night_extra_due"] = None
     for reservation in payload["late_arrivals"]:
         reservation["total_amount"] = None
         reservation["amount_paid"] = None
         reservation["balance_due"] = None
+        reservation["company_night_extra_due"] = None
 
     # Even a debtor count/list is financial information. Managers receive no
     # pending-payment identities or alerts from the operational report lane.

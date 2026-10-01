@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
+from app.api import subscription as subscription_api
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.security_audit_log import SecurityAuditLog
@@ -40,11 +41,13 @@ from app.services.permission_service import (
     PERMISSION_GUEST_EDIT,
     PERMISSION_HOTEL_PROPERTY_MANAGE,
     PERMISSION_HOTEL_SECURITY_MANAGE,
+    PERMISSION_GUEST_READ,
     PERMISSION_OCCUPANCY_VIEW,
     PERMISSION_RESERVATION_CREATE,
     PERMISSION_PERMISSION_MANAGE,
     PERMISSION_ROOM_STATUS_UPDATE,
     PERMISSION_SETTINGS_INTEGRATIONS_VIEW,
+    PERMISSION_SETTINGS_FX_MANAGE,
     PERMISSION_STOCK_ADJUST,
     PERMISSION_WHATSAPP_INBOX_VIEW,
     canonical_permission_code,
@@ -136,6 +139,11 @@ def test_permissions_matrix_available_to_permission_manager_only():
         assert response.status_code == 200
         assert response.json()["matrix"]["manager"][PERMISSION_RESERVATION_CREATE]["allowed"] is True
 
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "co_owner")
+        co_owner_response = client.get(path, headers=_step_up_headers(path, method="GET"))
+        assert co_owner_response.status_code == 200
+        assert co_owner_response.json()["matrix"]["co_owner"][PERMISSION_PERMISSION_MANAGE]["allowed"] is True
+
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
         assert client.get("/api/permissions/matrix").status_code == 403
 
@@ -160,7 +168,7 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         legacy_codes = set(LEGACY_PERMISSION_ALIASES)
 
         # New role-only business actions are named capabilities in the catalog.
-        assert len(canonical_codes) == 108
+        assert len(canonical_codes) == 110
         assert {"payment:proof:view", "payment:proof:review"} <= canonical_codes
         assert {"payment:refund", "reservation:cancel_paid"} <= canonical_codes
         assert {"reservation:manual_rate_limited", "reservation:manual_rate_policy_manage"} <= canonical_codes
@@ -183,6 +191,10 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
                 assert cell["help_es"] == _CANONICAL_DEFINITIONS[code][2]
         for role in ("owner", "co_owner", "manager"):
             assert matrix[role]["payment:proof:review"]["allowed"] is True
+        assert matrix["owner"][PERMISSION_SETTINGS_FX_MANAGE]["allowed"] is True
+        assert matrix["co_owner"][PERMISSION_SETTINGS_FX_MANAGE]["allowed"] is True
+        assert matrix["co_owner"][PERMISSION_SETTINGS_FX_MANAGE]["source"] == "invariant"
+        assert matrix["manager"][PERMISSION_SETTINGS_FX_MANAGE]["allowed"] is False
         assert matrix["manager"]["reservation:charge"]["allowed"] is True
         assert matrix["manager"]["cash:operate"]["allowed"] is True
         assert matrix["manager"]["payment:refund"]["allowed"] is True
@@ -263,7 +275,27 @@ def test_revoking_each_section_view_permission_blocks_its_read_endpoint(
         engine.dispose()
 
 
-def test_permission_catalog_exposes_owner_only_normal_metadata_and_help_text():
+def test_subscription_status_does_not_claim_active_when_source_is_unavailable(monkeypatch):
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+
+    def fail_status(*_args, **_kwargs):
+        raise RuntimeError("synthetic subscription store failure")
+
+    monkeypatch.setattr(subscription_api, "_serialize_status_payload", fail_status)
+    try:
+        response = client.get("/api/subscription/status")
+        assert response.status_code == 503
+        assert "estado real" in response.json()["detail"].lower()
+        assert response.json().get("status") is None
+        assert response.json().get("source") is None
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_permission_catalog_exposes_administrator_and_owner_only_metadata_and_help_text():
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
     try:
@@ -284,6 +316,17 @@ def test_permission_catalog_exposes_owner_only_normal_metadata_and_help_text():
             assert catalog[code]["critical"] is True
             assert catalog[code]["step_up_required"] is True
             assert catalog[code]["delegable"] is False
+
+        assert catalog[PERMISSION_PERMISSION_MANAGE]["locked"] is True
+        assert catalog[PERMISSION_PERMISSION_MANAGE]["lock_reason"] == "role_scope"
+        assert catalog[PERMISSION_SETTINGS_FX_MANAGE]["critical"] is True
+        assert catalog[PERMISSION_SETTINGS_FX_MANAGE]["step_up_required"] is True
+        assert catalog[PERMISSION_SETTINGS_FX_MANAGE]["delegable"] is False
+        assert catalog[PERMISSION_SETTINGS_FX_MANAGE]["locked"] is True
+        assert catalog[PERMISSION_SETTINGS_FX_MANAGE]["lock_reason"] == "role_scope"
+
+        assert catalog["settings:users:manage"]["step_up_required"] is True
+        assert catalog["settings:subscription:manage"]["step_up_required"] is True
 
         assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["critical"] is False
         assert catalog[PERMISSION_CASH_APPROVE_DIFFERENCE]["step_up_required"] is True
@@ -426,6 +469,52 @@ def test_owner_rate_adjust_is_denied_by_default_and_can_be_explicitly_granted():
         effective = client.get("/api/permissions/effective")
         assert effective.status_code == 200, effective.text
         assert "reservation:rate_adjust" in effective.json()["permissions"]
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_co_owner_cannot_mutate_or_reset_owner_role_profile():
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "co_owner")
+    try:
+        headers = _step_up_headers("/api/permissions/override", method="PUT")
+        blocked = client.put(
+            "/api/permissions/override",
+            json={"role": "owner", "permission_code": PERMISSION_GUEST_READ, "allowed": False},
+            headers=headers,
+        )
+        assert blocked.status_code == 403
+
+        blocked_rate_adjust = client.put(
+            "/api/permissions/override",
+            json={"role": "owner", "permission_code": "reservation:rate_adjust", "allowed": True},
+            headers=_step_up_headers("/api/permissions/override", method="PUT"),
+        )
+        assert blocked_rate_adjust.status_code == 403
+
+        blocked_critical_reset = client.delete(
+            f"/api/permissions/overrides/role/owner/{PERMISSION_PERMISSION_MANAGE}",
+            params={"expected_version": 1},
+            headers=_step_up_headers(
+                f"/api/permissions/overrides/role/owner/{PERMISSION_PERMISSION_MANAGE}",
+                method="DELETE",
+            ),
+        )
+        assert blocked_critical_reset.status_code == 403
+
+        reset_headers = _step_up_headers("/api/permissions/role-overrides/owner", method="DELETE")
+        blocked_reset = client.delete("/api/permissions/role-overrides/owner", headers=reset_headers)
+        assert blocked_reset.status_code == 403
+
+        visibility_headers = _step_up_headers("/api/permissions/visibility-windows", method="PUT")
+        blocked_visibility = client.put(
+            "/api/permissions/visibility-windows",
+            json={"role": "owner", "past_hours": 24, "future_hours": 24},
+            headers=visibility_headers,
+        )
+        assert blocked_visibility.status_code == 403
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

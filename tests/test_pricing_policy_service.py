@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 
 from app.models.commercial import FxPolicy, RatePlan, RatePlanPrice, SellableProduct, TaxPolicy, TaxRule
+from app.models.fx_rate_snapshot import FxRateSnapshot
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota_core import OTACommissionRule, OTACurrencyRate, OTAProvider
 from app.models.room import RoomCategory
+from app.services import pricing_policy_service
 from app.services.pricing_policy_service import quote_rate_plan_stay
 
 
@@ -211,8 +213,19 @@ def test_quote_rate_plan_for_foreign_guest_respects_tax_exemption(db):
     assert quote.net_amount == 170.0
 
 
-def test_quote_rate_plan_converts_currency_with_fx_policy_spread(db):
+def test_quote_rate_plan_converts_currency_with_fx_policy_spread(db, monkeypatch):
     rate_plan, tax_policy, fx_policy = _seed_pricing_foundation(db)
+
+    def conversion_quote(currency, market="oficial"):
+        return {
+            "moneda": currency,
+            "casa": "oficial",
+            "compra": 1000.0,
+            "venta": 1000.0,
+            "fechaActualizacion": datetime.now(timezone.utc).isoformat(),
+        }
+
+    monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", conversion_quote)
 
     quote = quote_rate_plan_stay(
         db,
@@ -235,6 +248,9 @@ def test_quote_rate_plan_converts_currency_with_fx_policy_spread(db):
     assert quote.gross_total == 105000.0
     assert quote.commission_amount == 18900.0
     assert quote.net_amount == 86100.0
+    assert quote.fx_quote_details["usd_market"] == "oficial"
+    assert quote.fx_quote_details["source_side"] == "venta"
+    assert quote.fx_quote_details["target_side"] is None
 
 
 def test_quote_rate_plan_enforces_stay_constraints_and_charged_night_validity(db):
@@ -289,3 +305,205 @@ def test_quote_rate_plan_enforces_stay_constraints_and_charged_night_validity(db
     )
     assert quote.nights == 2
     assert quote.subtotal_amount == 250.0
+
+
+_FX_TEST_RATES = {
+    "USD": {"compra": 1000.0, "venta": 1100.0},
+    "EUR": {"compra": 1200.0, "venta": 1300.0},
+    "BRL": {"compra": 200.0, "venta": 220.0},
+    "CLP": {"compra": 1.0, "venta": 1.2},
+    "UYU": {"compra": 25.0, "venta": 27.0},
+}
+_SUPPORTED_CURRENCIES = ("ARS", "USD", "EUR", "BRL", "CLP", "UYU")
+_DIRECTED_FX_PAIRS = [
+    (source, target)
+    for source in _SUPPORTED_CURRENCIES
+    for target in _SUPPORTED_CURRENCIES
+    if source != target
+]
+
+
+@pytest.mark.parametrize("from_currency,to_currency", _DIRECTED_FX_PAIRS)
+def test_all_supported_fx_pairs_use_directional_quotes_via_ars(
+    db, monkeypatch, from_currency, to_currency
+):
+    _seed_pricing_foundation(db)
+    now = datetime.now(timezone.utc).isoformat()
+
+    def conversion_quote(currency, market="oficial"):
+        values = _FX_TEST_RATES[currency]
+        return {
+            "moneda": currency,
+            "casa": market if currency == "USD" else "oficial",
+            **values,
+            "fechaActualizacion": now,
+        }
+
+    monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", conversion_quote)
+    amount, effective_rate, details = pricing_policy_service._convert_amount(
+        db,
+        hotel_id=51,
+        amount=100.0,
+        from_currency=from_currency,
+        to_currency=to_currency,
+        fx_policy_id=None,
+        provider_code=None,
+    )
+
+    source_ars = 1.0 if from_currency == "ARS" else _FX_TEST_RATES[from_currency]["venta"]
+    target_ars = 1.0 if to_currency == "ARS" else _FX_TEST_RATES[to_currency]["compra"]
+    expected_rate = source_ars / target_ars * 1.05
+    assert effective_rate == pytest.approx(expected_rate, rel=1e-6)
+    assert amount == pytest.approx(round(100.0 * expected_rate, 2))
+    assert details["path"] == "via_ars"
+    assert details["configured_usd_market"] == "oficial"
+    assert details["usd_market"] == ("oficial" if "USD" in {from_currency, to_currency} else None)
+    assert details["source_side"] == (None if from_currency == "ARS" else "venta")
+    assert details["target_side"] == (None if to_currency == "ARS" else "compra")
+    if from_currency == "USD":
+        assert details["source_quote"]["usd_market"] == "oficial"
+    elif from_currency != "ARS":
+        assert details["source_quote"]["direct_currency_market"] == "oficial"
+    if to_currency == "USD":
+        assert details["target_quote"]["usd_market"] == "oficial"
+    elif to_currency != "ARS":
+        assert details["target_quote"]["direct_currency_market"] == "oficial"
+
+
+def test_global_blue_market_dominates_fx_policy_source_and_side(db, monkeypatch):
+    _seed_pricing_foundation(db)
+    config = db.get(HotelConfiguration, 51)
+    config.fx_conversion_rate_type = "blue"
+    policy = db.query(FxPolicy).filter(FxPolicy.hotel_id == 51).first()
+    policy.preferred_source = "official"  # Legacy policy source cannot override hotel settings.
+    policy.preferred_side = "buy"  # Legacy side does not override the directional rule.
+    now = datetime.now(timezone.utc).isoformat()
+    seen_markets = []
+
+    def conversion_quote(currency, market="oficial"):
+        seen_markets.append(market)
+        if currency == "USD" and market == "blue":
+            values = {"compra": 1200.0, "venta": 1250.0}
+        else:
+            values = _FX_TEST_RATES[currency]
+        return {
+            "moneda": currency,
+            "casa": market if currency == "USD" else "oficial",
+            **values,
+            "fechaActualizacion": now,
+        }
+
+    monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", conversion_quote)
+    _, global_blue_rate, global_details = pricing_policy_service._convert_amount(
+        db,
+        hotel_id=51,
+        amount=1,
+        from_currency="USD",
+        to_currency="ARS",
+        fx_policy_id=None,
+        provider_code=None,
+    )
+    assert global_blue_rate == pytest.approx(1250.0 * 1.05)
+    assert global_details["configured_usd_market"] == "blue"
+    assert global_details["usd_market"] == "blue"
+
+    _, policy_blue_rate, policy_details = pricing_policy_service._convert_amount(
+        db,
+        hotel_id=51,
+        amount=1,
+        from_currency="USD",
+        to_currency="ARS",
+        fx_policy_id=policy.id,
+        provider_code=None,
+    )
+    assert policy_blue_rate == pytest.approx(1250.0 * 1.05)
+    assert policy_details["usd_market"] == "blue"
+    assert seen_markets == ["blue", "blue"]
+
+    _, cross_rate, cross_details = pricing_policy_service._convert_amount(
+        db,
+        hotel_id=51,
+        amount=1,
+        from_currency="USD",
+        to_currency="EUR",
+        fx_policy_id=None,
+        provider_code=None,
+    )
+    assert cross_rate == pytest.approx(1250.0 / 1200.0 * 1.05)
+    assert cross_details["source_quote"]["market"] == "blue"
+    assert cross_details["source_quote"]["usd_market"] == "blue"
+    assert cross_details["source_quote"]["rate_type"] == "blue"
+    assert cross_details["target_quote"]["market"] == "oficial"
+    assert cross_details["target_quote"]["direct_currency_market"] == "oficial"
+    assert cross_details["target_quote"]["rate_type"] == "eur_oficial"
+
+    _, _, direct_only_details = pricing_policy_service._convert_amount(
+        db,
+        hotel_id=51,
+        amount=1,
+        from_currency="EUR",
+        to_currency="BRL",
+        fx_policy_id=None,
+        provider_code=None,
+    )
+    assert direct_only_details["configured_usd_market"] == "blue"
+    assert direct_only_details["usd_market"] is None
+    assert direct_only_details["source_quote"]["direct_currency_market"] == "oficial"
+    assert direct_only_details["target_quote"]["direct_currency_market"] == "oficial"
+
+
+def test_missing_selected_blue_market_does_not_fall_back_to_official_snapshot(db, monkeypatch):
+    _seed_pricing_foundation(db)
+    config = db.get(HotelConfiguration, 51)
+    config.fx_conversion_rate_type = "blue"
+    fresh_time = datetime.now(timezone.utc)
+    db.add(
+        FxRateSnapshot(
+            hotel_id=51,
+            rate_type="oficial",
+            moneda="USD",
+            compra=1000,
+            venta=1100,
+            provider_updated_at=fresh_time,
+        )
+    )
+    monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", lambda *_: None)
+
+    with pytest.raises(ValueError, match="blue.*USD.*no se usará otro mercado"):
+        pricing_policy_service._convert_amount(
+            db,
+            hotel_id=51,
+            amount=1,
+            from_currency="USD",
+            to_currency="ARS",
+            fx_policy_id=None,
+            provider_code=None,
+        )
+
+
+def test_negative_fx_spread_is_rejected_instead_of_reducing_hotel_quote(db, monkeypatch):
+    _seed_pricing_foundation(db)
+    policy = db.query(FxPolicy).filter(FxPolicy.hotel_id == 51).first()
+    policy.spread_pct = -0.01
+    monkeypatch.setattr(
+        pricing_policy_service,
+        "get_conversion_quote_sync",
+        lambda currency, market="oficial": {
+            "moneda": currency,
+            "casa": market if currency == "USD" else "oficial",
+            "compra": 1000.0,
+            "venta": 1100.0,
+            "fechaActualizacion": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+
+    with pytest.raises(ValueError, match="spread FX debe ser cero o mayor"):
+        pricing_policy_service._convert_amount(
+            db,
+            hotel_id=51,
+            amount=100,
+            from_currency="ARS",
+            to_currency="USD",
+            fx_policy_id=policy.id,
+            provider_code=None,
+        )

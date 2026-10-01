@@ -102,6 +102,32 @@ for (const persona of personas) {
   });
 }
 
+test("manager sees a permission message on restricted settings routes without denied configuration reads", async ({ page }) => {
+  const manager = personas.find((persona) => persona.label === "manager")!;
+  await login(page, manager);
+
+  const forbiddenReads: string[] = [];
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (
+      response.status() === 403
+      && response.request().method() === "GET"
+      && ["/api/config/", "/api/subscription/status"].includes(url.pathname)
+    ) {
+      forbiddenReads.push(`${response.request().method()} ${url.pathname}`);
+    }
+  });
+
+  for (const path of ["/settings/hotel", "/settings/subscription"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}$`));
+    await expect(page.getByTestId("permission-denied-page")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "No tenés permiso para ver esta sección." })).toBeVisible();
+  }
+
+  expect(forbiddenReads).toEqual([]);
+});
+
 // State transitions and room blocks are independent capabilities: manager can
 // change every state and manage blocks; reception can create blocks but cannot
 // change operational state; housekeeping changes only the separate cleaning state.

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.services.row_locks import lock_query
 from app.database import get_db
 from app.models.audit_log import AuditActionEnum
+from app.models.company import Company
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
 from app.models.hotel_config import HotelConfiguration
@@ -57,6 +58,8 @@ from app.services.reservation_service import (
     mark_reservation_no_show,
     update_reservation_fields,
     register_company_settlement,
+    deferred_company_reservation_ids,
+    reservation_has_deferred_company_billing,
 )
 from app.services.read_model_cache import get_cached_occupancy_grid_payload
 from app.services.guest_restriction_service import GuestProhibitedError, RestrictionOverridePermissionError
@@ -131,7 +134,12 @@ router = APIRouter(prefix="/api/reservations", tags=["Reservations"])
 logger = logging.getLogger(__name__)
 
 
-def _to_read(r: Reservation) -> ReservationRead:
+def _to_read(
+    r: Reservation,
+    *,
+    db: Session | None = None,
+    company_billing_deferred: bool | None = None,
+) -> ReservationRead:
     result = ReservationRead.model_validate(r)
     room = getattr(r, "room", None)
     result.room_number = (
@@ -156,6 +164,35 @@ def _to_read(r: Reservation) -> ReservationRead:
         {"id": g.id, "first_name": g.first_name, "last_name": g.last_name, "document_type": g.document_type, "document_number": g.document_number}
         for g in additional_guests
     ]
+    is_deferred = company_billing_deferred
+    if is_deferred is None:
+        is_deferred = (
+            reservation_has_deferred_company_billing(db, r, hotel_id=r.hotel_id)
+            if db is not None
+            else bool(r.company_id is not None and r.settlement_status in {"deferred", "settled"})
+        )
+    result.company_billing_deferred = bool(is_deferred)
+    if result.company_billing_deferred:
+        # These fields represent lodging or aggregate reservation money. A
+        # deferred company invoices lodging outside the PMS, so returning
+        # null is safer than exposing historical amounts or suggesting $0.
+        for field in (
+            "total_amount",
+            "amount_paid",
+            "external_paid_amount",
+            "deposit_amount",
+            "subtotal_amount",
+            "tax_amount",
+            "fee_amount",
+            "commission_amount",
+            "net_amount",
+            "quoted_amount_ars",
+            "quoted_amount_usd",
+            "balance_due",
+        ):
+            setattr(result, field, None)
+        result.external_paid_reference = None
+        result.external_paid_confirmed = False
     return result
 
 
@@ -325,7 +362,7 @@ def create_new_reservation(
         db.refresh(reservation)
         _project_reservation_graph(context.hotel_id, reservation)
         background_tasks.add_task(_trigger_reoptimization_bg, hotel_id=context.hotel_id)
-        return _to_read(reservation)
+        return _to_read(reservation, db=db)
     except ManualRatePolicyError as e:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
@@ -433,7 +470,7 @@ def create_or_update_manual_ota(
         db.commit()
         db.refresh(reservation)
         _project_reservation_graph(context.hotel_id, reservation)
-        return _to_read(reservation)
+        return _to_read(reservation, db=db)
     except OTAManualReservationError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -469,7 +506,15 @@ def list_reservations(
         context=context,
     )
     try:
-        return [_to_read(r) for r in reservations]
+        deferred_ids = deferred_company_reservation_ids(
+            db,
+            hotel_id=context.hotel_id,
+            reservations=reservations,
+        )
+        return [
+            _to_read(r, company_billing_deferred=r.id in deferred_ids)
+            for r in reservations
+        ]
     except Exception as exc:
         logger.error("Reservation serialization failed for hotel_id=%s error_type=%s", context.hotel_id, type(exc).__name__)
         raise HTTPException(status_code=500, detail="No se pudieron serializar las reservas") from exc
@@ -622,7 +667,7 @@ def register_settlement(
     except ReservationError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
-    return _to_read(reservation)
+    return _to_read(reservation, db=db)
 
 
 @router.get("/{reservation_id}", response_model=ReservationRead)
@@ -634,7 +679,7 @@ def get_reservation(
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
-    return _to_read(reservation)
+    return _to_read(reservation, db=db)
 
 
 from app.schemas.guest import GuestCreate
@@ -746,7 +791,7 @@ def add_reservation_guests(
             
     db.commit()
     db.refresh(reservation)
-    return _to_read(reservation)
+    return _to_read(reservation, db=db)
 
 
 @router.post("/{reservation_id}/cancel", response_model=ReservationRead)
@@ -898,7 +943,7 @@ def cancel_reservation(
             payload_before=before,
             payload_after=audit_log_service.model_snapshot(r),
         )
-        return _to_read(r)
+        return _to_read(r, db=db)
     except ReservationError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -993,7 +1038,7 @@ def release_no_guarantee_reservation(
             payload_before=before,
             payload_after=audit_log_service.model_snapshot(r),
         )
-        return _to_read(r)
+        return _to_read(r, db=db)
     except OTAManualReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1031,7 +1076,7 @@ def mark_no_show(
             payload_before=before,
             payload_after=audit_log_service.model_snapshot(r),
         )
-        return _to_read(r)
+        return _to_read(r, db=db)
     except ReservationError as e:
         db.rollback()
         if isinstance(e, ReservationVersionConflict):
@@ -1100,8 +1145,8 @@ def change_dates(
             trigger_type="reservation_date_change",
         )
         return ReservationDateChangeResponse(
-            original_reservation=_to_read(result.original_reservation),
-            reservation=_to_read(result.reservation),
+            original_reservation=_to_read(result.original_reservation, db=db),
+            reservation=_to_read(result.reservation, db=db),
             recreated=result.recreated,
             status_transitioned=result.status_transitioned,
         )
@@ -1142,6 +1187,15 @@ def modify_reservation(
         and getattr(r, field, None) != value
     }
     if "total_amount" in effective_data:
+        if reservation_has_deferred_company_billing(
+            db,
+            r,
+            hotel_id=context.hotel_id,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="El alojamiento de esta empresa se factura fuera del PMS y no admite correcciones de importe aquí.",
+            )
         if not reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=r):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -1186,7 +1240,7 @@ def modify_reservation(
     if data.client_version is not None and r.version != data.client_version:
         raise HTTPException(status_code=409, detail="Reservation was modified concurrently. Reload and retry.")
     if not effective_data:
-        return _to_read(r)
+        return _to_read(r, db=db)
     if data.client_version is None:
         raise HTTPException(
             status_code=status.HTTP_428_PRECONDITION_REQUIRED,
@@ -1245,7 +1299,7 @@ def modify_reservation(
                 hotel_id=context.hotel_id,
                 trigger_type="reservation_update",
             )
-        return _to_read(r)
+        return _to_read(r, db=db)
     except ReservationError as e:
         db.rollback()
         if isinstance(e, ReservationVersionConflict):
@@ -1268,15 +1322,38 @@ def extend_stay(
     background_tasks: BackgroundTasks,
     request: Request,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(
-        require_all_permissions(
-            PERMISSION_RESERVATION_UPDATE,
-            PERMISSION_RESERVATION_CHARGE,
-            PERMISSION_CASH_OPERATE,
-        )
-    ),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
     """Extend a guest's stay to a new checkout date."""
+    r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
+    if not r:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+
+    company_uses_deferred_settlement = False
+    if r.company_id is not None:
+        company = (
+            db.query(Company)
+            .filter(Company.hotel_id == context.hotel_id, Company.id == r.company_id)
+            .with_for_update()
+            .one_or_none()
+        )
+        company_uses_deferred_settlement = bool(company and company.payment_deferred)
+    is_deferred_company_reservation = (
+        r.settlement_status == "deferred" or company_uses_deferred_settlement
+    )
+
+    if payload.payment_action == "company_account":
+        require_all_permissions(PERMISSION_COMPANY_MANAGE)(request, db, context)
+    else:
+        if is_deferred_company_reservation:
+            require_all_permissions(PERMISSION_COMPANY_MANAGE)(request, db, context)
+        # Preserve the dependency's all-or-nothing permission and step-up
+        # handling for every action that creates or requests a payment.
+        require_all_permissions(
+            PERMISSION_RESERVATION_CHARGE,
+            PERMISSION_CASH_OPERATE,
+        )(request, db, context)
+
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
         raise HTTPException(
@@ -1293,9 +1370,6 @@ def extend_stay(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="The prior receipt date cannot be in the future.",
             )
-    r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
-    if not r:
-        raise HTTPException(status_code=404, detail="Reservation not found")
     before = audit_log_service.model_snapshot(r)
     try:
         result = extend_reservation_stay(
@@ -1327,7 +1401,7 @@ def extend_stay(
         db.commit()
         db.refresh(r)
         response = ReservationExtensionResponse(
-            reservation=_to_read(r),
+            reservation=_to_read(r, db=db),
             extension_amount=result.extension_amount,
             transaction=result.transaction,
             payment_link=result.payment_link,
@@ -1386,7 +1460,7 @@ def update_company_extension_request(
         )
         db.commit()
         db.refresh(reservation)
-        return _to_read(reservation)
+        return _to_read(reservation, db=db)
     except ReservationVersionConflict as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -1469,7 +1543,7 @@ def room_move(
             trigger_type="reservation_room_move",
         )
         return RoomMoveResponse(
-            reservation=_to_read(reservation),
+            reservation=_to_read(reservation, db=db),
             category_changed=result.category_changed,
             price_action=result.price_action,
             previous_total_amount=result.previous_total_amount,

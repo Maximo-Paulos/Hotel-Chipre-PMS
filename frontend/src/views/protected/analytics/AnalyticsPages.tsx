@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -344,12 +345,34 @@ const VALUE_LABELS: Record<string, Record<string, string>> = {
   }
 };
 
-const tableValue = (value: unknown, key = ""): string => {
+const tableValue = (
+  value: unknown,
+  key = "",
+  row?: Record<string, unknown>,
+  unavailableCurrencyLabel = "Sin cotización histórica"
+): string => {
   if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "Sí" : "No";
   // Money arrives as "678000.00" under *_ars / *_usd keys.
   const currency = /_(ars|usd)$/.exec(key)?.[1];
-  if (currency && value !== "" && Number.isFinite(Number(value))) return formatMoney(Number(value), currency.toUpperCase());
+  if (currency && value !== "" && Number.isFinite(Number(value))) {
+    const requestedCurrency = currency.toUpperCase();
+    const unavailableCurrencies = Array.isArray(row?.unavailable_currencies)
+      ? row.unavailable_currencies.map((item) => String(item).toUpperCase())
+      : [];
+    if (unavailableCurrencies.includes(requestedCurrency)) {
+      return unavailableCurrencyLabel;
+    }
+    const sourceCurrency = typeof row?.source_currency === "string" ? row.source_currency.toUpperCase() : null;
+    const fxRate = Number(row?.fx_rate_snapshot);
+    if (
+      (sourceCurrency !== requestedCurrency || !sourceCurrency) &&
+      (!Number.isFinite(fxRate) || fxRate <= 0)
+    ) {
+      return unavailableCurrencyLabel;
+    }
+    return formatMoney(Number(value), requestedCurrency);
+  }
   if (typeof value === "number") return String(value);
   if (typeof value === "string") return VALUE_LABELS[key]?.[value] ?? value;
   if (Array.isArray(value)) return `${value.length} items`;
@@ -366,8 +389,10 @@ const sectionLabel = (key: string) =>
 
 function usePlan() {
   const { data: subscription } = useSubscriptionStatus();
-  return subscription?.plan ?? "starter";
+  return subscription?.plan ?? null;
 }
+
+const planRankFor = (plan: string | null): number => (plan ? planRank[plan] ?? 0 : 0);
 
 function useAnalyticsQuery<T>(path: string, params: Record<string, string | number | boolean | null | undefined> = {}) {
   const { session } = useSession();
@@ -411,12 +436,16 @@ function PageShell({
 }
 
 function MetricGrid({ cards }: { cards: Array<Record<string, unknown>> }) {
+  const { t } = useTranslation("appshell");
+  const unavailableCurrencyLabel = t("currency.historicalRateUnavailable");
   const mapped = cards.map((card) => ({
     key: String(card.card_code || card.label || "metric"),
     label: String(card.label || card.card_code || "Métrica"),
     value:
       card.value_ars != null
-        ? formatMoney(Number(card.value_ars), "ARS")
+        ? card.value_ars_available === false
+          ? unavailableCurrencyLabel
+          : formatMoney(Number(card.value_ars), "ARS")
         : card.value_usd != null
           ? formatMoney(Number(card.value_usd), "USD")
           : card.value_pct != null
@@ -476,6 +505,8 @@ function AnalyticsFreshness({
 }
 
 function SectionTables({ data }: { data: Record<string, unknown> }) {
+  const { t } = useTranslation("appshell");
+  const unavailableCurrencyLabel = t("currency.historicalRateUnavailable");
   const entries = Object.entries(data).filter(([key]) => key !== "cards");
   if (entries.length === 0) {
     return null;
@@ -486,7 +517,7 @@ function SectionTables({ data }: { data: Record<string, unknown> }) {
         if (Array.isArray(value)) {
           const rows = value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"));
           const headers = rows.reduce<string[]>((acc, row) => {
-            Object.keys(row).forEach((field) => {
+              Object.keys(row).filter((field) => field !== "unavailable_currencies").forEach((field) => {
               if (!acc.includes(field)) acc.push(field);
             });
             return acc;
@@ -513,7 +544,7 @@ function SectionTables({ data }: { data: Record<string, unknown> }) {
                       <tr key={`${key}-${index}`}>
                         {headers.map((header) => (
                           <td key={header} className="px-3 py-2 text-slate-700">
-                            {tableValue(row[header], header)}
+                            {tableValue(row[header], header, row, unavailableCurrencyLabel)}
                           </td>
                         ))}
                       </tr>
@@ -533,7 +564,7 @@ function SectionTables({ data }: { data: Record<string, unknown> }) {
                 {rows.map(([field, item]) => (
                   <div key={field} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs">
                     <span className="font-medium text-slate-600">{sectionLabel(field)}</span>
-                    <span className="text-slate-900">{tableValue(item, field)}</span>
+                    <span className="text-slate-900">{tableValue(item, field, value as Record<string, unknown>, unavailableCurrencyLabel)}</span>
                   </div>
                 ))}
               </div>
@@ -543,7 +574,7 @@ function SectionTables({ data }: { data: Record<string, unknown> }) {
         return (
           <div key={key} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-sm font-semibold text-slate-900">{sectionLabel(key)}</h2>
-            <p className="mt-2 text-sm text-slate-700">{tableValue(value, key)}</p>
+            <p className="mt-2 text-sm text-slate-700">{tableValue(value, key, undefined, unavailableCurrencyLabel)}</p>
           </div>
         );
       })}
@@ -704,7 +735,7 @@ function FullAnalyticsLanding() {
 
 function PlanGuard({ children }: { children: React.ReactNode }) {
   const plan = usePlan();
-  if ((planRank[plan] ?? 0) <= planRank.starter) {
+  if (plan && planRankFor(plan) <= planRank.starter) {
     return <Navigate to="/analytics" replace />;
   }
   return <>{children}</>;
@@ -712,7 +743,7 @@ function PlanGuard({ children }: { children: React.ReactNode }) {
 
 function UltraGuard({ children }: { children: React.ReactNode }) {
   const plan = usePlan();
-  if ((planRank[plan] ?? 0) < planRank.ultra) {
+  if (planRankFor(plan) < planRank.ultra) {
     return <Navigate to="/analytics" replace />;
   }
   return <>{children}</>;
@@ -720,7 +751,7 @@ function UltraGuard({ children }: { children: React.ReactNode }) {
 
 export function AnalyticsHomePage() {
   const plan = usePlan();
-  if ((planRank[plan] ?? 0) <= planRank.starter) {
+  if (plan === "starter") {
     return <StarterLandingScreen />;
   }
   return <FullAnalyticsLanding />;
@@ -1034,7 +1065,7 @@ export function CompaniesSettingsPage() {
       // The mutation state remains available to the surrounding page.
     }
   };
-  if ((planRank[plan] ?? 0) < planRank.pro) {
+  if (plan && planRankFor(plan) < planRank.pro) {
     return <Navigate to="/analytics" replace />;
   }
 
@@ -1212,7 +1243,7 @@ export function RoomStateEventsPage() {
       // The mutation state remains available to the surrounding page.
     }
   };
-  if ((planRank[plan] ?? 0) < planRank.pro) {
+  if (plan && planRankFor(plan) < planRank.pro) {
     return <Navigate to="/analytics" replace />;
   }
 

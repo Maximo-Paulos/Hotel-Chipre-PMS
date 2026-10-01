@@ -336,36 +336,23 @@ def test_confirmed_extension_clears_pending_marker_and_preserves_request_note(mo
             "resolve_extension_conflict",
             lambda *args, **kwargs: {"resolved": True, "conflicts": [], "actions": []},
         )
-        monkeypatch.setattr(
-            reservation_operations_service,
-            "_extension_amount",
-            lambda *args, **kwargs: Decimal("50.00"),
-        )
-        monkeypatch.setattr(
-            reservation_operations_service,
-            "create_link",
-            lambda *args, **kwargs: object(),
-        )
-        from app.schemas.payment_link import PaymentLinkCreate
-
         previous_checkout = reservation.check_out_date
-        reservation_operations_service.extend_reservation_stay(
+        previous_total = reservation.total_amount
+        result = reservation_operations_service.extend_reservation_stay(
             db,
             reservation=reservation,
             hotel_id=1,
             new_checkout_date=previous_checkout + timedelta(days=1),
             client_version=reservation.version,
             pricing_mode="current_rate",
-            payment_action="payment_link",
-            payment_link=PaymentLinkCreate(
-                reservation_id=reservation.id,
-                requested_amount=Decimal("50.00"),
-                recipient_email="guest@example.com",
-                currency="ARS",
-            ),
+            payment_action="company_account",
             changed_by_user_id=10,
         )
         assert reservation.check_out_date == previous_checkout + timedelta(days=1)
+        assert result.extension_amount == Decimal("0.00")
+        assert result.transaction is None
+        assert result.payment_link is None
+        assert reservation.total_amount == previous_total
         assert reservation.company_extension_request_pending is False
         assert reservation.company_extension_request_note == "La empresa pidió salir el viernes"
     finally:

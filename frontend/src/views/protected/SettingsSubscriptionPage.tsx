@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
 import { CheckoutStub } from "../../components/CheckoutStub";
@@ -27,7 +28,6 @@ export default function SettingsSubscriptionPage() {
     () => (plansQuery.data?.length ? plansQuery.data : subscription?.available_plans) ?? [],
     [plansQuery.data, subscription?.available_plans]
   );
-  const isMock = subscription?.source === "mock" || availablePlans.some((plan) => plan.mock);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -35,7 +35,7 @@ export default function SettingsSubscriptionPage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   const limits = Array.isArray(subscription?.limits) ? subscription?.limits : [];
-  const currentPlan = subscription?.plan || "(sin plan)";
+  const currentPlan = subscription?.plan || (statusQuery.isFetching ? "Consultando…" : "No disponible");
   const currentPlanData = useMemo(
     () => availablePlans.find((plan) => plan.code === subscription?.plan) ?? null,
     [availablePlans, subscription?.plan]
@@ -83,11 +83,6 @@ export default function SettingsSubscriptionPage() {
           <p className="text-sm text-slate-600">Administrá el plan, el estado operativo y los límites del PMS.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {isMock && (
-            <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-              Modo mock/offline
-            </span>
-          )}
           {isTrialing && typeof subscription?.trial_remaining_days === "number" && (
             <span className="inline-flex items-center rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
               Prueba gratis · {subscription.trial_remaining_days} días restantes
@@ -194,12 +189,11 @@ export default function SettingsSubscriptionPage() {
               <li>
                 <strong>Hotel ID:</strong> {subscription.hotel_id ?? "-"}
               </li>
-              {subscription.trial_end_at && (
+              {isTrialing && subscription.trial_end_at && (
                 <li>
                   <strong>Fin de prueba:</strong> {new Date(subscription.trial_end_at).toLocaleDateString("es-AR")}
                 </li>
               )}
-              {isMock && <li className="text-amber-700">Fuente: mock/offline.</li>}
             </ul>
 
             {limits.length > 0 && (
@@ -236,24 +230,36 @@ export default function SettingsSubscriptionPage() {
             )}
           </>
         ) : (
-          <p className="text-sm text-rose-600">No se pudo obtener el estado.</p>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="alert">
+            <p>No se pudo consultar el estado real de la suscripción. No mostramos un plan de ejemplo.</p>
+            <button type="button" className="mt-2 font-semibold underline" onClick={() => void statusQuery.refetch()}>
+              Reintentar
+            </button>
+          </div>
         )}
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">Planes disponibles</h2>
-          <a
+          <Link
             className="text-sm font-semibold text-brand-700 hover:underline"
-            href="/pricing"
-            target="_blank"
-            rel="noreferrer"
+            to="/precios"
           >
             Ver landing de precios
-          </a>
+          </Link>
         </div>
         {plansQuery.isLoading ? (
           <p className="text-sm text-slate-500">Cargando...</p>
+        ) : plansQuery.isError && availablePlans.length === 0 ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="alert">
+            <p>No se pudieron cargar los planes. No mostramos datos de ejemplo.</p>
+            <button type="button" className="mt-2 font-semibold underline" onClick={() => void plansQuery.refetch()}>
+              Reintentar
+            </button>
+          </div>
+        ) : availablePlans.length === 0 ? (
+          <p className="text-sm text-slate-600">No hay planes disponibles para mostrar.</p>
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             {availablePlans.map((plan) => {

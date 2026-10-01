@@ -32,7 +32,12 @@ from app.services.permission_service import (
     PERMISSION_SETTINGS_ASSISTANT_VIEW,
     PERMISSION_SETTINGS_DAILY_REPORT_MANAGE,
     PERMISSION_SETTINGS_DAILY_REPORT_VIEW,
+    PERMISSION_SETTINGS_FX_MANAGE,
     PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
+    PERMISSION_SETTINGS_SECURITY_VIEW,
+    PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,
+    PERMISSION_SETTINGS_SUBSCRIPTION_VIEW,
+    PERMISSION_SETTINGS_USERS_VIEW,
     PERMISSION_RATES_UPDATE,
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_RESERVATION_MOVE_CATEGORY,
@@ -128,7 +133,14 @@ def test_agreed_defaults_are_explicit_and_do_not_broaden_sensitive_access(db):
     db.flush()
 
     assert resolve(db, 1, "owner", PERMISSION_PERMISSION_MANAGE, user_id=1)
-    assert not resolve(db, 1, "co_owner", PERMISSION_PERMISSION_MANAGE, user_id=2)
+    assert resolve(db, 1, "co_owner", PERMISSION_PERMISSION_MANAGE, user_id=2)
+    co_owner_admin = get_effective_permission_details(db, 1, "co_owner")[PERMISSION_PERMISSION_MANAGE]
+    assert co_owner_admin == {
+        "allowed": True,
+        "source": "invariant",
+        "locked": True,
+        "lock_reason": "role_scope",
+    }
     assert resolve(db, 1, "manager", PERMISSION_GUEST_PROHIBITION_MANAGE, user_id=3)
     assert resolve(db, 1, "manager", PERMISSION_RATES_UPDATE, user_id=3)
     assert not resolve(db, 1, "manager", PERMISSION_STOCK_ADJUST, user_id=3)
@@ -137,6 +149,38 @@ def test_agreed_defaults_are_explicit_and_do_not_broaden_sensitive_access(db):
     assert not resolve(db, 1, "housekeeping", PERMISSION_GUEST_READ, user_id=5)
     assert resolve(db, 1, "housekeeping", PERMISSION_ROOM_STATUS_UPDATE, user_id=5)
     assert not resolve(db, 1, "housekeeping", PERMISSION_STOCK_READ, user_id=5)
+
+
+def test_owner_and_co_owner_admin_sections_ignore_legacy_deny_overrides(db):
+    db.add(HotelConfiguration(id=1, subscription_active=True))
+    db.add(User(id=20, email="co-owner@example.test", password_hash="synthetic", is_verified=True))
+    db.flush()
+    seed_default_permissions(db)
+    db.add(HotelMembership(hotel_id=1, user_id=20, role="co_owner", status="active"))
+    db.flush()
+    admin_access_codes = (
+        PERMISSION_SETTINGS_USERS_VIEW,
+        PERMISSION_SETTINGS_USERS_MANAGE,
+        PERMISSION_SETTINGS_SUBSCRIPTION_VIEW,
+        PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,
+        PERMISSION_SETTINGS_SECURITY_VIEW,
+        PERMISSION_SETTINGS_FX_MANAGE,
+    )
+    for code in admin_access_codes:
+        db.add(HotelPermissionOverride(hotel_id=1, role="co_owner", permission_code=code, allowed=False))
+        db.add(UserPermissionOverride(hotel_id=1, user_id=20, permission_code=code, allowed=False))
+    db.commit()
+
+    for code in admin_access_codes:
+        details = get_effective_permission_details(db, 1, "co_owner", user_id=20)[code]
+        assert details == {
+            "allowed": True,
+            "source": "invariant",
+            "locked": True,
+            "lock_reason": "role_scope",
+        }
+        assert resolve(db, 1, "co_owner", code, user_id=20)
+        assert not resolve(db, 1, "manager", code, user_id=20)
 
 
 def test_resolution_precedence_is_invariant_user_role_default_deny(db):
@@ -163,7 +207,7 @@ def test_resolution_precedence_is_invariant_user_role_default_deny(db):
         "allowed": False,
         "source": "invariant",
         "locked": True,
-        "lock_reason": "owner_only",
+        "lock_reason": "role_scope",
     }
 
 
@@ -484,7 +528,7 @@ def test_cash_difference_denial_does_not_revoke_independent_owner_custody_receip
     assert details[PERMISSION_CASH_CUSTODY_RECEIVE]["source"] == "invariant"
 
 
-def test_only_owner_can_use_administration_catalog_and_co_owner_is_denied():
+def test_owner_and_co_owner_can_use_administration_catalog_but_manager_is_denied():
     client, db, engine = _client()
     try:
         fastapi_app.dependency_overrides[get_auth_context] = _auth(1, "owner", 10)
@@ -497,6 +541,19 @@ def test_only_owner_can_use_administration_catalog_and_co_owner_is_denied():
         assert any(row["code"] == PERMISSION_GUEST_READ for row in owner.json()["permissions"])
 
         fastapi_app.dependency_overrides[get_auth_context] = _auth(1, "co_owner", 10)
+        co_owner = client.get(
+            catalog_path,
+            headers=_step_up_headers(catalog_path, method="GET"),
+        )
+        assert co_owner.status_code == 200, co_owner.text
+        assert any(row["code"] == PERMISSION_GUEST_READ for row in co_owner.json()["permissions"])
+        matrix_path = "/api/permissions/matrix"
+        assert client.get(
+            matrix_path,
+            headers=_step_up_headers(matrix_path, method="GET"),
+        ).status_code == 200
+
+        fastapi_app.dependency_overrides[get_auth_context] = _auth(1, "manager", 10)
         assert client.get("/api/permissions/catalog").status_code == 403
         assert client.get("/api/permissions/matrix").status_code == 403
     finally:

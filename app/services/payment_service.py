@@ -15,6 +15,8 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.models.company import Company
+from app.models.company_night_charge import CompanyNightCharge, CompanyNightChargePaymentAllocation
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
 from app.models.operations import BillingAdjustment, ReservationStatusHistory
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
@@ -23,7 +25,10 @@ from app.models.transaction import (
 )
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
-from app.services.reservation_service import transition_reservation_status
+from app.services.reservation_service import (
+    reservation_has_deferred_company_billing,
+    transition_reservation_status,
+)
 from app.services.financial_ledger import (
     completed_paid_amount,
     operational_balance_due,
@@ -333,6 +338,32 @@ def process_payment(
             if not _same_idempotent_payment(existing_by_key, request, transaction_currency):
                 raise PaymentError("Idempotency key was already used for a different payment request")
             return existing_by_key
+
+    # Deferred company invoices are recorded outside the PMS. A new payment
+    # against that reservation may only collect explicitly selected nightly
+    # extras; prepare_company_night_charge_payment above verifies ownership,
+    # outstanding status, and the exact amount for those extras. Keep refunds
+    # on their existing source-payment validation path so earlier valid
+    # collections can still be returned.
+    if not is_refund:
+        company_uses_deferred_settlement = False
+        if reservation.company_id is not None:
+            company = (
+                db.query(Company)
+                .filter(
+                    Company.hotel_id == resolved_hotel_id,
+                    Company.id == reservation.company_id,
+                )
+                .with_for_update()
+                .one_or_none()
+            )
+            company_uses_deferred_settlement = bool(company and company.payment_deferred)
+        if reservation.settlement_status == "deferred" or company_uses_deferred_settlement:
+            if not request.company_night_charge_ids or not allocation_plan:
+                raise PaymentError(
+                    "La factura diferida de la empresa se registra fuera del PMS; "
+                    "solo se pueden cobrar adicionales por noche seleccionados."
+                )
 
     if request.manual_reference and (is_refund or request.payment_method not in MANUAL_REFERENCE_METHODS):
         raise PaymentError("Manual references are only valid for in-person card, debit, or bank-transfer payments")
@@ -758,40 +789,164 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
         .order_by(BillingAdjustment.effective_at, BillingAdjustment.id)
         .all()
     )
-    billing_adjustment_total = Decimal(str(round(sum(adj.total_amount for adj in billing_adjustments), 2)))
-    completed_payment_total = Decimal(str(round(
-        sum(_signed_transaction_amount(t.transaction_type, t.amount) for t in completed_transactions),
-        2,
-    )))
-    d_total = Decimal(str(reservation.total_amount or 0))
-    materialized_paid = Decimal(str(reservation.amount_paid or 0))
-    d_paid = paid_amount_with_legacy_fallback(db, resolved_hotel_id, reservation)
-    operational_total = d_total + billing_adjustment_total
-    operational_balance_due = max(Decimal("0"), operational_total - d_paid)
-    evidenced_paid = reconciled_paid_amounts_by_reservation(
+    deferred_company_billing = reservation_has_deferred_company_billing(
         db,
-        resolved_hotel_id,
-        [reservation.id],
-    ).get(reservation.id, Decimal("0.00"))
-    reconciliation_gap = materialized_paid - evidenced_paid
+        reservation,
+        hotel_id=resolved_hotel_id,
+    )
+    visible_transactions = transactions
+    visible_adjustments = billing_adjustments
+    if deferred_company_billing:
+        # Only specifically selected company-night extras are collectible
+        # through the PMS. Keep their ledger evidence, while hiding any legacy
+        # lodging receipts/amounts from this reservation summary.
+        night_charges = (
+            db.query(CompanyNightCharge)
+            .filter(
+                CompanyNightCharge.hotel_id == resolved_hotel_id,
+                CompanyNightCharge.reservation_id == reservation.id,
+            )
+            .all()
+        )
+        night_charge_ids = {row.id for row in night_charges}
+        adjustment_ids = {row.billing_adjustment_id for row in night_charges}
+        visible_adjustments = [row for row in billing_adjustments if row.id in adjustment_ids]
+        allocations = (
+            db.query(CompanyNightChargePaymentAllocation, Transaction)
+            .join(
+                Transaction,
+                (Transaction.id == CompanyNightChargePaymentAllocation.transaction_id)
+                & (Transaction.hotel_id == CompanyNightChargePaymentAllocation.hotel_id),
+            )
+            .filter(
+                CompanyNightChargePaymentAllocation.hotel_id == resolved_hotel_id,
+                CompanyNightChargePaymentAllocation.company_night_charge_id.in_(night_charge_ids),
+            )
+            .all()
+            if night_charge_ids
+            else []
+        )
+        allocations_by_transaction: dict[int, Decimal] = {}
+        for allocation, _transaction in allocations:
+            allocations_by_transaction[allocation.transaction_id] = (
+                allocations_by_transaction.get(allocation.transaction_id, Decimal("0.00"))
+                + Decimal(str(allocation.amount or 0))
+            )
+        transaction_by_id = {row.id: row for row in transactions}
+        valid_extra_payment_ids = {
+            transaction_id
+            for transaction_id, allocated_amount in allocations_by_transaction.items()
+            if transaction_id in transaction_by_id
+            and allocated_amount.quantize(Decimal("0.01"))
+            == Decimal(str(transaction_by_id[transaction_id].amount or 0)).quantize(Decimal("0.01"))
+        }
+        visible_transactions = [
+            transaction
+            for transaction in transactions
+            if transaction.id in valid_extra_payment_ids
+            or (
+                transaction.transaction_type == TransactionTypeEnum.REFUND
+                and transaction.refund_of_transaction_id in valid_extra_payment_ids
+            )
+        ]
+        charge_totals = {
+            row.id: Decimal(str(row.amount or 0)).quantize(Decimal("0.01"))
+            for row in night_charges
+        }
+        paid_by_charge: dict[int, Decimal] = {}
+        transaction_charge_ids: dict[int, list[int]] = {}
+        for allocation, transaction in allocations:
+            transaction_charge_ids.setdefault(transaction.id, []).append(allocation.company_night_charge_id)
+        completed_extra_payment_total = Decimal("0.00")
+        for transaction in visible_transactions:
+            if transaction.status != TransactionStatusEnum.COMPLETED:
+                continue
+            signed_amount = Decimal(str(_signed_transaction_amount(transaction.transaction_type, transaction.amount)))
+            completed_extra_payment_total += signed_amount
+            if transaction.transaction_type == TransactionTypeEnum.REFUND:
+                # Refunds affect only the charge allocation(s) of their source.
+                original = transaction_by_id.get(transaction.refund_of_transaction_id)
+                if original is not None:
+                    source_charge_ids = transaction_charge_ids.get(original.id, [])
+                    source_amount = Decimal(str(original.amount or 0))
+                    refund_ratio = min(Decimal("1"), Decimal(str(transaction.amount or 0)) / source_amount) if source_amount > 0 else Decimal("0")
+                    for charge_id in source_charge_ids:
+                        original_allocation = next(
+                            (
+                                Decimal(str(allocation.amount or 0))
+                                for allocation, _row in allocations
+                                if allocation.transaction_id == original.id
+                                and allocation.company_night_charge_id == charge_id
+                            ),
+                            Decimal("0.00"),
+                        )
+                        paid_by_charge[charge_id] = max(
+                            Decimal("0.00"),
+                            paid_by_charge.get(charge_id, Decimal("0.00")) - original_allocation * refund_ratio,
+                        )
+                continue
+            tx_amount = Decimal(str(transaction.amount or 0))
+            allocated_amount = allocations_by_transaction.get(transaction.id, Decimal("0.00"))
+            if tx_amount <= 0 or allocated_amount.quantize(Decimal("0.01")) != tx_amount.quantize(Decimal("0.01")):
+                continue
+            for allocation, _row in allocations:
+                if allocation.transaction_id == transaction.id:
+                    paid_by_charge[allocation.company_night_charge_id] = (
+                        paid_by_charge.get(allocation.company_night_charge_id, Decimal("0.00"))
+                        + Decimal(str(allocation.amount or 0))
+                    )
+        extra_total = sum(charge_totals.values(), Decimal("0.00"))
+        billing_adjustment_total = extra_total
+        completed_payment_total = completed_extra_payment_total.quantize(Decimal("0.01"))
+        operational_total = extra_total
+        operational_balance_due = sum(
+            (
+                max(Decimal("0.00"), amount - paid_by_charge.get(charge_id, Decimal("0.00")))
+                for charge_id, amount in charge_totals.items()
+            ),
+            Decimal("0.00"),
+        ).quantize(Decimal("0.01"))
+        d_total = Decimal("0.00")
+        d_paid = Decimal("0.00")
+        reconciliation_gap = None
+    else:
+        billing_adjustment_total = Decimal(str(round(sum(adj.total_amount for adj in billing_adjustments), 2)))
+        completed_payment_total = Decimal(str(round(
+            sum(_signed_transaction_amount(t.transaction_type, t.amount) for t in completed_transactions),
+            2,
+        )))
+        d_total = Decimal(str(reservation.total_amount or 0))
+        materialized_paid = Decimal(str(reservation.amount_paid or 0))
+        d_paid = paid_amount_with_legacy_fallback(db, resolved_hotel_id, reservation)
+        operational_total = d_total + billing_adjustment_total
+        operational_balance_due = max(Decimal("0"), operational_total - d_paid)
+        evidenced_paid = reconciled_paid_amounts_by_reservation(
+            db,
+            resolved_hotel_id,
+            [reservation.id],
+        ).get(reservation.id, Decimal("0.00"))
+        reconciliation_gap = materialized_paid - evidenced_paid
 
     return {
         "reservation_id": reservation.id,
         "confirmation_code": reservation.confirmation_code,
         "status": reservation.status.value,
         "currency_code": reservation.currency_code or "ARS",
-        "total_amount": reservation.total_amount,
-        "deposit_required": reservation.deposit_amount,
-        "amount_paid": d_paid,
-        "balance_due": max(Decimal("0"), d_total - d_paid),
+        "total_amount": None if deferred_company_billing else reservation.total_amount,
+        "deposit_required": None if deferred_company_billing else reservation.deposit_amount,
+        "amount_paid": None if deferred_company_billing else d_paid,
+        "balance_due": None if deferred_company_billing else max(Decimal("0"), d_total - d_paid),
         "operational_total_amount": operational_total,
         "operational_balance_due": operational_balance_due,
         "billing_adjustment_total": billing_adjustment_total,
+        "company_billing_deferred": deferred_company_billing,
         "payment_collection_model": reservation.payment_collection_model,
         "settlement_status": reservation.settlement_status,
-        "has_financial_reconciliation_gap": abs(reconciliation_gap) > 0.01,
+        "has_financial_reconciliation_gap": (
+            abs(reconciliation_gap) > 0.01 if reconciliation_gap is not None else False
+        ),
         "financial_reconciliation_gap": reconciliation_gap,
-        "recommended_next_action": _recommended_financial_action(
+        "recommended_next_action": None if deferred_company_billing else _recommended_financial_action(
             reservation=reservation,
             operational_balance_due=operational_balance_due,
         ),
@@ -812,7 +967,7 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
                 "prior_receipt_note": t.prior_receipt_note,
                 "created_at": str(t.created_at),
             }
-            for t in transactions
+            for t in visible_transactions
         ],
         "billing_adjustments": [
             {
@@ -824,7 +979,7 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
                 "currency_code": adj.currency_code,
                 "notes": adj.notes,
             }
-            for adj in billing_adjustments
+            for adj in visible_adjustments
         ],
         "completed_payments": completed_payment_total,
     }

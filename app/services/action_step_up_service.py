@@ -124,7 +124,7 @@ def permission_admin_read_step_up_ticket_matches(
     method: str,
     path: str,
 ) -> bool:
-    """Validate the reusable ticket only for owner-scoped RBAC reads."""
+    """Validate the reusable ticket only for owner/co-owner scoped RBAC reads."""
     if not ticket or len(ticket) > 8192 or not is_permission_admin_read_action(method, path):
         return False
     try:

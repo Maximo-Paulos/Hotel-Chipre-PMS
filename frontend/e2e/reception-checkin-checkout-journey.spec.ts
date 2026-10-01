@@ -60,6 +60,9 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
   const reservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
   await expect(reservationForm).toBeVisible();
+  await expect(page.getByLabel("Consulta rápida: check-in", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Consulta rápida: check-out", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Check-in", { exact: true })).toBeVisible();
 
   await reservationForm.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
@@ -128,7 +131,7 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
 
   const captureForm = drawer.getByTestId("checkin-capture-form");
   await expect(captureForm).toBeVisible();
-  await expect(captureForm).toContainText("Birth place is required");
+  await expect(captureForm).toContainText("Completá el lugar de nacimiento.");
   await captureForm.getByLabel("Lugar de nacimiento").fill("Rosario");
   await captureForm.getByLabel("País de nacimiento").fill("Argentina");
   await captureForm.getByLabel("Estado civil").fill("Soltero/a");
@@ -145,12 +148,50 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   // The capture form only shows while data is missing -- it's now saved.
   await expect(captureForm).toHaveCount(0);
 
+  await page.route(/\/api\/checkin\/\d+$/, async (route) => {
+    if (route.request().method() === "POST") {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+    await route.continue();
+  });
   await drawer.getByRole("button", { name: "Confirmar check-in", exact: true }).click();
+  await expect(drawer.getByTestId("drawer-action-pending")).toContainText("Registrando el check-in");
   await expect(drawer.getByText("Check-in registrado.", { exact: true })).toBeVisible();
   await expect(drawer.getByText("Check-in", { exact: true }).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
   await expect(drawer).not.toBeVisible();
+
+  // Switching to another real reservation must not carry the prior check-in
+  // success notice into the new reservation drawer.
+  await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
+  const secondReservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
+  await secondReservationForm.getByTestId("guest-search-input").fill(guestLastName);
+  const existingGuest = secondReservationForm.getByTestId("guest-search-results").getByRole("button").filter({ hasText: guestLastName });
+  await expect(existingGuest).toBeVisible();
+  await existingGuest.click();
+  const secondCategorySelect = secondReservationForm.locator("label").filter({ hasText: "Categoría" }).locator("select");
+  const secondCategoryOption = secondCategorySelect.locator("option").filter({ hasText: "Standard E2E" });
+  await secondCategorySelect.selectOption((await secondCategoryOption.getAttribute("value"))!);
+  await secondReservationForm.getByLabel("Check-in", { exact: true }).fill(localIsoDate(70));
+  await secondReservationForm.getByLabel("Check-out", { exact: true }).fill(localIsoDate(72));
+  const [secondCreateResponse] = await Promise.all([
+    page.waitForResponse((response) => response.url().includes("/api/reservations/") && response.request().method() === "POST"),
+    secondReservationForm.getByRole("button", { name: "Crear", exact: true }).click()
+  ]);
+  const secondReservation = await secondCreateResponse.json();
+  await page.getByRole("searchbox", { name: "Buscar reserva" }).fill(secondReservation.confirmation_code);
+  const secondSearchResult = page.getByTestId("reservation-search-results").getByRole("button", {
+    name: new RegExp(secondReservation.confirmation_code)
+  });
+  await expect(secondSearchResult).toBeVisible();
+  await secondSearchResult.click();
+  const secondDrawer = page.getByRole("dialog", { name: secondReservation.confirmation_code });
+  await expect(secondDrawer).toBeVisible();
+  await expect(secondDrawer.getByText("Check-in registrado.", { exact: true })).toHaveCount(0);
+  await secondDrawer.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(secondDrawer.getByText("Reserva cancelada.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
 
   // Cargar un consumo (minibar) desde la Ficha: reception tiene reservation:charge.
   const checkedInRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });

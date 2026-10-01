@@ -476,9 +476,9 @@ export function SettingsPermissionsPage() {
   const { t } = useTranslation();
   const { session } = useSession();
   const qc = useQueryClient();
-  // The permission administrator is owner-only in the backend. Keeping this
-  // check exact also prevents a previewed role from loading sensitive data.
-  const canManage = session.baseRole === "owner";
+  // Owners and co-owners share this tenant-scoped administration surface;
+  // backend authorization and action-bound MFA step-up remain authoritative.
+  const canManage = session.baseRole === "owner" || session.baseRole === "co_owner";
   const enabled = hasValidSession(session) && canManage;
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [roleVersions, setRoleVersions] = useState<RoleVersionMap>({});
@@ -591,7 +591,7 @@ export function SettingsPermissionsPage() {
       code,
       label: roleName(code),
       editable: isRoleEditable(code) && matrixExists && profileExists && windowExists,
-      editablePermissions: code === "owner" && canManage && matrixExists && profileExists
+      editablePermissions: code === "owner" && session.baseRole === "owner" && canManage && matrixExists && profileExists
         ? [OWNER_CONFIGURABLE_PERMISSION]
         : []
     };

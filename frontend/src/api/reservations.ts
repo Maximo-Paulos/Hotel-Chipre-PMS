@@ -35,20 +35,20 @@ export type Reservation = {
   check_out_date: string;
   actual_check_in?: string | null;
   actual_check_out?: string | null;
-  total_amount: number;
-  amount_paid: number;
-  deposit_amount: number;
+  total_amount: number | null;
+  amount_paid: number | null;
+  deposit_amount: number | null;
   status: ReservationStatus;
   source: ReservationSource;
   external_id?: string | null;
   source_provider_code?: string | null;
   num_adults: number;
   num_children: number;
-  subtotal_amount?: number;
-  tax_amount?: number;
-  fee_amount?: number;
-  commission_amount?: number;
-  net_amount?: number;
+  subtotal_amount?: number | null;
+  tax_amount?: number | null;
+  fee_amount?: number | null;
+  commission_amount?: number | null;
+  net_amount?: number | null;
   currency_code?: string;
   fx_rate_snapshot?: number | null;
   // Two independently-typed prices for manual OTA loads (NOT a conversion
@@ -57,7 +57,7 @@ export type Reservation = {
   // the canonical billing amount.
   quoted_amount_ars?: number | null;
   quoted_amount_usd?: number | null;
-  external_paid_amount?: number;
+  external_paid_amount?: number | null;
   external_paid_reference?: string | null;
   external_paid_confirmed?: boolean;
   allocation_status?: string;
@@ -65,6 +65,7 @@ export type Reservation = {
   requires_manual_review?: boolean;
   payment_collection_model?: string;
   settlement_status?: string;
+  company_billing_deferred?: boolean;
   manual_rate_reason?: string | null;
   notes?: string | null;
   arrival_time_hint?: string | null;
@@ -74,7 +75,7 @@ export type Reservation = {
   created_at?: string | null;
   updated_at?: string | null;
   version?: number;
-  balance_due?: number;
+  balance_due?: number | null;
   nights?: number;
   additional_guests?: Array<{
     id: number;
@@ -84,6 +85,14 @@ export type Reservation = {
     document_number?: string | null;
   }>;
 };
+
+/** Company accommodation billed outside the PMS; only explicit nightly extras are payable here. */
+export const isDeferredCompanyReservation = (
+  reservation: Pick<Reservation, "company_id" | "settlement_status" | "company_billing_deferred"> | null | undefined
+): boolean => Boolean(
+  reservation?.company_id &&
+  (reservation.company_billing_deferred === true || ["deferred", "settled"].includes(reservation.settlement_status ?? ""))
+);
 
 export type ReservationPendingAction = {
   action_key: string;
@@ -133,17 +142,18 @@ export type ReservationFinancialSummary = {
   confirmation_code: string;
   status: string;
   currency_code: string;
-  total_amount: number;
-  deposit_required: number;
-  amount_paid: number;
-  balance_due: number;
+  total_amount: number | null;
+  deposit_required: number | null;
+  amount_paid: number | null;
+  balance_due: number | null;
   operational_total_amount: number;
   operational_balance_due: number;
   billing_adjustment_total: number;
   payment_collection_model: string;
   settlement_status: string;
   has_financial_reconciliation_gap: boolean;
-  financial_reconciliation_gap: number;
+  financial_reconciliation_gap: number | null;
+  company_billing_deferred?: boolean;
   recommended_next_action?: string | null;
   transactions: ReservationTransactionSummary[];
   billing_adjustments: ReservationBillingAdjustmentSummary[];
@@ -290,18 +300,21 @@ export type ReservationQuotePromotionApplied = {
 
 export type ReservationQuote = {
   status: "ok";
+  company_billing_deferred?: boolean;
+  billing_mode?: string;
+  amounts_disclosed?: boolean;
   category_id: number;
   check_in_date: string;
   check_out_date: string;
   nights: number;
-  nightly_rate: number;
-  subtotal_amount: number;
-  tax_amount: number;
-  fee_amount: number;
-  commission_amount: number;
-  net_amount: number;
-  total_amount: number;
-  deposit_amount: number;
+  nightly_rate: number | null;
+  subtotal_amount: number | null;
+  tax_amount: number | null;
+  fee_amount: number | null;
+  commission_amount: number | null;
+  net_amount: number | null;
+  total_amount: number | null;
+  deposit_amount: number | null;
   currency_code: string;
   manual_rate_min_adjustment_pct?: string | number | null;
   manual_rate_max_adjustment_pct?: string | number | null;
@@ -348,9 +361,10 @@ export type ReservationGroupSummary = {
   room_count: number;
   reservation_ids: number[];
   reservation_codes: string[];
-  total_amount: number;
-  amount_paid: number;
-  balance_due: number;
+  total_amount: number | null;
+  amount_paid: number | null;
+  balance_due: number | null;
+  company_billing_deferred?: boolean;
   currency_code: string;
   created_at: string;
 };
@@ -568,12 +582,37 @@ export type CompanyExtensionRequestPayload = {
   client_version: number;
 };
 
+export type ReservationExtensionPayload = {
+  new_checkout_date: string;
+  client_version: number;
+  pricing_mode: "current_rate";
+  payment_action: "company_account";
+  notes?: string;
+};
+
+export type ReservationExtensionResponse = {
+  reservation: Reservation;
+  extension_amount: number | string;
+  transaction: null;
+  payment_link: null;
+};
+
 export const updateCompanyExtensionRequest = (
   id: number,
   payload: CompanyExtensionRequestPayload,
   session?: SessionLike
 ) => apiFetch<Reservation>(`/api/reservations/${id}/extension-request`, {
   method: "PUT",
+  data: payload,
+  session
+});
+
+export const extendReservationStay = (
+  id: number,
+  payload: ReservationExtensionPayload,
+  session?: SessionLike
+) => apiFetch<ReservationExtensionResponse>(`/api/reservations/${id}/extend`, {
+  method: "POST",
   data: payload,
   session
 });

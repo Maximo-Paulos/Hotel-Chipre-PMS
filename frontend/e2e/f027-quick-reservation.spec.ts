@@ -146,8 +146,8 @@ test.describe("F-027 reservation creation in English with an English browser loc
   test("reception completes quick reservation with day-first dates and an ISO API payload", async ({ page }) => {
     const category = "Standard E2E";
     let reservationPayload: Record<string, unknown> | null = null;
-    const checkInIso = "2026-11-02";
-    const checkOutIso = "2026-11-04";
+    const checkInIso = localIsoDate(30);
+    const checkOutIso = localIsoDate(32);
     const createdReservation = {
       id: 9003,
       confirmation_code: "F027-EN-CREATED",
@@ -200,7 +200,7 @@ test.describe("F-027 reservation creation in English with an English browser loc
           currency_code: "ARS",
           pricing_payment_method: null,
           quote_token: "synthetic-f027-en-quote",
-          expires_at: "2026-10-01T12:00:00Z",
+          expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
           breakdown: [{ date: checkInDate, price: 100000, base_price: 100000, source: "category_base", promotions_applied: [] }],
           promotions_applied: []
         })
@@ -221,30 +221,36 @@ test.describe("F-027 reservation creation in English with an English browser loc
     await page.locator('input[type="password"]').fill(receptionist.password);
     await page.getByTestId("login-submit").click();
     await page.waitForURL("**/dashboard");
-    await page.goto("/reservas");
-
-    const main = page.locator("main");
-    await expect(main.getByRole("heading", { name: "Reservations", exact: true })).toBeVisible();
-    await main.getByRole("button", { name: "Create reservation", exact: true }).click();
+    const quickReservation = page.getByRole("link", { name: "Quick reservation", exact: true });
+    await expect(quickReservation).toBeVisible();
+    await quickReservation.click();
+    await expect(page).toHaveURL(/\/reservas$/);
     const form = page.locator("form").filter({ hasText: "Reservation details" });
+    await expect(form).toBeVisible();
     await form.getByTestId("guest-search-input").fill("Huesped");
     const guestResult = form.getByTestId("guest-search-results").getByRole("button").filter({ hasText: "Huesped E2E" });
     await expect(guestResult).toBeVisible();
     await guestResult.click();
-    await form.getByLabel("Category", { exact: true }).selectOption({ label: category });
+    const categorySelect = form.getByRole("combobox", { name: /^Category$/i });
+    await expect(categorySelect).toHaveCount(1);
+    await categorySelect.selectOption({ label: category });
 
     const checkIn = form.getByLabel("Check-in", { exact: true });
     const checkOut = form.getByLabel("Check-out", { exact: true });
     await expect(checkIn).toHaveAttribute("placeholder", "DD/MM/YYYY");
-    await checkIn.fill("02/11/2026");
-    await checkOut.fill("04/11/2026");
+    await checkIn.fill(displayDate(checkInIso));
+    await checkOut.fill(displayDate(checkOutIso));
     await expect(form.getByText("Category base rate", { exact: true })).toBeVisible();
     await form.getByRole("button", { name: "Create", exact: true }).click();
 
     await expect.poll(() => reservationPayload).not.toBeNull();
-    expect(reservationPayload?.check_in_date).toBe(checkInIso);
-    expect(reservationPayload?.check_out_date).toBe(checkOutIso);
-    expect(reservationPayload?.quote_token).toBe("synthetic-f027-en-quote");
+    expect(reservationPayload).toMatchObject({
+      guest_id: 1,
+      category_id: 1,
+      check_in_date: checkInIso,
+      check_out_date: checkOutIso,
+      quote_token: "synthetic-f027-en-quote"
+    });
     await expect(page.getByText("Reservation created", { exact: true })).toBeVisible();
     await expect(form).toHaveCount(0);
   });

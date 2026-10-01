@@ -13,7 +13,11 @@ from app.models.hotel_config import HotelConfiguration
 from app.schemas.hotel_config import HotelConfigRead, HotelConfigUpdate, HotelInterfaceLanguageRead
 from app.services.email_service import mailer
 from app.services.payment_service import get_hotel_config
-from app.services.permission_service import PERMISSION_CONFIG_MANAGE
+from app.services.permission_service import (
+    PERMISSION_CONFIG_MANAGE,
+    PERMISSION_HOTEL_SETTINGS_READ,
+    PERMISSION_SETTINGS_FX_MANAGE,
+)
 from app.services.hotel_configuration_service import apply_configuration_update
 from app.services import audit_log_service
 from app.services.permission_service import PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE
@@ -38,7 +42,7 @@ def get_interface_language(
 @router.get("/", response_model=HotelConfigRead)
 def get_configuration(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_READ)),
 ):
     config = get_hotel_config(db, context.hotel_id)
     db.commit()
@@ -63,12 +67,29 @@ def update_configuration(
         for field in manual_rate_fields
         if field in update_data and update_data[field] != getattr(config, field)
     }
+    fx_fields = ("fx_conversion_rate_type", "fx_display_rate_types")
+    fx_before = {field: getattr(config, field) for field in fx_fields}
+    changed_fx_fields = {
+        field: update_data[field]
+        for field in fx_fields
+        if field in update_data and update_data[field] != fx_before[field]
+    }
     if changed_manual_rate_fields:
+        # A combined pricing-policy save already requires the stronger owner-only
+        # manual-rate permission and its action-bound step-up ticket. For an FX-only
+        # change, use the shared Owner/Co-owner FX permission below.
         authorize_permission(
             request,
             db,
             context,
             PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
+        )
+    elif changed_fx_fields:
+        authorize_permission(
+            request,
+            db,
+            context,
+            PERMISSION_SETTINGS_FX_MANAGE,
         )
 
     manual_rate_min = update_data.get(
@@ -106,6 +127,17 @@ def update_configuration(
             actor_user_id=context.user_id,
             payload_before=manual_rate_before,
             payload_after={field: getattr(config, field) for field in manual_rate_fields},
+        )
+    if changed_fx_fields:
+        audit_log_service.safe_create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="hotel_configuration",
+            record_id=config.id,
+            action=AuditActionEnum.UPDATE,
+            actor_user_id=context.user_id,
+            payload_before={field: fx_before[field] for field in changed_fx_fields},
+            payload_after={field: getattr(config, field) for field in changed_fx_fields},
         )
     db.commit()
     db.refresh(config)

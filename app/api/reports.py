@@ -20,7 +20,9 @@ from app.schemas.reports import (
 )
 from app.services.hotel_outbound_email_service import HotelOutboundEmailError, send_hotel_email
 from app.services.operational_report_service import (
+    company_night_extra_balances_by_reservation,
     daily_report as build_daily_operational_report,
+    filter_pms_revenue_transactions,
     nightly_summary as build_nightly_summary,
     nightly_summary_email_body,
     operational_report_recipients,
@@ -28,7 +30,11 @@ from app.services.operational_report_service import (
     redact_nightly_summary_financials,
 )
 from app.services.read_model_cache import get_cached_daily_report_payload
-from app.services.reservation_service import active_reservations, visible_reservations
+from app.services.reservation_service import (
+    active_reservations,
+    deferred_company_reservation_ids,
+    visible_reservations,
+)
 from app.services.room_service import active_rooms
 from app.services.permission_service import (
     PERMISSION_REPORTS_FINANCIAL_VIEW,
@@ -152,6 +158,18 @@ def daily_report(
             ReservationStatusEnum.PENDING,
         ]),
     ).all()
+    deferred_reservation_ids = deferred_company_reservation_ids(
+        db,
+        hotel_id=context.hotel_id,
+        reservations=[*arrivals, *departures, *in_house],
+    )
+    _extra_totals, extra_due_by_reservation = company_night_extra_balances_by_reservation(
+        db,
+        hotel_id=context.hotel_id,
+        reservation_ids=deferred_reservation_ids,
+        stay_date_from=report_date,
+        stay_date_to=report_date,
+    )
 
     total_rooms = active_rooms(db, context.hotel_id).filter(Room.is_active.is_(True)).count()
     occupied = len([r for r in in_house if r.status == ReservationStatusEnum.CHECKED_IN])
@@ -170,6 +188,11 @@ def daily_report(
         )
         .all()
     )
+    today_transactions = filter_pms_revenue_transactions(
+        db,
+        hotel_id=context.hotel_id,
+        transactions=today_transactions,
+    )
 
     revenue_by_method = {}
     # Same float/Decimal accumulator bug as revenue_report() below.
@@ -180,7 +203,13 @@ def daily_report(
         total_revenue += t.amount
 
     # ── Pending payments ──
-    pending_balance = sum(r.balance_due for r in in_house if r.balance_due > 0)
+    pending_amounts = [
+        extra_due_by_reservation.get(r.id, Decimal("0.00"))
+        if r.id in deferred_reservation_ids
+        else Decimal(str(r.balance_due or 0))
+        for r in in_house
+    ]
+    pending_balance = sum((amount for amount in pending_amounts if amount > 0), Decimal("0.00"))
 
     # ── No-shows (expected arrival today but not checked in and no cancel) ──
     no_shows = [r for r in arrivals if r.status in (
@@ -207,8 +236,14 @@ def daily_report(
                     "guest_id": r.guest_id,
                     "room_id": r.room_id,
                     "status": r.status.value,
-                    "total_amount": r.total_amount,
-                    "balance_due": r.balance_due,
+                    "company_billing_deferred": r.id in deferred_reservation_ids,
+                    "total_amount": None if r.id in deferred_reservation_ids else r.total_amount,
+                    "balance_due": None if r.id in deferred_reservation_ids else r.balance_due,
+                    "company_night_extra_due": (
+                        extra_due_by_reservation.get(r.id, Decimal("0.00"))
+                        if r.id in deferred_reservation_ids
+                        else None
+                    ),
                 }
                 for r in arrivals
             ],
@@ -238,7 +273,7 @@ def daily_report(
         },
         "pending_payments": {
             "total_balance": round(pending_balance, 2),
-            "count": len([r for r in in_house if r.balance_due > 0]),
+            "count": sum(1 for amount in pending_amounts if amount > 0),
         },
         "no_shows": {
             "count": len(no_shows),
@@ -354,6 +389,11 @@ def revenue_report(
         .order_by(Transaction.created_at)
         .all()
     )
+    transactions = filter_pms_revenue_transactions(
+        db,
+        hotel_id=context.hotel_id,
+        transactions=transactions,
+    )
 
     by_method = {}
     by_day = {}
@@ -376,8 +416,31 @@ def revenue_report(
         Reservation.check_in_date <= end_date,
         Reservation.status.notin_([ReservationStatusEnum.CANCELLED]),
     ).all()
-    expected_total = sum(r.total_amount for r in reservations)
-    total_pending = sum(r.balance_due for r in reservations)
+    deferred_reservation_ids = deferred_company_reservation_ids(
+        db,
+        hotel_id=context.hotel_id,
+        reservations=reservations,
+    )
+    company_extra_totals, company_extra_due = company_night_extra_balances_by_reservation(
+        db,
+        hotel_id=context.hotel_id,
+        reservation_ids=deferred_reservation_ids,
+        stay_date_from=start_date,
+        stay_date_to=end_date,
+    )
+    expected_total = sum(
+        (Decimal(str(r.total_amount or 0)) for r in reservations if r.id not in deferred_reservation_ids),
+        Decimal("0.00"),
+    ) + sum(company_extra_totals.values(), Decimal("0.00"))
+    total_pending = sum(
+        (
+            company_extra_due.get(r.id, Decimal("0.00"))
+            if r.id in deferred_reservation_ids
+            else Decimal(str(r.balance_due or 0))
+            for r in reservations
+        ),
+        Decimal("0.00"),
+    )
 
     return {
         "start_date": str(start_date),

@@ -16,9 +16,11 @@ from app.dependencies.auth import AuthContext
 from app.services.action_step_up_service import create_action_step_up_ticket
 from app.services.permission_service import (
     PERMISSION_CONFIG_MANAGE,
+    PERMISSION_HOTEL_SETTINGS_READ,
     PERMISSION_RESERVATION_MANUAL_RATE,
     PERMISSION_RESERVATION_MANUAL_RATE_LIMITED,
     PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
+    PERMISSION_SETTINGS_FX_MANAGE,
     resolve,
     set_override,
 )
@@ -112,6 +114,120 @@ def test_config_update_permissions(ctx):
     body = r.json()
     for k, v in payload.items():
         assert body[k] == v
+
+
+def test_config_read_permission_allows_get_without_allowing_updates(ctx):
+    client, db = ctx
+    set_override(db, 1, "manager", PERMISSION_HOTEL_SETTINGS_READ, True, user_id=None)
+
+    def manager_context():
+        return AuthContext(
+            hotel_id=1,
+            user_id=12,
+            user_email="manager@test.com",
+            user_role="manager",
+            is_verified=True,
+            permissions={PERMISSION_HOTEL_SETTINGS_READ},
+        )
+
+    fastapi_app.dependency_overrides[get_auth_context_target()] = manager_context
+
+    read_response = client.get("/api/config/")
+    update_response = client.patch("/api/config/", json={"allow_overbooking": True})
+
+    assert read_response.status_code == 200, read_response.text
+    assert update_response.status_code == 403, update_response.text
+
+
+def test_fx_market_configuration_is_audited_and_accepts_both_display_quotes(ctx):
+    client, db = ctx
+    payload = {"fx_conversion_rate_type": "blue", "fx_display_rate_types": ["oficial", "blue"]}
+    challenge = client.patch("/api/config/", json=payload)
+    assert challenge.status_code == 428
+    assert challenge.json()["detail"]["permission_code"] == PERMISSION_SETTINGS_FX_MANAGE
+    ticket = create_action_step_up_ticket(
+        user_id=1,
+        hotel_id=1,
+        token_version=0,
+        permission_code=PERMISSION_SETTINGS_FX_MANAGE,
+        method="PATCH",
+        path="/api/config/",
+    )
+    response = client.patch(
+        "/api/config/",
+        json=payload,
+        headers={"X-Action-Step-Up-Ticket": ticket},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["fx_conversion_rate_type"] == "blue"
+    assert response.json()["fx_display_rate_types"] == ["oficial", "blue"]
+    log = (
+        db.query(AuditLog)
+        .filter(AuditLog.hotel_id == 1, AuditLog.table_name == "hotel_configuration")
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+    assert log is not None
+    assert json.loads(log.payload_before) == {
+        "fx_conversion_rate_type": "oficial",
+        "fx_display_rate_types": ["oficial"],
+    }
+    assert json.loads(log.payload_after) == {
+        "fx_conversion_rate_type": "blue",
+        "fx_display_rate_types": ["oficial", "blue"],
+    }
+
+
+def test_co_owner_can_change_fx_market_after_step_up(ctx):
+    client, _db = ctx
+
+    def co_owner_context():
+        return AuthContext(
+            hotel_id=1,
+            user_id=11,
+            user_email="co-owner@test.com",
+            user_role="co_owner",
+            is_verified=True,
+            permissions=set(),
+        )
+
+    fastapi_app.dependency_overrides[get_auth_context_target()] = co_owner_context
+    payload = {"fx_conversion_rate_type": "blue"}
+    challenge = client.patch("/api/config/", json=payload)
+    assert challenge.status_code == 428
+    assert challenge.json()["detail"]["permission_code"] == PERMISSION_SETTINGS_FX_MANAGE
+
+    ticket = create_action_step_up_ticket(
+        user_id=11,
+        hotel_id=1,
+        token_version=0,
+        permission_code=PERMISSION_SETTINGS_FX_MANAGE,
+        method="PATCH",
+        path="/api/config/",
+    )
+    response = client.patch(
+        "/api/config/",
+        json=payload,
+        headers={"X-Action-Step-Up-Ticket": ticket},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["fx_conversion_rate_type"] == "blue"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"fx_conversion_rate_type": "tarjeta"},
+        {"fx_display_rate_types": []},
+        {"fx_display_rate_types": ["oficial", "oficial"]},
+        {"fx_display_rate_types": ["cripto"]},
+    ],
+)
+def test_fx_market_configuration_rejects_unsupported_or_ambiguous_quotes(ctx, payload):
+    client, _db = ctx
+    response = client.patch("/api/config/", json=payload)
+    assert response.status_code == 422, response.text
 
 
 def test_config_saves_hotel_checkin_and_checkout_times(ctx):
@@ -216,7 +332,9 @@ def test_housekeeping_can_read_only_the_hotel_interface_language(ctx):
 
 def test_owner_can_grant_manager_config_manage_override(ctx):
     client, db = ctx
+    set_override(db, 1, "manager", PERMISSION_HOTEL_SETTINGS_READ, True, user_id=None)
     set_override(db, 1, "manager", PERMISSION_CONFIG_MANAGE, True, user_id=None)
+    assert resolve(db, 1, "manager", PERMISSION_HOTEL_SETTINGS_READ) is True
     assert resolve(db, 1, "manager", PERMISSION_CONFIG_MANAGE) is True
     fastapi_app.dependency_overrides[get_auth_context_target()] = _override_role("manager")
 

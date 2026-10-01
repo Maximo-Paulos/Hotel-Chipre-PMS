@@ -45,7 +45,20 @@
       "birthCountry": "Country of birth",
       "maritalStatus": "Marital status",
       "occupation": "Occupation",
-      "acceptTerms": "Accepts terms and conditions"
+      "acceptTerms": "Accepts terms and conditions",
+      "requiredFields": {
+        "firstName": "Enter the first name.",
+        "lastName": "Enter the last name.",
+        "documentType": "Select the document type.",
+        "documentNumber": "Enter the document number.",
+        "nationality": "Enter the nationality.",
+        "country": "Enter the country.",
+        "birthPlace": "Enter the place of birth.",
+        "birthCountry": "Enter the country of birth.",
+        "maritalStatus": "Enter the marital status.",
+        "occupation": "Enter the occupation.",
+        "unknown": "Another required detail is still missing."
+      }
     },
     "companyExtension": {
       "title": "Company stay extension",
@@ -59,10 +72,23 @@
       "update": "Update request",
       "saving": "Saving…",
       "saved": "Extension request recorded.",
-      "saveFailed": "Could not save the extension request."
+      "saveFailed": "Could not save the extension request.",
+      "applyTitle": "Apply pending extension",
+      "applyHint": "The stay dates are updated. Accommodation is billed outside the PMS; no rate or cash movement is recorded.",
+      "newCheckoutDate": "New checkout date",
+      "apply": "Apply extension",
+      "applying": "Applying…",
+      "checkoutDateMustBeLater": "The new checkout date must be later than the current checkout date.",
+      "confirmTitle": "Confirm stay extension",
+      "confirmMessage": "The stay will be extended through {{date}}. Accommodation is billed outside the PMS.",
+      "confirmApply": "Confirm extension",
+      "cancel": "Cancel",
+      "applied": "Extension applied. Accommodation is billed outside the PMS.",
+      "applyFailed": "Could not apply the stay extension."
     },
     "billing": {
       "title": "Charges",
+      "deferredCompany": "Accommodation is billed outside the PMS. This panel does not show or collect that amount.",
       "updating": "Updating...",
       "loadingSummary": "Loading financial summary...",
       "operationalTotal": "Operational total",
@@ -131,9 +157,13 @@
     "pendingActionsTitle": "Pending actions",
     "actions": {
       "partialCheckIn": "Partial check-in",
+      "partialCheckInPending": "Registering partial check-in…",
       "confirmCheckIn": "Confirm check-in",
+      "confirmCheckInPending": "Registering check-in…",
       "checkOut": "Check-out",
+      "checkOutPending": "Registering check-out…",
       "cancel": "Cancel",
+      "cancelPending": "Cancelling reservation…",
       "labels": {
         "partialCheckIn": "partial check-in",
         "checkOut": "check-out",
@@ -483,10 +513,10 @@
       "title": "Quick check by category",
       "querying": "Checking availability...",
       "queryError": "Error checking availability",
-      "category": "Category for availability",
+      "category": "Quick lookup: category",
       "categoryPlaceholder": "Choose",
-      "checkIn": "Check-in for availability",
-      "checkOut": "Check-out for availability",
+      "checkIn": "Quick lookup: check-in",
+      "checkOut": "Quick lookup: check-out",
       "submit": "Check",
       "available": "Available: {{count}}",
       "ids": "IDs: {{ids}}",
@@ -530,7 +560,8 @@
       "rooms": "{{count}} rooms",
       "total": "Total",
       "paid": "Paid",
-      "balance": "Balance"
+      "balance": "Balance",
+      "deferredCompanyBilling": "Accommodation billed outside the PMS"
     },
     "list": {
       "eyebrow": "Listing",
@@ -552,6 +583,7 @@
       },
       "noResults": "There are no reservations matching the current filters.",
       "companyLinked": "Linked company",
+      "deferredCompanyBilling": "Billed outside the PMS",
       "roomCat": "{{room}} · Cat {{category}}",
       "edit": "Edit",
       "file": "Details",
@@ -666,6 +698,7 @@
       "notesPlaceholder": "Internal notes (optional)",
       "paymentsTitle": "Payments and balance",
       "paymentsSubtitle": "Financial summary and quick actions.",
+      "deferredCompanyBilling": "Company accommodation is billed outside the PMS. Selected nightly extras are collected from the reservation panel.",
       "updating": "Updating...",
       "summaryTotal": "Total",
       "summaryPaid": "Paid",
@@ -793,6 +826,7 @@
       "financePaid": "Paid",
       "financeDeposit": "Deposit",
       "financeBalance": "Balance",
+      "deferredCompanyFinance": "This company's accommodation is billed outside the PMS. The accommodation amount is not shown or collected here.",
       "financeLoadError": "Could not load the financial summary. Retry opening the details.",
       "financeOperationalTotal": "Operational total",
       "financeOperationalBalance": "Operational balance",

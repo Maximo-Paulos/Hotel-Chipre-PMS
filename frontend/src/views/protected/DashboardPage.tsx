@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
 import { usePendingReservationActions, useReservations } from "../../hooks/useReservations";
+import { isDeferredCompanyReservation } from "../../api/reservations";
 import { usePendingCashCloseReports } from "../../hooks/useCashRegister";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
@@ -63,7 +64,9 @@ export function DashboardPage() {
     const occupancy = rooms.length > 0 ? Math.round((occupied / rooms.length) * 100) : 0;
 
     const currentMonth = new Date(today).getMonth();
-    const adrBase = reservations.filter((r) => new Date(r.check_in_date).getMonth() === currentMonth);
+    const adrBase = reservations.filter((r) =>
+      new Date(r.check_in_date).getMonth() === currentMonth && !isDeferredCompanyReservation(r)
+    );
     const monthCurrencyCode = resolveSingleCurrencyCode(adrBase.map((r) => r.currency_code));
     const adr =
       adrBase.length > 0
@@ -216,7 +219,9 @@ export function DashboardPage() {
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 text-right font-semibold text-slate-900">
-                      {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
+                      {isDeferredCompanyReservation(reservation)
+                        ? t("pipeline.deferredCompanyBilling")
+                        : formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
                     </td>
                   </tr>
                 ))}
@@ -260,7 +265,9 @@ export function DashboardPage() {
                   <div className="text-right">
                     <dt className="text-slate-500">{t("pipeline.table.amount")}</dt>
                     <dd className="mt-1 font-semibold text-slate-900">
-                      {formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
+                      {isDeferredCompanyReservation(reservation)
+                        ? t("pipeline.deferredCompanyBilling")
+                        : formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
                     </dd>
                   </div>
                 </dl>

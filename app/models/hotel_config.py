@@ -75,6 +75,19 @@ class HotelConfiguration(Base):
     hotel_name = Column(String(200), nullable=False, default="Mi Hotel")
     hotel_timezone = Column(String(100), nullable=False, default="America/Argentina/Buenos_Aires")
     default_currency = Column(String(3), nullable=False, default="ARS")
+    # Global USD market source used in automatic currency conversions. Legacy
+    # FxPolicy source/side fields cannot override it. Existing hotels keep official.
+    fx_conversion_rate_type = Column(
+        String(20), nullable=False, default="oficial", server_default=text("'oficial'")
+    )
+    # Quotes exposed for operator comparison. Selection never rewrites a
+    # reservation's stored price or FX snapshot.
+    fx_display_rate_types = Column(
+        JSON,
+        nullable=False,
+        default=lambda: ["oficial"],
+        server_default=text("'[\"oficial\"]'"),
+    )
     check_in_time = Column(String(5), nullable=True)
     check_out_time = Column(String(5), nullable=True)
     manual_rate_min_adjustment_pct = Column(Numeric(7, 2), nullable=True)

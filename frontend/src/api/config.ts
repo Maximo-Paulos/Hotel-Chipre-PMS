@@ -7,6 +7,8 @@ export type HotelConfig = {
   check_in_time?: string | null;
   check_out_time?: string | null;
   default_currency: string;
+  fx_conversion_rate_type: "oficial" | "blue";
+  fx_display_rate_types: Array<"oficial" | "blue">;
   deposit_percentage: number;
   checkin_payment_policy: "deposit" | "total" | "free";
   free_cancellation_hours: number;

@@ -3,6 +3,7 @@ Subscription status and entitlements endpoints.
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
@@ -40,6 +41,7 @@ from app.services.permission_service import (
 
 router = APIRouter(prefix="/api/subscription", tags=["Subscription"])
 admin_router = APIRouter(prefix="/api/admin/subscription", tags=["Subscription Admin"])
+logger = logging.getLogger(__name__)
 
 
 def _remaining_trial_days(trial_end_at) -> int | None:
@@ -106,23 +108,12 @@ def subscription_status(
 ):
     try:
         return _serialize_status_payload(db, context.hotel_id)
-    except Exception:
-        fallback_plan = {"code": "starter", "name": "Plan Inicial", "room_limit": 15, "staff_limit": 3, "price_month": None}
-        return {
-            "hotel_id": context.hotel_id,
-            "status": "active",
-            "plan": "starter",
-            "room_limit": 15,
-            "staff_limit": 3,
-            "rooms_in_use": 0,
-            "staff_in_use": 0,
-            "available_plans": [fallback_plan],
-            "can_write": True,
-            "enforcement_enabled": False,
-            "trial_available": False,
-            "entitlements": [{"code": "rooms.max_active", "value": 15, "source": "fallback"}],
-            "source": "fallback",
-        }
+    except Exception as exc:
+        logger.exception("subscription_status_unavailable", extra={"hotel_id": context.hotel_id})
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudo consultar el estado real de la suscripción. Reintentá en unos minutos.",
+        ) from exc
 
 
 @router.get("/plans")

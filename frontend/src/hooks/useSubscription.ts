@@ -12,56 +12,6 @@ import { type SessionState, useSession } from "../state/session";
 
 import { useEffectivePermissions } from "./usePermissions";
 
-export const FALLBACK_PLANS: SubscriptionPlan[] = [
-  {
-    code: "starter",
-    name: "Starter",
-    price_month: null,
-    room_limit: 15,
-    description: "Ideal para hostels y B&B que empiezan a digitalizarse.",
-    features: ["Dashboard básico", "Hasta 15 habitaciones", "Exportes manuales CSV"],
-    badge: "Inicial",
-    mock: true
-  },
-  {
-    code: "pro",
-    name: "Pro",
-    price_month: null,
-    room_limit: 40,
-    description: "Para hoteles boutique que quieren operar sin fricción.",
-    features: ["Check-in rápido", "Hasta 8 usuarios", "Reportes diarios", "Soporte priorizado"],
-    badge: "Recomendado",
-    highlight: true,
-    mock: true
-  },
-  {
-    code: "ultra",
-    name: "Ultra",
-    price_month: null,
-    room_limit: 80,
-    description: "Hoteles con más volumen y necesidad de control fino.",
-    features: ["Integración OTA", "Hasta 20 usuarios", "Roles avanzados", "SLA 99.5%"],
-    badge: "Escala",
-    mock: true
-  }
-];
-
-const buildMockStatus = (session: SessionState): SubscriptionStatus => ({
-  hotel_id: session.hotelId ?? null,
-  status: "active",
-  plan: "pro",
-  room_limit: 40,
-  staff_limit: 8,
-  rooms_in_use: 4,
-  can_write: true,
-  limits: [
-    { code: "rooms", label: "Habitaciones operables", used: 4, limit: 40 },
-    { code: "users", label: "Usuarios activos", used: 6, limit: 8 }
-  ],
-  available_plans: FALLBACK_PLANS,
-  source: "mock"
-});
-
 const normalizeLimits = (
   limits: SubscriptionStatus["limits"],
   roomsInUse: number,
@@ -107,44 +57,23 @@ const normalizeLimits = (
 };
 
 const enrichPlans = (plans?: SubscriptionPlan[] | null): SubscriptionPlan[] => {
-  const fallbackMap = FALLBACK_PLANS.reduce<Record<string, SubscriptionPlan>>((acc, plan) => {
-    acc[plan.code] = plan;
-    return acc;
-  }, {});
-
-  if (!plans || plans.length === 0) {
-    return FALLBACK_PLANS.map((plan) => ({ ...plan, mock: true }));
-  }
-
-  return plans.map((plan) => {
-    const fallback = fallbackMap[plan.code];
-    return {
-      ...(fallback ? { ...fallback, mock: false } : { mock: false }),
-      ...plan,
-      price_month: plan.price_month ?? fallback?.price_month ?? null,
-      room_limit: typeof plan.room_limit === "number" ? plan.room_limit : fallback?.room_limit ?? 0,
-      description: plan.description ?? fallback?.description,
-      features: plan.features ?? fallback?.features,
-      badge: plan.badge ?? fallback?.badge,
-      highlight: plan.highlight ?? fallback?.highlight
-    };
-  });
+  return (plans ?? []).map((plan) => ({ ...plan, mock: false }));
 };
 
 const normalizeStatus = (data: SubscriptionStatus | null | undefined, session: SessionState): SubscriptionStatus => {
-  const fallback = buildMockStatus(session);
-  if (!data) return fallback;
+  if (!data || typeof data.status !== "string" || typeof data.room_limit !== "number" || typeof data.rooms_in_use !== "number") {
+    throw new Error("El backend devolvió un estado de suscripción incompleto.");
+  }
 
   const planFromData =
     (data as Record<string, unknown>)?.plan ??
     (data as Record<string, unknown>)?.plan_code ??
     (data as Record<string, unknown>)?.current_plan ??
-    fallback.plan;
+    null;
 
   const statusFromData =
     (data as Record<string, unknown>)?.status ??
-    (data as Record<string, unknown>)?.subscription_status ??
-    fallback.status;
+    (data as Record<string, unknown>)?.subscription_status;
 
   const canWriteRaw = (data as Record<string, unknown>)?.can_write;
   const canWrite =
@@ -152,23 +81,22 @@ const normalizeStatus = (data: SubscriptionStatus | null | undefined, session: S
       ? canWriteRaw
       : ["active", "trialing", "demo", "comped"].includes(String(statusFromData));
 
-  const roomLimit = typeof data.room_limit === "number" ? data.room_limit : fallback.room_limit;
-  const roomsInUse = typeof data.rooms_in_use === "number" ? data.rooms_in_use : fallback.rooms_in_use;
+  const roomLimit = data.room_limit;
+  const roomsInUse = data.rooms_in_use;
   const availablePlans = enrichPlans(data.available_plans);
   const limits = normalizeLimits(data.limits, roomsInUse, roomLimit);
-  const fallbackLimits = normalizeLimits(undefined, fallback.rooms_in_use, fallback.room_limit);
 
   return {
-    ...fallback,
     ...data,
+    hotel_id: data.hotel_id ?? session.hotelId,
     plan: planFromData as string | null,
     status: statusFromData as string,
     room_limit: roomLimit,
-    staff_limit: typeof data.staff_limit === "number" ? data.staff_limit : fallback.staff_limit,
+    staff_limit: typeof data.staff_limit === "number" ? data.staff_limit : null,
     rooms_in_use: roomsInUse,
     can_write: canWrite,
-    available_plans: availablePlans.length ? availablePlans : fallback.available_plans,
-    limits: limits.length ? limits : fallbackLimits,
+    available_plans: availablePlans,
+    limits,
     source: "api"
   };
 };
@@ -179,18 +107,9 @@ export function useSubscriptionStatus(options?: { enabled?: boolean }) {
   const enabled = hasValidSession(session) && (options?.enabled ?? true) && hasPermission("settings:subscription:view");
   return useQuery({
     queryKey: ["subscription", session.hotelId ?? "none", session.userId ?? "none"],
-    queryFn: async () => {
-      try {
-        const remote = await getSubscriptionStatus(session);
-        return normalizeStatus(remote, session);
-      } catch (error) {
-        console.warn("Falling back to mock subscription status", error);
-        return buildMockStatus(session);
-      }
-    },
+    queryFn: async () => normalizeStatus(await getSubscriptionStatus(session), session),
     enabled,
-    staleTime: 60_000,
-    placeholderData: () => buildMockStatus(session)
+    staleTime: 60_000
   });
 }
 
@@ -198,16 +117,7 @@ export function useSubscriptionPlans() {
   const { session } = useSession();
   return useQuery({
     queryKey: ["subscription-plans"],
-    queryFn: async () => {
-      try {
-        const remote = await listSubscriptionPlans(session);
-        return enrichPlans(remote);
-      } catch (error) {
-        console.warn("Falling back to mock subscription plans", error);
-        return enrichPlans();
-      }
-    },
-    staleTime: 5 * 60_000,
-    placeholderData: () => enrichPlans()
+    queryFn: async () => enrichPlans(await listSubscriptionPlans(session)),
+    staleTime: 5 * 60_000
   });
 }

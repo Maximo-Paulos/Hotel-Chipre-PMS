@@ -192,6 +192,7 @@ test("owner creates a promotion and simulates its price breakdown", async ({ pag
       return;
     }
     if (url.pathname.endsWith("/api/promotions") && request.method() === "POST") {
+      await new Promise((resolve) => setTimeout(resolve, 800));
       promotionsCreated = true;
       await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(createdPromotion) });
       return;
@@ -227,6 +228,8 @@ test("owner creates a promotion and simulates its price breakdown", async ({ pag
   await form.getByLabel("Nombre").fill("Descuento de verano");
   await form.getByLabel("Valor").fill("15");
   await form.getByRole("button", { name: "Crear promoción" }).click();
+  await expect(form.getByTestId("promotion-save-status")).toBeVisible();
+  await expect(form.getByRole("button", { name: "Cancelar", exact: true })).toBeDisabled();
 
   await expect(form).toBeHidden();
   await expect(page.getByText("Descuento de verano")).toBeVisible();

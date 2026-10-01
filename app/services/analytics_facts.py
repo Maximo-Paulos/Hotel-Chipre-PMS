@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -198,6 +198,14 @@ def refresh_fact_reservation_daily(
         if category is None:
             continue
         company = companies_by_id.get(reservation.company_id) if reservation.company_id else None
+        company_billing_deferred = bool(
+            reservation.company_id is not None
+            and (
+                bool(company and company.payment_deferred)
+                or str(getattr(reservation.settlement_status, "value", reservation.settlement_status) or "").lower()
+                in {"deferred", "settled"}
+            )
+        )
         stay_dates = _reservation_dates_in_window(reservation, date_from=date_from, date_to=date_to)
         if not stay_dates:
             continue
@@ -209,6 +217,7 @@ def refresh_fact_reservation_daily(
             nights=len(stay_dates),
             row_kind=row_kind,
             policy=policy,
+            company_billing_deferred=company_billing_deferred,
         )
         guest_segment, guest_segment_source = resolve_guest_segment(reservation, company)
         channel_code = backfill_channel_code(reservation)
@@ -222,6 +231,10 @@ def refresh_fact_reservation_daily(
             guest_segment=guest_segment,
             guest_segment_source=guest_segment_source,
         )
+        if company_billing_deferred:
+            # Keep occupied_night for physical occupancy while excluding these
+            # unrecorded external invoices from PMS ADR/revenue denominators.
+            facts = [replace(fact, chargeable_night=False) for fact in facts]
         for fact in facts:
             db.add(
                 FactReservationDaily(
@@ -533,6 +546,7 @@ def _reservation_monetary_totals(
     nights: int,
     row_kind: FactReservationRowKindEnum,
     policy: ReservationNoShowPolicyAppliedEnum,
+    company_billing_deferred: bool = False,
 ) -> MonetaryTotals:
     source_currency = str(reservation.currency_code or "ARS").strip().upper()[:3] or "ARS"
     fx_rate = _decimal_or_none(getattr(reservation, "fx_rate_snapshot", None))
@@ -555,6 +569,17 @@ def _reservation_monetary_totals(
     net_total = _decimal_or_zero(getattr(reservation, "net_amount", None)) * base_ratio
     variable_cost_total = _decimal_or_zero(category.variable_cost_per_night) * Decimal(str(nights))
     if row_kind != FactReservationRowKindEnum.OCCUPIED:
+        variable_cost_total = Decimal("0")
+
+    if company_billing_deferred:
+        # The company invoice is maintained outside this PMS. Do not turn a
+        # historical/manual nominal lodging amount into PMS revenue or margin.
+        gross_total = Decimal("0")
+        subtotal_total = Decimal("0")
+        tax_total = Decimal("0")
+        fee_total = Decimal("0")
+        commission_total = Decimal("0")
+        net_total = Decimal("0")
         variable_cost_total = Decimal("0")
 
     revenue_gross_ars, revenue_gross_usd = _currency_pair(gross_total, source_currency, fx_rate)
@@ -644,6 +669,14 @@ def _occupied_nightly_fact_map(
         if category is None:
             continue
         company = companies_by_id.get(reservation.company_id) if reservation.company_id else None
+        company_billing_deferred = bool(
+            reservation.company_id is not None
+            and (
+                bool(company and company.payment_deferred)
+                or str(getattr(reservation.settlement_status, "value", reservation.settlement_status) or "").lower()
+                in {"deferred", "settled"}
+            )
+        )
         policy = _resolve_no_show_policy(reservation)
         row_kind = _reservation_row_kind(reservation, policy)
         totals = _reservation_monetary_totals(
@@ -652,6 +685,7 @@ def _occupied_nightly_fact_map(
             nights=len(stay_dates),
             row_kind=row_kind,
             policy=policy,
+            company_billing_deferred=company_billing_deferred,
         )
         guest_segment, guest_segment_source = resolve_guest_segment(reservation, company)
         channel_code = backfill_channel_code(reservation)
@@ -750,13 +784,18 @@ def _currency_pair(
     fx_rate: Decimal | None,
 ) -> tuple[Decimal, Decimal]:
     normalized = source_currency.upper()
-    rate = fx_rate if fx_rate and fx_rate > 0 else Decimal("1")
+    rate = fx_rate if fx_rate and fx_rate > 0 else None
     if normalized == "USD":
         usd = amount.quantize(Decimal("0.01"))
-        ars = (amount * rate).quantize(Decimal("0.01"))
-    else:
+        ars = (amount * rate).quantize(Decimal("0.01")) if rate is not None else Decimal("0.00")
+    elif normalized == "ARS":
         ars = amount.quantize(Decimal("0.01"))
-        usd = (amount / rate).quantize(Decimal("0.01"))
+        usd = (amount / rate).quantize(Decimal("0.01")) if rate is not None else Decimal("0.00")
+    else:
+        # This analytics contract currently has ARS and USD columns only. Never
+        # mislabel an unsupported source currency as ARS or apply a made-up 1:1
+        # conversion; the original currency remains on the fact row.
+        return Decimal("0.00"), Decimal("0.00")
     return ars, usd
 
 

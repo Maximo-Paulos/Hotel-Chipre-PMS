@@ -544,20 +544,21 @@ def confirm_cash_custody(
     if report is None or report.custody_handoff is None:
         raise CashRegisterError("Cash custody handoff not found for this hotel")
     handoff = report.custody_handoff
+    amount = _money(successor_float_amount)
+    maximum_float = min(Decimal("9999999999.99"), _money(handoff.delivered_amount))
+    if amount < Decimal("0.00") or amount > maximum_float:
+        raise CashRegisterError("The successor float cannot exceed the cash delivered by the prior shift")
+
     if handoff.status == CashCustodyStatusEnum.CONFIRMED:
-        requested_amount = _money(successor_float_amount)
         existing_amount = report.successor_float_declared_amount
         if existing_amount is None:
-            if requested_amount != Decimal("0.00"):
+            if amount != Decimal("0.00"):
                 raise CashRegisterError("Cash custody was already confirmed without a successor float declaration")
             return report
-        if existing_amount != requested_amount:
+        if existing_amount != amount:
             raise CashRegisterError("Cash custody was already confirmed with a different successor float")
         return report
 
-    amount = _money(successor_float_amount)
-    if amount < Decimal("0.00") or amount > Decimal("9999999999.99"):
-        raise CashRegisterError("The successor float amount is outside the supported range")
     successor = (
         db.execute(
             select(CashSession)

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-01T01:42:26.194Z",
+  "generatedAt": "2026-10-01T06:37:29.147Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1828,17 +1828,19 @@
       "path": [
         "api_permissions_update_permission_override",
         "api_permissions_update_role_override",
+        "api_permissions_assert_role_profile_mutation_allowed",
         "api_permissions_validate_code",
         "api_permissions_validate_role"
       ],
       "qualifiedPath": [
         "api_permissions_update_permission_override",
         "api_permissions_update_role_override",
+        "api_permissions_assert_role_profile_mutation_allowed",
         "api_permissions_validate_code",
         "api_permissions_validate_role"
       ],
       "depth": 2,
-      "nodeCount": 4,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/api/permissions.py"
@@ -3507,14 +3509,16 @@
       "entryPointId": "api_permissions_restore_role_permission_defaults",
       "path": [
         "api_permissions_restore_role_permission_defaults",
+        "api_permissions_assert_role_profile_mutation_allowed",
         "api_permissions_validate_role"
       ],
       "qualifiedPath": [
         "api_permissions_restore_role_permission_defaults",
+        "api_permissions_assert_role_profile_mutation_allowed",
         "api_permissions_validate_role"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/permissions.py"
@@ -3529,16 +3533,18 @@
       "entryPointId": "api_permissions_restore_role_permission_override",
       "path": [
         "api_permissions_restore_role_permission_override",
+        "api_permissions_assert_role_profile_mutation_allowed",
         "api_permissions_validate_code",
         "api_permissions_validate_role"
       ],
       "qualifiedPath": [
         "api_permissions_restore_role_permission_override",
+        "api_permissions_assert_role_profile_mutation_allowed",
         "api_permissions_validate_code",
         "api_permissions_validate_role"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/api/permissions.py"
@@ -3915,14 +3921,18 @@
       "entryPointId": "api_permissions_update_visibility_window",
       "path": [
         "api_permissions_update_visibility_window",
+        "api_permissions_assert_role_profile_mutation_allowed",
+        "api_permissions_validate_role",
         "api_permissions_visibility_window_response"
       ],
       "qualifiedPath": [
         "api_permissions_update_visibility_window",
+        "api_permissions_assert_role_profile_mutation_allowed",
+        "api_permissions_validate_role",
         "api_permissions_visibility_window_response"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/api/permissions.py"
@@ -8227,6 +8237,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_reservations_extend_stay",
+      "name": "extend_stay",
+      "entryPoint": "api_reservations_extend_stay",
+      "entryPointId": "api_reservations_extend_stay",
+      "path": [
+        "api_reservations_extend_stay",
+        "api_reservations_ensure_action_permission",
+        "api_reservations_to_read"
+      ],
+      "qualifiedPath": [
+        "api_reservations_extend_stay",
+        "api_reservations_ensure_action_permission",
+        "api_reservations_to_read"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:services_invitation_service_issue_invitation",
       "name": "issue_invitation",
       "entryPoint": "services_invitation_service_issue_invitation",
@@ -10937,118 +10971,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_operational_report_service_nightly_summary",
-      "name": "nightly_summary",
-      "entryPoint": "services_operational_report_service_nightly_summary",
-      "entryPointId": "services_operational_report_service_nightly_summary",
-      "path": [
-        "services_operational_report_service_nightly_summary",
-        "services_operational_report_service_daily_report",
-        "services_operational_report_service_active_room_blocks",
-        "services_operational_report_service_alerts",
-        "services_operational_report_service_available_with_review",
-        "services_operational_report_service_cash_session",
-        "services_operational_report_service_group",
-        "services_operational_report_service_reservation_summary",
-        "services_operational_report_service_guest_name"
-      ],
-      "qualifiedPath": [
-        "services_operational_report_service_nightly_summary",
-        "services_operational_report_service_daily_report",
-        "services_operational_report_service_active_room_blocks",
-        "services_operational_report_service_alerts",
-        "services_operational_report_service_available_with_review",
-        "services_operational_report_service_cash_session",
-        "services_operational_report_service_group",
-        "services_operational_report_service_reservation_summary",
-        "services_operational_report_service_guest_name"
-      ],
-      "depth": 3,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/operational_report_service.py"
-      ],
-      "criticality": 0.2078,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_reservation_service_update_reservation_fields",
-      "name": "update_reservation_fields",
-      "entryPoint": "services_reservation_service_update_reservation_fields",
-      "entryPointId": "services_reservation_service_update_reservation_fields",
-      "path": [
-        "services_reservation_service_update_reservation_fields",
-        "services_reservation_service_apply_corporate_pricing",
-        "services_reservation_service_apply_manual_total_override",
-        "services_reservation_service_apply_pricing_result_to_reservation",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_lock_reservation_version",
-        "services_reservation_service_manual_override_total_for_nights",
-        "services_reservation_service_notify_reservation_event",
-        "services_reservation_service_pricing_result_for_explicit_total",
-        "services_reservation_service_pricing_snapshot_values",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_resolve_reservation_company",
-        "services_reservation_service_touch_facts",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_pricing_with_total",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_active_reservations",
-        "services_reservation_service_validate_stay_dates",
-        "services_reservation_service_reservationversionconflict",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_calendar_pricing_source"
-      ],
-      "qualifiedPath": [
-        "services_reservation_service_update_reservation_fields",
-        "services_reservation_service_apply_corporate_pricing",
-        "services_reservation_service_apply_manual_total_override",
-        "services_reservation_service_apply_pricing_result_to_reservation",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_lock_reservation_version",
-        "services_reservation_service_manual_override_total_for_nights",
-        "services_reservation_service_notify_reservation_event",
-        "services_reservation_service_pricing_result_for_explicit_total",
-        "services_reservation_service_pricing_snapshot_values",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_resolve_reservation_company",
-        "services_reservation_service_touch_facts",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_pricing_with_total",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_active_reservations",
-        "services_reservation_service_validate_stay_dates",
-        "services_reservation_service_reservationversionconflict",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_calendar_pricing_source"
-      ],
-      "depth": 3,
-      "nodeCount": 29,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_service.py"
-      ],
-      "criticality": 0.2059,
-      "warnings": []
-    },
-    {
       "id": "flow:services_reservation_service_mark_reservation_no_show",
       "name": "mark_reservation_no_show",
       "entryPoint": "services_reservation_service_mark_reservation_no_show",
@@ -11078,6 +11000,124 @@
         "app/services/reservation_service.py"
       ],
       "criticality": 0.2057,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_report_service_nightly_summary",
+      "name": "nightly_summary",
+      "entryPoint": "services_operational_report_service_nightly_summary",
+      "entryPointId": "services_operational_report_service_nightly_summary",
+      "path": [
+        "services_operational_report_service_nightly_summary",
+        "services_operational_report_service_daily_report",
+        "services_operational_report_service_active_room_blocks",
+        "services_operational_report_service_alerts",
+        "services_operational_report_service_available_with_review",
+        "services_operational_report_service_cash_session",
+        "services_operational_report_service_company_night_extra_balances_by_reservation",
+        "services_operational_report_service_group",
+        "services_operational_report_service_reservation_summary",
+        "services_operational_report_service_guest_name"
+      ],
+      "qualifiedPath": [
+        "services_operational_report_service_nightly_summary",
+        "services_operational_report_service_daily_report",
+        "services_operational_report_service_active_room_blocks",
+        "services_operational_report_service_alerts",
+        "services_operational_report_service_available_with_review",
+        "services_operational_report_service_cash_session",
+        "services_operational_report_service_company_night_extra_balances_by_reservation",
+        "services_operational_report_service_group",
+        "services_operational_report_service_reservation_summary",
+        "services_operational_report_service_guest_name"
+      ],
+      "depth": 3,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_report_service.py"
+      ],
+      "criticality": 0.205,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_service_update_reservation_fields",
+      "name": "update_reservation_fields",
+      "entryPoint": "services_reservation_service_update_reservation_fields",
+      "entryPointId": "services_reservation_service_update_reservation_fields",
+      "path": [
+        "services_reservation_service_update_reservation_fields",
+        "services_reservation_service_apply_corporate_pricing",
+        "services_reservation_service_apply_manual_total_override",
+        "services_reservation_service_apply_pricing_result_to_reservation",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_lock_reservation_version",
+        "services_reservation_service_manual_override_total_for_nights",
+        "services_reservation_service_notify_reservation_event",
+        "services_reservation_service_pricing_result_for_explicit_total",
+        "services_reservation_service_pricing_snapshot_values",
+        "services_reservation_service_reservation_has_deferred_company_billing",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_resolve_reservation_company",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_pricing_with_total",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_active_reservations",
+        "services_reservation_service_validate_stay_dates",
+        "services_reservation_service_reservationversionconflict",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult",
+        "services_reservation_service_deferred_company_reservation_ids",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_calendar_pricing_source"
+      ],
+      "qualifiedPath": [
+        "services_reservation_service_update_reservation_fields",
+        "services_reservation_service_apply_corporate_pricing",
+        "services_reservation_service_apply_manual_total_override",
+        "services_reservation_service_apply_pricing_result_to_reservation",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_lock_reservation_version",
+        "services_reservation_service_manual_override_total_for_nights",
+        "services_reservation_service_notify_reservation_event",
+        "services_reservation_service_pricing_result_for_explicit_total",
+        "services_reservation_service_pricing_snapshot_values",
+        "services_reservation_service_reservation_has_deferred_company_billing",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_resolve_reservation_company",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_pricing_with_total",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_active_reservations",
+        "services_reservation_service_validate_stay_dates",
+        "services_reservation_service_reservationversionconflict",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult",
+        "services_reservation_service_deferred_company_reservation_ids",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_calendar_pricing_source"
+      ],
+      "depth": 3,
+      "nodeCount": 31,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_service.py"
+      ],
+      "criticality": 0.2042,
       "warnings": []
     },
     {
@@ -12059,6 +12099,114 @@
       "warnings": []
     },
     {
+      "id": "flow:services_analytics_service_build_channels_payload",
+      "name": "build_channels_payload",
+      "entryPoint": "services_analytics_service_build_channels_payload",
+      "entryPointId": "services_analytics_service_build_channels_payload",
+      "path": [
+        "services_analytics_service_build_channels_payload",
+        "services_analytics_service_analytics_window",
+        "services_analytics_service_build_channels_breakdown",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_now",
+        "services_analytics_service_comparison_read",
+        "services_analytics_service_datewindow",
+        "services_analytics_service_utc_date_range",
+        "services_analytics_service_group_rows",
+        "services_analytics_service_money_str",
+        "services_analytics_service_sum_money",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
+      ],
+      "qualifiedPath": [
+        "services_analytics_service_build_channels_payload",
+        "services_analytics_service_analytics_window",
+        "services_analytics_service_build_channels_breakdown",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_now",
+        "services_analytics_service_comparison_read",
+        "services_analytics_service_datewindow",
+        "services_analytics_service_utc_date_range",
+        "services_analytics_service_group_rows",
+        "services_analytics_service_money_str",
+        "services_analytics_service_sum_money",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
+      ],
+      "depth": 4,
+      "nodeCount": 18,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_service.py"
+      ],
+      "criticality": 0.19,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_service_build_segments_payload",
+      "name": "build_segments_payload",
+      "entryPoint": "services_analytics_service_build_segments_payload",
+      "entryPointId": "services_analytics_service_build_segments_payload",
+      "path": [
+        "services_analytics_service_build_segments_payload",
+        "services_analytics_service_analytics_window",
+        "services_analytics_service_build_segments_breakdown",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_now",
+        "services_analytics_service_comparison_read",
+        "services_analytics_service_datewindow",
+        "services_analytics_service_utc_date_range",
+        "services_analytics_service_group_rows",
+        "services_analytics_service_money_str",
+        "services_analytics_service_sum_money",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
+      ],
+      "qualifiedPath": [
+        "services_analytics_service_build_segments_payload",
+        "services_analytics_service_analytics_window",
+        "services_analytics_service_build_segments_breakdown",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_now",
+        "services_analytics_service_comparison_read",
+        "services_analytics_service_datewindow",
+        "services_analytics_service_utc_date_range",
+        "services_analytics_service_group_rows",
+        "services_analytics_service_money_str",
+        "services_analytics_service_sum_money",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
+      ],
+      "depth": 4,
+      "nodeCount": 18,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_service.py"
+      ],
+      "criticality": 0.19,
+      "warnings": []
+    },
+    {
       "id": "flow:services_timezones_hotel_today",
       "name": "hotel_today",
       "entryPoint": "services_timezones_hotel_today",
@@ -12367,46 +12515,150 @@
       "warnings": []
     },
     {
-      "id": "flow:services_analytics_service_build_channels_payload",
-      "name": "build_channels_payload",
-      "entryPoint": "services_analytics_service_build_channels_payload",
-      "entryPointId": "services_analytics_service_build_channels_payload",
+      "id": "flow:services_analytics_service_build_category_detail_payload",
+      "name": "build_category_detail_payload",
+      "entryPoint": "services_analytics_service_build_category_detail_payload",
+      "entryPointId": "services_analytics_service_build_category_detail_payload",
       "path": [
-        "services_analytics_service_build_channels_payload",
+        "services_analytics_service_build_category_detail_payload",
         "services_analytics_service_analytics_window",
-        "services_analytics_service_build_channels_breakdown",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_load_reservation_facts",
-        "services_analytics_service_metric_card",
+        "services_analytics_service_money_str",
         "services_analytics_service_now",
+        "services_analytics_service_unavailable_currency_metadata",
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
-        "services_analytics_service_group_rows",
-        "services_analytics_service_money_str",
-        "services_analytics_service_sum_money",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money"
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
       ],
       "qualifiedPath": [
-        "services_analytics_service_build_channels_payload",
+        "services_analytics_service_build_category_detail_payload",
+        "services_analytics_service_analytics_window",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_money_str",
+        "services_analytics_service_now",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_comparison_read",
+        "services_analytics_service_datewindow",
+        "services_analytics_service_utc_date_range",
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
+      ],
+      "depth": 3,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_service.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_service_build_home_payload",
+      "name": "build_home_payload",
+      "entryPoint": "services_analytics_service_build_home_payload",
+      "entryPointId": "services_analytics_service_build_home_payload",
+      "path": [
+        "services_analytics_service_build_home_payload",
         "services_analytics_service_analytics_window",
         "services_analytics_service_build_channels_breakdown",
+        "services_analytics_service_build_segments_breakdown",
+        "services_analytics_service_currency_unavailable_for",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_load_room_facts",
         "services_analytics_service_metric_card",
         "services_analytics_service_now",
+        "services_analytics_service_sum_money",
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
-        "services_analytics_service_sum_money",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_money",
         "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money"
+        "services_analytics_service_unavailable_currencies"
+      ],
+      "qualifiedPath": [
+        "services_analytics_service_build_home_payload",
+        "services_analytics_service_analytics_window",
+        "services_analytics_service_build_channels_breakdown",
+        "services_analytics_service_build_segments_breakdown",
+        "services_analytics_service_currency_unavailable_for",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_load_room_facts",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_now",
+        "services_analytics_service_sum_money",
+        "services_analytics_service_comparison_read",
+        "services_analytics_service_datewindow",
+        "services_analytics_service_utc_date_range",
+        "services_analytics_service_group_rows",
+        "services_analytics_service_money_str",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_money",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_unavailable_currencies"
       ],
       "depth": 3,
-      "nodeCount": 15,
+      "nodeCount": 20,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_service.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_service_build_operations_payload",
+      "name": "build_operations_payload",
+      "entryPoint": "services_analytics_service_build_operations_payload",
+      "entryPointId": "services_analytics_service_build_operations_payload",
+      "path": [
+        "services_analytics_service_build_operations_payload",
+        "services_analytics_service_analytics_window",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_money_str",
+        "services_analytics_service_now",
+        "services_analytics_service_serialize_room_state_event",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_comparison_read",
+        "services_analytics_service_datewindow",
+        "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
+      ],
+      "qualifiedPath": [
+        "services_analytics_service_build_operations_payload",
+        "services_analytics_service_analytics_window",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_money_str",
+        "services_analytics_service_now",
+        "services_analytics_service_serialize_room_state_event",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_comparison_read",
+        "services_analytics_service_datewindow",
+        "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
+      ],
+      "depth": 3,
+      "nodeCount": 16,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -12461,46 +12713,148 @@
       "warnings": []
     },
     {
-      "id": "flow:services_analytics_service_build_segments_payload",
-      "name": "build_segments_payload",
-      "entryPoint": "services_analytics_service_build_segments_payload",
-      "entryPointId": "services_analytics_service_build_segments_payload",
+      "id": "flow:services_analytics_service_build_room_detail_payload",
+      "name": "build_room_detail_payload",
+      "entryPoint": "services_analytics_service_build_room_detail_payload",
+      "entryPointId": "services_analytics_service_build_room_detail_payload",
       "path": [
-        "services_analytics_service_build_segments_payload",
+        "services_analytics_service_build_room_detail_payload",
         "services_analytics_service_analytics_window",
-        "services_analytics_service_build_segments_breakdown",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_fetch_room_state_events",
         "services_analytics_service_load_reservation_facts",
-        "services_analytics_service_metric_card",
+        "services_analytics_service_money_str",
         "services_analytics_service_now",
+        "services_analytics_service_serialize_room_state_event",
+        "services_analytics_service_unavailable_currency_metadata",
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
-        "services_analytics_service_group_rows",
-        "services_analytics_service_money_str",
-        "services_analytics_service_sum_money",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money"
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
       ],
       "qualifiedPath": [
-        "services_analytics_service_build_segments_payload",
+        "services_analytics_service_build_room_detail_payload",
         "services_analytics_service_analytics_window",
-        "services_analytics_service_build_segments_breakdown",
+        "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_fetch_room_state_events",
         "services_analytics_service_load_reservation_facts",
-        "services_analytics_service_metric_card",
+        "services_analytics_service_money_str",
         "services_analytics_service_now",
+        "services_analytics_service_serialize_room_state_event",
+        "services_analytics_service_unavailable_currency_metadata",
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
-        "services_analytics_service_group_rows",
-        "services_analytics_service_money_str",
-        "services_analytics_service_sum_money",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money"
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 3,
-      "nodeCount": 15,
+      "nodeCount": 16,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_service.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_service_build_rooms_detail_breakdown",
+      "name": "build_rooms_detail_breakdown",
+      "entryPoint": "services_analytics_service_build_rooms_detail_breakdown",
+      "entryPointId": "services_analytics_service_build_rooms_detail_breakdown",
+      "path": [
+        "services_analytics_service_build_rooms_detail_breakdown",
+        "services_analytics_service_group_rows",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_load_room_facts",
+        "services_analytics_service_money_str",
+        "services_analytics_service_room_lookup_map",
+        "services_analytics_service_sum_money",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
+      ],
+      "qualifiedPath": [
+        "services_analytics_service_build_rooms_detail_breakdown",
+        "services_analytics_service_group_rows",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_load_room_facts",
+        "services_analytics_service_money_str",
+        "services_analytics_service_room_lookup_map",
+        "services_analytics_service_sum_money",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
+      ],
+      "depth": 3,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_service.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_service_build_rooms_overview_payload",
+      "name": "build_rooms_overview_payload",
+      "entryPoint": "services_analytics_service_build_rooms_overview_payload",
+      "entryPointId": "services_analytics_service_build_rooms_overview_payload",
+      "path": [
+        "services_analytics_service_build_rooms_overview_payload",
+        "services_analytics_service_analytics_window",
+        "services_analytics_service_category_lookup_map",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_group_rows",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_load_room_facts",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_money_str",
+        "services_analytics_service_now",
+        "services_analytics_service_room_lookup_map",
+        "services_analytics_service_sum_money",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_comparison_read",
+        "services_analytics_service_datewindow",
+        "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
+      ],
+      "qualifiedPath": [
+        "services_analytics_service_build_rooms_overview_payload",
+        "services_analytics_service_analytics_window",
+        "services_analytics_service_category_lookup_map",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_group_rows",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_load_room_facts",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_money_str",
+        "services_analytics_service_now",
+        "services_analytics_service_room_lookup_map",
+        "services_analytics_service_sum_money",
+        "services_analytics_service_unavailable_currency_metadata",
+        "services_analytics_service_comparison_read",
+        "services_analytics_service_datewindow",
+        "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_money",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_currency_unavailable_for"
+      ],
+      "depth": 3,
+      "nodeCount": 20,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -12546,6 +12900,46 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_service.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_fx_service_get_all_rates_snapshot",
+      "name": "get_all_rates_snapshot",
+      "entryPoint": "services_fx_service_get_all_rates_snapshot",
+      "entryPointId": "services_fx_service_get_all_rates_snapshot",
+      "path": [
+        "services_fx_service_get_all_rates_snapshot",
+        "services_fx_service_fetch_all_rates",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_cached_supported_rates",
+        "services_fx_service_get_async",
+        "services_fx_service_refresh_supported_rates",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_cache_key",
+        "services_fx_service_extract_direct_quotes",
+        "services_fx_service_store_rate"
+      ],
+      "qualifiedPath": [
+        "services_fx_service_get_all_rates_snapshot",
+        "services_fx_service_fetch_all_rates",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_cached_supported_rates",
+        "services_fx_service_get_async",
+        "services_fx_service_refresh_supported_rates",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_cache_key",
+        "services_fx_service_extract_direct_quotes",
+        "services_fx_service_store_rate"
+      ],
+      "depth": 3,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/fx_service.py"
       ],
       "criticality": 0.18,
       "warnings": []
@@ -12720,17 +13114,29 @@
         "services_fx_service_get_usd_rate_for_type",
         "services_fx_service_fetch_rate",
         "services_fx_service_is_cache_fresh",
-        "services_fx_service_get_async"
+        "services_fx_service_cache_key",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_extract_direct_quotes",
+        "services_fx_service_get_async",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_store_rate"
       ],
       "qualifiedPath": [
         "services_fx_service_get_usd_official_rate",
         "services_fx_service_get_usd_rate_for_type",
         "services_fx_service_fetch_rate",
         "services_fx_service_is_cache_fresh",
-        "services_fx_service_get_async"
+        "services_fx_service_cache_key",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_extract_direct_quotes",
+        "services_fx_service_get_async",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_store_rate"
       ],
       "depth": 3,
-      "nodeCount": 5,
+      "nodeCount": 11,
       "fileCount": 1,
       "files": [
         "app/services/fx_service.py"
@@ -13139,6 +13545,9 @@
         "services_pricing_policy_service_select_tax_policy",
         "services_pricing_policy_service_staypricingquote",
         "services_pricing_policy_service_calculate_rule_amount",
+        "services_pricing_policy_service_quote_provenance",
+        "services_pricing_policy_service_record_conversion_snapshot",
+        "services_pricing_policy_service_resolve_conversion_quote",
         "services_pricing_policy_service_select_fx_policy",
         "services_pricing_policy_service_load_json_dict"
       ],
@@ -13152,11 +13561,14 @@
         "services_pricing_policy_service_select_tax_policy",
         "services_pricing_policy_service_staypricingquote",
         "services_pricing_policy_service_calculate_rule_amount",
+        "services_pricing_policy_service_quote_provenance",
+        "services_pricing_policy_service_record_conversion_snapshot",
+        "services_pricing_policy_service_resolve_conversion_quote",
         "services_pricing_policy_service_select_fx_policy",
         "services_pricing_policy_service_load_json_dict"
       ],
       "depth": 3,
-      "nodeCount": 11,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/pricing_policy_service.py"
@@ -13719,182 +14131,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_analytics_service_build_category_detail_payload",
-      "name": "build_category_detail_payload",
-      "entryPoint": "services_analytics_service_build_category_detail_payload",
-      "entryPointId": "services_analytics_service_build_category_detail_payload",
-      "path": [
-        "services_analytics_service_build_category_detail_payload",
-        "services_analytics_service_analytics_window",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_money_str",
-        "services_analytics_service_now",
-        "services_analytics_service_comparison_read",
-        "services_analytics_service_datewindow",
-        "services_analytics_service_utc_date_range",
-        "services_analytics_service_money"
-      ],
-      "qualifiedPath": [
-        "services_analytics_service_build_category_detail_payload",
-        "services_analytics_service_analytics_window",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_money_str",
-        "services_analytics_service_now",
-        "services_analytics_service_comparison_read",
-        "services_analytics_service_datewindow",
-        "services_analytics_service_utc_date_range",
-        "services_analytics_service_money"
-      ],
-      "depth": 2,
-      "nodeCount": 10,
-      "fileCount": 1,
-      "files": [
-        "app/services/analytics_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_analytics_service_build_home_payload",
-      "name": "build_home_payload",
-      "entryPoint": "services_analytics_service_build_home_payload",
-      "entryPointId": "services_analytics_service_build_home_payload",
-      "path": [
-        "services_analytics_service_build_home_payload",
-        "services_analytics_service_analytics_window",
-        "services_analytics_service_build_channels_breakdown",
-        "services_analytics_service_build_segments_breakdown",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_load_reservation_facts",
-        "services_analytics_service_load_room_facts",
-        "services_analytics_service_metric_card",
-        "services_analytics_service_now",
-        "services_analytics_service_sum_money",
-        "services_analytics_service_comparison_read",
-        "services_analytics_service_datewindow",
-        "services_analytics_service_utc_date_range",
-        "services_analytics_service_group_rows",
-        "services_analytics_service_money_str",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money"
-      ],
-      "qualifiedPath": [
-        "services_analytics_service_build_home_payload",
-        "services_analytics_service_analytics_window",
-        "services_analytics_service_build_channels_breakdown",
-        "services_analytics_service_build_segments_breakdown",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_load_reservation_facts",
-        "services_analytics_service_load_room_facts",
-        "services_analytics_service_metric_card",
-        "services_analytics_service_now",
-        "services_analytics_service_sum_money",
-        "services_analytics_service_comparison_read",
-        "services_analytics_service_datewindow",
-        "services_analytics_service_utc_date_range",
-        "services_analytics_service_group_rows",
-        "services_analytics_service_money_str",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money"
-      ],
-      "depth": 2,
-      "nodeCount": 17,
-      "fileCount": 1,
-      "files": [
-        "app/services/analytics_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_analytics_service_build_operations_payload",
-      "name": "build_operations_payload",
-      "entryPoint": "services_analytics_service_build_operations_payload",
-      "entryPointId": "services_analytics_service_build_operations_payload",
-      "path": [
-        "services_analytics_service_build_operations_payload",
-        "services_analytics_service_analytics_window",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_load_reservation_facts",
-        "services_analytics_service_metric_card",
-        "services_analytics_service_money_str",
-        "services_analytics_service_now",
-        "services_analytics_service_serialize_room_state_event",
-        "services_analytics_service_comparison_read",
-        "services_analytics_service_datewindow",
-        "services_analytics_service_utc_date_range",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money"
-      ],
-      "qualifiedPath": [
-        "services_analytics_service_build_operations_payload",
-        "services_analytics_service_analytics_window",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_load_reservation_facts",
-        "services_analytics_service_metric_card",
-        "services_analytics_service_money_str",
-        "services_analytics_service_now",
-        "services_analytics_service_serialize_room_state_event",
-        "services_analytics_service_comparison_read",
-        "services_analytics_service_datewindow",
-        "services_analytics_service_utc_date_range",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money"
-      ],
-      "depth": 2,
-      "nodeCount": 13,
-      "fileCount": 1,
-      "files": [
-        "app/services/analytics_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_analytics_service_build_room_detail_payload",
-      "name": "build_room_detail_payload",
-      "entryPoint": "services_analytics_service_build_room_detail_payload",
-      "entryPointId": "services_analytics_service_build_room_detail_payload",
-      "path": [
-        "services_analytics_service_build_room_detail_payload",
-        "services_analytics_service_analytics_window",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_fetch_room_state_events",
-        "services_analytics_service_money_str",
-        "services_analytics_service_now",
-        "services_analytics_service_serialize_room_state_event",
-        "services_analytics_service_comparison_read",
-        "services_analytics_service_datewindow",
-        "services_analytics_service_utc_date_range",
-        "services_analytics_service_money"
-      ],
-      "qualifiedPath": [
-        "services_analytics_service_build_room_detail_payload",
-        "services_analytics_service_analytics_window",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_fetch_room_state_events",
-        "services_analytics_service_money_str",
-        "services_analytics_service_now",
-        "services_analytics_service_serialize_room_state_event",
-        "services_analytics_service_comparison_read",
-        "services_analytics_service_datewindow",
-        "services_analytics_service_utc_date_range",
-        "services_analytics_service_money"
-      ],
-      "depth": 2,
-      "nodeCount": 12,
-      "fileCount": 1,
-      "files": [
-        "app/services/analytics_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_contracts_build_room_occupancy_nightly_fact",
       "name": "build_room_occupancy_nightly_fact",
       "entryPoint": "services_analytics_contracts_build_room_occupancy_nightly_fact",
@@ -13923,124 +14159,42 @@
       "warnings": []
     },
     {
-      "id": "flow:services_analytics_service_build_rooms_detail_breakdown",
-      "name": "build_rooms_detail_breakdown",
-      "entryPoint": "services_analytics_service_build_rooms_detail_breakdown",
-      "entryPointId": "services_analytics_service_build_rooms_detail_breakdown",
-      "path": [
-        "services_analytics_service_build_rooms_detail_breakdown",
-        "services_analytics_service_group_rows",
-        "services_analytics_service_load_room_facts",
-        "services_analytics_service_money_str",
-        "services_analytics_service_room_lookup_map",
-        "services_analytics_service_sum_money",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money"
-      ],
-      "qualifiedPath": [
-        "services_analytics_service_build_rooms_detail_breakdown",
-        "services_analytics_service_group_rows",
-        "services_analytics_service_load_room_facts",
-        "services_analytics_service_money_str",
-        "services_analytics_service_room_lookup_map",
-        "services_analytics_service_sum_money",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money"
-      ],
-      "depth": 2,
-      "nodeCount": 8,
-      "fileCount": 1,
-      "files": [
-        "app/services/analytics_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_analytics_service_build_rooms_overview_payload",
-      "name": "build_rooms_overview_payload",
-      "entryPoint": "services_analytics_service_build_rooms_overview_payload",
-      "entryPointId": "services_analytics_service_build_rooms_overview_payload",
-      "path": [
-        "services_analytics_service_build_rooms_overview_payload",
-        "services_analytics_service_analytics_window",
-        "services_analytics_service_category_lookup_map",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_group_rows",
-        "services_analytics_service_load_room_facts",
-        "services_analytics_service_metric_card",
-        "services_analytics_service_money_str",
-        "services_analytics_service_now",
-        "services_analytics_service_room_lookup_map",
-        "services_analytics_service_sum_money",
-        "services_analytics_service_comparison_read",
-        "services_analytics_service_datewindow",
-        "services_analytics_service_utc_date_range",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money"
-      ],
-      "qualifiedPath": [
-        "services_analytics_service_build_rooms_overview_payload",
-        "services_analytics_service_analytics_window",
-        "services_analytics_service_category_lookup_map",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_group_rows",
-        "services_analytics_service_load_room_facts",
-        "services_analytics_service_metric_card",
-        "services_analytics_service_money_str",
-        "services_analytics_service_now",
-        "services_analytics_service_room_lookup_map",
-        "services_analytics_service_sum_money",
-        "services_analytics_service_comparison_read",
-        "services_analytics_service_datewindow",
-        "services_analytics_service_utc_date_range",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money"
-      ],
-      "depth": 2,
-      "nodeCount": 16,
-      "fileCount": 1,
-      "files": [
-        "app/services/analytics_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_service_build_starter_summary_payload",
       "name": "build_starter_summary_payload",
       "entryPoint": "services_analytics_service_build_starter_summary_payload",
       "entryPointId": "services_analytics_service_build_starter_summary_payload",
       "path": [
         "services_analytics_service_build_starter_summary_payload",
+        "services_analytics_service_currency_unavailable_for",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_load_reservation_facts",
         "services_analytics_service_metric_card",
         "services_analytics_service_now",
         "services_analytics_service_sum_money",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_money",
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money_str",
-        "services_analytics_service_money",
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow"
       ],
       "qualifiedPath": [
         "services_analytics_service_build_starter_summary_payload",
+        "services_analytics_service_currency_unavailable_for",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_load_reservation_facts",
         "services_analytics_service_metric_card",
         "services_analytics_service_now",
         "services_analytics_service_sum_money",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_money",
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money_str",
-        "services_analytics_service_money",
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -14813,30 +14967,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_fx_service_get_all_rates_snapshot",
-      "name": "get_all_rates_snapshot",
-      "entryPoint": "services_fx_service_get_all_rates_snapshot",
-      "entryPointId": "services_fx_service_get_all_rates_snapshot",
-      "path": [
-        "services_fx_service_get_all_rates_snapshot",
-        "services_fx_service_fetch_all_rates",
-        "services_fx_service_get_async"
-      ],
-      "qualifiedPath": [
-        "services_fx_service_get_all_rates_snapshot",
-        "services_fx_service_fetch_all_rates",
-        "services_fx_service_get_async"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/fx_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_ai_providers_get_analytics_ai_provider",
       "name": "get_analytics_ai_provider",
       "entryPoint": "services_analytics_ai_providers_get_analytics_ai_provider",
@@ -14892,6 +15022,42 @@
       "fileCount": 1,
       "files": [
         "app/api/gemma_chat.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_fx_service_get_conversion_quote_sync",
+      "name": "get_conversion_quote_sync",
+      "entryPoint": "services_fx_service_get_conversion_quote_sync",
+      "entryPointId": "services_fx_service_get_conversion_quote_sync",
+      "path": [
+        "services_fx_service_get_conversion_quote_sync",
+        "services_fx_service_cache_key",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_extract_direct_quotes",
+        "services_fx_service_quote_is_fresh",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_store_rate",
+        "services_fx_service_parse_provider_updated_at"
+      ],
+      "qualifiedPath": [
+        "services_fx_service_get_conversion_quote_sync",
+        "services_fx_service_cache_key",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_extract_direct_quotes",
+        "services_fx_service_quote_is_fresh",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_store_rate",
+        "services_fx_service_parse_provider_updated_at"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/fx_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -18279,14 +18445,16 @@
       "entryPointId": "analytics_analyticspages_companiessettingspage",
       "path": [
         "analytics_analyticspages_companiessettingspage",
+        "analytics_analyticspages_planrankfor",
         "analytics_analyticspages_useplan"
       ],
       "qualifiedPath": [
         "analytics_analyticspages_companiessettingspage",
+        "analytics_analyticspages_planrankfor",
         "analytics_analyticspages_useplan"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
@@ -18367,14 +18535,16 @@
       "entryPointId": "analytics_analyticspages_planguard",
       "path": [
         "analytics_analyticspages_planguard",
+        "analytics_analyticspages_planrankfor",
         "analytics_analyticspages_useplan"
       ],
       "qualifiedPath": [
         "analytics_analyticspages_planguard",
+        "analytics_analyticspages_planrankfor",
         "analytics_analyticspages_useplan"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
@@ -18503,14 +18673,16 @@
       "entryPointId": "components_reservationdetaildrawer_reservationdetaildrawer",
       "path": [
         "components_reservationdetaildrawer_reservationdetaildrawer",
+        "components_reservationdetaildrawer_addisodays",
         "components_reservationdetaildrawer_guestfullname"
       ],
       "qualifiedPath": [
         "components_reservationdetaildrawer_reservationdetaildrawer",
+        "components_reservationdetaildrawer_addisodays",
         "components_reservationdetaildrawer_guestfullname"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "frontend/src/components/ReservationDetailDrawer.tsx"
@@ -18571,14 +18743,16 @@
       "entryPointId": "analytics_analyticspages_roomstateeventspage",
       "path": [
         "analytics_analyticspages_roomstateeventspage",
+        "analytics_analyticspages_planrankfor",
         "analytics_analyticspages_useplan"
       ],
       "qualifiedPath": [
         "analytics_analyticspages_roomstateeventspage",
+        "analytics_analyticspages_planrankfor",
         "analytics_analyticspages_useplan"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
@@ -18637,14 +18811,16 @@
       "entryPointId": "analytics_analyticspages_ultraguard",
       "path": [
         "analytics_analyticspages_ultraguard",
+        "analytics_analyticspages_planrankfor",
         "analytics_analyticspages_useplan"
       ],
       "qualifiedPath": [
         "analytics_analyticspages_ultraguard",
+        "analytics_analyticspages_planrankfor",
         "analytics_analyticspages_useplan"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
@@ -21553,28 +21729,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_reservations_extend_stay",
-      "name": "extend_stay",
-      "entryPoint": "api_reservations_extend_stay",
-      "entryPointId": "api_reservations_extend_stay",
-      "path": [
-        "api_reservations_extend_stay",
-        "api_reservations_to_read"
-      ],
-      "qualifiedPath": [
-        "api_reservations_extend_stay",
-        "api_reservations_to_read"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/reservations.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:decorators_audit_hooks_extract_actor_user_id",
       "name": "extract_actor_user_id",
       "entryPoint": "decorators_audit_hooks_extract_actor_user_id",
@@ -21915,14 +22069,16 @@
       "entryPointId": "services_fx_service_get_cached_rates",
       "path": [
         "services_fx_service_get_cached_rates",
+        "services_fx_service_cached_rate",
         "services_fx_service_is_cache_fresh"
       ],
       "qualifiedPath": [
         "services_fx_service_get_cached_rates",
+        "services_fx_service_cached_rate",
         "services_fx_service_is_cache_fresh"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/services/fx_service.py"
@@ -22029,26 +22185,30 @@
       "entryPointId": "services_analytics_service_get_company_fact_detail",
       "path": [
         "services_analytics_service_get_company_fact_detail",
+        "services_analytics_service_currency_unavailable_for",
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_get_company_or_404",
         "services_analytics_service_metric_card",
         "services_analytics_service_money",
         "services_analytics_service_money_str",
-        "services_analytics_service_serialize_company"
+        "services_analytics_service_serialize_company",
+        "services_analytics_service_unavailable_currencies"
       ],
       "qualifiedPath": [
         "services_analytics_service_get_company_fact_detail",
+        "services_analytics_service_currency_unavailable_for",
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_facts_data_as_of",
         "services_analytics_service_get_company_or_404",
         "services_analytics_service_metric_card",
         "services_analytics_service_money",
         "services_analytics_service_money_str",
-        "services_analytics_service_serialize_company"
+        "services_analytics_service_serialize_company",
+        "services_analytics_service_unavailable_currencies"
       ],
       "depth": 1,
-      "nodeCount": 8,
+      "nodeCount": 10,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -22399,14 +22559,22 @@
       "entryPointId": "services_fx_service_get_rate_sync",
       "path": [
         "services_fx_service_get_rate_sync",
-        "services_fx_service_is_cache_fresh"
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_is_cache_fresh",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_store_rate"
       ],
       "qualifiedPath": [
         "services_fx_service_get_rate_sync",
-        "services_fx_service_is_cache_fresh"
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_is_cache_fresh",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_store_rate"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "app/services/fx_service.py"

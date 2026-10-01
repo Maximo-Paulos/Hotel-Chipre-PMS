@@ -4,7 +4,7 @@ Pydantic schemas for Reservation.
 import re
 
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Optional
+from typing import Literal, Optional
 from datetime import date, datetime
 from decimal import Decimal
 from app.models.reservation import ReservationChannelCodeEnum, ReservationStatusEnum, ReservationSourceEnum
@@ -118,17 +118,19 @@ class ReservationRead(BaseModel):
     check_out_date: date
     actual_check_in: Optional[datetime]
     actual_check_out: Optional[datetime]
-    total_amount: float
-    amount_paid: float
-    external_paid_amount: float = 0.0
+    # Deferred-company lodging is invoiced outside the PMS, so amount fields
+    # are nullable in reads and can be masked without suggesting a zero charge.
+    total_amount: float | None
+    amount_paid: float | None
+    external_paid_amount: float | None = 0.0
     external_paid_reference: Optional[str] = None
     external_paid_confirmed: bool = False
-    deposit_amount: float
-    subtotal_amount: float = 0.0
-    tax_amount: float = 0.0
-    fee_amount: float = 0.0
-    commission_amount: float = 0.0
-    net_amount: float = 0.0
+    deposit_amount: float | None
+    subtotal_amount: float | None = 0.0
+    tax_amount: float | None = 0.0
+    fee_amount: float | None = 0.0
+    commission_amount: float | None = 0.0
+    net_amount: float | None = 0.0
     currency_code: str = "ARS"
     fx_rate_snapshot: Optional[float] = None
     quoted_amount_ars: Optional[float] = None
@@ -140,6 +142,7 @@ class ReservationRead(BaseModel):
     external_confirmation_code: Optional[str] = None
     payment_collection_model: str = "hotel_collect"
     settlement_status: str = "not_applicable"
+    company_billing_deferred: bool = False
     num_adults: int
     num_children: int
     notes: Optional[str]
@@ -149,7 +152,7 @@ class ReservationRead(BaseModel):
     company_extension_request_note: Optional[str] = None
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
-    balance_due: float = 0.0
+    balance_due: float | None = 0.0
     nights: int = 0
     additional_guests: list[GuestSummary] = []
     allocation_status: str = "unassigned"
@@ -190,9 +193,10 @@ class ReservationGroupRead(BaseModel):
     room_count: int
     reservation_ids: list[int]
     reservation_codes: list[str]
-    total_amount: Decimal
-    amount_paid: Decimal
-    balance_due: Decimal
+    total_amount: Decimal | None
+    amount_paid: Decimal | None
+    balance_due: Decimal | None
+    company_billing_deferred: bool = False
     currency_code: str
     created_at: datetime
 
@@ -268,10 +272,19 @@ class ReservationExtensionRequest(BaseModel):
     new_checkout_date: date
     client_version: int
     pricing_mode: str = Field(default="current_rate", pattern="^(current_rate|original_average)$")
-    payment_action: str = Field(default="payment_link", pattern="^(immediate_payment|payment_link)$")
+    payment_action: Literal["immediate_payment", "payment_link", "company_account"] = "payment_link"
     immediate_payment: Optional[PaymentRequest] = None
     payment_link: Optional[PaymentLinkCreate] = None
     notes: Optional[str] = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_company_account_extension(self):
+        if self.payment_action == "company_account":
+            if self.immediate_payment is not None or self.payment_link is not None:
+                raise ValueError("La extensión a cuenta empresa no admite datos de cobro")
+            if self.pricing_mode != "current_rate":
+                raise ValueError("La extensión a cuenta empresa usa la tarifa vigente")
+        return self
 
 
 class ReservationExtensionResponse(BaseModel):

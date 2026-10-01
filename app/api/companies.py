@@ -32,6 +32,7 @@ class CompanyOptionRead(BaseModel):
     display_name: str
     legal_name: str
     is_active: bool
+    payment_deferred: bool
 
 
 @router.get("/options", response_model=list[CompanyOptionRead])
@@ -47,6 +48,7 @@ def get_company_options(
             "display_name": row.display_name,
             "legal_name": row.legal_name,
             "is_active": row.is_active,
+            "payment_deferred": row.payment_deferred,
         }
         for row in db.query(Company)
         .filter(Company.hotel_id == context.hotel_id)

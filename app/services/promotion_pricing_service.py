@@ -73,6 +73,7 @@ class CanonicalPricingResult:
     tax_amount: Decimal
     fee_amount: Decimal
     fx_rate_snapshot: Optional[Decimal]
+    fx_quote_details: dict | None
     booking_total: Decimal  # base - promotions + tax/fee, FX-converted, rounded -- what should be persisted
     payment_adjustment: Optional[dict]
     final_total_with_payment_adjustment: Decimal
@@ -97,6 +98,7 @@ class CanonicalPricingResult:
             "tax_amount": str(self.tax_amount),
             "fee_amount": str(self.fee_amount),
             "fx_rate_snapshot": str(self.fx_rate_snapshot) if self.fx_rate_snapshot is not None else None,
+            "fx_quote_details": self.fx_quote_details,
             "booking_total": str(self.booking_total),
             "payment_adjustment": self.payment_adjustment,
             "final_total_with_payment_adjustment": str(self.final_total_with_payment_adjustment),
@@ -154,6 +156,7 @@ def compute_canonical_stay_pricing(
             tax_amount=Decimal("0.00"),
             fee_amount=Decimal("0.00"),
             fx_rate_snapshot=None,
+            fx_quote_details=None,
             booking_total=total,
             payment_adjustment=None,
             final_total_with_payment_adjustment=total,
@@ -220,12 +223,13 @@ def compute_canonical_stay_pricing(
     # Step 5: currency conversion with an FX-rate snapshot.
     output_currency = base_currency
     fx_rate_snapshot: Optional[Decimal] = None
+    fx_quote_details: dict | None = None
     booking_total = gross_total
     if target_currency and target_currency.upper() != base_currency:
         from app.services.pricing_policy_service import PricingPolicyError, _convert_amount
 
         try:
-            converted, rate = _convert_amount(
+            converted, rate, fx_quote_details = _convert_amount(
                 db,
                 hotel_id=hotel_id,
                 amount=float(gross_total),
@@ -271,6 +275,7 @@ def compute_canonical_stay_pricing(
         tax_amount=tax_amount,
         fee_amount=fee_amount,
         fx_rate_snapshot=fx_rate_snapshot,
+        fx_quote_details=fx_quote_details,
         booking_total=booking_total,
         payment_adjustment=payment_adjustment,
         final_total_with_payment_adjustment=final_total,

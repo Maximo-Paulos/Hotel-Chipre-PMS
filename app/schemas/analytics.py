@@ -26,6 +26,7 @@ class AnalyticsMetricCardRead(BaseModel):
     card_code: str
     label: str
     value_ars: str | None = None
+    value_ars_available: bool | None = None
     value_pct: float | None = None
     value_count: int | None = None
 

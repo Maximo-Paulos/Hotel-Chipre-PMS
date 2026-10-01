@@ -143,6 +143,7 @@ def test_reservation_company_options_return_only_minimal_fields(api_client):
             "display_name": "Acme Travel",
             "legal_name": "Acme Travel SRL",
             "is_active": True,
+            "payment_deferred": False,
         }
     ]
     assert "tax_id" not in response.text

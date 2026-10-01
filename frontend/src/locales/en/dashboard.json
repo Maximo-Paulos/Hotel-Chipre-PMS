@@ -50,6 +50,7 @@
       "status": "Status",
       "amount": "Amount"
     },
+    "deferredCompanyBilling": "Billed outside the PMS",
     "empty": "No upcoming reservations."
   },
   "activity": {

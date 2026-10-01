@@ -20,6 +20,8 @@ class OperationalReservationSummary(BaseModel):
     total_amount: Decimal | None = None
     amount_paid: Decimal | None = None
     balance_due: Decimal | None = None
+    company_billing_deferred: bool = False
+    company_night_extra_due: Decimal | None = None
 
 
 class OperationalReservationGroup(BaseModel):

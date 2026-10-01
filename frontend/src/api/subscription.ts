@@ -35,7 +35,7 @@ export type SubscriptionStatus = {
   trial_end_at?: string | null;
   trial_remaining_days?: number | null;
   trial_available?: boolean;
-  source?: "api" | "mock";
+  source?: string;
   available_plans?: Array<SubscriptionPlan>;
 };
 

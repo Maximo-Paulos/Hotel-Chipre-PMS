@@ -23,6 +23,7 @@ from app.schemas.permission import (
 from app.services.permission_service import (
     PERMISSION_DEFINITIONS,
     PERMISSION_PERMISSION_MANAGE,
+    PERMISSION_RESERVATION_RATE_ADJUST,
     PERMISSION_TEMPORARY_GRANTS_MANAGE,
     PERMISSION_TEMPORARY_GRANTS_VIEW,
     ROLE_CODES,
@@ -114,6 +115,32 @@ def _validate_code(code: str) -> str:
     if code not in PERMISSION_DEFINITIONS:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Permiso invalido")
     return canonical_permission_code(code)
+
+
+def _assert_role_profile_mutation_allowed(
+    context: AuthContext,
+    role_code: str,
+    permission_code: str | None = None,
+    *,
+    restoring: bool = False,
+) -> None:
+    """Keep ownership-role cells immutable except the owner's explicit rate control."""
+    if role_code == "co_owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No se pueden modificar los permisos base de Dueño o Codueña",
+        )
+    if role_code == "owner" and not (
+        context.user_role == "owner"
+        and (
+            permission_code == PERMISSION_RESERVATION_RATE_ADJUST
+            or (restoring and permission_code == PERMISSION_PERMISSION_MANAGE)
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo el dueño puede administrar el permiso configurable del rol Dueño",
+        )
 
 
 def _target_membership_or_404(
@@ -224,6 +251,7 @@ def _update_role_override(
 ):
     _validate_role(db, context.hotel_id, payload.role)
     code = _validate_code(payload.permission_code)
+    _assert_role_profile_mutation_allowed(context, payload.role, code)
     try:
         override = set_role_override(
             db,
@@ -311,6 +339,8 @@ def update_visibility_window(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission_administrator),
 ):
+    _validate_role(db, context.hotel_id, payload.role)
+    _assert_role_profile_mutation_allowed(context, payload.role)
     try:
         row = set_visibility_window(
             db,
@@ -341,6 +371,7 @@ def restore_role_permission_override(
 ):
     _validate_role(db, context.hotel_id, role)
     code = _validate_code(permission_code)
+    _assert_role_profile_mutation_allowed(context, role, code, restoring=True)
     try:
         restored = restore_role_override(
             db,
@@ -377,6 +408,7 @@ def restore_role_permission_defaults(
     context: AuthContext = Depends(require_permission_administrator),
 ):
     _validate_role(db, context.hotel_id, role)
+    _assert_role_profile_mutation_allowed(context, role)
     restored = restore_role_defaults(db, context.hotel_id, role, context.user_id)
     db.commit()
     publish_permission_invalidation(context.hotel_id)

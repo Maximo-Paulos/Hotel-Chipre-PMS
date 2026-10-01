@@ -28,6 +28,8 @@ from app.models.user import User
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.dependencies.auth import AuthContext
+from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.permission_service import PERMISSION_SETTINGS_USERS_MANAGE
 
 
 def get_db_override_target():
@@ -235,8 +237,24 @@ def test_invite_rate_limited(authed_client, monkeypatch):
     db.commit()
 
     payload = {"email": "guest1@test.com", "role": "manager", "password": "pw"}
-    r1 = client.post("/api/users/invite", json=payload)
-    r2 = client.post("/api/users/invite", json={"email": "guest2@test.com", "role": "manager", "password": "pw"})
+    def invite(email):
+        path = "/api/users/invite"
+        ticket = create_action_step_up_ticket(
+            user_id=ctx["user_id"],
+            hotel_id=ctx["hotel_id"],
+            token_version=0,
+            permission_code=PERMISSION_SETTINGS_USERS_MANAGE,
+            method="POST",
+            path=path,
+        )
+        return client.post(
+            path,
+            json={"email": email, "role": "manager", "password": "pw"},
+            headers={"X-Action-Step-Up-Ticket": ticket},
+        )
+
+    r1 = invite("guest1@test.com")
+    r2 = invite("guest2@test.com")
 
     invite_limiter.reset(invite_key, db=db)
     db.commit()
@@ -252,9 +270,25 @@ def test_failed_invite_attempt_does_not_consume_successful_invite_quota(authed_c
     invite_limiter.reset(invite_key, db=db)
     db.commit()
 
-    invalid = client.post("/api/users/invite", json={"email": "bad-role@test.com", "role": "owner"})
-    first_success = client.post("/api/users/invite", json={"email": "first-good@test.com", "role": "manager"})
-    over_limit = client.post("/api/users/invite", json={"email": "second-good@test.com", "role": "manager"})
+    def invite(email, role):
+        path = "/api/users/invite"
+        ticket = create_action_step_up_ticket(
+            user_id=ctx["user_id"],
+            hotel_id=ctx["hotel_id"],
+            token_version=0,
+            permission_code=PERMISSION_SETTINGS_USERS_MANAGE,
+            method="POST",
+            path=path,
+        )
+        return client.post(
+            path,
+            json={"email": email, "role": role},
+            headers={"X-Action-Step-Up-Ticket": ticket},
+        )
+
+    invalid = invite("bad-role@test.com", "owner")
+    first_success = invite("first-good@test.com", "manager")
+    over_limit = invite("second-good@test.com", "manager")
 
     invite_limiter.reset(invite_key, db=db)
     db.commit()

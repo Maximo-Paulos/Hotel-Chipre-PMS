@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getHotelConfig, updateHotelConfig, type HotelConfig } from "../../api/config";
+import { getFxRates } from "../../api/fxRates";
 import {
   createRoomCategory,
   updateRoomCategory,
@@ -143,6 +144,12 @@ export function SettingsHotelPage() {
     queryKey: ["hotel-config", session.hotelId],
     enabled: hasValidSession(session),
     queryFn: () => getHotelConfig(session)
+  });
+  const fxRatesQuery = useQuery({
+    queryKey: ["fx-rates", session.hotelId],
+    enabled: hasValidSession(session) && permissionsKnown && hasPermission("settings:fx:manage"),
+    queryFn: () => getFxRates(session),
+    staleTime: 5 * 60 * 1000
   });
 
   useEffect(() => {
@@ -388,6 +395,7 @@ export function SettingsHotelPage() {
   };
 
   const ownerOnly = session.baseRole === "owner";
+  const canManageFxSettings = permissionsKnown && hasPermission("settings:fx:manage");
   const canDeleteRooms = permissionsKnown && hasPermission("hotel_settings:update");
   const canManageManualRatePolicy = permissionsKnown && hasPermission("reservation:manual_rate_policy_manage");
 
@@ -518,6 +526,96 @@ export function SettingsHotelPage() {
               <input maxLength={3} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase" value={form.jurisdiction_code ?? "AR"} onChange={(e) => handleChange("jurisdiction_code", e.target.value.toUpperCase())} />
             </label>
           </div>
+
+          {canManageFxSettings && (
+            <section className="rounded-lg border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-800">Cotizaciones y conversiones</h3>
+              <p className="mt-1 text-xs text-slate-600">
+                Solo se usan cotizaciones oficiales o dólar blue. Para USD, elegí oficial o blue; no se usan dólar tarjeta, MEP, CCL ni otras variantes. EUR, BRL, CLP y UYU usan su cotización oficial directa de DolarAPI; no se inventan cotizaciones blue para esas monedas. Los pares se convierten vía ARS con venta para la moneda de origen y compra para la de destino, aplicando el spread de la política FX. Si falta una cotización fresca, el cálculo se detiene sin cambiar de mercado.
+              </p>
+              <p className="mt-1 text-xs text-slate-600">Cambiar estas preferencias requiere MFA reciente.</p>
+              <div className="mt-3 grid gap-4 lg:grid-cols-2">
+                <label className="text-sm font-semibold text-slate-700">
+                  Cotización USD usada en conversiones
+                  <select
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    value={form.fx_conversion_rate_type ?? "oficial"}
+                    onChange={(event) => handleChange("fx_conversion_rate_type", event.target.value as "oficial" | "blue")}
+                  >
+                    <option value="oficial">Dólar oficial</option>
+                    <option value="blue">Dólar blue</option>
+                  </select>
+                </label>
+                <fieldset>
+                  <legend className="text-sm font-semibold text-slate-700">Cotizaciones USD visibles</legend>
+                  <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                    {([
+                      ["oficial", "Dólar oficial"],
+                      ["blue", "Dólar blue"]
+                    ] as const).map(([rateType, label]) => {
+                      const quote = fxRatesQuery.data?.find((item) => item.type === rateType);
+                      const selected = (form.fx_display_rate_types ?? ["oficial"]).includes(rateType);
+                      return (
+                        <label key={rateType} className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={(event) => {
+                              const current = form.fx_display_rate_types ?? ["oficial"];
+                              const next = event.target.checked
+                                ? Array.from(new Set([...current, rateType]))
+                                : current.filter((item) => item !== rateType);
+                              if (next.length === 0) {
+                                setError("Dejá visible al menos una cotización USD.");
+                                return;
+                              }
+                              handleChange("fx_display_rate_types", next);
+                              setError(null);
+                            }}
+                            className="mt-0.5"
+                          />
+                          <span className="min-w-0">
+                              <span className="block font-semibold text-slate-800">{label}</span>
+                            {selected && quote ? (
+                              <span className="mt-1 block text-xs font-normal text-slate-500">
+                                Compra {quote.compra ?? "—"} · Venta {quote.venta ?? "—"}{quote.fechaActualizacion ? ` · ${quote.fechaActualizacion}` : ""}
+                              </span>
+                            ) : selected ? (
+                              <span className="mt-1 block text-xs font-normal text-slate-500">Cotización no disponible ahora.</span>
+                            ) : (
+                              <span className="mt-1 block text-xs font-normal text-slate-500">Oculta según la preferencia del hotel.</span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              </div>
+              <div className="mt-3 rounded-lg bg-slate-50 p-3">
+                <p className="text-xs font-semibold text-slate-700">Cotizaciones directas usadas para otras monedas</p>
+                {fxRatesQuery.isLoading ? (
+                  <p className="mt-1 text-xs text-slate-500">Cargando cotizaciones de DolarAPI...</p>
+                ) : fxRatesQuery.isError ? (
+                  <p className="mt-1 text-xs text-amber-700">No se pudieron actualizar las cotizaciones ahora. Las conversiones requieren una cotización fresca o un snapshot válido.</p>
+                ) : (
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    {(["EUR", "BRL", "CLP", "UYU"] as const).map((currency) => {
+                      const quote = fxRatesQuery.data?.find((item) => item.type === currency.toLowerCase());
+                      return (
+                        <p key={currency} className="text-xs text-slate-600">
+                          <span className="font-semibold text-slate-800">{currency}:</span> {quote?.casa ?? "—"} · compra {quote?.compra ?? "—"} · venta {quote?.venta ?? "—"}
+                        </p>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Las tarifas y reservas ya creadas conservan sus importes. El mercado USD de este ajuste gobierna todas las conversiones; las políticas FX aportan el spread, mientras que su fuente y lado quedan legados. La dirección determina compra o venta.
+              </p>
+            </section>
+          )}
 
           {canManageManualRatePolicy && (
             <div className="rounded-lg border border-slate-200 p-4">

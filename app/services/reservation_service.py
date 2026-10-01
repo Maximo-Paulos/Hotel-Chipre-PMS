@@ -579,7 +579,10 @@ def _validate_bounded_manual_rate(
             pricing_channel_code=data.pricing_channel_code,
             pricing_payment_method=data.pricing_payment_method,
             guest_scope=data.guest_scope,
-            target_currency=data.target_currency,
+            # Compare against the canonical currency of the active rate plan.
+            # Converting first would require a live FX quote and could hide a
+            # simple currency mismatch behind an integration error.
+            target_currency=None,
             occupancy=data.num_adults + data.num_children,
             guest_id=data.guest_id,
         )
@@ -755,11 +758,38 @@ def _daily_rate_pricing_result(
         })
         current += timedelta(days=1)
 
+    base_currency = _get_hotel_default_currency(db, hotel_id=hotel_id)
+    output_currency = str(target_currency or base_currency).strip().upper()
     total_amount = round(sum(row["price"] for row in breakdown), 2)
+    fx_rate_snapshot = None
+    fx_quote_details = None
+    if output_currency != base_currency:
+        from app.services.pricing_policy_service import PricingPolicyError, _convert_amount
+
+        try:
+            total_amount, fx_rate_snapshot, fx_quote_details = _convert_amount(
+                db,
+                hotel_id=hotel_id,
+                amount=total_amount,
+                from_currency=base_currency,
+                to_currency=output_currency,
+                fx_policy_id=None,
+                provider_code=None,
+            )
+        except PricingPolicyError as exc:
+            raise ReservationError(str(exc)) from exc
+        for row in breakdown:
+            row["price"] = round(float(row["price"]) * fx_rate_snapshot, 2)
+            row["output_currency"] = output_currency
+
     nightly_rate = round(total_amount / nights, 2) if nights else 0.0
     deposit_amount = _compute_deposit_amount(db, hotel_id=hotel_id, gross_total=total_amount)
     snapshot = {
         "pricing_source": "daily_rates",
+        "base_currency": base_currency,
+        "output_currency": output_currency,
+        "fx_rate_snapshot": fx_rate_snapshot,
+        "fx_quote_details": fx_quote_details,
         "category_id": category.id,
         "payment_method": payment_method,
         "pricing_channel_code": pricing_channel_code or "direct",
@@ -778,8 +808,8 @@ def _daily_rate_pricing_result(
         fee_amount=0.0,
         commission_amount=0.0,
         net_amount=total_amount,
-        currency_code=_get_hotel_default_currency(db, hotel_id=hotel_id),
-        fx_rate_snapshot=None,
+        currency_code=output_currency,
+        fx_rate_snapshot=fx_rate_snapshot,
         pricing_source="daily_rates",
         sellable_product_id=sellable_product.id if sellable_product else None,
         rate_plan_id=None,
@@ -799,6 +829,67 @@ def _resolve_reservation_company(db: Session, *, hotel_id: int, company_id: int 
     if company is None:
         raise ReservationError("Company does not belong to the active hotel")
     return company
+
+
+def deferred_company_reservation_ids(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservations: list[Reservation] | tuple[Reservation, ...],
+) -> set[int]:
+    """Return reservations whose lodging is billed outside this PMS.
+
+    The persisted reservation state protects older/settled rows even if a
+    company setting has since changed. Current company configuration is also
+    read, but only through the reservation's hotel scope.
+    """
+    rows = [
+        row
+        for row in reservations
+        if row.hotel_id == hotel_id and row.company_id is not None
+    ]
+    if not rows:
+        return set()
+
+    deferred_ids = {
+        row.id
+        for row in rows
+        if str(getattr(row.settlement_status, "value", row.settlement_status) or "").lower()
+        in {"deferred", "settled"}
+    }
+    candidate_company_ids = {
+        row.company_id for row in rows if row.id not in deferred_ids and row.company_id is not None
+    }
+    if candidate_company_ids:
+        configured_company_ids = {
+            company_id
+            for (company_id,) in (
+                db.query(Company.id)
+                .filter(
+                    Company.hotel_id == hotel_id,
+                    Company.id.in_(candidate_company_ids),
+                    Company.payment_deferred.is_(True),
+                )
+                .all()
+            )
+        }
+        deferred_ids.update(
+            row.id for row in rows if row.company_id in configured_company_ids
+        )
+    return deferred_ids
+
+
+def reservation_has_deferred_company_billing(
+    db: Session,
+    reservation: Reservation,
+    *,
+    hotel_id: int,
+) -> bool:
+    return reservation.id in deferred_company_reservation_ids(
+        db,
+        hotel_id=hotel_id,
+        reservations=[reservation],
+    )
 
 
 def _reservation_channel_indicator(value) -> str | None:
@@ -2214,6 +2305,14 @@ def update_reservation_fields(
             setattr(reservation, field, update_data[field])
 
     if "total_amount" in update_data:
+        if reservation_has_deferred_company_billing(
+            db,
+            reservation,
+            hotel_id=hotel_id,
+        ):
+            raise ReservationError(
+                "El alojamiento de esta empresa se factura fuera del PMS y no admite correcciones de importe aquí."
+            )
         corrected_total = Decimal(str(update_data["total_amount"])).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
@@ -2526,6 +2625,7 @@ def _pricing_result_from_quote(
         "guest_scope": guest_scope,
         "pricing_payment_method": pricing_payment_method,
         "tax_breakdown": quote.tax_breakdown,
+        "fx_quote_details": quote.fx_quote_details,
         "breakdown": [
             {
                 "date": (check_in + timedelta(days=offset)).isoformat(),

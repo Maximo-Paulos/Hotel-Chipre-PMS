@@ -48,6 +48,7 @@ export type CompanyOption = {
   display_name: string;
   legal_name: string;
   is_active: boolean;
+  payment_deferred: boolean;
 };
 
 export const listCompanyOptions = (session?: SessionLike) =>

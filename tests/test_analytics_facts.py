@@ -218,6 +218,61 @@ def test_refresh_fact_reservation_daily_materializes_rows(db, hotel_config, samp
     assert sum(float(row.margin_operating_ars) for row in rows) == pytest.approx(65.0)
 
 
+def test_analytics_read_rebuilds_legacy_one_to_one_currency_facts(
+    db, hotel_config, sample_guest, sample_categories, sample_rooms, monkeypatch
+):
+    reservation = Reservation(
+        confirmation_code="FX-LEGACY-001",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=sample_rooms[0].id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 4, 1),
+        check_out_date=date(2026, 4, 2),
+        total_amount=100.0,
+        subtotal_amount=100.0,
+        net_amount=90.0,
+        amount_paid=0.0,
+        currency_code="ARS",
+        fx_rate_snapshot=None,
+        status=ReservationStatusEnum.PENDING,
+        outcome=ReservationOutcomeEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        channel_code=ReservationChannelCodeEnum.OTHER_DIRECT,
+        guest_segment=ReservationGuestSegmentEnum.LEISURE,
+        guest_segment_source=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
+        no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
+        num_adults=1,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+    refresh_fact_reservation_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date(2026, 4, 1),
+        date_to=date(2026, 4, 1),
+    )
+    fact = db.query(FactReservationDaily).filter_by(reservation_id=reservation.id).one()
+    assert float(fact.revenue_net_usd) == pytest.approx(0.0)
+
+    # Simulate a materialized fact written by the previous 1:1 fallback.
+    fact.revenue_net_usd = fact.revenue_net_ars
+    db.flush()
+    db.expunge(fact)
+    monkeypatch.setattr(db, "commit", lambda: db.flush())
+    analytics_service._ensure_facts_materialized(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date(2026, 4, 1),
+        date_to=date(2026, 4, 1),
+    )
+
+    refreshed = db.query(FactReservationDaily).filter_by(reservation_id=reservation.id).one()
+    assert float(refreshed.revenue_net_ars) == pytest.approx(90.0)
+    assert float(refreshed.revenue_net_usd) == pytest.approx(0.0)
+
+
 def test_refresh_fact_room_occupancy_daily_handles_blocking_events(
     db,
     hotel_config,

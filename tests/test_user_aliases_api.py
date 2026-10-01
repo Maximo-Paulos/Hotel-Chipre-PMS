@@ -18,6 +18,7 @@ from app.models.user import User
 from app.services.invitation_service import issue_invitation
 from app.services.security import hash_password
 from app.services.permission_service import PERMISSION_SETTINGS_USERS_MANAGE
+from app.services.action_step_up_service import create_action_step_up_ticket
 
 
 def _user(email: str, role: str) -> User:
@@ -42,6 +43,19 @@ def _invitation(db, *, hotel_id: int, user: User, inviter: User) -> StaffInvitat
     )
     db.flush()
     return invitation
+
+
+def _step_up_headers(user: User, hotel_id: int, method: str, path: str) -> dict[str, str]:
+    return {
+        "X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+            user_id=user.id,
+            hotel_id=hotel_id,
+            token_version=0,
+            permission_code=PERMISSION_SETTINGS_USERS_MANAGE,
+            method=method,
+            path=path,
+        )
+    }
 
 
 def test_alias_roster_is_minimal_hotel_scoped_and_includes_active_and_invited_members():
@@ -73,7 +87,10 @@ def test_alias_roster_is_minimal_hotel_scoped_and_includes_active_and_invited_me
     )
     client = TestClient(app)
     try:
-        response = client.get("/api/users/aliases")
+        response = client.get(
+            "/api/users/aliases",
+            headers=_step_up_headers(owner, 31, "GET", "/api/users/aliases"),
+        )
         assert response.status_code == 200, response.text
         body = response.json()
         assert set(body) == {"items"}
@@ -126,26 +143,46 @@ def test_alias_edit_and_invite_alias_are_normalized_unique_and_hotel_scoped(monk
     monkeypatch.setattr("app.api.users.mailer", NotConfiguredMailer())
     client = TestClient(app)
     try:
-        edited = client.patch(f"/api/users/{active.id}/alias", json={"alias": "  Night   Manager  "})
+        active_alias_path = f"/api/users/{active.id}/alias"
+        edited = client.patch(
+            active_alias_path,
+            json={"alias": "  Night   Manager  "},
+            headers=_step_up_headers(owner, 41, "PATCH", active_alias_path),
+        )
         assert edited.status_code == 200, edited.text
         db.refresh(db.query(HotelMembership).filter_by(hotel_id=41, user_id=active.id).one())
         active_membership = db.query(HotelMembership).filter_by(hotel_id=41, user_id=active.id).one()
         assert active_membership.alias == "Night Manager"
         assert active_membership.alias_key == "night manager"
 
-        invited_edit = client.patch(f"/api/users/{invited.id}/alias", json={"alias": "Back Office"})
+        invited_alias_path = f"/api/users/{invited.id}/alias"
+        invited_edit = client.patch(
+            invited_alias_path,
+            json={"alias": "Back Office"},
+            headers=_step_up_headers(owner, 41, "PATCH", invited_alias_path),
+        )
         assert invited_edit.status_code == 200, invited_edit.text
         assert invited_edit.json()["status"] == "invited"
         assert invited_edit.json()["alias"] == "Back Office"
 
-        duplicate = client.patch(f"/api/users/{invited.id}/alias", json={"alias": "NIGHT MANAGER"})
+        duplicate = client.patch(
+            invited_alias_path,
+            json={"alias": "NIGHT MANAGER"},
+            headers=_step_up_headers(owner, 41, "PATCH", invited_alias_path),
+        )
         assert duplicate.status_code == 409, duplicate.text
-        foreign = client.patch(f"/api/users/{other_hotel_user.id}/alias", json={"alias": "Outside"})
+        foreign_path = f"/api/users/{other_hotel_user.id}/alias"
+        foreign = client.patch(
+            foreign_path,
+            json={"alias": "Outside"},
+            headers=_step_up_headers(owner, 41, "PATCH", foreign_path),
+        )
         assert foreign.status_code == 404
 
         invited_response = client.post(
             "/api/users/invite",
             json={"email": "new-invite@example.test", "role": "receptionist", "alias": "  Evening   Desk "},
+            headers=_step_up_headers(owner, 41, "POST", "/api/users/invite"),
         )
         assert invited_response.status_code == 201, invited_response.text
         assert invited_response.json()["email_delivery"] == "not_configured"
@@ -165,6 +202,7 @@ def test_alias_edit_and_invite_alias_are_normalized_unique_and_hotel_scoped(monk
         failed_delivery = client.post(
             "/api/users/invite",
             json={"email": "delivery-failed@example.test", "role": "manager"},
+            headers=_step_up_headers(owner, 41, "POST", "/api/users/invite"),
         )
         assert failed_delivery.status_code == 201, failed_delivery.text
         assert failed_delivery.json()["email_delivery"] == "failed"
@@ -173,8 +211,10 @@ def test_alias_edit_and_invite_alias_are_normalized_unique_and_hotel_scoped(monk
         persisted_membership = db.query(HotelMembership).filter_by(hotel_id=41, user_id=persisted_user.id).one()
         assert persisted_membership.status == "invited"
 
+        resend_path = f"/api/users/invitations/{failed_delivery.json()['invitation_id']}/resend"
         retried_delivery = client.post(
-            f"/api/users/invitations/{failed_delivery.json()['invitation_id']}/resend"
+            resend_path,
+            headers=_step_up_headers(owner, 41, "POST", resend_path),
         )
         assert retried_delivery.status_code == 200, retried_delivery.text
         assert retried_delivery.json()["email_delivery"] == "failed"
@@ -190,6 +230,7 @@ def test_alias_edit_and_invite_alias_are_normalized_unique_and_hotel_scoped(monk
         sent_delivery = client.post(
             "/api/users/invite",
             json={"email": "delivery-sent@example.test", "role": "manager"},
+            headers=_step_up_headers(owner, 41, "POST", "/api/users/invite"),
         )
         assert sent_delivery.status_code == 201, sent_delivery.text
         assert sent_delivery.json()["email_delivery"] == "sent"

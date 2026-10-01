@@ -128,6 +128,7 @@ PERMISSION_HOTEL_SECURITY_MANAGE = "hotel_settings:security_manage"
 # Existing capabilities outside the split modules stay canonical.
 PERMISSION_COMPANY_MANAGE = "company:manage"
 PERMISSION_CASH_OPERATE = "cash:operate"
+PERMISSION_CASH_ADJUSTMENT_MANAGE = "cash:adjustment_manage"
 PERMISSION_CASH_EXPENSE = "cash:expense"
 PERMISSION_CASH_RECORD_PRIOR_RECEIPT = "cash:record_prior_receipt"
 PERMISSION_CASH_APPROVE_DIFFERENCE = "cash:approve_difference"
@@ -163,6 +164,7 @@ PERMISSION_SETTINGS_INTEGRATIONS_MANAGE = "settings:integrations:manage"
 PERMISSION_SETTINGS_SUBSCRIPTION_VIEW = "settings:subscription:view"
 PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE = "settings:subscription:manage"
 PERMISSION_SETTINGS_SECURITY_VIEW = "settings:security:view"
+PERMISSION_SETTINGS_FX_MANAGE = "settings:fx:manage"
 PERMISSION_SETTINGS_NOTIFICATIONS_VIEW = "settings:notifications:view"
 PERMISSION_SETTINGS_DAILY_REPORT_VIEW = "settings:notifications:daily_report:view"
 PERMISSION_SETTINGS_DAILY_REPORT_MANAGE = "settings:notifications:daily_report:manage"
@@ -458,6 +460,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "cash", "Operate cash register sessions and movements",
         "Permite abrir, operar y cerrar sesiones de caja y registrar movimientos. No permite aprobar diferencias de cierre.",
     ),
+    PERMISSION_CASH_ADJUSTMENT_MANAGE: (
+        "cash", "Manage manual cash balance adjustments",
+        "Permite registrar ajustes manuales que cambian el saldo esperado de caja. Requiere también cash:operate y MFA reciente; no habilita ingresos ni egresos manuales.",
+    ),
     PERMISSION_CASH_EXPENSE: (
         "cash", "Record manual cash expenses",
         "Permite registrar egresos manuales de caja. Requiere permiso explícito y MFA reciente; los reembolsos de huéspedes deben usar el flujo de devoluciones.",
@@ -589,6 +595,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     PERMISSION_SETTINGS_SECURITY_VIEW: (
         "settings", "Read security settings",
         "Permite abrir la configuración de seguridad y consultar su estado. No permite modificar secretos, sesiones ni políticas.",
+    ),
+    PERMISSION_SETTINGS_FX_MANAGE: (
+        "settings", "Manage currency conversion market",
+        "Permite elegir dólar oficial o blue para cotizaciones USD y las monedas visibles. Está limitado a Dueña/Codueña y cada cambio requiere MFA reciente.",
     ),
     PERMISSION_SETTINGS_NOTIFICATIONS_VIEW: (
         "settings", "Read notifications",
@@ -805,29 +815,36 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
 
 _OWNER_ONLY = frozenset(
     {
-        PERMISSION_PERMISSION_MANAGE,
         PERMISSION_HOTEL_PROPERTY_MANAGE,
         PERMISSION_HOTEL_SECURITY_MANAGE,
         PERMISSION_APIKEY_MANAGE,
         PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
     }
 )
-_STEP_UP_REQUIRED = _OWNER_ONLY | frozenset(
+_CRITICAL_PERMISSION_CODES = _OWNER_ONLY | frozenset(
+    {PERMISSION_PERMISSION_MANAGE, PERMISSION_SETTINGS_FX_MANAGE}
+)
+_STEP_UP_REQUIRED = _CRITICAL_PERMISSION_CODES | frozenset(
     {
         PERMISSION_CASH_APPROVE_DIFFERENCE,
         PERMISSION_CASH_CUSTODY_RECEIVE,
+        PERMISSION_CASH_ADJUSTMENT_MANAGE,
         PERMISSION_CASH_EXPENSE,
         PERMISSION_PAYMENT_REFUND,
         PERMISSION_OTA_PAYMENT_CONFIRM,
         PERMISSION_RESERVATION_CANCEL_PAID,
+        PERMISSION_SETTINGS_USERS_MANAGE,
+        PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,
     }
 )
 _ROLE_SCOPES: dict[str, frozenset[str]] = {
+    PERMISSION_PERMISSION_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_USERS_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_USERS_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_SUBSCRIPTION_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_SECURITY_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_SETTINGS_FX_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_TESTS_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_TESTS_EXECUTE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_DAILY_REPORT_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
@@ -841,6 +858,15 @@ _ROLE_SCOPES: dict[str, frozenset[str]] = {
     PERMISSION_CASH_APPROVE_DIFFERENCE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_CASH_CUSTODY_RECEIVE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
 }
+_CO_OWNER_ADMIN_ACCESS_PERMISSIONS = frozenset(
+    {
+        PERMISSION_SETTINGS_USERS_VIEW,
+        PERMISSION_SETTINGS_USERS_MANAGE,
+        PERMISSION_SETTINGS_SUBSCRIPTION_VIEW,
+        PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,
+        PERMISSION_SETTINGS_SECURITY_VIEW,
+    }
+)
 
 
 def immutable_permission_decision(role: str | None, code: str) -> tuple[bool, str] | None:
@@ -848,6 +874,22 @@ def immutable_permission_decision(role: str | None, code: str) -> tuple[bool, st
     if canonical in _OWNER_ONLY:
         return role == ROLE_OWNER, "owner_only"
     scoped_roles = _ROLE_SCOPES.get(canonical)
+    # The hotel confirmed that Co-owner receives the same default access to
+    # these administrative sections. Keep historical denials from silently
+    # removing the second administrator's access; Owner overrides remain intact.
+    if canonical in _CO_OWNER_ADMIN_ACCESS_PERMISSIONS and role == ROLE_CO_OWNER:
+        return True, "role_scope"
+    if canonical == PERMISSION_SETTINGS_FX_MANAGE and role in {ROLE_OWNER, ROLE_CO_OWNER}:
+        return True, "role_scope"
+    # Permission administration is an immutable baseline for both accountable
+    # owners. They can manage operational roles, but this grant cannot be
+    # revoked and leave the hotel without an administrator.
+    if (
+        canonical == PERMISSION_PERMISSION_MANAGE
+        and scoped_roles is not None
+        and role in scoped_roles
+    ):
+        return True, "role_scope"
     # Custody receipt is an independent step-up action for the two accountable
     # owners. Hotel overrides may disable difference approval, but must not
     # make a delivered-cash handoff impossible to acknowledge.
@@ -970,9 +1012,9 @@ def seed_default_permissions(db: Session) -> None:
             {
                 "code": code,
                 "description": description,
-                "critical": code in _OWNER_ONLY,
+                "critical": code in _CRITICAL_PERMISSION_CODES,
                 "step_up_required": code in _STEP_UP_REQUIRED,
-                "delegable": code not in _OWNER_ONLY,
+                "delegable": code not in _CRITICAL_PERMISSION_CODES,
             }
             for code, description in PERMISSION_DEFINITIONS.items()
         ],
@@ -981,9 +1023,9 @@ def seed_default_permissions(db: Session) -> None:
     rows = {row.code: row for row in db.query(Permission).filter(Permission.code.in_(PERMISSION_DEFINITIONS)).all()}
     for code, description in PERMISSION_DEFINITIONS.items():
         rows[code].description = description
-        rows[code].critical = code in _OWNER_ONLY
+        rows[code].critical = code in _CRITICAL_PERMISSION_CODES
         rows[code].step_up_required = code in _STEP_UP_REQUIRED
-        rows[code].delegable = code not in _OWNER_ONLY
+        rows[code].delegable = code not in _CRITICAL_PERMISSION_CODES
     db.flush()
     values = [
         {"role": role, "permission_code": code, "allowed": allowed}
@@ -1884,11 +1926,15 @@ def get_permission_catalog(db: Session | None = None) -> list[dict[str, object]]
                 "description": description,
                 "help_es": help_es,
                 "legacy_aliases": sorted(alias for alias, target in LEGACY_PERMISSION_ALIASES.items() if target == code),
-                "locked": code in _OWNER_ONLY,
-                "lock_reason": "owner_only" if code in _OWNER_ONLY else None,
-                "critical": bool(metadata.critical) if metadata is not None else code in _OWNER_ONLY,
-                "step_up_required": bool(metadata.step_up_required) if metadata is not None else code in _OWNER_ONLY,
-                "delegable": bool(metadata.delegable) if metadata is not None else code not in _OWNER_ONLY,
+                "locked": code in _CRITICAL_PERMISSION_CODES,
+                "lock_reason": (
+                    "owner_only" if code in _OWNER_ONLY
+                    else "role_scope" if code in _ROLE_SCOPES
+                    else None
+                ),
+                "critical": bool(metadata.critical) if metadata is not None else code in _CRITICAL_PERMISSION_CODES,
+                "step_up_required": bool(metadata.step_up_required) if metadata is not None else code in _STEP_UP_REQUIRED,
+                "delegable": bool(metadata.delegable) if metadata is not None else code not in _CRITICAL_PERMISSION_CODES,
             }
         )
     return sorted(result, key=lambda row: (str(row["module"]), str(row["code"])))

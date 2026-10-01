@@ -50,6 +50,7 @@
       "status": "Estado",
       "amount": "Monto"
     },
+    "deferredCompanyBilling": "Facturado fuera del PMS",
     "empty": "Sin próximas reservas."
   },
   "activity": {

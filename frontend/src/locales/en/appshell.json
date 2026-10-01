@@ -7,11 +7,19 @@
     "title": "No connection.",
     "description": "Visible data may be outdated. Reservation actions, check-in/out and payments require a connection and are not saved to retry automatically."
   },
+  "accessDenied": {
+    "title": "You don't have permission to view this section.",
+    "description": "Ask the hotel owner to review your permissions if you need access.",
+    "home": "Return to my home page"
+  },
+  "currency": {
+    "historicalRateUnavailable": "Historical exchange rate unavailable"
+  },
   "realtime": {
     "connected": "Connected: real-time changes active.",
     "connecting": "Connecting real-time sync…",
     "reconnecting": "Reconnecting real-time sync…",
-    "degraded": "Real-time sync degraded. Operations keep saving; we will refresh once reconnected."
+    "degraded": "Real-time sync is degraded. Check each action's confirmation before trying it again."
   },
   "viewingAs": {
     "banner": "Previewing as {{role}} — this does not change permissions or identity; your effective permissions remain those of {{baseRole}}.",
@@ -38,6 +46,7 @@
     "install": "Install",
     "dismiss": "Not now"
   },
+  "quickReservation": "Quick reservation",
   "nav": {
     "daily": {
       "planning": "Planning",

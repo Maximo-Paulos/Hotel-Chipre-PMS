@@ -18,6 +18,8 @@ from app.models.room import RoomCategory, Room
 from app.models.guest import Guest
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.services.security import hash_password
+from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.permission_service import PERMISSION_SETTINGS_USERS_MANAGE
 
 
 @pytest.fixture
@@ -171,9 +173,19 @@ def test_staff_cap_enforced_for_pending_invites_and_scoped_by_hotel(client_with_
     create_hotel_with_membership(db, 2, ctx["user_id"])
 
     def invite(email):
+        path = "/api/users/invite"
+        ticket = create_action_step_up_ticket(
+            user_id=ctx["user_id"],
+            hotel_id=ctx["hotel_id"],
+            token_version=0,
+            permission_code=PERMISSION_SETTINGS_USERS_MANAGE,
+            method="POST",
+            path=path,
+        )
         return client.post(
-            "/api/users/invite",
+            path,
             json={"email": email, "role": "receptionist"},
+            headers={"X-Action-Step-Up-Ticket": ticket},
         )
 
     # Starter allows the owner plus two reserved staff slots. Pending

@@ -44,7 +44,7 @@ function localIsoDate(offsetDays: number) {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 }
 
-test("company check-in waits for passenger validation and records extension requests without changing the stay", async ({ page, request }) => {
+test("company check-in records and applies a deferred extension without registering payment", async ({ page, request }) => {
   const session = await readSession(request);
   const headers = authHeaders(session);
   const suffix = Date.now().toString();
@@ -55,7 +55,8 @@ test("company check-in waits for passenger validation and records extension requ
       legal_name: `QA Empresa Diferida ${suffix} SRL`,
       display_name: `QA Empresa Diferida ${suffix}`,
       country_code: "AR",
-      payment_deferred: true
+      payment_deferred: true,
+      base_price: 100
     }
   });
   expect(companyResponse.status()).toBe(201, await companyResponse.text());
@@ -76,6 +77,34 @@ test("company check-in waits for passenger validation and records extension requ
 
   const checkIn = localIsoDate(0);
   const checkOut = localIsoDate(1);
+  const quoteResponse = await request.get(`${backendURL}/api/bookings/price-quote`, {
+    headers,
+    params: {
+      category_id: category!.id,
+      check_in_date: checkIn,
+      check_out_date: checkOut,
+      guest_id: guest.id,
+      company_id: company.id,
+      occupancy: 1
+    }
+  });
+  expect(quoteResponse.ok()).toBeTruthy();
+  const quote = await quoteResponse.json() as {
+    quote_token: string;
+    company_billing_deferred: boolean;
+    amounts_disclosed: boolean;
+    total_amount: number | null;
+    deposit_amount: number | null;
+    breakdown: unknown[];
+    promotions_applied: unknown[];
+  };
+  expect(quote.company_billing_deferred).toBe(true);
+  expect(quote.amounts_disclosed).toBe(false);
+  expect(quote.total_amount).toBeNull();
+  expect(quote.deposit_amount).toBeNull();
+  expect(quote.breakdown).toEqual([]);
+  expect(quote.promotions_applied).toEqual([]);
+
   const reservationResponse = await request.post(`${backendURL}/api/reservations/`, {
     headers,
     data: {
@@ -86,8 +115,7 @@ test("company check-in waits for passenger validation and records extension requ
       check_out_date: checkOut,
       num_adults: 1,
       num_children: 0,
-      total_amount: 100,
-      manual_rate_reason: "QA: tarifa de empresa",
+      quote_token: quote.quote_token,
       reservation_comment: "QA de check-in corporativo"
     }
   });
@@ -97,8 +125,30 @@ test("company check-in waits for passenger validation and records extension requ
     confirmation_code: string;
     check_in_date: string;
     check_out_date: string;
-    total_amount: number;
+    total_amount: number | null;
+    amount_paid: number | null;
+    company_billing_deferred: boolean;
   };
+  expect(reservation.company_billing_deferred).toBe(true);
+  expect(reservation.total_amount).toBeNull();
+  expect(reservation.amount_paid).toBeNull();
+
+  const financialSummaryResponse = await request.get(`${backendURL}/api/payments/summary/${reservation.id}`, { headers });
+  expect(financialSummaryResponse.ok()).toBeTruthy();
+  const financialSummary = await financialSummaryResponse.json() as {
+    company_billing_deferred: boolean;
+    total_amount: number | null;
+    deposit_required: number | null;
+    amount_paid: number | null;
+    balance_due: number | null;
+    financial_reconciliation_gap: number | null;
+  };
+  expect(financialSummary.company_billing_deferred).toBe(true);
+  expect(financialSummary.total_amount).toBeNull();
+  expect(financialSummary.deposit_required).toBeNull();
+  expect(financialSummary.amount_paid).toBeNull();
+  expect(financialSummary.balance_due).toBeNull();
+  expect(financialSummary.financial_reconciliation_gap).toBeNull();
 
   let releaseValidation!: () => void;
   let validationReached!: () => void;
@@ -158,12 +208,76 @@ test("company check-in waits for passenger validation and records extension requ
   const updated = await afterRequest.json() as typeof reservation & {
     company_extension_request_pending: boolean;
     company_extension_request_note: string;
-    amount_paid: number;
   };
   expect(updated.company_extension_request_pending).toBe(true);
   expect(updated.company_extension_request_note).toBe(extensionNote);
   expect(updated.check_in_date).toBe(reservation.check_in_date);
   expect(updated.check_out_date).toBe(reservation.check_out_date);
-  expect(updated.total_amount).toBe(reservation.total_amount);
-  expect(updated.amount_paid).toBe(0);
+  expect(updated.total_amount).toBeNull();
+  expect(updated.amount_paid).toBeNull();
+
+  const extensionApplyPanel = drawer.getByTestId("company-extension-apply");
+  await expect(extensionApplyPanel).toBeVisible();
+  const extendedCheckoutDate = localIsoDate(3);
+  await extensionApplyPanel.getByLabel("Nueva fecha de salida").fill(extendedCheckoutDate);
+
+  const financialWrites: string[] = [];
+  const onFinancialWrite = (requestEvent: import("@playwright/test").Request) => {
+    if (
+      ["POST", "PUT", "PATCH", "DELETE"].includes(requestEvent.method()) &&
+      /\/api\/(?:payments?|payment-links|cash)(?:\/|$)/.test(new URL(requestEvent.url()).pathname)
+    ) financialWrites.push(`${requestEvent.method()} ${new URL(requestEvent.url()).pathname}`);
+  };
+  page.on("request", onFinancialWrite);
+  const writesBeforeExtension = financialWrites.length;
+  const extensionResponsePromise = page.waitForResponse((response) =>
+    response.url().endsWith(`/api/reservations/${reservation.id}/extend`) && response.request().method() === "POST"
+  );
+  await extensionApplyPanel.getByRole("button", { name: "Aplicar extensión" }).click();
+  const confirmation = page.getByRole("alertdialog", { name: "Confirmar extensión de estadía" });
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole("button", { name: "Confirmar extensión" }).click();
+  const extensionResponse = await extensionResponsePromise;
+  expect(extensionResponse.status()).toBe(200, await extensionResponse.text());
+  const extensionResult = await extensionResponse.json() as {
+    reservation: { check_out_date: string; total_amount: number | null; amount_paid: number | null; company_billing_deferred: boolean };
+    extension_amount: number | string;
+    transaction: null;
+    payment_link: null;
+  };
+  expect(extensionResponse.request().postDataJSON()).toMatchObject({
+    new_checkout_date: extendedCheckoutDate,
+    pricing_mode: "current_rate",
+    payment_action: "company_account"
+  });
+  expect(extensionResult.transaction).toBeNull();
+  expect(extensionResult.payment_link).toBeNull();
+  expect(Number(extensionResult.extension_amount)).toBe(0);
+  expect(extensionResult.reservation.company_billing_deferred).toBe(true);
+  expect(extensionResult.reservation.total_amount).toBeNull();
+  expect(extensionResult.reservation.amount_paid).toBeNull();
+  await expect(drawer.getByText("Extensión aplicada. El alojamiento se factura fuera del PMS.", { exact: true })).toBeVisible();
+  expect(financialWrites.slice(writesBeforeExtension)).toEqual([]);
+  page.off("request", onFinancialWrite);
+
+  const afterExtensionResponse = await request.get(`${backendURL}/api/reservations/${reservation.id}`, { headers });
+  expect(afterExtensionResponse.ok()).toBeTruthy();
+  const afterExtension = await afterExtensionResponse.json() as typeof updated;
+  expect(afterExtension.check_in_date).toBe(reservation.check_in_date);
+  expect(afterExtension.check_out_date).toBe(extendedCheckoutDate);
+  expect(afterExtension.total_amount).toBeNull();
+  expect(afterExtension.amount_paid).toBeNull();
+  expect(afterExtension.company_extension_request_pending).toBe(false);
+  expect(afterExtension.company_extension_request_note).toBe(extensionNote);
+  expect(extensionResult.reservation.check_out_date).toBe(extendedCheckoutDate);
+
+  const updatedFinancialSummaryResponse = await request.get(`${backendURL}/api/payments/summary/${reservation.id}`, { headers });
+  expect(updatedFinancialSummaryResponse.ok()).toBeTruthy();
+  const updatedFinancialSummary = await updatedFinancialSummaryResponse.json() as typeof financialSummary;
+  expect(updatedFinancialSummary.company_billing_deferred).toBe(true);
+  expect(updatedFinancialSummary.total_amount).toBeNull();
+  expect(updatedFinancialSummary.deposit_required).toBeNull();
+  expect(updatedFinancialSummary.amount_paid).toBeNull();
+  expect(updatedFinancialSummary.balance_due).toBeNull();
+  expect(updatedFinancialSummary.financial_reconciliation_gap).toBeNull();
 });

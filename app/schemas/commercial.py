@@ -4,9 +4,9 @@ Schemas for the configurable commercial domain.
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProductRoomCompatibilityWrite(BaseModel):
@@ -196,19 +196,31 @@ class FxPolicyBase(BaseModel):
 
 
 class FxPolicyCreate(FxPolicyBase):
-    pass
+    preferred_source: Literal["official", "oficial", "blue"] = "official"
+    preferred_side: Literal["buy", "sell"] = "sell"
+    spread_pct: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+
+    @field_validator("preferred_source")
+    @classmethod
+    def normalize_preferred_source(cls, value: str) -> str:
+        return "official" if value == "oficial" else value
 
 
 class FxPolicyUpdate(BaseModel):
     code: Optional[str] = Field(default=None, min_length=1, max_length=50)
     name: Optional[str] = Field(default=None, min_length=1, max_length=150)
     base_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
-    preferred_source: Optional[str] = Field(default=None, min_length=1, max_length=50)
-    preferred_side: Optional[str] = Field(default=None, min_length=1, max_length=20)
-    spread_pct: Optional[float] = None
+    preferred_source: Optional[Literal["official", "oficial", "blue"]] = None
+    preferred_side: Optional[Literal["buy", "sell"]] = None
+    spread_pct: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     rounding_mode: Optional[str] = Field(default=None, min_length=1, max_length=30)
     is_active: Optional[bool] = None
     metadata_json: Optional[str] = None
+
+    @field_validator("preferred_source")
+    @classmethod
+    def normalize_preferred_source(cls, value: str | None) -> str | None:
+        return "official" if value == "oficial" else value
 
 
 class FxPolicyRead(FxPolicyBase):

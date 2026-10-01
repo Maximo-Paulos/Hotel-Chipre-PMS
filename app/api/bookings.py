@@ -206,6 +206,10 @@ def price_quote(
     """
     Calculate pricing for a potential booking without persisting it.
     Uses the canonical daily/seasonal rate resolver and then the category base price.
+
+    For deferred-billing companies, the quote retains date/category and token
+    fields required for reservation creation, marks ``company_billing_deferred``
+    true, and returns no monetary values (null amounts and empty price details).
     """
     if guest_id is not None:
         active = get_active_guest_restrictions(db, hotel_id=context.hotel_id, guest_id=guest_id)

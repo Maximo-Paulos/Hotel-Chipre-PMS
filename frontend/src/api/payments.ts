@@ -25,16 +25,17 @@ export type PaymentSummary = {
   confirmation_code: string;
   status: string;
   currency_code: string;
-  total_amount: number;
-  deposit_required: number;
-  amount_paid: number;
-  balance_due: number;
+  total_amount: number | null;
+  deposit_required: number | null;
+  amount_paid: number | null;
+  balance_due: number | null;
   // total_amount/balance_due only reflect the reservation's base price; they
   // ignore consumption charges (BillingAdjustment). operational_* includes
   // them and is the amount actually owed -- use it for collecting payment.
   operational_total_amount?: number;
   operational_balance_due?: number;
   billing_adjustment_total?: number;
+  company_billing_deferred?: boolean;
   completed_payments: number;
   transactions: Array<{
     id: number;

@@ -105,6 +105,7 @@ def list_reservation_groups(
             Reservation.total_amount,
             Reservation.amount_paid,
             Reservation.currency_code,
+            Reservation.settlement_status,
         )
         .filter(
             Reservation.hotel_id == hotel_id,
@@ -140,15 +141,38 @@ def list_reservation_groups(
         balance_due = Decimal("0.00")
         currencies = set()
         for child in children:
-            gross = Decimal(str(child.total_amount or 0))
-            paid = paid_by_reservation.get(child.id, Decimal(str(child.amount_paid or 0)))
-            adjustment = adjustments_by_reservation.get(child.id, Decimal("0.00"))
-            total_amount += gross
-            amount_paid += paid
-            balance_due += max(Decimal("0.00"), gross + adjustment - paid)
+            company = companies_by_id.get(group.company_id)
+            child_settlement_status = str(
+                getattr(child.settlement_status, "value", child.settlement_status) or ""
+            ).lower()
+            child_is_deferred = bool(
+                group.company_id is not None
+                and (
+                    bool(company and company.payment_deferred)
+                    or child_settlement_status in {"deferred", "settled"}
+                )
+            )
+            if not child_is_deferred:
+                gross = Decimal(str(child.total_amount or 0))
+                paid = paid_by_reservation.get(child.id, Decimal(str(child.amount_paid or 0)))
+                adjustment = adjustments_by_reservation.get(child.id, Decimal("0.00"))
+                total_amount += gross
+                amount_paid += paid
+                balance_due += max(Decimal("0.00"), gross + adjustment - paid)
             currencies.add(child.currency_code)
         guest = guests_by_id.get(group.guest_id)
         company = companies_by_id.get(group.company_id)
+        company_billing_deferred = bool(
+            group.company_id is not None
+            and (
+                bool(company and company.payment_deferred)
+                or any(
+                    str(getattr(row.settlement_status, "value", row.settlement_status) or "").lower()
+                    in {"deferred", "settled"}
+                    for row in children
+                )
+            )
+        )
         result.append(
             {
                 "id": group.id,
@@ -164,9 +188,10 @@ def list_reservation_groups(
                 "room_count": sum(1 for row in children if row.room_id is not None),
                 "reservation_ids": [row.id for row in children],
                 "reservation_codes": [row.confirmation_code for row in children],
-                "total_amount": total_amount.quantize(Decimal("0.01")),
-                "amount_paid": amount_paid.quantize(Decimal("0.01")),
-                "balance_due": balance_due.quantize(Decimal("0.01")),
+                "total_amount": None if company_billing_deferred else total_amount.quantize(Decimal("0.01")),
+                "amount_paid": None if company_billing_deferred else amount_paid.quantize(Decimal("0.01")),
+                "balance_due": None if company_billing_deferred else balance_due.quantize(Decimal("0.01")),
+                "company_billing_deferred": company_billing_deferred,
                 "currency_code": next(iter(currencies)) if len(currencies) == 1 else "ARS",
                 "created_at": group.created_at,
             }

@@ -13,7 +13,7 @@ const session = {
   csrfToken: "test-csrf-token"
 };
 
-function loadClient(fetchImpl) {
+function loadClient(fetchImpl, { locks } = {}) {
   const source = clientSource.replace("import.meta.env.VITE_API_URL", "undefined");
   const compiled = ts.transpileModule(source, {
     compilerOptions: {
@@ -31,8 +31,10 @@ function loadClient(fetchImpl) {
       exports: module.exports,
       require: () => ({ broadcastDomainChange() {} }),
       fetch: fetchImpl,
+      navigator: locks ? { locks } : undefined,
       Headers,
       URL,
+      setTimeout,
       atob,
       window: {
         location: {
@@ -324,6 +326,106 @@ test("concurrent 401s for the same session share one refresh and both retry", as
   assert.equal(refreshCalls, 1);
   assert.equal(protectedCalls, 4);
   assert.deepEqual(results.map((result) => result.ok), [true, true]);
+});
+
+test("refresh requests from different tabs serialize around the rotating session cookie", async () => {
+  const queues = new Map();
+  const locks = {
+    request(name, _options, callback) {
+      const previous = queues.get(name) ?? Promise.resolve();
+      const current = previous.then(callback);
+      queues.set(name, current.then(() => undefined, () => undefined));
+      return current;
+    }
+  };
+  let serverSessionCookie = "session-0";
+  let browserSessionCookie = "session-0";
+  let refreshCalls = 0;
+  let inFlightRefreshes = 0;
+  let maximumConcurrentRefreshes = 0;
+  const fetchFromEitherTab = async (url, init) => {
+    const pathname = new URL(String(url)).pathname;
+    if (pathname.endsWith("/auth/session/refresh")) {
+      const submittedCookie = browserSessionCookie;
+      refreshCalls += 1;
+      inFlightRefreshes += 1;
+      maximumConcurrentRefreshes = Math.max(maximumConcurrentRefreshes, inFlightRefreshes);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      if (submittedCookie !== serverSessionCookie) {
+        inFlightRefreshes -= 1;
+        return jsonResponse(401, { detail: "Sesion invalida o expirada" });
+      }
+      serverSessionCookie = `session-${refreshCalls}`;
+      browserSessionCookie = serverSessionCookie;
+      inFlightRefreshes -= 1;
+      return jsonResponse(200, {
+        access_token: `fresh-access-${refreshCalls}`,
+        hotel_id: 7,
+        user: { id: 1, email: session.userId, role: "owner" }
+      });
+    }
+    const authorization = new Headers(init.headers).get("Authorization");
+    return authorization === "Bearer expired-access"
+      ? jsonResponse(401, { detail: "Access token expired" })
+      : jsonResponse(200, { ok: true });
+  };
+  const tabs = [loadClient(fetchFromEitherTab, { locks }), loadClient(fetchFromEitherTab, { locks })];
+  tabs.forEach(({ client }) => client.setClientSession({ ...session, accessToken: "expired-access" }));
+
+  const results = await Promise.all(tabs.map(({ client }) => client.apiFetch("/api/reservations")));
+
+  assert.deepEqual(results.map((result) => result.ok), [true, true]);
+  assert.equal(refreshCalls, 2);
+  assert.equal(maximumConcurrentRefreshes, 1);
+  assert.deepEqual(tabs.map(({ locationAssignments }) => locationAssignments), [[], []]);
+});
+
+test("refresh retries one stale-cookie 401 when cross-tab locks are unavailable", async () => {
+  let refreshCalls = 0;
+  let protectedCalls = 0;
+  const { client, locationAssignments } = loadClient(async (url) => {
+    const pathname = new URL(String(url)).pathname;
+    if (pathname.endsWith("/auth/session/refresh")) {
+      refreshCalls += 1;
+      if (refreshCalls === 1) return jsonResponse(401, { detail: "Sesion invalida o expirada" });
+      return jsonResponse(200, {
+        access_token: "rotated-access-token",
+        hotel_id: 7,
+        user: { id: 1, email: session.userId, role: "owner" }
+      });
+    }
+    protectedCalls += 1;
+    return protectedCalls === 1
+      ? jsonResponse(401, { detail: "Access token expired" })
+      : jsonResponse(200, { ok: true });
+  });
+  client.setClientSession(session);
+
+  const result = await client.apiFetch("/api/reservations");
+
+  assert.equal(result.ok, true);
+  assert.equal(refreshCalls, 2);
+  assert.equal(protectedCalls, 2);
+  assert.deepEqual(locationAssignments, []);
+});
+
+test("a rate-limited refresh does not clear a still-current client session", async () => {
+  let unauthorizedNotifications = 0;
+  const { client, locationAssignments } = loadClient(async (url) => {
+    const pathname = new URL(String(url)).pathname;
+    return pathname.endsWith("/auth/session/refresh")
+      ? jsonResponse(429, { detail: "Too many requests" })
+      : jsonResponse(401, { detail: "Access token expired" });
+  });
+  client.setClientSession(session);
+  client.setUnauthorizedHandler(() => {
+    unauthorizedNotifications += 1;
+  });
+
+  await assert.rejects(client.apiFetch("/api/reservations"), (error) => error.status === 401);
+
+  assert.equal(unauthorizedNotifications, 0);
+  assert.deepEqual(locationAssignments, []);
 });
 
 test("a STEP_UP_REQUIRED response arriving after logout does not open a prompt", async () => {

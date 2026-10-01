@@ -39,6 +39,38 @@ from app.services.analytics_contracts import (
     resolve_guest_segment,
     split_amount_evenly,
 )
+from app.services.analytics_facts import _currency_pair
+from app.services.analytics_service import _unavailable_currencies
+
+
+@pytest.mark.parametrize(
+    ("amount", "source_currency", "fx_rate", "expected"),
+    [
+        (Decimal("255000"), "ARS", None, (Decimal("255000.00"), Decimal("0.00"))),
+        (Decimal("40000"), "USD", None, (Decimal("0.00"), Decimal("40000.00"))),
+        (Decimal("255000"), "ARS", Decimal("1000"), (Decimal("255000.00"), Decimal("255.00"))),
+        (Decimal("40000"), "USD", Decimal("1000"), (Decimal("40000000.00"), Decimal("40000.00"))),
+        (Decimal("99"), "EUR", None, (Decimal("0.00"), Decimal("0.00"))),
+    ],
+)
+def test_currency_pair_never_fabricates_a_one_to_one_exchange_rate(amount, source_currency, fx_rate, expected):
+    assert _currency_pair(amount, source_currency, fx_rate) == expected
+
+
+def test_analytics_marks_only_the_missing_converted_currency_as_unavailable():
+    ars_without_fx = SimpleNamespace(
+        source_currency="ARS",
+        fx_rate_snapshot=None,
+        revenue_net_ars=Decimal("255000.00"),
+    )
+    ars_with_fx = SimpleNamespace(
+        source_currency="ARS",
+        fx_rate_snapshot=Decimal("1000.000000"),
+        revenue_net_ars=Decimal("255000.00"),
+    )
+
+    assert _unavailable_currencies([ars_without_fx]) == ["USD"]
+    assert _unavailable_currencies([ars_with_fx]) == []
 
 
 @pytest.mark.parametrize(

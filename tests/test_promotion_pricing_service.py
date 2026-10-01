@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -8,11 +8,11 @@ import pytest
 from app.models.commercial import TaxPolicy, TaxRule
 from app.models.daily_rate import DailyRate
 from app.models.hotel_config import HotelConfiguration
-from app.models.ota_core import OTACurrencyRate, OTAProvider
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
 from app.models.room import RoomCategory
 from app.schemas.promotion import PromotionConditions, PromotionCreate
 from app.services.promotion_pricing_service import CanonicalPricingError, compute_canonical_stay_pricing
+from app.services import pricing_policy_service
 from app.services.promotion_service import create_promotion
 
 
@@ -106,19 +106,43 @@ def test_canonical_pricing_applies_tax_policy(db):
     assert result.booking_total == Decimal("242.00")
 
 
-def test_canonical_pricing_converts_currency_with_fx_snapshot(db):
+def test_canonical_promotion_pricing_converts_non_ars_currency_with_fx_snapshot(db, monkeypatch):
     category = _seed_hotel(db, 85, currency="USD")
     _seed_daily_rates(db, 85, category.id, date(2026, 5, 1), 1, 100.0)
-    db.add(OTACurrencyRate(hotel_id=85, base_currency="USD", quote_currency="ARS", rate=1000.0, source="manual"))
-    db.flush()
+    create_promotion(
+        db,
+        hotel_id=85,
+        payload=PromotionCreate(
+            code="USD_PROMO",
+            name="Ten percent off",
+            benefit_type="percentage",
+            benefit_value=Decimal("10"),
+        ),
+        created_by_user_id=None,
+    )
+    monkeypatch.setattr(
+        pricing_policy_service,
+        "get_conversion_quote_sync",
+        lambda currency, market="oficial": {
+            "moneda": currency,
+            "casa": market if currency == "USD" else "oficial",
+            "compra": 1000.0,
+            "venta": 1100.0,
+            "fechaActualizacion": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
     result = compute_canonical_stay_pricing(
         db, hotel_id=85, category_id=category.id, check_in=date(2026, 5, 1), check_out=date(2026, 5, 2),
         target_currency="ARS",
     )
     assert result.output_currency == "ARS"
-    assert result.fx_rate_snapshot == Decimal("1000")
-    assert result.booking_total == Decimal("100000.00")
+    assert result.subtotal_amount == Decimal("90.00")
+    assert result.fx_rate_snapshot == Decimal("1100")
+    assert result.booking_total == Decimal("99000.00")
+    assert result.fx_quote_details["usd_market"] == "oficial"
+    assert result.fx_quote_details["source_side"] == "venta"
+    assert result.to_snapshot_dict()["fx_quote_details"]["provider"] == "dolarapi.com"
 
 
 def test_canonical_pricing_missing_fx_rate_raises(db):

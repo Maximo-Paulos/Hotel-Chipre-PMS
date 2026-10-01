@@ -25,6 +25,7 @@ from app.services.permission_service import (
     HotelRoleNotFound,
     PERMISSION_PERMISSION_MANAGE,
     PERMISSION_RESERVATION_CREATE,
+    PERMISSION_SETTINGS_USERS_MANAGE,
     ROLE_HOUSEKEEPING,
     ROLE_RECEPTIONIST,
     archive_custom_role,
@@ -144,20 +145,25 @@ def test_authenticated_context_resolves_custom_role_base_and_fails_closed_for_mi
     assert "rol asignado no está disponible" in exc_info.value.detail
 
 
-def _step_up_headers(state, method: str, path: str) -> dict[str, str]:
+def _step_up_headers(
+    state,
+    method: str,
+    path: str,
+    permission_code: str = PERMISSION_PERMISSION_MANAGE,
+) -> dict[str, str]:
     return {
         "X-Action-Step-Up-Ticket": create_action_step_up_ticket(
             user_id=state["user_id"],
             hotel_id=state["hotel_id"],
             token_version=0,
-            permission_code=PERMISSION_PERMISSION_MANAGE,
+            permission_code=permission_code,
             method=method,
             path=path,
         )
     }
 
 
-def test_roles_api_contract_read_access_and_owner_only_mutations(role_api):
+def test_roles_api_contract_and_owner_co_owner_admin_mutations(role_api):
     client, _db, state = role_api
     create_path = "/api/roles"
 
@@ -200,18 +206,34 @@ def test_roles_api_contract_read_access_and_owner_only_mutations(role_api):
     readable = client.get("/api/roles")
     assert readable.status_code == 200, readable.text
     assert item["code"] in {row["code"] for row in readable.json()["roles"]}
-    assert client.post(
+    co_owner_created = client.post(
         create_path,
-        json={"name": "No autorizado", "base_role": "manager"},
-    ).status_code == 403
-    assert client.patch(
+        json={"name": "Turno co-dueña", "base_role": "manager"},
+        headers=_step_up_headers(state, "POST", create_path),
+    )
+    assert co_owner_created.status_code == 201, co_owner_created.text
+    co_owner_role = co_owner_created.json()["role"]
+    assert co_owner_role["name"] == "Turno co-dueña"
+    assert co_owner_role["base_role"] == "manager"
+    assert co_owner_role["version"] == 1
+
+    co_owner_renamed = client.patch(
         f"/api/roles/{item['code']}",
-        json={"name": "No autorizado", "expected_version": 1},
-    ).status_code == 403
-    assert client.delete(
-        f"/api/roles/{item['code']}?expected_version=1"
-    ).status_code == 403
-    assert client.put(
+        json={"name": "Turno de codueña", "expected_version": 1},
+        headers=_step_up_headers(state, "PATCH", f"/api/roles/{item['code']}"),
+    )
+    assert co_owner_renamed.status_code == 200, co_owner_renamed.text
+    assert co_owner_renamed.json()["role"]["name"] == "Turno de codueña"
+    assert co_owner_renamed.json()["role"]["version"] == 2
+
+    co_owner_archived = client.delete(
+        f"/api/roles/{co_owner_role['code']}?expected_version=1",
+        headers=_step_up_headers(state, "DELETE", f"/api/roles/{co_owner_role['code']}"),
+    )
+    assert co_owner_archived.status_code == 200, co_owner_archived.text
+    assert co_owner_archived.json()["role"]["is_active"] is False
+
+    co_owner_override = client.put(
         "/api/permissions/role-overrides",
         json={
             "role": item["code"],
@@ -220,23 +242,37 @@ def test_roles_api_contract_read_access_and_owner_only_mutations(role_api):
             "expected_version": 0,
         },
         headers=_step_up_headers(state, "PUT", "/api/permissions/role-overrides"),
-    ).status_code == 403
-    assert client.put(
+    )
+    assert co_owner_override.status_code == 200, co_owner_override.text
+    assert co_owner_override.json()["allowed"] is False
+    assert co_owner_override.json()["role"] == item["code"]
+
+    co_owner_window = client.put(
         "/api/permissions/visibility-windows",
         json={"role": item["code"], "past_hours": 24, "future_hours": 48},
         headers=_step_up_headers(state, "PUT", "/api/permissions/visibility-windows"),
-    ).status_code == 403
+    )
+    assert co_owner_window.status_code == 200, co_owner_window.text
+    assert (co_owner_window.json()["past_hours"], co_owner_window.json()["future_hours"]) == (24, 48)
+
+    state["role"] = "manager"
+    manager_created = client.post(
+        create_path,
+        json={"name": "No autorizado", "base_role": "manager"},
+        headers=_step_up_headers(state, "POST", create_path),
+    )
+    assert manager_created.status_code == 403, manager_created.text
     state["role"] = "owner"
 
     renamed = client.patch(
         f"/api/roles/{item['code']}",
-        json={"name": "Turno tarde", "expected_version": 1},
+        json={"name": "Turno tarde", "expected_version": 2},
         headers=_step_up_headers(state, "PATCH", f"/api/roles/{item['code']}"),
     )
     assert renamed.status_code == 200, renamed.text
     assert renamed.json()["role"]["code"] == item["code"]
     assert renamed.json()["role"]["name"] == "Turno tarde"
-    assert renamed.json()["role"]["version"] == 2
+    assert renamed.json()["role"]["version"] == 3
     stale = client.patch(
         f"/api/roles/{item['code']}",
         json={"name": "Nombre obsoleto", "expected_version": 1},
@@ -704,7 +740,7 @@ def test_custom_role_downgrade_aborts_before_any_data_changes(role_api, monkeypa
 
 
 def test_custom_roles_can_be_assigned_and_invited_but_owner_transfer_stays_separate(role_api):
-    client, db, _state = role_api
+    client, db, state = role_api
     role = _create_role(db, base_role=ROLE_HOUSEKEEPING)
     member = User(
         id=8,
@@ -736,7 +772,12 @@ def test_custom_roles_can_be_assigned_and_invited_but_owner_transfer_stays_separ
     )
     db.commit()
 
-    changed = client.patch(f"/api/users/{member.id}/role", json={"role": role.code})
+    change_path = f"/api/users/{member.id}/role"
+    changed = client.patch(
+        change_path,
+        json={"role": role.code},
+        headers=_step_up_headers(state, "PATCH", change_path, PERMISSION_SETTINGS_USERS_MANAGE),
+    )
     assert changed.status_code == 200, changed.text
     assert changed.json()["role"] == role.code
     assert db.query(HotelMembership).filter_by(hotel_id=1, user_id=member.id).one().role == role.code
@@ -745,6 +786,7 @@ def test_custom_roles_can_be_assigned_and_invited_but_owner_transfer_stays_separ
     invite = client.post(
         "/api/users/invite",
         json={"email": "new-staff@example.test", "role": role.code},
+        headers=_step_up_headers(state, "POST", "/api/users/invite", PERMISSION_SETTINGS_USERS_MANAGE),
     )
     assert invite.status_code == 201, invite.text
     assert invite.json()["user"]["role"] == role.code
@@ -779,12 +821,13 @@ def test_custom_roles_can_be_assigned_and_invited_but_owner_transfer_stays_separ
     invalid_owner = client.post(
         "/api/users/invite",
         json={"email": "owner-transfer@example.test", "role": "owner"},
+        headers=_step_up_headers(state, "POST", "/api/users/invite", PERMISSION_SETTINGS_USERS_MANAGE),
     )
     assert invalid_owner.status_code == 400
 
 
 def test_reinviting_member_to_same_custom_role_preserves_user_grants(role_api):
-    client, db, _state = role_api
+    client, db, state = role_api
     role = _create_role(db, base_role=ROLE_HOUSEKEEPING)
     member = User(
         id=9,
@@ -809,7 +852,11 @@ def test_reinviting_member_to_same_custom_role_preserves_user_grants(role_api):
     )
     db.commit()
 
-    response = client.post("/api/users/invite", json={"email": member.email, "role": role.code})
+    response = client.post(
+        "/api/users/invite",
+        json={"email": member.email, "role": role.code},
+        headers=_step_up_headers(state, "POST", "/api/users/invite", PERMISSION_SETTINGS_USERS_MANAGE),
+    )
 
     assert response.status_code == 201, response.text
     db.refresh(grant)

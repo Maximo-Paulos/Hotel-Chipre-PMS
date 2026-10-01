@@ -1317,26 +1317,27 @@ El proceso puede ejecutarse en segundo plano.
 
 ### 37.1 Sprint 1
 
-Monedas soportadas:
+Monedas habilitadas para conversión automática:
 
 - ARS.
 - USD.
+- EUR.
+- BRL.
+- CLP.
+- UYU.
 
 ### 37.2 Conversión configurable
 
-Cada hotel puede seleccionar:
+Para USD, cada hotel puede seleccionar solo una de estas cotizaciones para las conversiones:
 
-- dólar compra;
-- dólar venta;
-- oficial;
-- MEP;
-- blue;
-- tarjeta;
-- otra cotización disponible.
+- dólar oficial;
+- dólar blue.
 
-Regla:
+Dueño o codueña puede decidir si la pantalla muestra la cotización USD seleccionada o ambas (oficial y blue). Mostrar ambas no cambia el mercado utilizado para convertir.
 
-> El hotel puede elegir la referencia de conversión que utilizará.
+EUR, BRL, CLP y UYU usan únicamente su fila directa `casa=oficial` de DolarAPI. Las conversiones entre cualquier par de monedas soportadas pasan por ARS y conservan la cotización, mercado, lado y fecha usados. El lado de origen se toma de `venta` y el lado de destino de `compra`; un spread solo puede ser cero o positivo.
+
+No se usa, deriva ni sustituye por dólar tarjeta, MEP, CCL, cripto, mayorista ni otra variante. Si falta o está vencida la cotización exacta configurada, la conversión falla explícitamente y no cambia de mercado automáticamente.
 
 ## 38. Desempates finales del motor
 
@@ -2038,7 +2039,7 @@ El Sprint 1 se considera funcionalmente completo cuando permite:
 
 ### Q112. ¿Monedas Sprint 1?
 
-**Respuesta IA:** ARS y USD.
+**Respuesta IA:** ARS y USD como base, con conversión automática entre ARS, USD, EUR, BRL, CLP y UYU.
 
 ### Q113. ¿Se guardan importes originales?
 
@@ -2054,15 +2055,15 @@ El Sprint 1 se considera funcionalmente completo cuando permite:
 
 ### Q116. ¿Fuente de cotización?
 
-**Respuesta IA:** Proveedor oficial/configurable por hotel; debe abstraerse detrás de un servicio.
+**Respuesta IA:** DolarAPI detrás de un servicio. El único mercado configurable para USD es oficial o blue; el hotel puede mostrar una o ambas cotizaciones. EUR, BRL, CLP y UYU usan únicamente su fila directa `casa=oficial` de `/v1/cotizaciones`. No se ofrece, deriva ni etiqueta como blue una cotización no USD. En ningún par se usan dólar tarjeta, MEP, CCL, cripto, mayorista ni otras variantes. Fuentes vigentes: [Dólar oficial](https://dolarapi.com/docs/argentina/operations/get-dolar-oficial), [Dólar blue](https://dolarapi.com/docs/argentina/operations/get-dolar-blue) y [cotizaciones](https://dolarapi.com/docs/argentina/operations/get-cotizaciones).
 
 ### Q117. ¿Qué criterio favorece al hotel?
 
-**Respuesta IA:** Usar el lado de compra/venta que maximiza el valor recibido por el hotel según dirección de conversión.
+**Respuesta IA:** Todas las conversiones cruzadas pasan por ARS. La moneda de origen se valora con venta y el destino con compra; ARS→destino usa compra y origen→ARS usa venta. La selección oficial/blue aplica solo al lado USD; una conversión entre otras dos monedas usa las dos filas directas `casa=oficial`, sin cotización USD implícita. Cada lado conserva por separado tipo/mercado/fecha de DolarAPI. El spread FX no puede ser negativo; los campos legados `preferred_source`/`preferred_side` solo admiten official/blue y buy/sell, y no cambian mercado ni lados de la conversión automática.
 
 ### Q118. ¿Puede el dueño elegir otra cotización?
 
-**Respuesta IA:** Sí.
+**Respuesta IA:** Dueño y codueña configuran el mercado USD usado en conversiones y cuáles cotizaciones USD se muestran desde Ajustes del hotel; el cambio requiere MFA reciente. El selector de mercado solo acepta oficial o blue.
 
 ### Q119. ¿El recepcionista puede cambiarla?
 
@@ -2070,11 +2071,11 @@ El Sprint 1 se considera funcionalmente completo cuando permite:
 
 ### Q120. ¿Se guarda fecha/hora de cotización?
 
-**Respuesta IA:** Sí.
+**Respuesta IA:** Sí. La conversión conserva fuente, mercado/tipo, lado, fecha del proveedor y tasa aplicada en snapshots asociados a la transacción; las nuevas reservas guardan además la procedencia en su snapshot de precio. Cambiar Ajustes no reinterpreta reservas ya creadas.
 
 ### Q121. ¿Qué pasa si la API cae?
 
-**Respuesta IA:** Usar última cotización válida con warning y permitir override autorizado.
+**Respuesta IA:** Solo se admite una cotización fresca del mercado seleccionado o un snapshot reciente del mismo hotel, moneda y mercado. Si falta, el cálculo falla explícitamente; no cambia a otra variante de USD ni usa una cotización manual alternativa.
 
 ## M. Pagos, señas y links
 
