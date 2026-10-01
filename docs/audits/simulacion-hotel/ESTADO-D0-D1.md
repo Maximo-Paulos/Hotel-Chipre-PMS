@@ -1,16 +1,17 @@
 # Estado de remediación — Simulación del hotel, días 0 y 1
 
 Fecha de corte: 01/10/2026
-Rama de trabajo: `fix/hotel-sim-day0-day1`
+Rama de implementación: `fix/hotel-sim-day0-day1` y `fix/operational-task-version-cache`
 Base: `24957e5a4d018b451ab7b27bd072431e91450bf9`
 Fuentes: `/Users/maximopaulos/Downloads/PRUEBA 1 DIA 0.md`, `/Users/maximopaulos/Desktop/PRUEBA 1 DIA 1.md` y `/Users/maximopaulos/Downloads/registro-hallazgos-parcial-dia0-dia1.md`, entregados por el usuario.
+Publicación: PR #107 y PR #108 integrados en `main`; SHA desplegado verificado: `ba880314d04151c16470800d9bc4ef0e2ab92293`.
 
 ## Cómo leer este registro
 
 - **Implementado, prueba local**: hay cambios de código y regresión automatizada local. Falta que el personal simulado confirme que el flujo ya no causa inconvenientes.
 - **Parcial**: una parte está resuelta; se indican las brechas que siguen abiertas.
 - **Decisión del hotel**: no se fijaron reglas comerciales, financieras, legales u operativas sin autorización del dueño.
-- Esta rama no se publicó y no representa evidencia de QA en preview cloud ni de producción.
+- La publicación se verificó por SHA en API y frontend. No se ejecutó QA funcional en preview cloud ni en Render por instrucción expresa del usuario.
 
 ## Día 0
 
@@ -153,10 +154,10 @@ El reporte de Día 1 incluye recomendaciones de producto además de observacione
 - Playwright en bases locales desechables anteriores a F-049/F-052: F-027 + lavandería **10 passed**, F-040 **1 passed**, caja **2 passed**. No se ejecutó Render QA.
 - Las nuevas pruebas de navegador F-049/F-052 no tienen resultado: `scripts/serve_e2e_backend.py` fija el backend en 8040. Los intentos se detuvieron antes del primer test del navegador y sin requests desde Playwright; solo migraron/sembraron la base `_e2e.db` aislada del worktree o de una copia `/tmp`. 8040 quedó libre y el proceso de la simulación en 8041 no se consultó ni modificó.
 - Una base SQLite nueva completó `alembic upgrade head`; `alembic heads` informa un único head: `20261013_cash_adjustment_permission`.
-- `git diff --check` pasó. PR #107 se integró en `main` como `d9084009f2815abd9cd4746ace9effe824c2e2f6`; `https://api.hotels-pms.com/health` y `https://app.hotels-pms.com/build-meta.json` informaron ese SHA. Esta publicación precedió al hotfix H30 documentado arriba.
-- El E2E integral de CI para PR #107 terminó con **153 passed, 6 skipped y 4 failed**. H30 fue una regresión real de versión y se corrigió en esta iteración. Los otros tres fallos correspondieron al fixture del selector multi-hotel, disponibilidad/fixture de la reserva del journey de Gerencia y una aserción de texto desactualizada del smoke master-admin; se conservan como pendientes ajenos al alcance D0/D1 y no se presentan como aprobados.
+- `git diff --check` pasó. PR #107 y PR #108 se integraron en `main`; `https://api.hotels-pms.com/health` y `https://app.hotels-pms.com/build-meta.json` informaron `ba880314d04151c16470800d9bc4ef0e2ab92293`.
+- El E2E integral de CI para PR #108 terminó con **153 passed, 6 skipped y 4 failed**. El hotfix H30 se validó aparte en Chromium local (**1 passed**). El cuarto fallo fue el journey F-016 de grupos: el fixture podía escoger fechas en las que otros tests ya habían ocupado las habitaciones Standard E2E. El artefacto de CI mostró “No hay habitaciones disponibles”; el caso pasó localmente antes y después de aislarlo con cuatro habitaciones propias (**1 passed**). El ajuste quedó preparado en una rama separada de pruebas y no cambia el runtime. Los otros tres fallos corresponden al fixture del selector multi-hotel, disponibilidad/fixture de la reserva del journey de Gerencia y una aserción de texto desactualizada del smoke master-admin; se conservan como pendientes y no se presentan como aprobados.
 - La re-simulación D0/D1 con empleados queda pendiente. No se ejecutó QA en Render ni se configuró `RENDER_QA_SERVICE_ID`, por instrucción explícita del usuario.
-- Graphify AST-only se regeneró sin LLM: **13.011 nodos, 39.387 aristas, 638 comunidades y 1.011 flows**. `portable-check` pasó para **330 artefactos** después de normalizar etiquetas y archivos generados; `check-update` mantiene pendientes las descripciones/etiquetas semánticas y falta gramática Swift para tres archivos.
+- Graphify AST-only se regeneró sin LLM: **12.229 nodos, 32.206 aristas, 623 comunidades y 1.013 flows**. `portable-check` y `check-update` pasaron; Graphify omitió tres archivos Swift por falta de gramática y descartó 1.168 archivos locales de ciclo de vida.
 - Tras aplicar el mercado elegido a todas las conversiones, `.venv/bin/pytest -q --disable-warnings tests/test_fx_conversion_provider.py tests/test_fx_external_effects.py tests/test_pricing_policy_service.py tests/test_v72_fx_rates.py` pasó **62/62**. El blue de EUR, BRL, CLP y UYU se calcula con la cotización oficial de cada moneda y las relaciones compra/compra y venta/venta de USD blue/oficial; entradas cruzadas o vencidas se rechazan, la derivación conserva valores, fórmula y fechas fuente en la procedencia del precio, y no cae al mercado oficial si falta blue.
 - Después del ajuste de cotizaciones y etiquetas, `npm run typecheck`, `npm run lint`, `npm test` (**68/68**), `npm run test:i18n` (**2/2**) y `npm run build` pasaron; la build conserva la advertencia de chunk principal **713,78 KB**.
 - Playwright Chromium con DB SQLite aislada del worktree pasó **2/2** recorridos: controles de disponibilidad con etiquetas explícitas y cierre/aprobación/recepción de custodia con MFA y fondo sucesor. Se corrigieron selectores/aserciones que estaban desfasados del contenido real. El backend E2E usó 8040 y frontend 5173; la simulación existente en 8041 no se tocó.

@@ -57,11 +57,10 @@ test("owner creates a four-room company group and sees its total balance in the 
   const category = categories.find((item) => item.name === "Standard E2E");
   expect(category).toBeTruthy();
 
-  const roomsResponse = await request.get(`${backendURL}/api/rooms/`, { headers });
-  expect(roomsResponse.ok()).toBeTruthy();
-  const rooms = await roomsResponse.json() as Array<{ room_number: string; category_id: number; is_active?: boolean }>;
-  const activeCategoryRooms = rooms.filter((room) => room.category_id === category!.id && room.is_active !== false);
-  for (let index = activeCategoryRooms.length; index < 4; index += 1) {
+  // Earlier journeys may reserve existing Standard E2E rooms on any of the
+  // candidate dates. Give this flow four dedicated rooms so its result tests
+  // group creation instead of depending on suite order or date collisions.
+  for (let index = 0; index < 4; index += 1) {
     const createRoom = await request.post(`${backendURL}/api/rooms/`, {
       headers,
       data: {
@@ -74,6 +73,17 @@ test("owner creates a four-room company group and sees its total balance in the 
     });
     expect(createRoom.ok()).toBeTruthy();
   }
+  const salt = Number(suffix.slice(-3));
+  const checkIn = localIsoDate(500 + (salt % 30));
+  const checkOut = localIsoDate(502 + (salt % 30));
+  const availabilityResponse = await request.get(
+    `${backendURL}/api/rooms/availability?category_id=${category!.id}&check_in_date=${checkIn}&check_out_date=${checkOut}`,
+    { headers }
+  );
+  expect(availabilityResponse.ok()).toBeTruthy();
+  const availability = await availabilityResponse.json() as { status: string; count?: number };
+  expect(availability.status).toBe("ok");
+  expect(availability.count).toBeGreaterThanOrEqual(4);
 
   const companyResponse = await request.post(`${backendURL}/api/companies`, {
     headers,
@@ -105,9 +115,6 @@ test("owner creates a four-room company group and sees its total balance in the 
   await form.getByTestId("reservation-company-select").selectOption(String(company.id));
   await form.getByTestId("reservation-group-size").selectOption("4");
 
-  const salt = Number(suffix.slice(-3));
-  const checkIn = localIsoDate(500 + (salt % 30));
-  const checkOut = localIsoDate(502 + (salt % 30));
   await form.getByLabel("Check-in", { exact: true }).fill(checkIn);
   await form.getByLabel("Check-out", { exact: true }).fill(checkOut);
   await expect(form.getByTestId("reservation-group-auto-assignment")).toContainText("4 reservas");
