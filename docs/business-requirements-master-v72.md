@@ -1339,6 +1339,8 @@ USD usa el endpoint directo oficial o blue de DolarAPI. EUR, BRL, CLP y UYU usan
 
 No se usa, deriva ni sustituye por dólar tarjeta, MEP, CCL, cripto, mayorista ni otra variante. Si falta o está vencida la cotización exacta configurada, la conversión falla explícitamente y no cambia de mercado automáticamente.
 
+Al registrar un cobro en una moneda distinta a la reserva, el PMS consulta esa cotización en el momento del cobro, muestra cuánto se recibirá y cuánto se acreditará al saldo, y guarda ambos importes y monedas junto con la tasa y su procedencia. La devolución usa la moneda y tasa congeladas del cobro original, y queda limitada al saldo recibido pendiente de devolver. La caja se arquea por moneda recibida; los saldos de distintas monedas no se suman entre sí.
+
 ## 38. Desempates finales del motor
 
 Cuando existen soluciones equivalentes:
@@ -2059,7 +2061,7 @@ El Sprint 1 se considera funcionalmente completo cuando permite:
 
 ### Q117. ¿Qué criterio favorece al hotel?
 
-**Respuesta IA:** Todas las conversiones cruzadas pasan por ARS y usan el mercado elegido en la configuración para ambos lados. La moneda de origen se valora con venta y el destino con compra; el spread FX no puede ser negativo. Cada lado conserva la moneda, mercado de conversión, valor aplicado y fecha; las tasas blue no USD conservan además la procedencia y fórmula de derivación. Esta conversión de precios no registra compra o venta de efectivo en caja.
+**Respuesta IA:** Todas las conversiones cruzadas pasan por ARS y usan el mercado elegido en la configuración para ambos lados. La moneda de origen se valora con venta y el destino con compra; el spread FX no puede ser negativo. Cada lado conserva la moneda, mercado de conversión, valor aplicado y fecha; las tasas blue no USD conservan además la procedencia y fórmula de derivación. Cotizar o convertir un precio no crea un movimiento de caja. Al cobrar, el PMS guarda por separado lo recibido y el crédito convertido al saldo de la reserva; la caja registra el importe físico en su moneda y conserva la cotización aplicada.
 
 ### Q118. ¿Puede el dueño elegir otra cotización?
 

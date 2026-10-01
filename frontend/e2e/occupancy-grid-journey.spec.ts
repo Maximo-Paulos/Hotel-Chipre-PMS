@@ -162,7 +162,10 @@ test("owner sees a real reservation on the current-month grid and opens it via t
   expect(floorHeaders).toEqual([...floorHeaders].sort((a, b) => a - b));
 
   const createTarget = occupancyData.rooms.flatMap((room) =>
-    Array.from({ length: 14 }, (_, offset) => ({ room, date: localIsoDate(offset) }))
+    // Use a future visible date. The current-day column can straddle a hotel
+    // timezone boundary during local/CI runs and is not required to verify
+    // the empty-cell creation path.
+    Array.from({ length: 13 }, (_, index) => ({ room, date: localIsoDate(index + 1) }))
   ).find(({ room, date }) =>
     !["maintenance", "blocked"].includes(room.status)
     && !occupancyData.reservations.some((reservation) =>

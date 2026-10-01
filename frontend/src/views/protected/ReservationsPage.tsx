@@ -38,6 +38,7 @@ import {
   type RoomMovementGroup
 } from "../../api/allocationRuns";
 import { ApiError, hasValidSession } from "../../api/client";
+import { getFxConversionQuote, type FxCurrencyCode } from "../../api/fxRates";
 import { getGuestProhibitedDetail, type RestrictionOverride } from "../../api/guestRestrictions";
 import GuestQuickCreatePanel, {
   emptyQuickGuestForm,
@@ -112,6 +113,8 @@ type FormState = {
 };
 
 type PricingPaymentMethod = "base" | "cash" | "transfer" | "mercadopago" | "credit_card" | "paypal";
+
+const PAYMENT_CURRENCIES: FxCurrencyCode[] = ["ARS", "USD", "EUR", "BRL", "CLP", "UYU"];
 
 const paymentMethodValues: PaymentMethod[] = [
   "cash",
@@ -241,6 +244,7 @@ export function ReservationsPage() {
   const [guestForm, setGuestForm] = useState<QuickGuestFormValues>(emptyQuickGuestForm);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentAmountInput, setPaymentAmountInput] = useState("");
+  const [paymentTenderCurrencyInput, setPaymentTenderCurrencyInput] = useState("");
   const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
   const [collectedBefore, setCollectedBefore] = useState(false);
   const [collectedOn, setCollectedOn] = useState("");
@@ -353,6 +357,34 @@ export function ReservationsPage() {
   const guestMutation = useGuestCreate();
   const guestQuery = useGuest(guestIdOpen ?? undefined);
   const paymentSummaryQuery = usePaymentSummary(editing?.id || undefined);
+  const cashSessionsQuery = useCashSessions();
+  const paymentReservationCurrency = normalizeCurrencyCode(
+    paymentSummaryQuery.data?.currency_code ?? editing?.currency_code
+  );
+  const paymentTenderCurrency = normalizeCurrencyCode(
+    paymentTenderCurrencyInput || paymentReservationCurrency
+  );
+  const paymentFxQuoteQuery = useQuery({
+    queryKey: ["payment-fx-quote", session.hotelId, paymentReservationCurrency, paymentTenderCurrency],
+    queryFn: () => getFxConversionQuote(
+      paymentReservationCurrency as FxCurrencyCode,
+      paymentTenderCurrency as FxCurrencyCode,
+      session
+    ),
+    enabled: Boolean(
+      editing &&
+      paymentReservationCurrency !== paymentTenderCurrency &&
+      PAYMENT_CURRENCIES.includes(paymentReservationCurrency as FxCurrencyCode) &&
+      PAYMENT_CURRENCIES.includes(paymentTenderCurrency as FxCurrencyCode) &&
+      hasValidSession(session)
+    ),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    retry: false
+  });
+  useEffect(() => {
+    setPaymentTenderCurrencyInput(paymentReservationCurrency);
+  }, [editing?.id, paymentReservationCurrency]);
   const detailsReservationQuery = useReservation(detailsReservationId ?? undefined);
   const detailsReservation =
     detailsReservationQuery.data ?? reservations.find((item) => item.id === detailsReservationId) ?? null;
@@ -1284,7 +1316,21 @@ export function ReservationsPage() {
   const paymentSummary = paymentSummaryQuery.data;
   const isManualPaymentMethod = manualPaymentMethods.includes(paymentMethod);
   const canOperateCash = hasPermission("cash:operate");
-  const canRegisterSelectedPayment = canOperateCash && (paymentMethod === "cash" || isManualPaymentMethod);
+  const paymentFxRate = paymentTenderCurrency === paymentReservationCurrency
+    ? 1
+    : Number(paymentFxQuoteQuery.data?.rate ?? 0);
+  const paymentFxReady = Number.isFinite(paymentFxRate) && paymentFxRate > 0;
+  const hasMatchingCashSession = Boolean(
+    collectedBefore ||
+    paymentMethod !== "cash" ||
+    cashSessionsQuery.data?.some(
+      (cashSession) => cashSession.status === "open" && cashSession.currency_code.toUpperCase() === paymentTenderCurrency
+    )
+  );
+  const canRegisterSelectedPayment = canOperateCash &&
+    (paymentMethod === "cash" || isManualPaymentMethod) &&
+    paymentFxReady &&
+    hasMatchingCashSession;
   const canRecordPriorReceipt = hasPermission("cash:record_prior_receipt");
   const canRefundPayment = hasPermission("payment:refund");
   const refundablePaymentOptions = (paymentSummary?.transactions ?? [])
@@ -1321,7 +1367,6 @@ export function ReservationsPage() {
       setPaymentMethod(availablePaymentMethods[0]);
     }
   }, [availablePaymentMethods, paymentMethod]);
-  const cashSessionsQuery = useCashSessions();
   const hasOpenCashSession = useMemo(
     () => (cashSessionsQuery.data ?? []).some((s) => s.status === "open"),
     [cashSessionsQuery.data]
@@ -1365,13 +1410,21 @@ export function ReservationsPage() {
     setCommunicationRecipient(detailsGuest?.email ?? "");
   }, [detailsReservationId, detailsGuest?.email]);
   const editingCurrencyCode = normalizeCurrencyCode(paymentSummary?.currency_code ?? editing?.currency_code);
+  const tenderPerReservationUnit = paymentTenderCurrency === editingCurrencyCode
+    ? 1
+    : Number(paymentFxQuoteQuery.data?.rate ?? 0);
+  const conversionReady = Number.isFinite(tenderPerReservationUnit) && tenderPerReservationUnit > 0;
+  const convertReservationToTender = (amount: number) =>
+    conversionReady ? Number((amount * tenderPerReservationUnit).toFixed(2)) : null;
+  const convertTenderToReservation = (amount: number) =>
+    conversionReady ? Number((amount / tenderPerReservationUnit).toFixed(2)) : null;
   const suggestedDepositAmount = Math.max(
     Number(paymentSummary?.deposit_required ?? 0) - Number(paymentSummary?.amount_paid ?? 0),
     0
   );
   const requestedDepositPreview = paymentAmountInput.trim()
     ? Number(paymentAmountInput)
-    : suggestedDepositAmount;
+    : convertReservationToTender(suggestedDepositAmount) ?? suggestedDepositAmount;
   const depositAmountPreview = Number.isFinite(requestedDepositPreview) && requestedDepositPreview > 0
     ? Number(requestedDepositPreview.toFixed(2))
     : null;
@@ -1383,6 +1436,10 @@ export function ReservationsPage() {
   );
   const getPriorReceiptFields = (): Pick<PaymentRequest, "collected_before" | "collected_on" | "prior_receipt_note"> | null => {
     if (!collectedBefore) return {};
+    if (paymentTenderCurrency !== editingCurrencyCode) {
+      showToast("error", t("page.errors.priorReceiptOtherCurrency"));
+      return null;
+    }
     if (!canRecordPriorReceipt || paymentMethod !== "cash") {
       showToast("error", t("page.errors.priorReceiptPermissionRequired"));
       return null;
@@ -1449,26 +1506,30 @@ export function ReservationsPage() {
       return;
     }
     const enteredAmount = paymentAmountInput.trim();
-    const requestedAmount = enteredAmount ? Number(enteredAmount) : due;
+    const suggestedTenderAmount = convertReservationToTender(due);
+    const requestedAmount = enteredAmount
+      ? Number(enteredAmount)
+      : suggestedTenderAmount ?? due;
     const balance = Number(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
-    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+    const appliedPreview = convertTenderToReservation(requestedAmount);
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0 || appliedPreview === null || appliedPreview <= 0) {
       showToast("error", t("page.errors.invalidPartialAmount"));
       return;
     }
     const amount = Number(requestedAmount.toFixed(2));
     const roundedBalance = Number(balance.toFixed(2));
-    if (!Number.isFinite(balance) || amount > roundedBalance) {
+    if (!Number.isFinite(balance) || appliedPreview > roundedBalance + 0.01) {
       showToast("error", t("page.errors.invalidPartialAmount"));
       return;
     }
-    const roundedSuggested = Number(due.toFixed(2));
+    const roundedSuggested = Number((suggestedTenderAmount ?? due).toFixed(2));
     if (
       enteredAmount &&
       amount !== roundedSuggested &&
       !window.confirm(
         t("page.confirm.depositAmountDiff", {
-          suggested: formatMoney(roundedSuggested, editingCurrencyCode),
-          amount: formatMoney(amount, editingCurrencyCode)
+          suggested: formatMoney(roundedSuggested, paymentTenderCurrency),
+          amount: formatMoney(amount, paymentTenderCurrency)
         })
       )
     ) {
@@ -1482,7 +1543,7 @@ export function ReservationsPage() {
         amount,
         payment_method: paymentMethod,
         transaction_type: "deposit",
-        currency: editingCurrencyCode,
+        currency: paymentTenderCurrency,
         manual_reference: manualReference,
         ...priorReceiptFields
       });
@@ -1520,13 +1581,18 @@ export function ReservationsPage() {
     }
     const priorReceiptFields = getPriorReceiptFields();
     if (!priorReceiptFields) return;
+    const tenderAmount = convertReservationToTender(Number(due));
+    if (tenderAmount === null) {
+      showToast("error", paymentFxQuoteQuery.error instanceof Error ? paymentFxQuoteQuery.error.message : t("page.errors.paymentFxQuoteUnavailable"));
+      return;
+    }
     try {
       await paymentMutation.mutateAsync({
         reservation_id: editing.id,
-        amount: Number(due.toFixed(2)),
+        amount: tenderAmount,
         payment_method: paymentMethod,
         transaction_type: "full_payment",
-        currency: editingCurrencyCode,
+        currency: paymentTenderCurrency,
         manual_reference: manualReference,
         ...priorReceiptFields
       });
@@ -1558,7 +1624,8 @@ export function ReservationsPage() {
     }
     const amount = Number(paymentAmountInput);
     const balance = Number(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
-    if (!Number.isFinite(amount) || amount <= 0 || amount > balance + 0.01) {
+    const appliedPreview = convertTenderToReservation(amount);
+    if (!Number.isFinite(amount) || amount <= 0 || appliedPreview === null || appliedPreview > balance + 0.01) {
       showToast("error", t("page.errors.invalidPartialAmount"));
       return;
     }
@@ -1570,7 +1637,7 @@ export function ReservationsPage() {
         amount: Number(amount.toFixed(2)),
         payment_method: paymentMethod,
         transaction_type: "partial_payment",
-        currency: editingCurrencyCode,
+        currency: paymentTenderCurrency,
         manual_reference: manualReference,
         ...priorReceiptFields
       });
@@ -1603,18 +1670,22 @@ export function ReservationsPage() {
       return;
     }
     const amount = Number(paymentAmountInput);
+    if (paymentTenderCurrency !== refundTarget.currency) {
+      showToast("error", t("page.errors.refundMustUseOriginalCurrency", { currency: refundTarget.currency }));
+      return;
+    }
     if (!Number.isFinite(amount) || amount <= 0 || amount > refundTarget.refundableRemaining + 0.01) {
       showToast("error", t("page.errors.invalidRefundAmount"));
       return;
     }
-    if (!window.confirm(t("page.confirm.refund", { amount: formatMoney(amount, editingCurrencyCode) }))) return;
+    if (!window.confirm(t("page.confirm.refund", { amount: formatMoney(amount, refundTarget.currency) }))) return;
     try {
       await paymentMutation.mutateAsync({
         reservation_id: editing.id,
         amount: Number(amount.toFixed(2)),
         payment_method: paymentMethod,
         transaction_type: "refund",
-        currency: editingCurrencyCode,
+        currency: refundTarget.currency,
         description: t("page.messages.refundManualDescription"),
         refund_of_transaction_id: refundTarget.id,
         refund_reason: refundReason
@@ -1957,6 +2028,10 @@ export function ReservationsPage() {
 
       const isRefund = receiptData.type === "refund";
       const hasSurcharge = !isRefund && Math.abs(surchargeAmount) > 0.01;
+      const appliedCurrency = receiptData.applied_currency || receiptData.currency;
+      const hasFxConversion = appliedCurrency !== receiptData.currency
+        && Number.isFinite(Number(receiptData.fx_rate_snapshot))
+        && Number(receiptData.fx_rate_snapshot) > 0;
       const amountToShow = isRefund ? Math.abs(amount) : Math.abs(grossAmount);
       const receiptHtml = buildPaymentReceiptHtml({
         language,
@@ -1977,8 +2052,14 @@ export function ReservationsPage() {
         paymentMethod: t("drawer.payment.methods." + receiptData.method, { defaultValue: receiptData.method }),
         statusLabel: t("page.details.receipt.statusLabel"),
         status: t("page.details.receipt.statuses." + receiptData.status, { defaultValue: receiptData.status }),
-        appliedAmountLabel: hasSurcharge ? t("page.details.receipt.appliedAmountLabel") : undefined,
-        appliedAmount: hasSurcharge ? formatMoney(Math.abs(amount), receiptData.currency) : null,
+        appliedAmountLabel: hasSurcharge || hasFxConversion ? t("page.details.receipt.appliedAmountLabel") : undefined,
+        appliedAmount: hasSurcharge || hasFxConversion
+          ? formatMoney(Math.abs(Number(receiptData.applied_amount ?? amount)), appliedCurrency)
+          : null,
+        fxRateLabel: hasFxConversion ? t("page.details.receipt.fxRateLabel") : undefined,
+        fxRate: hasFxConversion
+          ? `1 ${appliedCurrency} = ${Number(receiptData.fx_rate_snapshot).toLocaleString(language === "es" ? "es-AR" : "en-US", { maximumFractionDigits: 6 })} ${receiptData.currency}`
+          : null,
         surchargeLabel: hasSurcharge ? t("page.details.receipt.surchargeLabel") : undefined,
         surcharge: hasSurcharge ? formatMoney(Math.abs(surchargeAmount), receiptData.currency) : null,
         amountLabel: isRefund ? t("page.details.receipt.refundAmountLabel") : t("page.details.receipt.amountLabel"),
@@ -3619,6 +3700,20 @@ export function ReservationsPage() {
                       </select>
                     </label>
                     <label className="text-xs font-semibold text-slate-600">
+                      Moneda recibida
+                      <select
+                        value={paymentTenderCurrency}
+                        onChange={(event) => setPaymentTenderCurrencyInput(event.target.value)}
+                        disabled={collectedBefore}
+                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm disabled:bg-slate-100"
+                        data-testid="payment-tender-currency"
+                      >
+                        {PAYMENT_CURRENCIES.map((currencyCode) => (
+                          <option key={currencyCode} value={currencyCode}>{currencyCode}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
                       {paymentMethod === "cash" && canRefundPayment
                         ? t("page.form.cashMovementAmount")
                         : t("page.form.amountToCharge")}
@@ -3631,18 +3726,49 @@ export function ReservationsPage() {
                         step="0.01"
                         value={paymentAmountInput}
                         onChange={(event) => setPaymentAmountInput(event.target.value)}
+                        aria-describedby="payment-fx-conversion-help"
                         placeholder={paymentMethod === "cash" && canRefundPayment
                           ? t("page.form.cashMovementAmountPlaceholder")
                           : t("page.form.amountToChargePlaceholder")}
                         className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
                       />
                     </label>
+                    <div className="sm:col-span-6" id="payment-fx-conversion-help" aria-live="polite">
+                      {paymentTenderCurrency !== editingCurrencyCode ? (
+                        paymentFxQuoteQuery.isError ? (
+                          <p className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" data-testid="payment-fx-error">
+                            No se pudo obtener una cotización vigente desde DolarAPI. El cobro queda bloqueado hasta poder consultar el mercado elegido por el hotel.
+                          </p>
+                        ) : paymentFxQuoteQuery.isLoading || !paymentFxQuoteQuery.data ? (
+                          <p className="rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600" role="status">
+                            Consultando cotización vigente desde DolarAPI…
+                          </p>
+                        ) : (
+                          <div className="rounded border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950" data-testid="payment-fx-quote">
+                            <p className="font-semibold">
+                              DolarAPI · {paymentFxQuoteQuery.data.configured_market === "blue" ? "Blue" : "Oficial"} · 1 {editingCurrencyCode} = {paymentFxRate.toLocaleString("es-AR", { maximumFractionDigits: 6 })} {paymentTenderCurrency}
+                              {paymentFxQuoteQuery.data.quote_details?.source_quote?.is_derived_blue || paymentFxQuoteQuery.data.quote_details?.target_quote?.is_derived_blue ? " · equivalente blue derivado" : ""}
+                            </p>
+                            <p className="mt-1">
+                              El importe recibido se aplica al saldo en {editingCurrencyCode} con esta cotización y el spread configurado. No se usa otro mercado si esta cotización falla.
+                              {paymentAmountInput && Number.isFinite(Number(paymentAmountInput)) && Number(paymentAmountInput) > 0 && conversionReady
+                                ? t("page.form.fxCreditEstimate", { amount: formatMoney(convertTenderToReservation(Number(paymentAmountInput)) ?? 0, editingCurrencyCode) })
+                                : ""}
+                            </p>
+                          </div>
+                        )
+                      ) : null}
+                      {paymentMethod === "cash" && paymentTenderCurrency !== editingCurrencyCode && !hasMatchingCashSession ? (
+                        <p className="mt-1 text-xs text-amber-800">Abrí una caja en {paymentTenderCurrency} para registrar ese efectivo y poder arquearlo en su moneda.</p>
+                      ) : null}
+                    </div>
                     {paymentMethod === "cash" && canRecordPriorReceipt ? (
                       <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 sm:col-span-6">
                         <label className="flex items-start gap-2 text-sm font-semibold text-slate-800">
                           <input
                             type="checkbox"
                             checked={collectedBefore}
+                            disabled={paymentTenderCurrency !== editingCurrencyCode}
                             onChange={(event) => setCollectedBefore(event.target.checked)}
                             className="mt-0.5"
                             data-testid="prior-receipt-toggle"
@@ -3690,7 +3816,6 @@ export function ReservationsPage() {
                         <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
                           {t("page.form.refundSource")}
                           <select
-                            required
                             value={selectedRefundTargetId ?? ""}
                             onChange={(event) =>
                               setRefundTargetTransactionId(event.target.value ? Number(event.target.value) : null)
@@ -3712,7 +3837,6 @@ export function ReservationsPage() {
                           {t("page.form.refundReason")}
                           <input
                             type="text"
-                            required
                             maxLength={240}
                             value={refundReasonInput}
                             onChange={(event) => setRefundReasonInput(event.target.value)}
@@ -3754,7 +3878,7 @@ export function ReservationsPage() {
                       {depositAmountPreview === null
                         ? t("page.form.registerDeposit")
                         : t("page.form.registerDepositAmount", {
-                            amount: formatMoney(depositAmountPreview, editingCurrencyCode)
+                            amount: formatMoney(depositAmountPreview, paymentTenderCurrency)
                           })}
                     </button>
                     <button
@@ -3768,7 +3892,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handleRefund}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash" || !canRefundPayment || !selectedRefundTargetId || !refundReasonInput.trim()}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash" || !canRefundPayment || !selectedRefundTargetId || !refundReasonInput.trim() || paymentTenderCurrency !== refundablePaymentOptions.find((transaction) => transaction.id === selectedRefundTargetId)?.currency}
                       className="rounded-lg border border-brand-200 bg-brand-100 px-3 py-2 text-sm font-semibold text-brand-800 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {t("page.form.registerRefund")}
@@ -3821,7 +3945,7 @@ export function ReservationsPage() {
                       <button
                         type="button"
                         onClick={handleSubmitTransferProof}
-                        disabled={paymentProofMutations.submitMutation.isPending || paymentSummaryQuery.isLoading}
+                        disabled={paymentProofMutations.submitMutation.isPending || paymentSummaryQuery.isLoading || paymentTenderCurrency !== editingCurrencyCode}
                         className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-900 hover:border-amber-400 disabled:opacity-60"
                       >
                         {paymentProofMutations.submitMutation.isPending ? t("page.form.sendingProof") : t("page.form.sendProof")}
@@ -4012,6 +4136,11 @@ export function ReservationsPage() {
                               {tx.manual_reference ? <span className="block text-slate-500">{t("page.form.manualPaymentReferenceRecorded", { reference: tx.manual_reference })}</span> : null}
                               {tx.fee_amount && tx.fee_amount > 0 ? (
                                 <span className="text-amber-700">{t("page.form.feeSuffix", { amount: formatMoney(tx.fee_amount, tx.currency) })}</span>
+                              ) : null}
+                              {tx.applied_currency && tx.applied_currency !== tx.currency && tx.applied_amount !== null && tx.applied_amount !== undefined ? (
+                                <span className="block text-sky-800">
+                                  Aplica {formatMoney(tx.applied_amount, tx.applied_currency)} al saldo · 1 {tx.applied_currency} = {Number(tx.fx_rate_snapshot ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 6 })} {tx.currency}
+                                </span>
                               ) : null}
                             </span>
                             <span className="font-semibold">

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,8 @@ from app.services.fx_service import (
     parse_provider_updated_at,
 )
 from app.services.permission_service import PERMISSION_REPORTS_FINANCIAL_VIEW
+from app.services.permission_service import PERMISSION_CASH_OPERATE
+from app.services.pricing_policy_service import PricingPolicyError, _convert_amount
 
 
 router = APIRouter(prefix="/fx", tags=["FX Rates"])
@@ -76,6 +78,28 @@ class FxSnapshotCreateResponse(BaseModel):
     message: str
 
 
+class FxConversionQuoteRequest(BaseModel):
+    from_currency: str = Field(..., min_length=3, max_length=3)
+    to_currency: str = Field(..., min_length=3, max_length=3)
+
+    @field_validator("from_currency", "to_currency")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if len(normalized) != 3 or not normalized.isascii() or not normalized.isalpha():
+            raise ValueError("La moneda debe ser un código de tres letras")
+        return normalized
+
+
+class FxConversionQuoteRead(BaseModel):
+    from_currency: str
+    to_currency: str
+    rate: float
+    provider: str
+    configured_market: str
+    quote_details: Optional[dict] = None
+
+
 @router.get("/rates", response_model=list[FxRateItem], summary="All current FX rates")
 async def get_all_rates(
     context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
@@ -109,6 +133,49 @@ async def get_all_rates(
             )
         )
     return items
+
+
+@router.post(
+    "/conversion-quote",
+    response_model=FxConversionQuoteRead,
+    summary="Current hotel-favorable cross-currency conversion quote",
+)
+def get_conversion_quote(
+    payload: FxConversionQuoteRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+):
+    """Return the configured official/blue conversion for any supported pair."""
+    try:
+        _converted_amount, rate, details = _convert_amount(
+            db,
+            hotel_id=context.hotel_id,
+            amount=1.0,
+            from_currency=payload.from_currency,
+            to_currency=payload.to_currency,
+            fx_policy_id=None,
+            provider_code=None,
+            persist_snapshots=False,
+        )
+    except PricingPolicyError as exc:
+        message = str(exc)
+        error_status = (
+            status.HTTP_422_UNPROCESSABLE_ENTITY
+            if "no soportada" in message.lower() or "no es válida" in message.lower()
+            else status.HTTP_502_BAD_GATEWAY
+        )
+        raise HTTPException(status_code=error_status, detail=message) from exc
+    market = str((details or {}).get("configured_usd_market") or "oficial").lower()
+    if market not in {"oficial", "blue"}:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="La cotización configurada no es válida.")
+    return FxConversionQuoteRead(
+        from_currency=payload.from_currency,
+        to_currency=payload.to_currency,
+        rate=float(rate),
+        provider="dolarapi.com",
+        configured_market=market,
+        quote_details=details,
+    )
 
 
 @router.get("/rates/usd/oficial", response_model=FxRateUsdOficial, summary="Official USD rate shortcut")

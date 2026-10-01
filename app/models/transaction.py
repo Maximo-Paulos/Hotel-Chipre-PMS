@@ -4,7 +4,7 @@ Supports: Efectivo (Cash), MercadoPago, PayPal, Credit/Debit Card.
 """
 import enum
 from sqlalchemy import (
-    Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime, Date, Boolean,
+    Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime, Date, Boolean, JSON,
     CheckConstraint, ForeignKeyConstraint, Index, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
@@ -54,14 +54,19 @@ class Transaction(Base):
     )
     reservation_id = Column(Integer, nullable=False)
 
-    # Financial details
+    # amount/currency are the amount applied to the reservation balance.
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(3), nullable=False, default="ARS")
+    # Tender fields preserve what the guest actually handed over. Legacy rows
+    # have NULL tender values and use amount/currency for both meanings.
+    tender_amount = Column(Numeric(12, 2), nullable=True)
+    tender_currency = Column(String(3), nullable=True)
     gross_amount = Column(Numeric(12, 2), nullable=True)
     tax_amount = Column(Numeric(12, 2), nullable=True)
     fee_amount = Column(Numeric(12, 2), nullable=True)
     net_amount = Column(Numeric(12, 2), nullable=True)
     fx_rate_snapshot = Column(Float, nullable=True)
+    fx_quote_details = Column(JSON, nullable=True)
     provider_code = Column(String(50), nullable=True)
 
     transaction_type = Column(

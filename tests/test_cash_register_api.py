@@ -198,6 +198,30 @@ def test_cash_register_api_returns_latest_close_report_for_successor_opening(cli
     assert successor["opening_balance"] == "0.00"
 
 
+def test_latest_cash_close_report_can_be_scoped_to_currency(client_with_db):
+    client, _db, _ctx = client_with_db
+    ars_session = client.post("/api/cash-register/sessions", json={"opening_balance": "100.00", "currency_code": "ARS"})
+    ars_closed = client.post(
+        f"/api/cash-register/sessions/{ars_session.json()['id']}/close",
+        json={"counted_balance": "100.00"},
+    )
+    usd_session = client.post("/api/cash-register/sessions", json={"opening_balance": "10.00", "currency_code": "USD"})
+    usd_closed = client.post(
+        f"/api/cash-register/sessions/{usd_session.json()['id']}/close",
+        json={"counted_balance": "10.00"},
+    )
+
+    assert ars_closed.status_code == 200, ars_closed.text
+    assert usd_closed.status_code == 200, usd_closed.text
+    latest_usd = client.get("/api/cash-register/close-reports/latest", params={"currency": "USD"})
+    latest_ars = client.get("/api/cash-register/close-reports/latest", params={"currency": "ARS"})
+
+    assert latest_usd.status_code == 200, latest_usd.text
+    assert latest_ars.status_code == 200, latest_ars.text
+    assert latest_usd.json()["session_id"] == usd_session.json()["id"]
+    assert latest_ars.json()["session_id"] == ars_session.json()["id"]
+
+
 def test_cash_register_close_rejects_float_until_after_close(client_with_db):
     client, db, _ctx = client_with_db
     opened = client.post("/api/cash-register/sessions", json={"opening_balance": "100.00"})
@@ -215,14 +239,23 @@ def test_cash_register_close_rejects_float_until_after_close(client_with_db):
     assert db.query(CashCloseReport).filter_by(session_id=session_id).count() == 0
 
 
-def test_cash_register_api_only_one_open_session_per_hotel(client_with_db):
+def test_cash_register_api_allows_one_open_session_per_currency(client_with_db):
     client, _db, _ctx = client_with_db
 
     assert client.post("/api/cash-register/sessions", json={"opening_balance": "10.00"}).status_code == 201
-    second = client.post("/api/cash-register/sessions", json={"opening_balance": "10.00"})
+    usd = client.post(
+        "/api/cash-register/sessions",
+        json={"opening_balance": "10.00", "currency_code": "USD"},
+    )
+    assert usd.status_code == 201, usd.text
 
-    assert second.status_code == 400
-    assert "open cash session" in second.json()["detail"]
+    duplicate_usd = client.post(
+        "/api/cash-register/sessions",
+        json={"opening_balance": "10.00", "currency_code": "USD"},
+    )
+
+    assert duplicate_usd.status_code == 400
+    assert "open cash session" in duplicate_usd.json()["detail"]
 
 
 def test_cash_register_api_difference_approval_requires_permission(client_with_db):

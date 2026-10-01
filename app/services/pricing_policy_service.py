@@ -318,6 +318,7 @@ def _convert_amount(
     to_currency: str,
     fx_policy_id: int | None,
     provider_code: str | None,
+    persist_snapshots: bool = True,
 ) -> tuple[float, float, dict | None]:
     policy = _select_fx_policy(db, hotel_id=hotel_id, fx_policy_id=fx_policy_id)
     from_code = str(from_currency or "").strip().upper()
@@ -355,7 +356,7 @@ def _convert_amount(
             raise PricingPolicyError("La cotización FX debe ser positiva")
         raw_rate = source_ars_per_unit / target_ars_per_unit
 
-        if source_quote is not None:
+        if persist_snapshots and source_quote is not None:
             _record_conversion_snapshot(
                 db,
                 hotel_id=hotel_id,
@@ -364,7 +365,7 @@ def _convert_amount(
                 quote=source_quote,
                 side="venta",
             )
-        if target_quote is not None:
+        if persist_snapshots and target_quote is not None:
             _record_conversion_snapshot(
                 db,
                 hotel_id=hotel_id,

@@ -86,7 +86,7 @@ test("owner preserves availability dates after querying a category", async ({ pa
   await login(page);
   await page.goto("/reservas");
 
-  const categorySelect = page.getByRole("combobox", { name: "Categoría", exact: true });
+  const categorySelect = page.getByRole("combobox", { name: "Categoría para disponibilidad", exact: true });
   await expect(categorySelect).toHaveCount(1);
   const categoryOption = categorySelect.locator("option").filter({ hasText: "Standard E2E" });
   await expect(categoryOption).toHaveCount(1);
@@ -94,13 +94,13 @@ test("owner preserves availability dates after querying a category", async ({ pa
   expect(categoryValue).toBeTruthy();
   await categorySelect.selectOption(categoryValue!);
 
-  const checkInField = page.getByRole("textbox", { name: "Check-in", exact: true });
-  const checkOutField = page.getByRole("textbox", { name: "Check-out", exact: true });
+  const checkInField = page.getByRole("textbox", { name: "Check-in para disponibilidad", exact: true });
+  const checkOutField = page.getByRole("textbox", { name: "Check-out para disponibilidad", exact: true });
   await expect(checkInField).toHaveCount(1);
   await expect(checkOutField).toHaveCount(1);
-  await checkInField.fill(checkIn);
+  await checkInField.fill(displayDate(checkIn));
   await checkInField.press("Tab");
-  await checkOutField.fill(checkOut);
+  await checkOutField.fill(displayDate(checkOut));
   await checkOutField.press("Tab");
 
   const availabilityButton = page.getByRole("button", { name: "Consultar", exact: true });
@@ -137,7 +137,19 @@ test("owner edits, extends, rejects an overlap and cancels a reservation", async
   const editForm = page.locator("form").filter({ hasText: "Pagos y balance" });
   await expect(editForm).toBeVisible();
   const editCheckOut = editForm.getByLabel("Check-out", { exact: true });
-  await editCheckOut.fill(extendedCheckOut);
+  await editCheckOut.fill(displayDate(extendedCheckOut));
+  const invalidFields = await editForm.locator("input:invalid, select:invalid, textarea:invalid").evaluateAll((elements) =>
+    elements.map((element) => ({
+      tag: element.tagName,
+      id: element.id,
+      name: element.getAttribute("name"),
+      label: element.getAttribute("aria-label"),
+      fieldLabel: element.closest("label")?.innerText,
+      value: (element as HTMLInputElement).value,
+      validationMessage: (element as HTMLInputElement).validationMessage
+    }))
+  );
+  expect(invalidFields, `The edit form has invalid required fields: ${JSON.stringify(invalidFields)}`).toEqual([]);
   await editForm.getByRole("button", { name: "Guardar cambios", exact: true }).click();
   await expect(page.getByText("Reserva actualizada", { exact: true })).toBeVisible();
   await expect(reservationTable.locator("tbody tr").filter({ hasText: guestLastName })).toContainText(extendedCheckOut);
@@ -204,6 +216,18 @@ test("editing a reservation cannot silently no-op a category/status change throu
 
   const adultsInput = editForm.locator("label").filter({ hasText: "Adultos" }).locator("input");
   await adultsInput.fill("2");
+  const invalidFields = await editForm.locator("input:invalid, select:invalid, textarea:invalid").evaluateAll((elements) =>
+    elements.map((element) => ({
+      tag: element.tagName,
+      id: element.id,
+      name: element.getAttribute("name"),
+      label: element.getAttribute("aria-label"),
+      fieldLabel: element.closest("label")?.innerText,
+      value: (element as HTMLInputElement).value,
+      validationMessage: (element as HTMLInputElement).validationMessage
+    }))
+  );
+  expect(invalidFields, `The edit form has invalid required fields: ${JSON.stringify(invalidFields)}`).toEqual([]);
   await editForm.getByRole("button", { name: "Guardar cambios", exact: true }).click();
   await expect(page.getByText("Reserva actualizada", { exact: true })).toBeVisible();
 

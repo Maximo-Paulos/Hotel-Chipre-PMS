@@ -6487,7 +6487,7 @@
           "Bookings"
         ],
         "summary": "Price Quote",
-        "description": "Calculate pricing for a potential booking without persisting it.\nUses the canonical daily/seasonal rate resolver and then the category base price.",
+        "description": "Calculate pricing for a potential booking without persisting it.\nUses the canonical daily/seasonal rate resolver and then the category base price.\n\nFor deferred-billing companies, the quote retains date/category and token\nfields required for reservation creation, marks ``company_billing_deferred``\ntrue, and returns no monetary values (null amounts and empty price details).",
         "operationId": "price_quote_api_bookings_price_quote_get",
         "parameters": [
           {
@@ -29991,6 +29991,82 @@
         }
       }
     },
+    "/fx/conversion-quote": {
+      "post": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Current hotel-favorable cross-currency conversion quote",
+        "description": "Return the configured official/blue conversion for any supported pair.",
+        "operationId": "get_conversion_quote_fx_conversion_quote_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FxConversionQuoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FxConversionQuoteRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/fx/rates/usd/oficial": {
       "get": {
         "tags": [
@@ -30061,7 +30137,7 @@
         "tags": [
           "FX Rates"
         ],
-        "summary": "Single USD rate type",
+        "summary": "Single supported FX quote",
         "operationId": "get_single_rate_fx_rates__rate_type__get",
         "parameters": [
           {
@@ -31507,6 +31583,24 @@
         "operationId": "latest_cash_close_report_cash_register_close_reports_latest_get",
         "parameters": [
           {
+            "name": "currency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Currency"
+            }
+          },
+          {
             "name": "x-hotel-id",
             "in": "header",
             "required": false,
@@ -31579,6 +31673,24 @@
         "summary": "Latest Cash Close Report",
         "operationId": "latest_cash_close_report_api_cash_register_close_reports_latest_get",
         "parameters": [
+          {
+            "name": "currency",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Currency"
+            }
+          },
           {
             "name": "x-hotel-id",
             "in": "header",
@@ -39229,6 +39341,17 @@
             ],
             "title": "Value Ars"
           },
+          "value_ars_available": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Ars Available"
+          },
           "value_pct": {
             "anyOf": [
               {
@@ -42644,6 +42767,10 @@
           "is_active": {
             "type": "boolean",
             "title": "Is Active"
+          },
+          "payment_deferred": {
+            "type": "boolean",
+            "title": "Payment Deferred"
           }
         },
         "type": "object",
@@ -42651,7 +42778,8 @@
           "id",
           "display_name",
           "legal_name",
-          "is_active"
+          "is_active",
+          "payment_deferred"
         ],
         "title": "CompanyOptionRead"
       },
@@ -43777,6 +43905,72 @@
         ],
         "title": "EntitlementsResponse"
       },
+      "FxConversionQuoteRead": {
+        "properties": {
+          "from_currency": {
+            "type": "string",
+            "title": "From Currency"
+          },
+          "to_currency": {
+            "type": "string",
+            "title": "To Currency"
+          },
+          "rate": {
+            "type": "number",
+            "title": "Rate"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "configured_market": {
+            "type": "string",
+            "title": "Configured Market"
+          },
+          "quote_details": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_currency",
+          "to_currency",
+          "rate",
+          "provider",
+          "configured_market"
+        ],
+        "title": "FxConversionQuoteRead"
+      },
+      "FxConversionQuoteRequest": {
+        "properties": {
+          "from_currency": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "From Currency"
+          },
+          "to_currency": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "To Currency"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_currency",
+          "to_currency"
+        ],
+        "title": "FxConversionQuoteRequest"
+      },
       "FxPolicyCreate": {
         "properties": {
           "code": {
@@ -43800,20 +43994,26 @@
           },
           "preferred_source": {
             "type": "string",
-            "maxLength": 50,
-            "minLength": 1,
+            "enum": [
+              "official",
+              "oficial",
+              "blue"
+            ],
             "title": "Preferred Source",
             "default": "official"
           },
           "preferred_side": {
             "type": "string",
-            "maxLength": 20,
-            "minLength": 1,
+            "enum": [
+              "buy",
+              "sell"
+            ],
             "title": "Preferred Side",
             "default": "sell"
           },
           "spread_pct": {
             "type": "number",
+            "minimum": 0.0,
             "title": "Spread Pct",
             "default": 0.0
           },
@@ -43969,8 +44169,11 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 50,
-                "minLength": 1
+                "enum": [
+                  "official",
+                  "oficial",
+                  "blue"
+                ]
               },
               {
                 "type": "null"
@@ -43982,8 +44185,10 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 20,
-                "minLength": 1
+                "enum": [
+                  "buy",
+                  "sell"
+                ]
               },
               {
                 "type": "null"
@@ -43994,7 +44199,8 @@
           "spread_pct": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -44068,6 +44274,17 @@
               }
             ],
             "title": "Moneda"
+          },
+          "casa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Casa"
           },
           "compra": {
             "anyOf": [
@@ -44187,6 +44404,17 @@
             "type": "string",
             "title": "Rate Type"
           },
+          "provider_market": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Market"
+          },
           "moneda": {
             "type": "string",
             "title": "Moneda"
@@ -44217,6 +44445,62 @@
             "type": "string",
             "format": "date-time",
             "title": "Fetched At"
+          },
+          "provider_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Updated At"
+          },
+          "selected_side": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Side"
+          },
+          "base_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Currency"
+          },
+          "quote_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Currency"
+          },
+          "applied_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Rate"
           },
           "source": {
             "type": "string",
@@ -46801,6 +47085,26 @@
             "type": "string",
             "title": "Default Currency"
           },
+          "fx_conversion_rate_type": {
+            "type": "string",
+            "enum": [
+              "oficial",
+              "blue"
+            ],
+            "title": "Fx Conversion Rate Type",
+            "default": "oficial"
+          },
+          "fx_display_rate_types": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "oficial",
+                "blue"
+              ]
+            },
+            "type": "array",
+            "title": "Fx Display Rate Types"
+          },
           "languages": {
             "items": {
               "type": "string"
@@ -47188,6 +47492,41 @@
               }
             ],
             "title": "Default Currency"
+          },
+          "fx_conversion_rate_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "oficial",
+                  "blue"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Conversion Rate Type"
+          },
+          "fx_display_rate_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "oficial",
+                    "blue"
+                  ]
+                },
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Display Rate Types"
           },
           "languages": {
             "anyOf": [
@@ -51584,6 +51923,22 @@
               }
             ],
             "title": "Balance Due"
+          },
+          "company_billing_deferred": {
+            "type": "boolean",
+            "title": "Company Billing Deferred",
+            "default": false
+          },
+          "company_night_extra_due": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Night Extra Due"
           }
         },
         "type": "object",
@@ -52981,6 +53336,39 @@
           "amount": {
             "type": "string",
             "title": "Amount"
+          },
+          "applied_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Amount"
+          },
+          "applied_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Currency"
+          },
+          "fx_rate_snapshot": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rate Snapshot"
           },
           "gross_amount": {
             "type": "string",
@@ -58001,7 +58389,11 @@
           },
           "payment_action": {
             "type": "string",
-            "pattern": "^(immediate_payment|payment_link)$",
+            "enum": [
+              "immediate_payment",
+              "payment_link",
+              "company_account"
+            ],
             "title": "Payment Action",
             "default": "payment_link"
           },
@@ -58140,19 +58532,47 @@
             "title": "Currency Code"
           },
           "total_amount": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Total Amount"
           },
           "deposit_required": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Deposit Required"
           },
           "amount_paid": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Amount Paid"
           },
           "balance_due": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Balance Due"
           },
           "operational_total_amount": {
@@ -58167,6 +58587,11 @@
             "type": "number",
             "title": "Billing Adjustment Total"
           },
+          "company_billing_deferred": {
+            "type": "boolean",
+            "title": "Company Billing Deferred",
+            "default": false
+          },
           "payment_collection_model": {
             "type": "string",
             "title": "Payment Collection Model"
@@ -58180,7 +58605,14 @@
             "title": "Has Financial Reconciliation Gap"
           },
           "financial_reconciliation_gap": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Financial Reconciliation Gap"
           },
           "recommended_next_action": {
@@ -58338,16 +58770,42 @@
             "title": "Reservation Codes"
           },
           "total_amount": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Total Amount"
           },
           "amount_paid": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Amount Paid"
           },
           "balance_due": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Balance Due"
+          },
+          "company_billing_deferred": {
+            "type": "boolean",
+            "title": "Company Billing Deferred",
+            "default": false
           },
           "currency_code": {
             "type": "string",
@@ -58885,15 +59343,36 @@
             "title": "Actual Check Out"
           },
           "total_amount": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Total Amount"
           },
           "amount_paid": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Amount Paid"
           },
           "external_paid_amount": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "External Paid Amount",
             "default": 0.0
           },
@@ -58914,31 +59393,73 @@
             "default": false
           },
           "deposit_amount": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Deposit Amount"
           },
           "subtotal_amount": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Subtotal Amount",
             "default": 0.0
           },
           "tax_amount": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Tax Amount",
             "default": 0.0
           },
           "fee_amount": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Fee Amount",
             "default": 0.0
           },
           "commission_amount": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Commission Amount",
             "default": 0.0
           },
           "net_amount": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Net Amount",
             "default": 0.0
           },
@@ -59029,6 +59550,11 @@
             "title": "Settlement Status",
             "default": "not_applicable"
           },
+          "company_billing_deferred": {
+            "type": "boolean",
+            "title": "Company Billing Deferred",
+            "default": false
+          },
           "num_adults": {
             "type": "integer",
             "title": "Num Adults"
@@ -59111,7 +59637,14 @@
             "title": "Updated At"
           },
           "balance_due": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Balance Due",
             "default": 0.0
           },
@@ -59307,6 +59840,39 @@
           "amount": {
             "type": "number",
             "title": "Amount"
+          },
+          "applied_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Amount"
+          },
+          "applied_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Currency"
+          },
+          "fx_rate_snapshot": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rate Snapshot"
           },
           "gross_amount": {
             "anyOf": [
@@ -63801,6 +64367,39 @@
           "currency": {
             "type": "string",
             "title": "Currency"
+          },
+          "tender_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tender Amount"
+          },
+          "tender_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tender Currency"
+          },
+          "fx_rate_snapshot": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rate Snapshot"
           },
           "transaction_type": {
             "$ref": "#/components/schemas/TransactionTypeEnum"

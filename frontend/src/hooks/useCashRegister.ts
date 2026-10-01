@@ -33,7 +33,7 @@ import { useGuardedMutation } from "./useGuardedMutation";
 const cashSessionsKey = (hotelId: number | null) => ["cash-sessions", hotelId];
 const cashMovementsKey = (hotelId: number | null, sessionId: number) => ["cash-movements", hotelId, sessionId];
 
-const latestCloseReportKey = (hotelId: number | null) => ["cash-latest-close-report", hotelId];
+const latestCloseReportKey = (hotelId: number | null, currency?: string) => ["cash-latest-close-report", hotelId, currency ?? "all"];
 const pendingCloseReportsKey = (hotelId: number | null) => ["cash-latest-close-report", hotelId, "pending"];
 const pendingCashCustodyReportsKey = (hotelId: number | null) => ["cash-latest-close-report", hotelId, "custody-pending"];
 const dailySummaryKey = (hotelId: number | null, date: string, currency?: string | null) => ["cash-daily-summary", hotelId, date, currency || "auto"];
@@ -57,11 +57,11 @@ export function useCashSessions() {
   });
 }
 
-export function useLatestCashCloseReport(options?: { enabled?: boolean }) {
+export function useLatestCashCloseReport(options?: { enabled?: boolean; currency?: string }) {
   const { session } = useSession();
   return useQuery<CashCloseReport | null>({
-    queryKey: latestCloseReportKey(session.hotelId),
-    queryFn: () => getLatestCashCloseReport(session),
+    queryKey: latestCloseReportKey(session.hotelId, options?.currency),
+    queryFn: () => getLatestCashCloseReport(session, options?.currency),
     enabled: hasValidSession(session) && (options?.enabled ?? true),
     staleTime: 15 * 1000
   });

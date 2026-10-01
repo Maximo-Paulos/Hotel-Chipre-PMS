@@ -101,7 +101,7 @@ def _transaction(
     return tx
 
 
-def test_only_one_open_cash_session_per_hotel_is_allowed(db):
+def test_only_one_open_cash_session_per_hotel_and_currency_is_allowed(db):
     _hotel(db, 1)
     _hotel(db, 2)
     _user(db, 10)
@@ -113,6 +113,15 @@ def test_only_one_open_cash_session_per_hotel_is_allowed(db):
 
     with pytest.raises(CashRegisterError):
         open_session(db, hotel_id=1, opened_by_user_id=11, opening_balance=Decimal("50.00"))
+
+    session_usd = open_session(
+        db,
+        hotel_id=1,
+        opened_by_user_id=11,
+        opening_balance=Decimal("10.00"),
+        currency_code="USD",
+    )
+    assert session_usd.currency_code == "USD"
 
     session_b = open_session(db, hotel_id=2, opened_by_user_id=12, opening_balance=Decimal("50.00"))
     assert session_b.hotel_id == 2

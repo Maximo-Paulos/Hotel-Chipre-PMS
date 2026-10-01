@@ -9,6 +9,7 @@ Tests the complete payment lifecycle including:
 """
 import pytest
 from datetime import date
+from decimal import Decimal
 
 from app.models.cash_register import CashSession
 from app.models.hotel_config import HotelConfiguration
@@ -22,6 +23,7 @@ from app.models.user import User
 from app.schemas.reservation import ReservationCreate
 from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
 from app.services.reservation_service import create_reservation
+from app.services import payment_service as payment_service_module
 from app.services.payment_service import (
     process_payment,
     get_reservation_financial_summary,
@@ -673,8 +675,8 @@ class TestPaymentEdgeCases:
         assert summary["currency_code"] == "USD"
         assert summary["transactions"][0]["currency"] == "USD"
 
-    def test_payment_rejects_currency_different_from_reservation_before_writing(
-        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    def test_payment_accepts_foreign_tender_and_credits_the_reservation_currency(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch
     ):
         data = ReservationCreate(
             guest_id=sample_guest.id,
@@ -683,23 +685,126 @@ class TestPaymentEdgeCases:
             check_out_date=date(2026, 8, 29),
         )
         reservation = create_reservation(db, data, hotel_id=hotel_config.id)
-        before_paid = reservation.amount_paid
+        open_session(
+            db,
+            hotel_id=hotel_config.id,
+            opened_by_user_id=None,
+            opening_balance=0,
+            currency_code="USD",
+        )
 
-        with pytest.raises(PaymentError, match="debe coincidir con la reserva"):
+        def quote(_db, *, amount, **_kwargs):
+            return amount * 0.001, 0.001, {"provider": "dolarapi.com", "configured_usd_market": "oficial"}
+
+        monkeypatch.setattr(payment_service_module, "_convert_amount", quote)
+        payment_request = PaymentRequest(
+            reservation_id=reservation.id,
+            amount=0.10,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            currency="USD",
+        )
+        transaction = process_payment(
+            db,
+            payment_request,
+            hotel_id=hotel_config.id,
+            idempotency_key="foreign-currency-payment-01",
+        )
+        replay = process_payment(
+            db,
+            payment_request,
+            hotel_id=hotel_config.id,
+            idempotency_key="foreign-currency-payment-01",
+        )
+        db.flush()
+
+        summary = get_reservation_financial_summary(db, hotel_config.id, reservation.id)
+        assert transaction.currency == "ARS"
+        assert transaction.amount == 100
+        assert transaction.tender_currency == "USD"
+        assert transaction.tender_amount == Decimal("0.10")
+        assert replay.id == transaction.id
+        assert transaction.fx_rate_snapshot == 0.001
+        assert reservation.amount_paid == 100
+        assert Decimal(str(summary["transactions"][0]["amount"])) == Decimal("0.10")
+        assert summary["transactions"][0]["currency"] == "USD"
+        assert summary["transactions"][0]["applied_amount"] == 100
+        assert summary["transactions"][0]["applied_currency"] == "ARS"
+
+    def test_foreign_currency_refund_uses_original_rate_and_limits_tender_units(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch
+    ):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 8, 27),
+            check_out_date=date(2026, 8, 29),
+        )
+        reservation = create_reservation(db, data, hotel_id=hotel_config.id)
+        open_session(
+            db,
+            hotel_id=hotel_config.id,
+            opened_by_user_id=None,
+            opening_balance=0,
+            currency_code="USD",
+        )
+
+        def quote(_db, *, amount, **_kwargs):
+            return amount * 0.005, 0.005, {
+                "provider": "dolarapi.com",
+                "configured_usd_market": "blue",
+                "path": "via_ars",
+            }
+
+        monkeypatch.setattr(payment_service_module, "_convert_amount", quote)
+        original = process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=reservation.id,
+                amount=1.00,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+                currency="USD",
+            ),
+            hotel_id=hotel_config.id,
+        )
+        refund = process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=reservation.id,
+                amount=0.50,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.REFUND,
+                currency="USD",
+                refund_of_transaction_id=original.id,
+                refund_reason="Ajuste aprobado",
+            ),
+            hotel_id=hotel_config.id,
+        )
+        db.flush()
+
+        assert original.amount == 200
+        assert refund.amount == 100
+        assert refund.tender_amount == 0.50
+        assert refund.tender_currency == "USD"
+        assert refund.fx_rate_snapshot == 0.005
+        assert refund.fx_quote_details["refund_uses_original_quote"] is True
+        assert reservation.amount_paid == 100
+
+        with pytest.raises(PaymentError, match="remaining refundable amount"):
             process_payment(
                 db,
                 PaymentRequest(
                     reservation_id=reservation.id,
-                    amount=30.0,
+                    amount=0.51,
                     payment_method=PaymentMethodEnum.CASH,
-                    transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+                    transaction_type=TransactionTypeEnum.REFUND,
                     currency="USD",
+                    refund_of_transaction_id=original.id,
+                    refund_reason="Excede saldo original",
                 ),
                 hotel_id=hotel_config.id,
             )
-
-        assert reservation.amount_paid == before_paid
-        assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 0
 
     def test_cash_payment_requires_drawer_currency_to_match_reservation(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config

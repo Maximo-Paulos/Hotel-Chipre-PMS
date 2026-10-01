@@ -204,8 +204,11 @@ export type CashCustodyReceiptPayload = {
 export const listCashSessions = (session?: SessionLike) =>
   apiFetch<CashSession[]>("/api/cash-register/sessions", { session });
 
-export const getLatestCashCloseReport = (session?: SessionLike) =>
-  apiFetch<CashCloseReport | null>("/api/cash-register/close-reports/latest", { session });
+export const getLatestCashCloseReport = (session?: SessionLike, currency?: string) =>
+  apiFetch<CashCloseReport | null>(
+    `/api/cash-register/close-reports/latest${currency ? `?currency=${encodeURIComponent(currency)}` : ""}`,
+    { session }
+  );
 
 export const listPendingCashCloseReports = (session?: SessionLike) =>
   apiFetch<CashCloseReport[]>("/api/cash-register/close-reports/pending", { session });

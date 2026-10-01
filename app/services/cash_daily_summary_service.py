@@ -127,8 +127,8 @@ def get_daily_summary(
     )
     prior_receipt_totals = (
         db.query(
-            Transaction.currency,
-            func.sum(Transaction.amount),
+            func.coalesce(Transaction.tender_currency, Transaction.currency),
+            func.sum(func.coalesce(Transaction.tender_amount, Transaction.amount)),
             func.count(Transaction.id),
         )
         .filter(
@@ -137,8 +137,8 @@ def get_daily_summary(
             Transaction.payment_method == PaymentMethodEnum.CASH,
             Transaction.collected_before.is_(True),
         )
-        .group_by(Transaction.currency)
-        .order_by(Transaction.currency.asc())
+        .group_by(func.coalesce(Transaction.tender_currency, Transaction.currency))
+        .order_by(func.coalesce(Transaction.tender_currency, Transaction.currency).asc())
         .all()
     )
     movements = (
@@ -230,7 +230,7 @@ def get_daily_summary(
         and _utc(received_at or delivered_at) <= start
     }
     observed_currencies = {
-        str(transaction.currency or (hotel.default_currency if hotel else "ARS")).upper()
+        str(transaction.tender_currency or transaction.currency or (hotel.default_currency if hotel else "ARS")).upper()
         for transaction in transactions
     }
     observed_currencies.update(session_currencies.values())
@@ -281,13 +281,13 @@ def get_daily_summary(
     digital_net = ZERO
 
     for transaction in transactions:
-        transaction_currency = str(transaction.currency or (hotel.default_currency if hotel else "ARS")).upper()
+        transaction_currency = str(transaction.tender_currency or transaction.currency or (hotel.default_currency if hotel else "ARS")).upper()
         if transaction_currency != report_currency:
             continue
         method = _value(transaction.payment_method)
         transaction_type = _value(transaction.transaction_type)
         amount = _decimal(transaction.gross_amount if transaction.gross_amount is not None else transaction.amount)
-        base_amount = _decimal(transaction.amount)
+        base_amount = _decimal(transaction.tender_amount if transaction.tender_amount is not None else transaction.amount)
         is_refund = transaction_type == TransactionTypeEnum.REFUND.value
         positive_amount = abs(amount)
         signed_amount = -positive_amount if is_refund else positive_amount
@@ -525,8 +525,8 @@ def get_daily_summary(
                 "transaction_id": transaction.id,
                 "reservation_id": transaction.reservation_id,
                 "confirmation_code": confirmation_code,
-                "amount": _decimal(transaction.amount),
-                "currency_code": str(transaction.currency or "ARS").upper(),
+                "amount": _decimal(transaction.tender_amount if transaction.tender_amount is not None else transaction.amount),
+                "currency_code": str(transaction.tender_currency or transaction.currency or "ARS").upper(),
                 "collected_on": transaction.collected_on,
                 "prior_receipt_note": transaction.prior_receipt_note,
                 "recorded_at": _utc(transaction.created_at),

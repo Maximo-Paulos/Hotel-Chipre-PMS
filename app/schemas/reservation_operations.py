@@ -157,6 +157,9 @@ class AllocationRunResponse(BaseModel):
 class ReservationTransactionSummaryRead(BaseModel):
     id: int
     amount: float
+    applied_amount: Optional[float] = None
+    applied_currency: Optional[str] = None
+    fx_rate_snapshot: Optional[float] = None
     gross_amount: Optional[float] = None
     fee_amount: Optional[float] = None
     currency: str

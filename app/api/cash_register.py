@@ -166,7 +166,7 @@ def export_cash_ledger_csv(
     )
     if selected_currency:
         prior_receipt_query = prior_receipt_query.filter(
-            func.upper(Transaction.currency) == selected_currency
+            func.upper(func.coalesce(Transaction.tender_currency, Transaction.currency)) == selected_currency
         )
     prior_receipt_rows = prior_receipt_query.limit(ENTRY_LIMIT + 1).all()
     if len(prior_receipt_rows) > ENTRY_LIMIT:
@@ -175,9 +175,9 @@ def export_cash_ledger_csv(
             detail="El período excede el máximo de cobros previos exportables; acotá el período antes de exportar.",
         )
     currencies.update(
-        str(transaction.currency or "ARS").upper()
+        str(transaction.tender_currency or transaction.currency or "ARS").upper()
         for transaction, _confirmation_code in prior_receipt_rows
-        if transaction.currency
+        if transaction.tender_currency or transaction.currency
     )
     if selected_currency:
         currencies = {selected_currency}
@@ -229,7 +229,7 @@ def export_cash_ledger_csv(
         user_ids=(transaction.created_by_user_id for transaction, _ in prior_receipt_rows),
     )
     for transaction, confirmation_code in prior_receipt_rows:
-        receipt_currency = str(transaction.currency or "ARS").upper()
+        receipt_currency = str(transaction.tender_currency or transaction.currency or "ARS").upper()
         if selected_currency and receipt_currency != selected_currency:
             continue
         writer.writerow(
@@ -244,8 +244,8 @@ def export_cash_ledger_csv(
                 "reservation_id": transaction.reservation_id,
                 "transaction_id": transaction.id,
                 "cash_movement_id": "",
-                "amount": transaction.amount,
-                "signed_amount": transaction.amount,
+                "amount": transaction.tender_amount if transaction.tender_amount is not None else transaction.amount,
+                "signed_amount": transaction.tender_amount if transaction.tender_amount is not None else transaction.amount,
                 "payment_method": "cash",
                 "transaction_type": "",
                 "movement_type": "",
@@ -298,10 +298,11 @@ def list_cash_sessions(
 @router.get("/api/cash-register/close-reports/latest", response_model=CashCloseReportRead | None)
 @router.get("/cash-register/close-reports/latest", response_model=CashCloseReportRead | None)
 def latest_cash_close_report(
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
-    return get_latest_close_report(db, hotel_id=context.hotel_id)
+    return get_latest_close_report(db, hotel_id=context.hotel_id, currency_code=currency)
 
 
 @router.get("/api/cash-register/close-reports/pending", response_model=list[CashCloseReportRead])

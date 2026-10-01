@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { completeStepUpPrompt, loginAsStepUpOwner } from "./support/step-up-owner";
+
 // B1: ReservationDetailDrawer + global access (header search, "Reserva
 // rápida", and the ?reserva=<id> deep link). Covers opening the drawer from
 // three different entry points and verifies it shows the real state,
@@ -18,9 +20,11 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 20_000 });
 }
 
-test("owner opens the reservation drawer from the dashboard, global search, and a deep link", async ({ page }) => {
+test("owner opens the reservation drawer from the dashboard, global search, and a deep link", async ({ page }, testInfo) => {
   const suffix = Date.now().toString();
   const guestLastName = `DrawerQA-${suffix}`;
+  const ownerSession = await loginAsStepUpOwner(page, "cash-business", testInfo.project.name);
+  let lastTotpStep = ownerSession.lastTotpStep;
   // The dashboard lists real upcoming arrivals: check-in from today on, not
   // yet checked in, soonest first, five at most (upcomingOnly on
   // GET /api/reservations). So this reservation has to be a near arrival.
@@ -37,8 +41,6 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   };
   const checkIn = localIsoDate(1);
   const checkOut = localIsoDate(3);
-
-  await login(page);
 
   // Cash and a manually verified in-person card/bank operation complete at
   // this collection point; gateway links are handled by their separate flow.
@@ -155,6 +157,7 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
 
   // Cleanup: free tomorrow's room and dashboard slot for the next run.
   await drawer.getByRole("button", { name: "Cancelar", exact: true }).click();
+  lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
   await expect(drawer.getByText("Reserva cancelada.", { exact: true })).toBeVisible();
 });
 

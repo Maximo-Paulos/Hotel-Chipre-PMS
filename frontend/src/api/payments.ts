@@ -40,6 +40,9 @@ export type PaymentSummary = {
   transactions: Array<{
     id: number;
     amount: number;
+    applied_amount?: number | null;
+    applied_currency?: string | null;
+    fx_rate_snapshot?: number | null;
     gross_amount?: number;
     fee_amount?: number;
     currency: string;
@@ -63,6 +66,9 @@ export type PaymentReceiptData = {
   hotel_name: string;
   hotel_timezone: string;
   amount: number | string;
+  applied_amount?: number | string | null;
+  applied_currency?: string | null;
+  fx_rate_snapshot?: number | null;
   gross_amount: number | string;
   fee_amount: number | string;
   currency: string;

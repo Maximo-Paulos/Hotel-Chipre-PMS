@@ -7,7 +7,7 @@ Lifecycle:
     ↳ CashCloseReport (arqueo y diferencias al cerrar)
 
 Rules:
-  - A hotel can only have ONE open session at a time.
+  - A hotel can have at most one open session per currency.
   - Movements cannot be added to a closed session.
   - The close report captures expected vs actual and the difference.
   - Re-apertura allowed after supervisor approval (via PendingOperationalAction).
@@ -30,6 +30,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -56,9 +57,8 @@ class CashCustodyStatusEnum(str, enum.Enum):
 
 class CashSession(Base):
     """
-    Single cash-register shift. Only one OPEN session per hotel at a time
-    (enforced by partial unique index in PostgreSQL; SQLite tolerates multiple
-    open rows but the service layer guards it).
+    Single currency-specific cash-register shift. A hotel may keep one open
+    session per currency so physical balances are never mixed.
     """
     __tablename__ = "cash_sessions"
 
@@ -111,6 +111,14 @@ class CashSession(Base):
         CheckConstraint("opening_balance >= 0", name="ck_cash_sessions_opening_nonneg"),
         UniqueConstraint("hotel_id", "id", name="uq_cash_sessions_hotel_id_id"),
         Index("ix_cash_sessions_hotel_status", "hotel_id", "status"),
+        Index(
+            "uq_cash_sessions_open_currency",
+            "hotel_id",
+            "currency_code",
+            unique=True,
+            postgresql_where=text("status = 'open'"),
+            sqlite_where=text("status = 'open'"),
+        ),
     )
 
     def __repr__(self) -> str:

@@ -230,3 +230,44 @@ def test_single_fx_quote_endpoint_exposes_derived_blue_currency(fx_client, monke
     assert response.status_code == 200, response.text
     assert response.json()["type"] == "eur_blue"
     assert response.json()["casa"] == "blue_derivado"
+
+
+def test_current_conversion_quote_returns_configured_cross_currency_rate_without_writing_snapshot(
+    fx_client, monkeypatch
+):
+    client, SessionLocal, _ = fx_client
+    with SessionLocal() as db:
+        config = db.get(HotelConfiguration, 1)
+        config.fx_conversion_rate_type = "blue"
+        db.commit()
+
+    def quote(db, *, hotel_id, amount, from_currency, to_currency, fx_policy_id, provider_code, persist_snapshots):
+        assert hotel_id == 1
+        assert amount == 1.0
+        assert from_currency == "EUR"
+        assert to_currency == "UYU"
+        assert fx_policy_id is None
+        assert provider_code is None
+        assert persist_snapshots is False
+        return 1.25, 1.25, {
+            "provider": "dolarapi.com",
+            "configured_usd_market": "blue",
+            "path": "via_ars",
+            "source_quote": {"currency": "EUR", "is_derived_blue": True},
+            "target_quote": {"currency": "UYU", "is_derived_blue": True},
+        }
+
+    monkeypatch.setattr(fx_rates_module, "_convert_amount", quote)
+    response = client.post(
+        "/fx/conversion-quote",
+        json={"from_currency": "EUR", "to_currency": "UYU"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["rate"] == 1.25
+    assert payload["provider"] == "dolarapi.com"
+    assert payload["configured_market"] == "blue"
+    assert payload["quote_details"]["source_quote"]["is_derived_blue"] is True
+    with SessionLocal() as db:
+        assert db.query(FxRateSnapshot).filter(FxRateSnapshot.hotel_id == 1).count() == 0

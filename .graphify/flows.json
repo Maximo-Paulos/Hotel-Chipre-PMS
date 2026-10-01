@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-01T07:38:48.921Z",
+  "generatedAt": "2026-10-01T11:56:15.369Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -12107,48 +12107,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_service_process_payment",
-      "name": "process_payment",
-      "entryPoint": "services_payment_service_process_payment",
-      "entryPointId": "services_payment_service_process_payment",
-      "path": [
-        "services_payment_service_process_payment",
-        "services_payment_service_calculate_payment_surcharge",
-        "services_payment_service_paymenterror",
-        "services_payment_service_paymentnotfounderror",
-        "services_payment_service_resolve_payment_currency",
-        "services_payment_service_resolve_reservation_hotel",
-        "services_payment_service_same_idempotent_payment",
-        "services_payment_service_update_reservation_financials",
-        "services_payment_service_validate_payment_method_enabled",
-        "services_payment_service_payment_method_value",
-        "services_payment_service_sync_reservation_financial_status",
-        "services_payment_service_get_hotel_config"
-      ],
-      "qualifiedPath": [
-        "services_payment_service_process_payment",
-        "services_payment_service_calculate_payment_surcharge",
-        "services_payment_service_paymenterror",
-        "services_payment_service_paymentnotfounderror",
-        "services_payment_service_resolve_payment_currency",
-        "services_payment_service_resolve_reservation_hotel",
-        "services_payment_service_same_idempotent_payment",
-        "services_payment_service_update_reservation_financials",
-        "services_payment_service_validate_payment_method_enabled",
-        "services_payment_service_payment_method_value",
-        "services_payment_service_sync_reservation_financial_status",
-        "services_payment_service_get_hotel_config"
-      ],
-      "depth": 2,
-      "nodeCount": 12,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_service.py"
-      ],
-      "criticality": 0.1908,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_service_build_channels_payload",
       "name": "build_channels_payload",
       "entryPoint": "services_analytics_service_build_channels_payload",
@@ -12402,6 +12360,50 @@
         "app/services/subscription_service.py"
       ],
       "criticality": 0.19,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_service_process_payment",
+      "name": "process_payment",
+      "entryPoint": "services_payment_service_process_payment",
+      "entryPointId": "services_payment_service_process_payment",
+      "path": [
+        "services_payment_service_process_payment",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_resolve_applied_payment_amount",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_resolve_reservation_hotel",
+        "services_payment_service_same_idempotent_payment",
+        "services_payment_service_update_reservation_financials",
+        "services_payment_service_validate_payment_method_enabled",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_sync_reservation_financial_status",
+        "services_payment_service_get_hotel_config"
+      ],
+      "qualifiedPath": [
+        "services_payment_service_process_payment",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_resolve_applied_payment_amount",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_resolve_reservation_hotel",
+        "services_payment_service_same_idempotent_payment",
+        "services_payment_service_update_reservation_financials",
+        "services_payment_service_validate_payment_method_enabled",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_sync_reservation_financial_status",
+        "services_payment_service_get_hotel_config"
+      ],
+      "depth": 2,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_service.py"
+      ],
+      "criticality": 0.1892,
       "warnings": []
     },
     {
@@ -22272,6 +22274,28 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_fx_rates_get_conversion_quote",
+      "name": "get_conversion_quote",
+      "entryPoint": "api_fx_rates_get_conversion_quote",
+      "entryPointId": "api_fx_rates_get_conversion_quote",
+      "path": [
+        "api_fx_rates_get_conversion_quote",
+        "api_fx_rates_fxconversionquoteread"
+      ],
+      "qualifiedPath": [
+        "api_fx_rates_get_conversion_quote",
+        "api_fx_rates_fxconversionquoteread"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/fx_rates.py"
       ],
       "criticality": 0.16,
       "warnings": []

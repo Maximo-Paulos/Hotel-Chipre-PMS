@@ -125,6 +125,7 @@
       "alembic/versions/20261011_co_owner_manual_rate_default.py",
       "alembic/versions/20261012_fx_market_preferences.py",
       "alembic/versions/20261013_cash_adjustment_permission.py",
+      "alembic/versions/20261014_payment_fx_currency.py",
       "alembic/versions/3bc5882f756d_add_role_visibility_windows.py",
       "alembic/versions/3eaf48a79290_sync_model_drift_missing_columns.py",
       "alembic/versions/41d66acfb13a_linen_location_par_levels.py",
@@ -1444,10 +1445,10 @@
     ],
     "video": []
   },
-  "total_files": 1435,
-  "total_words": 2016099,
+  "total_files": 1436,
+  "total_words": 2018785,
   "needs_graph": true,
-  "warning": "Large corpus: 1435 files · ~2,016,099 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1436 files · ~2,018,785 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1468,7 +1469,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "81a7ffe8103aa6643bf390c5afdd4d202e5387dd",
+    "source_hash": "51738e1be471cca6ad6164adca7ec0af93bbf83c",
     "branches": [
       "fix/hotel-sim-day0-day1",
       "main"
@@ -1482,9 +1483,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "81a7ffe8103aa6643bf390c5afdd4d202e5387dd",
+    "head": "51738e1be471cca6ad6164adca7ec0af93bbf83c",
     "candidate_count": null,
-    "included_count": 1435,
+    "included_count": 1436,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 15,

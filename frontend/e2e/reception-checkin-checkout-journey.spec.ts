@@ -29,8 +29,8 @@ async function login(page: Page) {
 test("receptionist runs the full check-in / checkout journey with a pending-balance charge", async ({ page }) => {
   const suffix = Date.now().toString();
   const guestLastName = `QA-Recepcion ${suffix}`;
-  const checkIn = localIsoDate(40);
-  const checkOut = localIsoDate(42);
+  const checkIn = localIsoDate(0);
+  const checkOut = localIsoDate(1);
 
   await login(page);
 
@@ -60,8 +60,8 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
   const reservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
   await expect(reservationForm).toBeVisible();
-  await expect(page.getByLabel("Consulta rápida: check-in", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Consulta rápida: check-out", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Check-in para disponibilidad", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Check-out para disponibilidad", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Check-in", { exact: true })).toBeVisible();
 
   await reservationForm.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
@@ -104,7 +104,7 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   expect(reservationId).toBeGreaterThan(0);
 
   const reservationTable = page.locator("table").filter({ hasText: "Código" });
-  const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
+  const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: confirmationCode });
   await expect(reservationRow).toHaveCount(1);
 
   // Pagar el total antes de poder hacer check-in (regla de negocio: fully_paid).
@@ -167,7 +167,11 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
   const secondReservationForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
   await secondReservationForm.getByTestId("guest-search-input").fill(guestLastName);
-  const existingGuest = secondReservationForm.getByTestId("guest-search-results").getByRole("button").filter({ hasText: guestLastName });
+  const existingGuest = secondReservationForm
+    .getByTestId("guest-search-results")
+    .getByRole("button")
+    .filter({ hasText: guestLastName })
+    .first();
   await expect(existingGuest).toBeVisible();
   await existingGuest.click();
   const secondCategorySelect = secondReservationForm.locator("label").filter({ hasText: "Categoría" }).locator("select");
@@ -194,8 +198,8 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await page.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
 
   // Cargar un consumo (minibar) desde la Ficha: reception tiene reservation:charge.
-  const checkedInRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
-  await checkedInRow.getByRole("button", { name: "Ficha", exact: true }).click();
+  const checkedInRow = reservationTable.locator("tbody tr").filter({ hasText: confirmationCode });
+  await checkedInRow.getByRole("button", { name: "Ficha", exact: true }).first().click();
   const detailsModal = page.locator("div.fixed").filter({ hasText: "Ficha" });
   await expect(detailsModal.getByRole("heading", { name: /Reserva/ })).toBeVisible();
   const chargeForm = detailsModal.locator("form").filter({ hasText: "Detalle del consumo" });
@@ -210,7 +214,7 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   // reservation.balance_due no ve (sólo compara total_amount vs amount_paid,
   // no BillingAdjustment), así que este saldo lo detecta recién el backend al
   // intentar el check-out, no el chequeo previo del botón.
-  const chargedRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
+  const chargedRow = reservationTable.locator("tbody tr").filter({ hasText: confirmationCode });
   await chargedRow.getByRole("button", { name: "Check-out", exact: true }).click();
   await expect(page.getByText(/saldo pendiente de/i)).toBeVisible();
   await expect(page.getByText("Check-out registrado", { exact: true })).toHaveCount(0);
@@ -225,7 +229,7 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await balanceEditModal.getByRole("button", { name: "Cerrar", exact: true }).click();
 
   // Checkout con saldo completo: ahora sí cierra la estadía.
-  const settledRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
+  const settledRow = reservationTable.locator("tbody tr").filter({ hasText: confirmationCode });
   await settledRow.getByRole("button", { name: "Check-out", exact: true }).click();
   await expect(page.getByText("Check-out registrado", { exact: true })).toBeVisible();
 

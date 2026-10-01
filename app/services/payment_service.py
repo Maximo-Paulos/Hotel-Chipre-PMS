@@ -40,6 +40,8 @@ from app.services.company_night_charge_service import (
     prepare_company_night_charge_payment,
     record_company_night_charge_payment_allocations,
 )
+from app.services.fx_service import SUPPORTED_CONVERSION_CURRENCIES
+from app.services.pricing_policy_service import PricingPolicyError, _convert_amount
 
 
 class PaymentError(Exception):
@@ -58,11 +60,15 @@ MANUAL_REFERENCE_METHODS = frozenset(
 
 
 def _same_idempotent_payment(existing: Transaction, request: PaymentRequest, currency: str) -> bool:
+    requested_amount = Decimal(str(request.amount)).quantize(Decimal("0.01"))
+    existing_tender_amount = Decimal(
+        str(existing.tender_amount if existing.tender_amount is not None else existing.amount)
+    ).quantize(Decimal("0.01"))
     return (
-        Decimal(str(existing.amount)) == Decimal(str(request.amount))
+        existing_tender_amount == requested_amount
         and existing.payment_method == request.payment_method
         and existing.transaction_type == request.transaction_type
-        and existing.currency == currency
+        and (existing.tender_currency or existing.currency) == currency
         and existing.manual_reference == request.manual_reference
         and existing.refund_of_transaction_id == request.refund_of_transaction_id
         and existing.refund_reason == request.refund_reason
@@ -144,11 +150,7 @@ def _resolve_reservation_hotel(
 
 
 def _resolve_payment_currency(reservation: Reservation, requested_currency: Optional[str]) -> str:
-    """
-    Keep every payment in the reservation's ledger currency. We do not have a
-    validated FX conversion flow here, so accepting a different currency would
-    make balance checks and paid totals compare unlike amounts.
-    """
+    """Resolve the tender currency while keeping conversions within supported pairs."""
     reservation_currency = (reservation.currency_code or "ARS").strip().upper()
     candidate = (requested_currency or reservation_currency).strip().upper()
     if (
@@ -160,11 +162,62 @@ def _resolve_payment_currency(reservation: Reservation, requested_currency: Opti
         or not candidate.isalpha()
     ):
         raise PaymentError("La moneda de la reserva o del pago no es válida")
-    if candidate != reservation_currency:
+    if candidate != reservation_currency and (
+        candidate not in SUPPORTED_CONVERSION_CURRENCIES
+        or reservation_currency not in SUPPORTED_CONVERSION_CURRENCIES
+    ):
         raise PaymentError(
-            f"La moneda del pago ({candidate}) debe coincidir con la reserva ({reservation_currency})"
+            f"No se admite convertir entre {reservation_currency} y {candidate}; "
+            "monedas disponibles: ARS, USD, EUR, BRL, CLP y UYU."
         )
     return candidate
+
+
+def _resolve_applied_payment_amount(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation: Reservation,
+    tender_amount: Decimal,
+    tender_currency: str,
+    refund_source: Transaction | None = None,
+) -> tuple[Decimal, float, dict | None]:
+    """Convert received tender into the reservation currency using one frozen rate."""
+    reservation_currency = (reservation.currency_code or "ARS").strip().upper()
+    if tender_currency == reservation_currency:
+        return tender_amount.quantize(Decimal("0.01")), 1.0, None
+
+    if refund_source is not None:
+        original_tender = Decimal(str(refund_source.tender_amount if refund_source.tender_amount is not None else refund_source.amount or 0))
+        original_credit = Decimal(str(refund_source.amount or 0))
+        if original_tender <= 0 or original_credit <= 0:
+            raise PaymentError("No se puede calcular el equivalente de la devolución original")
+        exact_tender_per_credit = original_tender / original_credit
+        tender_per_credit = float(exact_tender_per_credit)
+        applied = (tender_amount / exact_tender_per_credit).quantize(Decimal("0.01"))
+        details = refund_source.fx_quote_details
+        if details:
+            details = {**details, "refund_uses_original_quote": True}
+        return applied, tender_per_credit, details
+
+    try:
+        _converted_one, tender_per_credit, details = _convert_amount(
+            db,
+            hotel_id=hotel_id,
+            amount=1.0,
+            from_currency=reservation_currency,
+            to_currency=tender_currency,
+            fx_policy_id=None,
+            provider_code=None,
+        )
+    except PricingPolicyError as exc:
+        raise PaymentError(str(exc)) from exc
+    if tender_per_credit <= 0:
+        raise PaymentError("La cotización de conversión no es válida")
+    applied = (tender_amount / Decimal(str(tender_per_credit))).quantize(Decimal("0.01"))
+    if applied <= Decimal("0.00"):
+        raise PaymentError("El importe recibido es demasiado bajo para acreditarse a la reserva")
+    return applied, tender_per_credit, details
 
 
 def _payment_method_value(method) -> str:
@@ -310,20 +363,10 @@ def process_payment(
 
     is_refund = request.transaction_type == TransactionTypeEnum.REFUND
     transaction_currency = _resolve_payment_currency(reservation, request.currency)
+    tender_amount = Decimal(str(request.amount)).quantize(Decimal("0.01"))
+    if tender_amount <= Decimal("0.00"):
+        raise PaymentError("El importe del cobro debe ser mayor a cero")
     allocation_plan = None
-    if not is_refund:
-        try:
-            allocation_plan = prepare_company_night_charge_payment(
-                db,
-                hotel_id=resolved_hotel_id,
-                reservation_id=request.reservation_id,
-                amount=Decimal(str(request.amount)),
-                charge_ids=request.company_night_charge_ids,
-                idempotency_key=idempotency_key,
-            )
-        except CompanyNightChargeError as exc:
-            raise PaymentError(str(exc)) from exc
-
     if idempotency_key is not None:
         existing_by_key = (
             db.query(Transaction)
@@ -338,6 +381,79 @@ def process_payment(
             if not _same_idempotent_payment(existing_by_key, request, transaction_currency):
                 raise PaymentError("Idempotency key was already used for a different payment request")
             return existing_by_key
+
+    if request.manual_reference and (is_refund or request.payment_method not in MANUAL_REFERENCE_METHODS):
+        raise PaymentError("Manual references are only valid for in-person card, debit, or bank-transfer payments")
+    if not is_refund and (request.refund_of_transaction_id is not None or request.refund_reason is not None):
+        raise PaymentError("Refund source and reason are only valid for refund transactions")
+    refund_source = None
+    if is_refund:
+        if request.payment_method != PaymentMethodEnum.CASH:
+            raise PaymentError("Manual reservation refunds must be returned through cash")
+        if request.refund_of_transaction_id is None or not request.refund_reason:
+            raise PaymentError("A refund must identify the original payment and include a reason")
+        refund_source = (
+            db.query(Transaction)
+            .filter(
+                Transaction.hotel_id == resolved_hotel_id,
+                Transaction.reservation_id == request.reservation_id,
+                Transaction.id == request.refund_of_transaction_id,
+                Transaction.status == TransactionStatusEnum.COMPLETED,
+                Transaction.transaction_type != TransactionTypeEnum.REFUND,
+            )
+            .with_for_update()
+            .first()
+        )
+        if refund_source is None:
+            raise PaymentError("The original payment was not found as a completed payment for this reservation")
+        if (refund_source.tender_currency or refund_source.currency) != transaction_currency:
+            raise PaymentError("A refund must use the original payment currency")
+        already_refunded_tender = (
+            db.query(func.coalesce(func.sum(func.coalesce(Transaction.tender_amount, Transaction.amount)), 0))
+            .filter(
+                Transaction.hotel_id == resolved_hotel_id,
+                Transaction.refund_of_transaction_id == refund_source.id,
+                Transaction.transaction_type == TransactionTypeEnum.REFUND,
+                Transaction.status == TransactionStatusEnum.COMPLETED,
+            )
+            .scalar()
+        )
+        original_tender_amount = Decimal(str(
+            refund_source.tender_amount if refund_source.tender_amount is not None else refund_source.amount
+        ))
+        refundable_remaining = original_tender_amount - Decimal(str(already_refunded_tender or 0))
+        if tender_amount > refundable_remaining:
+            raise PaymentError(
+                f"Refund amount {tender_amount:.2f} exceeds the remaining refundable amount "
+                f"{max(refundable_remaining, Decimal('0.00')):.2f} {transaction_currency} "
+                "for the original payment"
+            )
+
+    if request.collected_before and transaction_currency != (reservation.currency_code or "ARS").strip().upper():
+        raise PaymentError(
+            "Un cobro previo en otra moneda requiere la cotización vigente en la fecha original. "
+            "Registralo en la moneda de la reserva hasta contar con esa cotización histórica."
+        )
+    applied_amount, fx_rate_snapshot, fx_quote_details = _resolve_applied_payment_amount(
+        db,
+        hotel_id=resolved_hotel_id,
+        reservation=reservation,
+        tender_amount=tender_amount,
+        tender_currency=transaction_currency,
+        refund_source=refund_source,
+    )
+    if not is_refund:
+        try:
+            allocation_plan = prepare_company_night_charge_payment(
+                db,
+                hotel_id=resolved_hotel_id,
+                reservation_id=request.reservation_id,
+                amount=applied_amount,
+                charge_ids=request.company_night_charge_ids,
+                idempotency_key=idempotency_key,
+            )
+        except CompanyNightChargeError as exc:
+            raise PaymentError(str(exc)) from exc
 
     # Deferred company invoices are recorded outside the PMS. A new payment
     # against that reservation may only collect explicitly selected nightly
@@ -365,51 +481,6 @@ def process_payment(
                     "solo se pueden cobrar adicionales por noche seleccionados."
                 )
 
-    if request.manual_reference and (is_refund or request.payment_method not in MANUAL_REFERENCE_METHODS):
-        raise PaymentError("Manual references are only valid for in-person card, debit, or bank-transfer payments")
-    if not is_refund and (request.refund_of_transaction_id is not None or request.refund_reason is not None):
-        raise PaymentError("Refund source and reason are only valid for refund transactions")
-    refund_source = None
-    if is_refund:
-        if request.payment_method != PaymentMethodEnum.CASH:
-            raise PaymentError("Manual reservation refunds must be returned through cash")
-        if request.refund_of_transaction_id is None or not request.refund_reason:
-            raise PaymentError("A refund must identify the original payment and include a reason")
-        refund_source = (
-            db.query(Transaction)
-            .filter(
-                Transaction.hotel_id == resolved_hotel_id,
-                Transaction.reservation_id == request.reservation_id,
-                Transaction.id == request.refund_of_transaction_id,
-                Transaction.status == TransactionStatusEnum.COMPLETED,
-                Transaction.transaction_type != TransactionTypeEnum.REFUND,
-            )
-            .with_for_update()
-            .first()
-        )
-        if refund_source is None:
-            raise PaymentError("The original payment was not found as a completed payment for this reservation")
-        if refund_source.currency != transaction_currency:
-            raise PaymentError("A refund must use the original payment currency")
-        already_refunded = (
-            db.query(func.coalesce(func.sum(Transaction.amount), 0))
-            .filter(
-                Transaction.hotel_id == resolved_hotel_id,
-                Transaction.refund_of_transaction_id == refund_source.id,
-                Transaction.transaction_type == TransactionTypeEnum.REFUND,
-                Transaction.status == TransactionStatusEnum.COMPLETED,
-            )
-            .scalar()
-        )
-        refundable_remaining = Decimal(str(refund_source.amount)) - Decimal(str(already_refunded or 0))
-        # These values are stored as two-decimal NUMERIC amounts, so there is
-        # no floating-point rounding to absorb here. A one-cent tolerance would
-        # permit a refund larger than the original payment.
-        if Decimal(str(request.amount)) > refundable_remaining:
-            raise PaymentError(
-                f"Refund amount ${request.amount:.2f} exceeds the remaining refundable amount "
-                f"${max(refundable_remaining, Decimal('0.00')):.2f} for the original payment"
-            )
     if manual_confirmation and request.manual_reference:
         duplicate_reference = (
             db.query(Transaction.id)
@@ -450,16 +521,16 @@ def process_payment(
         surcharge_amount = surcharge_info["surcharge_amount"]
     else:
         surcharge_amount = Decimal("0.00")
-    gross_amount = (Decimal(str(request.amount)) + surcharge_amount).quantize(Decimal("0.01"))
+    gross_amount = (tender_amount + surcharge_amount).quantize(Decimal("0.01"))
 
     # 3. Validate against the confirmed transaction ledger; amount_paid is only
     #    a materialized compatibility cache and must not authorize overpayment.
     _TOLERANCE = Decimal("0.01")
     ledger_paid = paid_amount_with_legacy_fallback(db, resolved_hotel_id, reservation)
     if is_refund:
-        if Decimal(str(request.amount)) > ledger_paid:
+        if applied_amount > ledger_paid:
             raise PaymentError(
-                f"Refund amount ${request.amount:.2f} exceeds paid amount ${ledger_paid:.2f}"
+                f"Refund amount applied ${applied_amount:.2f} exceeds paid amount ${ledger_paid:.2f}"
             )
     else:
         balance = operational_balance_due(
@@ -468,9 +539,9 @@ def process_payment(
             reservation=reservation,
             paid_amount=ledger_paid,
         )
-        if Decimal(str(request.amount)) > Decimal(str(balance)) + _TOLERANCE:
+        if applied_amount > Decimal(str(balance)) + _TOLERANCE:
             raise PaymentError(
-                f"Payment amount ${request.amount:.2f} exceeds balance due ${balance:.2f}"
+                f"Payment amount applied ${applied_amount:.2f} exceeds balance due ${balance:.2f}"
             )
 
     if request.payment_method == PaymentMethodEnum.CASH and not request.collected_before:
@@ -517,10 +588,14 @@ def process_payment(
     transaction = Transaction(
         hotel_id=resolved_hotel_id,
         reservation_id=request.reservation_id,
-        amount=request.amount,
+        amount=applied_amount,
+        tender_amount=tender_amount,
+        tender_currency=transaction_currency,
         gross_amount=gross_amount,
         fee_amount=surcharge_amount,
-        currency=transaction_currency,
+        currency=(reservation.currency_code or "ARS").strip().upper(),
+        fx_rate_snapshot=fx_rate_snapshot,
+        fx_quote_details=fx_quote_details,
         transaction_type=request.transaction_type,
         payment_method=request.payment_method,
         status=tx_status,
@@ -869,7 +944,8 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
                 if original is not None:
                     source_charge_ids = transaction_charge_ids.get(original.id, [])
                     source_amount = Decimal(str(original.amount or 0))
-                    refund_ratio = min(Decimal("1"), Decimal(str(transaction.amount or 0)) / source_amount) if source_amount > 0 else Decimal("0")
+                    refund_amount = Decimal(str(transaction.amount or 0))
+                    refund_ratio = min(Decimal("1"), refund_amount / source_amount) if source_amount > 0 else Decimal("0")
                     for charge_id in source_charge_ids:
                         original_allocation = next(
                             (
@@ -953,10 +1029,13 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
         "transactions": [
             {
                 "id": t.id,
-                "amount": t.amount,
+                "amount": t.tender_amount if t.tender_amount is not None else t.amount,
+                "applied_amount": t.amount,
+                "applied_currency": t.currency,
+                "fx_rate_snapshot": t.fx_rate_snapshot,
                 "gross_amount": t.gross_amount if t.gross_amount is not None else t.amount,
                 "fee_amount": t.fee_amount or 0,
-                "currency": t.currency,
+                "currency": t.tender_currency or t.currency,
                 "method": t.payment_method.value,
                 "type": t.transaction_type.value,
                 "status": t.status.value,
@@ -1001,16 +1080,17 @@ def get_payment_receipt_data(db: Session, hotel_id: Optional[int], transaction_i
     }:
         raise PaymentNotFoundError("Confirmed payment not found")
 
-    reservation_code = (
-        db.query(Reservation.confirmation_code)
+    reservation_row = (
+        db.query(Reservation.confirmation_code, Reservation.currency_code)
         .filter(
             Reservation.id == transaction.reservation_id,
             Reservation.hotel_id == hotel_id,
         )
-        .scalar()
+        .first()
     )
-    if reservation_code is None:
+    if reservation_row is None:
         raise PaymentNotFoundError("Confirmed payment not found")
+    reservation_code, reservation_currency = reservation_row
 
     hotel = db.get(HotelConfiguration, hotel_id)
     created_at = transaction.created_at
@@ -1025,10 +1105,13 @@ def get_payment_receipt_data(db: Session, hotel_id: Optional[int], transaction_i
         "confirmation_code": reservation_code,
         "hotel_name": hotel.hotel_name if hotel and hotel.hotel_name else "Mi Hotel",
         "hotel_timezone": hotel.hotel_timezone if hotel and hotel.hotel_timezone else "America/Argentina/Buenos_Aires",
-        "amount": transaction.amount,
+        "amount": transaction.tender_amount if transaction.tender_amount is not None else transaction.amount,
+        "applied_amount": transaction.amount,
+        "applied_currency": transaction.currency or reservation_currency,
+        "fx_rate_snapshot": transaction.fx_rate_snapshot,
         "gross_amount": transaction.gross_amount if transaction.gross_amount is not None else transaction.amount,
         "fee_amount": transaction.fee_amount or Decimal("0.00"),
-        "currency": transaction.currency,
+        "currency": transaction.tender_currency or transaction.currency,
         "method": transaction.payment_method,
         "type": transaction.transaction_type,
         "status": transaction.status,

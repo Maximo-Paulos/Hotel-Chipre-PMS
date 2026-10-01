@@ -51,7 +51,10 @@ test("owner can register, verify, recover access and complete onboarding through
   await page.getByLabel("Ocupación máxima", { exact: true }).fill("2");
   await page.getByLabel("Descripción breve", { exact: true }).fill("Categoría de prueba sintética");
   await saveAndExpectPath(page, "/onboarding/subscription");
-  await page.getByRole("radio", { name: "Plan Pro, hasta 40 habitaciones", exact: true }).click();
+  const proPlanRadio = page.getByRole("radio", { name: "Plan Pro, hasta 40 habitaciones", exact: true });
+  // The radio is intentionally visually hidden inside its clickable plan card.
+  // Click the visible label so the browser exercises the same interaction as an operator.
+  await proPlanRadio.locator("xpath=ancestor::label[1]").click();
   await saveAndExpectPath(page, "/onboarding/rooms");
 
   await page.getByRole("button", { name: "+ Agregar habitación", exact: true }).click();

@@ -65,36 +65,44 @@ def open_session(
     currency_code: str = "ARS",
     notes: str | None = None,
 ) -> CashSession:
-    """Open one hotel-scoped cash session, enforcing at most one open session."""
+    """Open one hotel-scoped cash session per currency."""
+
+    normalized_currency = currency_code.strip().upper()[:3]
 
     existing = (
         db.query(CashSession)
         .filter(
             CashSession.hotel_id == hotel_id,
             CashSession.status == CashSessionStatusEnum.OPEN,
+            CashSession.currency_code == normalized_currency,
         )
         .one_or_none()
     )
     if existing is not None:
-        raise CashRegisterError("Hotel already has an open cash session")
+        raise CashRegisterError("Hotel already has an open cash session for this currency")
 
     session = CashSession(
         hotel_id=hotel_id,
         opened_by_user_id=opened_by_user_id,
         opening_balance=_money(opening_balance),
-        currency_code=currency_code.strip().upper()[:3],
+        currency_code=normalized_currency,
         notes=notes,
     )
     db.add(session)
     try:
         db.flush()
     except IntegrityError as exc:
-        raise CashRegisterError("Hotel already has an open cash session") from exc
+        raise CashRegisterError("Hotel already has an open cash session for this currency") from exc
     return session
 
 
-def get_latest_close_report(db: Session, *, hotel_id: int) -> CashCloseReport | None:
-    return (
+def get_latest_close_report(
+    db: Session,
+    *,
+    hotel_id: int,
+    currency_code: str | None = None,
+) -> CashCloseReport | None:
+    query = (
         db.query(CashCloseReport)
         .options(
             joinedload(CashCloseReport.session),
@@ -102,9 +110,12 @@ def get_latest_close_report(db: Session, *, hotel_id: int) -> CashCloseReport | 
             joinedload(CashCloseReport.custody_handoff),
         )
         .filter(CashCloseReport.hotel_id == hotel_id)
-        .order_by(CashCloseReport.closed_at.desc(), CashCloseReport.id.desc())
-        .first()
     )
+    if currency_code:
+        query = query.join(CashSession, CashSession.id == CashCloseReport.session_id).filter(
+            CashSession.currency_code == currency_code.strip().upper()
+        )
+    return query.order_by(CashCloseReport.closed_at.desc(), CashCloseReport.id.desc()).first()
 
 
 def list_pending_close_reports(db: Session, *, hotel_id: int) -> list[CashCloseReport]:
@@ -261,16 +272,15 @@ def add_movement(
     return movement
 
 
-def get_open_session(db: Session, hotel_id: int) -> CashSession | None:
-    """Return the single open cash session for a hotel, or None if none is open."""
-    return (
-        db.query(CashSession)
-        .filter(
-            CashSession.hotel_id == hotel_id,
-            CashSession.status == CashSessionStatusEnum.OPEN,
-        )
-        .one_or_none()
+def get_open_session(db: Session, hotel_id: int, currency_code: str | None = None) -> CashSession | None:
+    """Return an open session, optionally for the requested currency."""
+    query = db.query(CashSession).filter(
+        CashSession.hotel_id == hotel_id,
+        CashSession.status == CashSessionStatusEnum.OPEN,
     )
+    if currency_code:
+        query = query.filter(CashSession.currency_code == currency_code.strip().upper())
+    return query.order_by(CashSession.id.desc()).first()
 
 
 def require_open_session_for_currency(
@@ -279,7 +289,7 @@ def require_open_session_for_currency(
     hotel_id: int,
     currency_code: str,
 ) -> CashSession:
-    """Lock and return the active drawer only when its currency matches a payment.
+    """Lock the active drawer for the tender currency.
 
     Payment processing holds this lock through transaction and movement writes,
     so closing the drawer cannot calculate an expected balance in the middle
@@ -290,10 +300,19 @@ def require_open_session_for_currency(
         .where(
             CashSession.hotel_id == hotel_id,
             CashSession.status == CashSessionStatusEnum.OPEN,
+            CashSession.currency_code == str(currency_code or "").strip().upper(),
         )
         .with_for_update(of=CashSession)
     ).scalar_one_or_none()
     if session is None:
+        any_open_session = db.query(CashSession.id).filter(
+            CashSession.hotel_id == hotel_id,
+            CashSession.status == CashSessionStatusEnum.OPEN,
+        ).first()
+        if any_open_session:
+            raise CashRegisterError(
+                f"Cash session currency ({str(currency_code or '').strip().upper()}) does not have an open drawer"
+            )
         raise CashRegisterError("Cash payment requires an open cash session")
 
     session_currency = (session.currency_code or "").strip().upper()
@@ -328,7 +347,7 @@ def record_cash_payment_movement(
     session = require_open_session_for_currency(
         db,
         hotel_id=transaction.hotel_id,
-        currency_code=transaction.currency,
+        currency_code=transaction.tender_currency or transaction.currency,
     )
 
     from app.models.transaction import TransactionTypeEnum

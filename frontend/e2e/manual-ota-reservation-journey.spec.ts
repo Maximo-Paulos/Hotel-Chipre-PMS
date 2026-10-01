@@ -258,6 +258,7 @@ test("tarifa manual en reserva directa muestra la moneda usada aunque no haya co
 
   await form.locator("label").filter({ hasText: "Monto total manual" }).locator("input").fill("180");
   await form.locator("label").filter({ hasText: /^Moneda/ }).locator("select").selectOption("USD");
+  await form.getByLabel(/Motivo obligatorio/).fill("Tarifa acordada para la prueba sintética");
   await expect(form.getByText("No se usa la cotización automática de Tarifas para esta reserva.")).toBeVisible();
 
   // Manual pricing skips the quote_token gate -- the button must not be

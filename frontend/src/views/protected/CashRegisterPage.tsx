@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import { downloadCashLedgerCsv, type CashCloseReport, type CashMovementPayload } from "../../api/cashRegister";
 import {
@@ -48,7 +48,7 @@ export function CashRegisterPage() {
   const [reportCurrency, setReportCurrency] = useState("");
 
   const sessionsQuery = useCashSessions();
-  const latestCloseReportQuery = useLatestCashCloseReport();
+  const latestCloseReportQuery = useLatestCashCloseReport({ currency: openingCurrency });
   const pendingCloseReportsQuery = usePendingCashCloseReports();
   const canReceiveCustody = hasPermission("cash:custody:receive");
   const pendingCashCustodyReportsQuery = usePendingCashCustodyReports({ enabled: canReceiveCustody });
@@ -62,12 +62,25 @@ export function CashRegisterPage() {
   const hotelTimeZone = dailySummaryQuery.data?.timezone ?? hotelConfigQuery.data?.hotel_timezone;
   const availableCurrencies = useMemo(
     () => Array.from(new Set([
+      "ARS", "USD", "EUR", "BRL", "CLP", "UYU",
       ...sessions.map((item) => item.currency_code.toUpperCase()),
       ...(dailySummaryQuery.data?.prior_receipt_totals ?? []).map((item) => item.currency_code.toUpperCase())
     ])).sort(),
     [dailySummaryQuery.data?.prior_receipt_totals, sessions]
   );
-  const openSession = useMemo(() => sessions.find((session) => session.status === "open") ?? null, [sessions]);
+  const openSessions = useMemo(() => sessions.filter((session) => session.status === "open"), [sessions]);
+  const defaultCurrency = (hotelConfigQuery.data?.default_currency || "ARS").toUpperCase();
+  useEffect(() => {
+    setOpeningCurrency(defaultCurrency);
+  }, [defaultCurrency]);
+  const openSession = useMemo(
+    () => openSessions.find((session) => session.currency_code.toUpperCase() === defaultCurrency) ?? openSessions[0] ?? null,
+    [defaultCurrency, openSessions]
+  );
+  const openSessionForOpeningCurrency = useMemo(
+    () => openSessions.find((session) => session.currency_code.toUpperCase() === openingCurrency) ?? null,
+    [openSessions, openingCurrency]
+  );
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedSessionId) ?? openSession ?? sessions[0] ?? null,
     [openSession, selectedSessionId, sessions]
@@ -88,8 +101,13 @@ export function CashRegisterPage() {
     closeReport?.session_id === selectedSession?.id
       ? closeReport
       : selectedSessionCloseReportQuery.data ?? null;
-  const successorNeedsApproval = pendingCloseReports.length > 0 && !openSession;
-  const successorOpeningBalance = Number(latestCloseReport?.successor_opening_balance ?? 0);
+  const latestCloseReportForOpeningCurrency = latestCloseReport?.currency_code?.toUpperCase() === openingCurrency
+    ? latestCloseReport
+    : null;
+  const successorNeedsApproval = pendingCloseReports.some(
+    (report) => report.currency_code.toUpperCase() === openingCurrency
+  ) && !openSessionForOpeningCurrency;
+  const successorOpeningBalance = Number(latestCloseReportForOpeningCurrency?.successor_opening_balance ?? 0);
   const canApproveDifference = hasPermission("cash:approve_difference");
   const canOperateCash = hasPermission("cash:operate");
   const canAdjustCash = hasPermission("cash:adjustment_manage");
@@ -537,7 +555,7 @@ export function CashRegisterPage() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="font-semibold text-slate-900">Caja #{session.id}</p>
+                            <p className="font-semibold text-slate-900">Caja #{session.id} · {session.currency_code}</p>
                             <p className="text-xs text-slate-500">{formatHotelDateTime(session.opened_at, hotelTimeZone)}</p>
                           </div>
                           <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${session.status === "open" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
@@ -561,7 +579,7 @@ export function CashRegisterPage() {
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Apertura</p>
               <h2 className="text-lg font-semibold text-slate-900">Abrir caja</h2>
-              {!openSession && latestCloseReport && !successorNeedsApproval ? (
+              {!openSessionForOpeningCurrency && latestCloseReportForOpeningCurrency && !successorNeedsApproval ? (
                 <p className="mt-1 text-xs text-emerald-700">
                   Saldo sucesor sugerido por el último arqueo: {money(successorOpeningBalance, currency)}
                 </p>
@@ -601,10 +619,10 @@ export function CashRegisterPage() {
             </label>
             <button
               type="submit"
-              disabled={busy || !canOperateCash || Boolean(openSession) || successorNeedsApproval}
+              disabled={busy || !canOperateCash || Boolean(openSessionForOpeningCurrency) || successorNeedsApproval}
               className="w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
-              {openSession ? "Ya hay una caja abierta" : "Abrir caja"}
+              {openSessionForOpeningCurrency ? "Ya hay una caja abierta" : "Abrir caja"}
             </button>
           </form>
         </section>

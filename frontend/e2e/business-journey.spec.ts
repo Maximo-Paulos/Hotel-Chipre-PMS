@@ -59,6 +59,7 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   const guestLastName = `Journey ${suffix}`;
 
   const ownerSession = await loginAsStepUpOwner(page, "cash-business", testInfo.project.name);
+  let lastTotpStep = ownerSession.lastTotpStep;
 
   // Closing a cash session always opens a new successor session
   // (see close_session() in app/services/cash_register_service.py), so a
@@ -162,7 +163,7 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   const editModal = page.locator("div.fixed").filter({ hasText: "Pagos y balance" });
   const editForm = editModal.locator("form").filter({ hasText: "Pagos y balance" });
   await expect(editForm.getByText("Resumen financiero y acciones rápidas.", { exact: true })).toBeVisible();
-  const partialAmount = editForm.getByLabel("Monto a cobrar");
+  const partialAmount = editForm.getByLabel(/^(Monto a cobrar|Monto del movimiento)$/);
   await expect(partialAmount).toBeVisible();
   await partialAmount.fill("70000");
   await editForm.getByRole("button", { name: "Cobro parcial", exact: true }).click();
@@ -202,8 +203,10 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await expect(editForm.getByText(/approved$/)).toBeVisible();
   await editForm.getByLabel("Medio de pago").selectOption("cash");
   await partialAmount.fill("100");
+  await editForm.getByLabel("Motivo de la devolución").fill("Devolución de prueba aprobada");
   page.once("dialog", (dialog) => dialog.accept());
   await editForm.getByRole("button", { name: "Registrar devolución", exact: true }).click();
+  lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText("Devolución registrada", { exact: true })).toBeVisible();
   await editForm.getByRole("button", { name: "Pago total", exact: true }).click();
   await expect(page.getByText("Pago completo registrado", { exact: true })).toBeVisible();
@@ -249,13 +252,17 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await closeCashForm.locator('input[type="number"]').fill(String(expectedBalance));
   await closeCashForm.getByRole("button", { name: "Cerrar caja", exact: true }).click();
   await expect(page.getByText("Caja cerrada.", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Caja sucesora: .* abierta con saldo \$0/)).toBeVisible();
-  await expect(page.getByText(/Custodia: pendiente de recepción del dueño o la codueña\./)).toBeVisible();
-  await page.getByRole("button", { name: "Confirmar recepción de custodia", exact: true }).click();
-  const custodyTotpStep = await completeStepUpPrompt(page, ownerSession.lastTotpStep, ownerSession.auth.user.email);
+  await expect(page.getByText(/Caja sucesora: .* abierta con saldo \$\s*0(?:,00)?/)).toBeVisible();
+  await expect(page.getByText(/Custodia: pendiente de recepción del dueño o la codueña por/)).toBeVisible();
+  await page
+    .getByTestId("cash-pending-custodies")
+    .getByRole("button", { name: "Confirmar custodia y cambio", exact: true })
+    .first()
+    .click();
+  const custodyTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText(/Recepción confirmada\. Fondo de cambio para la sucesora:/)).toBeVisible();
-  expect(custodyTotpStep).toBeGreaterThan(ownerSession.lastTotpStep);
-  await expect(page.getByText(/Custodia: recepción confirmada\./)).toBeVisible();
+  expect(custodyTotpStep).toBeGreaterThan(lastTotpStep);
+  await expect(page.getByText(/Custodia: recepción confirmada de/)).toBeVisible();
 });
 
 test("owner completes guided stock movements through the UI", async ({ page }) => {

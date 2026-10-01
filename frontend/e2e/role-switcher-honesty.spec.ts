@@ -86,9 +86,11 @@ test("a legacy localStorage role payload does not unlock baseRole-gated screens 
   // Deep-link guards use the authenticated baseRole/effective permissions,
   // so neither protected page mounts and no sensitive request is issued.
   await page.goto("/settings/permissions");
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByTestId("permission-denied-page")).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/settings/permissions");
 
   await page.goto("/operacion/stock");
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByTestId("permission-denied-page")).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/operacion/stock");
   expect(sensitiveRequests).toHaveLength(0);
 });

@@ -76,6 +76,9 @@ class TransactionRead(BaseModel):
     reservation_id: int
     amount: float
     currency: str
+    tender_amount: Optional[float] = None
+    tender_currency: Optional[str] = None
+    fx_rate_snapshot: Optional[float] = None
     transaction_type: TransactionTypeEnum
     payment_method: PaymentMethodEnum
     status: TransactionStatusEnum
@@ -104,6 +107,9 @@ class PaymentReceiptRead(BaseModel):
     hotel_name: str
     hotel_timezone: str
     amount: Decimal
+    applied_amount: Optional[Decimal] = None
+    applied_currency: Optional[str] = None
+    fx_rate_snapshot: Optional[float] = None
     gross_amount: Decimal
     fee_amount: Decimal
     currency: str

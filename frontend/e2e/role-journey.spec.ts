@@ -139,7 +139,9 @@ for (const persona of personas) {
     // which is unrelated to per-room permission controls.
     const main = page.locator("main");
     await expect(main.getByRole("heading", { name: "Habitaciones", exact: true })).toBeVisible();
-    await expect(main.locator("p", { hasText: "Hab. 101" })).toBeVisible();
+    await expect(
+      main.getByTestId("room-card").filter({ hasText: "Hab. 101" }).first()
+    ).toBeVisible();
 
     const roomStatusSelects = main.locator('select[aria-label^="Estado de habitación"]');
     const housekeepingStatusSelects = main.locator('select[aria-label^="Estado de limpieza"]');
@@ -226,7 +228,8 @@ test("housekeeping stays inside rooms and laundry without loading restricted dat
 
   for (const forbiddenPath of ["/dashboard", "/huespedes", "/caja", "/reportes", "/operacion/stock", "/settings/security"]) {
     await page.goto(forbiddenPath);
-    await expect(page).toHaveURL(/\/habitaciones$/);
+    await expect(page.getByTestId("permission-denied-page")).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe(forbiddenPath);
   }
 
   expect(requestedPaths.some((path) => path.startsWith("/api/onboarding"))).toBe(false);
@@ -394,7 +397,8 @@ test("owner can grant receptionist rates read without granting rate edits", asyn
   }
 
   await page.goto("/operacion/tarifas");
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByTestId("permission-denied-page")).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/operacion/tarifas");
 });
 
 test("permissions screen shows the catalog help text in an InfoTip", async ({ page }, testInfo) => {
