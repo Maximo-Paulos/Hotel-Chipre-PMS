@@ -121,6 +121,10 @@ class Settings(BaseSettings):
     # ``False``: production must state every decision explicitly, while every
     # runtime guard treats an unset value as disabled (fail closed).
     EXTERNAL_EFFECTS_ENABLED: bool | None = None
+    # DolarAPI is a public, read-only market-data source. Its GETs carry no hotel
+    # or guest data and can be enabled independently of payment, email, and OTA
+    # connections. Unset defaults off outside production and on in production.
+    DOLARAPI_RATES_ENABLED: bool | None = None
     INBOUND_PROVIDER_EVENTS_ENABLED: bool | None = None
     GOOGLE_LOGIN_ENABLED: bool | None = None
     # None preserves the development/test default for backwards-compatible

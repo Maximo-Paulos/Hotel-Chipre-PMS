@@ -103,6 +103,11 @@ def test_company_create_and_patch_round_trips_commercial_fields(api_client):
     assert body["base_price"] is None
     assert body["payment_deferred"] is True
 
+    listed = client.get("/api/companies")
+    assert listed.status_code == 200, listed.text
+    assert listed.json()[0]["id"] == body["id"]
+    assert listed.json()[0]["display_name"] == "Acme Travel"
+
     patch = client.patch(
         f"/api/companies/{body['id']}",
         json={

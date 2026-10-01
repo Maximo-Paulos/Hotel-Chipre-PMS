@@ -1526,6 +1526,7 @@ def create_reservation(
         arrival_time_hint=data.arrival_time_hint,
         reservation_comment=data.reservation_comment,
         mobility_restriction=data.mobility_restriction,
+        allocation_status="assigned" if room_id is not None else "unassigned",
         pricing_snapshot=pricing.pricing_snapshot,
         manual_rate_reason=data.manual_rate_reason if manual_rate_scope is not None else None,
         manual_rate_scope=manual_rate_scope,

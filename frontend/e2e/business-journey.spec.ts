@@ -442,7 +442,27 @@ test("owner manages a room move and no-show from the reservation ficha", async (
   await destinationSelect.selectOption(destinationValue!);
   await stayOperations.getByLabel("Motivo del cambio").selectOption("operational");
   await stayOperations.getByLabel("Notas del cambio").fill("Mantenimiento preventivo de la habitación origen");
-  await stayOperations.getByRole("button", { name: "Mover habitación", exact: true }).click();
+  let holdRoomMoveReads = false;
+  let releaseRoomMoveReads!: () => void;
+  const roomMoveReadGate = new Promise<void>((resolve) => {
+    releaseRoomMoveReads = resolve;
+  });
+  await page.route("**/api/**", async (route) => {
+    if (holdRoomMoveReads && route.request().method() === "GET") {
+      await roomMoveReadGate;
+    }
+    await route.continue();
+  });
+  const moveRoomButton = stayOperations.getByRole("button", { name: "Mover habitación", exact: true });
+  holdRoomMoveReads = true;
+  try {
+    await moveRoomButton.click();
+    await expect(moveRoomButton).toBeEnabled();
+    await expect(moveRoomButton).toHaveText("Mover habitación");
+  } finally {
+    holdRoomMoveReads = false;
+    releaseRoomMoveReads();
+  }
   await expect(page.getByText("Habitación cambiada.", { exact: true })).toBeVisible();
   await expect(detailsModal).toContainText(`Hab ${secondRoomNumber}`);
 

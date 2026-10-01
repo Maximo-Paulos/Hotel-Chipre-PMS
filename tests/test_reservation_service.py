@@ -162,6 +162,7 @@ class TestReservationCreation:
         assert res.balance_due == 400.0
         assert res.status == ReservationStatusEnum.PENDING
         assert res.room_id is not None  # Auto-assigned
+        assert res.allocation_status == "assigned"
 
     def test_daily_rate_reservation_converts_target_currency_and_persists_fx_provenance(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch

@@ -42,6 +42,8 @@ services:
         value: "false"
       - key: CONNECTIONS_ENABLED
         value: "false"
+      - key: DOLARAPI_RATES_ENABLED
+        value: "true"
       - key: GOOGLE_LOGIN_ENABLED
         value: "false"
       - key: APPLE_LOGIN_ENABLED

@@ -6,11 +6,15 @@ provider event, imports an SDK, or opens a network client.
 """
 from __future__ import annotations
 
-from app.config import Settings, get_settings
+from app.config import Settings, get_settings, is_production_mode
 
 
 class ExternalEffectsDisabled(RuntimeError):
     """Raised when outbound provider traffic is disabled for this runtime."""
+
+
+class DolarApiRatesDisabled(RuntimeError):
+    """Raised when public DolarAPI market-data reads are disabled."""
 
 
 class InboundProviderEventsDisabled(RuntimeError):
@@ -49,6 +53,19 @@ def external_connections_enabled(settings: Settings | None = None) -> bool:
     )
 
 
+def dolarapi_rates_enabled(settings: Settings | None = None) -> bool:
+    """Allow only public DolarAPI quote reads, independently of integrations.
+
+    This exception never enables provider credentials, callbacks, payments,
+    emails, OTA calls, or any other outbound integration.
+    """
+    runtime_settings = settings or get_settings()
+    configured = runtime_settings.DOLARAPI_RATES_ENABLED
+    if configured is not None:
+        return configured is True
+    return is_production_mode(runtime_settings)
+
+
 def require_external_effects(effect: str, settings: Settings | None = None) -> None:
     if not external_effects_enabled(settings):
         raise ExternalEffectsDisabled(
@@ -62,6 +79,13 @@ def require_external_connections(effect: str, settings: Settings | None = None) 
     if runtime_settings.CONNECTIONS_ENABLED is not True:
         raise ExternalEffectsDisabled(
             f"{effect} is disabled by CONNECTIONS_ENABLED"
+        )
+
+
+def require_dolarapi_rates(effect: str, settings: Settings | None = None) -> None:
+    if not dolarapi_rates_enabled(settings):
+        raise DolarApiRatesDisabled(
+            f"{effect} is disabled by DOLARAPI_RATES_ENABLED"
         )
 
 

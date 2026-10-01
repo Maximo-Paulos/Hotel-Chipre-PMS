@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "artifact_root": "artifacts/qa-operational/prod-day-sim-20261001-6361f7a1",
+  "artifacts": [
+    {
+      "artifact_id": "manager-companies-error",
+      "relative_path": "dom/manager-companies-error.txt",
+      "sha256": "sha256:f1c5debd9e0d604506f24d779eeb3d7a05709a543bae9390802d5e77daaff042",
+      "media_type": "text/plain",
+      "redaction_state": "verified"
+    },
+    {
+      "artifact_id": "owner-fx-rates-unavailable",
+      "relative_path": "dom/owner-fx-rates-unavailable.txt",
+      "sha256": "sha256:955a4d3040c93ea9e03077c38123b4ec0aec2c67f2ccdfa81ea521ea27e33867",
+      "media_type": "text/plain",
+      "redaction_state": "verified"
+    },
+    {
+      "artifact_id": "reception-ota-assignment-inconsistent",
+      "relative_path": "dom/reception-ota-assignment-inconsistent.txt",
+      "sha256": "sha256:a8644c6c89e72b6c8ce0f0f96d4bc65821a2c3eb39531b3cce992c9387e47bb2",
+      "media_type": "text/plain",
+      "redaction_state": "verified"
+    },
+    {
+      "artifact_id": "reception-room-move-spinner",
+      "relative_path": "dom/reception-room-move-spinner.txt",
+      "sha256": "sha256:f0c2ff3598df7fee4b1e403533e5c884be9589089480a875d41e6d3df7df1b7c",
+      "media_type": "text/plain",
+      "redaction_state": "verified"
+    }
+  ]
+}
