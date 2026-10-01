@@ -143,6 +143,7 @@ El reporte de Día 1 incluye recomendaciones de producto además de observacione
 - Frontend: `npm test` **65 passed**; `npm run test:i18n` **2 passed**; typecheck, lint y build pasaron. La build mantiene la advertencia existente de chunk principal de **704 KB**.
 - Alembic reporta un único head: `20261011_co_owner_manual_rate_default`. `validate_setup.py` pasó después de regenerar inventarios.
 - Graphify se regeneró: **12.669 nodos, 36.990 aristas, 645 comunidades y 1.010 flows**; `portable-check` pasó para 313 artefactos. `check-update` todavía indica descripciones/etiquetas semánticas pendientes y no extrae tres fuentes Swift porque falta su gramática.
+- El verificador rechazó el release por encontrar **0 resúmenes QA firmados**; tampoco existe `.env.qa.local`. En GitHub, al entorno `preview-qa` le falta la variable `RENDER_QA_SERVICE_ID` que exige `verify-preview-providers.yml`, así que el ciclo de preview no puede iniciar correctamente.
 - Los resultados son locales/sintéticos. Aún faltan el preview aislado con su propia base y la evidencia QA cloud firmada del release gate; no equivalen a re-simulación ni a despliegue.
 
 ## Pendientes de producto y operación
