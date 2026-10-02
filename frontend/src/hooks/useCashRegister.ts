@@ -1,10 +1,13 @@
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import {
+  approveCashExpense,
   addCashMovement,
   approveCashCloseDifference,
   confirmCashCustody,
   closeCashSession,
+  createCashExpense,
+  listCashExpenses,
   getLatestCashCloseReport,
   getCashSessionSummary,
   getCashSessionCloseReport,
@@ -14,6 +17,9 @@ import {
   listPendingCashCloseReports,
   listPendingCashCustodyReports,
   openCashSession,
+  rejectCashExpense,
+  type CashExpense,
+  type CashExpensePayload,
   type CashCloseReport,
   type CashCustodyReceiptPayload,
   type CashMovement,
@@ -37,6 +43,7 @@ const latestCloseReportKey = (hotelId: number | null, currency?: string) => ["ca
 const pendingCloseReportsKey = (hotelId: number | null) => ["cash-latest-close-report", hotelId, "pending"];
 const pendingCashCustodyReportsKey = (hotelId: number | null) => ["cash-latest-close-report", hotelId, "custody-pending"];
 const dailySummaryKey = (hotelId: number | null, date: string, currency?: string | null) => ["cash-daily-summary", hotelId, date, currency || "auto"];
+const cashExpensesKey = (hotelId: number | null) => ["cash-expenses", hotelId];
 
 /**
  * Payments created outside the cash screen still change the current cash
@@ -107,6 +114,16 @@ export function useCashDailySummary(reportDate: string, currency?: string | null
   });
 }
 
+export function useCashExpenses(options?: { enabled?: boolean }) {
+  const { session } = useSession();
+  return useQuery<CashExpense[]>({
+    queryKey: cashExpensesKey(session.hotelId),
+    queryFn: () => listCashExpenses(session),
+    enabled: hasValidSession(session) && (options?.enabled ?? true),
+    staleTime: 10 * 1000
+  });
+}
+
 export function useCashMovements(sessionId?: number) {
   const { session } = useSession();
   return useQuery<CashMovement[]>({
@@ -168,7 +185,42 @@ export function useCashRegisterMutations(sessionId?: number) {
     onError: async () => invalidateSessions()
   });
 
-  return { openSessionMutation, addMovementMutation, closeSessionMutation, approveDifferenceMutation, confirmCustodyMutation };
+  const createExpenseMutation = useGuardedMutation<CashExpense, Error, CashExpensePayload>({
+    mutationFn: (payload) => createCashExpense(sessionId!, payload, session),
+    onSuccess: async () => {
+      await invalidateSessions();
+      await queryClient.invalidateQueries({ queryKey: cashExpensesKey(session.hotelId) });
+    },
+    onError: async () => queryClient.invalidateQueries({ queryKey: cashExpensesKey(session.hotelId) })
+  });
+
+  const approveExpenseMutation = useGuardedMutation<CashExpense, Error, number>({
+    mutationFn: (expenseId) => approveCashExpense(expenseId, session),
+    onSuccess: async () => {
+      await invalidateSessions();
+      await queryClient.invalidateQueries({ queryKey: cashExpensesKey(session.hotelId) });
+    },
+    onError: async () => queryClient.invalidateQueries({ queryKey: cashExpensesKey(session.hotelId) })
+  });
+
+  const rejectExpenseMutation = useGuardedMutation<CashExpense, Error, { expenseId: number; reason: string }>({
+    mutationFn: ({ expenseId, reason }) => rejectCashExpense(expenseId, reason, session),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: cashExpensesKey(session.hotelId) });
+    },
+    onError: async () => queryClient.invalidateQueries({ queryKey: cashExpensesKey(session.hotelId) })
+  });
+
+  return {
+    openSessionMutation,
+    addMovementMutation,
+    closeSessionMutation,
+    approveDifferenceMutation,
+    confirmCustodyMutation,
+    createExpenseMutation,
+    approveExpenseMutation,
+    rejectExpenseMutation
+  };
 }
 
 export const cashSessionStatusLabel: Record<string, string> = {

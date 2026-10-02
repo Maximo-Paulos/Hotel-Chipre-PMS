@@ -54,7 +54,6 @@ type GuestQuickCreatePanelProps = {
   form: QuickGuestFormValues;
   onFormChange: (updater: (prev: QuickGuestFormValues) => QuickGuestFormValues) => void;
   onGuestCreated: (guestId: number) => void;
-  onError: (message: string) => void;
 };
 
 const GUEST_SEARCH_MIN_LENGTH = 2;
@@ -63,6 +62,17 @@ const GUEST_SEARCH_DEBOUNCE_MS = 300;
 
 const guestFullName = (guest: Pick<Guest, "first_name" | "last_name">) =>
   `${guest.first_name} ${guest.last_name}`.trim();
+
+const normalizeIdentity = (value: string | null | undefined) =>
+  (value ?? "")
+    .trim()
+    .toLocaleLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const normalizePhone = (value: string | null | undefined) => (value ?? "").replace(/\D/g, "");
+
+type PossibleDuplicate = { guest: Guest; sameDocument: boolean };
 
 function GuestSummaryCard({
   guest,
@@ -121,8 +131,7 @@ export default function GuestQuickCreatePanel({
   guestIdDisabled,
   form,
   onFormChange,
-  onGuestCreated,
-  onError
+  onGuestCreated
 }: GuestQuickCreatePanelProps) {
   const { t } = useTranslation("guests");
   const { session } = useSession();
@@ -135,6 +144,25 @@ export default function GuestQuickCreatePanel({
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
   const [showQuickCreate, setShowQuickCreate] = useState(false);
+  const [possibleDuplicates, setPossibleDuplicates] = useState<PossibleDuplicate[]>([]);
+  const [reviewedDraftKey, setReviewedDraftKey] = useState<string | null>(null);
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const draftKey = JSON.stringify({
+    first_name: normalizeIdentity(form.first_name),
+    last_name: normalizeIdentity(form.last_name),
+    email: normalizeIdentity(form.email),
+    phone: normalizePhone(form.phone),
+    document_type: form.document_type,
+    document_number: normalizeIdentity(form.document_number)
+  });
+
+  useEffect(() => {
+    setPossibleDuplicates([]);
+    setReviewedDraftKey(null);
+    setCreateError(null);
+  }, [draftKey]);
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedQuery(query.trim()), GUEST_SEARCH_DEBOUNCE_MS);
@@ -179,7 +207,7 @@ export default function GuestQuickCreatePanel({
     setShowQuickCreate(false);
   };
 
-  const handleCreateGuest = async () => {
+  const createAndAssignGuest = async () => {
     if (!canCreateGuests) return;
     try {
       const guest = await guestMutation.mutateAsync({
@@ -194,10 +222,103 @@ export default function GuestQuickCreatePanel({
       onGuestIdChange(String(guest.id));
       onFormChange(emptyQuickGuestForm);
       setShowQuickCreate(false);
+      setPossibleDuplicates([]);
+      setCreateError(null);
       onGuestCreated(guest.id);
     } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : t("quickCreate.createError"));
+      setCreateError(err instanceof Error ? err.message : t("quickCreate.createError"));
     }
+  };
+
+  const findPossibleDuplicates = async (): Promise<PossibleDuplicate[]> => {
+    if (!canViewGuests) return [];
+    const searchTerms = Array.from(new Set([
+      form.document_number.trim(),
+      form.email.trim(),
+      form.phone.trim(),
+      form.first_name.trim()
+    ].filter((value) => value.length >= GUEST_SEARCH_MIN_LENGTH)));
+    if (searchTerms.length === 0) return [];
+
+    const results = await Promise.all(searchTerms.map((search) =>
+      listGuests({ search, limit: 100 }, session)
+    ));
+    const candidates = new Map<number, Guest>();
+    results.flat().forEach((guest) => candidates.set(guest.id, guest));
+    const draftEmail = normalizeIdentity(form.email);
+    const draftPhone = normalizePhone(form.phone);
+    const draftFirstName = normalizeIdentity(form.first_name);
+    const draftLastName = normalizeIdentity(form.last_name);
+    const draftDocument = normalizeIdentity(form.document_number);
+
+    return Array.from(candidates.values())
+      .map((guest) => {
+        const sameDocument = Boolean(
+          draftDocument && form.document_type &&
+          guest.document_type === form.document_type &&
+          normalizeIdentity(guest.document_number) === draftDocument
+        );
+        const matchesIdentity = sameDocument || Boolean(
+          (draftEmail && normalizeIdentity(guest.email) === draftEmail) ||
+          (draftPhone.length >= 6 && normalizePhone(guest.phone) === draftPhone) ||
+          (draftFirstName && draftLastName &&
+            normalizeIdentity(guest.first_name) === draftFirstName &&
+            normalizeIdentity(guest.last_name) === draftLastName)
+        );
+        return { guest, sameDocument, matchesIdentity };
+      })
+      .filter((match) => match.matchesIdentity)
+      .map(({ guest, sameDocument }) => ({ guest, sameDocument }));
+  };
+
+  const handleCreateGuest = async () => {
+    if (!canCreateGuests || guestMutation.isPending || isCheckingDuplicates) return;
+    setCreateError(null);
+    if (reviewedDraftKey === draftKey) {
+      if (possibleDuplicates.some((match) => match.sameDocument)) {
+        setCreateError(t("quickCreate.documentAlreadyExists"));
+        return;
+      }
+      await createAndAssignGuest();
+      return;
+    }
+
+    if (!canViewGuests) {
+      await createAndAssignGuest();
+      return;
+    }
+
+    setIsCheckingDuplicates(true);
+    try {
+      const matches = await findPossibleDuplicates();
+      if (matches.length > 0) {
+        setPossibleDuplicates(matches);
+        setReviewedDraftKey(draftKey);
+        return;
+      }
+      await createAndAssignGuest();
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : t("quickCreate.duplicateCheckFailed"));
+    } finally {
+      setIsCheckingDuplicates(false);
+    }
+  };
+
+  const handleUseDuplicate = (guest: Guest) => {
+    handleSelectGuest(guest);
+    setPossibleDuplicates([]);
+    setCreateError(null);
+  };
+
+  const handleCreateSeparateGuest = async () => {
+    if (possibleDuplicates.some((match) => match.sameDocument)) {
+      setCreateError(t("quickCreate.documentAlreadyExists"));
+      return;
+    }
+    setReviewedDraftKey(draftKey);
+    setPossibleDuplicates([]);
+    setCreateError(null);
+    await createAndAssignGuest();
   };
 
   const results = searchQuery.data ?? [];
@@ -277,11 +398,11 @@ export default function GuestQuickCreatePanel({
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <button
               type="button"
-              onClick={handleCreateGuest}
-              disabled={guestMutation.isPending || !form.first_name || !form.last_name}
+              onClick={() => void handleCreateGuest()}
+              disabled={guestMutation.isPending || isCheckingDuplicates || !form.first_name || !form.last_name}
               className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {t("quickCreate.createAndAssign")}
+              {isCheckingDuplicates ? t("quickCreate.checkingDuplicates") : guestMutation.isPending ? t("quickCreate.saving") : t("quickCreate.createAndAssign")}
             </button>
             <span>{t("quickCreate.autoAssignHint")}</span>
             <button
@@ -293,6 +414,45 @@ export default function GuestQuickCreatePanel({
               {t("quickCreate.backToSearch")}
             </button>
           </div>
+          {createError ? (
+            <p className="mt-2 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert">
+              {createError}
+            </p>
+          ) : null}
+          {possibleDuplicates.length > 0 ? (
+            <section className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3" aria-label={t("quickCreate.duplicateWarningTitle")}>
+              <p className="text-sm font-semibold text-amber-950">{t("quickCreate.duplicateWarningTitle")}</p>
+              <p className="mt-1 text-xs text-amber-900">{t("quickCreate.duplicateWarningBody")}</p>
+              {possibleDuplicates.some((match) => match.sameDocument) ? (
+                <p className="mt-2 text-xs font-medium text-rose-800">{t("quickCreate.documentAlreadyExists")}</p>
+              ) : null}
+              <ul className="mt-2 divide-y divide-amber-200 rounded border border-amber-200 bg-white">
+                {possibleDuplicates.map(({ guest }) => (
+                  <li key={guest.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs">
+                    <span>
+                      <strong>{guestFullName(guest)}</strong>
+                      {guest.email ? ` · ${guest.email}` : ""}
+                      {guest.phone ? ` · ${guest.phone}` : ""}
+                      {guest.document_number ? ` · ${guest.document_type ?? ""} ${guest.document_number}` : ""}
+                    </span>
+                    <button type="button" onClick={() => handleUseDuplicate(guest)} className="font-semibold text-brand-700 underline">
+                      {t("quickCreate.useExistingGuest")}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {!possibleDuplicates.some((match) => match.sameDocument) ? (
+                <button
+                  type="button"
+                  onClick={() => void handleCreateSeparateGuest()}
+                  disabled={guestMutation.isPending}
+                  className="mt-3 rounded border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-950 disabled:opacity-60"
+                >
+                  {t("quickCreate.createSeparateGuest")}
+                </button>
+              ) : null}
+            </section>
+          ) : null}
         </div>
       ) : (
         <div className="space-y-2">

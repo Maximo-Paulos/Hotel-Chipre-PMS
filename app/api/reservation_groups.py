@@ -1,6 +1,6 @@
 """Create and inspect groups of independently billed hotel reservations."""
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.reservations import _trigger_reoptimization_bg
@@ -9,10 +9,15 @@ from app.dependencies.auth import AuthContext, authorize_permission, require_per
 from app.models.audit_log import AuditActionEnum
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.reservation import ReservationGroupCreate, ReservationGroupRead
+from app.schemas.reservation_group_payment import ReservationGroupPaymentCreate, ReservationGroupPaymentRead
 from app.services import audit_log_service
+from app.services.audit_log_service import create_audit_log
 from app.services.reservation_group_service import create_reservation_group, list_reservation_groups
 from app.services.reservation_service import ReservationError
 from app.services.permission_service import PERMISSION_COMPANY_MANAGE, PERMISSION_RESERVATION_CREATE, PERMISSION_RESERVATION_READ
+from app.services.permission_service import PERMISSION_CASH_OPERATE
+from app.services.payment_service import PaymentError, PaymentNotFoundError
+from app.services.reservation_group_payment_service import create_reservation_group_payment
 
 
 router = APIRouter(prefix="/api/reservation-groups", tags=["Reservation Groups"])
@@ -51,7 +56,7 @@ def create_reservation_group_route(
             actor_user_id=context.user_id,
             actor_role=context.user_role,
         )
-        audit_log_service.safe_create_audit_log(
+        create_audit_log(
             db,
             hotel_id=context.hotel_id,
             table_name="reservation_groups",
@@ -64,7 +69,7 @@ def create_reservation_group_route(
             },
         )
         for reservation in reservations:
-            audit_log_service.safe_create_audit_log(
+            create_audit_log(
                 db,
                 hotel_id=context.hotel_id,
                 table_name="reservations",
@@ -89,6 +94,60 @@ def create_reservation_group_route(
     except ReservationError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.post(
+    "/{group_id}/payments",
+    response_model=ReservationGroupPaymentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_reservation_group_payment_route(
+    group_id: int,
+    data: ReservationGroupPaymentCreate,
+    request: Request,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=100),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+):
+    try:
+        batch, replayed = create_reservation_group_payment(
+            db,
+            hotel_id=context.hotel_id,
+            group_id=group_id,
+            payload=data,
+            idempotency_key=idempotency_key,
+            actor_user_id=context.user_id,
+        )
+        if not replayed:
+            create_audit_log(
+                db,
+                hotel_id=context.hotel_id,
+                table_name="reservation_group_payment_batches",
+                record_id=batch["id"],
+                action=AuditActionEnum.CREATE,
+                actor_user_id=context.user_id,
+                payload_after={
+                    "group_id": group_id,
+                    "received_amount": str(batch["received_amount"]),
+                    "currency": batch["currency"],
+                    "payment_method": getattr(batch["payment_method"], "value", batch["payment_method"]),
+                    "reservation_ids": [item["reservation_id"] for item in batch["allocations"]],
+                },
+            )
+        db.commit()
+        return batch
+    except PaymentNotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PaymentError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise

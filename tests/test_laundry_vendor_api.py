@@ -74,6 +74,48 @@ def _teardown(db, engine):
     engine.dispose()
 
 
+def test_duplicate_remito_returns_conflict_but_other_direction_is_allowed():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        vendor_response = client.post("/api/laundry/vendors", json={"name": "Lavadero único"})
+        assert vendor_response.status_code == 201, vendor_response.text
+        vendor_id = vendor_response.json()["id"]
+        item = create_linen_item(db, hotel_id=1, name="Sábanas únicas", unit="unit", min_quantity=None, active=True)
+        house = create_location(db, hotel_id=1, name="Depósito único")
+        register_movement(
+            db,
+            hotel_id=1,
+            item_id=item.id,
+            location_id=house.id,
+            movement_type="in",
+            quantity=Decimal("5.00"),
+            reason="conteo de apertura",
+            reservation_id=None,
+            created_by_user_id=None,
+        )
+        db.commit()
+        payload = {
+            "vendor_id": vendor_id,
+            "direction": "outbound",
+            "remito_number": "R-ÚNICO",
+            "remito_date": datetime(2026, 10, 1, tzinfo=timezone.utc).isoformat(),
+            "house_location_id": house.id,
+            "lines": [{"linen_item_id": item.id, "quantity": "2.00"}],
+        }
+        created = client.post("/api/laundry/remitos", json=payload)
+        assert created.status_code == 201, created.text
+
+        duplicate = client.post("/api/laundry/remitos", json=payload)
+        assert duplicate.status_code == 409
+        assert "Ya existe un remito" in duplicate.json()["detail"]
+
+        inbound = client.post("/api/laundry/remitos", json={**payload, "direction": "inbound"})
+        assert inbound.status_code == 201, inbound.text
+    finally:
+        _teardown(db, engine)
+
+
 def test_owner_can_manage_vendors_and_receptionist_cannot():
     client, db, engine = _client_with_db()
     try:

@@ -15,6 +15,7 @@ from starlette.requests import Request
 from app.api import payments as payments_api
 from app.api import reservations as reservations_api
 from app.dependencies.auth import AuthContext
+from app.models.audit_log import AuditLog
 from app.models.cash_register import CashMovement
 from app.models.company import Company
 from app.models.company_night_charge import CompanyNightlySurchargeRate
@@ -121,6 +122,38 @@ def test_register_settlement_marks_settled(db, sample_guest, sample_rooms, sampl
     register_company_settlement(db, reservation, hotel_id=1)
     assert reservation.settlement_status == "settled"
 
+
+def test_register_settlement_rolls_back_when_audit_cannot_be_written(
+    db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch
+):
+    company = _deferred_company(db)
+    reservation = create_reservation(
+        db,
+        ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            room_id=sample_rooms[0].id,
+            check_in_date=date(2030, 3, 1),
+            check_out_date=date(2030, 3, 3),
+            company_id=company.id,
+        ),
+        hotel_id=1,
+    )
+    reservation_id = reservation.id
+    db.commit()
+
+    def fail_audit(*args, **kwargs):
+        raise RuntimeError("audit unavailable")
+
+    monkeypatch.setattr("app.services.audit_log_service.create_audit_log", fail_audit)
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        register_company_settlement(db, reservation, hotel_id=1)
+
+    db.rollback()
+    persisted = db.get(type(reservation), reservation_id)
+    assert persisted is not None
+    assert persisted.settlement_status == "deferred"
+    assert db.query(AuditLog).filter_by(hotel_id=1, table_name="reservations", record_id=reservation_id).count() == 0
 
 def test_register_settlement_rejects_non_company(db, sample_guest, sample_rooms, sample_categories, hotel_config):
     data = ReservationCreate(

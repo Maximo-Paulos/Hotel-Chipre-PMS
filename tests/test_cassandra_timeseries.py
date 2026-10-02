@@ -118,12 +118,20 @@ def test_cassandra_off_room_status_and_daily_rate_still_write_postgres(timeserie
     assert status_response.status_code == 200, status_response.text
     assert status_response.json()["room"]["status"] == RoomStatusEnum.MAINTENANCE.value
 
-    rate_response = client.post(
-        f"/api/rates/category/{category_id}/daily",
-        json={"date": "2026-09-01", "price": 175.5},
+    draft_response = client.post(
+        "/api/rate-change-drafts",
+        json={
+            "category_id": category_id,
+            "changes": [{"date": "2026-09-01", "values": {"price": 175.5}}],
+        },
     )
-    assert rate_response.status_code == 200, rate_response.text
-    assert rate_response.json()["price"] == 175.5
+    assert draft_response.status_code == 201, draft_response.text
+    draft = draft_response.json()
+    confirmed = client.post(
+        f"/api/rate-change-drafts/{draft['id']}/confirm",
+        json={"expected_version": draft["version"]},
+    )
+    assert confirmed.status_code == 200, confirmed.text
 
     with SessionLocal() as db:
         room = db.get(Room, room_id)

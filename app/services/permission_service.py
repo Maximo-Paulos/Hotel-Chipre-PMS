@@ -131,6 +131,7 @@ PERMISSION_COMPANY_NIGHT_RATE_MANAGE = "company:night_rate_manage"
 PERMISSION_CASH_OPERATE = "cash:operate"
 PERMISSION_CASH_ADJUSTMENT_MANAGE = "cash:adjustment_manage"
 PERMISSION_CASH_EXPENSE = "cash:expense"
+PERMISSION_CASH_EXPENSE_APPROVE = "cash:expense_approve"
 PERMISSION_CASH_RECORD_PRIOR_RECEIPT = "cash:record_prior_receipt"
 PERMISSION_CASH_APPROVE_DIFFERENCE = "cash:approve_difference"
 PERMISSION_CASH_CUSTODY_RECEIVE = "cash:custody:receive"
@@ -471,7 +472,11 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_CASH_EXPENSE: (
         "cash", "Record manual cash expenses",
-        "Permite registrar egresos manuales de caja. Requiere permiso explícito y MFA reciente; los reembolsos de huéspedes deben usar el flujo de devoluciones.",
+        "Permite cargar un gasto manual de caja con categoría, proveedor y comprobante. El importe no afecta el arqueo hasta que lo apruebe personal autorizado.",
+    ),
+    PERMISSION_CASH_EXPENSE_APPROVE: (
+        "cash", "Approve manual cash expenses",
+        "Permite aprobar gastos manuales pendientes de caja. Solo Dueño, Codueña y Gerencia pueden usarlo y cada aprobación requiere MFA reciente.",
     ),
     PERMISSION_CASH_RECORD_PRIOR_RECEIPT: (
         "cash", "Record cash collected before using the system",
@@ -789,6 +794,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_PAYMENT_PROOF_VIEW, PERMISSION_PAYMENT_PROOF_REVIEW,
         PERMISSION_RESERVATION_CHARGE, PERMISSION_CASH_OPERATE,
         PERMISSION_CASH_EXPENSE,
+        PERMISSION_CASH_EXPENSE_APPROVE,
         PERMISSION_CASH_RECORD_PRIOR_RECEIPT,
         PERMISSION_PAYMENT_REFUND,
         PERMISSION_OTA_PAYMENT_CONFIRM,
@@ -849,7 +855,7 @@ _STEP_UP_REQUIRED = _CRITICAL_PERMISSION_CODES | frozenset(
         PERMISSION_CASH_APPROVE_DIFFERENCE,
         PERMISSION_CASH_CUSTODY_RECEIVE,
         PERMISSION_CASH_ADJUSTMENT_MANAGE,
-        PERMISSION_CASH_EXPENSE,
+        PERMISSION_CASH_EXPENSE_APPROVE,
         PERMISSION_PAYMENT_REFUND,
         PERMISSION_OTA_PAYMENT_CONFIRM,
         PERMISSION_RESERVATION_CANCEL_PAID,
@@ -884,6 +890,7 @@ _ROLE_SCOPES: dict[str, frozenset[str]] = {
     PERMISSION_RESERVATION_DEMO_SEED: frozenset({ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER}),
     PERMISSION_CASH_APPROVE_DIFFERENCE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_CASH_CUSTODY_RECEIVE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_CASH_EXPENSE_APPROVE: frozenset({ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER}),
 }
 _CO_OWNER_ADMIN_ACCESS_PERMISSIONS = frozenset(
     {

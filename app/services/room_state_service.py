@@ -48,9 +48,7 @@ def change_room_status(
     if notes is not None:
         room.notes = notes
 
-    db.commit()
-    db.refresh(room)
-    audit_log_service.safe_create_audit_log(
+    audit_log_service.create_audit_log(
         db,
         hotel_id=hotel_id,
         table_name="rooms",
@@ -60,6 +58,8 @@ def change_room_status(
         payload_before=before,
         payload_after=audit_log_service.model_snapshot(room),
     )
+    db.commit()
+    db.refresh(room)
     invalidate_hotel_operational_caches(hotel_id)
     project_room_state_event(
         hotel_id,

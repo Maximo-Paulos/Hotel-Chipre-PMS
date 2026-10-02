@@ -165,6 +165,8 @@ class CashMovement(Base):
 
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_cash_movements_amount_positive"),
+        # Required as a composite FK target for other hotel-scoped ledgers.
+        UniqueConstraint("hotel_id", "id", name="uq_cash_movements_hotel_id_id"),
         ForeignKeyConstraint(
             ["hotel_id", "session_id"], ["cash_sessions.hotel_id", "cash_sessions.id"],
             name="fk_cash_movements_hotel_session", ondelete="CASCADE",

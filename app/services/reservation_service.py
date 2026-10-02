@@ -1594,7 +1594,7 @@ def register_company_settlement(
 
     Transitions settlement_status -> 'settled' for a company reservation that was
     created with payment_deferred. Idempotent: re-registering a settled reservation
-    is a no-op. Audited via audit_log_service (best-effort).
+    is a no-op. The settlement and its audit row share the caller's transaction.
     """
     if reservation.hotel_id != hotel_id:
         raise ReservationError("Cross-hotel settlement is not allowed")
@@ -1611,24 +1611,21 @@ def register_company_settlement(
     reservation.settlement_status = "settled"
     db.flush()
 
-    try:
-        from app.services.audit_log_service import safe_create_audit_log
+    from app.services.audit_log_service import create_audit_log
 
-        safe_create_audit_log(
-            db,
-            hotel_id=hotel_id,
-            table_name="reservations",
-            record_id=reservation.id,
-            action="update",
-            actor_user_id=actor_user_id,
-            payload_before=before,
-            payload_after={
-                "settlement_status": reservation.settlement_status,
-                "notes": notes,
-            },
-        )
-    except Exception:  # pragma: no cover - audit is best-effort
-        logging.getLogger(__name__).exception("settlement audit failed")
+    create_audit_log(
+        db,
+        hotel_id=hotel_id,
+        table_name="reservations",
+        record_id=reservation.id,
+        action="update",
+        actor_user_id=actor_user_id,
+        payload_before=before,
+        payload_after={
+            "settlement_status": reservation.settlement_status,
+            "notes": notes,
+        },
+    )
     return reservation
 
 

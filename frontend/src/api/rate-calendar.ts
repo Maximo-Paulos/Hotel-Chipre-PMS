@@ -99,13 +99,6 @@ export type RatePaymentMethodOptions = {
 export const getRatePaymentMethodOptions = (session?: SessionLike) =>
   apiFetch<RatePaymentMethodOptions>("/api/rates/payment-method-options", { method: "GET", session });
 
-export type DailyRateOut = DailyRatePrices & {
-  id: number;
-  hotel_id: number;
-  category_id: number;
-  date: string;
-};
-
 // One row per date for the editable grid. `source` says where the effective
 // price came from (an explicit daily_rate, a price_period, the category base,
 // or none), and `daily_rate_id` is set only when an explicit row exists.
@@ -128,55 +121,6 @@ export const getCategoryDailyRates = (
   });
 };
 
-export type BulkRateResult = { created: number; updated: number };
-
-export type BulkRateField = keyof Pick<
-  DailyRatePrices,
-  "price" | "price_cash" | "price_transfer" | "price_mercadopago" | "price_paypal" | "price_credit_card"
->;
-
-export type BulkRateFieldMode = "set" | "amount_delta" | "percent_delta";
-
-export const upsertDailyRate = (
-  categoryId: number,
-  payload: DailyRatePrices & { date: string },
-  session?: SessionLike
-) =>
-  apiFetch<DailyRateOut>(`/api/rates/category/${categoryId}/daily`, {
-    method: "POST",
-    data: payload,
-    session
-  });
-
-export const bulkUpsertDailyRates = (
-  categoryId: number,
-  payload: DailyRatePrices & { from_date: string; to_date: string; exclude_dates?: string[] },
-  session?: SessionLike
-) =>
-  apiFetch<BulkRateResult>(`/api/rates/category/${categoryId}/bulk`, {
-    method: "POST",
-    data: payload,
-    session
-  });
-
-export const bulkUpdateDailyRateField = (
-  categoryId: number,
-  payload: {
-    from_date: string;
-    to_date: string;
-    field: BulkRateField;
-    mode: BulkRateFieldMode;
-    value: number;
-    exclude_dates?: string[];
-  },
-  session?: SessionLike
-) =>
-  apiFetch<BulkRateResult>(`/api/rates/category/${categoryId}/bulk-field`, {
-    method: "POST",
-    data: payload,
-    session
-  });
-
 export type PricePeriod = {
   id: number;
   hotel_id: number;
@@ -185,12 +129,20 @@ export type PricePeriod = {
   start_date: string;
   end_date: string;
   price_per_night: number;
+  price_cash?: number | null;
+  price_transfer?: number | null;
+  price_mercadopago?: number | null;
+  price_paypal?: number | null;
+  price_credit_card?: number | null;
+  price_debit_card?: number | null;
+  price_booking?: number | null;
+  price_expedia?: number | null;
   priority: number;
   is_active: boolean;
   created_at: string;
 };
 
-export type PricePeriodInput = Omit<Pick<PricePeriod, "category_id" | "name" | "start_date" | "end_date" | "price_per_night" | "priority" | "is_active">, "category_id"> & {
+export type PricePeriodInput = Omit<Pick<PricePeriod, "category_id" | "name" | "start_date" | "end_date" | "price_per_night" | "price_cash" | "price_transfer" | "price_mercadopago" | "price_paypal" | "price_credit_card" | "price_debit_card" | "price_booking" | "price_expedia" | "priority" | "is_active">, "category_id"> & {
   category_id: number;
 };
 
@@ -198,12 +150,3 @@ export const listPricePeriods = (categoryId: number, session?: SessionLike) => {
   const search = new URLSearchParams({ category_id: String(categoryId), active_only: "false" });
   return apiFetch<PricePeriod[]>(`/api/rates/periods?${search.toString()}`, { session });
 };
-
-export const createPricePeriod = (payload: PricePeriodInput, session?: SessionLike) =>
-  apiFetch<PricePeriod>("/api/rates/periods", { method: "POST", data: payload, session });
-
-export const updatePricePeriod = (periodId: number, payload: Partial<PricePeriodInput>, session?: SessionLike) =>
-  apiFetch<PricePeriod>(`/api/rates/periods/${periodId}`, { method: "PATCH", data: payload, session });
-
-export const deletePricePeriod = (periodId: number, session?: SessionLike) =>
-  apiFetch<void>(`/api/rates/periods/${periodId}`, { method: "DELETE", session });

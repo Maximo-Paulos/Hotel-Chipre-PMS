@@ -151,6 +151,13 @@ class LaundryRemito(Base):
     __table_args__ = (
         CheckConstraint("direction IN ('outbound', 'inbound')", name="ck_laundry_remitos_direction_valid"),
         UniqueConstraint("hotel_id", "id", name="uq_laundry_remitos_hotel_id_id"),
+        UniqueConstraint(
+            "hotel_id",
+            "vendor_id",
+            "direction",
+            "remito_number",
+            name="uq_laundry_remitos_hotel_vendor_direction_number",
+        ),
         ForeignKeyConstraint(
             ["hotel_id", "vendor_id"],
             ["laundry_vendors.hotel_id", "laundry_vendors.id"],

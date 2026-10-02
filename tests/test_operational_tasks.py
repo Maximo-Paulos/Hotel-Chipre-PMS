@@ -134,6 +134,76 @@ def test_task_comment_appends_history_without_changing_task_status(db, hotel_con
     assert events[-1].comment == "Faltan toallas en el depósito."
 
 
+def test_housekeeping_can_read_all_general_tasks_but_cannot_operate_them(db, hotel_config, sample_rooms):
+    cleaner = _user(db, "cleaner@example.test", role=ROLE_HOUSEKEEPING)
+    another_user = _user(db, "another-staff@example.test", role=ROLE_MANAGER)
+    general = create_task(
+        db,
+        hotel_id=hotel_config.id,
+        task_type=OperationalTaskTypeEnum.GENERAL,
+        priority=OperationalTaskPriorityEnum.MEDIUM,
+        title="Nota para el próximo turno",
+        description="Llega un proveedor a la tarde.",
+        assigned_to_user_id=another_user.id,
+        created_by_user_id=another_user.id,
+    )
+    housekeeping = create_task(
+        db,
+        hotel_id=hotel_config.id,
+        task_type=OperationalTaskTypeEnum.HOUSEKEEPING,
+        priority=OperationalTaskPriorityEnum.MEDIUM,
+        title="Preparar habitación",
+        assigned_to_user_id=None,
+        created_by_user_id=another_user.id,
+    )
+    assigned_elsewhere = create_task(
+        db,
+        hotel_id=hotel_config.id,
+        task_type=OperationalTaskTypeEnum.MAINTENANCE,
+        priority=OperationalTaskPriorityEnum.MEDIUM,
+        title="Revisar equipo",
+        assigned_to_user_id=another_user.id,
+        created_by_user_id=another_user.id,
+    )
+    another_user.display_name = "Gerente de prueba"
+    db.flush()
+
+    context = AuthContext(
+        hotel_id=hotel_config.id,
+        user_id=cleaner.id,
+        user_email=cleaner.email,
+        user_role=ROLE_HOUSEKEEPING,
+        is_verified=True,
+    )
+    visible = get_operational_tasks(
+        status_filter=None,
+        task_type=None,
+        room_id=None,
+        limit=100,
+        db=db,
+        context=context,
+    )
+    visible_ids = {task["id"] for task in visible}
+    assert general.id in visible_ids
+    assert housekeeping.id in visible_ids
+    assert assigned_elsewhere.id not in visible_ids
+    general_read = next(task for task in visible if task["id"] == general.id)
+    assert general_read["description"] == "Llega un proveedor a la tarde."
+    assert general_read["created_by_name"] == "Gerente de prueba"
+
+    history = get_operational_task_history(general.id, db=db, context=context)
+    assert history[0]["actor_name"] == "Gerente de prueba"
+    with pytest.raises(HTTPException) as error:
+        patch_operational_task(
+            general.id,
+            OperationalTaskUpdate(client_version=general.version, status=OperationalTaskStatusEnum.IN_PROGRESS),
+            db=db,
+            context=context,
+        )
+    assert error.value.status_code == 403
+    assert general.status == OperationalTaskStatusEnum.PENDING
+
+
 def test_maintenance_task_keeps_block_until_authorized_release(db, hotel_config, sample_rooms):
     manager = _user(db, "maintenance@example.test")
     block = RoomBlock(
@@ -273,7 +343,15 @@ def test_custom_housekeeping_task_inbox_stays_in_housekeeping_lane(db, hotel_con
     )
     task_ids = {task["id"] for task in tasks}
     assert housekeeping_task.id in task_ids
-    assert reception_task.id not in task_ids
+    assert reception_task.id in task_ids
+    with pytest.raises(OperationalTaskError):
+        validate_task_operator_scope(
+            db,
+            hotel_id=hotel_config.id,
+            task_id=reception_task.id,
+            role="housekeeping",
+            user_id=7001,
+        )
 
 
 def test_report_only_custom_manager_cannot_read_or_mutate_out_of_scope_tasks(
@@ -357,13 +435,15 @@ def test_report_only_custom_manager_cannot_read_or_mutate_out_of_scope_tasks(
     assert visible[0]["confirmation_code"] is None
 
     scope_checks = []
-    original_scope_check = operational_tasks_api.validate_task_operator_scope
+    original_scope_check = operational_tasks_api.validate_task_operator_read_scope
 
     def capture_scope_lock(*args, **kwargs):
-        scope_checks.append(kwargs.get("for_update"))
+        # Read-only history checks must not ask the validator to lock the task.
+        assert "for_update" not in kwargs
+        scope_checks.append(True)
         return original_scope_check(*args, **kwargs)
 
-    monkeypatch.setattr(operational_tasks_api, "validate_task_operator_scope", capture_scope_lock)
+    monkeypatch.setattr(operational_tasks_api, "validate_task_operator_read_scope", capture_scope_lock)
     own_history = get_operational_task_history(own_task.id, db=db, context=context)
     assert len(own_history) == 1
     assert scope_checks == [True]

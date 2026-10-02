@@ -49,6 +49,13 @@ class HotelConfigRead(BaseModel):
     require_document_for_checkin: bool
     require_terms_acceptance: bool
     hotel_name: str
+    fiscal_legal_name: Optional[str] = None
+    fiscal_tax_id: Optional[str] = None
+    fiscal_vat_condition: Optional[Literal[
+        "responsable_inscripto", "monotributo", "exento", "consumidor_final", "no_responsable", "otro"
+    ]] = None
+    fiscal_address: Optional[str] = None
+    fiscal_point_of_sale: Optional[int] = None
     hotel_timezone: str
     check_in_time: Optional[str] = None
     check_out_time: Optional[str] = None
@@ -89,6 +96,13 @@ class HotelConfigUpdate(BaseModel):
     require_document_for_checkin: Optional[bool] = None
     require_terms_acceptance: Optional[bool] = None
     hotel_name: Optional[str] = None
+    fiscal_legal_name: Optional[str] = Field(default=None, max_length=200)
+    fiscal_tax_id: Optional[str] = Field(default=None, max_length=20)
+    fiscal_vat_condition: Optional[Literal[
+        "responsable_inscripto", "monotributo", "exento", "consumidor_final", "no_responsable", "otro"
+    ]] = None
+    fiscal_address: Optional[str] = Field(default=None, max_length=300)
+    fiscal_point_of_sale: Optional[int] = Field(default=None, ge=1, le=99999)
     hotel_timezone: Optional[str] = None
     check_in_time: Optional[str] = None
     check_out_time: Optional[str] = None
@@ -149,6 +163,16 @@ class HotelConfigUpdate(BaseModel):
             raise ValueError(f"Unsupported interface_language: {value}")
         return candidate
 
+    @field_validator("fiscal_legal_name", "fiscal_tax_id", "fiscal_address", mode="before")
+    @classmethod
+    def normalize_fiscal_text(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("Los datos fiscales deben ser texto")
+        cleaned = value.strip()
+        return cleaned or None
+
     @field_validator("check_in_time", "check_out_time", mode="before")
     @classmethod
     def normalize_hotel_local_time(cls, value: object) -> str | None:
@@ -164,7 +188,20 @@ class HotelConfigUpdate(BaseModel):
         return candidate
 
     @model_validator(mode="after")
-    def validate_manual_rate_bounds(self):
+    def validate_configuration_consistency(self):
+        if (self.jurisdiction_code or "AR").strip().upper() == "AR" and self.fiscal_tax_id:
+            digits = re.sub(r"\D", "", self.fiscal_tax_id)
+            if len(digits) != 11:
+                raise ValueError("El CUIT debe tener 11 dígitos")
+            weights = (5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
+            check = 11 - sum(int(digit) * weight for digit, weight in zip(digits[:10], weights)) % 11
+            if check == 11:
+                check = 0
+            elif check == 10:
+                check = 9
+            if check != int(digits[-1]):
+                raise ValueError("El dígito verificador del CUIT no es válido")
+            self.fiscal_tax_id = digits
         lower_supplied = "manual_rate_min_adjustment_pct" in self.model_fields_set
         upper_supplied = "manual_rate_max_adjustment_pct" in self.model_fields_set
         lower = self.manual_rate_min_adjustment_pct

@@ -92,6 +92,7 @@ from app.api import (
     notifications,
     operational_tasks,
     reservation_communications,
+    rate_change_drafts,
 )
 import app.master_admin.models  # noqa: F401
 from app.master_admin.router import router as master_admin_router
@@ -382,6 +383,7 @@ app.include_router(company_night_charges.router)
 app.include_router(room_state_events.router)
 app.include_router(rate_calendar.router)
 app.include_router(daily_rates.router)
+app.include_router(rate_change_drafts.router)
 app.include_router(fx_rates.router)
 # The frontend API client is rooted at /api. Keep the existing /fx paths while
 # exposing the same authenticated routes under /api/fx for PMS clients.

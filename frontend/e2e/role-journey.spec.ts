@@ -245,7 +245,9 @@ test("housekeeping stays inside rooms and laundry without loading restricted dat
   expect(requestedPaths.some((path) => path.startsWith("/api/onboarding"))).toBe(false);
   expect(requestedPaths.some((path) => path.startsWith("/api/subscription"))).toBe(false);
   expect(requestedPaths.some((path) => path === "/api/rooms/categories")).toBe(false);
-  expect(requestedPaths.some((path) => path.startsWith("/api/room-blocks"))).toBe(false);
+  // Limpieza recibe los bloqueos operativos útiles para su turno; la API
+  // oculta bloqueos de uso del dueño, VIP y sobreventa.
+  expect(requestedPaths.some((path) => path.startsWith("/api/room-blocks/"))).toBe(true);
   expect(requestedPaths.some((path) => path.startsWith("/api/guests"))).toBe(false);
   expect(requestedPaths.some((path) => path.startsWith("/api/reports"))).toBe(false);
   expect(requestedPaths.some((path) => path.startsWith("/api/stock"))).toBe(false);
@@ -315,15 +317,22 @@ test("housekeeping can comment on existing tasks and send work for review", asyn
   await page.getByRole("button", { name: "Agregar", exact: true }).click();
   const card = page.locator("article").filter({ hasText: title });
   await expect(card).toBeVisible();
+  await card.getByRole("button", { name: "Fotos y evidencia" }).click();
+  const photoInput = card.getByLabel(`Adjuntar foto a ${title}`);
+  await photoInput.setInputFiles({
+    name: "habitacion-revisada.png",
+    mimeType: "image/png",
+    buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00])
+  });
+  await expect(card.getByText("habitacion-revisada.png", { exact: true })).toBeVisible();
   await card.getByLabel(`Comentario para ${title}`).fill("Repuesto completado; revisar disponibilidad.");
   await card.getByRole("button", { name: "Agregar comentario" }).click();
   await card.getByRole("button", { name: "Ver historial" }).click();
   await expect(card).toContainText("Repuesto completado; revisar disponibilidad.");
-  await expect(card.getByRole("button", { name: "Resolver" })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Resolver" })).toHaveCount(1);
   await card.getByRole("button", { name: "Tomar" }).click();
   await card.getByRole("button", { name: "Enviar a revisión" }).click();
   await expect(card).toContainText("Pendiente de revisión");
-  await expect(card).toContainText("La gerencia revisa y cierra este pendiente.");
 
   await page.getByTestId("logout-btn").click();
   await page.waitForURL("**/login");
@@ -332,6 +341,14 @@ test("housekeeping can comment on existing tasks and send work for review", asyn
 
   const managerCard = page.locator("article").filter({ hasText: title });
   await expect(managerCard).toContainText("Pendiente de revisión");
+  await managerCard.getByRole("button", { name: "Fotos y evidencia" }).click();
+  await expect(managerCard.getByText("habitacion-revisada.png", { exact: true })).toBeVisible();
+  const photoContentResponse = page.waitForResponse((response) =>
+    response.request().method() === "GET" && new URL(response.url()).pathname.endsWith("/content")
+  );
+  await managerCard.getByRole("button", { name: "Ver foto" }).click();
+  expect((await photoContentResponse).ok()).toBeTruthy();
+  await expect(managerCard.getByRole("img", { name: "Foto adjunta: habitacion-revisada.png" })).toHaveAttribute("src", /^data:image\/png;base64,/);
   await managerCard.getByRole("button", { name: "Resolver", exact: true }).click();
   await expect(page.getByText("Tarea resuelta.", { exact: true })).toBeVisible();
   await expect(managerCard).toContainText("Resuelta");

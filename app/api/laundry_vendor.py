@@ -15,12 +15,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_all_permissions, require_any_permission, require_permission
 from app.services.laundry_vendor_service import (
     LaundryVendorError,
+    DuplicateLaundryRemitoError,
     create_remito,
     create_vendor,
     list_remitos,
@@ -33,6 +35,7 @@ from app.services.laundry_vendor_service import (
     vendor_balance,
     vendor_settlements,
     vendor_spend,
+    is_duplicate_remito_integrity_error,
 )
 from app.services.linen_service import (
     LinenError,
@@ -587,9 +590,24 @@ def upsert_laundry_vendor_price(
             actor_user_id=context.user_id,
             **data.model_dump(),
         )
+    except DuplicateLaundryRemitoError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except (LaundryVendorError, LinenError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        if is_duplicate_remito_integrity_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ya existe un remito con ese número, lavadero y sentido. Revisá si es salida o entrada.",
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No se pudo confirmar el remito en este momento.",
+        ) from exc
     db.refresh(price)
     return price
 
@@ -625,9 +643,24 @@ def create_laundry_remito(
             notes=data.notes,
             actor_user_id=context.user_id,
         )
+    except DuplicateLaundryRemitoError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except (LaundryVendorError, LinenError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        if is_duplicate_remito_integrity_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ya existe un remito con ese número, lavadero y sentido. Revisá si es salida o entrada.",
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No se pudo confirmar el remito en este momento.",
+        ) from exc
     db.refresh(remito)
     warnings = [
         f"No hay precio configurado para el item {line.linen_item_id}"

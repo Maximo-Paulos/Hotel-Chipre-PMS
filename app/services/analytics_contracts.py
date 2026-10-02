@@ -253,8 +253,25 @@ def build_reservation_nightly_facts(
     if not stay_dates:
         return []
 
-    resolved_row_kind = _resolve_row_kind(row_kind, no_show_policy_applied)
-    if resolved_row_kind == FactReservationRowKindEnum.NO_SHOW_WAIVED:
+    status = _maybe_enum(getattr(reservation, "status", None), ReservationStatusEnum) or ReservationStatusEnum.PENDING
+    resolved_policy = _maybe_enum(no_show_policy_applied, ReservationNoShowPolicyAppliedEnum)
+    if resolved_policy is None:
+        resolved_policy = _maybe_enum(
+            getattr(reservation, "no_show_policy_applied", None), ReservationNoShowPolicyAppliedEnum
+        ) or ReservationNoShowPolicyAppliedEnum.NONE
+    if row_kind is None and status == ReservationStatusEnum.NO_SHOW:
+        resolved_row_kind = (
+            FactReservationRowKindEnum.NO_SHOW_WAIVED
+            if resolved_policy == ReservationNoShowPolicyAppliedEnum.WAIVED
+            else FactReservationRowKindEnum.NO_SHOW_CHARGEABLE
+        )
+    else:
+        resolved_row_kind = _resolve_row_kind(row_kind, resolved_policy)
+    pending_no_show = (
+        resolved_row_kind == FactReservationRowKindEnum.NO_SHOW_CHARGEABLE
+        and resolved_policy == ReservationNoShowPolicyAppliedEnum.NONE
+    )
+    if resolved_row_kind == FactReservationRowKindEnum.NO_SHOW_WAIVED or pending_no_show:
         nightly_totals = [
             MonetaryTotals(source_currency=totals.source_currency, fx_rate_snapshot=totals.fx_rate_snapshot)
             for _ in stay_dates
@@ -265,7 +282,6 @@ def build_reservation_nightly_facts(
     room_id = getattr(reservation, "room_id", None)
     category_id = int(getattr(reservation, "category_id"))
     company_id = getattr(reservation, "company_id", None)
-    status = _maybe_enum(getattr(reservation, "status", None), ReservationStatusEnum) or ReservationStatusEnum.PENDING
     outcome = _maybe_enum(getattr(reservation, "outcome", None), ReservationOutcomeEnum) or reservation_status_to_outcome(status)
     resolved_channel = normalize_channel_code(
         channel_code,
@@ -292,7 +308,9 @@ def build_reservation_nightly_facts(
             outcome=outcome,
             row_kind=resolved_row_kind,
             occupied_night=resolved_row_kind == FactReservationRowKindEnum.OCCUPIED,
-            chargeable_night=resolved_row_kind != FactReservationRowKindEnum.NO_SHOW_WAIVED,
+            chargeable_night=(
+                resolved_row_kind != FactReservationRowKindEnum.NO_SHOW_WAIVED and not pending_no_show
+            ),
             revenue_gross_ars=nightly_totals[index].revenue_gross_ars,
             revenue_gross_usd=nightly_totals[index].revenue_gross_usd,
             revenue_net_ars=nightly_totals[index].revenue_net_ars,

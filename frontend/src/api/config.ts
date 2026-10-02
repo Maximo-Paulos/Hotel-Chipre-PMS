@@ -3,6 +3,11 @@ import { apiFetch, type SessionLike } from "./client";
 export type HotelConfig = {
   id: number;
   hotel_name: string;
+  fiscal_legal_name?: string | null;
+  fiscal_tax_id?: string | null;
+  fiscal_vat_condition?: "responsable_inscripto" | "monotributo" | "exento" | "consumidor_final" | "no_responsable" | "otro" | null;
+  fiscal_address?: string | null;
+  fiscal_point_of_sale?: number | null;
   hotel_timezone: string;
   check_in_time?: string | null;
   check_out_time?: string | null;

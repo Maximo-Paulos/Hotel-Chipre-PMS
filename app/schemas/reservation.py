@@ -181,6 +181,17 @@ class ReservationGroupCreate(BaseModel):
         return self
 
 
+class ReservationGroupChildFinancialRead(BaseModel):
+    id: int
+    confirmation_code: str
+    total_amount: Decimal | None
+    amount_paid: Decimal | None
+    balance_due: Decimal | None
+    currency_code: str
+    status: str
+    company_billing_deferred: bool = False
+
+
 class ReservationGroupRead(BaseModel):
     id: int
     hotel_id: int
@@ -195,6 +206,7 @@ class ReservationGroupRead(BaseModel):
     room_count: int
     reservation_ids: list[int]
     reservation_codes: list[str]
+    reservations: list[ReservationGroupChildFinancialRead] = Field(default_factory=list)
     total_amount: Decimal | None
     amount_paid: Decimal | None
     balance_due: Decimal | None
@@ -203,6 +215,8 @@ class ReservationGroupRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
 
 
 class ReservationUpdate(BaseModel):

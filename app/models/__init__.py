@@ -13,6 +13,10 @@ from app.models.reservation import (
     ReservationNoShowPolicyAppliedEnum,
 )
 from app.models.reservation_group import ReservationGroup
+from app.models.reservation_group_payment import (
+    ReservationGroupPaymentBatch,
+    ReservationGroupPaymentAllocation,
+)
 from app.models.transaction import Transaction, PaymentMethodEnum, TransactionStatusEnum
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
@@ -47,6 +51,7 @@ from app.models.ota_core import (
 )
 from app.models.pricing import CategoryPricing
 from app.models.daily_rate import DailyRate, PricePeriod
+from app.models.rate_change_draft import RateChangeDraft
 from app.models.commercial import (
     SellableProduct,
     ProductRoomCompatibility,
@@ -147,12 +152,14 @@ from app.models.cash_register import (
     CashMovementTypeEnum,
     CashCustodyStatusEnum,
 )
+from app.models.cash_expense import CashExpense, CashExpenseStatusEnum
 from app.models.waitlist import WaitlistEntry, WaitlistStatusEnum
 from app.models.hotel_api_key import HotelAPIKey, APIKeyPurposeEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.operational_task import (
     OperationalTask,
     OperationalTaskEvent,
+    OperationalTaskAttachment,
     OperationalTaskTypeEnum,
     OperationalTaskStatusEnum,
     OperationalTaskPriorityEnum,
@@ -201,7 +208,7 @@ from app.models.analytics import (
 
 __all__ = [
     "Room", "RoomCategory",
-    "OperationalTask", "OperationalTaskEvent", "OperationalTaskTypeEnum",
+    "OperationalTask", "OperationalTaskEvent", "OperationalTaskAttachment", "OperationalTaskTypeEnum",
     "OperationalTaskStatusEnum", "OperationalTaskPriorityEnum", "ShiftHandoff",
     "ShiftHandoffStatusEnum",
     "ReservationEmailDelivery",

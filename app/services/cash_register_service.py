@@ -20,8 +20,9 @@ from app.models.cash_register import (
     CashSession,
     CashSessionStatusEnum,
 )
+from app.models.cash_expense import CashExpense, CashExpenseStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
-from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum
+from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.services.distributed_lock import with_distributed_lock
 
 
@@ -30,6 +31,7 @@ class CashRegisterError(Exception):
 
 
 TWOPLACES = Decimal("0.01")
+ZERO = Decimal("0.00")
 logger = logging.getLogger(__name__)
 
 
@@ -488,6 +490,17 @@ def close_session(
         raise CashRegisterError("Cash session is not open")
     if session.close_report is not None:
         raise CashRegisterError("Cash session already has a close report")
+    pending_expense = (
+        db.query(CashExpense.id)
+        .filter(
+            CashExpense.hotel_id == hotel_id,
+            CashExpense.session_id == session.id,
+            CashExpense.status == CashExpenseStatusEnum.PENDING.value,
+        )
+        .first()
+    )
+    if pending_expense is not None:
+        raise CashRegisterError("Resolvé los gastos pendientes antes de cerrar esta caja")
 
     closed_at = datetime.now(timezone.utc)
     expected_balance = _money(session.opening_balance) + _confirmed_cash_movements_total(db, session, closed_at)
@@ -695,7 +708,7 @@ def list_sessions(db: Session, *, hotel_id: int) -> list[CashSession]:
 
 
 def list_movements(db: Session, *, hotel_id: int, session_id: int) -> list[CashMovement]:
-    return (
+    movements = (
         db.query(CashMovement)
         .join(CashSession, CashSession.id == CashMovement.session_id)
         .filter(
@@ -706,3 +719,41 @@ def list_movements(db: Session, *, hotel_id: int, session_id: int) -> list[CashM
         .order_by(CashMovement.recorded_at.asc(), CashMovement.id.asc())
         .all()
     )
+    transaction_ids = {movement.transaction_id for movement in movements if movement.transaction_id is not None}
+    transactions = (
+        db.query(Transaction)
+        .filter(Transaction.hotel_id == hotel_id, Transaction.id.in_(transaction_ids))
+        .all()
+        if transaction_ids
+        else []
+    )
+    by_transaction = {transaction.id: transaction for transaction in transactions}
+    group_totals: dict[int, Decimal] = {}
+    group_reservations: dict[int, set[int]] = {}
+    for movement in movements:
+        transaction = by_transaction.get(movement.transaction_id)
+        batch_id = getattr(transaction, "group_payment_batch_id", None) if transaction is not None else None
+        is_confirmed_cash_payment = (
+            transaction is not None
+            and transaction.status == TransactionStatusEnum.COMPLETED
+            and transaction.payment_method == PaymentMethodEnum.CASH
+            and transaction.transaction_type != TransactionTypeEnum.REFUND
+        )
+        if not batch_id or not is_confirmed_cash_payment:
+            continue
+        group_totals[batch_id] = group_totals.get(batch_id, ZERO) + _money(movement.amount)
+        group_reservations.setdefault(batch_id, set()).add(transaction.reservation_id)
+
+    for movement in movements:
+        transaction = by_transaction.get(movement.transaction_id)
+        batch_id = getattr(transaction, "group_payment_batch_id", None) if transaction is not None else None
+        is_confirmed_cash_payment = (
+            transaction is not None
+            and transaction.status == TransactionStatusEnum.COMPLETED
+            and transaction.payment_method == PaymentMethodEnum.CASH
+            and transaction.transaction_type != TransactionTypeEnum.REFUND
+        )
+        movement.group_payment_batch_id = batch_id if batch_id and is_confirmed_cash_payment else None
+        movement.group_payment_total = group_totals.get(batch_id) if movement.group_payment_batch_id else None
+        movement.group_payment_reservation_count = len(group_reservations[batch_id]) if movement.group_payment_batch_id else None
+    return movements

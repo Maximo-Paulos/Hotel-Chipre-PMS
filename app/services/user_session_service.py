@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+import base64
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Request, Response
@@ -27,6 +28,7 @@ USER_SESSION_COOKIE_PATH = "/api/"
 # a 7-day idle lifetime removes dormant devices without interrupting active use.
 USER_SESSION_ABSOLUTE_TTL = timedelta(days=30)
 USER_SESSION_IDLE_TTL = timedelta(days=7)
+USER_SESSION_ROTATION_RECOVERY_WINDOW = timedelta(seconds=10)
 USER_SESSION_COOKIE_MAX_AGE_SECONDS = int(USER_SESSION_ABSOLUTE_TTL.total_seconds())
 UNKNOWN_DEVICE_LABEL = "Dispositivo desconocido"
 
@@ -49,6 +51,30 @@ def _hash_value(value: str) -> str:
 
 def _issue_token() -> str:
     return secrets.token_urlsafe(48)
+
+
+def _issue_rotation_successor(session: UserSession, previous_token_hash: str) -> str:
+    """Derive one opaque successor so a lost refresh response can be replayed.
+
+    The raw successor is never stored. Domain-separated HMAC uses the server's
+    JWT secret and binds the token to this session, its owner, the previous
+    token hash, and the session's CSRF hash. Repeating the same rotation input
+    during the short recovery window therefore returns the exact same token.
+    """
+
+    server_secret = str(get_settings().JWT_SECRET or "").encode("utf-8")
+    key = hmac.new(server_secret, b"hotel-chipre:user-session-rotation:v1", hashlib.sha256).digest()
+    payload = ":".join(
+        (
+            "user-session-successor-v1",
+            str(session.id),
+            str(session.user_id),
+            previous_token_hash,
+            session.csrf_token_hash,
+        )
+    ).encode("utf-8")
+    digest = hmac.new(key, payload, hashlib.sha256).digest()
+    return "usr1_" + base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
 def _session_cookie_secure() -> bool:
@@ -199,7 +225,16 @@ def validate_and_touch_session(
         .with_for_update()
         .first()
     )
-    if session is None or not hmac.compare_digest(session.session_token_hash, session_hash):
+    is_rotation_replay = False
+    if session is None:
+        session = (
+            db.query(UserSession)
+            .filter(UserSession.previous_session_token_hash == session_hash)
+            .with_for_update()
+            .first()
+        )
+        is_rotation_replay = session is not None
+    if session is None:
         return None
     if session.revoked_at is not None:
         return None
@@ -221,7 +256,21 @@ def validate_and_touch_session(
     if not hmac.compare_digest(session.csrf_token_hash, csrf_hash):
         return None
 
-    new_session_token = _issue_token()
+    if is_rotation_replay:
+        rotated_at = _as_aware(session.previous_token_rotated_at)
+        if (
+            rotated_at is None
+            or rotated_at > now
+            or now - rotated_at > USER_SESSION_ROTATION_RECOVERY_WINDOW
+        ):
+            return None
+        # Do not update last_seen_at: replaying the predecessor recovers the
+        # already-issued successor but does not extend session idleness.
+        return session, _issue_rotation_successor(session, session_hash)
+
+    new_session_token = _issue_rotation_successor(session, session.session_token_hash)
+    session.previous_session_token_hash = session.session_token_hash
+    session.previous_token_rotated_at = now
     session.session_token_hash = _hash_value(new_session_token)
     session.last_seen_at = now
     db.add(session)

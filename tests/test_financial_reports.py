@@ -186,6 +186,89 @@ def test_revenue_report_totals_multiple_completed_transactions_without_crashing(
     assert payload["expected"]["reservations_count"] == 1
 
 
+def test_revenue_refunds_and_transaction_bounds_use_hotel_local_days(reports_client):
+    client, db, reservation_id = reports_client
+    hotel = db.get(HotelConfiguration, 1)
+    hotel.hotel_timezone = "America/Argentina/Buenos_Aires"
+    db.flush()
+
+    _make_completed_transaction(
+        db,
+        reservation_id=reservation_id,
+        amount="10.00",
+        processed_at=datetime(2026, 4, 1, 2, 59, 59, tzinfo=timezone.utc),
+    )  # 2026-03-31 23:59:59 in the hotel.
+    _make_completed_transaction(
+        db,
+        reservation_id=reservation_id,
+        amount="100.00",
+        processed_at=datetime(2026, 4, 1, 3, 0, 0, tzinfo=timezone.utc),
+    )  # 2026-04-01 00:00:00 in the hotel.
+    _make_completed_transaction(
+        db,
+        reservation_id=reservation_id,
+        amount="30.00",
+        transaction_type=TransactionTypeEnum.REFUND,
+        processed_at=datetime(2026, 4, 2, 2, 59, 59, tzinfo=timezone.utc),
+    )  # 2026-04-01 23:59:59 in the hotel.
+    _make_completed_transaction(
+        db,
+        reservation_id=reservation_id,
+        amount="40.00",
+        processed_at=datetime(2026, 4, 2, 3, 0, 0, tzinfo=timezone.utc),
+    )  # 2026-04-02 00:00:00 in the hotel.
+
+    response = client.get(
+        "/api/reports/revenue",
+        params={"start_date": "2026-04-01", "end_date": "2026-04-01"},
+    )
+
+    assert response.status_code == 200, response.text
+    collected = response.json()["collected"]
+    assert collected["by_currency"] == [
+        {
+            "currency_code": "ARS",
+            "gross_collected": "100.00",
+            "refunds": "30.00",
+            "net_collected": "70.00",
+            "transaction_count": 2,
+        }
+    ]
+    assert collected["by_day"] == {"2026-04-01": "70.00"}
+
+
+def test_booked_value_includes_and_prorates_stays_overlapping_the_report_window(reports_client):
+    client, db, base_reservation_id = reports_client
+    base_reservation = db.get(Reservation, base_reservation_id)
+    _reservation_for_report(
+        db,
+        base_reservation=base_reservation,
+        confirmation_code="RES-FIN-MONTH-CROSSING",
+        check_in_date=date(2026, 4, 30),
+        amount="300.01",
+        currency="ARS",
+    )
+    crossing = db.query(Reservation).filter_by(confirmation_code="RES-FIN-MONTH-CROSSING").one()
+    crossing.check_out_date = date(2026, 5, 3)
+    db.flush()
+
+    response = client.get(
+        "/api/reports/revenue",
+        params={"start_date": "2026-05-01", "end_date": "2026-05-01"},
+    )
+
+    assert response.status_code == 200, response.text
+    booked = response.json()["booked_value"]["by_currency"]
+    assert booked == [
+        {
+            "currency_code": "ARS",
+            "amount": "100.00",
+            "reservation_count": 1,
+            "booked_night_count": 1,
+        }
+    ]
+
+
 def _reservation_for_report(
     db,
     *,

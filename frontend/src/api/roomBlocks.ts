@@ -36,6 +36,7 @@ export type RoomBlockCreatePayload = {
 export type RoomBlockConflictPreview = {
   reservation_count: number;
   protected_reservation_count: number;
+  overlapping_block_count?: number;
 };
 
 export const listActiveRoomBlocks = (
@@ -67,3 +68,15 @@ export const previewRoomBlockConflicts = (
 
 export const resolveRoomBlock = (blockId: number, session?: SessionLike) =>
   apiFetch<RoomBlock>(`/api/room-blocks/${blockId}/resolve`, { method: "POST", session });
+
+export const previewRoomBlockExtension = (blockId: number, endsAt: string, session?: SessionLike) => {
+  const search = new URLSearchParams({ ends_at: endsAt });
+  return apiFetch<RoomBlockConflictPreview>(`/api/room-blocks/${blockId}/extend-preview?${search.toString()}`, { session });
+};
+
+export const extendRoomBlock = (blockId: number, endsAt: string, session?: SessionLike) =>
+  apiFetch<RoomBlock>(`/api/room-blocks/${blockId}/extend`, {
+    method: "POST",
+    data: { ends_at: endsAt },
+    session
+  });

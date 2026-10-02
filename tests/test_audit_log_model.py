@@ -21,6 +21,7 @@ from app.database import Base
 from app.models.audit_log import AuditActionEnum, AuditLog
 from app.models.hotel_config import HotelConfiguration
 from app.models.user import User
+from app.services.audit_log_service import create_audit_log
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +185,25 @@ def test_audit_log_created_at_defaults_to_utc_now(db):
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
     assert before <= ts <= after
+
+
+def test_audit_writer_leaves_commit_to_the_business_transaction(db):
+    hotel = HotelConfiguration(id=506, hotel_name="Atomic Audit Hotel", subscription_active=True)
+    db.add(hotel)
+    db.flush()
+
+    log = create_audit_log(
+        db,
+        hotel_id=hotel.id,
+        table_name="daily_rates",
+        record_id=1,
+        action=AuditActionEnum.CREATE,
+    )
+    assert db.query(AuditLog).filter(AuditLog.id == log.id).one_or_none() is not None
+
+    db.rollback()
+
+    assert db.query(AuditLog).filter_by(hotel_id=hotel.id, table_name="daily_rates").count() == 0
 
 
 # ---------------------------------------------------------------------------

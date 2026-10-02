@@ -291,8 +291,34 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   // Model the API's upsert semantics: omitted per-method prices stay as
   // stored when a user updates only the base price.
   const persistedDailyRates = mockDailyRates.map((rate) => ({ ...rate }));
-  const bulkRequests: unknown[] = [];
-  const fieldBulkRequests: unknown[] = [];
+  type MockDraft = {
+    id: number;
+    hotel_id: number;
+    category_id: number;
+    draft_type: "daily_rates";
+    status: "draft" | "confirmed";
+    version: number;
+    changes: Array<{
+      date: string;
+      source_before: string;
+      before: Record<string, number | null>;
+      after: Record<string, number | null>;
+      values: Record<string, number | null>;
+    }>;
+    impact: { reservations_impacted: number; reservation_nights: number; dates_with_reservations: string[] };
+    impact_at_creation: { reservations_impacted: number; reservation_nights: number; dates_with_reservations: string[] };
+    created_at: string;
+    updated_at: string;
+    confirmed_at?: string;
+  };
+  type DraftCreate = {
+    category_id: number;
+    draft_type?: "daily_rates";
+    changes: Array<{ date: string; values: Record<string, number | null> }>;
+  };
+  const draftRequests: DraftCreate[] = [];
+  let nextDraftId = 500;
+  let openDraft: MockDraft | null = null;
 
   await page.route("https://fonts.googleapis.com/**", async (route) => {
     await route.fulfill({ status: 200, contentType: "text/css", body: "" });
@@ -375,6 +401,82 @@ test("rate calendar page renders annual editor and integrated channel view", asy
       return;
     }
 
+    if (url.pathname.endsWith("/api/rate-change-drafts") && request.method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(openDraft?.status === "draft" ? [openDraft] : [])
+      });
+      return;
+    }
+
+    if (url.pathname.endsWith("/api/rate-change-drafts") && request.method() === "POST") {
+      const payload = request.postDataJSON() as DraftCreate;
+      draftRequests.push(payload);
+      const now = new Date().toISOString();
+      const changes = payload.changes.map((change) => {
+        const stored = persistedDailyRates.find((rate) => rate.date === change.date);
+        const calendarDay = mockCalendar.days.find((day) => day.date === change.date);
+        const calendarBasePrice = calendarDay?.channels.find((channel) => channel.provider_code === "direct")?.prices[0]?.base_amount;
+        const before: Record<string, number | null> = {
+          price: stored?.price ?? calendarBasePrice ?? 0,
+          price_cash: stored?.price_cash ?? null,
+          price_transfer: stored?.price_transfer ?? null,
+          price_mercadopago: stored?.price_mercadopago ?? null
+        };
+        return {
+          date: change.date,
+          source_before: stored?.source ?? "category_base",
+          before,
+          after: { ...before, ...change.values },
+          values: change.values
+        };
+      });
+      const impact = {
+        reservations_impacted: changes.some((change) => change.date === "2026-05-07") ? 1 : 0,
+        reservation_nights: changes.some((change) => change.date === "2026-05-07") ? 2 : 0,
+        dates_with_reservations: changes.some((change) => change.date === "2026-05-07") ? ["2026-05-07"] : []
+      };
+      openDraft = {
+        id: ++nextDraftId,
+        hotel_id: 1,
+        category_id: payload.category_id,
+        draft_type: "daily_rates",
+        status: "draft",
+        version: 1,
+        changes,
+        impact,
+        impact_at_creation: impact,
+        created_at: now,
+        updated_at: now
+      };
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(openDraft) });
+      return;
+    }
+
+    const confirmDraftMatch = url.pathname.match(/\/api\/rate-change-drafts\/(\d+)\/confirm$/);
+    if (confirmDraftMatch && request.method() === "POST") {
+      expect(Number(confirmDraftMatch[1])).toBe(openDraft?.id);
+      expect(request.postDataJSON()).toEqual({ expected_version: 1 });
+      if (openDraft) {
+        for (const change of openDraft.changes) {
+          const storedIndex = persistedDailyRates.findIndex((rate) => rate.date === change.date);
+          const updatedRate = {
+            ...(storedIndex >= 0 ? persistedDailyRates[storedIndex] : {}),
+            date: change.date,
+            ...change.after,
+            source: "daily_rate",
+            daily_rate_id: 201
+          };
+          if (storedIndex >= 0) persistedDailyRates[storedIndex] = updatedRate;
+          else persistedDailyRates.push(updatedRate);
+        }
+        openDraft = { ...openDraft, status: "confirmed", version: 2, confirmed_at: new Date().toISOString() };
+      }
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(openDraft) });
+      return;
+    }
+
     if (url.pathname.endsWith("/api/rates/category/7/daily") && request.method() === "POST") {
       const payload = request.postDataJSON();
       const storedIndex = persistedDailyRates.findIndex((rate) => rate.date === payload.date);
@@ -411,8 +513,6 @@ test("rate calendar page renders annual editor and integrated channel view", asy
     }
 
     if (url.pathname.endsWith("/api/rates/category/7/bulk") && request.method() === "POST") {
-      const payload = request.postDataJSON();
-      bulkRequests.push(payload);
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -422,8 +522,6 @@ test("rate calendar page renders annual editor and integrated channel view", asy
     }
 
     if (url.pathname.endsWith("/api/rates/category/7/bulk-field") && request.method() === "POST") {
-      const payload = request.postDataJSON();
-      fieldBulkRequests.push(payload);
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -496,7 +594,8 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   // test must scope to the grid to keep resolving a single element.
   await expect(rateEditorGrid.getByLabel("Precio base 2026-05-07")).toBeVisible();
   await expect(page.getByText("Edición masiva")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Aplicar al calendario" })).toBeVisible();
+  await expect(page.getByText("Sin cambios pendientes", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Guardar borrador", exact: true })).toHaveCount(0);
   await expect(page.getByTestId("rate-calendar-grid")).toBeVisible();
   await expect(page.getByText("Direct", { exact: true })).toHaveCount(0);
 
@@ -509,14 +608,18 @@ test("rate calendar page renders annual editor and integrated channel view", asy
 
   await firstBasePrice.fill("45000");
   await firstBasePrice.press("Enter");
-  await expect.poll(() => savedCells.length).toBe(1);
-  expect(savedCells[0]).toMatchObject({
-    date: "2026-05-07",
-    price: 45000,
-    price_cash: 41000,
-    price_transfer: null,
-    price_mercadopago: null
+  await expect(page.getByTestId("rate-change-local-preview")).toBeVisible();
+  expect(savedCells).toHaveLength(0);
+  await page.getByRole("button", { name: "Guardar borrador", exact: true }).click();
+  await expect.poll(() => draftRequests.length).toBe(1);
+  expect(draftRequests[0]).toMatchObject({
+    category_id: 7,
+    changes: [{ date: "2026-05-07", values: { price: 45000 } }]
   });
+  await expect(page.getByTestId("rate-change-draft-review")).toContainText("2 noches");
+  await page.getByRole("button", { name: "Confirmar tarifas", exact: true }).click();
+  await expect.poll(() => openDraft?.status).toBe("confirmed");
+  await expect(firstBasePrice).toHaveValue("45000");
 
   await expect(page.getByText("Booking.com")).toBeVisible();
   await expect(page.getByText("Falta mapeo").first()).toBeVisible();
@@ -529,28 +632,25 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   await page.getByRole("button", { name: "Vie" }).click();
   await page.getByLabel("Precio base *").fill("50000");
   await page.getByTestId("rate-editor-save").click();
-
-  await expect.poll(() => bulkRequests.length).toBe(1);
-  expect(bulkRequests[0]).toMatchObject({
-    from_date: "2026-05-07",
-    to_date: "2026-05-09",
-    price: 50000,
-    exclude_dates: ["2026-05-07", "2026-05-09"]
-  });
+  await expect(page.getByTestId("rate-change-local-preview")).toBeVisible();
+  await page.getByRole("button", { name: "Guardar borrador", exact: true }).click();
+  await expect.poll(() => draftRequests.length).toBe(2);
+  expect(draftRequests[1]?.changes).toEqual([{
+    date: "2026-05-08",
+    values: { price: 50000, price_cash: null, price_transfer: null }
+  }]);
+  await page.getByRole("button", { name: "Confirmar tarifas", exact: true }).click();
+  await expect.poll(() => openDraft?.status).toBe("confirmed");
 
   await page.getByLabel("Tipo de edición").selectOption("field");
   await page.getByLabel("Campo rápido").selectOption("price_transfer");
   await page.getByLabel("Acción").selectOption("percent_delta");
   await page.getByLabel("Valor").fill("-10");
   await page.getByTestId("rate-editor-save").click();
-
-  await expect.poll(() => fieldBulkRequests.length).toBe(1);
-  expect(fieldBulkRequests[0]).toMatchObject({
-    from_date: "2026-05-07",
-    to_date: "2026-05-09",
-    field: "price_transfer",
-    mode: "percent_delta",
-    value: -10,
-    exclude_dates: ["2026-05-07", "2026-05-09"]
-  });
+  await expect(page.getByTestId("rate-change-local-preview")).toBeVisible();
+  await page.getByRole("button", { name: "Guardar borrador", exact: true }).click();
+  await expect.poll(() => draftRequests.length).toBe(3);
+  expect(draftRequests[2]?.changes).toEqual([{ date: "2026-05-08", values: { price_transfer: 45000 } }]);
+  await page.getByRole("button", { name: "Confirmar tarifas", exact: true }).click();
+  await expect.poll(() => openDraft?.status).toBe("confirmed");
 });

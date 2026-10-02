@@ -171,12 +171,13 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         legacy_codes = set(LEGACY_PERMISSION_ALIASES)
 
         # New role-only business actions are named capabilities in the catalog.
-        assert len(canonical_codes) == 111
+        assert len(canonical_codes) == 112
         assert {"payment:proof:view", "payment:proof:review"} <= canonical_codes
         assert {"payment:refund", "reservation:cancel_paid"} <= canonical_codes
         assert {"reservation:manual_rate_limited", "reservation:manual_rate_policy_manage"} <= canonical_codes
         assert "reservation:rate_adjust" in canonical_codes
         assert "cash:expense" in canonical_codes
+        assert "cash:expense_approve" in canonical_codes
         assert "payment:ota_confirm" in canonical_codes
         assert "reservation:ota_record" in canonical_codes
         assert "company:night_rate_manage" in canonical_codes
@@ -205,6 +206,11 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         assert matrix["manager"]["reservation:cancel_paid"]["allowed"] is True
         assert matrix["manager"]["cash:expense"]["allowed"] is True
         assert matrix["co_owner"]["cash:expense"]["allowed"] is True
+        assert matrix["owner"]["cash:expense_approve"]["allowed"] is True
+        assert matrix["co_owner"]["cash:expense_approve"]["allowed"] is True
+        assert matrix["manager"]["cash:expense_approve"]["allowed"] is True
+        assert matrix["receptionist"]["cash:expense"]["allowed"] is False
+        assert matrix["receptionist"]["cash:expense_approve"]["allowed"] is False
         assert matrix["manager"]["reservation:manual_rate_limited"]["allowed"] is True
         assert matrix["co_owner"]["reservation:manual_rate_limited"]["allowed"] is True
         assert matrix["owner"]["reservation:rate_adjust"]["allowed"] is False
@@ -359,7 +365,8 @@ def test_permission_catalog_exposes_administrator_and_owner_only_metadata_and_he
         assert catalog[PERMISSION_CASH_CUSTODY_RECEIVE]["critical"] is False
         assert catalog[PERMISSION_CASH_CUSTODY_RECEIVE]["step_up_required"] is True
         assert catalog[PERMISSION_CASH_CUSTODY_RECEIVE]["delegable"] is True
-        assert catalog["cash:expense"]["step_up_required"] is True
+        assert catalog["cash:expense"]["step_up_required"] is False
+        assert catalog["cash:expense_approve"]["step_up_required"] is True
         assert catalog["payment:ota_confirm"]["step_up_required"] is True
 
         for code in (PERMISSION_GUEST_CREATE, PERMISSION_RESERVATION_CREATE, PERMISSION_ROOM_STATUS_UPDATE):
@@ -457,6 +464,90 @@ def test_permission_override_can_deny_receptionist_guest_edit():
         effective = client.get("/api/permissions/effective")
         assert effective.status_code == 200
         assert PERMISSION_GUEST_EDIT not in effective.json()["permissions"]
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+def test_permission_override_batch_uses_one_ticket_and_audits_each_cell_atomically():
+    client, db, engine = _client_with_db()
+    db.add(
+        User(
+            id=20,
+            email="batch-target@test.com",
+            password_hash="test-hash",
+            is_active=True,
+            is_verified=True,
+        )
+    )
+    db.add(HotelMembership(hotel_id=1, user_id=20, role="receptionist", status="active"))
+    db.commit()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=99)
+    try:
+        path = "/api/permissions/overrides/batch"
+        payload = {
+            "changes": [
+                {
+                    "scope": "role",
+                    "operation": "set",
+                    "role": "receptionist",
+                    "permission_code": PERMISSION_GUEST_CREATE,
+                    "allowed": False,
+                    "expected_version": 0,
+                },
+                {
+                    "scope": "user",
+                    "operation": "set",
+                    "user_id": 20,
+                    "permission_code": PERMISSION_GUEST_EDIT,
+                    "allowed": False,
+                    "expected_version": 0,
+                },
+            ]
+        }
+        missing_ticket = client.put(path, json=payload)
+        assert missing_ticket.status_code == 428
+
+        stale_payload = {"changes": [dict(change) for change in payload["changes"]]}
+        stale_payload["changes"][1]["expected_version"] = 1
+        stale = client.put(
+            path,
+            json=stale_payload,
+            headers=_step_up_headers(path, method="PUT", user_id=99),
+        )
+        assert stale.status_code == 409
+        assert db.query(HotelPermissionOverride).filter_by(
+            hotel_id=1,
+            role="receptionist",
+            permission_code=PERMISSION_GUEST_CREATE,
+        ).count() == 0
+
+        ticket_headers = _step_up_headers(path, method="PUT", user_id=99)
+        applied = client.put(path, json=payload, headers=ticket_headers)
+        assert applied.status_code == 200, applied.text
+        assert applied.json() == {"hotel_id": 1, "updated": 2}
+
+        role_cell = client.get(
+            "/api/permissions/matrix",
+            headers=_step_up_headers("/api/permissions/matrix", method="GET", user_id=99),
+        ).json()["matrix"]["receptionist"][PERMISSION_GUEST_CREATE]
+        user_detail = client.get(
+            "/api/permissions/user-overrides/20",
+            headers=_step_up_headers("/api/permissions/user-overrides/20", method="GET", user_id=99),
+        ).json()["details"][canonical_permission_code(PERMISSION_GUEST_EDIT)]
+        assert role_cell["allowed"] is False
+        assert user_detail["allowed"] is False
+
+        replay = client.put(path, json=payload, headers=ticket_headers)
+        assert replay.status_code == 428
+        audit_actions = (
+            db.query(SecurityAuditLog.action)
+            .filter(SecurityAuditLog.hotel_id == 1)
+            .all()
+        )
+        assert sum(action[0] == "permission.override.updated" for action in audit_actions) == 1
+        assert sum(action[0] == "permission.user_override.updated" for action in audit_actions) == 1
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

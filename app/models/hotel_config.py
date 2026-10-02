@@ -75,6 +75,13 @@ class HotelConfiguration(Base):
 
     # General
     hotel_name = Column(String(200), nullable=False, default="Mi Hotel")
+    # Informational fiscal issuer profile. It is deliberately separate from
+    # electronic invoicing; these values never imply an ARCA-issued document.
+    fiscal_legal_name = Column(String(200), nullable=True)
+    fiscal_tax_id = Column(String(20), nullable=True)
+    fiscal_vat_condition = Column(String(40), nullable=True)
+    fiscal_address = Column(String(300), nullable=True)
+    fiscal_point_of_sale = Column(Integer, nullable=True)
     hotel_timezone = Column(String(100), nullable=False, default="America/Argentina/Buenos_Aires")
     default_currency = Column(String(3), nullable=False, default="ARS")
     # Global USD market source used in automatic currency conversions. Legacy

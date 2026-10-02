@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
 import type { DailyRateRangeRow } from "../api/rate-calendar";
-import type { SingleRateInput } from "../hooks/useRateCalendar";
 
 import type { PriceField } from "./RateEditorGrid";
 
@@ -26,7 +25,7 @@ type RateEditorMobileCardsProps = {
   dailyRates: DailyRateRangeRow[];
   currencyCode: string;
   visibleFields: PriceField[];
-  onSaveCell: (payload: SingleRateInput) => void;
+  onStageChange: (payload: { date: string; values: Partial<Record<PriceField, number | null>> }) => void;
   disabled?: boolean;
 };
 
@@ -43,13 +42,13 @@ function RateDayCard({
   row,
   currencyCode,
   visibleFields,
-  onSaveCell,
+  onStageChange,
   disabled
 }: {
   row: DailyRateRangeRow;
   currencyCode: string;
   visibleFields: PriceField[];
-  onSaveCell: (payload: SingleRateInput) => void;
+  onStageChange: (payload: { date: string; values: Partial<Record<PriceField, number | null>> }) => void;
   disabled?: boolean;
 }) {
   const [values, setValues] = useState<Record<PriceField, string>>({
@@ -81,14 +80,16 @@ function RateDayCard({
       setError("El precio base es obligatorio.");
       return;
     }
-    const payload: SingleRateInput = {
-      date: row.date,
-      price: parsed.price as number
-    };
+    const changed: Partial<Record<PriceField, number | null>> = {};
     for (const field of visibleFields) {
-      if (field !== "price") Object.assign(payload, { [field]: parsed[field] });
+      const original = row[field] ?? null;
+      if (parsed[field] !== original) changed[field] = parsed[field];
     }
-    onSaveCell(payload);
+    if (Object.keys(changed).length === 0) {
+      setError("No hay cambios nuevos para agregar.");
+      return;
+    }
+    onStageChange({ date: row.date, values: changed });
     setSaved(true);
   };
 
@@ -133,7 +134,7 @@ function RateDayCard({
       </div>
 
       {error ? <p className="mt-2 text-xs font-medium text-rose-700">{error}</p> : null}
-      {saved && !error ? <p className="mt-2 text-xs font-medium text-emerald-700">Guardado.</p> : null}
+      {saved && !error ? <p className="mt-2 text-xs font-medium text-emerald-700">Cambios agregados al borrador local.</p> : null}
 
       <button
         type="button"
@@ -141,13 +142,13 @@ function RateDayCard({
         disabled={disabled}
         className="mt-3 min-h-11 w-full rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
       >
-        Guardar {DAY_LABEL.format(date)} ({currencyCode})
+        Preparar {DAY_LABEL.format(date)} ({currencyCode})
       </button>
     </article>
   );
 }
 
-export function RateEditorMobileCards({ dailyRates, currencyCode, visibleFields, onSaveCell, disabled }: RateEditorMobileCardsProps) {
+export function RateEditorMobileCards({ dailyRates, currencyCode, visibleFields, onStageChange, disabled }: RateEditorMobileCardsProps) {
   const [offset, setOffset] = useState(0);
   const firstDate = dailyRates[0]?.date;
 
@@ -190,7 +191,7 @@ export function RateEditorMobileCards({ dailyRates, currencyCode, visibleFields,
       </div>
 
       {visible.map((row) => (
-        <RateDayCard key={row.date} row={row} currencyCode={currencyCode} visibleFields={visibleFields} onSaveCell={onSaveCell} disabled={disabled} />
+        <RateDayCard key={row.date} row={row} currencyCode={currencyCode} visibleFields={visibleFields} onStageChange={onStageChange} disabled={disabled} />
       ))}
     </div>
   );

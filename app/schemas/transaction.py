@@ -110,6 +110,7 @@ class TransactionRead(BaseModel):
     created_at: Optional[UTCDateTime]
     processed_at: Optional[UTCDateTime]
     created_by_user_id: Optional[int] = None
+    group_payment_batch_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

@@ -153,8 +153,15 @@
     "fallbackName": "Guest #{{id}}",
     "noDocument": "No document",
     "noResults": "No guests found for \"{{query}}\".",
-    "createNew": "Can't find them? Create a new guest",
-    "noPermissions": "You don't have permission to view or create guests.",
-    "createError": "Unable to create the guest"
-  }
+  "createNew": "Can't find them? Create a new guest",
+  "noPermissions": "You don't have permission to view or create guests.",
+  "createError": "Unable to create the guest",
+  "checkingDuplicates": "Checking for similar guests...",
+  "duplicateWarningTitle": "Review possible duplicate guests",
+  "duplicateWarningBody": "We found records with the same name, email, or phone. No records were merged; choose an existing guest or continue to create another.",
+  "documentAlreadyExists": "This document type and number are already registered. Choose the existing guest to avoid duplicating the document.",
+  "duplicateCheckFailed": "We couldn't check existing guests. Fix the issue and try again.",
+  "useExistingGuest": "Use this guest",
+  "createSeparateGuest": "Create a separate guest"
+}
 }

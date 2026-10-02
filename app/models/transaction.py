@@ -116,6 +116,10 @@ class Transaction(Base):
     gateway_response = Column(Text, nullable=True)            # Full JSON response from gateway
     # Idempotency: dedupe gateway-driven transactions (hotel_id, reservation_id, idempotency_key)
     idempotency_key = Column(String(100), nullable=True)
+    # A single group collection may be allocated over several reservation
+    # transactions. The shared batch id lets cash, receipts, and audit views
+    # present it as one operator-entered collection without losing child ledgers.
+    group_payment_batch_id = Column(Integer, nullable=True)
 
     # Audit: which staff user triggered this money-moving state change, if any.
     # NULL is a legitimate value for gateway/webhook-initiated transactions
@@ -187,6 +191,12 @@ class Transaction(Base):
             ["hotel_id", "refund_of_transaction_id"],
             ["transactions.hotel_id", "transactions.id"],
             name="fk_transactions_refund_source_same_hotel",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "group_payment_batch_id"],
+            ["reservation_group_payment_batches.hotel_id", "reservation_group_payment_batches.id"],
+            name="fk_transactions_hotel_group_payment_batch",
             ondelete="RESTRICT",
         ),
     )

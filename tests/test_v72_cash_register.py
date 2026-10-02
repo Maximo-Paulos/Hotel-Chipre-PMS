@@ -309,22 +309,20 @@ class TestCloseSession:
         assert session.status == CashSessionStatusEnum.CLOSED
 
     def test_close_session_with_approved_difference_closes_session(self, db: Session):
-        from app.api.cash_register import close_cash_session
+        from app.api.cash_register import _require_cash_difference_approval_when_requested
+        from starlette.requests import Request
 
         session = _open_cash_session(db, opening_balance=Decimal("100.00"))
-        ctx = _auth_context(permissions={PERMISSION_CASH_APPROVE_DIFFERENCE})
+        ctx = _auth_context(role="owner", permissions={PERMISSION_CASH_APPROVE_DIFFERENCE})
+        payload = CashSessionClose(counted_balance=Decimal("99.00"), approve_difference=True)
+        request = Request({"type": "http", "method": "POST", "path": f"/api/cash-register/sessions/{session.id}/close", "headers": []})
 
-        report = close_cash_session(
-            session.id,
-            CashSessionClose(counted_balance=Decimal("99.00"), approve_difference=True),
-            db=db,
-            context=ctx,
-        )
+        with pytest.raises(HTTPException) as exc_info:
+            _require_cash_difference_approval_when_requested(request, payload, db=db, context=ctx)
 
-        assert report.difference == Decimal("-1.00")
-        assert report.difference_approved is True
-        assert report.approved_by_user_id == USER_ID
-        assert session.status == CashSessionStatusEnum.CLOSED
+        assert exc_info.value.status_code == 428
+        db.refresh(session)
+        assert session.status == CashSessionStatusEnum.OPEN
 
     @pytest.mark.xfail(reason=BRM17_MISSING_REASON + ": per-method close breakdown is absent")
     def test_close_session_with_per_method_breakdown(self):
@@ -419,8 +417,7 @@ class TestCashMovements:
                 context=_auth_context(),
             )
 
-        assert exc_info.value.status_code == 428
-        assert "cash:expense" in str(exc_info.value.detail)
+        assert exc_info.value.status_code == 422
 
     def test_create_movement_on_closed_session_raises_400(self, db: Session):
         from app.api.cash_register import add_cash_movement

@@ -12,6 +12,7 @@ from app.models.room import Room, RoomStatusEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.operational_task import OperationalTask, OperationalTaskStatusEnum, OperationalTaskTypeEnum
 from app.services.read_model_cache import invalidate_hotel_operational_caches
+from app.services.row_locks import lock_query
 
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,15 @@ def _invalidate_availability_cache(hotel_id: int) -> None:
             "room_block.availability_cache_invalidation_failed",
             extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
         )
+
+
+class RoomBlockExtensionConflictError(RoomBlockError):
+    """Extending would overlap another active block or a protected stay."""
+
+    def __init__(self, *, protected_reservation_count: int = 0, overlapping_block_count: int = 0):
+        self.protected_reservation_count = protected_reservation_count
+        self.overlapping_block_count = overlapping_block_count
+        super().__init__("La extensión se superpone con reservas protegidas u otros bloqueos")
 
 
 def _validate_range(starts_at: date, ends_at: date | None, is_indefinite: bool) -> None:
@@ -219,6 +229,74 @@ def get_block(db: Session, *, hotel_id: int, block_id: int) -> RoomBlock:
     block = db.query(RoomBlock).filter(RoomBlock.id == block_id, RoomBlock.hotel_id == hotel_id).first()
     if block is None:
         raise RoomBlockError("Room block not found")
+    return block
+
+
+def preview_block_extension(
+    db: Session,
+    *,
+    hotel_id: int,
+    block_id: int,
+    ends_at: date,
+) -> dict[str, int]:
+    """Count conflicts in the newly added half-open window [old_end, ends_at)."""
+    block = get_block(db, hotel_id=hotel_id, block_id=block_id)
+    if block.resolved_at is not None or block.is_indefinite or block.ends_at is None:
+        raise RoomBlockError("Solo se pueden extender bloqueos activos con fecha de fin")
+    if ends_at <= block.ends_at:
+        raise RoomBlockError("La nueva fecha debe ser posterior a la fecha de fin actual")
+
+    from app.services.reservation_service import active_reservations
+
+    overlapping = active_reservations(db, hotel_id).filter(
+        Reservation.room_id == block.room_id,
+        Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]),
+        Reservation.check_in_date < ends_at,
+        Reservation.check_out_date > block.ends_at,
+    )
+    protected = overlapping.filter(_protected_reservation_filter())
+    other_blocks = (
+        db.query(RoomBlock.id)
+        .filter(
+            RoomBlock.hotel_id == hotel_id,
+            RoomBlock.room_id == block.room_id,
+            RoomBlock.id != block.id,
+            RoomBlock.resolved_at.is_(None),
+            RoomBlock.starts_at < ends_at,
+            or_(RoomBlock.ends_at.is_(None), RoomBlock.ends_at > block.ends_at),
+        )
+    )
+    return {
+        "reservation_count": overlapping.count(),
+        "protected_reservation_count": protected.count(),
+        "overlapping_block_count": other_blocks.count(),
+    }
+
+
+def extend_block(
+    db: Session,
+    *,
+    hotel_id: int,
+    block_id: int,
+    ends_at: date,
+) -> RoomBlock:
+    block = lock_query(
+        db.query(RoomBlock).filter(RoomBlock.hotel_id == hotel_id, RoomBlock.id == block_id),
+        RoomBlock,
+    ).one_or_none()
+    if block is None:
+        raise RoomBlockError("Room block not found")
+    conflicts = preview_block_extension(db, hotel_id=hotel_id, block_id=block_id, ends_at=ends_at)
+    if conflicts["protected_reservation_count"] or conflicts["overlapping_block_count"]:
+        raise RoomBlockExtensionConflictError(
+            protected_reservation_count=conflicts["protected_reservation_count"],
+            overlapping_block_count=conflicts["overlapping_block_count"],
+        )
+    block.ends_at = ends_at
+    block.is_indefinite = False
+    block.updated_at = datetime.now(timezone.utc)
+    db.flush()
+    _invalidate_availability_cache(hotel_id)
     return block
 
 

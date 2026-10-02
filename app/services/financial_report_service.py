@@ -24,6 +24,7 @@ from app.services.operational_report_service import (
 )
 from app.services.reservation_service import deferred_company_reservation_ids
 from app.services.timezones import normalize_timezone
+from app.services.analytics_contracts import split_amount_evenly
 
 
 ZERO = Decimal("0.00")
@@ -65,6 +66,23 @@ def _aggregate_rows(rows: dict, *, group_fields: tuple[str, ...]) -> list[dict]:
 
 def _empty_totals() -> dict[str, Decimal | int]:
     return {"gross_collected": ZERO, "refunds": ZERO, "net_collected": ZERO, "transaction_count": 0}
+
+
+def _booked_nights_in_window(reservation: Reservation, *, start_date: date, end_date: date) -> int:
+    overlap_start = max(reservation.check_in_date, start_date)
+    overlap_end = min(reservation.check_out_date, end_date + timedelta(days=1))
+    return max(0, (overlap_end - overlap_start).days)
+
+
+def _booked_amount_in_window(reservation: Reservation, *, start_date: date, end_date: date) -> Decimal:
+    """Allocate a contract total over its full stay, then sum only selected nights."""
+    full_nights = max((reservation.check_out_date - reservation.check_in_date).days, 1)
+    window_nights = _booked_nights_in_window(reservation, start_date=start_date, end_date=end_date)
+    if window_nights <= 0:
+        return ZERO
+    first_night = max((start_date - reservation.check_in_date).days, 0)
+    nightly_amounts = split_amount_evenly(_money(reservation.total_amount), full_nights)
+    return sum(nightly_amounts[first_night:first_night + window_nights], ZERO)
 
 
 def build_financial_report(
@@ -207,8 +225,8 @@ def build_financial_report(
         .filter(
             Reservation.hotel_id == hotel_id,
             Reservation.deleted_at.is_(None),
-            Reservation.check_in_date >= start_date,
             Reservation.check_in_date <= end_date,
+            Reservation.check_out_date > start_date,
             Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.NO_SHOW]),
         )
         .all()
@@ -220,11 +238,16 @@ def build_financial_report(
         if reservation.id in booked_deferred_ids:
             continue
         currency = str(reservation.currency_code or "ARS").strip().upper()
-        booked_by_currency[currency] += _money(reservation.total_amount)
+        booked_by_currency[currency] += _booked_amount_in_window(
+            reservation,
+            start_date=start_date,
+            end_date=end_date,
+        )
         booked_count_by_currency[currency] += 1
-        booked_night_count_by_currency[currency] += max(
-            1,
-            (reservation.check_out_date - reservation.check_in_date).days,
+        booked_night_count_by_currency[currency] += _booked_nights_in_window(
+            reservation,
+            start_date=start_date,
+            end_date=end_date,
         )
     booked_currencies = [
         {

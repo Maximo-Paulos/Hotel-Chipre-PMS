@@ -15,6 +15,7 @@ from app.models.security_audit_log import SecurityAuditLog
 
 
 _REDACTED = "[REDACTED]"
+_SAFE_PUBLIC_DETAIL_KEYS = frozenset({"permission_code"})
 _SENSITIVE_KEY_RE = re.compile(
     r"(?:password|passwd|passphrase|secret|token|totp|otp|mfa|recovery|"
     r"credential|authorization|cookie|session|private.?key|api.?key|"
@@ -33,6 +34,7 @@ _SAFE_SECURITY_RESOURCE_TYPES = frozenset(
     {
         "permission",
         "permission_override",
+        "user_permission_override",
         "reservation",
         "company_document",
         "room_movement_group",
@@ -53,7 +55,7 @@ def _redact_value(value: Any) -> Any:
         return {
             str(key): _redact_value(item)
             for key, item in value.items()
-            if not _SENSITIVE_KEY_RE.search(str(key))
+            if str(key) in _SAFE_PUBLIC_DETAIL_KEYS or not _SENSITIVE_KEY_RE.search(str(key))
         }
     if isinstance(value, list):
         return [_redact_value(item) for item in value]

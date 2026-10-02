@@ -116,6 +116,50 @@ def test_config_update_permissions(ctx):
         assert body[k] == v
 
 
+def test_fiscal_profile_update_is_validated_and_audited_in_the_same_request(ctx):
+    client, db = ctx
+    response = client.patch(
+        "/api/config/",
+        json={
+            "fiscal_legal_name": " Hotel de Prueba SRL ",
+            "fiscal_tax_id": "20-12345678-6",
+            "fiscal_vat_condition": "responsable_inscripto",
+            "fiscal_address": " Av. Ejemplo 123 ",
+            "fiscal_point_of_sale": 3,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["fiscal_legal_name"] == "Hotel de Prueba SRL"
+    assert response.json()["fiscal_tax_id"] == "20123456786"
+    audit = db.query(AuditLog).filter_by(
+        hotel_id=1,
+        table_name="hotel_configuration",
+        record_id=1,
+    ).one()
+    assert json.loads(audit.payload_after) == {
+        "fiscal_legal_name": "Hotel de Prueba SRL",
+        "fiscal_tax_id": "20123456786",
+        "fiscal_vat_condition": "responsable_inscripto",
+        "fiscal_address": "Av. Ejemplo 123",
+        "fiscal_point_of_sale": 3,
+    }
+
+
+def test_invalid_fiscal_tax_id_does_not_change_profile_or_audit(ctx):
+    client, db = ctx
+    response = client.patch(
+        "/api/config/",
+        json={"fiscal_legal_name": "No debe guardarse", "fiscal_tax_id": "20-12345678-0"},
+    )
+
+    assert response.status_code == 422
+    config = db.get(HotelConfiguration, 1)
+    assert config.fiscal_legal_name is None
+    assert config.fiscal_tax_id is None
+    assert db.query(AuditLog).filter_by(table_name="hotel_configuration").count() == 0
+
+
 def test_config_read_permission_allows_get_without_allowing_updates(ctx):
     client, db = ctx
     set_override(db, 1, "manager", PERMISSION_HOTEL_SETTINGS_READ, True, user_id=None)
@@ -414,6 +458,30 @@ def test_manual_rate_policy_configuration_is_audited_and_requires_both_bounds(ct
         "manual_rate_min_adjustment_pct": "-25",
         "manual_rate_max_adjustment_pct": "10",
     }
+
+
+def test_manual_rate_policy_update_does_not_commit_when_audit_insert_fails(ctx, monkeypatch):
+    client, db = ctx
+
+    def fail_audit(*args, **kwargs):
+        raise RuntimeError("audit unavailable")
+
+    monkeypatch.setattr("app.services.audit_log_service.create_audit_log", fail_audit)
+    response = client.patch(
+        "/api/config/",
+        json={
+            "manual_rate_min_adjustment_pct": -20,
+            "manual_rate_max_adjustment_pct": 15,
+        },
+        headers=_manual_rate_policy_step_up_headers(),
+    )
+    assert response.status_code == 500, response.text
+
+    db.rollback()
+    stored = db.get(HotelConfiguration, 1)
+    assert stored.manual_rate_min_adjustment_pct is None
+    assert stored.manual_rate_max_adjustment_pct is None
+    assert db.query(AuditLog).filter_by(hotel_id=1, table_name="hotel_configuration", record_id=1).count() == 0
 
 
 def test_clearing_manual_rate_policy_requires_clearing_both_bounds(ctx):

@@ -138,6 +138,13 @@ TENANT_TABLES: tuple[str, ...] = (
     # that migration installs their initial tenant policies.
     "company_nightly_surcharge_rates",
     "company_night_charge_amount_adjustments",
+    # Added by d2a7e93f4c2b_day2_feedback_schema; that migration installs
+    # their initial tenant policies while this inventory tracks the full model.
+    "reservation_group_payment_batches",
+    "reservation_group_payment_allocations",
+    "cash_expenses",
+    "rate_change_drafts",
+    "operational_task_attachments",
 )
 
 

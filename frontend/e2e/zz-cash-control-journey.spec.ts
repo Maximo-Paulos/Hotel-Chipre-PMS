@@ -29,6 +29,7 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   // TOTP step; allow two code-window boundaries plus the UI journey.
   test.setTimeout(120_000);
   const ownerSession = await loginAsStepUpOwner(page, "cash", testInfo.project.name);
+  let lastTotpStep = ownerSession.lastTotpStep;
   // The "Abrir caja" button starts enabled optimistically and only flips to
   // "Ya hay una caja abierta" once GET /api/cash-register/sessions resolves
   // (CashRegisterPage derives openSession from an initially-empty sessions
@@ -53,7 +54,10 @@ test("owner controls manual cash movements, approves an arqueo difference and co
     await expect(existingOpenButton).toBeVisible();
   }
 
-  const movementForm = page.locator("form").filter({ hasText: "Registrar movimiento" });
+  const movementForm = page.locator("form")
+    .filter({ hasText: "Tipo" })
+    .filter({ hasText: "Importe" })
+    .filter({ hasText: "Descripción" });
   await expect(movementForm.getByText("Reserva ID", { exact: true })).not.toBeVisible();
   await expect(movementForm.getByText("Transaccion ID", { exact: true })).not.toBeVisible();
   await movementForm.getByText("Tipo", { exact: true }).locator("..").locator("select").selectOption("income");
@@ -65,9 +69,16 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   await movementForm.getByText("Tipo", { exact: true }).locator("..").locator("select").selectOption("expense");
   await movementForm.getByText("Importe", { exact: true }).locator("..").locator("input").fill("200");
   await movementForm.getByText("Descripción", { exact: true }).locator("..").locator("input").fill("Compra de insumos");
-  await movementForm.getByRole("button", { name: "Registrar movimiento", exact: true }).click();
-  await completeStepUpPrompt(page, ownerSession.lastTotpStep, ownerSession.auth.user.email);
-  await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
+  await movementForm.getByText("Categoría", { exact: true }).locator("..").locator("input").fill("Insumos");
+  await movementForm.getByText("Proveedor", { exact: true }).locator("..").locator("input").fill("Proveedor E2E");
+  await movementForm.getByText("Referencia del comprobante", { exact: true }).locator("..").locator("input").fill("COMP-2026-001");
+  await movementForm.getByRole("button", { name: "Registrar gasto pendiente", exact: true }).click();
+  await expect(page.getByText("Gasto pendiente de aprobación. Todavía no modifica el saldo de caja.", { exact: true })).toBeVisible();
+  const pendingExpense = page.getByTestId("cash-expenses").locator("li").filter({ hasText: "Compra de insumos" });
+  await expect(pendingExpense).toContainText("Pendiente de aprobación");
+  await pendingExpense.getByRole("button", { name: "Aprobar gasto · MFA", exact: true }).click();
+  lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
+  await expect(page.getByText("Gasto aprobado y registrado en caja.", { exact: true })).toBeVisible();
 
   const closeForm = page.locator("form").filter({ hasText: "Saldo esperado:" }).filter({ hasText: "Cerrar caja" });
   const expectedText = await closeForm.getByText(/Saldo esperado:/).innerText();
@@ -87,7 +98,7 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   await expect(page.getByText(/Estado: pendiente de aprobación/, { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Aprobar diferencia", exact: true }).last().click();
-  const lastTotpStep = await completeStepUpPrompt(page, ownerSession.lastTotpStep, ownerSession.auth.user.email);
+  lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText("Diferencia aprobada.", { exact: true })).toBeVisible();
   await expect(page.getByText(/^Custodia: pendiente de recepción del dueño o la codueña por /)).toBeVisible();
   const currentCustody = page.getByTestId("cash-pending-custodies")

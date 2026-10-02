@@ -62,6 +62,13 @@ def update_configuration(
         "manual_rate_min_adjustment_pct",
         "manual_rate_max_adjustment_pct",
     )
+    fiscal_fields = (
+        "fiscal_legal_name",
+        "fiscal_tax_id",
+        "fiscal_vat_condition",
+        "fiscal_address",
+        "fiscal_point_of_sale",
+    )
     changed_manual_rate_fields = {
         field: update_data[field]
         for field in manual_rate_fields
@@ -69,10 +76,16 @@ def update_configuration(
     }
     fx_fields = ("fx_conversion_rate_type", "fx_display_rate_types")
     fx_before = {field: getattr(config, field) for field in fx_fields}
+    fiscal_before = {field: getattr(config, field) for field in fiscal_fields}
     changed_fx_fields = {
         field: update_data[field]
         for field in fx_fields
         if field in update_data and update_data[field] != fx_before[field]
+    }
+    changed_fiscal_fields = {
+        field: update_data[field]
+        for field in fiscal_fields
+        if field in update_data and update_data[field] != getattr(config, field)
     }
     if changed_manual_rate_fields:
         # A combined pricing-policy save already requires the stronger owner-only
@@ -118,7 +131,7 @@ def update_configuration(
     }
     apply_configuration_update(config, update_data)
     if changed_manual_rate_fields:
-        audit_log_service.safe_create_audit_log(
+        audit_log_service.create_audit_log(
             db,
             hotel_id=context.hotel_id,
             table_name="hotel_configuration",
@@ -129,7 +142,7 @@ def update_configuration(
             payload_after={field: getattr(config, field) for field in manual_rate_fields},
         )
     if changed_fx_fields:
-        audit_log_service.safe_create_audit_log(
+        audit_log_service.create_audit_log(
             db,
             hotel_id=context.hotel_id,
             table_name="hotel_configuration",
@@ -139,6 +152,20 @@ def update_configuration(
             payload_before={field: fx_before[field] for field in changed_fx_fields},
             payload_after={field: getattr(config, field) for field in changed_fx_fields},
         )
+    if changed_fiscal_fields:
+        audit_log_service.queue_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="hotel_configuration",
+            record_id=config.id,
+            action=AuditActionEnum.UPDATE,
+            actor_user_id=context.user_id,
+            payload_before={field: fiscal_before[field] for field in changed_fiscal_fields},
+            payload_after={field: getattr(config, field) for field in changed_fiscal_fields},
+        )
+        # Fail closed for this new fiscal-profile write: both the profile and
+        # its audit record must be flushed before the caller commits.
+        db.flush()
     db.commit()
     db.refresh(config)
     return config

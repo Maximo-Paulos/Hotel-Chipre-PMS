@@ -67,7 +67,10 @@ test("owner finds and approves a receptionist's pending close from another brows
     expect(pendingReport.difference_approved).toBe(false);
     expect(pendingReport.successor_opening_balance).toBe("0.00");
     expect(Number(pendingReport.custody_handoff.delivered_amount)).toBeCloseTo(countedBalance, 2);
-    await expect(closeForm.getByText("Saldo contado", { exact: true }).locator("..").locator("input")).toHaveValue("");
+    // Closing a turn selects the closed session's report. Its arqueo form is
+    // intentionally removed; the successor starts with its own empty form
+    // when selected.
+    await expect(closeForm).toHaveCount(0);
     await expect(receptionPage.getByText(/abierta con saldo.*0,00/)).toBeVisible();
     await expect(receptionPage.getByTestId("cash-pending-approvals")).toBeVisible();
     await expect(receptionPage.getByRole("button", { name: "Aprobar diferencia", exact: true })).toHaveCount(0);

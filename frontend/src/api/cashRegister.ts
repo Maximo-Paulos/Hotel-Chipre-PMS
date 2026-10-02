@@ -23,6 +23,9 @@ export type CashMovement = {
   reservation_id?: number | null;
   transaction_id?: number | null;
   recorded_by_user_id?: number | null;
+  group_payment_batch_id?: number | null;
+  group_payment_total?: number | null;
+  group_payment_reservation_count?: number | null;
   movement_type: CashMovementType;
   amount: number;
   description?: string | null;
@@ -35,15 +38,18 @@ export type CashCloseReport = {
   session_id: number;
   currency_code: string;
   closed_by_user_id?: number | null;
+  closed_by_name?: string | null;
   expected_balance: number;
   declared_balance: number;
   difference: number;
   difference_approved: boolean;
   approved_by_user_id?: number | null;
+  approved_by_name?: string | null;
   successor_session_id?: number | null;
   successor_opening_balance?: number | string | null;
   successor_float_declared_amount?: number | string | null;
   successor_float_declared_by_user_id?: number | null;
+  successor_float_declared_by_name?: string | null;
   successor_float_declared_at?: string | null;
   custody_handoff?: CashCustodyHandoff | null;
   notes?: string | null;
@@ -117,6 +123,7 @@ export type CashDailyEntry = {
   actor_user_id?: number | null;
   actor_name: string;
   transaction_id?: number | null;
+  group_payment_batch_id?: number | null;
   cash_movement_id?: number | null;
   reservation_id?: number | null;
   amount: number;
@@ -139,6 +146,8 @@ export type CashDailySession = {
   closed_at?: string | null;
   opened_by_user_id?: number | null;
   closed_by_user_id?: number | null;
+  opened_by_name?: string | null;
+  closed_by_name?: string | null;
   opening_balance: number;
   expected_balance: number;
   declared_balance?: number | null;
@@ -203,6 +212,44 @@ export type CashCustodyReceiptPayload = {
   successor_float_amount: number;
 };
 
+export type CashExpenseStatus = "pending" | "approved" | "rejected";
+
+export type CashExpense = {
+  id: number;
+  hotel_id: number;
+  session_id: number;
+  amount: number;
+  currency_code: string;
+  category: string;
+  vendor: string;
+  description?: string | null;
+  receipt_reference?: string | null;
+  receipt_filename?: string | null;
+  has_receipt_image: boolean;
+  status: CashExpenseStatus;
+  cash_movement_id?: number | null;
+  recorded_by_user_id?: number | null;
+  recorded_by_name?: string | null;
+  approved_by_user_id?: number | null;
+  approved_by_name?: string | null;
+  rejected_by_user_id?: number | null;
+  rejected_by_name?: string | null;
+  rejection_reason?: string | null;
+  created_at: string;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+};
+
+export type CashExpensePayload = {
+  amount: number;
+  category: string;
+  vendor: string;
+  description?: string | null;
+  receipt_reference?: string | null;
+  receipt_image_base64?: string | null;
+  receipt_filename?: string | null;
+};
+
 export const listCashSessions = (session?: SessionLike) =>
   apiFetch<CashSession[]>("/api/cash-register/sessions", { session });
 
@@ -237,11 +284,12 @@ export const getCashDailySummary = (date: string, session?: SessionLike, currenc
 };
 
 export const downloadCashLedgerCsv = async (
-  date: string,
+  fromDate: string,
+  toDate: string,
   session?: SessionLike,
   currency?: string | null
 ): Promise<Blob> => {
-  const query = new URLSearchParams({ date });
+  const query = new URLSearchParams({ from: fromDate, to: toDate });
   if (currency) query.set("currency", currency);
   const response = await fetch(buildUrl(`/api/cash-register/export.csv?${query.toString()}`), {
     headers: buildAuthHeaders(session),
@@ -257,6 +305,37 @@ export const downloadCashLedgerCsv = async (
     }
     throw new Error(message);
   }
+  return response.blob();
+};
+
+export const listCashExpenses = (session?: SessionLike, expenseStatus?: CashExpenseStatus) => {
+  const query = expenseStatus ? `?status=${encodeURIComponent(expenseStatus)}` : "";
+  return apiFetch<CashExpense[]>(`/api/cash-register/expenses${query}`, { session });
+};
+
+export const createCashExpense = (sessionId: number, payload: CashExpensePayload, session?: SessionLike) =>
+  apiFetch<CashExpense>(`/api/cash-register/sessions/${sessionId}/expenses`, {
+    method: "POST",
+    data: payload,
+    session
+  });
+
+export const approveCashExpense = (expenseId: number, session?: SessionLike) =>
+  apiFetch<CashExpense>(`/api/cash-register/expenses/${expenseId}/approve`, { method: "POST", session });
+
+export const rejectCashExpense = (expenseId: number, reason: string, session?: SessionLike) =>
+  apiFetch<CashExpense>(`/api/cash-register/expenses/${expenseId}/reject`, {
+    method: "POST",
+    data: { reason },
+    session
+  });
+
+export const downloadCashExpenseReceipt = async (expenseId: number, session?: SessionLike): Promise<Blob> => {
+  const response = await fetch(buildUrl(`/api/cash-register/expenses/${expenseId}/receipt`), {
+    headers: buildAuthHeaders(session),
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error("No se pudo abrir el comprobante privado");
   return response.blob();
 };
 

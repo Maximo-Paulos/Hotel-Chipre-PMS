@@ -287,22 +287,53 @@ def test_price_period_delete_soft_deletes_hides_and_audits(soft_delete_client):
         category_id = category.id
 
     created = client.post(
-        "/api/rates/periods",
+        "/api/rate-change-drafts",
         json={
             "category_id": category_id,
-            "name": "Winter",
-            "start_date": "2026-07-01",
-            "end_date": "2026-07-10",
-            "price_per_night": 150.0,
-            "priority": 1,
-            "is_active": True,
+            "draft_type": "price_period",
+            "period_operation": {
+                "action": "create",
+                "values": {
+                    "name": "Winter",
+                    "start_date": "2026-07-01",
+                    "end_date": "2026-07-10",
+                    "price_per_night": 150.0,
+                    "priority": 1,
+                    "is_active": True,
+                },
+            },
         },
     )
     assert created.status_code == 201, created.text
-    period_id = created.json()["id"]
+    created_draft = created.json()
+    confirmed_create = client.post(
+        f"/api/rate-change-drafts/{created_draft['id']}/confirm",
+        json={"expected_version": created_draft["version"]},
+    )
+    assert confirmed_create.status_code == 200, confirmed_create.text
+    with SessionLocal() as db:
+        period_id = db.query(PricePeriod.id).filter_by(
+            hotel_id=1,
+            category_id=category_id,
+            name="Winter",
+            deleted_at=None,
+        ).one()[0]
 
-    deleted = client.delete(f"/api/rates/periods/{period_id}")
-    assert deleted.status_code == 204, deleted.text
+    deleted = client.post(
+        "/api/rate-change-drafts",
+        json={
+            "category_id": category_id,
+            "draft_type": "price_period",
+            "period_operation": {"action": "delete", "period_id": period_id},
+        },
+    )
+    assert deleted.status_code == 201, deleted.text
+    delete_draft = deleted.json()
+    confirmed_delete = client.post(
+        f"/api/rate-change-drafts/{delete_draft['id']}/confirm",
+        json={"expected_version": delete_draft["version"]},
+    )
+    assert confirmed_delete.status_code == 200, confirmed_delete.text
     assert client.get("/api/rates/periods").json() == []
 
     with SessionLocal() as db:

@@ -6,7 +6,12 @@ import type { TFunction } from "i18next";
 
 import { ApiError, hasValidSession } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
-import { previewRoomBlockConflicts, type RoomBlockCreatePayload, type RoomBlockReasonCode } from "../../api/roomBlocks";
+import {
+  previewRoomBlockConflicts,
+  previewRoomBlockExtension,
+  type RoomBlockCreatePayload,
+  type RoomBlockReasonCode
+} from "../../api/roomBlocks";
 import { getHousekeepingBoard, type HousekeepingStatus, type RoomStatus } from "../../api/rooms";
 import { roomBlockReasonLabel, roomBlockReasonOptions, useRoomBlocks } from "../../hooks/useRoomBlocks";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
@@ -67,6 +72,7 @@ export function RoomsPage() {
   const canToggleCleaningStatus = hasPermission("room:status_update");
   const canCreateBlocks = hasPermission("room:block_create");
   const canReleaseBlocks = hasPermission("room:block_release");
+  const canReadBlocks = hasPermission("room:read") || canCreateBlocks || canReleaseBlocks;
   const showAssignments = !isHousekeeping && hasPermission("occupancy:view");
   const { roomsQuery, categoriesQuery, updateStatusMutation, updateCleaningStatusMutation } = useRooms({
     includeCategories: !isHousekeeping
@@ -77,7 +83,7 @@ export function RoomsPage() {
     enabled: isHousekeeping && hasValidSession(session),
     staleTime: 0
   });
-  const { blocksQuery, createBlockMutation, resolveBlockMutation } = useRoomBlocks({ enabled: !isHousekeeping });
+  const { blocksQuery, createBlockMutation, resolveBlockMutation, extendBlockMutation } = useRoomBlocks({ enabled: canReadBlocks });
   const today = todayIso();
   // Keep the persisted physical status independent from future allocations,
   // while still showing the next/current reservation after a Planilla move.
@@ -92,8 +98,11 @@ export function RoomsPage() {
   const [pendingRoom, setPendingRoom] = useState<number | null>(null);
   const [roomStatusError, setRoomStatusError] = useState<{ roomId: number; message: string } | null>(null);
   const [pendingBlockId, setPendingBlockId] = useState<number | null>(null);
+  const [extendingBlockId, setExtendingBlockId] = useState<number | null>(null);
+  const [extensionEndDate, setExtensionEndDate] = useState("");
   const [blockForm, setBlockForm] = useState<BlockFormValues>(() => emptyBlockForm());
   const [blockMessage, setBlockMessage] = useState<string | null>(null);
+  const [blockErrors, setBlockErrors] = useState<Record<string, string>>({});
   const { data: subscription } = useSubscriptionStatus({ enabled: !isHousekeeping });
 
   const writeBlocked = subscription?.can_write === false;
@@ -124,7 +133,18 @@ export function RoomsPage() {
       ends_at: blockForm.is_indefinite ? null : blockForm.ends_at,
       is_indefinite: blockForm.is_indefinite
     }, session),
-    enabled: !isHousekeeping && canCreateBlocks && !actionsBlocked && blockRangeReady && hasValidSession(session),
+    enabled: canCreateBlocks && !actionsBlocked && blockRangeReady && hasValidSession(session),
+    staleTime: 0,
+    retry: false
+  });
+  const extendingBlock = activeBlocks.find((block) => block.id === extendingBlockId) ?? null;
+  const extensionRangeReady = Boolean(
+    extendingBlock?.ends_at && extensionEndDate && extensionEndDate > extendingBlock.ends_at
+  );
+  const blockExtensionPreviewQuery = useQuery({
+    queryKey: ["room-block-extension-preview", session.hotelId, extendingBlockId, extensionEndDate],
+    queryFn: () => previewRoomBlockExtension(extendingBlockId as number, extensionEndDate, session),
+    enabled: canCreateBlocks && !actionsBlocked && extendingBlockId !== null && extensionRangeReady && hasValidSession(session),
     staleTime: 0,
     retry: false
   });
@@ -220,14 +240,15 @@ export function RoomsPage() {
     event.preventDefault();
     if (actionsBlocked || !canCreateBlocks) return;
     setBlockMessage(null);
+    setBlockErrors((current) => { const next = { ...current }; delete next.create; return next; });
 
     const roomId = Number(blockForm.room_id);
     if (!Number.isInteger(roomId) || roomId <= 0) {
-      setBlockMessage(t("blocks.selectRoomError"));
+      setBlockErrors((current) => ({ ...current, create: t("blocks.selectRoomError") }));
       return;
     }
     if (!blockForm.is_indefinite && !blockForm.ends_at) {
-      setBlockMessage(t("blocks.endDateRequired"));
+      setBlockErrors((current) => ({ ...current, create: t("blocks.endDateRequired") }));
       return;
     }
 
@@ -248,9 +269,9 @@ export function RoomsPage() {
       if (error instanceof ApiError && error.status === 409) {
         const detail = (error.payload as { detail?: { reservation_ids?: unknown } } | null)?.detail;
         const count = Array.isArray(detail?.reservation_ids) ? detail.reservation_ids.length : 1;
-        setBlockMessage(t("blocks.protectedConflictRejected", { count }));
+        setBlockErrors((current) => ({ ...current, create: t("blocks.protectedConflictRejected", { count }) }));
       } else {
-        setBlockMessage(error instanceof Error ? error.message : t("blocks.createError"));
+        setBlockErrors((current) => ({ ...current, create: error instanceof Error ? error.message : t("blocks.createError") }));
       }
     }
   };
@@ -259,11 +280,29 @@ export function RoomsPage() {
     if (actionsBlocked || !canReleaseBlocks) return;
     setPendingBlockId(blockId);
     setBlockMessage(null);
+    setBlockErrors((current) => { const next = { ...current }; delete next[`resolve-${blockId}`]; return next; });
     try {
       await resolveBlockMutation.mutateAsync(blockId);
       setBlockMessage(t("blocks.resolveSuccess"));
     } catch (error) {
-      setBlockMessage(error instanceof Error ? error.message : t("blocks.resolveError"));
+      setBlockErrors((current) => ({ ...current, [`resolve-${blockId}`]: error instanceof Error ? error.message : t("blocks.resolveError") }));
+    } finally {
+      setPendingBlockId(null);
+    }
+  };
+
+  const handleExtendBlock = async (blockId: number) => {
+    if (!extensionEndDate) return;
+    setPendingBlockId(blockId);
+    setBlockMessage(null);
+    setBlockErrors((current) => { const next = { ...current }; delete next[`extend-${blockId}`]; return next; });
+    try {
+      await extendBlockMutation.mutateAsync({ blockId, endsAt: extensionEndDate });
+      setBlockMessage(t("blocks.extendSuccess"));
+      setExtendingBlockId(null);
+      setExtensionEndDate("");
+    } catch (error) {
+      setBlockErrors((current) => ({ ...current, [`extend-${blockId}`]: error instanceof Error ? error.message : t("blocks.extendError") }));
     } finally {
       setPendingBlockId(null);
     }
@@ -302,30 +341,34 @@ export function RoomsPage() {
       )}
 
       {isHousekeeping ? (
-        <div className="grid gap-4 sm:grid-cols-4">
-          {housekeepingStatusOptions.map((status) => (
-            <StatusBadge
-              key={status}
-              label={housekeepingStatusLabels[status]}
-              value={housekeepingStats[status] ?? 0}
-              className={housekeepingStatusColors[status]}
-            />
-          ))}
-        </div>
-      ) : (
+        housekeepingBoardQuery.isSuccess ? (
+          <div className="grid gap-4 sm:grid-cols-4">
+            {housekeepingStatusOptions.map((status) => (
+              <StatusBadge
+                key={status}
+                label={housekeepingStatusLabels[status]}
+                value={housekeepingStats[status] ?? 0}
+                className={housekeepingStatusColors[status]}
+              />
+            ))}
+          </div>
+        ) : null
+      ) : roomsQuery.isSuccess ? (
         <div className="grid gap-4 sm:grid-cols-3">
           <StatusBadge label={t("stats.available")} value={stats.available ?? 0} className={statusColors.available} />
           <StatusBadge label={t("stats.occupied")} value={stats.occupied ?? 0} className={statusColors.occupied} />
           <StatusBadge label={t("stats.cleaning")} value={stats.cleaning ?? 0} className={statusColors.cleaning} />
         </div>
-      )}
+      ) : null}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">{t("inventory.eyebrow")}</p>
             <h2 className="text-lg font-semibold text-slate-900">{t("inventory.title", { count: rooms.length })}</h2>
-            {roomsQuery.error && <p className="text-xs text-rose-700">{t("inventory.loadError", { message: (roomsQuery.error as Error).message })}</p>}
+            {roomsQuery.isLoading && <p role="status" className="text-xs text-slate-600">{t("inventory.loading")}</p>}
+            {roomsQuery.isError && <p role="alert" className="text-xs text-rose-700">{t("inventory.loadError", { message: (roomsQuery.error as Error).message })} <button type="button" onClick={() => void roomsQuery.refetch()} className="font-semibold underline">{t("inventory.retry")}</button></p>}
+            {!isHousekeeping && categoriesQuery.isError && <p role="alert" className="text-xs text-rose-700">{t("inventory.categoriesLoadError")} <button type="button" onClick={() => void categoriesQuery.refetch()} className="font-semibold underline">{t("inventory.retry")}</button></p>}
           </div>
         </div>
 
@@ -339,6 +382,7 @@ export function RoomsPage() {
             const availableStatuses = canManageRoomStatus || !isHousekeeping ? statusOptions : housekeepingStatusOptions;
             const selectedStatus = isHousekeeping ? room.housekeeping_status : room.status;
             const maintenanceBlocked = isHousekeeping && housekeepingBoardQuery.isSuccess && maintenanceBlockedRoomIds.has(room.id);
+            const activeRoomBlock = activeBlocks.find((block) => block.room_id === room.id);
             return (
               <div key={room.id} data-testid="room-card" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between">
@@ -379,6 +423,16 @@ export function RoomsPage() {
                   </div>
                 </div>
                 <p className="mt-3 text-sm text-slate-700">{room.notes || t("inventory.noNotes")}</p>
+                {blocksQuery.isSuccess && activeRoomBlock && (
+                  <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800" data-testid={`room-active-block-${room.id}`}>
+                    {activeRoomBlock.is_indefinite || !activeRoomBlock.ends_at
+                      ? t("blocks.roomCardBlockedIndefinite", { reason: roomBlockReasonLabel[activeRoomBlock.reason_code] })
+                      : t("blocks.roomCardBlocked", {
+                          reason: roomBlockReasonLabel[activeRoomBlock.reason_code],
+                          freeFrom: formatDate(activeRoomBlock.ends_at)
+                        })}
+                  </p>
+                )}
                 {canChangeThisStatus ? (
                   <div className="mt-4 text-xs text-slate-600">
                     <label htmlFor={`room-status-${room.id}`} className="mb-1 block font-semibold text-slate-600">
@@ -411,9 +465,10 @@ export function RoomsPage() {
                       <p className="mt-2 text-xs text-slate-500">{t("inventory.saving")}</p>
                     )}
                     {roomStatusError?.roomId === room.id && (
-                      <p role="alert" className="mt-2 text-xs text-rose-700">
-                        {t("inventory.statusUpdateError", { message: roomStatusError.message })}
-                      </p>
+                      <div role="alert" className="mt-2 flex items-start justify-between gap-2 text-xs text-rose-700">
+                        <p>{t("inventory.statusUpdateError", { message: roomStatusError.message })}</p>
+                        <button type="button" aria-label={t("blocks.closeError")} onClick={() => setRoomStatusError(null)} className="shrink-0 font-semibold underline">{t("blocks.closeError")}</button>
+                      </div>
                     )}
                   </div>
                 ) : (
@@ -422,7 +477,7 @@ export function RoomsPage() {
               </div>
             );
           })}
-          {!roomsQuery.isLoading && rooms.length === 0 && (
+          {!roomsQuery.isLoading && !roomsQuery.isError && rooms.length === 0 && (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
               {t("inventory.empty")}
             </div>
@@ -430,18 +485,20 @@ export function RoomsPage() {
         </div>
       </div>
 
-      {!isHousekeeping && <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      {canReadBlocks && <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">{t("blocks.eyebrow")}</p>
             <h2 className="text-lg font-semibold text-slate-900">{t("blocks.title", { count: activeBlocks.length })}</h2>
             <p className="text-sm text-slate-600">{t("blocks.description")}</p>
-            {blocksQuery.error && <p className="mt-1 text-xs text-rose-700">{t("blocks.loadError", { message: (blocksQuery.error as Error).message })}</p>}
+            {blocksQuery.isLoading && <p role="status" className="mt-1 text-xs text-slate-600">{t("blocks.loading")}</p>}
+            {blocksQuery.isError && <p role="alert" className="mt-1 text-xs text-rose-700">{t("blocks.loadError", { message: (blocksQuery.error as Error).message })} <button type="button" onClick={() => void blocksQuery.refetch()} className="font-semibold underline">{t("blocks.retry")}</button></p>}
           </div>
           {blocksQuery.isFetching && <p className="text-xs text-slate-500">{t("blocks.updating")}</p>}
         </div>
 
         {canCreateBlocks && (
+        <>
         <form className="mt-4 grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:grid-cols-6" onSubmit={handleCreateBlock}>
           <label className="space-y-1 text-sm lg:col-span-1">
             <span className="text-slate-600">{t("blocks.roomFieldLabel")}</span>
@@ -554,6 +611,13 @@ export function RoomsPage() {
             </button>
           </div>
         </form>
+        {blockErrors.create && (
+          <div role="alert" className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+            <p>{blockErrors.create}</p>
+            <button type="button" onClick={() => setBlockErrors((current) => { const next = { ...current }; delete next.create; return next; })} className="shrink-0 font-semibold underline">{t("blocks.closeError")}</button>
+          </div>
+        )}
+        </>
         )}
 
         {blockMessage && (
@@ -573,6 +637,22 @@ export function RoomsPage() {
                     <h3 className="text-base font-semibold text-slate-900">{roomBlockReasonLabel[block.reason_code]}</h3>
                     <p className="text-xs text-slate-500">{formatBlockDates(block.starts_at, block.ends_at, block.is_indefinite, t)}</p>
                   </div>
+                  <div className="flex flex-wrap gap-2">
+                  {canCreateBlocks && !block.is_indefinite && block.ends_at && (
+                    <button
+                      type="button"
+                    onClick={() => {
+                      setExtendingBlockId((current) => current === block.id ? null : block.id);
+                      setExtensionEndDate("");
+                      setBlockMessage(null);
+                      setBlockErrors((current) => { const next = { ...current }; delete next[`extend-${block.id}`]; return next; });
+                      }}
+                      disabled={actionsBlocked || extendBlockMutation.isPending}
+                      className="rounded-lg border border-brand-200 px-3 py-2 text-xs font-semibold text-brand-800 hover:bg-brand-50 disabled:opacity-60"
+                    >
+                      {extendingBlockId === block.id ? t("blocks.cancelExtend") : t("blocks.extend")}
+                    </button>
+                  )}
                   {canReleaseBlocks && (
                     <button
                       type="button"
@@ -583,12 +663,62 @@ export function RoomsPage() {
                       {pendingBlockId === block.id && resolveBlockMutation.isPending ? t("blocks.resolving") : t("blocks.resolve")}
                     </button>
                   )}
+                  </div>
                 </div>
                 <p className="mt-3 text-sm text-slate-700">{block.reason_note || t("blocks.noDetail")}</p>
+                {blockErrors[`resolve-${block.id}`] && (
+                  <div role="alert" className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                    <p>{blockErrors[`resolve-${block.id}`]}</p>
+                    <button type="button" onClick={() => setBlockErrors((current) => { const next = { ...current }; delete next[`resolve-${block.id}`]; return next; })} className="shrink-0 font-semibold underline">{t("blocks.closeError")}</button>
+                  </div>
+                )}
+                {extendingBlockId === block.id && (
+                  <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      {t("blocks.extendEndLabel")}
+                      <input
+                        type="date"
+                        value={extensionEndDate}
+                        min={block.ends_at ?? undefined}
+                        onChange={(event) => setExtensionEndDate(event.target.value)}
+                        className="mt-1 block min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                        disabled={extendBlockMutation.isPending}
+                      />
+                    </label>
+                    {extensionRangeReady && blockExtensionPreviewQuery.isLoading && <p role="status" className="text-xs text-slate-600">{t("blocks.extendPreviewLoading")}</p>}
+                    {extensionRangeReady && blockExtensionPreviewQuery.isError && <p role="alert" className="text-xs text-rose-700">{t("blocks.extendPreviewError")} <button type="button" onClick={() => void blockExtensionPreviewQuery.refetch()} className="font-semibold underline">{t("blocks.retry")}</button></p>}
+                    {extensionRangeReady && blockExtensionPreviewQuery.data && (
+                      <p className="text-xs text-slate-700">
+                        {t("blocks.extendPreviewSummary", {
+                          reservations: blockExtensionPreviewQuery.data.reservation_count,
+                          protected: blockExtensionPreviewQuery.data.protected_reservation_count,
+                          blocks: blockExtensionPreviewQuery.data.overlapping_block_count ?? 0
+                        })}
+                      </p>
+                    )}
+                    {extensionRangeReady && blockExtensionPreviewQuery.data && (blockExtensionPreviewQuery.data.protected_reservation_count > 0 || (blockExtensionPreviewQuery.data.overlapping_block_count ?? 0) > 0) && (
+                      <p role="alert" className="text-xs text-rose-700">{t("blocks.extendConflict")}</p>
+                    )}
+                    {blockErrors[`extend-${block.id}`] && (
+                      <div role="alert" className="flex items-start justify-between gap-3 text-xs text-rose-700">
+                        <p>{blockErrors[`extend-${block.id}`]}</p>
+                        <button type="button" onClick={() => setBlockErrors((current) => { const next = { ...current }; delete next[`extend-${block.id}`]; return next; })} className="shrink-0 font-semibold underline">{t("blocks.closeError")}</button>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleExtendBlock(block.id)}
+                      disabled={actionsBlocked || !extensionRangeReady || !blockExtensionPreviewQuery.isSuccess || blockExtensionPreviewQuery.data.protected_reservation_count > 0 || (blockExtensionPreviewQuery.data.overlapping_block_count ?? 0) > 0 || extendBlockMutation.isPending}
+                      className="min-h-10 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                    >
+                      {extendBlockMutation.isPending ? t("blocks.extending") : t("blocks.confirmExtend")}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
-          {!blocksQuery.isLoading && activeBlocks.length === 0 && (
+          {!blocksQuery.isLoading && !blocksQuery.isError && activeBlocks.length === 0 && (
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
               {t("blocks.empty")}
             </div>

@@ -38,6 +38,14 @@ from app.services.permission_service import PERMISSION_RATES_READ, PERMISSION_RA
 
 router = APIRouter(prefix="/api/rates", tags=["Daily Rates"])
 
+
+def _reject_direct_rate_write() -> None:
+    """Keep every rate change behind the reviewable draft workflow."""
+    raise HTTPException(
+        status_code=409,
+        detail="Los cambios de tarifas deben guardarse como borrador y confirmarse desde /api/rate-change-drafts.",
+    )
+
 # ---------------------------------------------------------------------------
 # Pydantic schemas
 # ---------------------------------------------------------------------------
@@ -307,6 +315,7 @@ def upsert_daily_rate(
     context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
     _get_category_or_404(db, context.hotel_id, category_id)
+    _reject_direct_rate_write()
 
     existing = (
         db.query(DailyRate)
@@ -341,9 +350,8 @@ def upsert_daily_rate(
         existing.updated_at = datetime.now(timezone.utc)
         row = existing
 
-    db.commit()
-    db.refresh(row)
-    audit_log_service.safe_create_audit_log(
+    db.flush()
+    audit_log_service.create_audit_log(
         db,
         hotel_id=context.hotel_id,
         table_name="daily_rates",
@@ -353,6 +361,8 @@ def upsert_daily_rate(
         payload_before=before,
         payload_after=audit_log_service.model_snapshot(row),
     )
+    db.commit()
+    db.refresh(row)
     project_daily_rate_change(
         context.hotel_id,
         category_id,
@@ -381,6 +391,7 @@ def bulk_upsert_daily_rates(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
+    _reject_direct_rate_write()
     if payload.to_date < payload.from_date:
         raise HTTPException(status_code=422, detail="to_date must be >= from_date")
     if (payload.to_date - payload.from_date).days > 730:
@@ -435,9 +446,9 @@ def bulk_upsert_daily_rates(
                 created += 1
         current += timedelta(days=1)
 
-    db.commit()
+    db.flush()
     for row, before in touched_rows:
-        audit_log_service.safe_create_audit_log(
+        audit_log_service.create_audit_log(
             db,
             hotel_id=context.hotel_id,
             table_name="daily_rates",
@@ -447,6 +458,7 @@ def bulk_upsert_daily_rates(
             payload_before=before,
             payload_after=audit_log_service.model_snapshot(row),
         )
+    db.commit()
     changed_at = datetime.now(timezone.utc)
     for touched_date in touched_dates:
         project_daily_rate_change(
@@ -490,6 +502,7 @@ def bulk_update_daily_rate_field(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
+    _reject_direct_rate_write()
     if payload.to_date < payload.from_date:
         raise HTTPException(status_code=422, detail="to_date must be >= from_date")
     if (payload.to_date - payload.from_date).days > 730:
@@ -545,9 +558,9 @@ def bulk_update_daily_rate_field(
         touched_rows.append((row, before))
         current += timedelta(days=1)
 
-    db.commit()
+    db.flush()
     for row, before in touched_rows:
-        audit_log_service.safe_create_audit_log(
+        audit_log_service.create_audit_log(
             db,
             hotel_id=context.hotel_id,
             table_name="daily_rates",
@@ -557,6 +570,7 @@ def bulk_update_daily_rate_field(
             payload_before=before,
             payload_after=audit_log_service.model_snapshot(row),
         )
+    db.commit()
     changed_at = datetime.now(timezone.utc)
     for touched_date in touched_dates:
         row = existing_map.get(touched_date)
@@ -610,6 +624,7 @@ def create_price_period(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
+    _reject_direct_rate_write()
     if payload.end_date < payload.start_date:
         raise HTTPException(status_code=422, detail="end_date must be >= start_date")
     _get_category_or_404(db, context.hotel_id, payload.category_id)
@@ -633,9 +648,8 @@ def create_price_period(
         is_active=payload.is_active,
     )
     db.add(period)
-    db.commit()
-    db.refresh(period)
-    audit_log_service.safe_create_audit_log(
+    db.flush()
+    audit_log_service.create_audit_log(
         db,
         hotel_id=context.hotel_id,
         table_name="price_periods",
@@ -644,6 +658,8 @@ def create_price_period(
         actor_user_id=context.user_id,
         payload_after=audit_log_service.model_snapshot(period),
     )
+    db.commit()
+    db.refresh(period)
     invalidate_hotel_operational_caches(context.hotel_id)
     return period
 
@@ -659,6 +675,7 @@ def update_price_period(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
+    _reject_direct_rate_write()
     period = (
         db.query(PricePeriod)
         .filter(
@@ -694,9 +711,8 @@ def update_price_period(
         db.rollback()
         raise HTTPException(status_code=422, detail="end_date must be >= start_date")
 
-    db.commit()
-    db.refresh(period)
-    audit_log_service.safe_create_audit_log(
+    db.flush()
+    audit_log_service.create_audit_log(
         db,
         hotel_id=context.hotel_id,
         table_name="price_periods",
@@ -706,6 +722,8 @@ def update_price_period(
         payload_before=before,
         payload_after=audit_log_service.model_snapshot(period),
     )
+    db.commit()
+    db.refresh(period)
     invalidate_hotel_operational_caches(context.hotel_id)
     return period
 
@@ -720,6 +738,7 @@ def delete_price_period(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
+    _reject_direct_rate_write()
     period = (
         db.query(PricePeriod)
         .filter(
@@ -734,9 +753,8 @@ def delete_price_period(
     before = audit_log_service.model_snapshot(period)
     period.deleted_at = datetime.now(timezone.utc)
     period.deleted_by_user_id = context.user_id
-    db.commit()
-    db.refresh(period)
-    audit_log_service.safe_create_audit_log(
+    db.flush()
+    audit_log_service.create_audit_log(
         db,
         hotel_id=context.hotel_id,
         table_name="price_periods",
@@ -746,6 +764,8 @@ def delete_price_period(
         payload_before=before,
         payload_after=audit_log_service.model_snapshot(period),
     )
+    db.commit()
+    db.refresh(period)
     invalidate_hotel_operational_caches(context.hotel_id)
 
 
@@ -759,6 +779,7 @@ def apply_period_to_daily_rates(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
 ):
+    _reject_direct_rate_write()
     period = (
         db.query(PricePeriod)
         .filter(

@@ -48,12 +48,25 @@ mutaciones protegidas por `cash:operate` y permite el consolidado de lectura a
 los roles con `cash:view`.
 
 Al cerrar un turno, `Saldo contado` registra todo el efectivo físico del cajón.
-`Fondo que queda en el cajón para el próximo turno` selecciona qué parte abre la
-caja sucesora (sugerido: el saldo inicial del turno que cierra); no puede
-superar el total contado. El remanente se registra como entrega de custodia y
-su recepción sigue siendo una confirmación separada del dueño o la codueña. El campo de
-saldo contado se limpia después del cierre. La aprobación de una diferencia y
-la recepción de custodia son decisiones independientes.
+El cierre guarda el saldo esperado, el contado, la diferencia, las notas, el
+autor y la hora. La caja sucesora comienza en cero. Al recibir la custodia,
+Dueño o Codueña puede declarar por separado el efectivo que deja como fondo de
+cambio; ese importe se limita a lo entregado y queda registrado como apertura
+de la caja sucesora. La aprobación de una diferencia y la recepción de
+custodia son decisiones independientes.
+
+Los gastos manuales se cargan con categoría, proveedor y referencia o imagen
+privada del comprobante. Cargar un gasto lo deja pendiente y no reduce el
+saldo esperado. Dueño, Codueña y Gerencia pueden registrarlo y aprobarlo; la
+aprobación o rechazo requiere MFA y queda auditado. Recepción solo puede
+cargarlo si tiene `cash:expense` otorgado explícitamente; el gasto queda
+pendiente hasta su aprobación.
+
+La exportación CSV admite rangos de fechas locales del hotel. Usa encabezados
+en español, punto y coma, codificación UTF-8 con BOM y coma decimal para abrir
+en Excel con configuración es-AR; los textos que podrían interpretarse como
+fórmulas se exportan como texto. Los cobros de un mismo lote grupal aparecen
+como una sola línea en el registro de caja.
 
 Los timestamps operativos almacenados como UTC se exponen con zona explícita en
 las respuestas de caja y pagos. La interfaz interpreta como UTC los timestamps

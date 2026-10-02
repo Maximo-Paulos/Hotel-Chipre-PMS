@@ -3,7 +3,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.cash_register import CashCustodyStatusEnum, CashMovementTypeEnum, CashSessionStatusEnum
 from app.schemas.datetime_types import UTCDateTime
@@ -50,6 +50,9 @@ class CashMovementRead(BaseModel):
     reservation_id: Optional[int] = None
     transaction_id: Optional[int] = None
     recorded_by_user_id: Optional[int] = None
+    group_payment_batch_id: Optional[int] = None
+    group_payment_total: Optional[Decimal] = None
+    group_payment_reservation_count: Optional[int] = None
     movement_type: CashMovementTypeEnum
     amount: Decimal
     description: Optional[str] = None
@@ -111,6 +114,7 @@ class CashDailyEntryRead(BaseModel):
     actor_user_id: Optional[int] = None
     actor_name: str
     transaction_id: Optional[int] = None
+    group_payment_batch_id: Optional[int] = None
     cash_movement_id: Optional[int] = None
     reservation_id: Optional[int] = None
     amount: Decimal
@@ -133,6 +137,8 @@ class CashDailySessionRead(BaseModel):
     closed_at: Optional[UTCDateTime] = None
     opened_by_user_id: Optional[int] = None
     closed_by_user_id: Optional[int] = None
+    opened_by_name: Optional[str] = None
+    closed_by_name: Optional[str] = None
     opening_balance: Decimal
     expected_balance: Decimal
     declared_balance: Optional[Decimal] = None
@@ -215,18 +221,81 @@ class CashCloseReportRead(BaseModel):
     session_id: int
     currency_code: str
     closed_by_user_id: Optional[int] = None
+    closed_by_name: Optional[str] = None
     expected_balance: Decimal
     declared_balance: Decimal
     difference: Decimal
     difference_approved: bool
     approved_by_user_id: Optional[int] = None
+    approved_by_name: Optional[str] = None
     successor_session_id: Optional[int] = None
     successor_opening_balance: Optional[Decimal] = None
     successor_float_declared_amount: Optional[Decimal] = None
     successor_float_declared_by_user_id: Optional[int] = None
+    successor_float_declared_by_name: Optional[str] = None
     successor_float_declared_at: Optional[UTCDateTime] = None
     custody_handoff: Optional[CashCustodyHandoffRead] = None
     notes: Optional[str] = None
     closed_at: UTCDateTime
 
     model_config = {"from_attributes": True}
+
+
+class CashExpenseCreate(BaseModel):
+    amount: Decimal = Field(..., gt=Decimal("0"), le=Decimal("9999999999.99"))
+    category: str = Field(min_length=1, max_length=64)
+    vendor: str = Field(min_length=1, max_length=120)
+    description: Optional[str] = Field(default=None, max_length=300)
+    receipt_reference: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    receipt_image_base64: Optional[str] = Field(default=None, max_length=7_000_000)
+    receipt_filename: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("category", "vendor", "receipt_reference")
+    @classmethod
+    def trim_required_or_optional_text(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+    @model_validator(mode="after")
+    def require_receipt_reference_or_image(self):
+        if not self.receipt_reference and not self.receipt_image_base64:
+            raise ValueError("Ingresá la referencia del comprobante o adjuntá una imagen")
+        return self
+
+    model_config = {"extra": "forbid"}
+
+
+class CashExpenseRead(BaseModel):
+    id: int
+    hotel_id: int
+    session_id: int
+    amount: Decimal
+    currency_code: str
+    category: str
+    vendor: str
+    description: Optional[str] = None
+    receipt_reference: Optional[str] = None
+    receipt_filename: Optional[str] = None
+    has_receipt_image: bool = False
+    status: str
+    cash_movement_id: Optional[int] = None
+    recorded_by_user_id: Optional[int] = None
+    recorded_by_name: Optional[str] = None
+    approved_by_user_id: Optional[int] = None
+    approved_by_name: Optional[str] = None
+    rejected_by_user_id: Optional[int] = None
+    rejected_by_name: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    created_at: UTCDateTime
+    approved_at: Optional[UTCDateTime] = None
+    rejected_at: Optional[UTCDateTime] = None
+
+
+class CashExpenseReject(BaseModel):
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def trim_reason(cls, value: str) -> str:
+        return value.strip()
+
+    model_config = {"extra": "forbid"}

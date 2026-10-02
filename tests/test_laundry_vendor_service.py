@@ -7,6 +7,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.laundry_vendor_service import (
     LaundryVendorError,
+    DuplicateLaundryRemitoError,
     create_remito,
     create_vendor,
     list_remitos,
@@ -99,6 +100,67 @@ def test_create_remito_inbound_reverses_the_transfer(db):
     assert current_stock(db, hotel_id=1, item_id=item.id, location_id=house.id) == Decimal("20.00")
     assert current_stock(db, hotel_id=1, item_id=item.id, location_id=vendor.linen_location_id) == Decimal("0.00")
     assert current_stock(db, hotel_id=1, item_id=item.id) == Decimal("20.00")
+
+
+def test_remito_number_is_unique_per_hotel_vendor_and_direction(db):
+    _seed_hotels(db)
+    item = create_linen_item(db, hotel_id=1, name="Sabanas remito", unit="unit", min_quantity=None, active=True)
+    house = create_location(db, hotel_id=1, name="Deposito remitos")
+    vendor = create_vendor(db, hotel_id=1, name="Lavadero remitos")
+    other_vendor = create_vendor(db, hotel_id=1, name="Otro lavadero remitos")
+    db.flush()
+    _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("20.00"))
+    db.commit()
+
+    create_remito(
+        db,
+        hotel_id=1,
+        vendor_id=vendor.id,
+        direction="outbound",
+        remito_number="R-SAME",
+        remito_date=datetime(2026, 7, 1, tzinfo=timezone.utc),
+        house_location_id=house.id,
+        lines=[{"linen_item_id": item.id, "quantity": Decimal("5.00")}],
+    )
+    db.commit()
+
+    with pytest.raises(DuplicateLaundryRemitoError):
+        create_remito(
+            db,
+            hotel_id=1,
+            vendor_id=vendor.id,
+            direction="outbound",
+            remito_number=" R-SAME ",
+            remito_date=datetime(2026, 7, 2, tzinfo=timezone.utc),
+            house_location_id=house.id,
+            lines=[{"linen_item_id": item.id, "quantity": Decimal("1.00")}],
+        )
+
+    # The same paper number is valid for an incoming ticket and for another vendor.
+    inbound = create_remito(
+        db,
+        hotel_id=1,
+        vendor_id=vendor.id,
+        direction="inbound",
+        remito_number="R-SAME",
+        remito_date=datetime(2026, 7, 3, tzinfo=timezone.utc),
+        house_location_id=house.id,
+        lines=[{"linen_item_id": item.id, "quantity": Decimal("5.00")}],
+    )
+    db.commit()
+    other = create_remito(
+        db,
+        hotel_id=1,
+        vendor_id=other_vendor.id,
+        direction="outbound",
+        remito_number="R-SAME",
+        remito_date=datetime(2026, 7, 4, tzinfo=timezone.utc),
+        house_location_id=house.id,
+        lines=[{"linen_item_id": item.id, "quantity": Decimal("1.00")}],
+    )
+    db.commit()
+    assert inbound.direction == "inbound"
+    assert other.vendor_id == other_vendor.id
 
 
 def test_create_remito_rejects_insufficient_stock_at_source_and_creates_nothing(db):

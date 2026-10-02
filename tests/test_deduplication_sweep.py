@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from app.api.rooms import update_room
 from app.dependencies.auth import AuthContext
 from app.models.hotel_membership import HotelMembership
+from app.models.audit_log import AuditLog
 from app.models.invitation import StaffInvitation
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.user import User
@@ -31,6 +32,8 @@ def _context() -> AuthContext:
 
 
 def test_generic_room_status_patch_projects_event_and_reallocates(db, hotel_config, monkeypatch):
+    db.add(User(id=101, email="owner@example.com", password_hash="test", role="owner", is_verified=True))
+    db.flush()
     category = RoomCategory(hotel_id=1, name="Standard", code="STD", base_price_per_night=100, max_occupancy=2)
     db.add(category)
     db.flush()
@@ -60,6 +63,51 @@ def test_generic_room_status_patch_projects_event_and_reallocates(db, hotel_conf
     assert result.status == RoomStatusEnum.BLOCKED
     assert events and events[0][1:3] == (room.id, "blocked")
     assert allocations and allocations[0]["hotel_id"] == 1
+
+
+def test_room_state_audit_is_written_before_commit(db, hotel_config, monkeypatch):
+    category = RoomCategory(hotel_id=hotel_config.id, name="Atomic", code="ATOMIC", base_price_per_night=100, max_occupancy=2)
+    db.add(category)
+    db.flush()
+    room = Room(
+        hotel_id=hotel_config.id,
+        room_number="ATOMIC-101",
+        floor=1,
+        category_id=category.id,
+        status=RoomStatusEnum.AVAILABLE,
+    )
+    db.add(room)
+    db.flush()
+    monkeypatch.setattr(room_state_service, "project_room_state_event", lambda *args: None)
+    monkeypatch.setattr(room_state_service, "invalidate_hotel_operational_caches", lambda *_args: None)
+    monkeypatch.setattr(
+        room_state_service,
+        "run_persisted_allocation",
+        lambda *args, **kwargs: SimpleNamespace(
+            run=SimpleNamespace(id=2, status="completed"),
+            solver_result=SimpleNamespace(assignments=[], unassigned_reservations=[], moved_reservations=[], objective_value=0, error=None),
+        ),
+    )
+    real_commit = db.commit
+    commits = []
+
+    def checked_commit():
+        commits.append(
+            db.query(AuditLog)
+            .filter_by(hotel_id=hotel_config.id, table_name="rooms", record_id=room.id)
+            .count()
+        )
+        real_commit()
+
+    monkeypatch.setattr(db, "commit", checked_commit)
+    room_state_service.change_room_status(
+        db,
+        room=room,
+        hotel_id=hotel_config.id,
+        status=RoomStatusEnum.MAINTENANCE,
+    )
+
+    assert commits == [1]
 
 
 def test_onboarding_staff_creates_real_invitation_without_email(db, hotel_config):

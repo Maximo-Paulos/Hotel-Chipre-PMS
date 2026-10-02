@@ -470,6 +470,32 @@ def test_operational_audit_unifies_sources_filters_and_preserves_tenant_boundary
         )
     )
     db.add(
+        SecurityAuditLog(
+            hotel_id=hotel_config.id,
+            user_id=actor.id,
+            action="permission.user_override.updated",
+            resource_type="user_permission_override",
+            resource_id="9102:reports:financial:view",
+            details=json.dumps(
+                {
+                    "before": {
+                        "permission_code": "reports:financial:view",
+                        "allowed": False,
+                        "email": "private@example.test",
+                    },
+                    "after": {
+                        "permission_code": "reports:financial:view",
+                        "allowed": True,
+                        "version": 3,
+                        "token": "must-not-be-exposed",
+                        "free_text": "must-also-not-be-exposed",
+                    },
+                }
+            ),
+            created_at=datetime(2026, 9, 4, 16, tzinfo=timezone.utc),
+        )
+    )
+    db.add(
         RoomMoveEvent(
             hotel_id=hotel_config.id,
             reservation_id=reservation.id,
@@ -505,6 +531,14 @@ def test_operational_audit_unifies_sources_filters_and_preserves_tenant_boundary
         category="guests",
         actor_user_id=actor.id,
     )
+    permission_items, permission_total = list_operational_audit(
+        db,
+        hotel_id=hotel_config.id,
+        limit=20,
+        offset=0,
+        category="permissions",
+        action="permission.user_override.updated",
+    )
 
     assert total >= 4
     assert {item["source"] for item in all_items} >= {"row_mutation", "business_event", "security_event", "room_move_event"}
@@ -513,5 +547,18 @@ def test_operational_audit_unifies_sources_filters_and_preserves_tenant_boundary
     assert room_items[0]["from_room_id"] == sample_rooms[0].id
     assert guest_items
     assert all(item["area"] == "guests" for item in guest_items)
+    assert permission_total == 1
+    permission_item = permission_items[0]
+    assert permission_item["area"] == "permissions"
+    assert permission_item["details"]["resource_id"] == "9102:reports:financial:view"
+    event_details = permission_item["details"]["event_details"]
+    assert event_details["before"] == {"permission_code": "reports:financial:view", "allowed": False}
+    assert event_details["after"] == {
+        "permission_code": "reports:financial:view",
+        "allowed": True,
+        "version": 3,
+    }
+    assert "must-not-be-exposed" not in json.dumps(permission_item["details"])
+    assert "must-also-not-be-exposed" not in json.dumps(permission_item["details"])
     security_item = next(item for item in all_items if item["source"] == "security_event")
     assert "must-not-be-exposed" not in json.dumps(security_item["details"])

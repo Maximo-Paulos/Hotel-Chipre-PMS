@@ -2,13 +2,12 @@ import { type ReactNode } from "react";
 import cx from "clsx";
 
 import type { DailyRateRangeRow, RateCalendarResponse } from "../api/rate-calendar";
-import type { SingleRateInput } from "../hooks/useRateCalendar";
 
 type RateEditorGridProps = {
   dailyRates: DailyRateRangeRow[];
   calendar?: RateCalendarResponse;
   currencyCode: string;
-  onSaveCell: (payload: SingleRateInput) => void;
+  onStageChange: (payload: { date: string; values: Partial<Record<PriceField, number | null>> }) => void;
   onSelectCell?: (field: PriceField, date: string) => void;
   selectedRange?: {
     field: PriceField;
@@ -117,7 +116,7 @@ export function RateEditorGrid({
   dailyRates,
   calendar,
   currencyCode,
-  onSaveCell,
+  onStageChange,
   onSelectCell,
   selectedRange,
   visibleFields,
@@ -155,12 +154,7 @@ export function RateEditorGrid({
     input.setAttribute("aria-invalid", "false");
     if (value === current) return true;
 
-    const payload: SingleRateInput = {
-      date: row.date,
-      price: field === "price" ? (value as number) : row.price
-    };
-    if (field !== "price") Object.assign(payload, { [field]: value });
-    onSaveCell(payload);
+    onStageChange({ date: row.date, values: { [field]: value } });
     return true;
   };
 
