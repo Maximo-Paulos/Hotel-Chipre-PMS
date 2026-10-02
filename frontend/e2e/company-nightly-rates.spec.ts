@@ -31,8 +31,8 @@ test("owner records effective dated company extra person rates without changing 
   await expect(page.getByRole("heading", { name: companyName, exact: true })).toBeVisible();
 
   const effectiveDate = page.getByTestId("company-nightly-rate-effective-date");
+  await expect(effectiveDate).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
   const today = await effectiveDate.inputValue();
-  expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   await page.getByTestId("company-nightly-rate-amount").fill("0");
   await page.getByTestId("company-nightly-rate-submit").click();
   await expect(page.getByText("Nueva tarifa registrada.", { exact: true })).toBeVisible();

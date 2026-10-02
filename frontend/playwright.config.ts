@@ -89,14 +89,10 @@ export default defineConfig({
   expect: {
     timeout: 10_000
   },
-  // The 3 webkit-*-business Apple device projects share one isolated database
-  // and one hotel's cash register (a single non-date-scoped resource, unlike
-  // rooms/reservations which can be disambiguated by date). Concurrent
-  // workers racing to open/close/approve that one cash session produces
-  // false negatives (stuck "Abrir caja", unresolved arqueo differences) that
-  // no per-test date isolation can fix. Force full serialization across the
-  // whole business matrix instead of just within each project.
-  workers: process.env.E2E_WEBKIT_BUSINESS === "true" ? 1 : undefined,
+  // UI projects share one isolated database, hotel, and cash register.
+  // Per-project workers: 1 still lets Chromium and mobile projects mutate
+  // that shared state concurrently, so serialize the complete matrix.
+  workers: 1,
   reporter: [["list"], ["html", { outputFolder: "e2e-report" }]],
   use: {
     baseURL,
