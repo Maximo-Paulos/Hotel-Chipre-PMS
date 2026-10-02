@@ -23,7 +23,7 @@ def _enable_inbound_provider_events(monkeypatch):
 
 
 def _reservation(db, hotel_id: int = 1) -> Reservation:
-    db.add(HotelConfiguration(id=hotel_id, subscription_active=True))
+    db.add(HotelConfiguration(id=hotel_id, subscription_active=True, enable_mercado_pago=True))
     db.flush()
     guest = Guest(first_name="Webhook", last_name="Guest", hotel_id=hotel_id)
     category = RoomCategory(

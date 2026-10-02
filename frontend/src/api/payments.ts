@@ -14,6 +14,10 @@ export type PaymentRequest = {
   manual_reference?: string;
   refund_of_transaction_id?: number;
   refund_reason?: string;
+  company_night_charge_refund_allocations?: Array<{
+    charge_id: number;
+    amount: number;
+  }>;
   collected_before?: boolean;
   collected_on?: string;
   prior_receipt_note?: string;
@@ -42,6 +46,11 @@ export type PaymentSummary = {
     amount: number;
     applied_amount?: number | null;
     applied_currency?: string | null;
+    company_night_charge_refundable_allocations?: Array<{
+      charge_id: number;
+      stay_date: string;
+      remaining_amount: number | string;
+    }>;
     fx_rate_snapshot?: number | null;
     gross_amount?: number;
     fee_amount?: number;

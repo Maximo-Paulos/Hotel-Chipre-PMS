@@ -495,6 +495,32 @@ def calculate_reservation_pricing(
                 tax_policy_id=tax_policy.id if tax_policy else None,
             )
         except PricingPolicyError as exc:
+            # Older hotels manage prices through the daily/seasonal calendar.
+            # A single inferred commercial plan must not shadow those visible
+            # rates when no plan price covers the requested stay. Keep explicit
+            # product/plan/tax selections strict so an intentional commercial
+            # configuration never silently changes pricing models.
+            if (
+                str(exc) == "No active prices found for rate plan"
+                and rate_plan_id is None
+                and sellable_product_id is None
+                and tax_policy_id is None
+            ):
+                return _daily_rate_pricing_result(
+                    db,
+                    hotel_id=hotel_id,
+                    category=category,
+                    check_in=check_in,
+                    check_out=check_out,
+                    nights=nights,
+                    payment_method=pricing_payment_method,
+                    sellable_product=sellable_product,
+                    tax_policy=tax_policy,
+                    pricing_channel_code=pricing_channel_code,
+                    target_currency=target_currency,
+                    guest_id=guest_id,
+                    company_id=company_id,
+                )
             raise ReservationError(str(exc))
         return _pricing_result_from_quote(
             db,

@@ -1,26 +1,26 @@
 # Resumen Graphify
 
-Generado: 2026-10-01T17:15:21.416985+00:00
-Commit: `6361f7a1c40b602cd4fc8c4df3f8ef7720382177`
+Generado: 2026-10-01T21:43:59.957847+00:00
+Commit: `377196c6ba076e14525c5bd79edfec7eab1f1c46`
 
 `graphify summary .graphify/graph.json`:
 ```text
 Graphify First-Hop Summary
-Graph: 12239 nodes, 32422 edges, 625 communities, density 0.0004, average degree 5.2981, undirected
+Graph: 12489 nodes, 34649 edges, 648 communities, density 0.0004, average degree 5.5487, undirected
 
 Top hubs:
-  1. Base (degree 388, community 2 Community 2, app/database.py)
-  2. Reservation (degree 320, community 5 Community 5, app/models/reservation.py)
-  3. HotelConfiguration (degree 295, community 24 Community 24, app/models/hotel_config.py)
-  4. ReservationStatusEnum (degree 249, community 22 Community 22, app/models/reservation.py)
-  5. Room (degree 223, community 27 Community 27, app/models/room.py)
+  1. Base (degree 395, community 1 Community 1, app/database.py)
+  2. Reservation (degree 372, community 13 Community 13, app/models/reservation.py)
+  3. HotelConfiguration (degree 357, community 7 Community 7, app/models/hotel_config.py)
+  4. ReservationStatusEnum (degree 302, community 15 Community 15, app/models/reservation.py)
+  5. Room (degree 263, community 13 Community 13, app/models/room.py)
 
 Key communities:
-  1. Community 0 - Community 0: 253 nodes, 344 internal edges, density 0.0108; top nodes: database.py, ca694f7 feat(rbac,config,perf): permission-driven visibility, dedup sweep and infra readiness, 87a469f Merge pull request #92 from Maximo-Paulos/feature/realtime-hardening-and-i18n
-  2. Community 1 - Community 1: 196 nodes, 255 internal edges, density 0.0133; top nodes: d908400 Merge pull request #107 from Maximo-Paulos/fix/hotel-sim-day0-day1, bf4a21f Fix day 0 and day 1 hotel simulation findings, reservation-charge-journey.spec.ts
-  3. Community 2 - Community 2: 194 nodes, 434 internal edges, density 0.0232; top nodes: Base, Base, ExternalEffectsDisabled
-  4. Community 3 - Community 3: 179 nodes, 966 internal edges, density 0.0606; top nodes: fix/hotel-sim-day0-day1, fix/operational-task-version-cache, main
-  5. Community 4 - Community 4: 177 nodes, 297 internal edges, density 0.0191; top nodes: BaseModel, auth.py, cash_register.py
+  1. Community 0 - Community 0: 295 nodes, 392 internal edges, density 0.009; top nodes: d908400 Merge pull request #107 from Maximo-Paulos/fix/hotel-sim-day0-day1, bf4a21f Fix day 0 and day 1 hotel simulation findings, google-invitation-access.spec.ts
+  2. Community 1 - Community 1: 236 nodes, 565 internal edges, density 0.0204; top nodes: Base, Base, str
+  3. Community 2 - Community 2: 220 nodes, 1141 internal edges, density 0.0474; top nodes: Company, Transaction, TransactionTypeEnum
+  4. Community 3 - Community 3: 181 nodes, 303 internal edges, density 0.0186; top nodes: BaseModel, auth.py, cash_register.py
+  5. Community 4 - Community 4: 177 nodes, 1274 internal edges, density 0.0818; top nodes: fix/day1-company-fx-routes, test/operational-prod-day-20261001, fix/hotel-sim-day0-day1
 
 Next best action: Start with get_neighbors on "Base", then use query_graph for the user's specific question.
 ```

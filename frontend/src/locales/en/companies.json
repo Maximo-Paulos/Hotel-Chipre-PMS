@@ -1,0 +1,25 @@
+{
+  "nightlyRates": {
+    "title": "Extra guest charge per night",
+    "description": "Set the amount and effective date. The new rate applies to charges created for those stay dates; it does not change charges already created.",
+    "currency": "Hotel reference currency: {{currency}}.",
+    "currencyUnavailable": "Hotel currency is unavailable; the amount is shown without a currency symbol.",
+    "effectiveFrom": "Effective from",
+    "amount": "Amount per extra guest and night",
+    "zeroAmountHint": "An amount of $0 will not create an extra charge for this rate period.",
+    "save": "Save new rate",
+    "saving": "Saving rate…",
+    "historyTitle": "Rate history",
+    "loading": "Loading rate history…",
+    "historyEmpty": "No extra guest rates have been configured yet.",
+    "historyLoadError": "Could not load rate history.",
+    "retry": "Retry",
+    "saved": "New rate saved.",
+    "saveError": "Could not save the rate.",
+    "invalidAmount": "Enter an amount of zero or more.",
+    "invalidDate": "Choose today or a future date.",
+    "readOnly": "You can view this company. Managing company and rate settings requires permission.",
+    "ratePermissionMissing": "You can view the rate history. Saving rates requires additional permission.",
+    "zeroRate": "No extra charge"
+  }
+}

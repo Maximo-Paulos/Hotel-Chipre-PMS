@@ -5261,7 +5261,7 @@
           "Reservations"
         ],
         "summary": "Update Company Extension Request",
-        "description": "Record a pending company extension without changing the stay.",
+        "description": "Record a pending company extension without changing the stay or terms.",
         "operationId": "update_company_extension_request_api_reservations__reservation_id__extension_request_put",
         "parameters": [
           {
@@ -27826,6 +27826,162 @@
         }
       }
     },
+    "/api/companies/{company_id}/nightly-rates": {
+      "get": {
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Get Company Nightly Rates",
+        "operationId": "get_company_nightly_rates_api_companies__company_id__nightly_rates_get",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Company Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyNightlySurchargeRatesRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Create Company Nightly Rate",
+        "operationId": "create_company_nightly_rate_api_companies__company_id__nightly_rates_post",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Company Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyNightlySurchargeRateCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyNightlySurchargeRateRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/companies/{company_id}/deactivate": {
       "post": {
         "tags": [
@@ -28805,6 +28961,90 @@
         }
       }
     },
+    "/api/reservations/{reservation_id}/company-night-charges/corrections": {
+      "post": {
+        "tags": [
+          "Company Night Charges"
+        ],
+        "summary": "Correct Reservation Company Night Charges",
+        "operationId": "correct_reservation_company_night_charges_api_reservations__reservation_id__company_night_charges_corrections_post",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyNightChargeAmountAdjustmentSetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyNightChargesSummaryRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/room-state-events": {
       "get": {
         "tags": [
@@ -29148,6 +29388,72 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RateCalendarResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rates/payment-method-options": {
+      "get": {
+        "tags": [
+          "Daily Rates"
+        ],
+        "summary": "Get Payment Method Options",
+        "description": "Expose enabled rate methods without returning unrelated hotel settings.",
+        "operationId": "get_payment_method_options_api_rates_payment_method_options_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentMethodOptionsOut"
                 }
               }
             }
@@ -30389,6 +30695,490 @@
                     "$ref": "#/components/schemas/FxSnapshotRead"
                   },
                   "title": "Response List Fx Snapshots Fx Snapshots Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fx/rates": {
+      "get": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "All current FX rates",
+        "operationId": "get_all_rates_api_fx_rates_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FxRateItem"
+                  },
+                  "title": "Response Get All Rates Api Fx Rates Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fx/conversion-quote": {
+      "post": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Current hotel-favorable cross-currency conversion quote",
+        "description": "Return the configured official/blue conversion for any supported pair.",
+        "operationId": "get_conversion_quote_api_fx_conversion_quote_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FxConversionQuoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FxConversionQuoteRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fx/rates/usd/oficial": {
+      "get": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Official USD rate shortcut",
+        "operationId": "get_usd_oficial_rate_api_fx_rates_usd_oficial_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FxRateUsdOficial"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fx/rates/{rate_type}": {
+      "get": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Single supported FX quote",
+        "operationId": "get_single_rate_api_fx_rates__rate_type__get",
+        "parameters": [
+          {
+            "name": "rate_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Rate Type"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FxRateItem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fx/snapshot": {
+      "post": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Persist current FX rates to DB",
+        "operationId": "create_fx_snapshot_api_fx_snapshot_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FxSnapshotCreateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fx/snapshots": {
+      "get": {
+        "tags": [
+          "FX Rates"
+        ],
+        "summary": "Historical FX snapshots",
+        "operationId": "list_fx_snapshots_api_fx_snapshots_get",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD",
+              "title": "From"
+            },
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD",
+              "title": "To"
+            },
+            "description": "YYYY-MM-DD"
+          },
+          {
+            "name": "rate_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by rate type, e.g. oficial",
+              "title": "Rate Type"
+            },
+            "description": "Filter by rate type, e.g. oficial"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FxSnapshotRead"
+                  },
+                  "title": "Response List Fx Snapshots Api Fx Snapshots Get"
                 }
               }
             }
@@ -42639,6 +43429,108 @@
         ],
         "title": "CompanyExtensionRequestUpdate"
       },
+      "CompanyNightChargeAmountAdjustmentRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "previous_amount": {
+            "type": "string",
+            "title": "Previous Amount"
+          },
+          "new_amount": {
+            "type": "string",
+            "title": "New Amount"
+          },
+          "delta_amount": {
+            "type": "string",
+            "title": "Delta Amount"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "previous_amount",
+          "new_amount",
+          "delta_amount",
+          "reason",
+          "created_at"
+        ],
+        "title": "CompanyNightChargeAmountAdjustmentRead"
+      },
+      "CompanyNightChargeAmountAdjustmentRequest": {
+        "properties": {
+          "charge_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Charge Id"
+          },
+          "new_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "New Amount"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "charge_id",
+          "new_amount",
+          "reason"
+        ],
+        "title": "CompanyNightChargeAmountAdjustmentRequest"
+      },
+      "CompanyNightChargeAmountAdjustmentSetRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyNightChargeAmountAdjustmentRequest"
+            },
+            "type": "array",
+            "maxItems": 90,
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CompanyNightChargeAmountAdjustmentSetRequest"
+      },
       "CompanyNightChargeRead": {
         "properties": {
           "id": {
@@ -42653,6 +43545,26 @@
           "amount": {
             "type": "string",
             "title": "Amount"
+          },
+          "unit_amount": {
+            "type": "string",
+            "title": "Unit Amount"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "rate_effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Effective From"
           },
           "currency_code": {
             "type": "string",
@@ -42673,6 +43585,13 @@
           "review_only": {
             "type": "boolean",
             "title": "Review Only"
+          },
+          "adjustments": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyNightChargeAmountAdjustmentRead"
+            },
+            "type": "array",
+            "title": "Adjustments"
           }
         },
         "type": "object",
@@ -42680,6 +43599,8 @@
           "id",
           "stay_date",
           "amount",
+          "unit_amount",
+          "quantity",
           "currency_code",
           "paid_amount",
           "remaining_due",
@@ -42687,6 +43608,34 @@
           "review_only"
         ],
         "title": "CompanyNightChargeRead"
+      },
+      "CompanyNightChargeRefundAllocation": {
+        "properties": {
+          "charge_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Charge Id"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Amount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "charge_id",
+          "amount"
+        ],
+        "title": "CompanyNightChargeRefundAllocation",
+        "description": "Part of a cash refund assigned to one company extra night, in reservation currency."
       },
       "CompanyNightChargeSetRequest": {
         "properties": {
@@ -42699,6 +43648,13 @@
             "maxItems": 90,
             "minItems": 1,
             "title": "Stay Dates"
+          },
+          "extra_person_count": {
+            "type": "integer",
+            "maximum": 99.0,
+            "minimum": 1.0,
+            "title": "Extra Person Count",
+            "default": 1
           }
         },
         "type": "object",
@@ -42749,6 +43705,100 @@
           "charges"
         ],
         "title": "CompanyNightChargesSummaryRead"
+      },
+      "CompanyNightlySurchargeRateCreate": {
+        "properties": {
+          "effective_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Effective From"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Amount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "effective_from",
+          "amount"
+        ],
+        "title": "CompanyNightlySurchargeRateCreate"
+      },
+      "CompanyNightlySurchargeRateRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "company_id": {
+            "type": "integer",
+            "title": "Company Id"
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Effective From"
+          },
+          "amount": {
+            "type": "string",
+            "title": "Amount"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "company_id",
+          "effective_from",
+          "amount",
+          "created_at"
+        ],
+        "title": "CompanyNightlySurchargeRateRead"
+      },
+      "CompanyNightlySurchargeRatesRead": {
+        "properties": {
+          "hotel_today": {
+            "type": "string",
+            "format": "date",
+            "title": "Hotel Today"
+          },
+          "rates": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyNightlySurchargeRateRead"
+            },
+            "type": "array",
+            "title": "Rates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hotel_today"
+        ],
+        "title": "CompanyNightlySurchargeRatesRead"
       },
       "CompanyOptionRead": {
         "properties": {
@@ -51342,6 +52392,17 @@
             ],
             "title": "Payment Methods"
           },
+          "payment_method_options": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Method Options"
+          },
           "ota_channels": {
             "anyOf": [
               {
@@ -53097,8 +54158,66 @@
         ],
         "title": "PaymentMethodEnum"
       },
+      "PaymentMethodOptionsOut": {
+        "properties": {
+          "enable_cash": {
+            "type": "boolean",
+            "title": "Enable Cash"
+          },
+          "enable_bank_transfer": {
+            "type": "boolean",
+            "title": "Enable Bank Transfer"
+          },
+          "enable_debit_card": {
+            "type": "boolean",
+            "title": "Enable Debit Card"
+          },
+          "enable_credit_card": {
+            "type": "boolean",
+            "title": "Enable Credit Card"
+          },
+          "enable_mercado_pago": {
+            "type": "boolean",
+            "title": "Enable Mercado Pago"
+          },
+          "enable_paypal": {
+            "type": "boolean",
+            "title": "Enable Paypal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enable_cash",
+          "enable_bank_transfer",
+          "enable_debit_card",
+          "enable_credit_card",
+          "enable_mercado_pago",
+          "enable_paypal"
+        ],
+        "title": "PaymentMethodOptionsOut"
+      },
       "PaymentMethodsPayload": {
         "properties": {
+          "enable_cash": {
+            "type": "boolean",
+            "title": "Enable Cash",
+            "default": true
+          },
+          "enable_bank_transfer": {
+            "type": "boolean",
+            "title": "Enable Bank Transfer",
+            "default": false
+          },
+          "enable_debit_card": {
+            "type": "boolean",
+            "title": "Enable Debit Card",
+            "default": false
+          },
+          "enable_credit_card": {
+            "type": "boolean",
+            "title": "Enable Credit Card",
+            "default": false
+          },
           "mercado_pago": {
             "$ref": "#/components/schemas/ProviderSetupPayload"
           },
@@ -53524,6 +54643,14 @@
             "type": "array",
             "maxItems": 90,
             "title": "Company Night Charge Ids"
+          },
+          "company_night_charge_refund_allocations": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyNightChargeRefundAllocation"
+            },
+            "type": "array",
+            "maxItems": 90,
+            "title": "Company Night Charge Refund Allocations"
           },
           "collected_before": {
             "type": "boolean",
@@ -57838,6 +58965,30 @@
         "title": "ReservationChargeCreate",
         "description": "Operator-created consumption or extra charge for an active stay."
       },
+      "ReservationCompanyNightRefundableAllocationRead": {
+        "properties": {
+          "charge_id": {
+            "type": "integer",
+            "title": "Charge Id"
+          },
+          "stay_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Stay Date"
+          },
+          "remaining_amount": {
+            "type": "number",
+            "title": "Remaining Amount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "charge_id",
+          "stay_date",
+          "remaining_amount"
+        ],
+        "title": "ReservationCompanyNightRefundableAllocationRead"
+      },
       "ReservationCreate": {
         "properties": {
           "guest_id": {
@@ -59961,6 +61112,13 @@
               }
             ],
             "title": "Prior Receipt Note"
+          },
+          "company_night_charge_refundable_allocations": {
+            "items": {
+              "$ref": "#/components/schemas/ReservationCompanyNightRefundableAllocationRead"
+            },
+            "type": "array",
+            "title": "Company Night Charge Refundable Allocations"
           },
           "created_at": {
             "type": "string",

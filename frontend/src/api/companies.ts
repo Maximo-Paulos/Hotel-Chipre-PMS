@@ -51,6 +51,38 @@ export type CompanyOption = {
   payment_deferred: boolean;
 };
 
+export type CompanyNightlyRate = {
+  id: number;
+  company_id: number;
+  effective_from: string;
+  amount: number | string;
+  created_by_user_id?: number | null;
+  created_at: string;
+};
+
+export type CompanyNightlyRatesResponse = {
+  hotel_today: string;
+  rates: CompanyNightlyRate[];
+};
+
+export type CompanyNightlyRatePayload = {
+  effective_from: string;
+  amount: number;
+};
+
+export const listCompanyNightlyRates = (companyId: number, session?: SessionLike) =>
+  apiFetch<CompanyNightlyRatesResponse>(`/api/companies/${companyId}/nightly-rates`, { session });
+
+export const createCompanyNightlyRate = (
+  companyId: number,
+  payload: CompanyNightlyRatePayload,
+  session?: SessionLike
+) => apiFetch<CompanyNightlyRate>(`/api/companies/${companyId}/nightly-rates`, {
+  method: "POST",
+  data: payload,
+  session
+});
+
 export const listCompanyOptions = (session?: SessionLike) =>
   apiFetch<CompanyOption[]>("/api/companies/options", { session });
 

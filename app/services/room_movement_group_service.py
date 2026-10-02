@@ -23,6 +23,24 @@ class RoomMovementGroupError(Exception):
     """Business error for room movement group operations."""
 
 
+def reservation_actual_guest_count(reservation: Reservation) -> int:
+    """Use the greater of declared occupancy and linked guest identities.
+
+    Some company bookings keep their contracted occupancy/category while the
+    hotel records additional arriving guests separately. Capacity checks must
+    include those linked people without double-counting them against the
+    declared adult/child total.
+    """
+    declared_count = int(reservation.num_adults or 0) + int(reservation.num_children or 0)
+    # The primary occupant counts even on legacy/company records without a
+    # linked primary guest profile. additional_guests stores only people in
+    # addition to that primary occupant, so include the primary slot there.
+    linked_additional_count = len(
+        {guest.id for guest in (reservation.additional_guests or ()) if guest.id is not None}
+    )
+    return max(declared_count, 1 + linked_additional_count)
+
+
 def sync_room_statuses_after_move(
     db: Session,
     *,
@@ -152,6 +170,18 @@ def create_grouped_room_move(
     if reservation.room_id is None:
         raise RoomMovementGroupError("Reservation has no source room to move")
 
+    destination_category = (
+        db.query(RoomCategory)
+        .filter(RoomCategory.id == to_room.category_id, RoomCategory.hotel_id == hotel_id)
+        .first()
+    )
+    if destination_category is None:
+        raise RoomMovementGroupError("Destination room category does not belong to the active hotel")
+    try:
+        _validate_reservation_occupancy(destination_category, reservation_actual_guest_count(reservation), 0)
+    except ReservationError as exc:
+        raise RoomMovementGroupError(str(exc)) from exc
+
     before = audit_log_service.model_snapshot(reservation)
     from_room_id = reservation.room_id
     state_before = f"room_id={from_room_id};category_id={reservation.category_id}"
@@ -167,7 +197,10 @@ def create_grouped_room_move(
     db.flush()
 
     reservation.room_id = to_room.id
-    reservation.category_id = to_room.category_id
+    # Company category is the contracted product. A physical room change must
+    # not silently rewrite the invoice category or the saved base-rate basis.
+    if reservation.company_id is None:
+        reservation.category_id = to_room.category_id
     reservation.version = (reservation.version or 0) + 1
     reservation.allocation_locked = True
     reservation.requires_manual_review = False
@@ -187,7 +220,7 @@ def create_grouped_room_move(
         reason_note=reason_note,
         trigger_event=trigger_event,
         state_before=state_before,
-        state_after=f"room_id={to_room.id};category_id={to_room.category_id}",
+        state_after=f"room_id={to_room.id};category_id={reservation.category_id}",
         notes=reason_note,
         created_by_user_id=created_by_user_id,
     )
@@ -345,8 +378,8 @@ def revert_group(
         try:
             _validate_reservation_occupancy(
                 original_category,
-                reservation.num_adults,
-                reservation.num_children,
+                reservation_actual_guest_count(reservation),
+                0,
             )
         except ReservationError as exc:
             conflicts.append(
@@ -395,7 +428,8 @@ def revert_group(
             continue
 
         reservation.room_id = from_room.id
-        reservation.category_id = from_room.category_id
+        if reservation.company_id is None:
+            reservation.category_id = from_room.category_id
         reservation.version = (reservation.version or 0) + 1
         reservation.allocation_locked = True
         reservation.requires_manual_review = False

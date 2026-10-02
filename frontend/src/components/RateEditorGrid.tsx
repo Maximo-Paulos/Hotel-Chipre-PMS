@@ -15,6 +15,7 @@ type RateEditorGridProps = {
     startDate: string;
     endDate: string;
   } | null;
+  visibleFields: PriceField[];
   disabled?: boolean;
 };
 
@@ -119,10 +120,12 @@ export function RateEditorGrid({
   onSaveCell,
   onSelectCell,
   selectedRange,
+  visibleFields,
   disabled
 }: RateEditorGridProps) {
   const calendarByDate = new Map((calendar?.days ?? []).map((day) => [day.date, day]));
   const symbol = currencySymbol(currencyCode);
+  const visibleRows = PRICE_ROWS.filter((priceRow) => visibleFields.includes(priceRow.field));
 
   const columns: Column[] = dailyRates.map((row, index) => {
     const day = calendarByDate.get(row.date);
@@ -152,15 +155,12 @@ export function RateEditorGrid({
     input.setAttribute("aria-invalid", "false");
     if (value === current) return true;
 
-    onSaveCell({
+    const payload: SingleRateInput = {
       date: row.date,
-      price: field === "price" ? (value as number) : row.price,
-      price_cash: field === "price_cash" ? value : row.price_cash ?? null,
-      price_transfer: field === "price_transfer" ? value : row.price_transfer ?? null,
-      price_mercadopago: field === "price_mercadopago" ? value : row.price_mercadopago ?? null,
-      price_paypal: field === "price_paypal" ? value : row.price_paypal ?? null,
-      price_credit_card: field === "price_credit_card" ? value : row.price_credit_card ?? null
-    });
+      price: field === "price" ? (value as number) : row.price
+    };
+    if (field !== "price") Object.assign(payload, { [field]: value });
+    onSaveCell(payload);
     return true;
   };
 
@@ -267,7 +267,7 @@ export function RateEditorGrid({
           </tr>
 
           {/* Editable price rows */}
-          {PRICE_ROWS.map((priceRow, idx) => (
+          {visibleRows.map((priceRow, idx) => (
             <tr key={priceRow.field}>
               <RowLabel
                 sub={symbol}

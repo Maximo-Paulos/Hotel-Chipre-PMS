@@ -471,6 +471,7 @@ def test_non_cash_payments_never_increase_physical_cash_in_the_open_session(db):
 
     hotel = _hotel(db, 1)
     hotel.enable_bank_transfer = True
+    hotel.enable_mercado_pago = True
     _user(db, 10)
     mp_reservation = _reservation(db, 1, "CASH-NONCASH-MP")
     transfer_reservation = _extra_reservation("CASH-NONCASH-XFER")

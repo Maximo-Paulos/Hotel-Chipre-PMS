@@ -53,7 +53,20 @@ def client_with_db():
 
 
 def _reservation(db, hotel_id: int, code: str) -> Reservation:
-    db.add(HotelConfiguration(id=hotel_id, subscription_active=True))
+    # These API scenarios exercise every payment method; opt them in explicitly
+    # so production's cash-only defaults remain covered independently.
+    db.add(
+        HotelConfiguration(
+            id=hotel_id,
+            subscription_active=True,
+            enable_cash=True,
+            enable_bank_transfer=True,
+            enable_debit_card=True,
+            enable_credit_card=True,
+            enable_mercado_pago=True,
+            enable_paypal=True,
+        )
+    )
     db.flush()
     guest = Guest(first_name="Api", last_name="Guest", hotel_id=hotel_id)
     category = RoomCategory(

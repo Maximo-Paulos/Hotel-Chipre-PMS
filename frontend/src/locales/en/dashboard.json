@@ -13,15 +13,15 @@
       "helper_other": "{{count}} arrivals"
     },
     "adr": {
-      "label": "ADR",
-      "helperSingle": "Average monthly rate",
-      "helperMulti": "Month with reservations in different currencies"
+      "label": "Average booked per night",
+      "helperSingle": "Reservation value divided by booked nights",
+      "helperMulti": "Reservations use different currencies",
+      "helperEmpty": "No eligible reservations this month"
     },
     "revenue": {
-      "label": "Revenue this month",
-      "helperSingle_one": "{{count}} departure today",
-      "helperSingle_other": "{{count}} departures today",
-      "helperMulti": "Review detail by reservation"
+      "label": "Reservation value this month",
+      "helperSingle": "Booked value; it is not cash collected",
+      "helperEmpty": "No eligible reservations this month"
     },
     "pendingActions": {
       "label": "Pending actions",
@@ -30,7 +30,8 @@
       "helperNone": "No critical actions",
       "helperError": "The operations inbox could not be loaded"
     },
-    "multiCurrency": "Multi-currency"
+    "multiCurrency": "Multiple currencies",
+    "noReservations": "No reservations"
   },
   "cashApprovals": {
     "title": "Pending cash differences",

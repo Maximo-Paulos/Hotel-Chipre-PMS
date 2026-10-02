@@ -96,7 +96,7 @@ def client_with_db(monkeypatch):
 
 
 def _reservation(db, hotel_id: int, code: str) -> Reservation:
-    db.add(HotelConfiguration(id=hotel_id, subscription_active=True))
+    db.add(HotelConfiguration(id=hotel_id, subscription_active=True, enable_mercado_pago=True))
     db.flush()
     guest = Guest(first_name="Webhook", last_name="Endpoint", hotel_id=hotel_id)
     category = RoomCategory(

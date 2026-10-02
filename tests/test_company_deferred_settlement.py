@@ -17,6 +17,8 @@ from app.api import reservations as reservations_api
 from app.dependencies.auth import AuthContext
 from app.models.cash_register import CashMovement
 from app.models.company import Company
+from app.models.company_night_charge import CompanyNightlySurchargeRate
+from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.payment import PaymentLink
 from app.models.reservation import ReservationStatusEnum
@@ -38,6 +40,7 @@ from app.services.reservation_service import (
     create_reservation,
     register_company_settlement,
 )
+from app.services.timezones import hotel_today
 
 
 def _deferred_company(
@@ -59,6 +62,16 @@ def _deferred_company(
     )
     db.add(company)
     db.flush()
+    if nightly_extra is not None:
+        db.add(
+            CompanyNightlySurchargeRate(
+                hotel_id=hotel_id,
+                company_id=company.id,
+                effective_from=hotel_today(db, hotel_id),
+                amount=nightly_extra,
+            )
+        )
+        db.flush()
     return company
 
 
@@ -554,6 +567,10 @@ def test_deferred_company_selected_nightly_extra_remains_collectible(
     hotel_config.enable_bank_transfer = True
     company = _deferred_company(db, nightly_extra=Decimal("75.00"))
     reservation = _company_reservation(db, sample_guest, sample_rooms, sample_categories, company)
+    reservation.additional_guests.append(
+        Guest(hotel_id=1, first_name="Extra", last_name="Company Deferred QA")
+    )
+    db.flush()
     summary = add_company_night_charges(
         db,
         hotel_id=1,

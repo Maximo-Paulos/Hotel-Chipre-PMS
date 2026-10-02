@@ -219,6 +219,7 @@ function Cell({
     return (
       <td
         data-testid={hasBlockConflict ? `occupancy-block-conflict-${item.id}` : undefined}
+        aria-label={hasBlockConflict ? t("occupancy.blockConflictTitle", { reason: blockReason }) : undefined}
         className={cx("min-w-[64px] border-b border-r border-slate-200 p-1 align-top", hasBlockConflict && "bg-rose-50")}
         title={hasBlockConflict ? t("occupancy.blockConflictTitle", { reason: blockReason }) : blockedTitle}
         {...dropProps}
@@ -254,11 +255,18 @@ function Cell({
 
   if (blockItems.length > 0) {
     const blockReason = blockReasonLabels[blockItems[0].reason_code] ?? t("occupancy.blocked");
+    const blockedCellLabel = t("occupancy.blockedCell", { reason: blockReason });
     return (
-      <td className="min-w-[64px] border-b border-r border-slate-200 bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_6px,#f8fafc_6px,#f8fafc_12px)] p-1 align-top" title={blockReason}>
+      <td
+        data-testid={roomId !== undefined && day ? `occupancy-block-${roomId}-${day}` : undefined}
+        aria-label={blockedCellLabel}
+        className="min-w-[64px] border-b border-r border-slate-200 bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_6px,#f8fafc_6px,#f8fafc_12px)] p-1 align-top"
+        title={blockedCellLabel}
+      >
         <span className="block truncate px-2 py-1.5 text-xs font-medium text-slate-500">
           {t("occupancy.blocked")}
         </span>
+        <span className="block truncate px-2 text-[10px] font-medium text-slate-700">{blockReason}</span>
       </td>
     );
   }
@@ -309,12 +317,13 @@ export function OccupancyGrid({ data, days, todayIso, sortMode, onSelectReservat
     <div data-testid="occupancy-grid" className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div aria-label={t("occupancy.legendLabel")} className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2 text-xs">
         <span className="font-semibold text-slate-700">{t("occupancy.legendLabel")}</span>
-        {legendStatuses.map((status) => (
-          <span key={status} className={cx("rounded-full px-2 py-1 font-medium", reservationStatusConfig[status].className)}>
-            {t(`occupancy.statuses.${status}`)}
-          </span>
-        ))}
-        <span className="rounded-full bg-slate-100 px-2 py-1 font-medium text-slate-600">{t("occupancy.blocked")}</span>
+      {legendStatuses.map((status) => (
+        <span key={status} className={cx("rounded-full px-2 py-1 font-medium", reservationStatusConfig[status].className)}>
+          {t(`occupancy.statuses.${status}`)}
+        </span>
+      ))}
+      <span className="rounded-full bg-slate-100 px-2 py-1 font-medium text-slate-600">{t("occupancy.blocked")}</span>
+      <span className="rounded-full bg-rose-100 px-2 py-1 font-medium text-rose-900">{t("occupancy.blockConflictLegend")}</span>
       </div>
       <table className="w-full min-w-[1076px] table-fixed border-separate border-spacing-0">
         <thead>

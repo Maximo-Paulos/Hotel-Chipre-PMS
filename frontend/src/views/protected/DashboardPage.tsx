@@ -63,34 +63,52 @@ export function DashboardPage() {
     const occupied = rooms.filter((r) => r.status === "occupied").length;
     const occupancy = rooms.length > 0 ? Math.round((occupied / rooms.length) * 100) : 0;
 
-    const currentMonth = new Date(today).getMonth();
-    const adrBase = reservations.filter((r) =>
-      new Date(r.check_in_date).getMonth() === currentMonth && !isDeferredCompanyReservation(r)
+    const monthReservations = reservations.filter((r) =>
+      r.check_in_date >= monthFrom
+      && r.check_in_date <= monthTo
+      && !isDeferredCompanyReservation(r)
+      && !["cancelled", "no_show"].includes(r.status)
     );
-    const monthCurrencyCode = resolveSingleCurrencyCode(adrBase.map((r) => r.currency_code));
-    const adr =
-      adrBase.length > 0
-        ? adrBase.reduce((acc, r) => {
-            const nights = r.nights && r.nights > 0 ? r.nights : 1;
-            return acc + (r.total_amount || 0) / nights;
-          }, 0) / adrBase.length
-        : 0;
+    const monthCurrencyCode = resolveSingleCurrencyCode(monthReservations.map((r) => r.currency_code));
+    const bookedNightCount = monthReservations.reduce(
+      (acc, reservation) => acc + (reservation.nights && reservation.nights > 0 ? reservation.nights : 1),
+      0
+    );
+    const bookedAmount = monthReservations.reduce((acc, reservation) => acc + Number(reservation.total_amount || 0), 0);
+    const averageBookedPerNight = bookedNightCount > 0 ? bookedAmount / bookedNightCount : 0;
 
-    const revenue = adrBase.reduce((acc, r) => acc + (r.total_amount || 0), 0);
+    const currencyTotals = new Map<string, number>();
+    for (const reservation of monthReservations) {
+      const currencyCode = String(reservation.currency_code || "ARS").trim().toUpperCase();
+      currencyTotals.set(currencyCode, (currencyTotals.get(currencyCode) ?? 0) + Number(reservation.total_amount || 0));
+    }
+    const reservationValueByCurrency = [...currencyTotals.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([currencyCode, amount]) => formatMoney(Math.round(amount), currencyCode))
+      .join(" · ");
     const arrivalsToday = reservations.filter((r) => r.check_in_date === today).length;
-    const departuresToday = reservations.filter((r) => r.check_out_date === today).length;
 
     return [
       { label: t("cards.occupancyToday.label"), value: `${occupancy}%`, helper: t("cards.occupancyToday.helper", { count: arrivalsToday }) },
       {
         label: t("cards.adr.label"),
-        value: monthCurrencyCode ? formatMoney(Math.round(adr || 0), monthCurrencyCode) : t("cards.multiCurrency"),
-        helper: monthCurrencyCode ? t("cards.adr.helperSingle") : t("cards.adr.helperMulti")
+        value: monthReservations.length === 0
+          ? t("cards.noReservations")
+          : monthCurrencyCode
+            ? formatMoney(Math.round(averageBookedPerNight), monthCurrencyCode)
+            : t("cards.multiCurrency"),
+        helper: monthReservations.length === 0
+          ? t("cards.adr.helperEmpty")
+          : monthCurrencyCode
+            ? t("cards.adr.helperSingle")
+            : t("cards.adr.helperMulti")
       },
       {
         label: t("cards.revenue.label"),
-        value: monthCurrencyCode ? formatMoney(Math.round(revenue || 0), monthCurrencyCode) : t("cards.multiCurrency"),
-        helper: monthCurrencyCode ? t("cards.revenue.helperSingle", { count: departuresToday }) : t("cards.revenue.helperMulti")
+        value: monthReservations.length === 0 ? t("cards.noReservations") : reservationValueByCurrency,
+        helper: monthReservations.length === 0
+          ? t("cards.revenue.helperEmpty")
+          : t("cards.revenue.helperSingle")
       },
       {
         label: t("cards.pendingActions.label"),
@@ -102,7 +120,7 @@ export function DashboardPage() {
             : t("cards.pendingActions.helperNone")
       }
     ];
-  }, [criticalPendingActions, pendingActions.length, pendingActionsQuery.isError, reservations, rooms, today, t]);
+  }, [criticalPendingActions, monthFrom, monthTo, pendingActions.length, pendingActionsQuery.isError, reservations, rooms, today, t]);
 
   const arrivals = upcomingReservations;
 
@@ -151,7 +169,7 @@ export function DashboardPage() {
         {cards.map((card) => (
           <div key={card.label} className="rounded-panel bg-white p-5 shadow-raise ring-1 ring-slate-900/5">
             <p className="text-sm text-slate-500">{card.label}</p>
-            <div className="numeric mt-2 text-3xl font-semibold tracking-tight text-slate-900">{card.value}</div>
+            <div className="numeric mt-2 break-words text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{card.value}</div>
             <p className="text-xs text-slate-500">{card.helper}</p>
           </div>
         ))}

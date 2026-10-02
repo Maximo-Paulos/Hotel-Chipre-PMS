@@ -37,10 +37,22 @@ def set_deposit_policy(config: HotelConfiguration, *, deposit_percentage: float,
     )
 
 
-def set_payment_methods(config: HotelConfiguration, *, mercado_pago: bool, paypal: bool, credit_card: bool) -> None:
+def set_payment_methods(
+    config: HotelConfiguration,
+    *,
+    cash: bool,
+    bank_transfer: bool,
+    debit_card: bool,
+    mercado_pago: bool,
+    paypal: bool,
+    credit_card: bool,
+) -> None:
     apply_configuration_update(
         config,
         {
+            "enable_cash": cash,
+            "enable_bank_transfer": bank_transfer,
+            "enable_debit_card": debit_card,
             "enable_mercado_pago": mercado_pago,
             "enable_paypal": paypal,
             "enable_credit_card": credit_card,

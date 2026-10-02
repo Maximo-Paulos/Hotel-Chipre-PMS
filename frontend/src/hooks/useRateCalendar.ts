@@ -11,6 +11,7 @@ import {
   createPricePeriod,
   updatePricePeriod,
   deletePricePeriod,
+  getRatePaymentMethodOptions,
   type BulkRateResult,
   type BulkRateField,
   type BulkRateFieldMode,
@@ -19,7 +20,8 @@ import {
   type DailyRateRangeRow,
   type RateCalendarResponse,
   type PricePeriod,
-  type PricePeriodInput
+  type PricePeriodInput,
+  type RatePaymentMethodOptions
 } from "../api/rate-calendar";
 import { useSession } from "../state/session";
 import { refreshAfterMutation } from "../api/queryInvalidation";
@@ -37,6 +39,16 @@ export function useRateCalendar(categoryId: number | null, dateFrom: string, dat
     queryKey: ["rate-calendar", session.hotelId ?? null, categoryId, dateFrom, dateTo],
     queryFn: () => getRateCalendarDaily({ categoryId: categoryId as number, dateFrom, dateTo }, session),
     enabled: hasValidSession(session) && typeof categoryId === "number" && categoryId > 0,
+    staleTime: 60_000
+  });
+}
+
+export function useRatePaymentMethodOptions() {
+  const { session } = useSession();
+  return useQuery<RatePaymentMethodOptions>({
+    queryKey: ["rate-payment-method-options", session.hotelId ?? null],
+    queryFn: () => getRatePaymentMethodOptions(session),
+    enabled: hasValidSession(session),
     staleTime: 60_000
   });
 }

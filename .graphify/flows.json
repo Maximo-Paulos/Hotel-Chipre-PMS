@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-01T17:49:44.091Z",
+  "generatedAt": "2026-10-01T21:43:41.460Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -4711,6 +4711,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_reservations_update_company_extension_request",
+      "name": "update_company_extension_request",
+      "entryPoint": "api_reservations_update_company_extension_request",
+      "entryPointId": "api_reservations_update_company_extension_request",
+      "path": [
+        "api_reservations_update_company_extension_request",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_to_read"
+      ],
+      "qualifiedPath": [
+        "api_reservations_update_company_extension_request",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_to_read"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
+      ],
+      "criticality": 0.3267,
+      "warnings": []
+    },
+    {
       "id": "flow:api_subscription_upsert_entitlement_override",
       "name": "upsert_entitlement_override",
       "entryPoint": "api_subscription_upsert_entitlement_override",
@@ -5414,6 +5438,28 @@
       "fileCount": 1,
       "files": [
         "app/api/stock.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_reservations_create_reservation_charge",
+      "name": "create_reservation_charge",
+      "entryPoint": "api_reservations_create_reservation_charge",
+      "entryPointId": "api_reservations_create_reservation_charge",
+      "path": [
+        "api_reservations_create_reservation_charge",
+        "api_reservations_authorize_company_reservation_management"
+      ],
+      "qualifiedPath": [
+        "api_reservations_create_reservation_charge",
+        "api_reservations_authorize_company_reservation_management"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -6319,28 +6365,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_reservations_update_company_extension_request",
-      "name": "update_company_extension_request",
-      "entryPoint": "api_reservations_update_company_extension_request",
-      "entryPointId": "api_reservations_update_company_extension_request",
-      "path": [
-        "api_reservations_update_company_extension_request",
-        "api_reservations_to_read"
-      ],
-      "qualifiedPath": [
-        "api_reservations_update_company_extension_request",
-        "api_reservations_to_read"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/reservations.py"
-      ],
-      "criticality": 0.285,
-      "warnings": []
-    },
-    {
       "id": "flow:services_guest_profile_validate_primary_guest_record",
       "name": "validate_primary_guest_record",
       "entryPoint": "services_guest_profile_validate_primary_guest_record",
@@ -7147,6 +7171,62 @@
         "app/services/ota/adapters/booking.py"
       ],
       "criticality": 0.2609,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_reservations_change_dates",
+      "name": "change_dates",
+      "entryPoint": "api_reservations_change_dates",
+      "entryPointId": "api_reservations_change_dates",
+      "path": [
+        "api_reservations_change_dates",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_ensure_action_permission",
+        "api_reservations_is_manager_context",
+        "api_reservations_to_read"
+      ],
+      "qualifiedPath": [
+        "api_reservations_change_dates",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_ensure_action_permission",
+        "api_reservations_is_manager_context",
+        "api_reservations_to_read"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
+      ],
+      "criticality": 0.26,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_reservations_modify_reservation",
+      "name": "modify_reservation",
+      "entryPoint": "api_reservations_modify_reservation",
+      "entryPointId": "api_reservations_modify_reservation",
+      "path": [
+        "api_reservations_modify_reservation",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_ensure_action_permission",
+        "api_reservations_is_manager_context",
+        "api_reservations_to_read"
+      ],
+      "qualifiedPath": [
+        "api_reservations_modify_reservation",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_ensure_action_permission",
+        "api_reservations_is_manager_context",
+        "api_reservations_to_read"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
+      ],
+      "criticality": 0.26,
       "warnings": []
     },
     {
@@ -8030,6 +8110,7 @@
         "api_users_resend_invitation",
         "api_users_assert_manageable_membership",
         "api_users_inviteresponse",
+        "api_users_membership_for_invitation",
         "api_users_membership_user_info",
         "api_users_send_invitation_email",
         "api_users_assert_manageable_role"
@@ -8038,12 +8119,13 @@
         "api_users_resend_invitation",
         "api_users_assert_manageable_membership",
         "api_users_inviteresponse",
+        "api_users_membership_for_invitation",
         "api_users_membership_user_info",
         "api_users_send_invitation_email",
         "api_users_assert_manageable_role"
       ],
       "depth": 2,
-      "nodeCount": 6,
+      "nodeCount": 7,
       "fileCount": 2,
       "files": [
         "app/api/users.py",
@@ -8173,6 +8255,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_reservations_cancel_reservation",
+      "name": "cancel_reservation",
+      "entryPoint": "api_reservations_cancel_reservation",
+      "entryPointId": "api_reservations_cancel_reservation",
+      "path": [
+        "api_reservations_cancel_reservation",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_to_read"
+      ],
+      "qualifiedPath": [
+        "api_reservations_cancel_reservation",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_to_read"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:services_room_block_service_create_block",
       "name": "create_block",
       "entryPoint": "services_room_block_service_create_block",
@@ -8246,6 +8352,30 @@
       "fileCount": 1,
       "files": [
         "app/services/invitation_service.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_reservations_mark_no_show",
+      "name": "mark_no_show",
+      "entryPoint": "api_reservations_mark_no_show",
+      "entryPointId": "api_reservations_mark_no_show",
+      "path": [
+        "api_reservations_mark_no_show",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_to_read"
+      ],
+      "qualifiedPath": [
+        "api_reservations_mark_no_show",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_to_read"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
       ],
       "criticality": 0.2433,
       "warnings": []
@@ -9559,32 +9689,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_reservations_change_dates",
-      "name": "change_dates",
-      "entryPoint": "api_reservations_change_dates",
-      "entryPointId": "api_reservations_change_dates",
-      "path": [
-        "api_reservations_change_dates",
-        "api_reservations_ensure_action_permission",
-        "api_reservations_is_manager_context",
-        "api_reservations_to_read"
-      ],
-      "qualifiedPath": [
-        "api_reservations_change_dates",
-        "api_reservations_ensure_action_permission",
-        "api_reservations_is_manager_context",
-        "api_reservations_to_read"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/api/reservations.py"
-      ],
-      "criticality": 0.2225,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_service_create_company",
       "name": "create_company",
       "entryPoint": "services_analytics_service_create_company",
@@ -9632,32 +9736,6 @@
       "fileCount": 1,
       "files": [
         "app/api/settings_security.py"
-      ],
-      "criticality": 0.2225,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_reservations_modify_reservation",
-      "name": "modify_reservation",
-      "entryPoint": "api_reservations_modify_reservation",
-      "entryPointId": "api_reservations_modify_reservation",
-      "path": [
-        "api_reservations_modify_reservation",
-        "api_reservations_ensure_action_permission",
-        "api_reservations_is_manager_context",
-        "api_reservations_to_read"
-      ],
-      "qualifiedPath": [
-        "api_reservations_modify_reservation",
-        "api_reservations_ensure_action_permission",
-        "api_reservations_is_manager_context",
-        "api_reservations_to_read"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/api/reservations.py"
       ],
       "criticality": 0.2225,
       "warnings": []
@@ -11089,36 +11167,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_service_get_reservation_financial_summary",
-      "name": "get_reservation_financial_summary",
-      "entryPoint": "services_payment_service_get_reservation_financial_summary",
-      "entryPointId": "services_payment_service_get_reservation_financial_summary",
-      "path": [
-        "services_payment_service_get_reservation_financial_summary",
-        "services_payment_service_paymenterror",
-        "services_payment_service_paymentnotfounderror",
-        "services_payment_service_recommended_financial_action",
-        "services_payment_service_resolve_reservation_hotel",
-        "services_payment_service_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_payment_service_get_reservation_financial_summary",
-        "services_payment_service_paymenterror",
-        "services_payment_service_paymentnotfounderror",
-        "services_payment_service_recommended_financial_action",
-        "services_payment_service_resolve_reservation_hotel",
-        "services_payment_service_signed_transaction_amount"
-      ],
-      "depth": 1,
-      "nodeCount": 6,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_service.py"
-      ],
-      "criticality": 0.2017,
-      "warnings": []
-    },
-    {
       "id": "flow:services_reservation_service_transition_reservation_status",
       "name": "transition_reservation_status",
       "entryPoint": "services_reservation_service_transition_reservation_status",
@@ -11694,6 +11742,38 @@
         "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.1978,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_service_get_reservation_financial_summary",
+      "name": "get_reservation_financial_summary",
+      "entryPoint": "services_payment_service_get_reservation_financial_summary",
+      "entryPointId": "services_payment_service_get_reservation_financial_summary",
+      "path": [
+        "services_payment_service_get_reservation_financial_summary",
+        "services_payment_service_company_night_charge_refund_options",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_recommended_financial_action",
+        "services_payment_service_resolve_reservation_hotel",
+        "services_payment_service_signed_transaction_amount"
+      ],
+      "qualifiedPath": [
+        "services_payment_service_get_reservation_financial_summary",
+        "services_payment_service_company_night_charge_refund_options",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_recommended_financial_action",
+        "services_payment_service_resolve_reservation_hotel",
+        "services_payment_service_signed_transaction_amount"
+      ],
+      "depth": 1,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_service.py"
+      ],
+      "criticality": 0.1957,
       "warnings": []
     },
     {
@@ -13962,6 +14042,7 @@
         "services_company_night_charge_service_company",
         "services_company_night_charge_service_companynightchargeerror",
         "services_company_night_charge_service_get_company_night_charges",
+        "services_company_night_charge_service_rate_for_date",
         "services_company_night_charge_service_reservation",
         "services_company_night_charge_service_paid_and_pending_by_charge"
       ],
@@ -13970,11 +14051,12 @@
         "services_company_night_charge_service_company",
         "services_company_night_charge_service_companynightchargeerror",
         "services_company_night_charge_service_get_company_night_charges",
+        "services_company_night_charge_service_rate_for_date",
         "services_company_night_charge_service_reservation",
         "services_company_night_charge_service_paid_and_pending_by_charge"
       ],
       "depth": 2,
-      "nodeCount": 6,
+      "nodeCount": 7,
       "fileCount": 1,
       "files": [
         "app/services/company_night_charge_service.py"
@@ -14232,6 +14314,7 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -14245,12 +14328,13 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -14314,6 +14398,38 @@
       "fileCount": 1,
       "files": [
         "app/api/invitations.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_company_night_charge_service_correct_company_night_charge_amounts",
+      "name": "correct_company_night_charge_amounts",
+      "entryPoint": "services_company_night_charge_service_correct_company_night_charge_amounts",
+      "entryPointId": "services_company_night_charge_service_correct_company_night_charge_amounts",
+      "path": [
+        "services_company_night_charge_service_correct_company_night_charge_amounts",
+        "services_company_night_charge_service_companynightchargeerror",
+        "services_company_night_charge_service_get_company_night_charges",
+        "services_company_night_charge_service_reservation",
+        "services_company_night_charge_service_company",
+        "services_company_night_charge_service_paid_and_pending_by_charge",
+        "services_company_night_charge_service_rate_for_date"
+      ],
+      "qualifiedPath": [
+        "services_company_night_charge_service_correct_company_night_charge_amounts",
+        "services_company_night_charge_service_companynightchargeerror",
+        "services_company_night_charge_service_get_company_night_charges",
+        "services_company_night_charge_service_reservation",
+        "services_company_night_charge_service_company",
+        "services_company_night_charge_service_paid_and_pending_by_charge",
+        "services_company_night_charge_service_rate_for_date"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/company_night_charge_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -14750,6 +14866,7 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -14763,12 +14880,13 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -15430,6 +15548,7 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -15443,12 +15562,13 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -15590,6 +15710,30 @@
       "fileCount": 1,
       "files": [
         "app/services/linen_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_company_night_charge_service_list_company_nightly_surcharge_rates",
+      "name": "list_company_nightly_surcharge_rates",
+      "entryPoint": "services_company_night_charge_service_list_company_nightly_surcharge_rates",
+      "entryPointId": "services_company_night_charge_service_list_company_nightly_surcharge_rates",
+      "path": [
+        "services_company_night_charge_service_list_company_nightly_surcharge_rates",
+        "services_company_night_charge_service_company",
+        "services_company_night_charge_service_companynightchargeerror"
+      ],
+      "qualifiedPath": [
+        "services_company_night_charge_service_list_company_nightly_surcharge_rates",
+        "services_company_night_charge_service_company",
+        "services_company_night_charge_service_companynightchargeerror"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/company_night_charge_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -16240,15 +16384,17 @@
       "path": [
         "api_users_revoke_invitation",
         "api_users_assert_manageable_membership",
+        "api_users_membership_for_invitation",
         "api_users_assert_manageable_role"
       ],
       "qualifiedPath": [
         "api_users_revoke_invitation",
         "api_users_assert_manageable_membership",
+        "api_users_membership_for_invitation",
         "api_users_assert_manageable_role"
       ],
       "depth": 2,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/api/users.py"
@@ -16515,6 +16661,7 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -16529,12 +16676,13 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -16557,6 +16705,7 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -16571,12 +16720,13 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -16599,6 +16749,7 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -16613,12 +16764,13 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -16695,6 +16847,7 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -16709,12 +16862,13 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -16847,6 +17001,7 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -16861,12 +17016,13 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -17260,6 +17416,7 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -17273,12 +17430,13 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -17301,6 +17459,7 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -17315,12 +17474,13 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -17337,12 +17497,13 @@
         "services_onboarding_service_upsert_payment_methods",
         "services_onboarding_service_get_or_create_config",
         "services_onboarding_service_get_or_create_state",
+        "services_onboarding_service_onboardingerror",
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
-        "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -17351,18 +17512,19 @@
         "services_onboarding_service_upsert_payment_methods",
         "services_onboarding_service_get_or_create_config",
         "services_onboarding_service_get_or_create_state",
+        "services_onboarding_service_onboardingerror",
         "services_onboarding_service_resolve_hotel_id",
         "services_onboarding_service_status_from_state",
-        "services_onboarding_service_onboardingerror",
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -17384,6 +17546,7 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -17397,12 +17560,13 @@
         "services_onboarding_service_build_finish_gates",
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
+        "services_onboarding_service_payment_method_options",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -18949,14 +19113,16 @@
       "entryPointId": "api_reservations_add_reservation_guests",
       "path": [
         "api_reservations_add_reservation_guests",
+        "api_reservations_reservation_room_capacity_category",
         "api_reservations_to_read"
       ],
       "qualifiedPath": [
         "api_reservations_add_reservation_guests",
+        "api_reservations_reservation_room_capacity_category",
         "api_reservations_to_read"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/reservations.py"
@@ -19751,28 +19917,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_reservations_cancel_reservation",
-      "name": "cancel_reservation",
-      "entryPoint": "api_reservations_cancel_reservation",
-      "entryPointId": "api_reservations_cancel_reservation",
-      "path": [
-        "api_reservations_cancel_reservation",
-        "api_reservations_to_read"
-      ],
-      "qualifiedPath": [
-        "api_reservations_cancel_reservation",
-        "api_reservations_to_read"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/reservations.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_waitlist_service_cancel_waitlist_entry",
       "name": "cancel_waitlist_entry",
       "entryPoint": "services_waitlist_service_cancel_waitlist_entry",
@@ -20251,6 +20395,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_company_night_charge_service_create_company_nightly_surcharge_rate",
+      "name": "create_company_nightly_surcharge_rate",
+      "entryPoint": "services_company_night_charge_service_create_company_nightly_surcharge_rate",
+      "entryPointId": "services_company_night_charge_service_create_company_nightly_surcharge_rate",
+      "path": [
+        "services_company_night_charge_service_create_company_nightly_surcharge_rate",
+        "services_company_night_charge_service_company",
+        "services_company_night_charge_service_companynightchargeerror"
+      ],
+      "qualifiedPath": [
+        "services_company_night_charge_service_create_company_nightly_surcharge_rate",
+        "services_company_night_charge_service_company",
+        "services_company_night_charge_service_companynightchargeerror"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/company_night_charge_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_fx_rates_create_fx_snapshot",
       "name": "create_fx_snapshot",
       "entryPoint": "api_fx_rates_create_fx_snapshot",
@@ -20279,16 +20447,18 @@
       "entryPointId": "services_room_movement_group_service_create_grouped_room_move",
       "path": [
         "services_room_movement_group_service_create_grouped_room_move",
+        "services_room_movement_group_service_reservation_actual_guest_count",
         "services_room_movement_group_service_roommovementgrouperror",
         "services_room_movement_group_service_sync_room_statuses_after_move"
       ],
       "qualifiedPath": [
         "services_room_movement_group_service_create_grouped_room_move",
+        "services_room_movement_group_service_reservation_actual_guest_count",
         "services_room_movement_group_service_roommovementgrouperror",
         "services_room_movement_group_service_sync_room_statuses_after_move"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/services/room_movement_group_service.py"
@@ -21455,6 +21625,30 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20261015_company_nightly_rate_history_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20261015_company_nightly_rate_history_downgrade",
+      "entryPointId": "versions_20261015_company_nightly_rate_history_downgrade",
+      "path": [
+        "versions_20261015_company_nightly_rate_history_downgrade",
+        "versions_20261015_company_nightly_rate_history_disable_silent_rls_filtering",
+        "versions_20261015_company_nightly_rate_history_disable_tenant_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261015_company_nightly_rate_history_downgrade",
+        "versions_20261015_company_nightly_rate_history_disable_silent_rls_filtering",
+        "versions_20261015_company_nightly_rate_history_disable_tenant_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261015_company_nightly_rate_history.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_3bc5882f756d_add_role_visibility_windows_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_3bc5882f756d_add_role_visibility_windows_downgrade",
@@ -21990,6 +22184,30 @@
       "fileCount": 1,
       "files": [
         "app/services/whatsapp_booking_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:components_reservationdetaildrawer_getcheckinactionerrormessage",
+      "name": "getCheckinActionErrorMessage",
+      "entryPoint": "components_reservationdetaildrawer_getcheckinactionerrormessage",
+      "entryPointId": "components_reservationdetaildrawer_getcheckinactionerrormessage",
+      "path": [
+        "components_reservationdetaildrawer_getcheckinactionerrormessage",
+        "components_reservationdetaildrawer_getcheckinapierrordetail",
+        "components_reservationdetaildrawer_isstructuredmissingguestdata"
+      ],
+      "qualifiedPath": [
+        "components_reservationdetaildrawer_getcheckinactionerrormessage",
+        "components_reservationdetaildrawer_getcheckinapierrordetail",
+        "components_reservationdetaildrawer_isstructuredmissingguestdata"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/components/ReservationDetailDrawer.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -22590,6 +22808,28 @@
       "fileCount": 1,
       "files": [
         "app/services/hotel_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_daily_rates_get_payment_method_options",
+      "name": "get_payment_method_options",
+      "entryPoint": "api_daily_rates_get_payment_method_options",
+      "entryPointId": "api_daily_rates_get_payment_method_options",
+      "path": [
+        "api_daily_rates_get_payment_method_options",
+        "api_daily_rates_paymentmethodoptionsout"
+      ],
+      "qualifiedPath": [
+        "api_daily_rates_get_payment_method_options",
+        "api_daily_rates_paymentmethodoptionsout"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/daily_rates.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -23527,28 +23767,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_reservations_mark_no_show",
-      "name": "mark_no_show",
-      "entryPoint": "api_reservations_mark_no_show",
-      "entryPointId": "api_reservations_mark_no_show",
-      "path": [
-        "api_reservations_mark_no_show",
-        "api_reservations_to_read"
-      ],
-      "qualifiedPath": [
-        "api_reservations_mark_no_show",
-        "api_reservations_to_read"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/reservations.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_notification_service_mark_notification_read",
       "name": "mark_notification_read",
       "entryPoint": "services_notification_service_mark_notification_read",
@@ -23977,6 +24195,28 @@
       ],
       "depth": 1,
       "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/company_night_charge_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_company_night_charge_service_prepare_company_night_charge_refund",
+      "name": "prepare_company_night_charge_refund",
+      "entryPoint": "services_company_night_charge_service_prepare_company_night_charge_refund",
+      "entryPointId": "services_company_night_charge_service_prepare_company_night_charge_refund",
+      "path": [
+        "services_company_night_charge_service_prepare_company_night_charge_refund",
+        "services_company_night_charge_service_companynightchargeerror"
+      ],
+      "qualifiedPath": [
+        "services_company_night_charge_service_prepare_company_night_charge_refund",
+        "services_company_night_charge_service_companynightchargeerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
       "fileCount": 1,
       "files": [
         "app/services/company_night_charge_service.py"
@@ -24890,15 +25130,17 @@
       "path": [
         "services_room_movement_group_service_revert_group",
         "services_room_movement_group_service_active_reservation_conflicts_for_room",
+        "services_room_movement_group_service_reservation_actual_guest_count",
         "services_room_movement_group_service_roommovementgrouperror"
       ],
       "qualifiedPath": [
         "services_room_movement_group_service_revert_group",
         "services_room_movement_group_service_active_reservation_conflicts_for_room",
+        "services_room_movement_group_service_reservation_actual_guest_count",
         "services_room_movement_group_service_roommovementgrouperror"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/services/room_movement_group_service.py"
@@ -26626,6 +26868,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20261010_company_night_charge_tenant_keys.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20261015_company_nightly_rate_history_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20261015_company_nightly_rate_history_upgrade",
+      "entryPointId": "versions_20261015_company_nightly_rate_history_upgrade",
+      "path": [
+        "versions_20261015_company_nightly_rate_history_upgrade",
+        "versions_20261015_company_nightly_rate_history_enable_tenant_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261015_company_nightly_rate_history_upgrade",
+        "versions_20261015_company_nightly_rate_history_enable_tenant_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261015_company_nightly_rate_history.py"
       ],
       "criticality": 0.16,
       "warnings": []

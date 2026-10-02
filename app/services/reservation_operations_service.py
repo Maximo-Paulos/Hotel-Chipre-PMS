@@ -50,6 +50,7 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_MOVE_CAPACITY,
     PERMISSION_RESERVATION_MOVE_CATEGORY,
     PERMISSION_RESERVATION_RATE_ADJUST,
+    PERMISSION_COMPANY_MANAGE,
     RESERVATION_MOVE_TIER_PERMISSIONS,
     audit_permission_denied,
     resolve,
@@ -71,7 +72,11 @@ from app.services.reservation_service import (
     _apply_pricing_result_to_reservation,
     _validate_reservation_occupancy,
 )
-from app.services.room_movement_group_service import create_grouped_room_move, sync_room_statuses_after_move
+from app.services.room_movement_group_service import (
+    create_grouped_room_move,
+    reservation_actual_guest_count,
+    sync_room_statuses_after_move,
+)
 from app.services.timezones import hotel_today
 
 
@@ -468,6 +473,7 @@ def resolve_extension_conflict(
     hotel_id: int,
     new_checkout_date: date,
     actor_user_id: int | None = None,
+    can_manage_company_reservations: bool = False,
 ) -> dict:
     conflicts = _extension_conflicts(
         db,
@@ -492,6 +498,15 @@ def resolve_extension_conflict(
             "check_in_date": conflict.check_in_date.isoformat(),
             "check_out_date": conflict.check_out_date.isoformat(),
         }
+        if conflict.company_id is not None and not can_manage_company_reservations:
+            unresolved.append(
+                {
+                    **details,
+                    "reason": "company_reservation_requires_management_permission",
+                    "message": "Se necesita permiso para reasignar una reserva de empresa en conflicto.",
+                }
+            )
+            continue
         if reservation_has_payment_or_deposit(db, hotel_id=hotel_id, reservation=conflict):
             unresolved.append(
                 {
@@ -883,6 +898,7 @@ def extend_reservation_stay(
     payment_link: PaymentLinkCreate | None = None,
     changed_by_user_id: int | None = None,
     notes: str | None = None,
+    can_manage_company_reservations: bool = False,
 ) -> ReservationExtensionResult:
     if reservation.hotel_id != hotel_id:
         raise ReservationOperationsError("La reserva no pertenece al hotel activo")
@@ -935,6 +951,7 @@ def extend_reservation_stay(
         hotel_id=hotel_id,
         new_checkout_date=new_checkout_date,
         actor_user_id=changed_by_user_id,
+        can_manage_company_reservations=can_manage_company_reservations,
     )
     if not conflict_resolution["resolved"]:
         return ReservationExtensionResult(
@@ -1069,6 +1086,24 @@ def move_reservation_room(
     origin_room_disposition: str | None = None,
     origin_room_disposition_note: str | None = None,
 ) -> RoomMoveResult:
+    if reservation.company_id is not None and not resolve(
+        db,
+        hotel_id,
+        actor_role,
+        PERMISSION_COMPANY_MANAGE,
+        user_id=moved_by_user_id,
+    ):
+        audit_permission_denied(
+            db,
+            hotel_id=hotel_id,
+            user_id=moved_by_user_id,
+            role=actor_role,
+            permission_code=PERMISSION_COMPANY_MANAGE,
+        )
+        raise RoomMovePermissionError(
+            "Para mover una reserva de empresa necesitás el permiso 'Administrar empresas'."
+        )
+
     lock_reservation_version(
         db,
         reservation,
@@ -1119,31 +1154,47 @@ def move_reservation_room(
         raise ReservationOperationsError("La habitacion destino no esta disponible para esas fechas")
 
     category_changed = destination_category.id != current_category.id
-    if category_changed:
-        try:
-            _validate_reservation_occupancy(destination_category, reservation.num_adults, reservation.num_children)
-        except ReservationError as exc:
-            raise ReservationOperationsError(str(exc)) from exc
+    try:
+        _validate_reservation_occupancy(
+            destination_category,
+            reservation_actual_guest_count(reservation),
+            0,
+        )
+    except ReservationError as exc:
+        raise ReservationOperationsError(str(exc)) from exc
 
     previous_total = Decimal(str(reservation.total_amount or 0)).quantize(Decimal("0.01"))
+    if reservation.company_id is not None and price_action == "reprice":
+        raise ReservationOperationsError(
+            "El cambio de habitación de una reserva de empresa conserva la categoría y tarifa contratadas; "
+            "registrá el adicional de persona por separado."
+        )
+
     # sellable_product_id/rate_plan_id are tied to the *current* category's commercial
     # setup; when the category changes they may not be compatible with the new one, so
     # let calculate_reservation_pricing re-infer them for the destination category.
-    pricing = calculate_reservation_pricing(
-        db,
-        category_id=room.category_id,
-        check_in=reservation.check_in_date,
-        check_out=reservation.check_out_date,
-        hotel_id=hotel_id,
-        sellable_product_id=None if category_changed else reservation.sellable_product_id,
-        rate_plan_id=None if category_changed else reservation.rate_plan_id,
-        tax_policy_id=reservation.tax_policy_id,
-        pricing_channel_code=reservation.source_provider_code or reservation.source.value,
-        target_currency=reservation.currency_code,
-        occupancy=reservation.num_adults + reservation.num_children,
-    )
-    quoted_total = Decimal(str(pricing.total_amount)).quantize(Decimal("0.01"))
-    amount_delta = (quoted_total - previous_total).quantize(Decimal("0.01"))
+    if reservation.company_id is not None:
+        pricing = None
+        quoted_total = previous_total
+        amount_delta = Decimal("0.00")
+        currency_code = reservation.currency_code
+    else:
+        pricing = calculate_reservation_pricing(
+            db,
+            category_id=room.category_id,
+            check_in=reservation.check_in_date,
+            check_out=reservation.check_out_date,
+            hotel_id=hotel_id,
+            sellable_product_id=None if category_changed else reservation.sellable_product_id,
+            rate_plan_id=None if category_changed else reservation.rate_plan_id,
+            tax_policy_id=reservation.tax_policy_id,
+            pricing_channel_code=reservation.source_provider_code or reservation.source.value,
+            target_currency=reservation.currency_code,
+            occupancy=reservation.num_adults + reservation.num_children,
+        )
+        quoted_total = Decimal(str(pricing.total_amount)).quantize(Decimal("0.01"))
+        amount_delta = (quoted_total - previous_total).quantize(Decimal("0.01"))
+        currency_code = pricing.currency_code
 
     # A cross-category move that keeps a more expensive quote is a
     # complimentary upgrade. Repricing also changes the reservation's
@@ -1179,9 +1230,10 @@ def move_reservation_room(
     previous_room_id = reservation.room_id
     status_value = reservation.status.value if hasattr(reservation.status, "value") else str(reservation.status)
     reservation.room_id = room.id
-    reservation.category_id = room.category_id
+    if reservation.company_id is None:
+        reservation.category_id = room.category_id
     reservation.version = (reservation.version or 0) + 1
-    if price_action == "reprice":
+    if price_action == "reprice" and pricing is not None:
         _apply_pricing_result_to_reservation(reservation, pricing)
     if move_type == RoomMoveTypeEnum.MANUAL_MOVE:
         reservation.allocation_locked = True
@@ -1244,7 +1296,7 @@ def move_reservation_room(
         previous_total_amount=previous_total,
         quoted_total_amount=quoted_total,
         amount_delta=amount_delta,
-        currency_code=pricing.currency_code,
+        currency_code=currency_code,
         origin_room_disposition=origin_room_disposition,
         origin_room_disposition_note=origin_room_disposition_note,
         origin_room_status_before=origin_room_status_before,

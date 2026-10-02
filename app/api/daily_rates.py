@@ -24,6 +24,7 @@ from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
 from app.models.audit_log import AuditActionEnum
 from app.models.daily_rate import DailyRate, PricePeriod
+from app.models.hotel_config import HotelConfiguration
 from app.models.room import RoomCategory
 from app.services import audit_log_service
 from app.services.pricing_service import (
@@ -74,6 +75,15 @@ class DailyRateFallbackOut(BaseModel):
     daily_rate_id: Optional[int] = None
 
 
+class PaymentMethodOptionsOut(BaseModel):
+    enable_cash: bool
+    enable_bank_transfer: bool
+    enable_debit_card: bool
+    enable_credit_card: bool
+    enable_mercado_pago: bool
+    enable_paypal: bool
+
+
 class DailyRateIn(BaseModel):
     date: date
     price: float = Field(..., ge=0)
@@ -108,6 +118,15 @@ class BulkFieldRateIn(BaseModel):
 class BulkRateOut(BaseModel):
     created: int
     updated: int
+
+
+_OPTIONAL_RATE_FIELDS = (
+    "price_cash",
+    "price_transfer",
+    "price_mercadopago",
+    "price_paypal",
+    "price_credit_card",
+)
 
 
 class PricePeriodIn(BaseModel):
@@ -220,6 +239,23 @@ def _resolve_source(
 # ---------------------------------------------------------------------------
 
 
+@router.get("/payment-method-options", response_model=PaymentMethodOptionsOut)
+def get_payment_method_options(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_READ)),
+):
+    """Expose enabled rate methods without returning unrelated hotel settings."""
+    config = db.get(HotelConfiguration, context.hotel_id)
+    return PaymentMethodOptionsOut(
+        enable_cash=bool(config.enable_cash) if config else True,
+        enable_bank_transfer=bool(config.enable_bank_transfer) if config else False,
+        enable_debit_card=bool(config.enable_debit_card) if config else False,
+        enable_credit_card=bool(config.enable_credit_card) if config else False,
+        enable_mercado_pago=bool(config.enable_mercado_pago) if config else False,
+        enable_paypal=bool(config.enable_paypal) if config else False,
+    )
+
+
 @router.get(
     "/category/{category_id}",
     response_model=List[DailyRateFallbackOut],
@@ -288,22 +324,20 @@ def upsert_daily_rate(
             category_id=category_id,
             date=payload.date,
             price=payload.price,
-            price_cash=payload.price_cash,
-            price_transfer=payload.price_transfer,
-            price_mercadopago=payload.price_mercadopago,
-            price_paypal=payload.price_paypal,
-            price_credit_card=payload.price_credit_card,
+            **{
+                field: getattr(payload, field)
+                for field in _OPTIONAL_RATE_FIELDS
+                if field in payload.model_fields_set
+            },
             created_by_user_id=context.user_id,
         )
         db.add(row)
     else:
         before = audit_log_service.model_snapshot(existing)
         existing.price = payload.price
-        existing.price_cash = payload.price_cash
-        existing.price_transfer = payload.price_transfer
-        existing.price_mercadopago = payload.price_mercadopago
-        existing.price_paypal = payload.price_paypal
-        existing.price_credit_card = payload.price_credit_card
+        for field in _OPTIONAL_RATE_FIELDS:
+            if field in payload.model_fields_set:
+                setattr(existing, field, getattr(payload, field))
         existing.updated_at = datetime.now(timezone.utc)
         row = existing
 
@@ -377,11 +411,9 @@ def bulk_upsert_daily_rates(
                 r = existing_map[current]
                 before = audit_log_service.model_snapshot(r)
                 r.price = payload.price
-                r.price_cash = payload.price_cash
-                r.price_transfer = payload.price_transfer
-                r.price_mercadopago = payload.price_mercadopago
-                r.price_paypal = payload.price_paypal
-                r.price_credit_card = payload.price_credit_card
+                for field in _OPTIONAL_RATE_FIELDS:
+                    if field in payload.model_fields_set:
+                        setattr(r, field, getattr(payload, field))
                 r.updated_at = datetime.now(timezone.utc)
                 touched_rows.append((r, before))
                 updated += 1
@@ -391,11 +423,11 @@ def bulk_upsert_daily_rates(
                     category_id=category_id,
                     date=current,
                     price=payload.price,
-                    price_cash=payload.price_cash,
-                    price_transfer=payload.price_transfer,
-                    price_mercadopago=payload.price_mercadopago,
-                    price_paypal=payload.price_paypal,
-                    price_credit_card=payload.price_credit_card,
+                    **{
+                        field: getattr(payload, field)
+                        for field in _OPTIONAL_RATE_FIELDS
+                        if field in payload.model_fields_set
+                    },
                     created_by_user_id=context.user_id,
                 )
                 db.add(r)

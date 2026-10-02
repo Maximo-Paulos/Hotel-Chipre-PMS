@@ -192,6 +192,105 @@ def test_success_returns_expected_schema():
         _cleanup_client(db, engine)
 
 
+def test_rate_payment_options_only_exposes_enabled_methods():
+    client, db, engine = _build_client()
+    try:
+        _seed_hotel(db, 1, "H1")
+        config = db.get(HotelConfiguration, 1)
+        config.enable_cash = True
+        config.enable_bank_transfer = True
+        config.enable_debit_card = False
+        config.enable_credit_card = False
+        config.enable_mercado_pago = False
+        config.enable_paypal = False
+        db.commit()
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+
+        response = client.get("/api/rates/payment-method-options")
+
+        assert response.status_code == 200, response.text
+        assert response.json() == {
+            "enable_cash": True,
+            "enable_bank_transfer": True,
+            "enable_debit_card": False,
+            "enable_credit_card": False,
+            "enable_mercado_pago": False,
+            "enable_paypal": False,
+        }
+    finally:
+        _cleanup_client(db, engine)
+
+
+def test_daily_rate_patch_preserves_omitted_method_prices_and_allows_explicit_clear():
+    client, db, engine = _build_client()
+    try:
+        category = _seed_hotel(db, 1, "H1")
+        row = DailyRate(
+            hotel_id=1,
+            category_id=category.id,
+            date=date(2026, 5, 7),
+            price=100,
+            price_transfer=90,
+            price_paypal=80,
+        )
+        db.add(row)
+        db.commit()
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+
+        preserved = client.post(
+            f"/api/rates/category/{category.id}/daily",
+            json={"date": "2026-05-07", "price": 110},
+        )
+        assert preserved.status_code == 200, preserved.text
+        assert row.price == 110
+        assert row.price_transfer == 90
+        assert row.price_paypal == 80
+
+        cleared = client.post(
+            f"/api/rates/category/{category.id}/daily",
+            json={"date": "2026-05-07", "price": 120, "price_transfer": None},
+        )
+        assert cleared.status_code == 200, cleared.text
+        assert row.price_transfer is None
+        assert row.price_paypal == 80
+    finally:
+        _cleanup_client(db, engine)
+
+
+def test_bulk_rate_patch_preserves_omitted_method_prices():
+    client, db, engine = _build_client()
+    try:
+        category = _seed_hotel(db, 1, "H1")
+        rows = [
+            DailyRate(
+                hotel_id=1,
+                category_id=category.id,
+                date=date(2026, 5, day),
+                price=100,
+                price_transfer=90 + day,
+                price_paypal=80 + day,
+            )
+            for day in (7, 8)
+        ]
+        db.add_all(rows)
+        db.commit()
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+
+        response = client.post(
+            f"/api/rates/category/{category.id}/bulk",
+            json={"from_date": "2026-05-07", "to_date": "2026-05-08", "price": 125},
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json() == {"created": 0, "updated": 2}
+        assert [(row.price, row.price_transfer, row.price_paypal) for row in rows] == [
+            (125, 97, 87),
+            (125, 98, 88),
+        ]
+    finally:
+        _cleanup_client(db, engine)
+
+
 def test_bulk_field_percent_update_preserves_base_prices_and_excludes_dates():
     client, db, engine = _build_client()
     try:

@@ -154,6 +154,12 @@ class AllocationRunResponse(BaseModel):
     moved_count: int
 
 
+class ReservationCompanyNightRefundableAllocationRead(BaseModel):
+    charge_id: int
+    stay_date: date
+    remaining_amount: float
+
+
 class ReservationTransactionSummaryRead(BaseModel):
     id: int
     amount: float
@@ -171,6 +177,9 @@ class ReservationTransactionSummaryRead(BaseModel):
     collected_before: bool = False
     collected_on: Optional[date] = None
     prior_receipt_note: Optional[str] = None
+    company_night_charge_refundable_allocations: list[ReservationCompanyNightRefundableAllocationRead] = Field(
+        default_factory=list
+    )
     created_at: str
 
 

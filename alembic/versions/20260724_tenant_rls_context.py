@@ -134,6 +134,10 @@ TENANT_TABLES: tuple[str, ...] = (
     "linen_items",
     "linen_locations",
     "linen_movements",
+    # Added by 20261015_company_nightly_rate_history after this baseline;
+    # that migration installs their initial tenant policies.
+    "company_nightly_surcharge_rates",
+    "company_night_charge_amount_adjustments",
 )
 
 

@@ -127,6 +127,7 @@ PERMISSION_HOTEL_SECURITY_MANAGE = "hotel_settings:security_manage"
 
 # Existing capabilities outside the split modules stay canonical.
 PERMISSION_COMPANY_MANAGE = "company:manage"
+PERMISSION_COMPANY_NIGHT_RATE_MANAGE = "company:night_rate_manage"
 PERMISSION_CASH_OPERATE = "cash:operate"
 PERMISSION_CASH_ADJUSTMENT_MANAGE = "cash:adjustment_manage"
 PERMISSION_CASH_EXPENSE = "cash:expense"
@@ -456,6 +457,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "companies", "Manage companies and documents",
         "Permite crear, editar y administrar empresas y sus documentos. No implica acceso automático a otras configuraciones del hotel.",
     ),
+    PERMISSION_COMPANY_NIGHT_RATE_MANAGE: (
+        "companies", "Manage company extra-person nightly rates",
+        "Permite definir o cambiar el adicional nocturno por persona extra de una empresa desde una fecha de vigencia. Dueño, codueña y gerencia lo tienen por defecto; recepción puede cobrar cargos existentes, pero no cambiar esta tarifa.",
+    ),
     PERMISSION_CASH_OPERATE: (
         "cash", "Operate cash register sessions and movements",
         "Permite abrir, operar y cerrar sesiones de caja y registrar movimientos. No permite aprobar diferencias de cierre.",
@@ -737,13 +742,23 @@ _OPERATIONS = tuple(
         PERMISSION_RESERVATION_MANUAL_RATE_LIMITED,
         PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
         PERMISSION_RESERVATION_RATE_ADJUST,
+        PERMISSION_COMPANY_NIGHT_RATE_MANAGE,
     }
 )
 DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
     ROLE_OWNER: _role_permissions(
         *(code for code in _CANONICAL_DEFINITIONS if code != PERMISSION_RESERVATION_RATE_ADJUST)
     ),
-    ROLE_CO_OWNER: _role_permissions(*_OPERATIONS, PERMISSION_RESERVATION_MANUAL_RATE_LIMITED),
+    ROLE_CO_OWNER: _role_permissions(
+        *_OPERATIONS,
+        PERMISSION_RESERVATION_MANUAL_RATE_LIMITED,
+        PERMISSION_RESERVATION_MANUAL_RATE,
+        PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
+        PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
+        PERMISSION_APIKEY_MANAGE,
+        PERMISSION_HOTEL_SECURITY_MANAGE,
+        PERMISSION_COMPANY_NIGHT_RATE_MANAGE,
+    ),
     ROLE_MANAGER: _role_permissions(
         PERMISSION_GUEST_READ, PERMISSION_GUEST_CREATE, PERMISSION_GUEST_UPDATE,
         PERMISSION_GUEST_TAGS_MANAGE, PERMISSION_GUEST_PROHIBITION_READ,
@@ -753,6 +768,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_UPDATE, PERMISSION_RESERVATION_OTA_RECORD,
         PERMISSION_RESERVATION_MANUAL_RATE_LIMITED,
         PERMISSION_RESERVATION_RATE_ADJUST,
+        PERMISSION_COMPANY_NIGHT_RATE_MANAGE,
         PERMISSION_RESERVATION_CANCEL,
         PERMISSION_RESERVATION_CANCEL_PAID,
         PERMISSION_RESERVATION_DELETE, PERMISSION_RESERVATION_DEMO_SEED,
@@ -816,12 +832,16 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
 _OWNER_ONLY = frozenset(
     {
         PERMISSION_HOTEL_PROPERTY_MANAGE,
+    }
+)
+_OWNER_CO_OWNER_CRITICAL = frozenset(
+    {
         PERMISSION_HOTEL_SECURITY_MANAGE,
         PERMISSION_APIKEY_MANAGE,
         PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
     }
 )
-_CRITICAL_PERMISSION_CODES = _OWNER_ONLY | frozenset(
+_CRITICAL_PERMISSION_CODES = _OWNER_ONLY | _OWNER_CO_OWNER_CRITICAL | frozenset(
     {PERMISSION_PERMISSION_MANAGE, PERMISSION_SETTINGS_FX_MANAGE}
 )
 _STEP_UP_REQUIRED = _CRITICAL_PERMISSION_CODES | frozenset(
@@ -844,6 +864,10 @@ _ROLE_SCOPES: dict[str, frozenset[str]] = {
     PERMISSION_SETTINGS_SUBSCRIPTION_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_SECURITY_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_HOTEL_SECURITY_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_APIKEY_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
+    PERMISSION_COMPANY_NIGHT_RATE_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER}),
     PERMISSION_SETTINGS_FX_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_TESTS_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_TESTS_EXECUTE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
@@ -867,6 +891,15 @@ _CO_OWNER_ADMIN_ACCESS_PERMISSIONS = frozenset(
         PERMISSION_SETTINGS_SECURITY_VIEW,
     }
 )
+_OWNER_CO_OWNER_ADMIN_ACCESS_PERMISSIONS = frozenset(
+    {
+        PERMISSION_RESERVATION_MANUAL_RATE,
+        PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
+        PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
+        PERMISSION_APIKEY_MANAGE,
+        PERMISSION_HOTEL_SECURITY_MANAGE,
+    }
+)
 
 
 def immutable_permission_decision(role: str | None, code: str) -> tuple[bool, str] | None:
@@ -874,9 +907,13 @@ def immutable_permission_decision(role: str | None, code: str) -> tuple[bool, st
     if canonical in _OWNER_ONLY:
         return role == ROLE_OWNER, "owner_only"
     scoped_roles = _ROLE_SCOPES.get(canonical)
-    # The hotel confirmed that Co-owner receives the same default access to
-    # these administrative sections. Keep historical denials from silently
-    # removing the second administrator's access; Owner overrides remain intact.
+    # These five sensitive permissions are shared, immutable administrative
+    # access for both accountable owners; property ownership transfer remains
+    # Owner-only above.
+    if canonical in _OWNER_CO_OWNER_ADMIN_ACCESS_PERMISSIONS and role in {ROLE_OWNER, ROLE_CO_OWNER}:
+        return True, "role_scope"
+    # Preserve the existing Co-owner guarantee for the administrative sections
+    # while allowing Owner-level overrides for those section views.
     if canonical in _CO_OWNER_ADMIN_ACCESS_PERMISSIONS and role == ROLE_CO_OWNER:
         return True, "role_scope"
     if canonical == PERMISSION_SETTINGS_FX_MANAGE and role in {ROLE_OWNER, ROLE_CO_OWNER}:

@@ -4,11 +4,16 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
-from app.schemas.company_night_charge import CompanyNightChargeSetRequest, CompanyNightChargesSummaryRead
+from app.schemas.company_night_charge import (
+    CompanyNightChargeAmountAdjustmentSetRequest,
+    CompanyNightChargeSetRequest,
+    CompanyNightChargesSummaryRead,
+)
 from app.services.analytics_service import require_analytics_plan
 from app.services.company_night_charge_service import (
     CompanyNightChargeError,
     add_company_night_charges,
+    correct_company_night_charge_amounts,
     get_company_night_charges,
 )
 from app.services.permission_service import PERMISSION_COMPANY_MANAGE, PERMISSION_RESERVATION_READ
@@ -43,6 +48,33 @@ def create_reservation_company_night_charges(
             hotel_id=context.hotel_id,
             reservation_id=reservation_id,
             stay_dates=payload.stay_dates,
+            actor_user_id=context.user_id,
+            extra_person_count=payload.extra_person_count,
+        )
+        db.commit()
+        return result
+    except CompanyNightChargeError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/{reservation_id}/company-night-charges/corrections",
+    response_model=CompanyNightChargesSummaryRead,
+)
+def correct_reservation_company_night_charges(
+    reservation_id: int,
+    payload: CompanyNightChargeAmountAdjustmentSetRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMPANY_MANAGE)),
+):
+    require_analytics_plan(db, context.hotel_id, "pro")
+    try:
+        result = correct_company_night_charge_amounts(
+            db,
+            hotel_id=context.hotel_id,
+            reservation_id=reservation_id,
+            items=[item.model_dump() for item in payload.items],
             actor_user_id=context.user_id,
         )
         db.commit()

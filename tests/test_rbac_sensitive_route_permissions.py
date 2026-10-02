@@ -684,6 +684,74 @@ def test_reservation_extension_requires_update_charge_and_cash_permissions_indep
         _close(db, engine)
 
 
+def test_reception_cannot_release_company_assignment_while_extending_direct_reservation():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        company = Company(
+            hotel_id=1,
+            legal_name="Protected Company LLC",
+            display_name="Protected Company",
+        )
+        db.add(company)
+        db.flush()
+        reservation.status = ReservationStatusEnum.FULLY_PAID
+        reservation.amount_paid = reservation.total_amount
+        company_reservation = Reservation(
+            hotel_id=1,
+            guest_id=reservation.guest_id,
+            category_id=reservation.category_id,
+            room_id=reservation.room_id,
+            confirmation_code="RBAC-COMPANY-CONFLICT",
+            check_in_date=reservation.check_out_date,
+            check_out_date=reservation.check_out_date + timedelta(days=2),
+            status=ReservationStatusEnum.PENDING,
+            total_amount=Decimal("200.00"),
+            num_adults=1,
+            company_id=company.id,
+            source=ReservationSourceEnum.DIRECT,
+        )
+        db.add(company_reservation)
+        db.commit()
+        previous_company_state = (
+            company_reservation.room_id,
+            company_reservation.version,
+            company_reservation.allocation_status,
+            company_reservation.requires_manual_review,
+            company_reservation.notes,
+        )
+
+        response = client.post(
+            f"/api/reservations/{reservation.id}/extend",
+            json={
+                "new_checkout_date": (reservation.check_out_date + timedelta(days=1)).isoformat(),
+                "client_version": reservation.version,
+                "pricing_mode": "original_average",
+                "payment_action": "payment_link",
+                "payment_link": {
+                    "reservation_id": reservation.id,
+                    "requested_amount": "100.00",
+                    "recipient_email": "guest@example.com",
+                },
+            },
+        )
+
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"]["conflicts"][0]["reason"] == (
+            "company_reservation_requires_management_permission"
+        )
+        db.refresh(company_reservation)
+        assert (
+            company_reservation.room_id,
+            company_reservation.version,
+            company_reservation.allocation_status,
+            company_reservation.requires_manual_review,
+            company_reservation.notes,
+        ) == previous_company_state
+        assert db.query(PaymentLink).filter_by(reservation_id=reservation.id).count() == 0
+    finally:
+        _close(db, engine)
+
+
 def test_legacy_booking_patch_rejects_status_changes_but_preserves_field_updates():
     client, db, engine, _auth, reservation, _stock_item = _client()
     try:
@@ -1087,8 +1155,12 @@ def test_generic_date_edit_preserves_negotiated_and_unclassified_totals(
 
 
 def test_generic_date_edit_preserves_booked_company_base_rate(monkeypatch):
-    client, db, engine, _auth, reservation, _stock_item = _client()
+    client, db, engine, auth, reservation, _stock_item = _client()
     try:
+        # Company reservation terms are editable only by authorized staff.
+        # This test covers price preservation for an authorized owner edit.
+        auth["user_id"] = 10
+        auth["role"] = "owner"
         company = Company(
             hotel_id=1,
             legal_name="Acme Hotels LLC",

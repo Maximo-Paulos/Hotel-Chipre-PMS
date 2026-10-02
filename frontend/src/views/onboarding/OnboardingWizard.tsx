@@ -68,6 +68,10 @@ const defaultPolicyForm: DepositPolicyPayload = {
 const emptyProviderSetup = (): OnboardingProviderSetup => ({ enabled: false, credentials: {} });
 
 const defaultPaymentsForm: PaymentMethodsPayload = {
+  enable_cash: true,
+  enable_bank_transfer: false,
+  enable_debit_card: false,
+  enable_credit_card: false,
   mercado_pago: emptyProviderSetup(),
   paypal: emptyProviderSetup(),
   stripe: emptyProviderSetup()
@@ -170,6 +174,10 @@ export function OnboardingWizard() {
 
     if (status.payment_methods && paymentMethodsHydratedForHotel.current !== status.hotel_id) {
       setPaymentsForm({
+        enable_cash: status.payment_method_options?.enable_cash ?? true,
+        enable_bank_transfer: status.payment_method_options?.enable_bank_transfer ?? false,
+        enable_debit_card: status.payment_method_options?.enable_debit_card ?? false,
+        enable_credit_card: status.payment_method_options?.enable_credit_card ?? false,
         mercado_pago: hydrateProvider(status.payment_methods.mercado_pago),
         paypal: hydrateProvider(status.payment_methods.paypal),
         stripe: hydrateProvider(status.payment_methods.stripe)
@@ -1209,18 +1217,58 @@ function PaymentsStep({
   loading: boolean;
   status?: StepStatus;
 }) {
+  const collectionMethods: Array<{ key: keyof Pick<PaymentMethodsPayload, "enable_cash" | "enable_bank_transfer" | "enable_debit_card" | "enable_credit_card">; label: string }> = [
+    { key: "enable_cash", label: "Efectivo" },
+    { key: "enable_bank_transfer", label: "Transferencia" },
+    { key: "enable_debit_card", label: "Tarjeta de débito" },
+    { key: "enable_credit_card", label: "Tarjeta de crédito" }
+  ];
+
   return (
     <StepCard title="Métodos de pago" status={status}>
-      <ProviderSetupGrid
-        title="Gateways"
-        providers={[
-          { key: "mercado_pago", label: "Mercado Pago" },
-          { key: "paypal", label: "PayPal" },
-          { key: "stripe", label: "Tarjeta de crédito / Stripe (solo Pro / Ultra)" }
-        ]}
-        values={form}
-        onChange={setForm}
-      />
+      <fieldset>
+        <legend className="text-sm font-semibold text-slate-900">¿Cómo cobrás hoy?</legend>
+        <p className="mt-1 text-sm text-slate-600">Elegí los medios que acepta el hotel. Podés cambiarlos después en Configuración del hotel.</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {collectionMethods.map(({ key, label }) => (
+            <label key={key} className="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                checked={form[key]}
+                onChange={(event) => setForm({ ...form, [key]: event.target.checked })}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <details className="mt-4 rounded-lg border border-slate-200 px-4 py-3">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-800">Conectar cobros online (opcional)</summary>
+        <p className="mt-2 text-sm text-slate-600">Las conexiones online pueden configurarse ahora o más adelante.</p>
+        <div className="mt-3">
+          <ProviderSetupGrid
+            title="Pasarelas de pago"
+            providers={[
+              { key: "mercado_pago", label: "Mercado Pago" },
+              { key: "paypal", label: "PayPal" },
+              { key: "stripe", label: "Tarjeta de crédito / Stripe (solo Pro / Ultra)" }
+            ]}
+            values={{
+              mercado_pago: form.mercado_pago,
+              paypal: form.paypal,
+              stripe: form.stripe
+            }}
+            onChange={(providers) =>
+              setForm({
+                ...form,
+                mercado_pago: providers.mercado_pago ?? form.mercado_pago,
+                paypal: providers.paypal ?? form.paypal,
+                stripe: providers.stripe ?? form.stripe
+              })
+            }
+          />
+        </div>
+      </details>
       <StepActions onSave={onSave} loading={loading} />
     </StepCard>
   );
@@ -1275,6 +1323,24 @@ function SubscriptionStep({
   currentSubscription?: OnboardingSubscription | null;
   stripeEnabled: boolean;
 }) {
+  const subscriptionStatusLabels: Record<string, string> = {
+    active: "Activa",
+    trialing: "Prueba gratis",
+    demo: "Demostración",
+    comped: "Acceso de cortesía",
+    past_due: "Pago pendiente",
+    suspended: "Suspendida",
+    paused: "Pausada",
+    cancelled: "Cancelada",
+    canceled: "Cancelada"
+  };
+  const planLabels: Record<string, string> = { starter: "Starter", pro: "Pro", ultra: "Ultra" };
+  const currentStatusLabel = currentSubscription?.status
+    ? subscriptionStatusLabels[String(currentSubscription.status).toLowerCase()] ?? "Estado no disponible"
+    : "Estado no disponible";
+  const currentPlanLabel = currentSubscription?.plan
+    ? planLabels[String(currentSubscription.plan).toLowerCase()] ?? "Plan actual"
+    : "Plan actual";
   const selectedStarterWithStripe = stripeEnabled && form.plan_code === "starter";
   const currentPlanCode = String(currentSubscription?.plan ?? "");
   const trialAvailable = currentSubscription?.trial_available === true;
@@ -1284,8 +1350,8 @@ function SubscriptionStep({
     <StepCard title="Elección de suscripción" status={status}>
       {currentSubscription && (
         <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          Estado actual: <strong>{String(currentSubscription.status ?? "-")}</strong> · Plan actual:{" "}
-          <strong>{String(currentSubscription.plan ?? "-")}</strong>
+          Estado de la suscripción: <strong>{currentStatusLabel}</strong> · Plan actual:{" "}
+          <strong>{currentPlanLabel}</strong>
         </div>
       )}
       <div className="grid gap-3 md:grid-cols-3">

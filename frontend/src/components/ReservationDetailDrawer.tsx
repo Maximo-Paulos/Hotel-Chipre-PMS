@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { type TFunction } from "i18next";
 
 import { ApiError } from "../api/client";
 import { fetchCompanyDocumentFile } from "../api/companies";
+import {
+  createCompanyNightCharges,
+  correctCompanyNightChargeAmounts,
+  type CompanyNightChargeCorrection
+} from "../api/companyNightCharges";
+import { refreshPaymentState } from "../api/queryInvalidation";
 import { isDeferredCompanyReservation } from "../api/reservations";
 import { type GuestUpdatePayload } from "../api/guests";
 import { type RestrictionOverride } from "../api/guestRestrictions";
@@ -16,11 +23,12 @@ import {
   useValidateGuestCheckin
 } from "../hooks/useReservations";
 import { useGuest } from "../hooks/useGuests";
-import { useCompanyNightCharges, useCreateCompanyNightCharges } from "../hooks/useCompanyNightCharges";
+import { useCompanyNightCharges } from "../hooks/useCompanyNightCharges";
 import { useMarkCompanyDocumentSigned, useReservationCompanyDocuments } from "../hooks/useCompanies";
 import { useEffectivePermissions } from "../hooks/usePermissions";
 import { usePaymentMutation, usePaymentSummary } from "../hooks/usePayments";
 import { useRestrictionOverridePrompt } from "../hooks/useRestrictionOverridePrompt";
+import { useGuardedMutation } from "../hooks/useGuardedMutation";
 import { useSession } from "../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../utils/currency";
 import {
@@ -72,6 +80,70 @@ const checkinValidationErrorKeys: Record<string, string> = {
   "Occupation is required": "drawer.checkinCapture.requiredFields.occupation"
 };
 
+const checkinFieldKeysByName: Record<string, string> = {
+  first_name: "drawer.checkinCapture.requiredFields.firstName",
+  last_name: "drawer.checkinCapture.requiredFields.lastName",
+  document_type: "drawer.checkinCapture.requiredFields.documentType",
+  document_number: "drawer.checkinCapture.requiredFields.documentNumber",
+  nationality: "drawer.checkinCapture.requiredFields.nationality",
+  country: "drawer.checkinCapture.requiredFields.country",
+  birth_place: "drawer.checkinCapture.requiredFields.birthPlace",
+  birth_country: "drawer.checkinCapture.requiredFields.birthCountry",
+  marital_status: "drawer.checkinCapture.requiredFields.maritalStatus",
+  occupation: "drawer.checkinCapture.requiredFields.occupation"
+};
+
+const getCheckinApiErrorDetail = (error: unknown): unknown => {
+  if (!(error instanceof ApiError) || !error.payload || typeof error.payload !== "object") return null;
+  return (error.payload as Record<string, unknown>).detail;
+};
+
+const isStructuredMissingGuestData = (detail: unknown): boolean => {
+  if (!detail || typeof detail !== "object") return false;
+  const record = detail as Record<string, unknown>;
+  const code = typeof record.code === "string" ? record.code.toUpperCase() : "";
+  const hasGuestDataCode = code.includes("GUEST_DATA") && (code.includes("MISSING") || code.includes("REQUIRED"));
+  const describesGuestField = (value: unknown): boolean => {
+    if (typeof value === "string") {
+      return Boolean(checkinFieldKeysByName[value] || checkinValidationErrorKeys[value]);
+    }
+    if (!value || typeof value !== "object") return false;
+    const item = value as Record<string, unknown>;
+    const field = [item.field, item.name, item.path, ...(Array.isArray(item.loc) ? item.loc : [])]
+      .find((part) => typeof part === "string" && checkinFieldKeysByName[part]);
+    return typeof field === "string";
+  };
+  const structuredFields = [record.fields, record.errors].filter(Array.isArray).flat();
+  return hasGuestDataCode || structuredFields.some(describesGuestField);
+};
+
+const getCheckinActionErrorMessage = (
+  error: unknown,
+  t: TFunction,
+  balanceDue: number,
+  currencyCode: string
+): string => {
+  const detail = getCheckinApiErrorDetail(error);
+  const structuredMessage =
+    detail && typeof detail === "object" && typeof (detail as Record<string, unknown>).message === "string"
+      ? (detail as Record<string, unknown>).message as string
+      : "";
+  const message = typeof detail === "string" ? detail : structuredMessage;
+
+  // Current API versions return missing fields as an English detail string;
+  // accept a future structured field list too, while keeping the operator UI
+  // localized and independent of that transport shape.
+  if (isStructuredMissingGuestData(detail) || /missing required guest data/i.test(message)) {
+    return t("drawer.checkinCapture.submitMissingFields");
+  }
+  if (/must be paid first/i.test(message)) {
+    return t("drawer.errors.checkInPaymentRequired", {
+      balance: formatMoney(Math.max(0, balanceDue), currencyCode)
+    });
+  }
+  return t("drawer.errors.checkInFailed");
+};
+
 type Props = {
   reservationId: number | null;
   onClose: () => void;
@@ -115,6 +187,10 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const [companionError, setCompanionError] = useState<string | null>(null);
   const [selectedCompanyChargeIds, setSelectedCompanyChargeIds] = useState<number[]>([]);
   const [selectedCompanyChargeDates, setSelectedCompanyChargeDates] = useState<string[]>([]);
+  const [companyExtraPersonCount, setCompanyExtraPersonCount] = useState("1");
+  const [selectedCompanyCorrectionIds, setSelectedCompanyCorrectionIds] = useState<number[]>([]);
+  const [companyCorrectionAmounts, setCompanyCorrectionAmounts] = useState<Record<number, string>>({});
+  const [companyCorrectionReason, setCompanyCorrectionReason] = useState("");
 
   useEffect(() => {
     setActionError(null);
@@ -122,17 +198,40 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   }, [reservationId]);
 
   const reservationQuery = useReservation(reservationId ?? undefined);
+  const queryClient = useQueryClient();
+  const { session } = useSession();
   const operationsQuery = useReservationOperationsSummary(reservationId ?? undefined);
   const summaryQuery = usePaymentSummary(reservationId ?? undefined);
   const paymentMutation = usePaymentMutation(reservationId ?? undefined);
   const companyNightChargesQuery = useCompanyNightCharges(reservationId ?? undefined, Boolean(reservationQuery.data?.company_id));
-  const createCompanyNightChargesMutation = useCreateCompanyNightCharges(reservationId ?? undefined);
+  const refreshCompanyNightCharges = async () => {
+    if (!reservationId) return;
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["company-night-charges", session.hotelId, reservationId]
+      }),
+      refreshPaymentState(queryClient, session.hotelId, reservationId)
+    ]);
+  };
+  const createCompanyNightChargesMutation = useGuardedMutation({
+    mutationFn: ({ stayDates, extraPersonCount }: { stayDates: string[]; extraPersonCount: number }) => {
+      if (!reservationId) throw new Error("No reservation selected");
+      return createCompanyNightCharges(reservationId, stayDates, session, extraPersonCount);
+    },
+    onSuccess: refreshCompanyNightCharges
+  });
+  const correctCompanyNightChargesMutation = useGuardedMutation({
+    mutationFn: (items: CompanyNightChargeCorrection[]) => {
+      if (!reservationId) throw new Error("No reservation selected");
+      return correctCompanyNightChargeAmounts(reservationId, items, session);
+    },
+    onSuccess: refreshCompanyNightCharges
+  });
   const companyDocumentsQuery = useReservationCompanyDocuments(reservationQuery.data?.company_id ? reservationId ?? undefined : undefined);
   const markCompanyDocumentSignedMutation = useMarkCompanyDocumentSigned();
   const { hasPermission } = useEffectivePermissions();
   const canManageCompanyCharges = hasPermission("company:manage");
   const canApplyCompanyExtension = hasPermission("reservation:update") && canManageCompanyCharges;
-  const { session } = useSession();
   const {
     cancelMutation,
     checkInMutation,
@@ -151,10 +250,9 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const summary = summaryQuery.data;
   const deferredCompanyBilling = isDeferredCompanyReservation(reservation);
 
-  // B3.3/B3.4: FULLY_PAID/PRE_CHECK_IN is exactly when the guest's check-in
-  // data (birth place/country, marital status, occupation, etc.) still
-  // matters -- ask the backend if anything's missing before showing the
-  // capture form, instead of waiting for a 400 on the actual check-in.
+  // Load and validate check-in data for every pre-arrival reservation state.
+  // Payment eligibility is enforced by the backend's hotel policy; a balance
+  // must not hide the guest fields needed to complete check-in.
   const checkinDataRelevant = Boolean(reservation) && (
     canCheckInReservation(reservation!.status)
     || reservation?.settlement_status === "deferred"
@@ -254,13 +352,20 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const companyNightCharges = companyNightChargesQuery.data;
   const companyChargeRows = companyNightCharges?.charges ?? [];
   const chargedCompanyDates = new Set(companyChargeRows.map((charge) => charge.stay_date));
-  const outstandingCompanyCharges = companyChargeRows.filter((charge) => charge.remaining_due > 0.01);
-  const companyNightPaidTotal = companyChargeRows.reduce((total, charge) => total + charge.paid_amount, 0);
+  const outstandingCompanyCharges = companyChargeRows.filter((charge) => Number(charge.remaining_due) > 0.01);
+  const selectedCompanyCorrectionRows = companyChargeRows.filter((charge) =>
+    selectedCompanyCorrectionIds.includes(charge.id)
+  );
+  const hasInvalidCompanyCorrectionAmount = selectedCompanyCorrectionRows.some((charge) => {
+    const amount = Number(companyCorrectionAmounts[charge.id]);
+    return !Number.isFinite(amount) || amount <= 0 || Math.round(amount * 100) === Math.round(Number(charge.amount) * 100);
+  });
+  const companyNightPaidTotal = companyChargeRows.reduce((total, charge) => total + Number(charge.paid_amount), 0);
   const companyBasePaid = Math.max(0, Number(summary?.amount_paid ?? 0) - companyNightPaidTotal);
   const companyBaseBalanceDue = Math.max(0, Number(summary?.total_amount ?? 0) - companyBasePaid);
   const selectedCompanyChargeTotal = outstandingCompanyCharges
     .filter((charge) => selectedCompanyChargeIds.includes(charge.id) && !charge.review_only && !charge.payment_pending)
-    .reduce((total, charge) => total + charge.remaining_due, 0);
+    .reduce((total, charge) => total + Number(charge.remaining_due), 0);
   const hasUnpaidCompanyCharges = outstandingCompanyCharges.length > 0;
   const isManualPaymentMethod = manualPaymentMethods.includes(paymentMethod);
   const canSignCompanyDocuments = hasPermission("checkin:perform");
@@ -284,6 +389,10 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   useEffect(() => {
     setSelectedCompanyChargeIds([]);
     setSelectedCompanyChargeDates([]);
+    setCompanyExtraPersonCount("1");
+    setSelectedCompanyCorrectionIds([]);
+    setCompanyCorrectionAmounts({});
+    setCompanyCorrectionReason("");
     setPaymentAmount("");
     setPaymentReferenceInput("");
   }, [reservationId]);
@@ -298,14 +407,54 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
 
   const handleCreateCompanyNightCharges = async () => {
     if (!reservationId || selectedCompanyChargeDates.length === 0) return;
+    const extraPersonCount = Number(companyExtraPersonCount);
+    if (!Number.isInteger(extraPersonCount) || extraPersonCount < 1 || extraPersonCount > 99) {
+      setActionError(t("drawer.companyCharges.invalidPersonCount"));
+      return;
+    }
     setActionError(null);
     setActionMessage(null);
     try {
-      await createCompanyNightChargesMutation.mutateAsync(selectedCompanyChargeDates);
+      await createCompanyNightChargesMutation.mutateAsync({
+        stayDates: selectedCompanyChargeDates,
+        extraPersonCount
+      });
       setSelectedCompanyChargeDates([]);
       setActionMessage(t("drawer.companyCharges.created"));
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : t("drawer.companyCharges.createFailed"));
+    }
+  };
+
+  const handleCorrectCompanyNightCharges = async () => {
+    if (!reservationId || selectedCompanyCorrectionRows.length === 0) return;
+    const reason = companyCorrectionReason.trim();
+    if (!reason) {
+      setActionError(t("drawer.companyCharges.correctionReasonRequired"));
+      return;
+    }
+    if (hasInvalidCompanyCorrectionAmount) {
+      setActionError(t("drawer.companyCharges.correctionAmountInvalid"));
+      return;
+    }
+
+    const items = selectedCompanyCorrectionRows.map((charge) => ({
+      charge_id: charge.id,
+      new_amount: Number(companyCorrectionAmounts[charge.id]),
+      reason
+    }));
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      await correctCompanyNightChargesMutation.mutateAsync(items);
+      setSelectedCompanyCorrectionIds([]);
+      setCompanyCorrectionAmounts({});
+      setCompanyCorrectionReason("");
+      setSelectedCompanyChargeIds([]);
+      setPaymentAmount("");
+      setActionMessage(t("drawer.companyCharges.corrected"));
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : t("drawer.companyCharges.correctionFailed"));
     }
   };
 
@@ -490,7 +639,9 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       // The guest has an active GuestRestriction -- prompt for an override
       // reason and retry through the same atomic endpoint.
       if (restrictionOverridePrompt.handleError(err, (override) => void submitCheckIn(override))) return;
-      setActionError(t("drawer.errors.checkInFailed"));
+      setActionError(
+        getCheckinActionErrorMessage(err, t, Number(operationalBalanceDue ?? 0), currencyCode)
+      );
     }
   };
 
@@ -916,10 +1067,21 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       </span>
                     ) : null}
                   </div>
+                  <p className="mt-1 text-xs text-slate-600">{t("drawer.companyCharges.roomAndContractNote")}</p>
+                  <p className="mt-1 text-xs text-slate-600">{t("drawer.companyCharges.roleHint")}</p>
                   {companyNightChargesQuery.isLoading ? (
                     <p className="mt-2 text-xs text-slate-500">{t("drawer.companyCharges.loading")}</p>
                   ) : companyNightChargesQuery.isError ? (
-                    <p className="mt-2 text-xs text-rose-700">{t("drawer.companyCharges.loadFailed")}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-rose-700">
+                      <span>{t("drawer.companyCharges.loadFailed")}</span>
+                      <button
+                        type="button"
+                        onClick={() => void companyNightChargesQuery.refetch()}
+                        className="rounded border border-rose-300 bg-white px-2 py-1 font-semibold hover:bg-rose-50"
+                      >
+                        {t("drawer.companyCharges.retry")}
+                      </button>
+                    </div>
                   ) : (
                     <>
                       {companyChargeRows.length === 0 ? (
@@ -927,33 +1089,105 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       ) : (
                         <ul className="mt-2 space-y-2">
                           {companyChargeRows.map((charge) => (
-                            <li key={charge.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-100 bg-white px-2 py-2">
-                              <label className="flex min-w-0 items-start gap-2 text-xs">
-                                {charge.remaining_due > 0.01 && !charge.payment_pending && !charge.review_only ? (
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedCompanyChargeIds.includes(charge.id)}
-                                    onChange={(event) => setSelectedCompanyChargeIds((current) =>
-                                      event.target.checked
-                                        ? [...current, charge.id]
-                                        : current.filter((id) => id !== charge.id)
-                                    )}
-                                    aria-label={t("drawer.companyCharges.selectNight", { date: charge.stay_date })}
-                                  />
-                                ) : <span className="w-3" />}
-                                <span>
-                                  <span className="block font-semibold text-slate-800">{charge.stay_date}</span>
-                                  <span className="text-slate-500">
-                                    {t("drawer.companyCharges.paidDue", {
-                                      paid: formatMoney(charge.paid_amount, charge.currency_code),
-                                      due: formatMoney(charge.remaining_due, charge.currency_code)
-                                    })}
+                            <li key={charge.id} className="rounded-md border border-amber-100 bg-white px-2 py-2">
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <label className="flex min-w-0 items-start gap-2 text-xs">
+                                  {Number(charge.remaining_due) > 0.01 && !charge.payment_pending && !charge.review_only ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedCompanyChargeIds.includes(charge.id)}
+                                      onChange={(event) => setSelectedCompanyChargeIds((current) =>
+                                        event.target.checked
+                                          ? [...current, charge.id]
+                                          : current.filter((id) => id !== charge.id)
+                                      )}
+                                      aria-label={t("drawer.companyCharges.selectNight", { date: charge.stay_date })}
+                                    />
+                                  ) : <span className="w-3" />}
+                                  <span>
+                                    <span className="block font-semibold text-slate-800">{charge.stay_date}</span>
+                                    <span className="block text-slate-500">
+                                      {t("drawer.companyCharges.quantityAndUnit", {
+                                        quantity: charge.quantity,
+                                        amount: formatMoney(charge.unit_amount, charge.currency_code)
+                                      })}
+                                    </span>
+                                    <span className="text-slate-500">
+                                      {t("drawer.companyCharges.paidDue", {
+                                        paid: formatMoney(charge.paid_amount, charge.currency_code),
+                                        due: formatMoney(charge.remaining_due, charge.currency_code)
+                                      })}
+                                    </span>
+                                    {charge.review_only ? <span className="mt-0.5 block text-rose-700">{t("drawer.companyCharges.reviewOnly")}</span> : null}
+                                    {charge.payment_pending ? <span className="mt-0.5 block text-amber-800">{t("drawer.companyCharges.paymentPending")}</span> : null}
                                   </span>
-                                  {charge.review_only ? <span className="mt-0.5 block text-rose-700">{t("drawer.companyCharges.reviewOnly")}</span> : null}
-                                  {charge.payment_pending ? <span className="mt-0.5 block text-amber-800">{t("drawer.companyCharges.paymentPending")}</span> : null}
-                                </span>
-                              </label>
-                              <span className="text-xs font-semibold text-slate-700">{formatMoney(charge.amount, charge.currency_code)}</span>
+                                </label>
+                                <div className="flex flex-col items-end gap-2">
+                                  <span className="text-xs font-semibold text-slate-700">{formatMoney(charge.amount, charge.currency_code)}</span>
+                                  {canManageCompanyCharges ? (
+                                    <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedCompanyCorrectionIds.includes(charge.id)}
+                                        disabled={correctCompanyNightChargesMutation.isPending}
+                                        onChange={(event) => {
+                                          setSelectedCompanyCorrectionIds((current) => event.target.checked
+                                            ? [...current, charge.id]
+                                            : current.filter((id) => id !== charge.id));
+                                          setCompanyCorrectionAmounts((current) => {
+                                            if (event.target.checked) {
+                                              return { ...current, [charge.id]: current[charge.id] ?? Number(charge.amount).toFixed(2) };
+                                            }
+                                            const next = { ...current };
+                                            delete next[charge.id];
+                                            return next;
+                                          });
+                                        }}
+                                        aria-label={t("drawer.companyCharges.selectForCorrection", { date: charge.stay_date })}
+                                      />
+                                      {t("drawer.companyCharges.selectForCorrectionLabel")}
+                                    </label>
+                                  ) : null}
+                                </div>
+                              </div>
+                              {selectedCompanyCorrectionIds.includes(charge.id) ? (
+                                <label className="mt-2 block max-w-xs space-y-1 text-xs">
+                                  <span className="text-slate-600">{t("drawer.companyCharges.newAmountLabel", { date: charge.stay_date })}</span>
+                                  <input
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    value={companyCorrectionAmounts[charge.id] ?? ""}
+                                    onChange={(event) => setCompanyCorrectionAmounts((current) => ({
+                                      ...current,
+                                      [charge.id]: event.target.value
+                                    }))}
+                                    disabled={correctCompanyNightChargesMutation.isPending}
+                                    className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                                    aria-label={t("drawer.companyCharges.newAmountLabel", { date: charge.stay_date })}
+                                  />
+                                </label>
+                              ) : null}
+                              {charge.adjustments.length > 0 ? (
+                                <details className="mt-2 text-xs text-slate-600">
+                                  <summary className="cursor-pointer font-medium">
+                                    {t("drawer.companyCharges.adjustmentHistory", { count: charge.adjustments.length })}
+                                  </summary>
+                                  <ul className="mt-1 space-y-1 pl-4">
+                                    {charge.adjustments.map((adjustment) => (
+                                      <li key={adjustment.id}>
+                                        <span className="font-medium">{new Date(adjustment.created_at).toLocaleString()}</span>
+                                        {": "}
+                                        {formatMoney(adjustment.previous_amount, charge.currency_code)}
+                                        {" → "}
+                                        {formatMoney(adjustment.new_amount, charge.currency_code)}
+                                        {` (${formatMoney(adjustment.delta_amount, charge.currency_code)})`}
+                                        <span className="block">{adjustment.reason}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </details>
+                              ) : null}
                             </li>
                           ))}
                         </ul>
@@ -961,9 +1195,24 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       {hasUnpaidCompanyCharges ? (
                         <p className="mt-2 text-xs text-amber-900">{t("drawer.companyCharges.selectBeforePayment")}</p>
                       ) : null}
-                      {canManageCompanyCharges && companyNightCharges?.nightly_surcharge_amount && companyNightCharges.nightly_surcharge_amount > 0 ? (
+                      {canManageCompanyCharges && Number(companyNightCharges?.nightly_surcharge_amount ?? 0) > 0 ? (
                         <div className="mt-3 border-t border-amber-200 pt-3">
                           <p className="text-xs font-semibold text-slate-700">{t("drawer.companyCharges.applyTitle")}</p>
+                          <p className="mt-1 text-xs text-slate-600">{t("drawer.companyCharges.applyHint")}</p>
+                          <label className="mt-2 block max-w-xs space-y-1 text-xs">
+                            <span className="text-slate-600">{t("drawer.companyCharges.extraPersonCount")}</span>
+                            <input
+                              type="number"
+                              min="1"
+                              max="99"
+                              step="1"
+                              value={companyExtraPersonCount}
+                              onChange={(event) => setCompanyExtraPersonCount(event.target.value)}
+                              disabled={createCompanyNightChargesMutation.isPending}
+                              className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                              aria-label={t("drawer.companyCharges.extraPersonCount")}
+                            />
+                          </label>
                           <div className="mt-2 grid grid-cols-2 gap-2">
                             {candidateCompanyChargeDates.map((stayDate) => {
                               const alreadyCharged = chargedCompanyDates.has(stayDate);
@@ -978,6 +1227,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                                         ? [...current, stayDate]
                                         : current.filter((date) => date !== stayDate)
                                     )}
+                                    aria-label={t("drawer.companyCharges.selectStayNight", { date: stayDate })}
                                   />
                                   <span>{stayDate}{alreadyCharged ? ` · ${t("drawer.companyCharges.alreadyAdded")}` : ""}</span>
                                 </label>
@@ -991,6 +1241,39 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                             className="mt-2 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {createCompanyNightChargesMutation.isPending ? t("drawer.companyCharges.applying") : t("drawer.companyCharges.apply")}
+                          </button>
+                        </div>
+                      ) : null}
+                      {selectedCompanyCorrectionRows.length > 0 ? (
+                        <div className="mt-3 border-t border-amber-200 pt-3">
+                          <p className="text-xs font-semibold text-slate-700">{t("drawer.companyCharges.correctionTitle")}</p>
+                          <p className="mt-1 text-xs text-slate-600">{t("drawer.companyCharges.correctionHint")}</p>
+                          <label className="mt-2 block space-y-1 text-xs">
+                            <span className="text-slate-600">{t("drawer.companyCharges.correctionReason")}</span>
+                            <textarea
+                              rows={2}
+                              maxLength={500}
+                              value={companyCorrectionReason}
+                              onChange={(event) => setCompanyCorrectionReason(event.target.value)}
+                              disabled={correctCompanyNightChargesMutation.isPending}
+                              className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                              aria-label={t("drawer.companyCharges.correctionReason")}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => void handleCorrectCompanyNightCharges()}
+                            disabled={
+                              selectedCompanyCorrectionRows.length === 0 ||
+                              !companyCorrectionReason.trim() ||
+                              hasInvalidCompanyCorrectionAmount ||
+                              correctCompanyNightChargesMutation.isPending
+                            }
+                            className="mt-2 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {correctCompanyNightChargesMutation.isPending
+                              ? t("drawer.companyCharges.correcting")
+                              : t("drawer.companyCharges.correct")}
                           </button>
                         </div>
                       ) : null}
@@ -1043,18 +1326,30 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                     </label>
                     {isManualPaymentMethod ? (
                       <label className="min-w-48 flex-1 space-y-1 text-xs">
-                        <span className="text-slate-600">{t("page.form.manualPaymentReference")}</span>
+                        <span className="text-slate-600">
+                          {paymentMethod === "bank_transfer"
+                            ? t("page.form.manualTransferReference")
+                            : t("page.form.manualCardReference")}
+                        </span>
                         <input
                           type="text"
                           required
                           maxLength={120}
                           value={paymentReferenceInput}
                           onChange={(event) => setPaymentReferenceInput(event.target.value)}
-                          placeholder={t("page.form.manualPaymentReferencePlaceholder")}
+                          placeholder={paymentMethod === "bank_transfer"
+                            ? t("page.form.manualTransferReferencePlaceholder")
+                            : t("page.form.manualCardReferencePlaceholder")}
                           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                          aria-label={t("page.form.manualPaymentReference")}
+                          aria-label={paymentMethod === "bank_transfer"
+                            ? t("page.form.manualTransferReference")
+                            : t("page.form.manualCardReference")}
                         />
-                        <span className="block text-slate-500">{t("page.form.manualPaymentReferenceHint")}</span>
+                        <span className="block text-slate-500">
+                          {paymentMethod === "bank_transfer"
+                            ? t("page.form.manualTransferReferenceHint")
+                            : t("page.form.manualCardReferenceHint")}
+                        </span>
                       </label>
                     ) : null}
                     <button

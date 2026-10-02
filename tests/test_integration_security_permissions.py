@@ -41,7 +41,7 @@ def _client(role: str):
     return TestClient(app, raise_server_exceptions=False)
 
 
-def test_owner_can_enter_secret_connection_mutations_but_co_owner_is_denied(monkeypatch):
+def test_owner_and_co_owner_can_enter_secret_connection_mutations(monkeypatch):
     calls = []
     resolved = []
 
@@ -53,7 +53,7 @@ def test_owner_can_enter_secret_connection_mutations_but_co_owner_is_denied(monk
     monkeypatch.setattr(
         permission_service,
         "resolve",
-        lambda _db, _hotel_id, role, code, user_id=None: resolved.append((role, code)) or role == "owner",
+        lambda _db, _hotel_id, role, code, user_id=None: resolved.append((role, code)) or role in {"owner", "co_owner"},
     )
     monkeypatch.setattr(permission_service, "audit_permission_denied", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(auth_dependencies, "_require_action_step_up", lambda *_args, **_kwargs: None)
@@ -66,9 +66,9 @@ def test_owner_can_enter_secret_connection_mutations_but_co_owner_is_denied(monk
     co_owner = _client("co_owner")
     for method, path, kwargs in mutating_requests:
         response = getattr(co_owner, method)(path, **kwargs)
-        assert response.status_code == 403
-    assert calls == []
-    assert all(code == PERMISSION_HOTEL_SECURITY_MANAGE for _role, code in resolved)
+        assert response.status_code == 500
+    assert calls == ["entered", "entered", "entered"]
+    assert all(role == "co_owner" and code == PERMISSION_HOTEL_SECURITY_MANAGE for role, code in resolved)
 
     owner = _client("owner")
     path = "/api/integrations/1/revoke"
@@ -82,7 +82,12 @@ def test_owner_can_enter_secret_connection_mutations_but_co_owner_is_denied(monk
     )
     owner_response = owner.post(path, headers={"X-Action-Step-Up-Ticket": ticket})
     assert owner_response.status_code == 500
-    assert calls == ["entered"]
+    assert calls == ["entered", "entered", "entered", "entered"]
+
+    manager = _client("manager")
+    denied = manager.post(path)
+    assert denied.status_code == 403
+    assert calls == ["entered", "entered", "entered", "entered"]
 
 
 @pytest.mark.parametrize("payload", [{}, {"token": "synthetic-not-a-credential"}])

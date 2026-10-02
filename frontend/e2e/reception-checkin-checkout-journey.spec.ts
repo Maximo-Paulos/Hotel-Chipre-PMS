@@ -107,6 +107,19 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: confirmationCode });
   await expect(reservationRow).toHaveCount(1);
 
+  // A reservation with an outstanding balance must still open the check-in
+  // panel so the receptionist can see and complete the guest fields. The
+  // server remains authoritative about whether this hotel's payment policy
+  // allows check-in at the current paid amount.
+  await reservationRow.getByRole("button", { name: "Check-in", exact: true }).click();
+  const pendingBalanceDrawer = page.getByRole("dialog", { name: confirmationCode });
+  await expect(pendingBalanceDrawer).toBeVisible();
+  await expect(pendingBalanceDrawer.getByText("Pendiente", { exact: true })).toBeVisible();
+  await expect(pendingBalanceDrawer.getByTestId("drawer-balance-due")).toBeVisible();
+  await expect(pendingBalanceDrawer.getByTestId("checkin-capture-form")).toBeVisible();
+  await expect(pendingBalanceDrawer.getByTestId("checkin-capture-form")).toContainText("Completá el lugar de nacimiento.");
+  await pendingBalanceDrawer.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
+
   // Pagar el total antes de poder hacer check-in (regla de negocio: fully_paid).
   await reservationRow.getByRole("button", { name: "Editar", exact: true }).click();
   const editModal = page.locator("div.fixed").filter({ hasText: "Pagos y balance" });
@@ -132,6 +145,13 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   const captureForm = drawer.getByTestId("checkin-capture-form");
   await expect(captureForm).toBeVisible();
   await expect(captureForm).toContainText("Completá el lugar de nacimiento.");
+
+  // If the POST returns the legacy English missing-data detail, show a
+  // localized correction message instead of exposing backend text.
+  await drawer.getByRole("button", { name: "Confirmar check-in", exact: true }).click();
+  await expect(drawer).toContainText("Completá los datos faltantes para el check-in y volvé a intentar.");
+  await expect(drawer).not.toContainText("Check-in blocked");
+
   await captureForm.getByLabel("Lugar de nacimiento").fill("Rosario");
   await captureForm.getByLabel("País de nacimiento").fill("Argentina");
   await captureForm.getByLabel("Estado civil").fill("Soltero/a");

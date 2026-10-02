@@ -208,7 +208,13 @@ def test_paid_future_conflict_reports_conflict_and_extension_does_not_proceed(db
     assert db.query(RoomMovementGroup).count() == 0
 
 
-def test_extension_card_payment_with_pos_reference_is_completed_and_audited(db, sample_guest, sample_rooms):
+def test_extension_card_payment_with_pos_reference_is_completed_and_audited(
+    db, sample_guest, sample_rooms, hotel_config
+):
+    # This scenario explicitly exercises card settlement. Cash-only is the
+    # default for new hotels, so enable the configured card method for it.
+    hotel_config.enable_credit_card = True
+    db.flush()
     reservation = _reservation(
         db,
         code="EXT-MANUAL-CARD",

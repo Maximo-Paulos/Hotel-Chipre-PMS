@@ -9,6 +9,13 @@ from app.models.transaction import PaymentMethodEnum, TransactionStatusEnum, Tra
 from app.schemas.datetime_types import UTCDateTime
 
 
+class CompanyNightChargeRefundAllocation(BaseModel):
+    """Part of a cash refund assigned to one company extra night, in reservation currency."""
+
+    charge_id: int = Field(..., gt=0)
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
+
+
 class PaymentRequest(BaseModel):
     """Client-facing payment request (e.g. from booking cart)."""
     reservation_id: int
@@ -21,6 +28,10 @@ class PaymentRequest(BaseModel):
     refund_of_transaction_id: Optional[int] = Field(default=None, gt=0)
     refund_reason: Optional[str] = Field(default=None, min_length=1, max_length=240)
     company_night_charge_ids: list[int] = Field(default_factory=list, max_length=90)
+    company_night_charge_refund_allocations: list[CompanyNightChargeRefundAllocation] = Field(
+        default_factory=list,
+        max_length=90,
+    )
     collected_before: bool = False
     collected_on: Optional[date] = None
     prior_receipt_note: Optional[str] = Field(default=None, min_length=1, max_length=240)
@@ -56,7 +67,12 @@ class PaymentRequest(BaseModel):
         if len(self.company_night_charge_ids) != len(set(self.company_night_charge_ids)):
             raise ValueError("Company night charge ids must be unique")
         if self.transaction_type == TransactionTypeEnum.REFUND and self.company_night_charge_ids:
-            raise ValueError("Refunds cannot allocate company night charges")
+            raise ValueError("Use explicit company night refund allocations for refunds")
+        if self.transaction_type != TransactionTypeEnum.REFUND and self.company_night_charge_refund_allocations:
+            raise ValueError("Company night refund allocations are only valid for refunds")
+        refund_charge_ids = [row.charge_id for row in self.company_night_charge_refund_allocations]
+        if len(refund_charge_ids) != len(set(refund_charge_ids)):
+            raise ValueError("Company night refund charge ids must be unique")
         has_prior_receipt_details = self.collected_on is not None or self.prior_receipt_note is not None
         if self.collected_before:
             if self.payment_method != PaymentMethodEnum.CASH:

@@ -1952,7 +1952,7 @@ def test_owner_and_co_owner_can_assign_receptionist(owner_ctx):
 
     fastapi_app.dependency_overrides[get_auth_context_target()] = override_auth_context_co_owner
     co_owner_invite = _manage_users_request(client, "post", "/api/users/invite",
-        json={"email": "reception-co@test.com", "role": "receptionist"},
+        json={"email": "reception-co@test.com", "role": "Recepción"},
     )
     assert co_owner_invite.status_code == 201, co_owner_invite.text
     assert co_owner_invite.json()["user"]["role"] == "receptionist"

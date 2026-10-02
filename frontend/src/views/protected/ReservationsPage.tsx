@@ -39,7 +39,7 @@ import {
 } from "../../api/allocationRuns";
 import { ApiError, hasValidSession } from "../../api/client";
 import { getFxConversionQuote, type FxCurrencyCode } from "../../api/fxRates";
-import { getGuestProhibitedDetail, type RestrictionOverride } from "../../api/guestRestrictions";
+import { getGuestProhibitedDetail } from "../../api/guestRestrictions";
 import GuestQuickCreatePanel, {
   emptyQuickGuestForm,
   hasQuickGuestFormData,
@@ -70,7 +70,6 @@ import { usePaymentLinks, usePaymentLinkCancel, usePaymentLinkCreate } from "../
 import { usePaymentProofMutations, usePaymentProofs } from "../../hooks/usePaymentProofs";
 import { fetchPaymentProofImage } from "../../api/paymentProofs";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
-import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { type HotelConfig } from "../../api/config";
 import { useRooms } from "../../hooks/useRooms";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
@@ -251,6 +250,7 @@ export function ReservationsPage() {
   const [priorReceiptNote, setPriorReceiptNote] = useState("");
   const [refundTargetTransactionId, setRefundTargetTransactionId] = useState<number | null>(null);
   const [refundReasonInput, setRefundReasonInput] = useState("");
+  const [refundNightAmounts, setRefundNightAmounts] = useState<Record<number, string>>({});
   const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
   const [paymentProofPreview, setPaymentProofPreview] = useState<{ proofId: number; url: string } | null>(null);
   const [viewingPaymentProofId, setViewingPaymentProofId] = useState<number | null>(null);
@@ -777,6 +777,7 @@ export function ReservationsPage() {
     setPriorReceiptNote("");
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
+    setRefundNightAmounts({});
     setPaymentProofFile(null);
     setFormOpen(true);
   };
@@ -786,7 +787,6 @@ export function ReservationsPage() {
   // modal. Open it once on arrival and drop the flag so back/refresh
   // doesn't keep reopening it.
   const [searchParams, setSearchParams] = useSearchParams();
-  const { openReservation } = useReservationDrawer();
   useEffect(() => {
     if (searchParams.get("crear") === "1") {
       const positiveId = (value: string | null) => {
@@ -858,6 +858,7 @@ export function ReservationsPage() {
     setPriorReceiptNote("");
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
+    setRefundNightAmounts({});
     setPaymentProofFile(null);
     setFormOpen(true);
   };
@@ -880,6 +881,7 @@ export function ReservationsPage() {
     setPriorReceiptNote("");
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
+    setRefundNightAmounts({});
     setPaymentProofFile(null);
   };
 
@@ -1170,7 +1172,6 @@ export function ReservationsPage() {
 
   const canCancel = canCancelReservation;
   const canCheckIn = canCheckInReservation;
-  const isCheckInReady = (status: ReservationStatus) => ["fully_paid", "pre_check_in"].includes(status);
   const canCheckOut = canCheckOutReservation;
   const canNoShow = (status: ReservationStatus) => ["pending", "deposit_paid", "fully_paid"].includes(status);
   const canMoveRoom = (status: ReservationStatus) => !["cancelled", "checked_out", "no_show"].includes(status);
@@ -1187,46 +1188,6 @@ export function ReservationsPage() {
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.cancelFailed"));
     }
-  };
-
-  const handleCheckIn = (reservation: Reservation) => {
-    clearToast();
-    if (!isCheckInReady(reservation.status)) {
-      const balance = reservation.balance_due ?? Math.max(
-        0,
-        Number(reservation.total_amount ?? 0) - Number(reservation.amount_paid ?? 0)
-      );
-      openEdit(reservation);
-      showToast(
-        "info",
-        balance > 0.01
-          ? t("page.messages.balancePendingCheckIn", { balance: formatMoney(balance, normalizeCurrencyCode(reservation.currency_code)) })
-          : t("page.messages.paymentNotConfirmed")
-      );
-      return;
-    }
-    const submitCheckIn = async (restrictionOverride?: RestrictionOverride): Promise<void> => {
-      try {
-        await checkInMutation.mutateAsync(
-          restrictionOverride ? { id: reservation.id, restriction_override: restrictionOverride } : reservation.id
-        );
-        showToast("success", t("page.messages.checkInDone"));
-      } catch (err: unknown) {
-        if (restrictionOverridePrompt.handleError(err, (override) => void submitCheckIn(override))) return;
-        const msg = err instanceof Error ? err.message : "";
-        // B3.3/B3.4: this quick action has no room to show the guest-data
-        // capture form inline -- send the receptionist to the reservation
-        // panel, which shows that form up front, instead of leaving them
-        // stuck on a bare 400 with no way to fix it from here.
-        if (msg.includes("missing required guest data")) {
-          openReservation(reservation.id);
-          showToast("info", t("page.messages.missingGuestDataForCheckIn"));
-          return;
-        }
-        showToast("error", t("page.errors.checkInFailed"));
-      }
-    };
-    void submitCheckIn();
   };
 
   const handleCheckOut = async (reservation: Reservation) => {
@@ -1369,6 +1330,73 @@ export function ReservationsPage() {
     refundablePaymentOptions.find((transaction) => transaction.id === refundTargetTransactionId)?.id ??
     refundablePaymentOptions[0]?.id ??
     null;
+  const selectedRefundTarget = refundablePaymentOptions.find((transaction) => transaction.id === selectedRefundTargetId) ?? null;
+  const companyNightRefundableAllocations = selectedRefundTarget?.company_night_charge_refundable_allocations ?? [];
+  const isCompanyNightRefund = companyNightRefundableAllocations.length > 0;
+  const refundCents = (amount: number) => Math.round((amount + Number.EPSILON) * 100);
+  const enteredCompanyNightRefunds = companyNightRefundableAllocations.map((allocation) => {
+    const rawAmount = refundNightAmounts[allocation.charge_id] ?? "";
+    const hasValue = rawAmount.trim().length > 0;
+    const amount = hasValue ? Number(rawAmount) : 0;
+    const amountCents = Number.isFinite(amount) ? refundCents(amount) : NaN;
+    const remainingAmount = Number(allocation.remaining_amount);
+    const remainingCents = Number.isFinite(remainingAmount) ? refundCents(remainingAmount) : -1;
+    const valid = !hasValue || (
+      Number.isFinite(amount) &&
+      Math.abs(amount * 100 - amountCents) < 0.0001 &&
+      amountCents > 0 &&
+      amountCents <= remainingCents
+    );
+    return { ...allocation, rawAmount, hasValue, amountCents, remainingAmount, remainingCents, valid };
+  });
+  const selectedCompanyNightRefunds = enteredCompanyNightRefunds.filter(
+    (allocation) => allocation.hasValue && allocation.valid && allocation.amountCents > 0
+  );
+  const hasInvalidCompanyNightRefund = enteredCompanyNightRefunds.some((allocation) => !allocation.valid);
+  const companyNightRefundBaseAmount = selectedCompanyNightRefunds.reduce(
+    (total, allocation) => total + allocation.amountCents,
+    0
+  ) / 100;
+  const originalTenderAmount = Number(selectedRefundTarget?.amount ?? 0);
+  const originalAppliedAmount = Number(selectedRefundTarget?.applied_amount ?? 0);
+  const originalTenderPerAppliedUnit = originalTenderAmount > 0 && originalAppliedAmount > 0
+    ? originalTenderAmount / originalAppliedAmount
+    : null;
+  const companyNightRefundTenderAmount = isCompanyNightRefund && originalTenderPerAppliedUnit
+    ? refundCents(companyNightRefundBaseAmount * originalTenderPerAppliedUnit) / 100
+    : null;
+  const companyNightRefundAppliedAmount = companyNightRefundTenderAmount !== null && originalTenderPerAppliedUnit
+    ? refundCents(companyNightRefundTenderAmount / originalTenderPerAppliedUnit) / 100
+    : null;
+  const companyNightRefundMatchesAppliedAmount = companyNightRefundBaseAmount > 0 &&
+    companyNightRefundAppliedAmount !== null &&
+    Math.abs(refundCents(companyNightRefundAppliedAmount) - refundCents(companyNightRefundBaseAmount)) <= 1;
+  const companyNightRefundWithinSource = companyNightRefundTenderAmount !== null && selectedRefundTarget !== null &&
+    refundCents(companyNightRefundTenderAmount) <= refundCents(selectedRefundTarget.refundableRemaining);
+  const canSubmitCompanyNightRefund = isCompanyNightRefund &&
+    selectedCompanyNightRefunds.length > 0 &&
+    !hasInvalidCompanyNightRefund &&
+    companyNightRefundTenderAmount !== null &&
+    companyNightRefundTenderAmount > 0 &&
+    companyNightRefundMatchesAppliedAmount &&
+    companyNightRefundWithinSource;
+  const companyNightRefundValidationMessage = !isCompanyNightRefund
+    ? null
+    : originalTenderPerAppliedUnit === null
+      ? t("page.errors.refundAppliedAmountUnavailable")
+      : selectedRefundTarget && paymentTenderCurrency !== selectedRefundTarget.currency
+        ? t("page.errors.refundMustUseOriginalCurrency", { currency: selectedRefundTarget.currency })
+      : hasInvalidCompanyNightRefund
+        ? t("page.errors.refundNightAmountInvalid")
+        : companyNightRefundBaseAmount > 0 && !companyNightRefundWithinSource
+          ? t("page.errors.refundNightAmountExceedsSource")
+          : companyNightRefundBaseAmount > 0 && !companyNightRefundMatchesAppliedAmount
+            ? t("page.errors.refundNightRoundingMismatch")
+            : null;
+  useEffect(() => {
+    setRefundNightAmounts({});
+    setPaymentAmountInput("");
+  }, [selectedRefundTargetId]);
   const hotelConfigQuery = useHotelConfig();
   const availablePaymentMethods = useMemo(
     () => enabledPaymentMethods(hotelConfigQuery.data),
@@ -1684,11 +1712,17 @@ export function ReservationsPage() {
       showToast("error", t("page.errors.refundReasonRequired"));
       return;
     }
-    const amount = Number(paymentAmountInput);
     if (paymentTenderCurrency !== refundTarget.currency) {
       showToast("error", t("page.errors.refundMustUseOriginalCurrency", { currency: refundTarget.currency }));
       return;
     }
+    if (isCompanyNightRefund && !canSubmitCompanyNightRefund) {
+      showToast("error", companyNightRefundValidationMessage ?? t("page.errors.refundNightAmountInvalid"));
+      return;
+    }
+    const amount = isCompanyNightRefund
+      ? companyNightRefundTenderAmount ?? 0
+      : Number(paymentAmountInput);
     if (!Number.isFinite(amount) || amount <= 0 || amount > refundTarget.refundableRemaining + 0.01) {
       showToast("error", t("page.errors.invalidRefundAmount"));
       return;
@@ -1703,10 +1737,19 @@ export function ReservationsPage() {
         currency: refundTarget.currency,
         description: t("page.messages.refundManualDescription"),
         refund_of_transaction_id: refundTarget.id,
-        refund_reason: refundReason
+        refund_reason: refundReason,
+        ...(isCompanyNightRefund
+          ? {
+              company_night_charge_refund_allocations: selectedCompanyNightRefunds.map((allocation) => ({
+                charge_id: allocation.charge_id,
+                amount: allocation.amountCents / 100
+              }))
+            }
+          : {})
       });
       setPaymentAmountInput("");
       setRefundReasonInput("");
+      setRefundNightAmounts({});
       showToast("success", t("page.messages.refundDone"));
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.refundFailed"));
@@ -2807,12 +2850,8 @@ export function ReservationsPage() {
                         <button
                           type="button"
                           disabled={!canCheckIn(reservation.status) || checkInMutation.isPending || subscriptionBlocked}
-                          onClick={() => handleCheckIn(reservation)}
-                          title={
-                            isCheckInReady(reservation.status)
-                              ? t("page.list.checkInTooltipReady")
-                              : t("page.list.checkInTooltipBlocked")
-                          }
+                          onClick={() => openDetails(reservation)}
+                          title={t("page.list.checkInTooltipOpen")}
                           className="rounded-lg border border-emerald-200 px-2 py-1 text-emerald-700 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {t("page.list.checkIn")}
@@ -2909,12 +2948,8 @@ export function ReservationsPage() {
                   <button
                     type="button"
                     disabled={!canCheckIn(reservation.status) || checkInMutation.isPending || subscriptionBlocked}
-                    onClick={() => handleCheckIn(reservation)}
-                    title={
-                      isCheckInReady(reservation.status)
-                        ? t("page.list.checkInTooltipReady")
-                        : t("page.list.checkInTooltipBlocked")
-                    }
+                    onClick={() => openDetails(reservation)}
+                    title={t("page.list.checkInTooltipOpen")}
                     className="min-h-11 rounded-lg border border-emerald-200 px-3 py-2 text-emerald-700 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {t("page.list.checkIn")}
@@ -3729,27 +3764,51 @@ export function ReservationsPage() {
                       </select>
                     </label>
                     <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
-                      {paymentMethod === "cash" && canRefundPayment
-                        ? t("page.form.cashMovementAmount")
-                        : t("page.form.amountToCharge")}
-                      <input
-                        aria-label={paymentMethod === "cash" && canRefundPayment
+                      {isCompanyNightRefund
+                        ? t("page.form.companyNightRefundCashAmount", { currency: selectedRefundTarget?.currency ?? paymentTenderCurrency })
+                        : paymentMethod === "cash" && canRefundPayment
                           ? t("page.form.cashMovementAmount")
-                          : t("page.form.amountToChargeAria")}
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        value={paymentAmountInput}
-                        onChange={(event) => setPaymentAmountInput(event.target.value)}
-                        aria-describedby="payment-fx-conversion-help"
-                        placeholder={paymentMethod === "cash" && canRefundPayment
-                          ? t("page.form.cashMovementAmountPlaceholder")
-                          : t("page.form.amountToChargePlaceholder")}
-                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
-                      />
+                          : t("page.form.amountToCharge")}
+                      {isCompanyNightRefund ? (
+                        <input
+                          aria-label={t("page.form.companyNightRefundCashAmount", { currency: selectedRefundTarget?.currency ?? paymentTenderCurrency })}
+                          type="text"
+                          readOnly
+                          aria-readonly="true"
+                          value={companyNightRefundTenderAmount !== null && companyNightRefundBaseAmount > 0
+                            ? formatMoney(companyNightRefundTenderAmount, selectedRefundTarget?.currency ?? paymentTenderCurrency)
+                            : "—"}
+                          aria-describedby="company-night-refund-cash-hint"
+                          className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
+                          data-testid="company-night-refund-tender-amount"
+                        />
+                      ) : (
+                        <input
+                          aria-label={paymentMethod === "cash" && canRefundPayment
+                            ? t("page.form.cashMovementAmount")
+                            : t("page.form.amountToChargeAria")}
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={paymentAmountInput}
+                          onChange={(event) => setPaymentAmountInput(event.target.value)}
+                          aria-describedby="payment-fx-conversion-help"
+                          placeholder={paymentMethod === "cash" && canRefundPayment
+                            ? t("page.form.cashMovementAmountPlaceholder")
+                            : t("page.form.amountToChargePlaceholder")}
+                          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
+                        />
+                      )}
                     </label>
                     <div className="sm:col-span-6" id="payment-fx-conversion-help" aria-live="polite">
-                      {paymentTenderCurrency !== editingCurrencyCode ? (
+                      {isCompanyNightRefund ? (
+                        <div className="rounded border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950" id="company-night-refund-cash-hint" data-testid="company-night-refund-conversion-hint">
+                          <p>{t("page.form.companyNightRefundCashHint")}</p>
+                          {companyNightRefundValidationMessage ? (
+                            <p className="mt-1 text-rose-800" role="alert">{companyNightRefundValidationMessage}</p>
+                          ) : null}
+                        </div>
+                      ) : paymentTenderCurrency !== editingCurrencyCode ? (
                         paymentFxQuoteQuery.isError ? (
                           <p className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" data-testid="payment-fx-error">
                             No se pudo obtener una cotización vigente desde DolarAPI. El cobro queda bloqueado hasta poder consultar el mercado elegido por el hotel.
@@ -3832,9 +3891,16 @@ export function ReservationsPage() {
                           {t("page.form.refundSource")}
                           <select
                             value={selectedRefundTargetId ?? ""}
-                            onChange={(event) =>
-                              setRefundTargetTransactionId(event.target.value ? Number(event.target.value) : null)
-                            }
+                            onChange={(event) => {
+                              const nextId = event.target.value ? Number(event.target.value) : null;
+                              const nextSource = refundablePaymentOptions.find((transaction) => transaction.id === nextId);
+                              setRefundTargetTransactionId(nextId);
+                              setRefundNightAmounts({});
+                              setPaymentAmountInput("");
+                              if (nextSource?.company_night_charge_refundable_allocations?.length) {
+                                setPaymentTenderCurrencyInput(nextSource.currency);
+                              }
+                            }}
                             disabled={refundablePaymentOptions.length === 0}
                             className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm disabled:bg-slate-100"
                           >
@@ -3848,6 +3914,55 @@ export function ReservationsPage() {
                             ))}
                           </select>
                         </label>
+                        {isCompanyNightRefund ? (
+                          <section className="rounded-lg border border-violet-200 bg-violet-50/70 p-3 sm:col-span-6" aria-labelledby="company-night-refund-heading" data-testid="company-night-refund-allocations">
+                            <h3 id="company-night-refund-heading" className="text-sm font-semibold text-violet-950">
+                              {t("page.form.companyNightRefundTitle")}
+                            </h3>
+                            <p className="mt-1 text-xs text-violet-900">
+                              {t("page.form.companyNightRefundHint", { currency: paymentReservationCurrency })}
+                            </p>
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                              {enteredCompanyNightRefunds.map((allocation) => {
+                                const date = new Intl.DateTimeFormat(
+                                  i18n.resolvedLanguage?.startsWith("en") ? "en-US" : "es-AR",
+                                  { dateStyle: "medium", timeZone: "UTC" }
+                                ).format(new Date(`${allocation.stay_date}T00:00:00Z`));
+                                const inputId = `company-night-refund-${allocation.charge_id}`;
+                                const availableAmount = Number.isFinite(allocation.remainingAmount)
+                                  ? Math.max(0, allocation.remainingAmount)
+                                  : 0;
+                                return (
+                                  <label key={allocation.charge_id} htmlFor={inputId} className="rounded-md border border-violet-100 bg-white p-3 text-xs font-semibold text-slate-700">
+                                    <span className="block">{t("page.form.companyNightRefundNight", { date })}</span>
+                                    <span className="mt-1 block font-normal text-slate-600">
+                                      {t("page.form.companyNightRefundAvailable", {
+                                        amount: formatMoney(availableAmount, paymentReservationCurrency)
+                                      })}
+                                    </span>
+                                    <span className="mt-2 block">{t("page.form.companyNightRefundAmount")}</span>
+                                    <input
+                                      id={inputId}
+                                      type="number"
+                                      min="0.01"
+                                      max={availableAmount}
+                                      step="0.01"
+                                      inputMode="decimal"
+                                      value={allocation.rawAmount}
+                                      disabled={allocation.remainingCents <= 0}
+                                      onChange={(event) => setRefundNightAmounts((current) => ({
+                                        ...current,
+                                        [allocation.charge_id]: event.target.value
+                                      }))}
+                                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm disabled:bg-slate-100"
+                                      data-testid={`company-night-refund-amount-${allocation.charge_id}`}
+                                    />
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        ) : null}
                         <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
                           {t("page.form.refundReason")}
                           <input
@@ -3863,17 +3978,25 @@ export function ReservationsPage() {
                     ) : null}
                     {isManualPaymentMethod ? (
                       <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
-                        {t("page.form.manualPaymentReference")}
+                        {paymentMethod === "bank_transfer"
+                          ? t("page.form.manualTransferReference")
+                          : t("page.form.manualCardReference")}
                         <input
                           type="text"
                           required
                           maxLength={120}
                           value={paymentReferenceInput}
                           onChange={(event) => setPaymentReferenceInput(event.target.value)}
-                          placeholder={t("page.form.manualPaymentReferencePlaceholder")}
+                          placeholder={paymentMethod === "bank_transfer"
+                            ? t("page.form.manualTransferReferencePlaceholder")
+                            : t("page.form.manualCardReferencePlaceholder")}
                           className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
                         />
-                        <span className="mt-1 block font-normal text-slate-500">{t("page.form.manualPaymentReferenceHint")}</span>
+                        <span className="mt-1 block font-normal text-slate-500">
+                          {paymentMethod === "bank_transfer"
+                            ? t("page.form.manualTransferReferenceHint")
+                            : t("page.form.manualCardReferenceHint")}
+                        </span>
                       </label>
                     ) : null}
                     <button
@@ -3907,7 +4030,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handleRefund}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash" || !canRefundPayment || !selectedRefundTargetId || !refundReasonInput.trim() || paymentTenderCurrency !== refundablePaymentOptions.find((transaction) => transaction.id === selectedRefundTargetId)?.currency}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || paymentMethod !== "cash" || !canRefundPayment || !selectedRefundTargetId || !refundReasonInput.trim() || paymentTenderCurrency !== selectedRefundTarget?.currency || (isCompanyNightRefund && !canSubmitCompanyNightRefund)}
                       className="rounded-lg border border-brand-200 bg-brand-100 px-3 py-2 text-sm font-semibold text-brand-800 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {t("page.form.registerRefund")}

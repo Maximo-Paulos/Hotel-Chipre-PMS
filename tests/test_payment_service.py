@@ -27,6 +27,7 @@ from app.services import payment_service as payment_service_module
 from app.services.payment_service import (
     process_payment,
     get_reservation_financial_summary,
+    _resolve_applied_payment_amount,
     PaymentError,
     PaymentNotFoundError,
 )
@@ -674,6 +675,47 @@ class TestPaymentEdgeCases:
         assert tx.currency == "USD"
         assert summary["currency_code"] == "USD"
         assert summary["transactions"][0]["currency"] == "USD"
+
+    @pytest.mark.parametrize(
+        ("reservation_currency", "tender_currency", "effective_rate", "unspread_rate", "tender_amount"),
+        [
+            ("ARS", "USD", 0.00105, 0.001, Decimal("10.00")),
+            ("USD", "ARS", 1260.0, 1200.0, Decimal("12600.00")),
+        ],
+    )
+    def test_foreign_payment_credit_uses_owner_favorable_directional_quote(
+        self, db, monkeypatch, reservation_currency, tender_currency, effective_rate, unspread_rate, tender_amount
+    ):
+        reservation = Reservation(currency_code=reservation_currency)
+        quote_calls = []
+        quote_details = {
+            "provider": "dolarapi.com",
+            "configured_usd_market": "oficial",
+            "source_side": "venta" if reservation_currency != "ARS" else None,
+            "target_side": "compra" if tender_currency != "ARS" else None,
+        }
+
+        def quote(_db, *, amount, from_currency, to_currency, **_kwargs):
+            quote_calls.append((from_currency, to_currency))
+            assert amount == 1.0
+            return amount * effective_rate, effective_rate, quote_details
+
+        monkeypatch.setattr(payment_service_module, "_convert_amount", quote)
+        applied_amount, applied_rate, details = _resolve_applied_payment_amount(
+            db,
+            hotel_id=DEFAULT_HOTEL_ID,
+            reservation=reservation,
+            tender_amount=tender_amount,
+            tender_currency=tender_currency,
+        )
+
+        expected_credit = (tender_amount / Decimal(str(effective_rate))).quantize(Decimal("0.01"))
+        credit_without_owner_spread = (tender_amount / Decimal(str(unspread_rate))).quantize(Decimal("0.01"))
+        assert quote_calls == [(reservation_currency, tender_currency)]
+        assert applied_rate == effective_rate
+        assert applied_amount == expected_credit
+        assert applied_amount < credit_without_owner_spread
+        assert details == quote_details
 
     def test_payment_accepts_foreign_tender_and_credits_the_reservation_currency(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch
