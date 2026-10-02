@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.models.cash_register import (
     CashCloseReport,
     CashCustodyHandoff,
+    CashCustodyStatusEnum,
     CashMovement,
     CashMovementTypeEnum,
     CashSession,
@@ -196,39 +197,11 @@ def get_daily_summary(
         session.id: str(session.currency_code or (hotel.default_currency if hotel else "ARS")).upper()
         for session in sessions
     }
-    # Successor turns intentionally start at zero; the custody record is the
-    # evidence for cash carried over from a previous turn. Include a confirmed
-    # handoff only when its successor was already active at the selected local
-    # day boundary. A handoff created during the day must not become a second
-    # income in that day's totals.
-    custody_rows = (
-        db.query(
-            CashCloseReport.successor_session_id,
-            CashCustodyHandoff.delivered_amount,
-            CashCustodyHandoff.status,
-            CashCustodyHandoff.received_at,
-            CashCustodyHandoff.delivered_at,
-        )
-        .join(CashCustodyHandoff, CashCustodyHandoff.close_report_id == CashCloseReport.id)
-        .filter(
-            CashCloseReport.hotel_id == hotel_id,
-            CashCloseReport.successor_session_id.is_not(None),
-            CashCustodyHandoff.hotel_id == hotel_id,
-        )
-        .all()
-    )
-    confirmed_carry_in = {
-        successor_id: _decimal(delivered_amount)
-        for successor_id, delivered_amount, handoff_status, received_at, delivered_at in custody_rows
-        if successor_id is not None
-        and _value(handoff_status) == "confirmed"
-        # A handoff acknowledged after the local day started belongs to that
-        # later operational moment, not to the opening balance being reported.
-        # ``delivered_at`` is the safe legacy fallback for old confirmed rows
-        # that predate ``received_at`` being recorded.
-        and _utc(received_at or delivered_at) is not None
-        and _utc(received_at or delivered_at) <= start
-    }
+    # `confirm_cash_custody` writes the declared change float to the successor
+    # CashSession.opening_balance. The handoff's delivered_amount is the full
+    # prior drawer count, not extra cash in the successor; adding it here would
+    # count the same physical money twice (and could include money withdrawn by
+    # the owner). Keep the persisted successor opening as the single source.
     observed_currencies = {
         str(transaction.tender_currency or transaction.currency or (hotel.default_currency if hotel else "ARS")).upper()
         for transaction in transactions
@@ -405,6 +378,8 @@ def get_daily_summary(
     opening_balance = ZERO
     declared_values: list[Decimal] = []
     difference_values: list[Decimal] = []
+    custody_delivered_total = ZERO
+    custody_difference_total = ZERO
     prior_net_by_session: dict[int, Decimal] = defaultdict(lambda: ZERO)
     for movement in prior_movements:
         linked_transaction = movement_transactions.get(movement.transaction_id) if movement.transaction_id else None
@@ -436,10 +411,35 @@ def get_daily_summary(
         closed_at = _utc(session.closed_at)
         session_opening_balance = _decimal(session.opening_balance)
         if opened_at is not None and opened_at <= start and (closed_at is None or closed_at > start):
-            # A successor turn is created with a zero opening balance. Once
-            # its custody handoff is confirmed, that handoff is the evidence
-            # for cash already present at the start of the selected day.
-            session_opening_balance += confirmed_carry_in.get(session.id, ZERO)
+            # Include prior movements on a session that was already open at
+            # the hotel-local day boundary. Any declared successor float is
+            # already represented by session.opening_balance.
+            legacy_carry = (
+                db.query(CashCloseReport, CashCustodyHandoff)
+                .join(
+                    CashCustodyHandoff,
+                    and_(
+                        CashCustodyHandoff.close_report_id == CashCloseReport.id,
+                        CashCustodyHandoff.hotel_id == CashCloseReport.hotel_id,
+                    ),
+                )
+                .filter(
+                    CashCloseReport.hotel_id == hotel_id,
+                    CashCloseReport.successor_session_id == session.id,
+                    CashCloseReport.successor_float_declared_amount.is_(None),
+                    CashCustodyHandoff.status == CashCustodyStatusEnum.CONFIRMED,
+                )
+                .one_or_none()
+            )
+            if legacy_carry is not None:
+                _prior_report, prior_handoff = legacy_carry
+                acknowledged_at = _utc(prior_handoff.received_at or prior_handoff.delivered_at)
+                if acknowledged_at is not None and acknowledged_at <= start:
+                    # Rows predating explicit float declarations used the
+                    # confirmed full handoff as the successor opening. Keep
+                    # that historical behavior, while new confirmations use
+                    # the declared float stored directly on the session.
+                    session_opening_balance += _decimal(prior_handoff.delivered_amount)
             session_opening_balance += prior_net_by_session.get(session.id, ZERO)
             opening_balance += session_opening_balance
         elif opened_at is not None and start <= opened_at < end:
@@ -449,6 +449,16 @@ def get_daily_summary(
             difference = _decimal(close_report.difference)
             declared_values.append(declared)
             difference_values.append(difference)
+            handoff = close_report.custody_handoff
+            handoff_at = _utc(handoff.delivered_at) if handoff is not None else None
+            if handoff_at is not None and start <= handoff_at < end:
+                # Closing removes the declared cash from the old drawer. The
+                # successor float is already included in opening_balance, so
+                # only the delivered amount is subtracted here. Include the
+                # close difference to reconcile the ledger expectation to the
+                # amount actually counted before delivery.
+                custody_delivered_total += _decimal(handoff.delivered_amount)
+                custody_difference_total += difference
         else:
             declared = None
             difference = None
@@ -468,10 +478,17 @@ def get_daily_summary(
             }
         )
 
-    # Physical cash is authoritative from the cash movements; transaction
-    # totals are displayed separately so digital payments never inflate it.
+    # Physical cash is authoritative from the cash movements and cash custody
+    # transitions; transaction totals are displayed separately so digital
+    # payments never inflate it. A successor float is already included in the
+    # summed openings, while a same-day close removes the declared delivery.
     cash_movement_net = cash_income - cash_expense + cash_adjustment
-    physical_expected = opening_balance + cash_movement_net
+    physical_expected = (
+        opening_balance
+        + cash_movement_net
+        + custody_difference_total
+        - custody_delivered_total
+    )
     for session_read in session_reads:
         session_movements = [
             movement for movement in physical_movements if movement.session_id == session_read["session_id"]
@@ -514,6 +531,8 @@ def get_daily_summary(
             "income_total": _decimal(cash_income),
             "expense_total": _decimal(cash_expense),
             "adjustment_total": _decimal(cash_adjustment),
+            "custody_delivered_total": _decimal(custody_delivered_total),
+            "custody_difference_total": _decimal(custody_difference_total),
             "expected_balance": _decimal(physical_expected),
             "declared_balance": _decimal(sum(declared_values, ZERO)) if declared_values else None,
             "difference": _decimal(sum(difference_values, ZERO)) if difference_values else None,

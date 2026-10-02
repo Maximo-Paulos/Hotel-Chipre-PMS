@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { buildAuthHeaders, buildUrl, type SessionLike } from "../api/client";
-import { refreshDomains } from "../api/queryInvalidation";
+import { recoveryDomainsForCursor, refreshDomains } from "../api/queryInvalidation";
 import {
   HOTEL_ID_INDEX_BY_QUERY_PREFIX,
   QUERY_PREFIXES_BY_DOMAIN,
@@ -38,8 +38,9 @@ const CHANNEL_NAME = "hotel-pms-domain-events";
 const STORAGE_KEY = "hotel-pms-domain-event";
 
 const DOMAIN_QUERY_PREFIXES = QUERY_PREFIXES_BY_DOMAIN;
-const ALL_DOMAINS = Object.keys(QUERY_PREFIXES_BY_DOMAIN) as SyncDomain[];
 const EVENT_ID_LIMIT = 2048;
+// Coalesce a burst of committed table events into one tenant-scoped refetch.
+const REALTIME_EVENT_DEBOUNCE_MS = 1_000;
 // Recovery remains bounded below the ten-second freshness budget when the
 // SSE transport is unavailable. Hidden tabs are included so visibility changes
 // do not leave an employee's session stale for a full minute.
@@ -157,18 +158,22 @@ export const broadcastDomainChange = (hotelId: number | string | null | undefine
       path: safePath,
       occurredAt: Date.now()
     };
+    let postedToBroadcastChannel = false;
     try {
       if (typeof BroadcastChannel !== "undefined") {
         channel ??= new BroadcastChannel(CHANNEL_NAME);
         channel.postMessage(message);
+        postedToBroadcastChannel = true;
       }
     } catch {
       // Storage below is the Safari/private-mode fallback.
     }
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(message));
-    } catch {
-      /* ignore unavailable storage */
+    if (!postedToBroadcastChannel) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(message));
+      } catch {
+        /* ignore unavailable storage */
+      }
     }
   });
 };
@@ -285,13 +290,13 @@ const recoverRealtime = async (
     latest_cursor?: number;
     domains?: string[];
     reset_required?: boolean;
+    has_more?: boolean;
   };
-  const domains = (payload.domains ?? []).filter((domain): domain is SyncDomain =>
-    ALL_DOMAINS.includes(domain as SyncDomain)
-  );
-  if (payload.reset_required && currentCursor > 0) {
-    await refreshDomains(queryClient, hotelId, ALL_DOMAINS);
-  } else if (domains.length) {
+  // A missing cursor is the expected first connection for a new browser
+  // session. Reconcile only domains returned by recovery; refetchType="active"
+  // limits network work to mounted views and avoids replaying a full reset.
+  const domains = recoveryDomainsForCursor(currentCursor, payload);
+  if (domains.length) {
     await refreshDomains(queryClient, hotelId, domains);
   }
   if (Number.isSafeInteger(payload.latest_cursor) && (payload.latest_cursor as number) >= currentCursor) {
@@ -343,7 +348,7 @@ const runEventStream = async (
       scheduledDomains.clear();
       refreshTimer = null;
       void refreshDomains(queryClient, hotelId, domains);
-    }, 1000);
+    }, REALTIME_EVENT_DEBOUNCE_MS);
   };
 
   updateRealtimeStatus(hotelId, "connecting");

@@ -49,6 +49,7 @@ import LocalizedDateField from "../../components/LocalizedDateField";
 import ManualOtaReservationModal from "../../components/ManualOtaReservationModal";
 import { RestrictionOverrideModal } from "../../components/RestrictionOverrideModal";
 import { useRestrictionOverridePrompt } from "../../hooks/useRestrictionOverridePrompt";
+import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
 import { getPaymentReceiptData, type PaymentMethod, type PaymentRequest, type PaymentSummary } from "../../api/payments";
 import { useCategories } from "../../hooks/useCategories";
@@ -229,7 +230,10 @@ export function ReservationsPage() {
     value ? t(`page.enums.${group}.${value}`, { defaultValue: t("page.enums.unknownValue") }) : t("page.enums.unknownValue");
   const sourceLabel = (value: string) => t(`page.form.sourceOptions.${value}`, { defaultValue: value });
   const { session } = useSession();
+  const { openReservation } = useReservationDrawer();
   const { hasPermission } = useEffectivePermissions();
+  const canManageCompanyReservation = (reservation: Pick<Reservation, "company_id">) =>
+    !reservation.company_id || hasPermission("company:manage");
   const canAdjustPaidReservationTotal = hasPermission("reservation:paid_total_adjust");
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<ReservationStatus | "all" | "">("");
@@ -824,6 +828,7 @@ export function ReservationsPage() {
   }, [searchParams, setSearchParams]);
 
   const openEdit = (reservation: Reservation) => {
+    if (!canManageCompanyReservation(reservation)) return;
     clearToast();
     setEditing(reservation);
     setFormValues({
@@ -924,6 +929,7 @@ export function ReservationsPage() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError(null);
+    if (editing && !canManageCompanyReservation(editing)) return;
     if (subscriptionBlocked) {
       setFormError(subscriptionBlockReason || t("page.subscription.inactive"));
       return;
@@ -945,8 +951,7 @@ export function ReservationsPage() {
           email: guestForm.email.trim() || undefined,
           phone: guestForm.phone.trim() || undefined,
           document_type: guestForm.document_type,
-          document_number: guestForm.document_number.trim() || undefined,
-          terms_accepted: true
+          document_number: guestForm.document_number.trim() || undefined
         });
         guestIdNum = newGuest.id;
         setFormValues((prev) => ({ ...prev, guest_id: String(newGuest.id) }));
@@ -1181,9 +1186,10 @@ export function ReservationsPage() {
     editing && ["checked_in", "checked_out", "cancelled", "no_show"].includes(editing.status)
   );
 
-  const handleCancel = async (id: number) => {
+  const handleCancel = async (reservation: Reservation) => {
+    if (!canManageCompanyReservation(reservation)) return;
     try {
-      await cancelMutation.mutateAsync(id);
+      await cancelMutation.mutateAsync(reservation.id);
       showToast("success", t("page.messages.cancelled"));
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.cancelFailed"));
@@ -1199,7 +1205,8 @@ export function ReservationsPage() {
     // "operativo" recién lo conoce el backend al intentar el check-out.
     const balance = reservation.balance_due ?? 0;
     if (balance > 0.01) {
-      openEdit(reservation);
+      if (canManageCompanyReservation(reservation)) openEdit(reservation);
+      else openReservation(reservation.id);
       showToast(
         "info",
         t("page.messages.balancePendingCheckOut", { balance: formatMoney(balance, normalizeCurrencyCode(reservation.currency_code)) })
@@ -1212,7 +1219,8 @@ export function ReservationsPage() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t("page.errors.checkOutFailed");
       if (/saldo pendiente/i.test(message)) {
-        openEdit(reservation);
+        if (canManageCompanyReservation(reservation)) openEdit(reservation);
+        else openReservation(reservation.id);
         showToast("info", `${message}${t("page.messages.checkOutBalanceHint")}`);
         return;
       }
@@ -1923,7 +1931,8 @@ export function ReservationsPage() {
 
   const handleRoomMove = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!detailsReservation || !roomMoveForm.to_room_id || !roomMoveForm.reason_code.trim()) {
+    if (!detailsReservation || !canManageCompanyReservation(detailsReservation)) return;
+    if (!roomMoveForm.to_room_id || !roomMoveForm.reason_code.trim()) {
       showToast("error", t("page.errors.roomMoveFieldsRequired"));
       return;
     }
@@ -2824,14 +2833,16 @@ export function ReservationsPage() {
                     </td>
                     <td className="px-4 py-2 text-right text-xs text-slate-700">
                       <div className="flex flex-wrap justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(reservation)}
-                          className="rounded-lg border border-slate-200 px-2 py-1 hover:border-slate-300 disabled:opacity-50"
-                          disabled={subscriptionBlocked}
-                        >
-                          {t("page.list.edit")}
-                        </button>
+                        {canManageCompanyReservation(reservation) ? (
+                          <button
+                            type="button"
+                            onClick={() => openEdit(reservation)}
+                            className="rounded-lg border border-slate-200 px-2 py-1 hover:border-slate-300 disabled:opacity-50"
+                            disabled={subscriptionBlocked}
+                          >
+                            {t("page.list.edit")}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => openDetails(reservation)}
@@ -2839,18 +2850,20 @@ export function ReservationsPage() {
                         >
                           {t("page.list.file")}
                         </button>
-                        <button
-                          type="button"
-                          disabled={!canCancel(reservation.status) || cancelMutation.isPending || subscriptionBlocked}
-                          onClick={() => handleCancel(reservation.id)}
-                          className="rounded-lg border border-rose-200 px-2 py-1 text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {t("page.list.cancel")}
-                        </button>
+                        {canManageCompanyReservation(reservation) ? (
+                          <button
+                            type="button"
+                            disabled={!canCancel(reservation.status) || cancelMutation.isPending || subscriptionBlocked}
+                            onClick={() => handleCancel(reservation)}
+                            className="rounded-lg border border-rose-200 px-2 py-1 text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {t("page.list.cancel")}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           disabled={!canCheckIn(reservation.status) || checkInMutation.isPending || subscriptionBlocked}
-                          onClick={() => openDetails(reservation)}
+                          onClick={() => openReservation(reservation.id)}
                           title={t("page.list.checkInTooltipOpen")}
                           className="rounded-lg border border-emerald-200 px-2 py-1 text-emerald-700 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -2922,14 +2935,16 @@ export function ReservationsPage() {
                     : formatMoney(reservation.total_amount ?? 0, reservation.currency_code)}
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1 text-xs text-slate-700">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(reservation)}
-                    className="min-h-11 rounded-lg border border-slate-200 px-3 py-2 hover:border-slate-300 disabled:opacity-50"
-                    disabled={subscriptionBlocked}
-                  >
-                    {t("page.list.edit")}
-                  </button>
+                  {canManageCompanyReservation(reservation) ? (
+                    <button
+                      type="button"
+                      onClick={() => openEdit(reservation)}
+                      className="min-h-11 rounded-lg border border-slate-200 px-3 py-2 hover:border-slate-300 disabled:opacity-50"
+                      disabled={subscriptionBlocked}
+                    >
+                      {t("page.list.edit")}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => openDetails(reservation)}
@@ -2937,18 +2952,20 @@ export function ReservationsPage() {
                   >
                     {t("page.list.file")}
                   </button>
-                  <button
-                    type="button"
-                    disabled={!canCancel(reservation.status) || cancelMutation.isPending || subscriptionBlocked}
-                    onClick={() => handleCancel(reservation.id)}
-                    className="min-h-11 rounded-lg border border-rose-200 px-3 py-2 text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {t("page.list.cancel")}
-                  </button>
+                  {canManageCompanyReservation(reservation) ? (
+                    <button
+                      type="button"
+                      disabled={!canCancel(reservation.status) || cancelMutation.isPending || subscriptionBlocked}
+                      onClick={() => handleCancel(reservation)}
+                      className="min-h-11 rounded-lg border border-rose-200 px-3 py-2 text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {t("page.list.cancel")}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     disabled={!canCheckIn(reservation.status) || checkInMutation.isPending || subscriptionBlocked}
-                    onClick={() => openDetails(reservation)}
+                    onClick={() => openReservation(reservation.id)}
                     title={t("page.list.checkInTooltipOpen")}
                     className="min-h-11 rounded-lg border border-emerald-200 px-3 py-2 text-emerald-700 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -4699,6 +4716,7 @@ export function ReservationsPage() {
               </div>
 
               <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {canManageCompanyReservation(detailsReservation) ? (
                 <form className="space-y-3 rounded-lg border border-slate-200 bg-white p-3" onSubmit={handleRoomMove}>
                   <p className="text-sm font-semibold text-slate-800">{t("page.details.changeRoomTitle")}</p>
                   <label className="space-y-1 text-sm">
@@ -4821,6 +4839,7 @@ export function ReservationsPage() {
                     <p className="text-xs text-amber-700">{t("page.details.noOtherRoomAvailable")}</p>
                   ) : null}
                 </form>
+                ) : null}
 
                 <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
                   <p className="text-sm font-semibold text-slate-800">{t("page.details.noShowTitle")}</p>

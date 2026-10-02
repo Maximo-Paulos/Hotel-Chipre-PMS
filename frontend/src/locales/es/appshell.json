@@ -7,10 +7,22 @@
     "title": "Sin conexión.",
     "description": "Los datos visibles pueden estar desactualizados. Las acciones de reservas, check-in/out y cobros requieren conexión y no se guardan para reintentar automáticamente."
   },
+  "sessionRestore": {
+    "checking": "Comprobando sesión…",
+    "retrying": "No se pudo comprobar la sesión. Reintentando ({{attempt}} de {{total}})…",
+    "title": "No se pudo comprobar tu sesión.",
+    "description": "No se pudo confirmar si la sesión sigue activa. La aplicación no la borró. Verificá la conexión y reintentá; también podés ir al inicio de sesión.",
+    "retry": "Reintentar",
+    "login": "Ir al inicio de sesión"
+  },
   "accessDenied": {
     "title": "No tenés permiso para ver esta sección.",
     "description": "Si necesitás acceder, pedile al dueño del hotel que revise tus permisos.",
     "home": "Volver a mi inicio"
+  },
+  "mySecurityPage": {
+    "title": "Mi seguridad",
+    "description": "Administrá la verificación en dos pasos de tu cuenta."
   },
   "currency": {
     "historicalRateUnavailable": "Sin cotización histórica"
@@ -92,6 +104,7 @@
         "tests": "Pruebas",
         "hotel": "Hotel",
         "security": "Seguridad",
+        "mySecurity": "Mi seguridad",
         "notifications": "Notificaciones"
       }
     }

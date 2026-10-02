@@ -159,7 +159,12 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
   await expect(reservationRow).toHaveCount(1);
   await reservationRow.getByRole("button", { name: "Check-in", exact: true }).click();
-  await expect(page.getByText(/Saldo pendiente de .*Cobralo con "Pago total"/)).toBeVisible();
+  const pendingBalanceDrawer = page.getByRole("dialog", { name: confirmationCode });
+  await expect(pendingBalanceDrawer).toBeVisible();
+  await expect(pendingBalanceDrawer.getByTestId("drawer-balance-due")).toBeVisible();
+  await expect(pendingBalanceDrawer.getByLabel("Método de pago")).toBeVisible();
+  await expect(pendingBalanceDrawer.getByTestId("checkin-capture-form")).toBeVisible();
+  await pendingBalanceDrawer.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
   const editModal = page.locator("div.fixed").filter({ hasText: "Pagos y balance" });
   const editForm = editModal.locator("form").filter({ hasText: "Pagos y balance" });
   await expect(editForm.getByText("Resumen financiero y acciones rápidas.", { exact: true })).toBeVisible();
@@ -215,15 +220,8 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   const paidRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
   await expect(paidRow.getByRole("button", { name: "Check-in", exact: true })).toBeEnabled();
   await paidRow.getByRole("button", { name: "Check-in", exact: true }).click();
-  // B3.3: this guest (quick "Alta rápida", no birth place/country/marital
-  // status/occupation) can't check in yet -- the row action redirects to the
-  // reservation panel, which shows the capture form up front instead of a
-  // bare 400.
-  await expect(
-    page.getByText("Faltan datos del huésped para el check-in: completalos en el panel de la reserva.", {
-      exact: true
-    })
-  ).toBeVisible();
+  // B3.3: the row action opens the global drawer, which surfaces the guest
+  // capture form before submitting check-in instead of exposing a bare 400.
   const drawer = page.getByRole("dialog", { name: confirmationCode });
   await expect(drawer).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`reserva=${reservationId}`));

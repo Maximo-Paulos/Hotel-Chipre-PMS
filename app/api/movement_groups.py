@@ -2,20 +2,22 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, authorize_permission, require_permission
 from app.models.operations import RoomMoveEvent, RoomMovementGroup
 from app.services.room_movement_group_service import (
     RoomMovementGroupError,
     get_group,
+    group_has_company_reservations,
     list_groups,
     revert_group,
 )
 from app.services.permission_service import (
+    PERMISSION_COMPANY_MANAGE,
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
 )
@@ -158,15 +160,21 @@ def read_movement_group(
 @router.post("/{group_id}/revert", response_model=MovementGroupRead)
 def revert_movement_group(
     group_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT)),
 ):
     try:
+        can_manage_company_reservations = False
+        if group_has_company_reservations(db, hotel_id=context.hotel_id, group_id=group_id):
+            authorize_permission(request, db, context, PERMISSION_COMPANY_MANAGE)
+            can_manage_company_reservations = True
         result = revert_group(
             db,
             hotel_id=context.hotel_id,
             group_id=group_id,
             reverted_by_user_id=context.user_id,
+            can_manage_company_reservations=can_manage_company_reservations,
         )
         group = result["group"]
         db.commit()

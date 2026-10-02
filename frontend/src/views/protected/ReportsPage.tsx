@@ -1,38 +1,93 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
-import { type OperationalReservationGroup, type OperationalReservationSummary } from "../../api/reports";
+import { downloadRevenueReportCsv, type CurrencyAmount, type OperationalReservationGroup, type OperationalReservationSummary } from "../../api/reports";
 import { ApiError } from "../../api/client";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { useDailyOperationalReport, useOccupancyReport, useOperationalAlerts, useRevenueReport } from "../../hooks/useReports";
-import { formatHotelDateTime, todayIso as today } from "../../utils/date";
+import { formatHotelDateTime, todayIso } from "../../utils/date";
+import { useSession } from "../../state/session";
 
-const money = (value?: number | string | null) =>
-  Number(value ?? 0).toLocaleString("es-AR", { style: "currency", currency: "ARS" });
+const money = (value?: CurrencyAmount | null, currency = "ARS") =>
+  Number(value ?? 0).toLocaleString("es-AR", { style: "currency", currency: currency.toUpperCase() });
+
+const hotelTodayIso = (timeZone?: string | null) => {
+  if (!timeZone) return todayIso();
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(new Date());
+    const dateParts = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+    return `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+  } catch {
+    return todayIso();
+  }
+};
+
+const paymentMethodLabel = (method?: string | null) => ({
+  cash: "Efectivo",
+  bank_transfer: "Transferencia",
+  credit_card: "Tarjeta de crédito",
+  debit_card: "Tarjeta de débito",
+  mercadopago: "Mercado Pago",
+  paypal: "PayPal",
+  stripe: "Stripe"
+}[String(method ?? "").toLowerCase()] ?? method ?? "Sin medio");
+
+const channelLabel = (channel?: string | null) => ({
+  manual_recepcion: "Recepción",
+  telefono: "Teléfono",
+  whatsapp_bot: "WhatsApp",
+  web_propia: "Web propia",
+  booking_manual: "Booking",
+  expedia_manual: "Expedia",
+  empresa: "Empresa"
+}[String(channel ?? "").toLowerCase()] ?? channel ?? "Sin canal");
+
+function currencyAmounts(rows: Array<{ currency_code: string; amount?: CurrencyAmount; net_collected?: CurrencyAmount }>, field: "amount" | "net_collected" = "amount") {
+  return rows.length === 0
+    ? "Sin datos"
+    : rows.map((row) => money(row[field] ?? 0, row.currency_code)).join(" · ");
+}
 
 export function ReportsPage() {
+  const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
   const hotelConfigQuery = useHotelConfig();
   const canViewFinancial = hasPermission("reports:financial:view");
-  const [reportDate, setReportDate] = useState(today());
+  const [selectedReportDate, setSelectedReportDate] = useState("");
+  const reportDate = selectedReportDate || hotelTodayIso(hotelConfigQuery.data?.hotel_timezone);
   const reportQuery = useDailyOperationalReport(reportDate);
   const alertsQuery = useOperationalAlerts(reportDate);
   const occupancyQuery = useOccupancyReport(reportDate, reportDate);
   const revenueQuery = useRevenueReport(reportDate, reportDate, canViewFinancial);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const report = reportQuery.data;
   const alerts = alertsQuery.data?.alerts ?? report?.alerts ?? [];
   const occupancy = occupancyQuery.data?.daily[0];
   const revenue = revenueQuery.data;
 
-  const pendingTotal = useMemo(() => {
-    return (report?.pending_payments.reservations ?? []).reduce((total, reservation) => {
-      return total + Number(
-        reservation.company_billing_deferred
-          ? reservation.company_night_extra_due ?? 0
-          : reservation.balance_due ?? 0
-      );
-    }, 0);
-  }, [report?.pending_payments.reservations]);
+  const exportCsv = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const blob = await downloadRevenueReportCsv(reportDate, reportDate, session);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `reporte-financiero-${reportDate}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "No se pudo exportar el reporte.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -47,7 +102,7 @@ export function ReportsPage() {
           <input
             type="date"
             value={reportDate}
-            onChange={(event) => setReportDate(event.target.value)}
+            onChange={(event) => setSelectedReportDate(event.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2"
           />
         </label>
@@ -85,22 +140,77 @@ export function ReportsPage() {
 
           {canViewFinancial && revenue && (
             <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm" data-testid="financial-report">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-emerald-700">Finanzas · acceso owner/co-owner</p>
-                <h2 className="text-lg font-semibold text-slate-900">Resumen del día</h2>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-emerald-700">Finanzas · acceso owner/co-owner</p>
+                  <h2 className="text-lg font-semibold text-slate-900">Resumen del día</h2>
+                  <p className="text-xs text-slate-600">Cobros y saldos se muestran por moneda. Zona horaria: {revenue.timezone}.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void exportCsv()}
+                  disabled={exporting || revenueQuery.isFetching}
+                  className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
+                >
+                  {exporting ? "Exportando…" : "Exportar CSV"}
+                </button>
               </div>
+              {exportError ? <p className="mt-3 text-sm text-rose-700" role="alert">{exportError}</p> : null}
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <Metric label="Cobrado" value={money(revenue.collected.total)} />
-                <Metric label="Esperado" value={money(revenue.expected.total)} />
-                <Metric label="Pendiente" value={money(revenue.expected.pending)} />
+                <Metric label="Cobrado en el PMS" value={currencyAmounts(revenue.collected.by_currency, "net_collected")} />
+                <Metric label="Valor reservado · no es cobro" value={currencyAmounts(revenue.booked_value.by_currency, "amount")} />
+                <Metric label="Cobrado por OTA · fuera de caja" value={currencyAmounts(revenue.external_ota_collected.by_currency, "amount")} />
               </div>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-700">
-                {Object.entries(revenue.collected.by_method).map(([method, amount]) => (
-                  <span key={method} className="rounded-full border border-emerald-200 bg-white px-3 py-1">
-                    {method}: {money(amount)}
-                  </span>
-                ))}
-                {Object.keys(revenue.collected.by_method).length === 0 && <span>Sin cobros registrados.</span>}
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <BreakdownTable
+                  title="Cobros y devoluciones por medio"
+                  rows={revenue.collected.by_method_by_currency.map((item) => ({
+                    key: `${item.payment_method}-${item.currency_code}`,
+                    label: paymentMethodLabel(item.payment_method),
+                    currency: item.currency_code,
+                    gross: item.gross_collected,
+                    refunds: item.refunds,
+                    net: item.net_collected
+                  }))}
+                />
+                <BreakdownTable
+                  title="Cobros y devoluciones por categoría"
+                  rows={revenue.collected.by_category.map((item) => ({
+                    key: `${item.category_id}-${item.currency_code}`,
+                    label: item.category_name ?? "Sin categoría",
+                    currency: item.currency_code,
+                    gross: item.gross_collected,
+                    refunds: item.refunds,
+                    net: item.net_collected
+                  }))}
+                />
+                <BreakdownTable
+                  title="Cobros y devoluciones por canal"
+                  rows={revenue.collected.by_channel.map((item) => ({
+                    key: `${item.channel_code}-${item.currency_code}`,
+                    label: channelLabel(item.channel_code),
+                    currency: item.currency_code,
+                    gross: item.gross_collected,
+                    refunds: item.refunds,
+                    net: item.net_collected
+                  }))}
+                />
+                <section className="overflow-hidden rounded-lg border border-emerald-200 bg-white">
+                  <div className="border-b border-emerald-100 px-4 py-3">
+                    <h3 className="font-semibold text-slate-900">Saldos por cobrar</h3>
+                    <p className="text-xs text-slate-500">Situación actual al {revenue.receivables_as_of}; no es un saldo histórico del día seleccionado.</p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="bg-emerald-50 text-xs text-slate-600"><tr><th className="px-3 py-2">Moneda</th><th className="px-3 py-2">Vencido</th><th className="px-3 py-2">Check-in de hoy</th><th className="px-3 py-2">Adicional empresa hoy</th><th className="px-3 py-2">Futuro</th><th className="px-3 py-2">Total</th></tr></thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {revenue.receivables.by_currency.length === 0 ? <tr><td colSpan={6} className="px-3 py-3 text-slate-500">No hay saldos por cobrar.</td></tr> : revenue.receivables.by_currency.map((item) => (
+                          <tr key={item.currency_code}><td className="px-3 py-2 font-semibold">{item.currency_code}</td><td className="px-3 py-2">{money(item.overdue, item.currency_code)}</td><td className="px-3 py-2">{money(item.due_at_check_in, item.currency_code)}</td><td className="px-3 py-2">{money(item.due_today_company_nights, item.currency_code)}</td><td className="px-3 py-2">{money(item.future, item.currency_code)}</td><td className="px-3 py-2 font-semibold">{money(item.total, item.currency_code)}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
               </div>
             </section>
           )}
@@ -108,10 +218,11 @@ export function ReportsPage() {
           <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="space-y-4">
               <ReservationGroup title="Llegadas del día" group={report.arrivals} emptyText="No hay llegadas para esta fecha." />
+              <ReservationGroup title="No-shows" group={report.no_shows} emptyText="No hay no-shows para esta fecha." />
               <ReservationGroup title="Salidas del día" group={report.departures} emptyText="No hay salidas para esta fecha." />
               {canViewFinancial && (
                 <ReservationGroup
-                  title={`Pagos pendientes · ${money(pendingTotal)}`}
+                  title="Saldos pendientes en estadías activas"
                   group={report.pending_payments}
                   emptyText="No hay pagos pendientes en el reporte."
                   showBalance
@@ -171,6 +282,11 @@ export function ReportsPage() {
                       <div key={`${alert.code}-${alert.reservation_id ?? alert.room_id ?? alert.cash_session_id ?? "general"}`} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                         <p className="font-semibold">{alert.severity.toUpperCase()} - {alert.code}</p>
                         <p>{alert.message}</p>
+                        {alert.code === "pending_payment" && alert.amount != null ? (
+                          <p className="mt-1 font-semibold">
+                            Pendiente: {money(alert.amount, alert.currency_code ?? "ARS")}
+                          </p>
+                        ) : null}
                       </div>
                     ))
                   )}
@@ -256,11 +372,35 @@ function ReservationRow({ reservation, showBalance }: { reservation: Operational
         reservation.company_billing_deferred ? (
           <div className="text-right">
             <p className="text-xs font-medium text-slate-600">Alojamiento facturado fuera del PMS</p>
-            {companyExtraDue > 0 ? <p className="font-semibold text-amber-800">Adicional empresa pendiente: {money(companyExtraDue)}</p> : null}
+            {companyExtraDue > 0 ? <p className="font-semibold text-amber-800">Adicional empresa pendiente: {money(companyExtraDue, reservation.currency_code ?? "ARS")}</p> : null}
           </div>
-        ) : <p className="font-semibold text-slate-900">{money(reservation.balance_due)}</p>
+        ) : <p className="font-semibold text-slate-900">{money(reservation.balance_due, reservation.currency_code ?? "ARS")}</p>
       ) : null}
     </div>
+  );
+}
+
+function BreakdownTable({
+  title,
+  rows
+}: {
+  title: string;
+  rows: Array<{ key: string; label: string; currency: string; gross: CurrencyAmount; refunds: CurrencyAmount; net: CurrencyAmount }>;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border border-emerald-200 bg-white">
+      <div className="border-b border-emerald-100 px-4 py-3"><h3 className="font-semibold text-slate-900">{title}</h3></div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-emerald-50 text-xs text-slate-600"><tr><th className="px-3 py-2">Grupo</th><th className="px-3 py-2">Moneda</th><th className="px-3 py-2">Cobrado</th><th className="px-3 py-2">Devuelto</th><th className="px-3 py-2">Neto</th></tr></thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.length === 0 ? <tr><td colSpan={5} className="px-3 py-3 text-slate-500">Sin cobros confirmados.</td></tr> : rows.map((row) => (
+              <tr key={row.key}><td className="px-3 py-2 font-medium text-slate-800">{row.label}</td><td className="px-3 py-2">{row.currency}</td><td className="px-3 py-2">{money(row.gross, row.currency)}</td><td className="px-3 py-2">{money(row.refunds, row.currency)}</td><td className="px-3 py-2 font-semibold">{money(row.net, row.currency)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

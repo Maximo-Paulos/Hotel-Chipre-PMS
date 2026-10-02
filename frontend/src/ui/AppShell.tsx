@@ -30,6 +30,7 @@ type NavItem = {
   to: string;
   requiresAnyPermission?: string[];
   requiresAllPermissions?: string[];
+  hideIfPermission?: string;
   // Presentation-only narrowing for the role preview. This is deliberately
   // not an authorization check; PermissionGate uses the real baseRole.
   hideForPreviewRoles?: Array<"owner" | "co_owner" | "manager" | "housekeeping" | "receptionist">;
@@ -106,6 +107,7 @@ const groupedNav: NavSection[] = [
       { label: "nav.sections.settings.tests", to: "/settings/tests", requiresAnyPermission: ["settings:tests:view"], hideForPreviewRoles: ["housekeeping"] },
       { label: "nav.sections.settings.hotel", to: "/settings/hotel", requiresAnyPermission: ["hotel_settings:read"], hideForPreviewRoles: ["housekeeping"] },
       { label: "nav.sections.settings.security", to: "/settings/security", requiresAnyPermission: ["settings:security:view"], hideForPreviewRoles: ["housekeeping"] },
+      { label: "nav.sections.settings.mySecurity", to: "/settings/my-security", hideIfPermission: "settings:security:view" },
       // Keep this presentation-only exception for the role preview. A real
       // housekeeping user with the permission must still see the link.
       { label: "nav.sections.settings.notifications", to: "/settings/notifications", requiresAnyPermission: ["settings:notifications:view"], hideForPreviewRoles: ["housekeeping"] },
@@ -166,7 +168,7 @@ export function AppShell() {
   const previewRole = role && role !== realRole ? role : null;
   const isHousekeeping = realRole === "housekeeping";
   const homePath = defaultPathForRole(realRole);
-  const { hasAnyPermission, hasAllPermissions } = useEffectivePermissions();
+  const { hasAnyPermission, hasAllPermissions, hasPermission } = useEffectivePermissions();
   const { reservationId: drawerReservationId, closeReservation } = useReservationDrawer();
   // The owner's phone-in-hand complaint (B7) was two competing mobile nav
   // mechanisms at once (a horizontal-scroll pill row + a separate native
@@ -188,7 +190,11 @@ export function AppShell() {
   useHotelInterfaceLanguage();
 
   const { data: onboarding, isFetching, error } = useOnboardingStatus({
-    enabled: isLoggedIn && isVerified && ["owner", "co_owner"].includes(realRole ?? "")
+    enabled:
+      isLoggedIn &&
+      isVerified &&
+      ["owner", "co_owner"].includes(realRole ?? "") &&
+      hasPermission("hotel_settings:update")
   });
   const { data: subscription } = useSubscriptionStatus({ enabled: !isHousekeeping });
   const onboardingError = error as ApiError | undefined;
@@ -207,12 +213,6 @@ export function AppShell() {
     }
   }, [isLoggedIn, isVerified, location.pathname, navigate]);
 
-  useEffect(() => {
-    if (onboardingError?.status === 403) {
-      navigate("/verify-email", { replace: true });
-    }
-  }, [onboardingError, navigate]);
-
   const capReached =
     subscription && subscription.room_limit > 0 && subscription.rooms_in_use >= subscription.room_limit;
   const capBanner =
@@ -229,9 +229,10 @@ export function AppShell() {
         .filter((item) => !previewRole || !item.hideForPreviewRoles?.includes(previewRole))
         .filter((item) => !item.requiresAnyPermission || hasAnyPermission(item.requiresAnyPermission))
         .filter((item) => !item.requiresAllPermissions || hasAllPermissions(item.requiresAllPermissions))
+        .filter((item) => !item.hideIfPermission || !hasPermission(item.hideIfPermission))
         .filter((item) => !item.minPlan || (subscription?.plan ? (planRank[subscription.plan as keyof typeof planRank] ?? 0) >= (planRank[item.minPlan] ?? 0) : false))
         .filter((item) => !(item.to === "/onboarding" && onboarding?.completed));
-  }, [previewRole, onboarding?.completed, subscription?.plan, hasAnyPermission, hasAllPermissions]);
+  }, [previewRole, onboarding?.completed, subscription?.plan, hasAnyPermission, hasAllPermissions, hasPermission]);
 
   const visibleDailyNav = useMemo(() => filterItems(dailyNav), [filterItems]);
 
@@ -377,12 +378,16 @@ export function AppShell() {
       )}
 
       {onboardingError && (
-        <div className="border-b border-rose-200 bg-rose-50 px-6 py-2 text-sm text-rose-900">
-          {onboardingError.status === 402
-              ? t("onboarding.error402")
-              : onboardingError.status === 403
-                ? t("onboarding.error403")
-                : t("onboarding.errorGeneric")}
+        <div className="border-b border-rose-200 bg-rose-50 px-6 py-2 text-sm text-rose-900" role="status">
+          {onboardingError.status === 402 ? (
+            t("onboarding.error402")
+          ) : onboardingError.status === 403 ? (
+            <>
+              <strong>{t("accessDenied.title")}</strong> {t("accessDenied.description")}
+            </>
+          ) : (
+            t("onboarding.errorGeneric")
+          )}
         </div>
       )}
 

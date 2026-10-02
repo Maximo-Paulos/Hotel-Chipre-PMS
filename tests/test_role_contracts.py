@@ -190,6 +190,18 @@ def test_manager_can_read_reservations_operationally(role_client):
         ).status_code
         == 200
     )
+    assert client.get("/api/reports/operational/arrivals/count").status_code == 200
+
+
+def test_receptionist_can_read_arrival_count_and_housekeeping_cannot(role_client):
+    client, _db, auth, _room, _guest, _category = role_client
+    auth["role"] = "receptionist"
+    response = client.get("/api/reports/operational/arrivals/count")
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
+
+    auth["role"] = "housekeeping"
+    assert client.get("/api/reports/operational/arrivals/count").status_code == 403
 
 
 def test_report_permissions_split_operational_from_financial(role_client):
@@ -331,6 +343,16 @@ def test_housekeeping_today_board_is_hotel_scoped_and_has_no_guest_or_free_text_
 
     today = local_today(db.get(HotelConfiguration, 1).hotel_timezone)
     room.status = RoomStatusEnum.OCCUPIED
+    stayover_room = Room(
+        hotel_id=1,
+        category_id=category.id,
+        room_number="102",
+        floor=1,
+        status=RoomStatusEnum.OCCUPIED,
+        housekeeping_status=RoomHousekeepingStatusEnum.DIRTY,
+    )
+    db.add(stayover_room)
+    db.flush()
     db.add_all(
         [
             Reservation(
@@ -355,6 +377,18 @@ def test_housekeeping_today_board_is_hotel_scoped_and_has_no_guest_or_free_text_
                 check_out_date=today,
                 status=ReservationStatusEnum.CHECKED_IN,
                 total_amount=100,
+                num_adults=1,
+            ),
+            Reservation(
+                hotel_id=1,
+                guest_id=guest.id,
+                category_id=category.id,
+                room_id=stayover_room.id,
+                confirmation_code="PRIVATE-STAYOVER-CODE",
+                check_in_date=today - timedelta(days=2),
+                check_out_date=today + timedelta(days=1),
+                status=ReservationStatusEnum.CHECKED_IN,
+                total_amount=200,
                 num_adults=1,
             ),
             RoomBlock(
@@ -387,14 +421,21 @@ def test_housekeeping_today_board_is_hotel_scoped_and_has_no_guest_or_free_text_
         "housekeeping_status",
         "has_arrival_today",
         "has_departure_today",
+        "has_stayover_today",
         "maintenance_blocked",
     }
     assert room_item["operational_status"] == "occupied"
     assert room_item["has_arrival_today"] is True
     assert room_item["has_departure_today"] is True
+    assert room_item["has_stayover_today"] is False
     assert room_item["maintenance_blocked"] is True
+    stayover_item = next(item for item in payload["rooms"] if item["room_id"] == stayover_room.id)
+    assert stayover_item["has_arrival_today"] is False
+    assert stayover_item["has_departure_today"] is False
+    assert stayover_item["has_stayover_today"] is True
     assert "PRIVATE-ARRIVAL-CODE" not in response.text
     assert "PRIVATE-DEPARTURE-CODE" not in response.text
+    assert "PRIVATE-STAYOVER-CODE" not in response.text
     assert "PRIVATE maintenance note" not in response.text
     assert guest.first_name not in response.text
 

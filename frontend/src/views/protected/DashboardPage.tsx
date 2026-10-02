@@ -4,12 +4,14 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
 import { usePendingReservationActions, useReservations } from "../../hooks/useReservations";
+import { useRevenueReport, useTodayArrivalCount } from "../../hooks/useReports";
 import { isDeferredCompanyReservation } from "../../api/reservations";
 import { usePendingCashCloseReports } from "../../hooks/useCashRegister";
+import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { useRooms } from "../../hooks/useRooms";
-import { formatMoney, resolveSingleCurrencyCode } from "../../utils/currency";
+import { formatMoney } from "../../utils/currency";
 import { todayIso } from "../../utils/date";
 // Single source of truth for reservation status colors/labels (also used by
 // ReservationsPage, the detail drawer, the global search and the occupancy
@@ -21,10 +23,38 @@ import { reservationStatusConfig } from "../../utils/reservationStatus";
 
 const monthRangeIso = (base: Date) => {
   const pad = (part: number) => String(part).padStart(2, "0");
-  const format = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  const start = new Date(base.getFullYear(), base.getMonth(), 1);
-  const end = new Date(base.getFullYear(), base.getMonth() + 1, 0);
-  return { fromDate: format(start), toDate: format(end) };
+  const year = base.getFullYear();
+  const month = base.getMonth() + 1;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return {
+    fromDate: `${year}-${pad(month)}-01`,
+    toDate: `${year}-${pad(month)}-${pad(lastDay)}`
+  };
+};
+
+const hotelTodayIso = (timeZone?: string | null, serverDate?: string | null) => {
+  if (timeZone) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).formatToParts(new Date());
+      const dateParts = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+      return `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+    } catch {
+      // Fall through to the hotel-local date supplied by the reports API.
+    }
+  }
+  return serverDate && /^\d{4}-\d{2}-\d{2}$/.test(serverDate) ? serverDate : todayIso();
+};
+
+type DashboardCard = {
+  label: string;
+  value: string;
+  helper: string;
+  helperRole?: "status" | "alert";
 };
 const reservationGuestLabel = (
   reservation: {
@@ -36,20 +66,23 @@ const reservationGuestLabel = (
 
 export function DashboardPage() {
   const { t } = useTranslation("dashboard");
-  const today = todayIso();
-  // KPI cards (ADR/revenue/arrivals-departures today) and "today" activity
-  // need every reservation touching the current month, not just the most
-  // recently created ones -- scope by date range instead of by count so the
-  // A2 pagination fix doesn't silently corrupt these numbers. `today` always
-  // falls inside this range, so today's check-ins/check-outs are covered.
-  const { fromDate: monthFrom, toDate: monthTo } = useMemo(() => monthRangeIso(new Date()), []);
+  const hotelConfigQuery = useHotelConfig();
+  const arrivalCountQuery = useTodayArrivalCount();
+  const today = hotelTodayIso(hotelConfigQuery.data?.hotel_timezone, arrivalCountQuery.data?.report_date);
+  // The reservation list supports dashboard activity and remains paginated.
+  // Financial KPIs use the separate permission-protected server aggregate.
+  const { fromDate: monthFrom, toDate: monthTo } = useMemo(() => monthRangeIso(new Date(`${today}T00:00:00`)), [today]);
   const { data: reservations = [] } = useReservations({ fromDate: monthFrom, toDate: monthTo, order: "check_in", limit: 200 });
+  const { hasPermission } = useEffectivePermissions();
+  const canViewFinancial = hasPermission("reports:financial:view");
+  // The monthly financial cards use the permission-protected server aggregate,
+  // not this paginated reservation list (which is capped for activity views).
+  const bookedValueQuery = useRevenueReport(monthFrom, monthTo, canViewFinancial);
   // Upcoming arrivals are filtered and ordered by the server from the
   // hotel's local day. This avoids hiding an arrival merely because newer
   // reservations were created afterwards.
   const { data: upcomingReservations = [] } = useReservations({ upcomingOnly: true, order: "check_in", limit: 5 });
   const pendingActionsQuery = usePendingReservationActions(8);
-  const { hasPermission } = useEffectivePermissions();
   const canApproveCashDifferences = hasPermission("cash:approve_difference");
   const pendingCashApprovalsQuery = usePendingCashCloseReports({ enabled: canApproveCashDifferences });
   const pendingCashApprovals = pendingCashApprovalsQuery.data ?? [];
@@ -59,57 +92,83 @@ export function DashboardPage() {
   const pendingActions = pendingActionsQuery.data || [];
   const criticalPendingActions = pendingActions.filter((item) => item.priority === "critical").length;
 
-  const cards = useMemo(() => {
-    const occupied = rooms.filter((r) => r.status === "occupied").length;
-    const occupancy = rooms.length > 0 ? Math.round((occupied / rooms.length) * 100) : 0;
+  const cards = useMemo<DashboardCard[]>(() => {
+    const activeRooms = rooms.filter((room) => room.is_active);
+    const occupied = activeRooms.filter((room) => room.status === "occupied").length;
+    const occupancy = activeRooms.length > 0 ? Math.round((occupied / activeRooms.length) * 100) : null;
+    const occupancyLoadingText = t("cards.occupancyToday.roomsLoading");
+    const occupancyErrorText = t("cards.occupancyToday.roomsError");
+    const noActiveRoomsText = t("cards.occupancyToday.noActiveRooms");
 
-    const monthReservations = reservations.filter((r) =>
-      r.check_in_date >= monthFrom
-      && r.check_in_date <= monthTo
-      && !isDeferredCompanyReservation(r)
-      && !["cancelled", "no_show"].includes(r.status)
-    );
-    const monthCurrencyCode = resolveSingleCurrencyCode(monthReservations.map((r) => r.currency_code));
-    const bookedNightCount = monthReservations.reduce(
-      (acc, reservation) => acc + (reservation.nights && reservation.nights > 0 ? reservation.nights : 1),
-      0
-    );
-    const bookedAmount = monthReservations.reduce((acc, reservation) => acc + Number(reservation.total_amount || 0), 0);
-    const averageBookedPerNight = bookedNightCount > 0 ? bookedAmount / bookedNightCount : 0;
-
-    const currencyTotals = new Map<string, number>();
-    for (const reservation of monthReservations) {
-      const currencyCode = String(reservation.currency_code || "ARS").trim().toUpperCase();
-      currencyTotals.set(currencyCode, (currencyTotals.get(currencyCode) ?? 0) + Number(reservation.total_amount || 0));
-    }
-    const reservationValueByCurrency = [...currencyTotals.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([currencyCode, amount]) => formatMoney(Math.round(amount), currencyCode))
+    const bookedCurrencies = bookedValueQuery.data?.booked_value.by_currency ?? [];
+    const hasBookedReservations = bookedCurrencies.length > 0;
+    const reservationValueByCurrency = bookedCurrencies
+      .map((item) => formatMoney(Number(item.amount), item.currency_code))
       .join(" · ");
-    const arrivalsToday = reservations.filter((r) => r.check_in_date === today).length;
+    const averageBookedPerNightByCurrency = bookedCurrencies
+      .filter((item) => item.booked_night_count > 0)
+      .map((item) => formatMoney(Math.round(Number(item.amount) / item.booked_night_count), item.currency_code))
+      .join(" · ");
+    const arrivalsToday = arrivalCountQuery.data?.count;
+
+    const occupancyHelper = roomsQuery.isLoading
+      ? occupancyLoadingText
+      : roomsQuery.isError
+        ? occupancyErrorText
+        : activeRooms.length === 0
+          ? noActiveRoomsText
+          : arrivalCountQuery.isLoading
+            ? t("cards.occupancyToday.helperLoading")
+            : arrivalCountQuery.isError
+              ? t("cards.occupancyToday.helperError")
+              : t("cards.occupancyToday.helper", { count: arrivalsToday ?? 0 });
 
     return [
-      { label: t("cards.occupancyToday.label"), value: `${occupancy}%`, helper: t("cards.occupancyToday.helper", { count: arrivalsToday }) },
       {
+        label: t("cards.occupancyToday.label"),
+        value: roomsQuery.isLoading || roomsQuery.isError || occupancy === null ? "—" : `${occupancy}%`,
+        helper: occupancyHelper,
+        helperRole: roomsQuery.isError || (!roomsQuery.isLoading && arrivalCountQuery.isError)
+          ? "alert"
+          : roomsQuery.isLoading || arrivalCountQuery.isLoading
+            ? "status"
+            : undefined
+      },
+      ...(canViewFinancial ? [{
         label: t("cards.adr.label"),
-        value: monthReservations.length === 0
-          ? t("cards.noReservations")
-          : monthCurrencyCode
-            ? formatMoney(Math.round(averageBookedPerNight), monthCurrencyCode)
-            : t("cards.multiCurrency"),
-        helper: monthReservations.length === 0
-          ? t("cards.adr.helperEmpty")
-          : monthCurrencyCode
-            ? t("cards.adr.helperSingle")
-            : t("cards.adr.helperMulti")
-      },
-      {
+        value: bookedValueQuery.isLoading
+          ? t("cards.revenue.helperLoading")
+          : bookedValueQuery.isError
+            ? "—"
+            : !hasBookedReservations
+              ? t("cards.noReservations")
+              : averageBookedPerNightByCurrency,
+        helper: bookedValueQuery.isLoading
+          ? t("cards.revenue.helperLoading")
+          : bookedValueQuery.isError
+            ? t("cards.revenue.helperError")
+          : !hasBookedReservations
+            ? t("cards.adr.helperEmpty")
+            : bookedCurrencies.length > 1
+              ? t("cards.adr.helperMulti")
+              : t("cards.adr.helperSingle")
+      }, {
         label: t("cards.revenue.label"),
-        value: monthReservations.length === 0 ? t("cards.noReservations") : reservationValueByCurrency,
-        helper: monthReservations.length === 0
-          ? t("cards.revenue.helperEmpty")
-          : t("cards.revenue.helperSingle")
-      },
+        value: bookedValueQuery.isLoading
+          ? t("cards.revenue.helperLoading")
+          : bookedValueQuery.isError
+            ? "—"
+            : hasBookedReservations
+              ? reservationValueByCurrency
+              : t("cards.noReservations"),
+        helper: bookedValueQuery.isLoading
+          ? t("cards.revenue.helperLoading")
+          : bookedValueQuery.isError
+            ? t("cards.revenue.helperError")
+            : hasBookedReservations
+              ? t("cards.revenue.helperSingle")
+              : t("cards.revenue.helperEmpty")
+      }] : []),
       {
         label: t("cards.pendingActions.label"),
         value: pendingActionsQuery.isError ? "—" : String(pendingActions.length),
@@ -117,10 +176,11 @@ export function DashboardPage() {
           ? t("cards.pendingActions.helperError")
           : criticalPendingActions > 0
             ? t("cards.pendingActions.helperCritical", { count: criticalPendingActions })
-            : t("cards.pendingActions.helperNone")
+            : t("cards.pendingActions.helperNone"),
+        helperRole: pendingActionsQuery.isError ? "alert" : undefined
       }
     ];
-  }, [criticalPendingActions, monthFrom, monthTo, pendingActions.length, pendingActionsQuery.isError, reservations, rooms, today, t]);
+  }, [arrivalCountQuery.data?.count, arrivalCountQuery.isError, arrivalCountQuery.isLoading, bookedValueQuery.data, bookedValueQuery.isError, bookedValueQuery.isLoading, canViewFinancial, criticalPendingActions, pendingActions.length, pendingActionsQuery.isError, rooms, roomsQuery.isError, roomsQuery.isLoading, t]);
 
   const arrivals = upcomingReservations;
 
@@ -165,12 +225,12 @@ export function DashboardPage() {
         </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className={`grid gap-4 ${canViewFinancial ? "md:grid-cols-4" : "md:grid-cols-2"}`}>
         {cards.map((card) => (
           <div key={card.label} className="rounded-panel bg-white p-5 shadow-raise ring-1 ring-slate-900/5">
             <p className="text-sm text-slate-500">{card.label}</p>
             <div className="numeric mt-2 break-words text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{card.value}</div>
-            <p className="text-xs text-slate-500">{card.helper}</p>
+            <p className="text-xs text-slate-500" role={card.helperRole}>{card.helper}</p>
           </div>
         ))}
       </div>

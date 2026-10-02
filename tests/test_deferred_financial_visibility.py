@@ -345,9 +345,9 @@ def test_deferred_company_reports_hide_base_money_but_keep_occupancy_and_extra_p
     assert arrival["company_night_extra_due"] == 0
     assert daily["revenue"]["total"] == 1200
     assert daily["pending_payments"]["total_balance"] == 0
-    assert revenue["expected"]["total"] == 1200
-    assert revenue["expected"]["pending"] == 0
-    assert revenue["collected"]["total"] == 1200
+    assert revenue["expected"]["total"] == Decimal("1200.00")
+    assert revenue["expected"]["pending"] == Decimal("0.00")
+    assert revenue["collected"]["total"] == Decimal("1200.00")
     # Reporting masks the base amount but never deletes the historical ledger row.
     assert db.query(Transaction).filter_by(id=base_payment.id).one().amount == Decimal("500.00")
 

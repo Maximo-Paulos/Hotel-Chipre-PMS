@@ -11,13 +11,16 @@ from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.company import Company
+from app.models.hotel_membership import HotelMembership
 from app.models.operations import RoomMoveEvent, RoomMoveTypeEnum, RoomMovementGroup
-from app.models.permission import HotelPermissionOverride
+from app.models.permission import HotelPermissionOverride, UserPermissionOverride
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.services.permission_service import (
+    PERMISSION_COMPANY_MANAGE,
     PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
     seed_default_permissions,
 )
@@ -144,6 +147,68 @@ def test_explicit_receptionist_grant_can_revert_group(route_prefix):
 
         assert response.status_code == 200, response.text
         assert response.json()["is_reverted"] is True
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+@pytest.mark.parametrize("route_prefix", ["/api/movement-groups", "/api/room-movement-groups"])
+def test_company_group_revert_denies_reception_even_with_individual_company_manage_override(route_prefix):
+    client, db, engine = _client_with_db()
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist", user_id=10)
+    try:
+        reservation, _, to_room, group = _seed_group(db, hotel_id=1)
+        company = Company(
+            hotel_id=1,
+            legal_name="Synthetic Company",
+            display_name="Synthetic Company",
+        )
+        db.add(company)
+        db.flush()
+        reservation.company_id = company.id
+        seed_default_permissions(db)
+        db.add(HotelMembership(hotel_id=1, user_id=10, role="receptionist", status="active"))
+        db.add(
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="receptionist",
+                permission_code=PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
+                allowed=True,
+                updated_by_user_id=10,
+            )
+        )
+        db.commit()
+        version_before_revert = reservation.version
+
+        denied = client.post(f"{route_prefix}/{group.id}/revert")
+
+        assert denied.status_code == 403, denied.text
+        db.refresh(reservation)
+        db.refresh(group)
+        assert reservation.room_id == to_room.id
+        assert reservation.version == version_before_revert
+        assert group.is_reverted is False
+
+        db.add(
+            UserPermissionOverride(
+                hotel_id=1,
+                user_id=10,
+                permission_code=PERMISSION_COMPANY_MANAGE,
+                allowed=True,
+                updated_by_user_id=10,
+            )
+        )
+        db.commit()
+
+        still_denied = client.post(f"{route_prefix}/{group.id}/revert")
+
+        assert still_denied.status_code == 403, still_denied.text
+        db.refresh(reservation)
+        db.refresh(group)
+        assert reservation.room_id == to_room.id
+        assert reservation.version == version_before_revert
+        assert group.is_reverted is False
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

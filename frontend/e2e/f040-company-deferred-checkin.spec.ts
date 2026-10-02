@@ -218,7 +218,7 @@ test("company check-in records and applies a deferred extension without register
 
   const extensionApplyPanel = drawer.getByTestId("company-extension-apply");
   await expect(extensionApplyPanel).toBeVisible();
-  const extendedCheckoutDate = localIsoDate(3);
+  const extendedCheckoutDate = localIsoDate(2);
   await extensionApplyPanel.getByLabel("Nueva fecha de salida").fill(extendedCheckoutDate);
 
   const financialWrites: string[] = [];

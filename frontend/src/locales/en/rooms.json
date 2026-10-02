@@ -39,6 +39,10 @@
     "floorCategory": "Floor {{floor}} · {{category}}",
     "arrival": "Arrival due today",
     "departure": "Departure due today",
+    "stayover": "Stayover service",
+    "floorFilter": "Floor",
+    "floorLabel": "Floor {{floor}}",
+    "allFloors": "All",
     "maintenanceBlocked": "Blocked for maintenance",
     "noSpecialEvents": "No special events today",
     "statusForRoom": "Cleaning status · {{number}}"

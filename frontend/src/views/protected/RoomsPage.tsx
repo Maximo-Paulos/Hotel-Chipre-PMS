@@ -338,6 +338,7 @@ export function RoomsPage() {
               (canToggleCleaningStatus && !isHousekeeping && ["available", "cleaning"].includes(room.status));
             const availableStatuses = canManageRoomStatus || !isHousekeeping ? statusOptions : housekeepingStatusOptions;
             const selectedStatus = isHousekeeping ? room.housekeeping_status : room.status;
+            const maintenanceBlocked = isHousekeeping && housekeepingBoardQuery.isSuccess && maintenanceBlockedRoomIds.has(room.id);
             return (
               <div key={room.id} data-testid="room-card" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between">
@@ -367,14 +368,9 @@ export function RoomsPage() {
                     })() : null}
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusColors[room.status]}`}>
-                      {roomStatusLabel[room.status]}
+                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${maintenanceBlocked ? "bg-rose-100 text-rose-800" : statusColors[room.status]}`}>
+                      {maintenanceBlocked ? t("housekeepingToday.maintenanceBlocked") : roomStatusLabel[room.status]}
                     </span>
-                    {isHousekeeping && housekeepingBoardQuery.isSuccess && maintenanceBlockedRoomIds.has(room.id) && (
-                      <span className="rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-800">
-                        {t("housekeepingToday.maintenanceBlocked")}
-                      </span>
-                    )}
                     {isHousekeeping && (
                       <span className={`rounded-full px-2 py-1 text-xs font-semibold ${housekeepingStatusColors[room.housekeeping_status]}`}>
                         {housekeepingStatusLabels[room.housekeeping_status]}

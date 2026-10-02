@@ -152,6 +152,9 @@ test("owner can log out mid-onboarding, resume without losing progress, and conf
   await page.getByLabel("Cancelación gratis hasta (horas)", { exact: true }).fill("24");
   await saveAndExpectPath(page, "/onboarding/payments");
 
+  const onlinePayments = page.locator("details").filter({ hasText: "Conectar cobros online (opcional)" });
+  await onlinePayments.locator("summary").click();
+  await expect(onlinePayments).toHaveAttribute("open", "");
   const mercadoPagoCheckbox = page.getByRole("checkbox", { name: "Mercado Pago", exact: true });
   if (!(await mercadoPagoCheckbox.isChecked())) {
     await mercadoPagoCheckbox.check();

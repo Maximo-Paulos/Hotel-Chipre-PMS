@@ -162,6 +162,8 @@ export type CashDailySummary = {
     income_total: number;
     expense_total: number;
     adjustment_total: number;
+    custody_delivered_total: number;
+    custody_difference_total: number;
     expected_balance: number;
     declared_balance?: number | null;
     difference?: number | null;

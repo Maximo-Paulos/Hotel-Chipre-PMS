@@ -68,8 +68,7 @@ test("authorized staff add and audit company nightly extras; reception collects 
       display_name: `QA Empresa Adicional ${suffix}`,
       country_code: "AR",
       payment_deferred: true,
-      base_price: 100,
-      extra_person_nightly_surcharge: 25
+      base_price: 100
     }
   });
   expect(companyResponse.status(), await companyResponse.text()).toBe(201);
@@ -114,6 +113,30 @@ test("authorized staff add and audit company nightly extras; reception collects 
 
   const checkIn = localIsoDate(10);
   const checkOut = localIsoDate(12);
+  const secondStayNight = localIsoDate(11);
+  const futureRateResponse = await request.post(`${backendURL}/api/companies/${company.id}/nightly-rates`, {
+    headers: ownerHeaders,
+    data: { effective_from: checkIn, amount: 25 }
+  });
+  expect(futureRateResponse.status(), await futureRateResponse.text()).toBe(201);
+  const midStayRateResponse = await request.post(`${backendURL}/api/companies/${company.id}/nightly-rates`, {
+    headers: ownerHeaders,
+    data: { effective_from: secondStayNight, amount: 40 }
+  });
+  expect(midStayRateResponse.status(), await midStayRateResponse.text()).toBe(201);
+  const futureRatesResponse = await request.get(`${backendURL}/api/companies/${company.id}/nightly-rates`, {
+    headers: ownerHeaders
+  });
+  expect(futureRatesResponse.ok(), await futureRatesResponse.text()).toBeTruthy();
+  const futureRates = await futureRatesResponse.json() as {
+    hotel_today: string;
+    rates: Array<{ effective_from: string; amount: string | number }>;
+  };
+  expect(futureRates.hotel_today < checkIn).toBeTruthy();
+  const effectiveFutureRate = futureRates.rates.find((rate) => rate.effective_from === checkIn);
+  expect(Number(effectiveFutureRate?.amount)).toBe(25);
+  const effectiveMidStayRate = futureRates.rates.find((rate) => rate.effective_from === secondStayNight);
+  expect(Number(effectiveMidStayRate?.amount)).toBe(40);
   const quoteResponse = await request.get(`${backendURL}/api/bookings/price-quote`, {
     headers: ownerHeaders,
     params: {
@@ -188,7 +211,7 @@ test("authorized staff add and audit company nightly extras; reception collects 
   await expect(ownerDrawer).toBeVisible();
   await expect(ownerDrawer).toContainText("el voucher");
   await ownerDrawer.getByLabel("Cantidad de personas extra por noche seleccionada").fill("1");
-  for (const stayDate of [checkIn, localIsoDate(11)]) {
+  for (const stayDate of [checkIn, secondStayNight]) {
     await ownerDrawer.getByLabel(`Agregar adicional por huésped extra para la noche ${stayDate}`).check();
   }
   const [createResponse] = await Promise.all([
@@ -200,13 +223,13 @@ test("authorized staff add and audit company nightly extras; reception collects 
   ]);
   expect(createResponse.ok(), await createResponse.text()).toBeTruthy();
   expect(createResponse.request().postDataJSON()).toMatchObject({
-    stay_dates: [checkIn, localIsoDate(11)],
+    stay_dates: [checkIn, secondStayNight],
     extra_person_count: 1
   });
   const createdSummary = await createResponse.json() as { charges: NightCharge[] };
   expect(createdSummary.charges).toHaveLength(2);
-  expect(Number(createdSummary.charges[0].amount)).toBe(25);
-  expect(Number(createdSummary.charges[1].amount)).toBe(25);
+  expect(Number(createdSummary.charges.find((charge) => charge.stay_date === checkIn)?.amount)).toBe(25);
+  expect(Number(createdSummary.charges.find((charge) => charge.stay_date === secondStayNight)?.amount)).toBe(40);
 
   await ownerDrawer.getByLabel(`Seleccionar el cargo de la noche ${checkIn} para corregir`).check();
   await ownerDrawer.getByLabel(`Nuevo total para la noche ${checkIn}`).fill("70");

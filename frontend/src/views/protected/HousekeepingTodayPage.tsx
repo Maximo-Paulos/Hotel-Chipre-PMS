@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -22,6 +22,7 @@ export function HousekeepingTodayPage() {
   const { t, i18n } = useTranslation("rooms");
   const { hasPermission } = useEffectivePermissions();
   const queryClient = useQueryClient();
+  const [selectedFloor, setSelectedFloor] = useState("all");
   const enabled = hasValidSession(session);
   const canUpdate = hasPermission("room:status_update");
   const boardQuery = useQuery({
@@ -40,6 +41,18 @@ export function HousekeepingTodayPage() {
   });
 
   const rooms = useMemo(() => boardQuery.data?.rooms ?? [], [boardQuery.data?.rooms]);
+  const floors = useMemo(() => [...new Set(rooms.map((room) => room.floor))].sort((a, b) => a - b), [rooms]);
+  const visibleRooms = useMemo(
+    () => selectedFloor === "all" ? rooms : rooms.filter((room) => String(room.floor) === selectedFloor),
+    [rooms, selectedFloor]
+  );
+  const roomsByFloor = useMemo(() => {
+    const groups = new Map<number, typeof visibleRooms>();
+    for (const room of visibleRooms) {
+      groups.set(room.floor, [...(groups.get(room.floor) ?? []), room]);
+    }
+    return [...groups.entries()];
+  }, [visibleRooms]);
   const counts = useMemo(() => rooms.reduce(
     (value, room) => ({ ...value, [room.housekeeping_status]: value[room.housekeeping_status] + 1 }),
     { dirty: 0, in_progress: 0, clean: 0, inspected: 0 }
@@ -102,41 +115,62 @@ export function HousekeepingTodayPage() {
         <p className="rounded-lg bg-white p-4 text-sm text-slate-600">{t("housekeepingToday.empty")}</p>
       ) : null}
 
-      <section aria-label={t("housekeepingToday.roomList")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {rooms.map((room) => (
-          <article key={room.room_id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">{t("housekeepingToday.room", { number: room.room_number })}</h2>
-                <p className="text-xs text-slate-600">{t("housekeepingToday.floorCategory", { floor: room.floor, category: room.category_name })}</p>
-              </div>
-              <span className={`shrink-0 rounded-full border px-2 py-1 text-xs font-semibold ${statusClasses[room.housekeeping_status]}`}>
-                {t(`housekeepingStatus.${room.housekeeping_status}`)}
-              </span>
+      <label className="block max-w-xs text-sm font-medium text-slate-700">
+        {t("housekeepingToday.floorFilter")}
+        <select
+          aria-label={t("housekeepingToday.floorFilter")}
+          value={selectedFloor}
+          onChange={(event) => setSelectedFloor(event.target.value)}
+          className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+        >
+          <option value="all">{t("housekeepingToday.allFloors")}</option>
+          {floors.map((floor) => <option key={floor} value={String(floor)}>{t("housekeepingToday.floorLabel", { floor })}</option>)}
+        </select>
+      </label>
+
+      <section aria-label={t("housekeepingToday.roomList")} className="space-y-4">
+        {roomsByFloor.map(([floor, floorRooms]) => (
+          <section key={floor} aria-label={t("housekeepingToday.floorLabel", { floor })}>
+            <h2 className="mb-2 text-sm font-semibold text-slate-700">{t("housekeepingToday.floorLabel", { floor })}</h2>
+            <div className="space-y-2">
+              {floorRooms.map((room) => (
+                <article key={room.room_id} className="flex min-w-0 flex-col gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <h3 className="font-semibold text-slate-900">{t("housekeepingToday.room", { number: room.room_number })}</h3>
+                      <span className="text-xs text-slate-600">{room.category_name}</span>
+                      <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusClasses[room.housekeeping_status]}`}>
+                        {t(`housekeepingStatus.${room.housekeeping_status}`)}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
+                      {room.has_departure_today && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-orange-800">{t("housekeepingToday.departure")}</span>}
+                      {room.has_arrival_today && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-800">{t("housekeepingToday.arrival")}</span>}
+                      {room.has_stayover_today && <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-800">{t("housekeepingToday.stayover")}</span>}
+                      {room.maintenance_blocked && <span className="rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-800">{t("housekeepingToday.maintenanceBlocked")}</span>}
+                      {!room.has_arrival_today && !room.has_departure_today && !room.has_stayover_today && !room.maintenance_blocked && (
+                        <span className="text-slate-500">{t("housekeepingToday.noSpecialEvents")}</span>
+                      )}
+                    </div>
+                  </div>
+                  {canUpdate ? (
+                    <label className="flex shrink-0 items-center gap-2 text-xs text-slate-700 sm:min-w-44">
+                      <span className="sr-only">{t("housekeepingStatus.label")}</span>
+                      <select
+                        aria-label={t("housekeepingToday.statusForRoom", { number: room.room_number })}
+                        value={room.housekeeping_status}
+                        disabled={statusMutation.isPending}
+                        onChange={(event) => void updateStatus(room.room_id, event.target.value as HousekeepingStatus)}
+                        className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 py-1"
+                      >
+                        {statusOrder.map((status) => <option key={status} value={status}>{t(`housekeepingStatus.${status}`)}</option>)}
+                      </select>
+                    </label>
+                  ) : null}
+                </article>
+              ))}
             </div>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              {room.has_arrival_today && <span className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-800">{t("housekeepingToday.arrival")}</span>}
-              {room.has_departure_today && <span className="rounded-full bg-orange-50 px-2 py-1 text-orange-800">{t("housekeepingToday.departure")}</span>}
-              {room.maintenance_blocked && <span className="rounded-full bg-rose-100 px-2 py-1 font-semibold text-rose-800">{t("housekeepingToday.maintenanceBlocked")}</span>}
-              {!room.has_arrival_today && !room.has_departure_today && !room.maintenance_blocked && (
-                <span className="text-slate-500">{t("housekeepingToday.noSpecialEvents")}</span>
-              )}
-            </div>
-            {canUpdate ? (
-              <label className="mt-4 block text-sm text-slate-700">
-                {t("housekeepingStatus.label")}
-                <select
-                  aria-label={t("housekeepingToday.statusForRoom", { number: room.room_number })}
-                  value={room.housekeeping_status}
-                  disabled={statusMutation.isPending}
-                  onChange={(event) => void updateStatus(room.room_id, event.target.value as HousekeepingStatus)}
-                  className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
-                >
-                  {statusOrder.map((status) => <option key={status} value={status}>{t(`housekeepingStatus.${status}`)}</option>)}
-                </select>
-              </label>
-            ) : null}
-          </article>
+          </section>
         ))}
       </section>
     </main>

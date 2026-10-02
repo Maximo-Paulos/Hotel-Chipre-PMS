@@ -11,6 +11,7 @@ import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
+from app.api import reports as reports_api
 from app.models.cash_register import CashSession, CashSessionStatusEnum
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
@@ -223,9 +224,150 @@ def test_daily_report_includes_pending_payment_late_arrivals_and_room_blocks(rep
     assert payload["arrivals"]["count"] == 1
     assert payload["departures"]["count"] == 1
     assert [item["reservation_id"] for item in payload["pending_payments"]["reservations"]] == [pending.id]
+    pending_alert = next(item for item in payload["alerts"] if item["code"] == "pending_payment")
+    assert pending_alert["amount"] == "200.00"
+    assert pending_alert["currency_code"] == "ARS"
     assert [item["reservation_id"] for item in payload["late_arrivals"]] == [late.id]
     assert [item["room_block_id"] for item in payload["active_room_blocks"]] == [block.id]
     assert payload["cash_session"]["status"] == "open"
+
+
+def test_today_arrival_count_is_server_side_hotel_local_and_not_page_limited(reports_client, monkeypatch):
+    client, db, ctx = reports_client
+    report_date = date(2026, 6, 13)
+    monkeypatch.setattr(reports_api, "hotel_today", lambda _db, hotel_id: report_date)
+    category, _rooms = _make_room_set(db, 1, "COUNT")
+    guest = _make_guest(db, 1, "arrival-count")
+    reservations = [
+        Reservation(
+            hotel_id=1,
+            guest_id=guest.id,
+            category_id=category.id,
+            room_id=None,
+            confirmation_code=f"COUNT-{index:03d}",
+            check_in_date=report_date,
+            check_out_date=date(2026, 6, 14),
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("0.00"),
+            status=ReservationStatusEnum.PENDING,
+            num_adults=1,
+        )
+        for index in range(205)
+    ]
+    reservations.extend([
+        Reservation(
+            hotel_id=1,
+            guest_id=guest.id,
+            category_id=category.id,
+            confirmation_code="COUNT-CANCELLED",
+            check_in_date=report_date,
+            check_out_date=date(2026, 6, 14),
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("0.00"),
+            status=ReservationStatusEnum.CANCELLED,
+            num_adults=1,
+        ),
+        Reservation(
+            hotel_id=1,
+            guest_id=guest.id,
+            category_id=category.id,
+            confirmation_code="COUNT-NO-SHOW",
+            check_in_date=report_date,
+            check_out_date=date(2026, 6, 14),
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("0.00"),
+            status=ReservationStatusEnum.NO_SHOW,
+            num_adults=1,
+        ),
+    ])
+    db.add_all(reservations)
+    db.flush()
+    ctx["role"] = "receptionist"
+
+    response = client.get("/api/reports/operational/arrivals/count")
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"report_date": report_date.isoformat(), "count": 205}
+
+
+def test_operational_daily_report_separates_no_shows_from_arrivals(reports_client):
+    client, db, _ctx = reports_client
+    report_date = date(2026, 6, 13)
+    category, rooms = _make_room_set(db, 1, "ARRIVAL-STATUS")
+    active = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "active-arrival"),
+        category=category,
+        room=rooms[0],
+        code="ARRIVAL-ACTIVE",
+        check_in=report_date,
+        check_out=date(2026, 6, 14),
+    )
+    cancelled = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "cancelled-arrival"),
+        category=category,
+        room=rooms[1],
+        code="ARRIVAL-CANCELLED",
+        check_in=report_date,
+        check_out=date(2026, 6, 14),
+        status=ReservationStatusEnum.CANCELLED,
+    )
+    no_show = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "no-show-arrival"),
+        category=category,
+        room=rooms[2],
+        code="ARRIVAL-NO-SHOW",
+        check_in=report_date,
+        check_out=date(2026, 6, 14),
+        status=ReservationStatusEnum.NO_SHOW,
+    )
+
+    response = client.get("/api/reports/operational/daily", params={"report_date": report_date.isoformat()})
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["arrivals"]["count"] == 1
+    assert [item["reservation_id"] for item in payload["arrivals"]["reservations"]] == [active.id]
+    assert payload["no_shows"]["count"] == 1
+    assert [item["reservation_id"] for item in payload["no_shows"]["reservations"]] == [no_show.id]
+    assert cancelled.id not in {item["reservation_id"] for item in payload["arrivals"]["reservations"]}
+
+
+def test_occupancy_report_counts_pre_check_in_reservations(reports_client):
+    client, db, _ctx = reports_client
+    report_date = date(2026, 6, 13)
+    category, rooms = _make_room_set(db, 1, "PRE-CHECK-IN-OCCUPANCY")
+    _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "pre-check-in-occupancy"),
+        category=category,
+        room=rooms[0],
+        code="RPT-PRE-CHECK-IN-OCCUPANCY",
+        check_in=report_date,
+        check_out=date(2026, 6, 14),
+        status=ReservationStatusEnum.PRE_CHECK_IN,
+    )
+
+    response = client.get(
+        "/api/reports/occupancy",
+        params={"start_date": report_date.isoformat(), "end_date": report_date.isoformat()},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["daily"] == [
+        {
+            "date": report_date.isoformat(),
+            "occupied": 1,
+            "available": 2,
+            "rate": 33.3,
+        }
+    ]
 
 
 def test_daily_report_is_hotel_scoped(reports_client):

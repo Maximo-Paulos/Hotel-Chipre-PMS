@@ -1,9 +1,9 @@
 # Rutas frontend
 
-Generado: 2026-10-01T21:43:59.410041+00:00
-Commit: `377196c6ba076e14525c5bd79edfec7eab1f1c46`
+Generado: 2026-10-02T06:30:16.090682+00:00
+Commit: `712d6ee4b0ea7d88206dabe2354c96c481a6286b`
 
-Extraídas de `frontend/src/router.tsx` (82 rutas declaradas). El host determina si una ruta es app o marketing.
+Extraídas de `frontend/src/router.tsx` (83 rutas declaradas). El host determina si una ruta es app o marketing.
 
 - `/`
 - `analytics`
@@ -45,6 +45,7 @@ Extraídas de `frontend/src/router.tsx` (82 rutas declaradas). El host determina
 - `settings/tests`
 - `settings/hotel`
 - `settings/security`
+- `settings/my-security`
 - `settings/sessions`
 - `settings/notifications`
 - `/adminpmsmaster`

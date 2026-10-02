@@ -113,7 +113,7 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   const drawerPaymentMethod = drawer.getByLabel("Método de pago");
   await expect(drawerPaymentMethod.locator('option[value="mercado_pago"]')).toHaveCount(0);
   await drawerPaymentMethod.selectOption("credit_card");
-  await expect(drawer.getByLabel("Identificador verificado del cobro")).toBeVisible();
+  await expect(drawer.getByLabel("Cupón verificado del posnet")).toBeVisible();
   await drawerPaymentMethod.selectOption("cash");
   const balanceBeforePayment = await drawer.getByTestId("drawer-balance-due").innerText();
   expect(balanceBeforePayment).toMatch(/\d/);

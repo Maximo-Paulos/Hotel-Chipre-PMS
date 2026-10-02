@@ -835,3 +835,99 @@ def test_twenty_seven_prior_receipts_do_not_inflate_the_open_cash_session(db):
     )
     assert closed.expected_balance == Decimal("50000.00")
     assert closed.difference == Decimal("0.00")
+
+
+def test_daily_cash_summary_uses_declared_successor_float_without_recounting_full_handoff(db):
+    from app.services.cash_daily_summary_service import get_daily_summary, _db_utc_bounds
+    from app.services.timezones import hotel_today
+
+    hotel = _hotel(db, 1)
+    _user(db, 10)
+    report_date = hotel_today(db, 1)
+    day_start, _day_end = _db_utc_bounds(report_date, hotel.hotel_timezone or "UTC")
+
+    prior_session = open_session(
+        db,
+        hotel_id=1,
+        opened_by_user_id=10,
+        opening_balance=Decimal("0.00"),
+    )
+    report = close_session(
+        db,
+        hotel_id=1,
+        session_id=prior_session.id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("100000.00"),
+    )
+    confirm_cash_custody(
+        db,
+        hotel_id=1,
+        report_id=report.id,
+        received_by_user_id=10,
+        successor_float_amount=Decimal("10000.00"),
+    )
+
+    # Model a close and custody confirmation before the selected local day.
+    prior_session.opened_at = day_start - timedelta(days=1)
+    prior_session.closed_at = day_start - timedelta(seconds=1)
+    report.closed_at = prior_session.closed_at
+    report.custody_handoff.delivered_at = prior_session.closed_at
+    report.custody_handoff.received_at = prior_session.closed_at
+    report.successor_session.opened_at = day_start
+    db.flush()
+
+    summary = get_daily_summary(
+        db,
+        hotel_id=1,
+        report_date=report_date,
+        currency_code="ARS",
+    )
+
+    assert summary["physical_cash"]["opening_balance"] == Decimal("10000.00")
+    assert summary["physical_cash"]["expected_balance"] == Decimal("10000.00")
+
+
+def test_daily_cash_summary_subtracts_same_day_handoff_and_reconciles_close_difference(db):
+    from app.services.cash_daily_summary_service import get_daily_summary
+    from app.services.timezones import hotel_today
+
+    hotel = _hotel(db, 1)
+    _user(db, 10)
+    report_date = hotel_today(db, 1)
+    prior_session = open_session(
+        db,
+        hotel_id=1,
+        opened_by_user_id=10,
+        opening_balance=Decimal("0.00"),
+    )
+    add_movement(
+        db,
+        hotel_id=1,
+        session_id=prior_session.id,
+        recorded_by_user_id=10,
+        movement_type=CashMovementTypeEnum.INCOME,
+        amount=Decimal("100000.00"),
+        description="Cobros del turno",
+    )
+    report = close_session(
+        db,
+        hotel_id=1,
+        session_id=prior_session.id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("105000.00"),
+    )
+    confirm_cash_custody(
+        db,
+        hotel_id=1,
+        report_id=report.id,
+        received_by_user_id=10,
+        successor_float_amount=Decimal("10000.00"),
+    )
+
+    summary = get_daily_summary(db, hotel_id=1, report_date=report_date, currency_code="ARS")
+
+    assert summary["physical_cash"]["opening_balance"] == Decimal("10000.00")
+    assert summary["physical_cash"]["income_total"] == Decimal("100000.00")
+    assert summary["physical_cash"]["custody_delivered_total"] == Decimal("105000.00")
+    assert summary["physical_cash"]["custody_difference_total"] == Decimal("5000.00")
+    assert summary["physical_cash"]["expected_balance"] == Decimal("10000.00")

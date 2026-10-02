@@ -41,7 +41,11 @@ from app.services.reservation_service import (
 )
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services import audit_log_service
-from app.services.financial_ledger import completed_paid_amount, has_payment_history_for_cancellation
+from app.services.financial_ledger import (
+    completed_paid_amount,
+    external_paid_balance_credit,
+    has_payment_history_for_cancellation,
+)
 
 
 class OTAError(Exception):
@@ -406,6 +410,9 @@ class OTAIntegrationService:
         *,
         preserve_operational_status: bool = False,
     ) -> None:
+        reservation_currency = (
+            normalized.currency_code or _hotel_default_currency(db, hotel_id)
+        ).strip().upper()
         gross_total = normalized.gross_total or 0.0
         tax_total = normalized.tax_total or 0.0
         fee_total = normalized.fee_total or 0.0
@@ -426,10 +433,14 @@ class OTAIntegrationService:
             gross_total=gross_total,
         )
         previous_external_paid = Decimal(str(reservation.external_paid_amount or 0))
-        if normalized.paid_amount is None and previous_external_paid > 0:
+        preserve_previous_external_payment = (
+            normalized.paid_amount is None and previous_external_paid > 0
+        )
+        if preserve_previous_external_payment:
             # Partial OTA modification payloads often omit settlement fields;
             # absence is not evidence that a previously confirmed credit was
-            # reversed. An explicit zero still replaces the snapshot below.
+            # reversed. Keep its original currency too. An explicit zero still
+            # replaces the snapshot below.
             amount_paid = float(previous_external_paid)
         else:
             amount_paid = OTAIntegrationService._resolve_paid_amount(
@@ -439,6 +450,16 @@ class OTAIntegrationService:
             )
         external_paid = Decimal(str(amount_paid)).quantize(Decimal("0.01"))
         reservation.external_paid_amount = external_paid
+        if external_paid > 0 and preserve_previous_external_payment:
+            reservation.external_paid_currency = (
+                reservation.external_paid_currency
+                or reservation.currency_code
+                or reservation_currency
+            )
+        elif external_paid > 0:
+            reservation.external_paid_currency = reservation_currency
+        else:
+            reservation.external_paid_currency = None
         reservation.external_paid_reference = (
             f"{normalized.provider_code}:{normalized.external_reservation_id}"[:120]
             if external_paid > 0
@@ -456,13 +477,21 @@ class OTAIntegrationService:
             else (received_at if external_paid > 0 else None)
         )
         locally_paid = completed_paid_amount(db, hotel_id, reservation.id)
-        total_paid_for_guest_balance = (external_paid + locally_paid).quantize(Decimal("0.01"))
+        # Current adapter contracts provide a single currency for the OTA price
+        # and paid amount. Until a provider supplies a distinct paid currency,
+        # these snapshots share reservation_currency. The explicit comparison
+        # protects historical/manual rows whose source currency differs.
+        reservation.currency_code = reservation_currency
+        balance_external_paid = external_paid_balance_credit(reservation)
+        total_paid_for_guest_balance = (
+            balance_external_paid + locally_paid
+        ).quantize(Decimal("0.01"))
         reservation.amount_paid = total_paid_for_guest_balance
         reservation.payment_collection_model = collection_model
         reservation.settlement_status = OTAIntegrationService._normalize_settlement_status(
             normalized.settlement_status,
             collection_model=collection_model,
-            amount_paid=amount_paid,
+            amount_paid=float(balance_external_paid),
             gross_total=gross_total,
         )
         if not preserve_operational_status:
@@ -476,7 +505,6 @@ class OTAIntegrationService:
         reservation.external_confirmation_code = (
             normalized.external_confirmation_code or normalized.external_reservation_id
         )
-        reservation.currency_code = normalized.currency_code or _hotel_default_currency(db, hotel_id)
         reservation.arrival_time_hint = normalized.arrival_time_hint
         reservation.pricing_snapshot = json.dumps(
             {
@@ -486,6 +514,7 @@ class OTAIntegrationService:
                 "fee_total": normalized.fee_total,
                 "commission_total": normalized.commission_total,
                 "paid_amount": amount_paid,
+                "paid_currency_code": reservation.external_paid_currency,
                 "payment_collection_model": collection_model,
                 "settlement_status": reservation.settlement_status,
                 "currency_code": normalized.currency_code,

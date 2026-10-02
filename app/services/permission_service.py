@@ -868,6 +868,9 @@ _ROLE_SCOPES: dict[str, frozenset[str]] = {
     PERMISSION_APIKEY_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_COMPANY_NIGHT_RATE_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER}),
+    # Company records and reservations are managed by hotel leadership. An
+    # individual permission override must not give Reception this capability.
+    PERMISSION_COMPANY_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER}),
     PERMISSION_SETTINGS_FX_MANAGE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_TESTS_VIEW: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_SETTINGS_TESTS_EXECUTE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),

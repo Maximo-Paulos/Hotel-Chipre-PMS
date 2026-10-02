@@ -58,6 +58,8 @@ export type Reservation = {
   quoted_amount_ars?: number | null;
   quoted_amount_usd?: number | null;
   external_paid_amount?: number | null;
+  external_paid_currency?: string | null;
+  external_paid_balance_credit_applied?: boolean;
   external_paid_reference?: string | null;
   external_paid_confirmed?: boolean;
   allocation_status?: string;
@@ -479,6 +481,7 @@ export type ManualOtaReservationPayload = {
   quoted_amount_ars?: number | null;
   quoted_amount_usd?: number | null;
   amount_paid?: number | null;
+  external_paid_currency?: string | null;
   external_paid_reference?: string | null;
 };
 

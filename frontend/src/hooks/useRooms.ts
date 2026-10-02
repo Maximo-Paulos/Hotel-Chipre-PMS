@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { listRoomCategories, listRooms, updateRoomCleaningStatus, updateRoomStatus, type HousekeepingStatus, type Room, type RoomCategory, type RoomStatus } from "../api/rooms";
+import { listRooms, updateRoomCleaningStatus, updateRoomStatus, type HousekeepingStatus, type Room, type RoomCategory, type RoomStatus } from "../api/rooms";
+import { listCategories } from "../api/categories";
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 import { queryKeys } from "../api/queryKeys";
@@ -20,7 +21,7 @@ export function useRooms(options?: { includeCategories?: boolean }) {
 
   const categoriesQuery = useQuery<RoomCategory[]>({
     queryKey: queryKeys.roomCategories(session.hotelId),
-    queryFn: () => listRoomCategories(session),
+    queryFn: () => listCategories(session),
     enabled: hasValidSession(session) && (options?.includeCategories ?? true),
     staleTime: 5 * 60 * 1000
   });

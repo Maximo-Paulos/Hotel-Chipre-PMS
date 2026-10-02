@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-01T21:43:41.460Z",
+  "generatedAt": "2026-10-02T06:37:13.170Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -875,6 +875,162 @@
       "warnings": []
     },
     {
+      "id": "flow:api_queryinvalidation_refreshcashstate",
+      "name": "refreshCashState",
+      "entryPoint": "api_queryinvalidation_refreshcashstate",
+      "entryPointId": "api_queryinvalidation_refreshcashstate",
+      "path": [
+        "api_queryinvalidation_refreshcashstate",
+        "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshcashstate",
+        "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshgueststate",
+      "name": "refreshGuestState",
+      "entryPoint": "api_queryinvalidation_refreshgueststate",
+      "entryPointId": "api_queryinvalidation_refreshgueststate",
+      "path": [
+        "api_queryinvalidation_refreshgueststate",
+        "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshgueststate",
+        "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshroomstate",
+      "name": "refreshRoomState",
+      "entryPoint": "api_queryinvalidation_refreshroomstate",
+      "entryPointId": "api_queryinvalidation_refreshroomstate",
+      "path": [
+        "api_queryinvalidation_refreshroomstate",
+        "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshroomstate",
+        "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshsettingsstate",
+      "name": "refreshSettingsState",
+      "entryPoint": "api_queryinvalidation_refreshsettingsstate",
+      "entryPointId": "api_queryinvalidation_refreshsettingsstate",
+      "path": [
+        "api_queryinvalidation_refreshsettingsstate",
+        "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshsettingsstate",
+        "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshstockstate",
+      "name": "refreshStockState",
+      "entryPoint": "api_queryinvalidation_refreshstockstate",
+      "entryPointId": "api_queryinvalidation_refreshstockstate",
+      "path": [
+        "api_queryinvalidation_refreshstockstate",
+        "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshstockstate",
+        "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshuserstate",
+      "name": "refreshUserState",
+      "entryPoint": "api_queryinvalidation_refreshuserstate",
+      "entryPointId": "api_queryinvalidation_refreshuserstate",
+      "path": [
+        "api_queryinvalidation_refreshuserstate",
+        "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshuserstate",
+        "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
       "id": "flow:dependencies_auth_require_permission_administrator",
       "name": "require_permission_administrator",
       "entryPoint": "dependencies_auth_require_permission_administrator",
@@ -1399,30 +1555,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_queryinvalidation_refreshcashstate",
-      "name": "refreshCashState",
-      "entryPoint": "api_queryinvalidation_refreshcashstate",
-      "entryPointId": "api_queryinvalidation_refreshcashstate",
-      "path": [
-        "api_queryinvalidation_refreshcashstate",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "qualifiedPath": [
-        "api_queryinvalidation_refreshcashstate",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/queryInvalidation.ts"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
       "id": "flow:api_queryinvalidation_refreshdomains",
       "name": "refreshDomains",
       "entryPoint": "api_queryinvalidation_refreshdomains",
@@ -1430,39 +1562,19 @@
       "path": [
         "api_queryinvalidation_refreshdomains",
         "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid",
         "api_queryinvalidation_refreshhotelqueriesbyprefix"
       ],
       "qualifiedPath": [
         "api_queryinvalidation_refreshdomains",
         "api_queryinvalidation_refreshaftermutation",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid",
         "api_queryinvalidation_refreshhotelqueriesbyprefix"
       ],
       "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/queryInvalidation.ts"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_queryinvalidation_refreshgueststate",
-      "name": "refreshGuestState",
-      "entryPoint": "api_queryinvalidation_refreshgueststate",
-      "entryPointId": "api_queryinvalidation_refreshgueststate",
-      "path": [
-        "api_queryinvalidation_refreshgueststate",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "qualifiedPath": [
-        "api_queryinvalidation_refreshgueststate",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "frontend/src/api/queryInvalidation.ts"
@@ -1478,12 +1590,42 @@
       "path": [
         "api_queryinvalidation_refreshpaymentstate",
         "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
+        "api_queryinvalidation_refreshreservationqueries",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid"
       ],
       "qualifiedPath": [
         "api_queryinvalidation_refreshpaymentstate",
         "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
+        "api_queryinvalidation_refreshreservationqueries",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshreservationcreatedstate",
+      "name": "refreshReservationCreatedState",
+      "entryPoint": "api_queryinvalidation_refreshreservationcreatedstate",
+      "entryPointId": "api_queryinvalidation_refreshreservationcreatedstate",
+      "path": [
+        "api_queryinvalidation_refreshreservationcreatedstate",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshreservationcreatedstate",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries"
       ],
       "depth": 2,
       "nodeCount": 3,
@@ -1502,15 +1644,47 @@
       "path": [
         "api_queryinvalidation_refreshreservationgueststate",
         "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
+        "api_queryinvalidation_refreshreservationqueries",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid"
       ],
       "qualifiedPath": [
         "api_queryinvalidation_refreshreservationgueststate",
         "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
+        "api_queryinvalidation_refreshreservationqueries",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid"
       ],
       "depth": 2,
-      "nodeCount": 3,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshreservationrecordstate",
+      "name": "refreshReservationRecordState",
+      "entryPoint": "api_queryinvalidation_refreshreservationrecordstate",
+      "entryPointId": "api_queryinvalidation_refreshreservationrecordstate",
+      "path": [
+        "api_queryinvalidation_refreshreservationrecordstate",
+        "api_queryinvalidation_refreshreservationqueries",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshreservationrecordstate",
+        "api_queryinvalidation_refreshreservationqueries",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "frontend/src/api/queryInvalidation.ts"
@@ -1526,111 +1700,21 @@
       "path": [
         "api_queryinvalidation_refreshreservationstate",
         "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
+        "api_queryinvalidation_refreshreservationqueries",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid"
       ],
       "qualifiedPath": [
         "api_queryinvalidation_refreshreservationstate",
         "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
+        "api_queryinvalidation_refreshreservationqueries",
+        "api_queryinvalidation_refreshhotelqueriesbyprefix",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid"
       ],
       "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/queryInvalidation.ts"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_queryinvalidation_refreshroomstate",
-      "name": "refreshRoomState",
-      "entryPoint": "api_queryinvalidation_refreshroomstate",
-      "entryPointId": "api_queryinvalidation_refreshroomstate",
-      "path": [
-        "api_queryinvalidation_refreshroomstate",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "qualifiedPath": [
-        "api_queryinvalidation_refreshroomstate",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/queryInvalidation.ts"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_queryinvalidation_refreshsettingsstate",
-      "name": "refreshSettingsState",
-      "entryPoint": "api_queryinvalidation_refreshsettingsstate",
-      "entryPointId": "api_queryinvalidation_refreshsettingsstate",
-      "path": [
-        "api_queryinvalidation_refreshsettingsstate",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "qualifiedPath": [
-        "api_queryinvalidation_refreshsettingsstate",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/queryInvalidation.ts"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_queryinvalidation_refreshstockstate",
-      "name": "refreshStockState",
-      "entryPoint": "api_queryinvalidation_refreshstockstate",
-      "entryPointId": "api_queryinvalidation_refreshstockstate",
-      "path": [
-        "api_queryinvalidation_refreshstockstate",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "qualifiedPath": [
-        "api_queryinvalidation_refreshstockstate",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/queryInvalidation.ts"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_queryinvalidation_refreshuserstate",
-      "name": "refreshUserState",
-      "entryPoint": "api_queryinvalidation_refreshuserstate",
-      "entryPointId": "api_queryinvalidation_refreshuserstate",
-      "path": [
-        "api_queryinvalidation_refreshuserstate",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "qualifiedPath": [
-        "api_queryinvalidation_refreshuserstate",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "frontend/src/api/queryInvalidation.ts"
@@ -3378,28 +3462,6 @@
       "fileCount": 1,
       "files": [
         "app/api/permissions.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_queryinvalidation_refreshreservationcreatedstate",
-      "name": "refreshReservationCreatedState",
-      "entryPoint": "api_queryinvalidation_refreshreservationcreatedstate",
-      "entryPointId": "api_queryinvalidation_refreshreservationcreatedstate",
-      "path": [
-        "api_queryinvalidation_refreshreservationcreatedstate",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "qualifiedPath": [
-        "api_queryinvalidation_refreshreservationcreatedstate",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/queryInvalidation.ts"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -6343,6 +6405,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_operational_report_service_today_arrival_count",
+      "name": "today_arrival_count",
+      "entryPoint": "services_operational_report_service_today_arrival_count",
+      "entryPointId": "services_operational_report_service_today_arrival_count",
+      "path": [
+        "services_operational_report_service_today_arrival_count",
+        "services_operational_report_service_arrivals_query"
+      ],
+      "qualifiedPath": [
+        "services_operational_report_service_today_arrival_count",
+        "services_operational_report_service_arrivals_query"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_report_service.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:api_whatsapp_crm_update_assignment",
       "name": "update_assignment",
       "entryPoint": "api_whatsapp_crm_update_assignment",
@@ -7600,54 +7684,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_financial_ledger_paid_amounts_by_reservation",
-      "name": "paid_amounts_by_reservation",
-      "entryPoint": "services_financial_ledger_paid_amounts_by_reservation",
-      "entryPointId": "services_financial_ledger_paid_amounts_by_reservation",
-      "path": [
-        "services_financial_ledger_paid_amounts_by_reservation",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_financial_ledger_paid_amounts_by_reservation",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_ledger.py"
-      ],
-      "criticality": 0.2533,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_financial_ledger_reconciled_paid_amounts_by_reservation",
-      "name": "reconciled_paid_amounts_by_reservation",
-      "entryPoint": "services_financial_ledger_reconciled_paid_amounts_by_reservation",
-      "entryPointId": "services_financial_ledger_reconciled_paid_amounts_by_reservation",
-      "path": [
-        "services_financial_ledger_reconciled_paid_amounts_by_reservation",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_financial_ledger_reconciled_paid_amounts_by_reservation",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "depth": 2,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_ledger.py"
-      ],
-      "criticality": 0.2533,
-      "warnings": []
-    },
-    {
       "id": "flow:services_cash_register_service_record_cash_payment_movement",
       "name": "record_cash_payment_movement",
       "entryPoint": "services_cash_register_service_record_cash_payment_movement",
@@ -8773,34 +8809,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_financial_ledger_has_payment_history_for_cancellation",
-      "name": "has_payment_history_for_cancellation",
-      "entryPoint": "services_financial_ledger_has_payment_history_for_cancellation",
-      "entryPointId": "services_financial_ledger_has_payment_history_for_cancellation",
-      "path": [
-        "services_financial_ledger_has_payment_history_for_cancellation",
-        "services_financial_ledger_paid_amount_with_legacy_fallback",
-        "services_financial_ledger_completed_paid_amount",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_financial_ledger_has_payment_history_for_cancellation",
-        "services_financial_ledger_paid_amount_with_legacy_fallback",
-        "services_financial_ledger_completed_paid_amount",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "depth": 4,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_ledger.py"
-      ],
-      "criticality": 0.24,
-      "warnings": []
-    },
-    {
       "id": "flow:services_gemma_service_gemmaservice_suggest_policy_from_questionnaire",
       "name": ".suggest_policy_from_questionnaire",
       "entryPoint": "services_gemma_service_gemmaservice_suggest_policy_from_questionnaire",
@@ -9009,6 +9017,58 @@
       "warnings": []
     },
     {
+      "id": "flow:services_financial_ledger_paid_amounts_by_reservation",
+      "name": "paid_amounts_by_reservation",
+      "entryPoint": "services_financial_ledger_paid_amounts_by_reservation",
+      "entryPointId": "services_financial_ledger_paid_amounts_by_reservation",
+      "path": [
+        "services_financial_ledger_paid_amounts_by_reservation",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_signed_transaction_amount"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_paid_amounts_by_reservation",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_signed_transaction_amount"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
+      ],
+      "criticality": 0.2325,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_financial_ledger_reconciled_paid_amounts_by_reservation",
+      "name": "reconciled_paid_amounts_by_reservation",
+      "entryPoint": "services_financial_ledger_reconciled_paid_amounts_by_reservation",
+      "entryPointId": "services_financial_ledger_reconciled_paid_amounts_by_reservation",
+      "path": [
+        "services_financial_ledger_reconciled_paid_amounts_by_reservation",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_signed_transaction_amount"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_reconciled_paid_amounts_by_reservation",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_signed_transaction_amount"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
+      ],
+      "criticality": 0.2325,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_20260724_billing_adjustment_enum_values_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_20260724_billing_adjustment_enum_values_upgrade",
@@ -9111,23 +9171,23 @@
       "warnings": []
     },
     {
-      "id": "flow:services_financial_ledger_operational_balance_due",
-      "name": "operational_balance_due",
-      "entryPoint": "services_financial_ledger_operational_balance_due",
-      "entryPointId": "services_financial_ledger_operational_balance_due",
+      "id": "flow:services_financial_ledger_has_payment_history_for_cancellation",
+      "name": "has_payment_history_for_cancellation",
+      "entryPoint": "services_financial_ledger_has_payment_history_for_cancellation",
+      "entryPointId": "services_financial_ledger_has_payment_history_for_cancellation",
       "path": [
-        "services_financial_ledger_operational_balance_due",
-        "services_financial_ledger_billing_adjustment_totals_by_reservation",
+        "services_financial_ledger_has_payment_history_for_cancellation",
         "services_financial_ledger_paid_amount_with_legacy_fallback",
         "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_external_paid_balance_credit",
         "services_financial_ledger_completed_paid_amounts_by_reservation",
         "services_financial_ledger_signed_transaction_amount"
       ],
       "qualifiedPath": [
-        "services_financial_ledger_operational_balance_due",
-        "services_financial_ledger_billing_adjustment_totals_by_reservation",
+        "services_financial_ledger_has_payment_history_for_cancellation",
         "services_financial_ledger_paid_amount_with_legacy_fallback",
         "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_external_paid_balance_credit",
         "services_financial_ledger_completed_paid_amounts_by_reservation",
         "services_financial_ledger_signed_transaction_amount"
       ],
@@ -9423,6 +9483,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_financial_ledger_operational_balance_due",
+      "name": "operational_balance_due",
+      "entryPoint": "services_financial_ledger_operational_balance_due",
+      "entryPointId": "services_financial_ledger_operational_balance_due",
+      "path": [
+        "services_financial_ledger_operational_balance_due",
+        "services_financial_ledger_billing_adjustment_totals_by_reservation",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_signed_transaction_amount"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_operational_balance_due",
+        "services_financial_ledger_billing_adjustment_totals_by_reservation",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_signed_transaction_amount"
+      ],
+      "depth": 4,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
+      ],
+      "criticality": 0.2257,
+      "warnings": []
+    },
+    {
       "id": "flow:services_payment_link_test_service_create_mercadopago_payment_link_test",
       "name": "create_mercadopago_payment_link_test",
       "entryPoint": "services_payment_link_test_service_create_mercadopago_payment_link_test",
@@ -9456,6 +9548,46 @@
         "app/services/payment_link_test_service.py"
       ],
       "criticality": 0.2256,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_report_service_nightly_summary",
+      "name": "nightly_summary",
+      "entryPoint": "services_operational_report_service_nightly_summary",
+      "entryPointId": "services_operational_report_service_nightly_summary",
+      "path": [
+        "services_operational_report_service_nightly_summary",
+        "services_operational_report_service_daily_report",
+        "services_operational_report_service_active_room_blocks",
+        "services_operational_report_service_alerts",
+        "services_operational_report_service_arrivals_query",
+        "services_operational_report_service_available_with_review",
+        "services_operational_report_service_cash_session",
+        "services_operational_report_service_company_night_extra_balances_by_reservation",
+        "services_operational_report_service_group",
+        "services_operational_report_service_reservation_summary",
+        "services_operational_report_service_guest_name"
+      ],
+      "qualifiedPath": [
+        "services_operational_report_service_nightly_summary",
+        "services_operational_report_service_daily_report",
+        "services_operational_report_service_active_room_blocks",
+        "services_operational_report_service_alerts",
+        "services_operational_report_service_arrivals_query",
+        "services_operational_report_service_available_with_review",
+        "services_operational_report_service_cash_session",
+        "services_operational_report_service_company_night_extra_balances_by_reservation",
+        "services_operational_report_service_group",
+        "services_operational_report_service_reservation_summary",
+        "services_operational_report_service_guest_name"
+      ],
+      "depth": 3,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_report_service.py"
+      ],
+      "criticality": 0.2255,
       "warnings": []
     },
     {
@@ -11049,44 +11181,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_operational_report_service_nightly_summary",
-      "name": "nightly_summary",
-      "entryPoint": "services_operational_report_service_nightly_summary",
-      "entryPointId": "services_operational_report_service_nightly_summary",
-      "path": [
-        "services_operational_report_service_nightly_summary",
-        "services_operational_report_service_daily_report",
-        "services_operational_report_service_active_room_blocks",
-        "services_operational_report_service_alerts",
-        "services_operational_report_service_available_with_review",
-        "services_operational_report_service_cash_session",
-        "services_operational_report_service_company_night_extra_balances_by_reservation",
-        "services_operational_report_service_group",
-        "services_operational_report_service_reservation_summary",
-        "services_operational_report_service_guest_name"
-      ],
-      "qualifiedPath": [
-        "services_operational_report_service_nightly_summary",
-        "services_operational_report_service_daily_report",
-        "services_operational_report_service_active_room_blocks",
-        "services_operational_report_service_alerts",
-        "services_operational_report_service_available_with_review",
-        "services_operational_report_service_cash_session",
-        "services_operational_report_service_company_night_extra_balances_by_reservation",
-        "services_operational_report_service_group",
-        "services_operational_report_service_reservation_summary",
-        "services_operational_report_service_guest_name"
-      ],
-      "depth": 3,
-      "nodeCount": 10,
-      "fileCount": 1,
-      "files": [
-        "app/services/operational_report_service.py"
-      ],
-      "criticality": 0.205,
-      "warnings": []
-    },
-    {
       "id": "flow:services_reservation_service_update_reservation_fields",
       "name": "update_reservation_fields",
       "entryPoint": "services_reservation_service_update_reservation_fields",
@@ -12564,6 +12658,7 @@
         "api_invitations_audit_invitation_mfa_challenge",
         "api_invitations_available_invitation",
         "api_invitations_build_invitation_mfa_challenge",
+        "api_invitations_issue_invitation_acceptance_response",
         "api_invitations_source_key",
         "api_invitations_activate_invitation_for_user",
         "api_invitations_pending_invitation_claim"
@@ -12577,12 +12672,13 @@
         "api_invitations_audit_invitation_mfa_challenge",
         "api_invitations_available_invitation",
         "api_invitations_build_invitation_mfa_challenge",
+        "api_invitations_issue_invitation_acceptance_response",
         "api_invitations_source_key",
         "api_invitations_activate_invitation_for_user",
         "api_invitations_pending_invitation_claim"
       ],
       "depth": 3,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/api/invitations.py"
@@ -12604,6 +12700,7 @@
         "api_invitations_audit_invitation_mfa_challenge",
         "api_invitations_available_invitation",
         "api_invitations_build_invitation_mfa_challenge",
+        "api_invitations_issue_invitation_acceptance_response",
         "api_invitations_raise_google_identity_integrity_conflict",
         "api_invitations_source_key",
         "api_invitations_activate_invitation_for_user",
@@ -12618,13 +12715,14 @@
         "api_invitations_audit_invitation_mfa_challenge",
         "api_invitations_available_invitation",
         "api_invitations_build_invitation_mfa_challenge",
+        "api_invitations_issue_invitation_acceptance_response",
         "api_invitations_raise_google_identity_integrity_conflict",
         "api_invitations_source_key",
         "api_invitations_activate_invitation_for_user",
         "api_invitations_pending_invitation_claim"
       ],
       "depth": 3,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/api/invitations.py"
@@ -14377,6 +14475,7 @@
         "api_invitations_audit_invitation_accept_denial",
         "api_invitations_available_invitation",
         "api_invitations_invitation_matches_challenge",
+        "api_invitations_issue_invitation_acceptance_response",
         "api_invitations_raise_google_identity_integrity_conflict",
         "api_invitations_source_key",
         "api_invitations_activate_invitation_for_user",
@@ -14388,13 +14487,14 @@
         "api_invitations_audit_invitation_accept_denial",
         "api_invitations_available_invitation",
         "api_invitations_invitation_matches_challenge",
+        "api_invitations_issue_invitation_acceptance_response",
         "api_invitations_raise_google_identity_integrity_conflict",
         "api_invitations_source_key",
         "api_invitations_activate_invitation_for_user",
         "api_invitations_pending_invitation_claim"
       ],
       "depth": 2,
-      "nodeCount": 9,
+      "nodeCount": 10,
       "fileCount": 1,
       "files": [
         "app/api/invitations.py"
@@ -16575,6 +16675,54 @@
       "warnings": []
     },
     {
+      "id": "flow:services_invitation_email_service_send_staff_role_changed_email",
+      "name": "send_staff_role_changed_email",
+      "entryPoint": "services_invitation_email_service_send_staff_role_changed_email",
+      "entryPointId": "services_invitation_email_service_send_staff_role_changed_email",
+      "path": [
+        "services_invitation_email_service_send_staff_role_changed_email",
+        "services_invitation_email_service_send_staff_notice",
+        "services_invitation_email_service_invitationmailer_send"
+      ],
+      "qualifiedPath": [
+        "services_invitation_email_service_send_staff_role_changed_email",
+        "services_invitation_email_service_send_staff_notice",
+        "services_invitation_email_service_invitationmailer_send"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/invitation_email_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_invitation_email_service_send_staff_welcome_email",
+      "name": "send_staff_welcome_email",
+      "entryPoint": "services_invitation_email_service_send_staff_welcome_email",
+      "entryPointId": "services_invitation_email_service_send_staff_welcome_email",
+      "path": [
+        "services_invitation_email_service_send_staff_welcome_email",
+        "services_invitation_email_service_send_staff_notice",
+        "services_invitation_email_service_invitationmailer_send"
+      ],
+      "qualifiedPath": [
+        "services_invitation_email_service_send_staff_welcome_email",
+        "services_invitation_email_service_send_staff_notice",
+        "services_invitation_email_service_invitationmailer_send"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/invitation_email_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_email_service_send_verification_email",
       "name": "send_verification_email",
       "entryPoint": "services_email_service_send_verification_email",
@@ -18645,6 +18793,28 @@
       "warnings": []
     },
     {
+      "id": "flow:protected_dashboardpage_dashboardpage",
+      "name": "DashboardPage",
+      "entryPoint": "protected_dashboardpage_dashboardpage",
+      "entryPointId": "protected_dashboardpage_dashboardpage",
+      "path": [
+        "protected_dashboardpage_dashboardpage",
+        "protected_dashboardpage_hoteltodayiso"
+      ],
+      "qualifiedPath": [
+        "protected_dashboardpage_dashboardpage",
+        "protected_dashboardpage_hoteltodayiso"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/DashboardPage.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:components_ratecalendargrid_dayheadercell",
       "name": "DayHeaderCell",
       "entryPoint": "components_ratecalendargrid_dayheadercell",
@@ -18830,17 +19000,21 @@
       "path": [
         "protected_reportspage_reportspage",
         "protected_reportspage_cashstatuslabel",
+        "protected_reportspage_currencyamounts",
+        "protected_reportspage_hoteltodayiso",
         "protected_reportspage_money",
         "protected_reportspage_reportserrormessage"
       ],
       "qualifiedPath": [
         "protected_reportspage_reportspage",
         "protected_reportspage_cashstatuslabel",
+        "protected_reportspage_currencyamounts",
+        "protected_reportspage_hoteltodayiso",
         "protected_reportspage_money",
         "protected_reportspage_reportserrormessage"
       ],
       "depth": 1,
-      "nodeCount": 4,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/ReportsPage.tsx"
@@ -21960,6 +22134,28 @@
       "fileCount": 1,
       "files": [
         "app/api/guests.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_reports_export_revenue_report_csv",
+      "name": "export_revenue_report_csv",
+      "entryPoint": "api_reports_export_revenue_report_csv",
+      "entryPointId": "api_reports_export_revenue_report_csv",
+      "path": [
+        "api_reports_export_revenue_report_csv",
+        "api_reports_safe_csv_cell"
+      ],
+      "qualifiedPath": [
+        "api_reports_export_revenue_report_csv",
+        "api_reports_safe_csv_cell"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/reports.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -27202,6 +27398,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/hooks/useCompanyNightCharges.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:hooks_usecompanies_usecompanynightlyrates",
+      "name": "useCompanyNightlyRates",
+      "entryPoint": "hooks_usecompanies_usecompanynightlyrates",
+      "entryPointId": "hooks_usecompanies_usecompanynightlyrates",
+      "path": [
+        "hooks_usecompanies_usecompanynightlyrates",
+        "hooks_usecompanies_companynightlyrateskey"
+      ],
+      "qualifiedPath": [
+        "hooks_usecompanies_usecompanynightlyrates",
+        "hooks_usecompanies_companynightlyrateskey"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useCompanies.ts"
       ],
       "criticality": 0.16,
       "warnings": []

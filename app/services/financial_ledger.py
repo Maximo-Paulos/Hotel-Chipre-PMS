@@ -57,6 +57,27 @@ def completed_paid_amount(db: Session, hotel_id: int, reservation_id: int) -> De
     )
 
 
+def external_paid_balance_credit(reservation) -> Decimal:
+    """Return an external OTA amount only when its unit matches the booking.
+
+    Historical rows without an explicit external currency are interpreted in
+    their reservation currency; the migration also backfills confirmed legacy
+    credits so report queries have a stable source value.
+    """
+    if not bool(getattr(reservation, "external_paid_confirmed", False)):
+        return Decimal("0.00")
+    amount = Decimal(str(getattr(reservation, "external_paid_amount", 0) or 0))
+    if amount <= 0:
+        return Decimal("0.00")
+    reservation_currency = str(getattr(reservation, "currency_code", None) or "ARS").strip().upper()
+    paid_currency = str(
+        getattr(reservation, "external_paid_currency", None) or reservation_currency
+    ).strip().upper()
+    if paid_currency != reservation_currency:
+        return Decimal("0.00")
+    return amount.quantize(Decimal("0.01"))
+
+
 def paid_amounts_by_reservation(
     db: Session,
     hotel_id: int,
@@ -78,7 +99,9 @@ def paid_amounts_by_reservation(
         Reservation.external_id,
         Reservation.amount_paid,
         Reservation.external_paid_amount,
+        Reservation.external_paid_currency,
         Reservation.external_paid_confirmed,
+        Reservation.currency_code,
     ).filter(Reservation.hotel_id == hotel_id)
     transactions_query = db.query(Transaction.reservation_id).filter(
         Transaction.hotel_id == hotel_id
@@ -94,11 +117,7 @@ def paid_amounts_by_reservation(
         ledger_paid = completed.get(row.id, Decimal("0.00"))
         is_ota_reservation = bool(row.source_provider_code or row.external_id)
         if is_ota_reservation:
-            external_paid = (
-                Decimal(str(row.external_paid_amount or 0))
-                if row.external_paid_confirmed
-                else Decimal("0.00")
-            )
+            external_paid = external_paid_balance_credit(row)
             result[row.id] = (ledger_paid + external_paid).quantize(Decimal("0.01"))
         elif row.id in has_transactions:
             result[row.id] = ledger_paid
@@ -126,7 +145,9 @@ def reconciled_paid_amounts_by_reservation(
         Reservation.source_provider_code,
         Reservation.external_id,
         Reservation.external_paid_amount,
+        Reservation.external_paid_currency,
         Reservation.external_paid_confirmed,
+        Reservation.currency_code,
     ).filter(Reservation.hotel_id == hotel_id)
     if ids is not None:
         if not ids:
@@ -138,8 +159,7 @@ def reconciled_paid_amounts_by_reservation(
             and row.external_paid_confirmed
         ):
             totals[row.id] = (
-                totals.get(row.id, Decimal("0.00"))
-                + Decimal(str(row.external_paid_amount or 0))
+                totals.get(row.id, Decimal("0.00")) + external_paid_balance_credit(row)
             ).quantize(Decimal("0.01"))
     return totals
 
@@ -157,11 +177,7 @@ def paid_amount_with_legacy_fallback(db: Session, hotel_id: int, reservation) ->
         or getattr(reservation, "external_id", None)
     )
     if is_ota_reservation:
-        external_paid = (
-            Decimal(str(getattr(reservation, "external_paid_amount", 0) or 0))
-            if bool(getattr(reservation, "external_paid_confirmed", False))
-            else Decimal("0.00")
-        )
+        external_paid = external_paid_balance_credit(reservation)
         return (completed_ledger + external_paid).quantize(Decimal("0.01"))
 
     has_transactions = db.query(Transaction.id).filter(

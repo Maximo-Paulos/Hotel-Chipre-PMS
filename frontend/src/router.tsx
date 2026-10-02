@@ -86,6 +86,9 @@ const SettingsNotificationsPage = lazy(() => import("./views/protected/SettingsN
 const SettingsSecurityPage = lazy(() =>
   import("./views/protected/SettingsSecurityPage").then((m) => ({ default: m.SettingsSecurityPage }))
 );
+const SettingsMySecurityPage = lazy(() =>
+  import("./views/protected/SettingsMySecurityPage").then((m) => ({ default: m.SettingsMySecurityPage }))
+);
 const SettingsSessionsPage = lazy(() =>
   import("./views/protected/SettingsSessionsPage").then((m) => ({ default: m.SettingsSessionsPage }))
 );
@@ -267,6 +270,7 @@ const appRoutes = APP_HOST
           { path: "settings/tests", element: <PermissionGate anyPermission={["settings:tests:view"]}><SettingsTestsPage /></PermissionGate> },
           { path: "settings/hotel", element: <PermissionGate anyPermission={["hotel_settings:read"]}><SettingsHotelPage /></PermissionGate> },
           { path: "settings/security", element: <PermissionGate anyPermission={["settings:security:view"]}><SettingsSecurityPage /></PermissionGate> },
+          { path: "settings/my-security", element: <SettingsMySecurityPage /> },
           { path: "settings/sessions", element: <SettingsSessionsPage /> },
           { path: "settings/notifications", element: <PermissionGate anyPermission={["settings:notifications:view"]}><SettingsNotificationsPage /></PermissionGate> }
         ]

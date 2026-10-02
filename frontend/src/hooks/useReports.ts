@@ -2,10 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   getDailyOperationalReport,
+  getTodayArrivalCount,
   getOccupancyReport,
   getOperationalAlerts,
   getRevenueReport,
   type DailyOperationalReport,
+  type ArrivalCount,
   type NightlyOperationalSummary,
   type OccupancyReport,
   type RevenueReport
@@ -39,6 +41,16 @@ export function useDailyOperationalReport(reportDate: string) {
     queryKey: dailyReportKey(session.hotelId, reportDate),
     queryFn: () => getDailyOperationalReport(reportDate, session),
     enabled: Boolean(reportDate) && hasValidSession(session),
+    staleTime: 30 * 1000
+  });
+}
+
+export function useTodayArrivalCount() {
+  const { session } = useSession();
+  return useQuery<ArrivalCount>({
+    queryKey: [...queryKeys.reports(session.hotelId, "today-arrival-count")],
+    queryFn: () => getTodayArrivalCount(session),
+    enabled: hasValidSession(session),
     staleTime: 30 * 1000
   });
 }

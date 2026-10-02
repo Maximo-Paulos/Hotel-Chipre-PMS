@@ -337,6 +337,21 @@ def get_housekeeping_board(
             .all()
         )
     }
+    stayover_room_ids = {
+        room_id
+        for (room_id,) in (
+            db.query(Reservation.room_id)
+            .filter(
+                Reservation.hotel_id == context.hotel_id,
+                Reservation.room_id.in_(room_ids),
+                Reservation.check_in_date < today,
+                Reservation.check_out_date > today,
+                Reservation.status == ReservationStatusEnum.CHECKED_IN,
+            )
+            .distinct()
+            .all()
+        )
+    }
     maintenance_room_ids = {
         room_id
         for (room_id,) in (
@@ -365,6 +380,7 @@ def get_housekeeping_board(
                 housekeeping_status=room.housekeeping_status,
                 has_arrival_today=room.id in arrival_room_ids,
                 has_departure_today=room.id in departure_room_ids,
+                has_stayover_today=room.id in stayover_room_ids,
                 maintenance_blocked=room.id in maintenance_room_ids,
             )
             for room, category_name in rooms

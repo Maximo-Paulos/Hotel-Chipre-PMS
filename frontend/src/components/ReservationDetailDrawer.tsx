@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { type TFunction } from "i18next";
 
 import { ApiError } from "../api/client";
-import { fetchCompanyDocumentFile } from "../api/companies";
+import { fetchCompanyDocumentFile, type CompanyNightlyRate } from "../api/companies";
 import {
   createCompanyNightCharges,
   correctCompanyNightChargeAmounts,
@@ -24,7 +24,7 @@ import {
 } from "../hooks/useReservations";
 import { useGuest } from "../hooks/useGuests";
 import { useCompanyNightCharges } from "../hooks/useCompanyNightCharges";
-import { useMarkCompanyDocumentSigned, useReservationCompanyDocuments } from "../hooks/useCompanies";
+import { useCompanyNightlyRates, useMarkCompanyDocumentSigned, useReservationCompanyDocuments } from "../hooks/useCompanies";
 import { useEffectivePermissions } from "../hooks/usePermissions";
 import { usePaymentMutation, usePaymentSummary } from "../hooks/usePayments";
 import { useRestrictionOverridePrompt } from "../hooks/useRestrictionOverridePrompt";
@@ -77,7 +77,8 @@ const checkinValidationErrorKeys: Record<string, string> = {
   "Birth place is required": "drawer.checkinCapture.requiredFields.birthPlace",
   "Birth country is required": "drawer.checkinCapture.requiredFields.birthCountry",
   "Marital status is required": "drawer.checkinCapture.requiredFields.maritalStatus",
-  "Occupation is required": "drawer.checkinCapture.requiredFields.occupation"
+  "Occupation is required": "drawer.checkinCapture.requiredFields.occupation",
+  "Guest must accept terms and conditions": "drawer.checkinCapture.requiredFields.termsAccepted"
 };
 
 const checkinFieldKeysByName: Record<string, string> = {
@@ -90,7 +91,8 @@ const checkinFieldKeysByName: Record<string, string> = {
   birth_place: "drawer.checkinCapture.requiredFields.birthPlace",
   birth_country: "drawer.checkinCapture.requiredFields.birthCountry",
   marital_status: "drawer.checkinCapture.requiredFields.maritalStatus",
-  occupation: "drawer.checkinCapture.requiredFields.occupation"
+  occupation: "drawer.checkinCapture.requiredFields.occupation",
+  terms_accepted: "drawer.checkinCapture.requiredFields.termsAccepted"
 };
 
 const getCheckinApiErrorDetail = (error: unknown): unknown => {
@@ -172,6 +174,20 @@ function addIsoDays(isoDate: string, dayCount: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+function effectiveCompanyNightlyRate(rates: CompanyNightlyRate[], stayDate: string): CompanyNightlyRate | null {
+  return rates.reduce<CompanyNightlyRate | null>((effective, rate) => {
+    if (rate.effective_from > stayDate) return effective;
+    if (
+      !effective ||
+      rate.effective_from > effective.effective_from ||
+      (rate.effective_from === effective.effective_from && rate.id > effective.id)
+    ) {
+      return rate;
+    }
+    return effective;
+  }, null);
+}
+
 export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const { t } = useTranslation("reservations");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
@@ -195,6 +211,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   useEffect(() => {
     setActionError(null);
     setActionMessage(null);
+    setCaptureForm(emptyCaptureForm);
   }, [reservationId]);
 
   const reservationQuery = useReservation(reservationId ?? undefined);
@@ -231,6 +248,10 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const markCompanyDocumentSignedMutation = useMarkCompanyDocumentSigned();
   const { hasPermission } = useEffectivePermissions();
   const canManageCompanyCharges = hasPermission("company:manage");
+  const companyNightlyRatesQuery = useCompanyNightlyRates(
+    reservationQuery.data?.company_id ?? undefined,
+    Boolean(reservationId && canManageCompanyCharges)
+  );
   const canApplyCompanyExtension = hasPermission("reservation:update") && canManageCompanyCharges;
   const {
     cancelMutation,
@@ -294,7 +315,9 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       birth_country: guestQuery.data.birth_country ?? "",
       marital_status: guestQuery.data.marital_status ?? "",
       occupation: guestQuery.data.occupation ?? "",
-      terms_accepted: guestQuery.data.terms_accepted ?? false
+      // Consent applies to the current check-in. A saved guest profile must
+      // not silently accept terms for a new stay.
+      terms_accepted: false
     });
   }, [guestQuery.data]);
 
@@ -385,6 +408,13 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       current.setUTCDate(current.getUTCDate() + 1);
     }
   }
+  const companyNightlyRates = companyNightlyRatesQuery.data?.rates ?? [];
+  const chargeableCompanyChargeOptions = candidateCompanyChargeDates.flatMap((stayDate) => {
+    const rate = effectiveCompanyNightlyRate(companyNightlyRates, stayDate);
+    return rate && Number.isFinite(Number(rate.amount)) && Number(rate.amount) > 0
+      ? [{ stayDate, rate }]
+      : [];
+  });
 
   useEffect(() => {
     setSelectedCompanyChargeIds([]);
@@ -1195,53 +1225,74 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       {hasUnpaidCompanyCharges ? (
                         <p className="mt-2 text-xs text-amber-900">{t("drawer.companyCharges.selectBeforePayment")}</p>
                       ) : null}
-                      {canManageCompanyCharges && Number(companyNightCharges?.nightly_surcharge_amount ?? 0) > 0 ? (
+                      {canManageCompanyCharges && candidateCompanyChargeDates.length > 0 ? (
                         <div className="mt-3 border-t border-amber-200 pt-3">
                           <p className="text-xs font-semibold text-slate-700">{t("drawer.companyCharges.applyTitle")}</p>
                           <p className="mt-1 text-xs text-slate-600">{t("drawer.companyCharges.applyHint")}</p>
-                          <label className="mt-2 block max-w-xs space-y-1 text-xs">
-                            <span className="text-slate-600">{t("drawer.companyCharges.extraPersonCount")}</span>
-                            <input
-                              type="number"
-                              min="1"
-                              max="99"
-                              step="1"
-                              value={companyExtraPersonCount}
-                              onChange={(event) => setCompanyExtraPersonCount(event.target.value)}
-                              disabled={createCompanyNightChargesMutation.isPending}
-                              className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-                              aria-label={t("drawer.companyCharges.extraPersonCount")}
-                            />
-                          </label>
-                          <div className="mt-2 grid grid-cols-2 gap-2">
-                            {candidateCompanyChargeDates.map((stayDate) => {
-                              const alreadyCharged = chargedCompanyDates.has(stayDate);
-                              return (
-                                <label key={stayDate} className={`flex items-center gap-2 rounded border px-2 py-1.5 text-xs ${alreadyCharged ? "border-slate-100 bg-slate-100 text-slate-400" : "border-amber-100 bg-white text-slate-700"}`}>
-                                  <input
-                                    type="checkbox"
-                                    checked={alreadyCharged || selectedCompanyChargeDates.includes(stayDate)}
-                                    disabled={alreadyCharged || createCompanyNightChargesMutation.isPending}
-                                    onChange={(event) => setSelectedCompanyChargeDates((current) =>
-                                      event.target.checked
-                                        ? [...current, stayDate]
-                                        : current.filter((date) => date !== stayDate)
-                                    )}
-                                    aria-label={t("drawer.companyCharges.selectStayNight", { date: stayDate })}
-                                  />
-                                  <span>{stayDate}{alreadyCharged ? ` · ${t("drawer.companyCharges.alreadyAdded")}` : ""}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => void handleCreateCompanyNightCharges()}
-                            disabled={selectedCompanyChargeDates.length === 0 || createCompanyNightChargesMutation.isPending}
-                            className="mt-2 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {createCompanyNightChargesMutation.isPending ? t("drawer.companyCharges.applying") : t("drawer.companyCharges.apply")}
-                          </button>
+                          {companyNightlyRatesQuery.isLoading ? (
+                            <p className="mt-2 text-xs text-slate-500" role="status">{t("drawer.companyCharges.ratesLoading")}</p>
+                          ) : companyNightlyRatesQuery.isError ? (
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-rose-700" role="alert">
+                              <span>{t("drawer.companyCharges.ratesLoadFailed")}</span>
+                              <button
+                                type="button"
+                                onClick={() => void companyNightlyRatesQuery.refetch()}
+                                className="rounded border border-rose-300 bg-white px-2 py-1 font-semibold hover:bg-rose-50"
+                              >
+                                {t("drawer.companyCharges.ratesRetry")}
+                              </button>
+                            </div>
+                          ) : chargeableCompanyChargeOptions.length === 0 ? (
+                            <p className="mt-2 text-xs text-slate-600">{t("drawer.companyCharges.noRateForStay")}</p>
+                          ) : (
+                            <>
+                              <label className="mt-2 block max-w-xs space-y-1 text-xs">
+                                <span className="text-slate-600">{t("drawer.companyCharges.extraPersonCount")}</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="99"
+                                  step="1"
+                                  value={companyExtraPersonCount}
+                                  onChange={(event) => setCompanyExtraPersonCount(event.target.value)}
+                                  disabled={createCompanyNightChargesMutation.isPending}
+                                  className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                                  aria-label={t("drawer.companyCharges.extraPersonCount")}
+                                />
+                              </label>
+                              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                {chargeableCompanyChargeOptions.map(({ stayDate, rate }) => {
+                                  const alreadyCharged = chargedCompanyDates.has(stayDate);
+                                  return (
+                                    <label key={stayDate} className={`flex items-center gap-2 rounded border px-2 py-1.5 text-xs ${alreadyCharged ? "border-slate-100 bg-slate-100 text-slate-400" : "border-amber-100 bg-white text-slate-700"}`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={alreadyCharged || selectedCompanyChargeDates.includes(stayDate)}
+                                        disabled={alreadyCharged || createCompanyNightChargesMutation.isPending}
+                                        onChange={(event) => setSelectedCompanyChargeDates((current) =>
+                                          event.target.checked
+                                            ? [...current, stayDate]
+                                            : current.filter((date) => date !== stayDate)
+                                        )}
+                                        aria-label={t("drawer.companyCharges.selectStayNight", { date: stayDate })}
+                                      />
+                                      <span>{stayDate} · {alreadyCharged
+                                        ? t("drawer.companyCharges.alreadyAdded")
+                                        : t("drawer.companyCharges.rateForNight", { amount: formatMoney(rate.amount, currencyCode) })}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void handleCreateCompanyNightCharges()}
+                                disabled={selectedCompanyChargeDates.length === 0 || createCompanyNightChargesMutation.isPending}
+                                className="mt-2 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {createCompanyNightChargesMutation.isPending ? t("drawer.companyCharges.applying") : t("drawer.companyCharges.apply")}
+                              </button>
+                            </>
+                          )}
                         </div>
                       ) : null}
                       {selectedCompanyCorrectionRows.length > 0 ? (
@@ -1466,20 +1517,22 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                 >
                   {checkOutMutation.isPending ? t("drawer.actions.checkOutPending") : t("drawer.actions.checkOut")}
                 </button>
-                <button
-                  type="button"
-                  disabled={!canCancelReservation(reservation.status) || cancelMutation.isPending}
-                  onClick={() =>
-                    void runAction(
-                      t("drawer.actions.labels.cancel"),
-                      () => cancelMutation.mutateAsync(reservation.id),
-                      () => setActionMessage(t("drawer.messages.cancelled"))
-                    )
-                  }
-                  className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {cancelMutation.isPending ? t("drawer.actions.cancelPending") : t("drawer.actions.cancel")}
-                </button>
+                {(!reservation.company_id || canManageCompanyCharges) ? (
+                  <button
+                    type="button"
+                    disabled={!canCancelReservation(reservation.status) || cancelMutation.isPending}
+                    onClick={() =>
+                      void runAction(
+                        t("drawer.actions.labels.cancel"),
+                        () => cancelMutation.mutateAsync(reservation.id),
+                        () => setActionMessage(t("drawer.messages.cancelled"))
+                      )
+                    }
+                    className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {cancelMutation.isPending ? t("drawer.actions.cancelPending") : t("drawer.actions.cancel")}
+                  </button>
+                ) : null}
               </section>
             </>
           )}

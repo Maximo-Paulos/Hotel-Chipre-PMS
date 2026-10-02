@@ -7,6 +7,7 @@ import {
   deleteCompanyDocument,
   listCompanies,
   listCompanyDocuments,
+  listCompanyNightlyRates,
   listReservationCompanyDocuments,
   reactivateCompany,
   updateCompany,
@@ -18,7 +19,8 @@ import {
   type CompanyDocumentPayload,
   type CompanyDocumentUploadPayload,
   type CompanyDocumentStatus,
-  type CompanyPayload
+  type CompanyPayload,
+  type CompanyNightlyRatesResponse
 } from "../api/companies";
 import { hasValidSession } from "../api/client";
 import { refreshSettingsState } from "../api/queryInvalidation";
@@ -29,6 +31,7 @@ import { useGuardedMutation } from "./useGuardedMutation";
 const companiesKey = (hotelId: number | null) => ["companies", hotelId];
 const companyDocumentsKey = (hotelId: number | null, companyId: number) => ["company-documents", hotelId, companyId];
 const reservationCompanyDocumentsKey = (hotelId: number | null, reservationId: number) => ["reservation-company-documents", hotelId, reservationId];
+const companyNightlyRatesKey = (hotelId: number | null, companyId: number) => ["company-nightly-rates", hotelId, companyId] as const;
 
 export function useCompanies() {
   const { session } = useSession();
@@ -37,6 +40,16 @@ export function useCompanies() {
     queryFn: () => listCompanies(session),
     enabled: hasValidSession(session),
     staleTime: 60 * 1000
+  });
+}
+
+export function useCompanyNightlyRates(companyId?: number, enabled = true) {
+  const { session } = useSession();
+  return useQuery<CompanyNightlyRatesResponse>({
+    queryKey: companyId ? companyNightlyRatesKey(session.hotelId, companyId) : ["company-nightly-rates", "none"],
+    queryFn: () => listCompanyNightlyRates(companyId!, session),
+    enabled: Boolean(companyId && enabled) && hasValidSession(session),
+    staleTime: 30 * 1000
   });
 }
 

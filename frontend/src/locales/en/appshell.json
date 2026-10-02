@@ -7,10 +7,22 @@
     "title": "No connection.",
     "description": "Visible data may be outdated. Reservation actions, check-in/out and payments require a connection and are not saved to retry automatically."
   },
+  "sessionRestore": {
+    "checking": "Checking session…",
+    "retrying": "Could not check the session. Retrying ({{attempt}} of {{total}})…",
+    "title": "We couldn't check your session.",
+    "description": "We couldn't confirm whether your session is still active. The app did not clear it. Check your connection and retry, or go to sign in.",
+    "retry": "Retry",
+    "login": "Go to sign in"
+  },
   "accessDenied": {
     "title": "You don't have permission to view this section.",
     "description": "Ask the hotel owner to review your permissions if you need access.",
     "home": "Return to my home page"
+  },
+  "mySecurityPage": {
+    "title": "My security",
+    "description": "Manage two-step verification for your account."
   },
   "currency": {
     "historicalRateUnavailable": "Historical exchange rate unavailable"
@@ -92,6 +104,7 @@
         "tests": "Tests",
         "hotel": "Hotel",
         "security": "Security",
+        "mySecurity": "My security",
         "notifications": "Notifications"
       }
     }
