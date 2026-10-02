@@ -171,6 +171,7 @@ test("housekeeping board is usable on a mobile viewport in English", async ({ pa
       "housekeeping_status",
       "has_arrival_today",
       "has_departure_today",
+      "has_stayover_today",
       "maintenance_blocked"
     ].sort();
     for (const room of board.rooms) {

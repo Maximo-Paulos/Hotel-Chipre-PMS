@@ -60,6 +60,19 @@ test("network failures also use the bounded session recovery path", async ({ pag
   await expect(page).toHaveURL(/\/dashboard$/);
 });
 
+test("a fresh login page does not wait for a session refresh when no session is stored", async ({ page }) => {
+  let refreshAttempts = 0;
+  await page.route("**/api/auth/session/refresh", async (route) => {
+    refreshAttempts += 1;
+    await route.fulfill({ status: 503, body: JSON.stringify({ detail: "Temporary test outage" }) });
+  });
+
+  await page.goto("/login");
+
+  await expect(page.getByTestId("login-submit")).toBeVisible();
+  expect(refreshAttempts).toBe(0);
+});
+
 test("an owner without onboarding permission gets an access message without a denied status request", async ({ page }) => {
   await loginAsOwner(page);
 
@@ -91,7 +104,16 @@ test("an owner without onboarding permission gets an access message without a de
     if (request.method() === "GET" && url.pathname === "/api/onboarding/status") onboardingStatusRequests += 1;
   });
 
+  const refreshedSession = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === "POST" && url.pathname === "/api/auth/session/refresh";
+  });
+  const effectivePermissions = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === "GET" && url.pathname === "/api/permissions/effective";
+  });
   await page.reload();
+  await Promise.all([refreshedSession, effectivePermissions]);
   await expect(page.getByRole("heading", { name: "Visión general" })).toBeVisible();
   await page.goto("/onboarding");
   await expect(page.getByTestId("permission-denied-page")).toBeVisible();

@@ -389,8 +389,10 @@ test("co-owner can invite staff and cannot manage the primary owner row", async 
   await page.getByRole("button", { name: "Copiar enlace" }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(resentInvitationUrl);
 
-  page.once("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Cancelar invitación", exact: true }).click();
+  await page.getByRole("alertdialog")
+    .getByRole("button", { name: "Cancelar invitación", exact: true })
+    .click();
   await expect(page.getByText("No hay invitaciones pendientes.")).toBeVisible();
   expect(calls.some((call) => call.path === "/api/users/invitations/41/resend")).toBe(true);
   expect(calls.some((call) => call.path === "/api/users/invitations/41" && call.method === "DELETE")).toBe(true);

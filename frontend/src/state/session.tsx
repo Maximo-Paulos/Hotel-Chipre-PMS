@@ -134,6 +134,15 @@ const isSessionRecoveryLoginPath = (): boolean => {
   return new URLSearchParams(window.location.search).get("sessionRecovery") === "1";
 };
 
+const shouldRestoreInitialSession = (): boolean => {
+  if (!isAppHostname() || isMasterAdminPath() || isSessionRecoveryLoginPath()) return false;
+  // A fresh login page has no browser session to restore. Avoid blocking its
+  // public form on a cross-origin refresh request that cannot succeed from a
+  // preview hostname. Existing sessions persist CSRF state and still restore.
+  if (typeof window !== "undefined" && window.location.pathname === "/login" && !readStoredCsrfToken()) return false;
+  return true;
+};
+
 const initialSession = (): SessionState => ({
   ...EMPTY_SESSION,
   csrfToken: readStoredCsrfToken()
@@ -162,7 +171,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return initialSession();
   });
   const [isInitializing, setIsInitializing] = useState(
-    () => isAppHostname() && !isMasterAdminPath() && !isSessionRecoveryLoginPath()
+    () => shouldRestoreInitialSession()
   );
   const [restoredSession, setRestoredSession] = useState(false);
   const [sessionRestoreFailed, setSessionRestoreFailed] = useState(false);

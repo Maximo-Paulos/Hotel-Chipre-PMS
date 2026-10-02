@@ -228,7 +228,13 @@ test("housekeeping stays inside rooms and laundry without loading restricted dat
   const navPaths = await navigation.locator("a[href]").evaluateAll((links) =>
     links.map((link) => link.getAttribute("href")).filter((href): href is string => Boolean(href))
   );
-  expect(navPaths.sort()).toEqual(["/habitaciones", "/operacion/lavanderia", "/operacion/limpieza-hoy", "/operacion/tareas"].sort());
+  expect(navPaths.sort()).toEqual([
+    "/habitaciones",
+    "/operacion/lavanderia",
+    "/operacion/limpieza-hoy",
+    "/operacion/tareas",
+    "/settings/my-security"
+  ].sort());
 
   for (const forbiddenPath of ["/dashboard", "/huespedes", "/caja", "/reportes", "/operacion/stock", "/settings/security"]) {
     await page.goto(forbiddenPath);
