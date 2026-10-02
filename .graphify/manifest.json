@@ -1392,8 +1392,8 @@
     "hash": "0247cb3d857d16599aaf628192831452"
   },
   "frontend/src/state/session.tsx": {
-    "mtime": 1790892913916.7393,
-    "hash": "eed7e4344c003c07cb7f43e2c60d3f1b"
+    "mtime": 1790925187521.4802,
+    "hash": "35e26f927884d9c4f69516dcecd97775"
   },
   "frontend/src/ui/AppShell.tsx": {
     "mtime": 1790922231612.8167,
@@ -3236,8 +3236,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1790921698855.4993,
-    "hash": "2545bc1f49665994a30cab499a936cec"
+    "mtime": 1790924916054.834,
+    "hash": "b18b48bbff37ebae59df48ca244e4122"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1790866643215.854,
@@ -3480,8 +3480,8 @@
     "hash": "867372cd9367129cc3f505ea7d89bf4a"
   },
   "frontend/e2e/role-journey.spec.ts": {
-    "mtime": 1790921795393.7158,
-    "hash": "9e6f44bd226a37aea6e2967d982a00fb"
+    "mtime": 1790924774257.687,
+    "hash": "2af628c70f185dc5472f1f447e8a9a3f"
   },
   "frontend/e2e/auth-onboarding-journey.spec.ts": {
     "mtime": 1790895266345.7695,
@@ -3568,8 +3568,8 @@
     "hash": "c82c14f42c56facd82379aeba473e3fe"
   },
   "frontend/e2e/housekeeping-laundry-journey.spec.ts": {
-    "mtime": 1790866643106.5293,
-    "hash": "289f010aaeda72a81b20a70ec8386aae"
+    "mtime": 1790924774257.1685,
+    "hash": "696ebb549910e39931e687fc082ad20a"
   },
   "frontend/e2e/manager-reports-journey.spec.ts": {
     "mtime": 1790866643107.0508,
@@ -5612,8 +5612,8 @@
     "hash": "324ded2c142db3951e250f887849ad5e"
   },
   "frontend/e2e/google-invitation-access.spec.ts": {
-    "mtime": 1790866643105.7502,
-    "hash": "b7af5cefa4cfa8a455a3e393b19d23c7"
+    "mtime": 1790925080094.9656,
+    "hash": "c3641511c1d45b46c91b08b27e704f77"
   },
   "tests/test_actor_alias_projection.py": {
     "mtime": 1790866643221.0222,
@@ -6100,8 +6100,8 @@
     "hash": "fae4b85eea7dc6b0961476e07482b0df"
   },
   "docs/audits/simulacion-hotel/ESTADO-D0-D1.md": {
-    "mtime": 1790922862005.5408,
-    "hash": "be1cfc90b11d92a370fba1aa6bf30b95"
+    "mtime": 1790923405469.4272,
+    "hash": "4be2660b2d84f4a0a51e93f5aa297ccc"
   },
   "docs/operations/staff-invitations.md": {
     "mtime": 1790866643054.1848,
@@ -6346,5 +6346,49 @@
   "qa/operational/runs/sim-d0d1-reaudit-20261001-5538c5/report.md": {
     "mtime": 1790883014774.1353,
     "hash": "414a4a68bd891efa6827a28f259ac301"
+  },
+  "alembic/versions/20261017_manual_ota_paid_currency.py": {
+    "mtime": 1790921340892.3862,
+    "hash": "5a39f4d9ba7444bab14480f8b539e396"
+  },
+  "app/services/financial_report_service.py": {
+    "mtime": 1790921275216.7197,
+    "hash": "61559f09aef3a7c394930c22dd78c40b"
+  },
+  "frontend/cross-tab-sync.test.mjs": {
+    "mtime": 1790919472989.7625,
+    "hash": "95c408585a7a73b449838af373728299"
+  },
+  "frontend/e2e/company-reservation-reception-permissions.spec.ts": {
+    "mtime": 1790921698131.0825,
+    "hash": "43f40e598429f2153b56c442a1ade0f3"
+  },
+  "frontend/e2e/personal-security-access.spec.ts": {
+    "mtime": 1790922520911.5596,
+    "hash": "1a9993b3be538c9f7faa6ce9ebdae9e6"
+  },
+  "frontend/e2e/session-recovery.spec.ts": {
+    "mtime": 1790925337001.9697,
+    "hash": "afa229af578bbeb6efed0ca8ec834000"
+  },
+  "frontend/query-invalidation-behavior.test.mjs": {
+    "mtime": 1790919248722.181,
+    "hash": "4c35ffe23da4a21f99106660232a572a"
+  },
+  "frontend/src/views/protected/SettingsMySecurityPage.tsx": {
+    "mtime": 1790922406038.364,
+    "hash": "73d0247d7734f459df833d6c3e1aefb6"
+  },
+  "tests/test_manual_ota_currency.py": {
+    "mtime": 1790921605530.3738,
+    "hash": "4899cb866c89e8f577d94c14916a1c06"
+  },
+  "tests/test_staff_access_email_service.py": {
+    "mtime": 1790923385826.6423,
+    "hash": "ada74b13a928fd683677fcfbeb01e755"
+  },
+  "docs/decisions/ota-prepaid-source-currency.md": {
+    "mtime": 1790921814844.7715,
+    "hash": "deeec8efbd0893289ed064f43b68daab"
   }
 }
