@@ -1096,8 +1096,8 @@
     "hash": "7432b400ecaba7f82ca797f24422f12f"
   },
   "frontend/playwright.config.ts": {
-    "mtime": 1790866643153.1152,
-    "hash": "e86993950e9648d6195d15620578cd55"
+    "mtime": 1790927571239.0984,
+    "hash": "1b68828b24a7e704a3dbd4b503dcd11e"
   },
   "frontend/src/App.tsx": {
     "mtime": 1790866643165.5527,
@@ -3236,8 +3236,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1790924916054.834,
-    "hash": "b18b48bbff37ebae59df48ca244e4122"
+    "mtime": 1790927972644.2107,
+    "hash": "75f9fc46c2fb3d123ebb91d7f82d071c"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1790866643215.854,
@@ -6248,8 +6248,8 @@
     "hash": "255b8b051c4c087edaf773c671a203bc"
   },
   "frontend/e2e/f040-company-deferred-checkin.spec.ts": {
-    "mtime": 1790866643105.5505,
-    "hash": "50e9bb07eefa77b8fc447c66e4ced37d"
+    "mtime": 1790927571240.0925,
+    "hash": "050eb7a12d2ec8514a7fb4b8644902c6"
   },
   "frontend/src/api/companyNightCharges.ts": {
     "mtime": 1790886287044.4746,
@@ -6336,8 +6336,8 @@
     "hash": "b1d3a5e490d2685eeab67e2109917207"
   },
   "frontend/e2e/company-nightly-rates.spec.ts": {
-    "mtime": 1790886739197.1648,
-    "hash": "f250dcaaf1fc9b4217888fa3db4665e1"
+    "mtime": 1790927571239.6343,
+    "hash": "1cb1d653a41aa7e9b63af17ef116dd12"
   },
   "tests/test_company_nightly_rate_migration.py": {
     "mtime": 1790890236614.0605,
