@@ -14,12 +14,13 @@ from app.main import app as fastapi_app
 from app.models.guest import Guest
 from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
-from app.models.permission import HotelPermissionOverride
+from app.models.permission import HotelPermissionOverride, UserPermissionOverride
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.user import User
 from app.services.permission_service import (
     DEFAULT_MATRIX,
+    PERMISSION_COMPANY_MANAGE,
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_RESERVATION_MOVE_CAPACITY,
     PERMISSION_RESERVATION_MOVE_CATEGORY,
@@ -355,7 +356,7 @@ def test_company_move_preserves_contracted_category_and_extra_guest_capacity_is_
     assert reservation.category_id == contracted_category.id
 
 
-def test_receptionist_cannot_move_company_reservation_even_with_same_category_move_permission(
+def test_receptionist_cannot_move_company_reservation_even_with_individual_company_manage_override(
     room_move_api_client, monkeypatch
 ):
     client, db, role_state = room_move_api_client
@@ -366,6 +367,15 @@ def test_receptionist_cannot_move_company_reservation_even_with_same_category_mo
     db.add(company)
     db.flush()
     reservation.company_id = company.id
+    db.add(
+        UserPermissionOverride(
+            hotel_id=1,
+            user_id=10,
+            permission_code=PERMISSION_COMPANY_MANAGE,
+            allowed=True,
+            updated_by_user_id=10,
+        )
+    )
     db.commit()
 
     response = _move(client, reservation, rooms["same_category"])

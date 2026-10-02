@@ -341,12 +341,15 @@ export function CashRegisterPage() {
               <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                 <div className="border-b border-slate-200 px-4 py-3">
                   <h3 className="font-semibold text-slate-900">Caja física</h3>
-                  <p className="text-xs text-slate-500">Apertura, movimientos manuales, esperado y arqueo.</p>
+                  <p className="text-xs text-slate-500">Esperado = apertura/fondos + ingresos − egresos + ajustes + diferencias de arqueo − entregas de efectivo. El fondo de la caja sucesora ya está incluido en la apertura. Los pagos externos no se suman a la caja.</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 px-4 py-3 text-sm">
                   <SummaryLine label="Apertura" value={money(dailySummaryQuery.data.physical_cash.opening_balance, dailySummaryQuery.data.currency_code)} />
                   <SummaryLine label="Ingresos" value={money(dailySummaryQuery.data.physical_cash.income_total, dailySummaryQuery.data.currency_code)} />
                   <SummaryLine label="Egresos" value={money(dailySummaryQuery.data.physical_cash.expense_total, dailySummaryQuery.data.currency_code)} />
+                  <SummaryLine label="Ajustes netos" value={money(dailySummaryQuery.data.physical_cash.adjustment_total, dailySummaryQuery.data.currency_code)} />
+                  <SummaryLine label="Diferencias de arqueo" value={money(dailySummaryQuery.data.physical_cash.custody_difference_total, dailySummaryQuery.data.currency_code)} />
+                  <SummaryLine label="Entregado al cerrar caja" value={money(dailySummaryQuery.data.physical_cash.custody_delivered_total, dailySummaryQuery.data.currency_code)} />
                   <SummaryLine label="Esperado" value={money(dailySummaryQuery.data.physical_cash.expected_balance, dailySummaryQuery.data.currency_code)} />
                   <SummaryLine label="Manual +" value={money(dailySummaryQuery.data.physical_cash.manual_income_total, dailySummaryQuery.data.currency_code)} />
                   <SummaryLine label="Manual -" value={money(dailySummaryQuery.data.physical_cash.manual_expense_total, dailySummaryQuery.data.currency_code)} />

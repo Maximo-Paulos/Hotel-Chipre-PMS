@@ -88,7 +88,10 @@ from app.services.ota_manual_service import (
     release_no_guarantee,
 )
 from app.services.payment_service import PaymentError
-from app.services.financial_ledger import has_payment_history_for_cancellation
+from app.services.financial_ledger import (
+    external_paid_balance_credit,
+    has_payment_history_for_cancellation,
+)
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_all_permissions, require_any_permission, require_permission
 from app.api.manual_rate_access import authorize_manual_rate_scope
@@ -172,6 +175,7 @@ def _to_read(
             else bool(r.company_id is not None and r.settlement_status in {"deferred", "settled"})
         )
     result.company_billing_deferred = bool(is_deferred)
+    result.external_paid_balance_credit_applied = external_paid_balance_credit(r) > 0
     if result.company_billing_deferred:
         # These fields represent lodging or aggregate reservation money. A
         # deferred company invoices lodging outside the PMS, so returning
@@ -180,6 +184,7 @@ def _to_read(
             "total_amount",
             "amount_paid",
             "external_paid_amount",
+            "external_paid_currency",
             "deposit_amount",
             "subtotal_amount",
             "tax_amount",
@@ -193,6 +198,7 @@ def _to_read(
             setattr(result, field, None)
         result.external_paid_reference = None
         result.external_paid_confirmed = False
+        result.external_paid_balance_credit_applied = False
     return result
 
 

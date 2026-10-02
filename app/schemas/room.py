@@ -133,6 +133,7 @@ class HousekeepingBoardRoomRead(BaseModel):
     housekeeping_status: RoomHousekeepingStatusEnum
     has_arrival_today: bool
     has_departure_today: bool
+    has_stayover_today: bool
     maintenance_blocked: bool
 
 

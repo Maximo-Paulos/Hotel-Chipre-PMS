@@ -85,6 +85,7 @@ def _reservation_summary(
         total_amount=None if company_billing_deferred else Decimal(reservation.total_amount or 0),
         amount_paid=None if company_billing_deferred else paid,
         balance_due=None if company_billing_deferred else max(Decimal("0"), total_due - paid),
+        currency_code=str(reservation.currency_code or "ARS").strip().upper(),
         company_billing_deferred=company_billing_deferred,
         company_night_extra_due=company_night_extra_due if company_billing_deferred else None,
     )
@@ -386,6 +387,12 @@ def _alerts(
                 severity="warning",
                 message=f"Reservation {item.confirmation_code} has balance due.",
                 reservation_id=item.reservation_id,
+                amount=(
+                    item.company_night_extra_due
+                    if item.company_billing_deferred
+                    else item.balance_due
+                ),
+                currency_code=item.currency_code,
                 room_id=item.room_id,
             )
         )
@@ -430,13 +437,33 @@ def _alerts(
     return alerts
 
 
+def _arrivals_query(db: Session, hotel_id: int, report_date: date):
+    return active_reservations(db, hotel_id).filter(
+        Reservation.check_in_date == report_date,
+        Reservation.status.notin_((
+            ReservationStatusEnum.CANCELLED,
+            ReservationStatusEnum.NO_SHOW,
+        )),
+    )
+
+
+def today_arrival_count(db: Session, hotel_id: int, report_date: date) -> int:
+    """Count operational arrivals without loading or exposing reservation data."""
+    return _arrivals_query(db, hotel_id, report_date).count()
+
+
 def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperationalReportRead:
     reservation_scope = active_reservations(db, hotel_id)
 
     arrivals = (
+        _arrivals_query(db, hotel_id, report_date)
+        .order_by(Reservation.id.asc())
+        .all()
+    )
+    no_shows = (
         reservation_scope.filter(
             Reservation.check_in_date == report_date,
-            Reservation.status != ReservationStatusEnum.CANCELLED,
+            Reservation.status == ReservationStatusEnum.NO_SHOW,
         )
         .order_by(Reservation.id.asc())
         .all()
@@ -468,12 +495,12 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
     )
     candidate_ids = {
         reservation.id
-        for reservation in (*arrivals, *departures, *balance_candidates, *late_arrivals)
+        for reservation in (*arrivals, *no_shows, *departures, *balance_candidates, *late_arrivals)
     }
     deferred_ids = deferred_company_reservation_ids(
         db,
         hotel_id=hotel_id,
-        reservations=[*arrivals, *departures, *balance_candidates, *late_arrivals],
+        reservations=[*arrivals, *no_shows, *departures, *balance_candidates, *late_arrivals],
     )
     _extra_totals, extra_due_by_reservation = company_night_extra_balances_by_reservation(
         db,
@@ -536,6 +563,13 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
             deferred_ids,
             extra_due_by_reservation,
         ),
+        no_shows=_group(
+            no_shows,
+            paid_by_reservation,
+            adjustments_by_reservation,
+            deferred_ids,
+            extra_due_by_reservation,
+        ),
         departures=_group(
             departures,
             paid_by_reservation,
@@ -564,7 +598,7 @@ def redact_daily_report_financials(
     """Project a daily report onto the manager-safe operational contract."""
 
     payload = report.model_dump()
-    for group_name in ("arrivals", "departures"):
+    for group_name in ("arrivals", "no_shows", "departures"):
         for reservation in payload[group_name]["reservations"]:
             reservation["total_amount"] = None
             reservation["amount_paid"] = None

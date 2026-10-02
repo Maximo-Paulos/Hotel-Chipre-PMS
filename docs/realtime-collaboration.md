@@ -35,11 +35,23 @@ limitada al hotel resuelto por la membresía autenticada e incluye filas del
 outbox pendientes y publicadas, porque ambas representan commits reales.
 
 `latest_cursor` usa `stream_cursor` en outbox v2 y conserva el `id` entero como
-fallback durante un despliegue mixto. La ausencia de cursor, `after_cursor=0`,
-un cursor anterior a las filas retenidas o más de 500 filas posteriores
-obligan a un refetch completo desde la API autoritativa
-(`reset_required=true`). El barrido devuelve como máximo 500 filas y
-`has_more` informa que el límite fue alcanzado.
+fallback durante un despliegue mixto. La API marca `reset_required=true` si no
+se envió cursor, `after_cursor=0`, el cursor antecede a las filas retenidas o
+hay más de 500 filas posteriores. El barrido devuelve como máximo 500 filas y
+`has_more` informa que alcanzó ese límite.
+
+El primer recovery con cursor ausente/0 es una carga normal, aunque el backend
+marque `reset_required=true` para señalar que no hubo cursor previo. Después de
+las consultas iniciales, el cliente hace una única reconciliación de los
+dominios devueltos por recovery y sólo para consultas activas del hotel; así
+cierra la carrera entre esas lecturas y `latest_cursor` sin volver a cargar
+consultas inactivas. Si `has_more=true`, la lista pudo quedar truncada y se
+reconcilian todos los dominios conocidos, todavía sólo en consultas activas.
+Luego guarda `latest_cursor` y abre el stream desde allí. Un cursor conocido con
+`reset_required=true` también reconcilia todos los dominios del hotel; una
+recuperación normal invalida sólo los dominios devueltos. En todos los casos,
+las consultas inactivas no generan requests de red y se actualizan cuando una
+vista las monta de nuevo.
 
 El recolector de `app.services.domain_events` guarda las señales en la sesión,
 elimina duplicados y las publica desde `after_commit`. `after_rollback`
@@ -50,8 +62,9 @@ Los fallos del transporte no deshacen una operación ya guardada.
 
 El cliente combina SSE con `BroadcastChannel` y el fallback de `localStorage`
 para pestañas del mismo navegador. Persiste el cursor por usuario/hotel,
-deduplica `event_id`, ejecuta recovery antes de abrir o reabrir SSE y repara
-gaps sin retroceder cursores. SSE reconecta con backoff exponencial y jitter.
+deduplica `event_id`, agrupa eventos cercanos en una invalidación por dominio,
+ejecuta recovery antes de abrir o reabrir SSE y repara gaps sin retroceder
+cursores. SSE reconecta con backoff exponencial y jitter.
 Si nunca conecta o queda degradado, hace polling cada 5 segundos tanto en
 primer plano como en segundo plano. El shell conserva los datos visibles y
 muestra que pueden estar desactualizados. El backend revalida la

@@ -123,6 +123,10 @@ test("manager sees a permission message on restricted settings routes without de
     await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}$`));
     await expect(page.getByTestId("permission-denied-page")).toBeVisible();
     await expect(page.getByRole("heading", { name: "No tenés permiso para ver esta sección." })).toBeVisible();
+    const returnLink = page.getByRole("link", { name: "Volver a mi inicio" });
+    await expect(returnLink).toHaveAttribute("href", "/dashboard");
+    await returnLink.click();
+    await expect(page).toHaveURL(/\/dashboard$/);
   }
 
   expect(forbiddenReads).toEqual([]);
@@ -264,12 +268,23 @@ test("housekeeping has a privacy-safe daily board that works on a phone", async 
   const boardResponse = await boardResponsePromise;
   expect(boardResponse.ok()).toBeTruthy();
   const board = boardPayload as {
-    rooms: Array<{ room_id: number; room_number: string; housekeeping_status: string }>;
+    rooms: Array<{
+      room_id: number;
+      room_number: string;
+      floor: number;
+      housekeeping_status: string;
+      has_stayover_today: boolean;
+    }>;
   };
   expect(JSON.stringify(board)).not.toMatch(/guest_name|confirmation_code|guest_id|reservation_id|reason_note/i);
   expect(board.rooms.length).toBeGreaterThan(0);
+  expect(board.rooms.every((room) => typeof room.has_stayover_today === "boolean")).toBe(true);
 
   const firstRoom = board.rooms[0]!;
+  const floorFilter = page.getByRole("combobox", { name: "Piso", exact: true });
+  await expect(floorFilter).toBeVisible();
+  await floorFilter.selectOption(String(firstRoom.floor));
+  await expect(page.getByRole("heading", { name: `Hab. ${firstRoom.room_number}`, exact: true })).toBeVisible();
   const statusControl = page.getByLabel(`Estado de limpieza · ${firstRoom.room_number}`, { exact: true });
   await expect(statusControl).toBeVisible();
   const nextStatus = firstRoom.housekeeping_status === "clean" ? "dirty" : "clean";

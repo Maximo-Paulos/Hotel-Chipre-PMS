@@ -23,6 +23,22 @@ class RoomMovementGroupError(Exception):
     """Business error for room movement group operations."""
 
 
+def group_has_company_reservations(db: Session, *, hotel_id: int, group_id: int) -> bool:
+    """Return whether a tenant-scoped movement group includes a company stay."""
+    return (
+        db.query(Reservation.id)
+        .join(RoomMoveEvent, RoomMoveEvent.reservation_id == Reservation.id)
+        .filter(
+            RoomMoveEvent.hotel_id == hotel_id,
+            RoomMoveEvent.movement_group_id == group_id,
+            Reservation.hotel_id == hotel_id,
+            Reservation.company_id.is_not(None),
+        )
+        .first()
+        is not None
+    )
+
+
 def reservation_actual_guest_count(reservation: Reservation) -> int:
     """Use the greater of declared occupancy and linked guest identities.
 
@@ -246,6 +262,7 @@ def revert_group(
     hotel_id: int,
     group_id: int,
     reverted_by_user_id: int | None = None,
+    can_manage_company_reservations: bool = False,
 ) -> dict:
     group = (
         db.query(RoomMovementGroup)
@@ -271,17 +288,32 @@ def revert_group(
     if not events:
         raise RoomMovementGroupError("Movement group has no linked room moves")
 
+    reservation_ids = sorted({event.reservation_id for event in events})
+    reservations = lock_query(
+        db.query(Reservation)
+        .filter(
+            Reservation.id.in_(reservation_ids),
+            Reservation.hotel_id == hotel_id,
+        )
+        .order_by(Reservation.id.asc())
+        .populate_existing(),
+        Reservation,
+    ).all()
+    reservations_by_id = {reservation.id: reservation for reservation in reservations}
+    if len(reservations_by_id) != len(reservation_ids):
+        raise RoomMovementGroupError("Linked reservation no longer exists")
+    if (
+        not can_manage_company_reservations
+        and any(reservation.company_id is not None for reservation in reservations)
+    ):
+        raise RoomMovementGroupError("Company reservation movement groups require company management permission")
+
     reverted: list[dict] = []
     conflicts: list[dict] = []
     for event in events:
         if event.from_room_id is None:
             raise RoomMovementGroupError("Movement without source room cannot be reverted automatically")
-        reservation_query = (
-            db.query(Reservation)
-            .filter(Reservation.id == event.reservation_id, Reservation.hotel_id == hotel_id)
-            .populate_existing()
-        )
-        reservation = lock_query(reservation_query, Reservation).first()
+        reservation = reservations_by_id.get(event.reservation_id)
         if reservation is None:
             raise RoomMovementGroupError("Linked reservation no longer exists")
         from_room_query = (

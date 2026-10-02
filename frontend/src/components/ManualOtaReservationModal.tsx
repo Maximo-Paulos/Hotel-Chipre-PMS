@@ -23,6 +23,7 @@ const CHANNEL_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "despegar", label: "Despegar" },
   { value: "other_ota", label: "Otra OTA" }
 ];
+const PAID_CURRENCY_OPTIONS = ["ARS", "USD", "EUR", "BRL", "CLP", "UYU"] as const;
 
 const tomorrowIso = () => addDaysIso(todayIso(), 1);
 
@@ -48,6 +49,7 @@ type FormState = {
   amount_ars: string;
   amount_usd: string;
   amount_paid: string;
+  external_paid_currency: string;
   external_paid_reference: string;
 };
 
@@ -65,6 +67,7 @@ const emptyFormState = (): FormState => ({
   amount_ars: "",
   amount_usd: "",
   amount_paid: "",
+  external_paid_currency: "",
   external_paid_reference: ""
 });
 
@@ -127,8 +130,7 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
           email: guestForm.email.trim() || undefined,
           phone: guestForm.phone.trim() || undefined,
           document_type: guestForm.document_type,
-          document_number: guestForm.document_number.trim() || undefined,
-          terms_accepted: true
+          document_number: guestForm.document_number.trim() || undefined
         });
         guestIdNum = newGuest.id;
         setGuestId(String(newGuest.id));
@@ -178,6 +180,7 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
     // in; if both are filled, ARS wins by default (see FormState comment).
     const totalAmount = amountArs !== null ? amountArs : amountUsd;
     const targetCurrency = amountArs !== null ? "ARS" : amountUsd !== null ? "USD" : null;
+    const paidCurrency = form.external_paid_currency || targetCurrency || "ARS";
 
     try {
       const reservation = await createManualOtaMutation.mutateAsync({
@@ -197,6 +200,7 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
         quoted_amount_ars: amountArs,
         quoted_amount_usd: amountUsd,
         amount_paid: amountPaid,
+        external_paid_currency: paidCurrency,
         external_paid_reference: form.external_paid_reference.trim() || null
       });
       setCreated(reservation);
@@ -261,6 +265,21 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
                     {created.quoted_amount_usd != null ? formatMoney(created.quoted_amount_usd, "USD") : "—"}
                   </p>
                 </div>
+              </div>
+            )}
+            {(created.external_paid_amount ?? 0) > 0 && (
+              <div className="mt-2 rounded-md border border-emerald-200 bg-white p-2 text-xs text-emerald-900">
+                <p>
+                  Prepago informado por la OTA: {formatMoney(created.external_paid_amount ?? 0, created.external_paid_currency || created.currency_code)}.
+                  Se registra fuera de la caja del hotel.
+                </p>
+                {created.external_paid_balance_credit_applied === false &&
+                  created.external_paid_currency &&
+                  created.external_paid_currency.toUpperCase() !== (created.currency_code || "ARS").toUpperCase() && (
+                    <p className="mt-1 font-semibold">
+                      Registrado en {created.external_paid_currency}; no imputado al saldo {normalizeCurrencyCode(created.currency_code)}. Falta definir una conversión explícita.
+                    </p>
+                  )}
               </div>
             )}
             {created.fx_rate_snapshot ? (
@@ -476,6 +495,20 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
                   placeholder="0.00"
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                 />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">
+                Moneda del prepago OTA
+                <select
+                  value={form.external_paid_currency || (form.amount_ars.trim() ? "ARS" : form.amount_usd.trim() ? "USD" : "ARS")}
+                  onChange={(e) => setForm((prev) => ({ ...prev, external_paid_currency: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
+                >
+                  {PAID_CURRENCY_OPTIONS.map((currency) => (
+                    <option key={currency} value={currency}>
+                      {currency}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="text-xs font-semibold text-slate-600">
                 Referencia del prepago OTA

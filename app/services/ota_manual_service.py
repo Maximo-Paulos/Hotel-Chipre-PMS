@@ -32,7 +32,7 @@ from app.services.reservation_service import (
     update_reservation_fields,
 )
 from app.services.waitlist_service import promote_from_waitlist
-from app.services.financial_ledger import completed_paid_amount
+from app.services.financial_ledger import completed_paid_amount, external_paid_balance_credit
 
 
 class OTAManualReservationError(Exception):
@@ -393,6 +393,11 @@ def _apply_manual_amounts(
     if data.amount_paid is not None:
         external_amount = Decimal(str(data.amount_paid)).quantize(Decimal("0.01"))
         reservation.external_paid_amount = external_amount
+        reservation.external_paid_currency = (
+            (data.external_paid_currency or reservation.currency_code or "ARS").strip().upper()
+            if external_amount > 0
+            else None
+        )
         reservation.external_paid_reference = data.external_paid_reference if external_amount > 0 else None
         reservation.external_paid_confirmed = external_amount > 0
         reservation.external_paid_ever_confirmed = (
@@ -402,8 +407,11 @@ def _apply_manual_amounts(
         reservation.external_paid_confirmed_at = (
             datetime.now(timezone.utc).replace(tzinfo=None) if external_amount > 0 else None
         )
+    if data.amount_paid is not None or data.target_currency:
         local_paid = completed_paid_amount(db, reservation.hotel_id, reservation.id)
-        reservation.amount_paid = (external_amount + local_paid).quantize(Decimal("0.01"))
+        reservation.amount_paid = (
+            external_paid_balance_credit(reservation) + local_paid
+        ).quantize(Decimal("0.01"))
 
 
 def _reservation_snapshot(reservation: Reservation) -> dict[str, Any]:
@@ -422,6 +430,7 @@ def _reservation_snapshot(reservation: Reservation) -> dict[str, Any]:
         "total_amount": str(reservation.total_amount or 0),
         "amount_paid": str(reservation.amount_paid or 0),
         "external_paid_amount": str(reservation.external_paid_amount or 0),
+        "external_paid_currency": reservation.external_paid_currency,
         "external_paid_reference": reservation.external_paid_reference,
         "external_paid_confirmed": bool(reservation.external_paid_confirmed),
         "version": reservation.version,

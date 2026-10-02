@@ -10,7 +10,12 @@
     "occupancyToday": {
       "label": "Ocupación hoy",
       "helper_one": "{{count}} llegada",
-      "helper_other": "{{count}} llegadas"
+      "helper_other": "{{count}} llegadas",
+      "helperLoading": "Consultando llegadas...",
+      "helperError": "No se pudieron consultar las llegadas",
+      "roomsLoading": "Cargando ocupación…",
+      "roomsError": "No se pudo cargar la ocupación.",
+      "noActiveRooms": "No hay habitaciones activas."
     },
     "adr": {
       "label": "Promedio reservado por noche",
@@ -19,9 +24,11 @@
       "helperEmpty": "No hay reservas elegibles este mes"
     },
     "revenue": {
-      "label": "Importe de reservas del mes",
+      "label": "Valor reservado este mes",
       "helperSingle": "Valor reservado; no equivale a cobros de caja",
-      "helperEmpty": "No hay reservas elegibles este mes"
+      "helperEmpty": "No hay reservas elegibles este mes",
+      "helperLoading": "Cargando valor reservado...",
+      "helperError": "No se pudo consultar el valor reservado"
     },
     "pendingActions": {
       "label": "Acciones pendientes",

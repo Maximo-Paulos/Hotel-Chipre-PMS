@@ -188,8 +188,7 @@ export default function GuestQuickCreatePanel({
         email: form.email.trim() || undefined,
         phone: form.phone.trim() || undefined,
         document_type: form.document_type,
-        document_number: form.document_number.trim() || undefined,
-        terms_accepted: true
+        document_number: form.document_number.trim() || undefined
       });
       setSelectedGuest(guest);
       onGuestIdChange(String(guest.id));

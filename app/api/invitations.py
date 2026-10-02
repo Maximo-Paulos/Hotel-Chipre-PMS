@@ -34,6 +34,7 @@ from app.services.permission_service import (
 )
 from app.services.security import hash_password, needs_rehash, verify_password
 from app.services.subscription_service import ensure_staff_within_limit
+from app.services.invitation_email_service import send_staff_welcome_email
 from app.services.user_lookup_service import find_user_by_email
 
 router = APIRouter(prefix="/api/invitations", tags=["Invitations"])
@@ -170,6 +171,14 @@ def _activate_invitation_for_user(
         payload_before={"event": "invitation.pending", **invitation_before},
         payload_after={"event": "invitation.accepted", **invitation_snapshot(invitation)},
     )
+    # Acceptance rotates credentials already associated with this account.
+    # The new response below issues a session with the incremented version;
+    # every older JWT and cookie session must reauthenticate.
+    user.token_version = (user.token_version or 0) + 1
+    db.add(user)
+    from app.services.user_session_service import revoke_all_sessions
+
+    revoke_all_sessions(db, user.id)
     return membership
 
 
@@ -375,6 +384,41 @@ def _activate_invitation_for_user_audited(
         raise
 
 
+def _issue_invitation_acceptance_response(
+    db: Session,
+    user: User,
+    invitation: StaffInvitation,
+    request: Request,
+    response: Response,
+    *,
+    audit_action: str | None = None,
+    audit_details: dict[str, object] | None = None,
+    requested_hotel_id: int | None = None,
+) -> AuthResponse:
+    """Commit invitation acceptance before best-effort welcome mail and login."""
+    email = user.email
+    role = invitation.role
+    db.commit()
+    try:
+        send_staff_welcome_email(email=email, role=role)
+    except Exception:
+        # Acceptance is committed before email delivery; provider errors are
+        # deliberately not logged or returned to the invitee.
+        pass
+
+    from app.api.auth import _issue_auth_response
+
+    return _issue_auth_response(
+        db,
+        user,
+        request=request,
+        response=response,
+        audit_action=audit_action,
+        audit_details=audit_details,
+        requested_hotel_id=requested_hotel_id,
+    )
+
+
 def _accept_invitation(
     payload: AcceptPayload,
     token: str,
@@ -491,11 +535,10 @@ def _accept_invitation(
                 expected_token_hash=hash_invitation_token(token),
                 method="password",
             )
-            from app.api.auth import _issue_auth_response
-
-            return _issue_auth_response(
+            return _issue_invitation_acceptance_response(
                 db,
                 user,
+                invitation,
                 request=request,
                 response=response,
                 audit_action="auth.login.success",
@@ -534,11 +577,10 @@ def _accept_invitation(
         method="password",
     )
 
-    from app.api.auth import _issue_auth_response
-
-    return _issue_auth_response(
+    return _issue_invitation_acceptance_response(
         db,
         user,
+        invitation,
         request=request,
         response=response,
         requested_hotel_id=invitation.hotel_id,
@@ -622,7 +664,6 @@ def complete_invitation_mfa_acceptance(
 
     from app.api.auth import (
         _allow_mfa_attempt,
-        _issue_auth_response,
         _reset_mfa_attempts,
     )
     from app.services import mfa_service
@@ -742,10 +783,6 @@ def complete_invitation_mfa_acceptance(
         if pending_google_identity is not None and user.google_sub is None:
             user.google_sub = pending_google_identity["sub"]
             user.is_verified = True
-            user.token_version = (user.token_version or 0) + 1
-            from app.services.user_session_service import revoke_all_sessions
-
-            revoke_all_sessions(db, user.id)
             audit_action = "google_auth.linked"
             audit_details = {"account_state": "linked_after_mfa_invitation", "provider": "google"}
         elif method == "google":
@@ -755,9 +792,10 @@ def complete_invitation_mfa_acceptance(
             audit_action = "auth.login.success"
             audit_details = {"method": "password+invitation+mfa"}
 
-        return _issue_auth_response(
+        return _issue_invitation_acceptance_response(
             db,
             user,
+            invitation,
             request=request,
             response=response,
             audit_action=audit_action,
@@ -802,7 +840,6 @@ def _accept_invitation_with_google(
     invitation = _available_invitation(token, db)
 
     from app.api.auth import (
-        _issue_auth_response,
         _verify_google_claims,
     )
     from app.config import get_settings
@@ -953,9 +990,10 @@ def _accept_invitation_with_google(
             expected_token_hash=hash_invitation_token(token),
             method="google",
         )
-        return _issue_auth_response(
+        return _issue_invitation_acceptance_response(
             db,
             user,
+            invitation,
             request=request,
             response=response,
             audit_action="google_auth.linked",

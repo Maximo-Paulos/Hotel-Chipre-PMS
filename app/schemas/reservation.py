@@ -123,6 +123,8 @@ class ReservationRead(BaseModel):
     total_amount: float | None
     amount_paid: float | None
     external_paid_amount: float | None = 0.0
+    external_paid_currency: Optional[str] = None
+    external_paid_balance_credit_applied: bool = False
     external_paid_reference: Optional[str] = None
     external_paid_confirmed: bool = False
     deposit_amount: float | None

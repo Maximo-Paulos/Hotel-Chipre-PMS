@@ -206,10 +206,13 @@ class Reservation(Base):
     # Financial
     total_amount = Column(Numeric(12, 2), nullable=False, default=0)
     amount_paid = Column(Numeric(12, 2), nullable=False, default=0)
-    # Payments credited by an external booking channel reduce the guest's
-    # operational balance but are not hotel cash or an in-app payment. Keep
-    # this source separate from the transaction ledger.
+    # Payments confirmed by an external booking channel are reported separately
+    # from hotel cash and the in-app transaction ledger. Their source currency
+    # is explicit because it may differ from the reservation's billing currency.
+    # Only same-currency external amounts can reduce the reservation balance;
+    # conversion requires a separately authorized FX snapshot.
     external_paid_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    external_paid_currency = Column(String(3), nullable=True)
     external_paid_reference = Column(String(120), nullable=True)
     external_paid_confirmed = Column(Boolean, nullable=False, default=False)
     external_paid_ever_confirmed = Column(Boolean, nullable=False, default=False)

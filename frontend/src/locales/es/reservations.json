@@ -58,6 +58,7 @@
         "birthCountry": "Completá el país de nacimiento.",
         "maritalStatus": "Completá el estado civil.",
         "occupation": "Completá la profesión.",
+        "termsAccepted": "Confirmá la aceptación de términos y condiciones.",
         "unknown": "Hay otro dato requerido pendiente de completar."
       }
     },
@@ -160,7 +161,12 @@
       "created": "Adicionales registrados para las noches seleccionadas.",
       "createFailed": "No se pudieron registrar los adicionales.",
       "applyTitle": "Aplicar el adicional configurado a noches seleccionadas",
-      "applyHint": "Se guarda el importe vigente de cada noche. Los cargos ya existentes no cambian automáticamente.",
+      "applyHint": "Se guarda el importe vigente para cada fecha elegida. Los cargos existentes no cambian automáticamente.",
+      "ratesLoading": "Cargando tarifas vigentes para la estadía...",
+      "ratesLoadFailed": "No se pudieron cargar las tarifas de la empresa.",
+      "ratesRetry": "Reintentar tarifas",
+      "noRateForStay": "No hay una tarifa positiva vigente para las noches de esta estadía.",
+      "rateForNight": "{{amount}} por persona/noche",
       "extraPersonCount": "Cantidad de personas extra por noche seleccionada",
       "invalidPersonCount": "Ingresá una cantidad entera entre 1 y 99.",
       "alreadyAdded": "ya cargado",

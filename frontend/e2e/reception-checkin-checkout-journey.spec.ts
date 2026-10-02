@@ -71,7 +71,11 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await reservationForm.getByPlaceholder("Teléfono").fill("1112345678");
   await reservationForm.getByLabel("Tipo de documento").selectOption("DNI");
   await reservationForm.getByPlaceholder("Documento").fill(`QA-RECEP-${suffix}`);
-  await reservationForm.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();
+  const [guestCreateRequest] = await Promise.all([
+    page.waitForRequest((request) => request.url().includes("/api/guests/") && request.method() === "POST"),
+    reservationForm.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click()
+  ]);
+  expect(guestCreateRequest.postDataJSON()).not.toHaveProperty("terms_accepted");
   await expect(page.getByText("Huésped creado y asignado", { exact: true })).toBeVisible();
 
   const categorySelect = reservationForm.locator("label").filter({ hasText: "Categoría" }).locator("select");
@@ -116,7 +120,9 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await expect(pendingBalanceDrawer).toBeVisible();
   await expect(pendingBalanceDrawer.getByText("Pendiente", { exact: true })).toBeVisible();
   await expect(pendingBalanceDrawer.getByTestId("drawer-balance-due")).toBeVisible();
+  await expect(pendingBalanceDrawer.getByLabel("Método de pago")).toBeVisible();
   await expect(pendingBalanceDrawer.getByTestId("checkin-capture-form")).toBeVisible();
+  await expect(pendingBalanceDrawer.getByLabel("Acepta términos y condiciones", { exact: true })).not.toBeChecked();
   await expect(pendingBalanceDrawer.getByTestId("checkin-capture-form")).toContainText("Completá el lugar de nacimiento.");
   await pendingBalanceDrawer.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
 
@@ -144,6 +150,7 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
 
   const captureForm = drawer.getByTestId("checkin-capture-form");
   await expect(captureForm).toBeVisible();
+  await expect(captureForm.getByLabel("Acepta términos y condiciones", { exact: true })).not.toBeChecked();
   await expect(captureForm).toContainText("Completá el lugar de nacimiento.");
 
   // If the POST returns the legacy English missing-data detail, show a
@@ -156,6 +163,7 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await captureForm.getByLabel("País de nacimiento").fill("Argentina");
   await captureForm.getByLabel("Estado civil").fill("Soltero/a");
   await captureForm.getByLabel("Profesión").fill("Recepcionista QA");
+  await captureForm.getByLabel("Acepta términos y condiciones", { exact: true }).check();
 
   await drawer.getByLabel("Nombre del acompañante").fill("Acompañante");
   await drawer.getByLabel("Apellido del acompañante").fill(guestLastName);

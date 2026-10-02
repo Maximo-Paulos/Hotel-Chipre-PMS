@@ -288,6 +288,9 @@ const mockDailyRates = [
 
 test("rate calendar page renders annual editor and integrated channel view", async ({ page }) => {
   const savedCells: unknown[] = [];
+  // Model the API's upsert semantics: omitted per-method prices stay as
+  // stored when a user updates only the base price.
+  const persistedDailyRates = mockDailyRates.map((rate) => ({ ...rate }));
   const bulkRequests: unknown[] = [];
   const fieldBulkRequests: unknown[] = [];
 
@@ -308,6 +311,7 @@ test("rate calendar page renders annual editor and integrated channel view", asy
     // richer OTA/channel rendering.
     if (
       url.pathname.endsWith("/api/auth/login") ||
+      url.pathname.endsWith("/api/auth/session/refresh") ||
       url.pathname.endsWith("/api/onboarding/status") ||
       url.pathname.endsWith("/api/permissions/effective") ||
       url.pathname.endsWith("/api/subscription/status")
@@ -355,9 +359,44 @@ test("rate calendar page renders annual editor and integrated channel view", asy
       return;
     }
 
+    if (url.pathname.endsWith("/api/rates/payment-method-options")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          enable_cash: true,
+          enable_bank_transfer: true,
+          enable_debit_card: false,
+          enable_credit_card: false,
+          enable_mercado_pago: false,
+          enable_paypal: false
+        })
+      });
+      return;
+    }
+
     if (url.pathname.endsWith("/api/rates/category/7/daily") && request.method() === "POST") {
       const payload = request.postDataJSON();
-      savedCells.push(payload);
+      const storedIndex = persistedDailyRates.findIndex((rate) => rate.date === payload.date);
+      const storedRate = storedIndex >= 0
+        ? persistedDailyRates[storedIndex]
+        : {
+            date: payload.date,
+            price_cash: null,
+            price_transfer: null,
+            price_mercadopago: null,
+            source: "daily_rate",
+            daily_rate_id: 201
+          };
+      const persistedRate = {
+        ...storedRate,
+        ...payload,
+        source: "daily_rate",
+        daily_rate_id: storedRate.daily_rate_id ?? 201
+      };
+      if (storedIndex >= 0) persistedDailyRates[storedIndex] = persistedRate;
+      else persistedDailyRates.push(persistedRate);
+      savedCells.push(persistedRate);
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -365,7 +404,7 @@ test("rate calendar page renders annual editor and integrated channel view", asy
           id: 201,
           hotel_id: 1,
           category_id: 7,
-          ...payload
+          ...persistedRate
         })
       });
       return;
@@ -399,7 +438,7 @@ test("rate calendar page renders annual editor and integrated channel view", asy
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(mockDailyRates)
+        body: JSON.stringify(persistedDailyRates)
       });
       return;
     }

@@ -10,7 +10,12 @@
     "occupancyToday": {
       "label": "Occupancy today",
       "helper_one": "{{count}} arrival",
-      "helper_other": "{{count}} arrivals"
+      "helper_other": "{{count}} arrivals",
+      "helperLoading": "Loading arrivals...",
+      "helperError": "Arrivals could not be loaded",
+      "roomsLoading": "Loading occupancy…",
+      "roomsError": "Occupancy could not be loaded.",
+      "noActiveRooms": "No active rooms."
     },
     "adr": {
       "label": "Average booked per night",
@@ -19,9 +24,11 @@
       "helperEmpty": "No eligible reservations this month"
     },
     "revenue": {
-      "label": "Reservation value this month",
+      "label": "Booked reservation value this month",
       "helperSingle": "Booked value; it is not cash collected",
-      "helperEmpty": "No eligible reservations this month"
+      "helperEmpty": "No eligible reservations this month",
+      "helperLoading": "Loading booked value...",
+      "helperError": "Booked value could not be loaded"
     },
     "pendingActions": {
       "label": "Pending actions",

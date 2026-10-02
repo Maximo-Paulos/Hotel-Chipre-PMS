@@ -19,10 +19,19 @@ const authResponse = {
   }
 };
 
-test("F-050 requires an invitation role and confirms role changes visibly", async ({ page }) => {
+test("F-050 requires an invitation role and confirms role and invitation changes in-page", async ({ page }) => {
   let loggedIn = false;
   let memberRole = "manager";
+  let pendingInvitations = [{
+    invitation_id: 10,
+    email: "pending-staff@example.test",
+    role: "receptionist",
+    status: "pending",
+    expires_at: "2030-01-01T00:00:00Z",
+    inviter_email: "owner@example.test"
+  }];
   const roleWrites: string[] = [];
+  const invitationRevokes: number[] = [];
   const invitePayloads: Array<Record<string, unknown>> = [];
 
   await page.route(`${backendURL}/api/**`, async (route) => {
@@ -78,7 +87,12 @@ test("F-050 requires an invitation role and confirms role changes visibly", asyn
         { user_id: 2, email: "staff@example.test", role: memberRole, status: "active", alias: null }
       ] });
     }
-    if (pathname === "/api/users/invitations" && method === "GET") return json([]);
+    if (pathname === "/api/users/invitations" && method === "GET") return json(pendingInvitations);
+    if (pathname === "/api/users/invitations/10" && method === "DELETE") {
+      invitationRevokes.push(10);
+      pendingInvitations = pendingInvitations.filter((invitation) => invitation.invitation_id !== 10);
+      return route.fulfill({ status: 204 });
+    }
     if (pathname === "/api/users/invite" && method === "POST") {
       const payload = request.postDataJSON() as Record<string, unknown>;
       invitePayloads.push(payload);
@@ -117,15 +131,37 @@ test("F-050 requires an invitation role and confirms role changes visibly", asyn
   expect(invitePayloads[0]).toMatchObject({ email: "new-staff@example.test", role: "receptionist" });
   await expect(inviteRole).toHaveValue("");
 
+  const invitationEmail = page.getByText("pending-staff@example.test", { exact: true });
+  const cancelInvitation = page.getByRole("button", { name: "Cancelar invitación", exact: true });
+  await cancelInvitation.click();
+  const invitationDialog = page.getByRole("alertdialog", { name: "Cancelar invitación" });
+  await expect(invitationDialog).toBeVisible();
+  await expect(invitationDialog).toContainText("pending-staff@example.test");
+  await invitationDialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(invitationDialog).toBeHidden();
+  await expect(invitationEmail).toBeVisible();
+  expect(invitationRevokes).toEqual([]);
+
+  await cancelInvitation.click();
+  await invitationDialog.getByRole("button", { name: "Cancelar invitación", exact: true }).click();
+  await expect.poll(() => invitationRevokes).toEqual([10]);
+  await expect(invitationEmail).toHaveCount(0);
+
   const memberRoleSelect = page.getByLabel("Rol de staff@example.test");
-  page.once("dialog", (dialog) => void dialog.dismiss());
   await memberRoleSelect.selectOption("co_owner");
+  const roleDialog = page.getByRole("alertdialog", { name: "Confirmar cambio de rol" });
+  await expect(roleDialog).toBeVisible();
+  await expect(memberRoleSelect).toHaveValue("manager");
+  await page.keyboard.press("Escape");
+  await expect(roleDialog).toBeHidden();
   await expect(memberRoleSelect).toHaveValue("manager");
   expect(roleWrites).toEqual([]);
 
-  page.once("dialog", (dialog) => void dialog.accept());
   await memberRoleSelect.selectOption("receptionist");
+  await expect(roleDialog).toBeVisible();
+  await expect(memberRoleSelect).toHaveValue("manager");
+  await roleDialog.getByRole("button", { name: "Cambiar rol", exact: true }).click();
   await expect.poll(() => roleWrites).toEqual(["receptionist"]);
   await expect(memberRoleSelect).toHaveValue("receptionist");
-  await expect(page.getByRole("status")).toContainText("Rol de staff@example.test actualizado a Recepción");
+  await expect(page.getByText("Rol de staff@example.test actualizado a Recepción.", { exact: true })).toBeVisible();
 });

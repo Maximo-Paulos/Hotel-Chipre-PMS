@@ -41,7 +41,7 @@ import {
 import { validateGuestForCheckin, type GuestCheckinValidation } from "../api/guests";
 import type { SessionState } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
-import { refreshAfterMutation, refreshReservationCreatedState, refreshReservationGuestState, refreshReservationState } from "../api/queryInvalidation";
+import { refreshReservationCreatedState, refreshReservationGuestState, refreshReservationRecordState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -162,7 +162,10 @@ export function useReservationMutations(filters?: ReservationFilters) {
   const queryClient = useQueryClient();
   const { session } = useSession();
 
-  const invalidate = () => refreshReservationState(queryClient, session.hotelId);
+  const invalidateReservationRecord = (
+    reservationId: number,
+    options: { includePaymentSummary?: boolean; includePaymentLinks?: boolean } = {}
+  ) => refreshReservationRecordState(queryClient, session.hotelId, reservationId, options);
   // Creating a reservation changes reservation-facing views, but recording a
   // required deposit amount does not create a cash movement. Keep active cash
   // sessions and room-movement groups fresh through their own mutations
@@ -175,8 +178,7 @@ export function useReservationMutations(filters?: ReservationFilters) {
   // too -- refresh both domains so the status/guest data the receptionist
   // just saved shows up immediately.
   const invalidateReservationDetail = (reservationId: number) => {
-    void reservationId;
-    return refreshReservationGuestState(queryClient, session.hotelId);
+    return refreshReservationGuestState(queryClient, session.hotelId, reservationId);
   };
 
   // Double-click / double-tap on "confirm" fires two submits in the same JS
@@ -201,7 +203,7 @@ export function useReservationMutations(filters?: ReservationFilters) {
   const updateMutation = useGuardedMutation({
     mutationFn: ({ id, payload }: { id: number; payload: ReservationUpdatePayload }) =>
       updateReservation(id, payload, session),
-    onSuccess: async () => invalidate()
+    onSuccess: async (_, variables) => invalidateReservationRecord(variables.id, { includePaymentSummary: true })
   });
 
   const companyExtensionRequestMutation = useGuardedMutation({
@@ -215,12 +217,17 @@ export function useReservationMutations(filters?: ReservationFilters) {
       extendReservationStay(id, payload, session),
     // Extending a deferred company stay updates its dates and reservation
     // total only. It does not create a payment or cash movement.
-    onSuccess: async () => refreshAfterMutation(queryClient, session.hotelId, ["reservations", "analytics"])
+    onSuccess: async (_, variables) => refreshReservationRecordState(queryClient, session.hotelId, variables.id)
   });
 
   const cancelMutation = useGuardedMutation({
     mutationFn: (id: number) => cancelReservation(id, session),
-    onSuccess: async () => invalidate()
+    // Cancellation changes the reservation projection and cancels its pending
+    // payment links, but it does not create a cash movement.
+    onSuccess: async (_, reservationId) => invalidateReservationRecord(reservationId, {
+      includePaymentSummary: true,
+      includePaymentLinks: true
+    })
   });
 
   type CheckInParams = number | ({ id: number } & CheckInPayload);
@@ -281,7 +288,10 @@ export function useReservationActionMutations(filters?: ReservationFilters) {
   const queryClient = useQueryClient();
   const { session } = useSession();
 
-  const invalidateAll = (reservationId?: number) => refreshReservationState(queryClient, session.hotelId, reservationId);
+  const invalidateReservationRecord = (
+    reservationId: number,
+    options: { includePaymentSummary?: boolean; includePaymentLinks?: boolean } = {}
+  ) => refreshReservationRecordState(queryClient, session.hotelId, reservationId, options);
 
   const resolveExternalMutation = useGuardedMutation<
     ReservationExternalResolutionResponse,
@@ -289,7 +299,9 @@ export function useReservationActionMutations(filters?: ReservationFilters) {
     { reservationId: number; payload: ReservationActionResolvePayload }
   >({
     mutationFn: ({ reservationId, payload }) => resolveReservationExternal(reservationId, payload, session),
-    onSuccess: async (_, variables) => invalidateAll(variables.reservationId)
+    onSuccess: async (_, variables) => invalidateReservationRecord(variables.reservationId, {
+      includePaymentSummary: true
+    })
   });
 
   const clearManualReviewMutation = useGuardedMutation<
@@ -298,7 +310,7 @@ export function useReservationActionMutations(filters?: ReservationFilters) {
     { reservationId: number; payload: ReservationActionResolvePayload }
   >({
     mutationFn: ({ reservationId, payload }) => clearReservationManualReview(reservationId, payload, session),
-    onSuccess: async (_, variables) => invalidateAll(variables.reservationId)
+    onSuccess: async (_, variables) => invalidateReservationRecord(variables.reservationId)
   });
 
   return {

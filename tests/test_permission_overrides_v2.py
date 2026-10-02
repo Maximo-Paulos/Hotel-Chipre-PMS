@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -21,6 +22,7 @@ from app.services.action_step_up_service import (
     is_permission_admin_read_action,
 )
 from app.services.permission_service import (
+    PERMISSION_COMPANY_MANAGE,
     PERMISSION_CASH_APPROVE_DIFFERENCE,
     PERMISSION_CASH_CUSTODY_RECEIVE,
     PERMISSION_GUEST_PROHIBITION_MANAGE,
@@ -509,6 +511,50 @@ def test_every_role_scoped_capability_rejects_out_of_scope_role_overrides(db):
                     "locked": True,
                     "lock_reason": "role_scope",
                 }
+
+
+def test_stale_individual_company_manage_override_cannot_grant_receptionist(db):
+    db.add(HotelConfiguration(id=1, subscription_active=True))
+    db.add_all(
+        [
+            User(id=10, email="owner@example.test", password_hash="synthetic", is_verified=True),
+            User(id=20, email="reception@example.test", password_hash="synthetic", is_verified=True),
+        ]
+    )
+    db.flush()
+    seed_default_permissions(db)
+    db.add_all(
+        [
+            HotelMembership(hotel_id=1, user_id=10, role="owner", status="active"),
+            HotelMembership(hotel_id=1, user_id=20, role="receptionist", status="active"),
+            UserPermissionOverride(
+                hotel_id=1,
+                user_id=20,
+                permission_code=PERMISSION_COMPANY_MANAGE,
+                allowed=True,
+                updated_by_user_id=10,
+            ),
+        ]
+    )
+    db.flush()
+
+    assert resolve(db, 1, "receptionist", PERMISSION_COMPANY_MANAGE, user_id=20) is False
+    assert get_effective_permission_details(db, 1, "receptionist", user_id=20)[PERMISSION_COMPANY_MANAGE] == {
+        "allowed": False,
+        "source": "invariant",
+        "locked": True,
+        "lock_reason": "role_scope",
+    }
+    with pytest.raises(ValueError, match="bloqueado"):
+        set_user_override(
+            db,
+            1,
+            20,
+            "receptionist",
+            PERMISSION_COMPANY_MANAGE,
+            True,
+            actor_user_id=10,
+        )
 
 
 def test_cash_difference_denial_does_not_revoke_independent_owner_custody_receipt(db):

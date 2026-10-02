@@ -564,21 +564,22 @@ def test_prior_receipt_api_requires_management_permission_and_stays_out_of_cash(
     report_date = hotel_today(db, 1)
     daily_report = client.get(f"/api/reports/daily?report_date={report_date.isoformat()}")
     assert daily_report.status_code == 200, daily_report.text
-    assert daily_report.json()["revenue"] == {
-        "total": 0,
-        "by_method": {},
-        "transactions_count": 0,
-    }
+    daily_revenue = daily_report.json()["revenue"]
+    assert daily_revenue["total"] == 0
+    assert daily_revenue["by_method"] == {}
+    assert daily_revenue["by_currency"] == []
+    assert daily_revenue["by_method_by_currency"] == []
+    assert daily_revenue["transactions_count"] == 0
     revenue_report = client.get(
         f"/api/reports/revenue?start_date={report_date.isoformat()}&end_date={report_date.isoformat()}"
     )
     assert revenue_report.status_code == 200, revenue_report.text
-    assert revenue_report.json()["collected"] == {
-        "total": 0,
-        "by_method": {},
-        "by_day": {},
-        "transactions_count": 0,
-    }
+    collected = revenue_report.json()["collected"]
+    assert collected["total"] == "0.00"
+    assert collected["by_method"] == {}
+    assert collected["by_day"] == {}
+    assert collected["by_currency"] == []
+    assert collected["transactions_count"] == 0
 
     prior_export = client.get(
         f"/api/cash-register/export.csv?from={collected_on.isoformat()}&to={collected_on.isoformat()}&currency=ARS"

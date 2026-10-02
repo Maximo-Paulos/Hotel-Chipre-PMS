@@ -35,6 +35,7 @@ class ManualOTAReservationCreate(BaseModel):
     quoted_amount_ars: Decimal | None = Field(default=None, ge=0)
     quoted_amount_usd: Decimal | None = Field(default=None, ge=0)
     amount_paid: Decimal | None = Field(default=None, ge=0)
+    external_paid_currency: str | None = Field(default=None, min_length=3, max_length=3)
     external_paid_reference: str | None = Field(default=None, max_length=120)
     payment_collection_model: str = Field(default="hotel_collect", max_length=40)
     settlement_status: str | None = Field(default=None, max_length=40)
@@ -57,6 +58,18 @@ class ManualOTAReservationCreate(BaseModel):
             return None
         normalized = str(value).strip()
         return normalized or None
+
+    @field_validator("external_paid_currency", mode="before")
+    @classmethod
+    def normalize_external_paid_currency(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip().upper()
+        if not normalized:
+            return None
+        if len(normalized) != 3 or not normalized.isalpha() or not normalized.isascii():
+            raise ValueError("external_paid_currency must be a three-letter currency code")
+        return normalized
 
     @model_validator(mode="after")
     def require_external_payment_reference(self):

@@ -39,6 +39,10 @@
     "floorCategory": "Piso {{floor}} · {{category}}",
     "arrival": "Llegada pendiente hoy",
     "departure": "Salida pendiente hoy",
+    "stayover": "Repaso de estadía",
+    "floorFilter": "Piso",
+    "floorLabel": "Piso {{floor}}",
+    "allFloors": "Todos",
     "maintenanceBlocked": "Bloqueada por mantenimiento",
     "noSpecialEvents": "Sin eventos especiales hoy",
     "statusForRoom": "Estado de limpieza · {{number}}"

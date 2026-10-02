@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   ApiError,
@@ -41,6 +42,7 @@ type SessionContextValue = {
 
 const LEGACY_STORAGE_KEY = "hotel-pms-session";
 const CSRF_STORAGE_KEY = "hotel-pms-csrf-token";
+const SESSION_RESTORE_RETRY_DELAYS_MS = [500, 1500] as const;
 const EMPTY_SESSION: SessionState = {
   userId: null,
   email: null,
@@ -53,6 +55,9 @@ const EMPTY_SESSION: SessionState = {
   csrfToken: null,
   isVerified: false
 };
+
+const isRetryableSessionRestoreError = (error: unknown) =>
+  error instanceof TypeError || (error instanceof ApiError && error.status >= 500);
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
@@ -124,6 +129,11 @@ const isMasterAdminPath = (): boolean => {
   return path === MASTER_ADMIN_PATH_PREFIX || path.startsWith(`${MASTER_ADMIN_PATH_PREFIX}/`);
 };
 
+const isSessionRecoveryLoginPath = (): boolean => {
+  if (typeof window === "undefined" || window.location.pathname !== "/login") return false;
+  return new URLSearchParams(window.location.search).get("sessionRecovery") === "1";
+};
+
 const initialSession = (): SessionState => ({
   ...EMPTY_SESSION,
   csrfToken: readStoredCsrfToken()
@@ -146,12 +156,17 @@ const sessionFromAuthResponse = (response: AuthResponsePayload): Partial<Session
 };
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation("appshell");
   const [session, setSession] = useState<SessionState>(() => {
     clearLegacyStoredSession();
     return initialSession();
   });
-  const [isInitializing, setIsInitializing] = useState(() => isAppHostname() && !isMasterAdminPath());
+  const [isInitializing, setIsInitializing] = useState(
+    () => isAppHostname() && !isMasterAdminPath() && !isSessionRecoveryLoginPath()
+  );
   const [restoredSession, setRestoredSession] = useState(false);
+  const [sessionRestoreFailed, setSessionRestoreFailed] = useState(false);
+  const [sessionRestoreRetryAttempt, setSessionRestoreRetryAttempt] = useState(0);
 
   const login = useCallback((partial: Partial<SessionState>) => {
     setSession((prev) => ({
@@ -226,26 +241,70 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isInitializing) return;
     let cancelled = false;
-    void refreshSession()
-      .then((response) => {
+    let retryTimer: number | undefined;
+    let cancelRetryDelay: (() => void) | undefined;
+
+    const waitBeforeRetry = (delayMs: number) => new Promise<void>((resolve) => {
+      const finish = () => {
+        if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+        retryTimer = undefined;
+        cancelRetryDelay = undefined;
+        resolve();
+      };
+      retryTimer = window.setTimeout(finish, delayMs);
+      cancelRetryDelay = finish;
+    });
+
+    const restoreSession = async () => {
+      for (let attempt = 0; ; attempt += 1) {
         if (cancelled) return;
-        applyAuthResponse(response);
-        setRestoredSession(true);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        if (error instanceof ApiError && error.status === 401) {
-          persistCsrfToken(null);
-          setSession(EMPTY_SESSION);
+        try {
+          const response = await refreshSession();
+          if (cancelled) return;
+          applyAuthResponse(response);
+          setSessionRestoreFailed(false);
+          setSessionRestoreRetryAttempt(0);
+          setRestoredSession(true);
+          return;
+        } catch (error: unknown) {
+          if (cancelled) return;
+          if (error instanceof ApiError && error.status === 401) {
+            // A 401 is the explicit signal that the cookie session is no
+            // longer valid. Keep temporary network/server failures out of
+            // this path so they cannot clear the browser's session state.
+            persistCsrfToken(null);
+            setSession(EMPTY_SESSION);
+            setSessionRestoreFailed(false);
+            setSessionRestoreRetryAttempt(0);
+            setRestoredSession(true);
+            return;
+          }
+
+          if (!isRetryableSessionRestoreError(error) || attempt >= SESSION_RESTORE_RETRY_DELAYS_MS.length) {
+            setSessionRestoreFailed(true);
+            return;
+          }
+
+          setSessionRestoreRetryAttempt(attempt + 1);
+          await waitBeforeRetry(SESSION_RESTORE_RETRY_DELAYS_MS[attempt]);
         }
-      })
-      .finally(() => {
-        if (!cancelled) setIsInitializing(false);
-      });
+      }
+    };
+
+    void restoreSession().finally(() => {
+      if (!cancelled) setIsInitializing(false);
+    });
     return () => {
       cancelled = true;
+      cancelRetryDelay?.();
     };
   }, [applyAuthResponse, isInitializing]);
+
+  const retrySessionRestore = useCallback(() => {
+    setSessionRestoreFailed(false);
+    setSessionRestoreRetryAttempt(0);
+    setIsInitializing(true);
+  }, []);
 
   const setHotelId = (hotelId: number | null) =>
     setSession((prev) => {
@@ -296,7 +355,42 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   };
 
   if (isInitializing) {
-    return <p className="p-8 text-sm text-slate-500" role="status">Comprobando sesión...</p>;
+    return (
+      <p className="p-8 text-sm text-slate-500" role="status" aria-live="polite" data-testid="session-restore-status">
+        {sessionRestoreRetryAttempt > 0
+          ? t("sessionRestore.retrying", {
+              attempt: sessionRestoreRetryAttempt,
+              total: SESSION_RESTORE_RETRY_DELAYS_MS.length
+            })
+          : t("sessionRestore.checking")}
+      </p>
+    );
+  }
+
+  if (sessionRestoreFailed) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-xl items-center px-4 py-12 sm:px-6" data-testid="session-restore-error">
+        <section className="w-full rounded-xl border border-amber-300 bg-amber-50 p-6 text-amber-950" role="alert">
+          <h1 className="text-lg font-semibold">{t("sessionRestore.title")}</h1>
+          <p className="mt-2 text-sm">{t("sessionRestore.description")}</p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              className="min-h-11 rounded-lg border border-amber-800 bg-amber-900 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-800"
+              onClick={retrySessionRestore}
+              type="button"
+            >
+              {t("sessionRestore.retry")}
+            </button>
+            <a
+              className="inline-flex min-h-11 items-center rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-800"
+              href="/login?sessionRecovery=1"
+            >
+              {t("sessionRestore.login")}
+            </a>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

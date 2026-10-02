@@ -55,6 +55,7 @@ from app.services.permission_service import (
     RESERVATION_MOVE_TIER_PERMISSIONS,
     PERMISSION_CHECKIN_PERFORM,
     PERMISSION_CHECKOUT_PERFORM,
+    PERMISSION_COMPANY_MANAGE,
     audit_permission_denied,
     resolve,
 )
@@ -407,6 +408,8 @@ def cancel_booking(
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(status_code=404, detail="Booking not found")
+    if booking.company_id is not None:
+        authorize_permission(request, db, context, PERMISSION_COMPANY_MANAGE)
     if booking.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
@@ -533,6 +536,7 @@ def checkout_booking(
 def update_booking(
     booking_id: int,
     payload: BookingUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
@@ -564,6 +568,8 @@ def update_booking(
         and not (field == "room_id" and value is None)
         and getattr(booking, field, None) != value
     }
+    if booking.company_id is not None and effective_data:
+        authorize_permission(request, db, context, PERMISSION_COMPANY_MANAGE)
     metadata_fields = {"arrival_time_hint", "reservation_comment"}
     terminal_mutation_fields = set(effective_data) - metadata_fields
     if booking.status in {

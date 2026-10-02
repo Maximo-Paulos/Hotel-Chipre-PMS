@@ -58,6 +58,7 @@
         "birthCountry": "Enter the country of birth.",
         "maritalStatus": "Enter the marital status.",
         "occupation": "Enter the occupation.",
+        "termsAccepted": "Confirm the guest's acceptance of the terms and conditions.",
         "unknown": "Another required detail is still missing."
       }
     },
@@ -160,7 +161,12 @@
       "created": "Surcharges recorded for the selected nights.",
       "createFailed": "Could not record the surcharges.",
       "applyTitle": "Apply the configured surcharge to selected nights",
-      "applyHint": "Each night saves its effective rate. Existing charges do not change automatically.",
+      "applyHint": "Each selected date saves its effective rate. Existing charges do not change automatically.",
+      "ratesLoading": "Loading rates effective during this stay...",
+      "ratesLoadFailed": "Could not load this company's rates.",
+      "ratesRetry": "Retry rates",
+      "noRateForStay": "There is no positive rate effective for any night in this stay.",
+      "rateForNight": "{{amount}} per person/night",
       "extraPersonCount": "Extra people for each selected night",
       "invalidPersonCount": "Enter a whole number from 1 to 99.",
       "alreadyAdded": "already added",

@@ -144,6 +144,8 @@ class CashDailyPhysicalRead(BaseModel):
     income_total: Decimal
     expense_total: Decimal
     adjustment_total: Decimal
+    custody_delivered_total: Decimal = Decimal("0.00")
+    custody_difference_total: Decimal = Decimal("0.00")
     expected_balance: Decimal
     declared_balance: Optional[Decimal] = None
     difference: Optional[Decimal] = None

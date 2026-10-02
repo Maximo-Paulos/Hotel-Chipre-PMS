@@ -24,8 +24,12 @@ import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { roleLabels } from "../../ui/UserBadge";
 import { fetchHotelRoles, hotelRolesQueryKey, type HotelRole } from "../../api/roles";
+import ConfirmDialog from "../../components/ConfirmDialog";
 
 type InviteFormState = Omit<InvitePayload, "role"> & { role: string };
+type PendingUserConfirmation =
+  | { kind: "role-change"; user: AuthUser; role: string }
+  | { kind: "revoke-invitation"; invitation: StaffInvitationEntry };
 
 export function SettingsUsersPage() {
   const { t } = useTranslation();
@@ -136,7 +140,7 @@ export function SettingsUsersPage() {
   const [inviteResult, setInviteResult] = useState<InviteResponse | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
-  const [roleDrafts, setRoleDrafts] = useState<Record<number, string>>({});
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingUserConfirmation | null>(null);
   const [roleChangeNotice, setRoleChangeNotice] = useState<{ email: string; role: string } | null>(null);
   const [editingAliasUserId, setEditingAliasUserId] = useState<number | null>(null);
   const [aliasDraft, setAliasDraft] = useState("");
@@ -169,34 +173,9 @@ export function SettingsUsersPage() {
     }
   };
 
-  const handleRoleChange = async (user: AuthUser, role: string) => {
-    if (!activeAssignableRoles.some((item) => item.code === role)) return;
-    setRoleDrafts((current) => ({ ...current, [user.id]: role }));
-    if (!window.confirm(t("hotelRoles.roleChangePermissionConfirm", { role: roleDisplayName(role) }))) {
-      setRoleDrafts((current) => {
-        const next = { ...current };
-        delete next[user.id];
-        return next;
-      });
-      return;
-    }
-    setRoleChangeNotice(null);
-    try {
-      await updateRoleMutation.mutateAsync({ userId: user.id, role });
-      setRoleDrafts((current) => {
-        const next = { ...current };
-        delete next[user.id];
-        return next;
-      });
-      setRoleChangeNotice({ email: user.email, role });
-    } catch {
-      setRoleDrafts((current) => {
-        const next = { ...current };
-        delete next[user.id];
-        return next;
-      });
-      // The mutation state renders the safe backend error below.
-    }
+  const handleRoleChange = (user: AuthUser, role: string) => {
+    if (user.role === role || !activeAssignableRoles.some((item) => item.code === role)) return;
+    setPendingConfirmation({ kind: "role-change", user, role });
   };
 
   const handleRevoke = async (userId: number) => {
@@ -228,10 +207,24 @@ export function SettingsUsersPage() {
     }
   };
 
-  const handleRevokeInvitation = async (invitation: StaffInvitationEntry) => {
-    if (!window.confirm(`¿Cancelar la invitación pendiente para ${invitation.email}?`)) return;
+  const handleConfirmPendingAction = async () => {
+    const action = pendingConfirmation;
+    if (!action) return;
+    setPendingConfirmation(null);
+
+    if (action.kind === "role-change") {
+      setRoleChangeNotice(null);
+      try {
+        await updateRoleMutation.mutateAsync({ userId: action.user.id, role: action.role });
+        setRoleChangeNotice({ email: action.user.email, role: action.role });
+      } catch {
+        // The mutation state renders the safe backend error below.
+      }
+      return;
+    }
+
     try {
-      await revokeInvitationMutation.mutateAsync(invitation.invitation_id);
+      await revokeInvitationMutation.mutateAsync(action.invitation.invitation_id);
     } catch {
       // The mutation state renders the safe backend error below.
     }
@@ -417,7 +410,7 @@ export function SettingsUsersPage() {
                     {canRevoke && (
                       <button
                         type="button"
-                        onClick={() => void handleRevokeInvitation(invitation)}
+                        onClick={() => setPendingConfirmation({ kind: "revoke-invitation", invitation })}
                         disabled={revokeInvitationMutation.isPending}
                         className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
                       >
@@ -520,9 +513,9 @@ export function SettingsUsersPage() {
                       <select
                         className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
                         aria-label={`Rol de ${u.email}`}
-                        value={roleDrafts[u.id] ?? u.role}
+                        value={u.role}
                         disabled={rolesQuery.isLoading || rolesQuery.isError || updateRoleMutation.isPending}
-                        onChange={(e) => void handleRoleChange(u, e.target.value)}
+                        onChange={(e) => handleRoleChange(u, e.target.value)}
                       >
                         {!activeAssignableRoles.some((role) => role.code === u.role) ? (
                           <option value={u.role} disabled>{`${roleDisplayName(u.role)} — ${t("hotelRoles.unavailable")}`}</option>
@@ -572,6 +565,24 @@ export function SettingsUsersPage() {
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={pendingConfirmation !== null}
+        title={pendingConfirmation?.kind === "role-change"
+          ? t("hotelRoles.roleChangeConfirmTitle")
+          : t("hotelRoles.invitationCancelConfirmTitle")}
+        message={pendingConfirmation?.kind === "role-change"
+          ? t("hotelRoles.roleChangePermissionConfirm", { role: roleDisplayName(pendingConfirmation.role) })
+          : pendingConfirmation?.kind === "revoke-invitation"
+            ? t("hotelRoles.invitationCancelConfirm", { email: pendingConfirmation.invitation.email })
+            : ""}
+        confirmLabel={pendingConfirmation?.kind === "role-change"
+          ? t("hotelRoles.roleChangeConfirmAction")
+          : t("hotelRoles.invitationCancelConfirmAction")}
+        cancelLabel={t("hotelRoles.cancel")}
+        danger={pendingConfirmation?.kind !== "role-change"}
+        onConfirm={() => void handleConfirmPendingAction()}
+        onCancel={() => setPendingConfirmation(null)}
+      />
     </div>
   );
 }

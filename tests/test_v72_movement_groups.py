@@ -21,6 +21,7 @@ from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.services.room_movement_group_service import (
+    RoomMovementGroupError,
     create_grouped_room_move,
     revert_group,
 )
@@ -368,11 +369,23 @@ def test_company_grouped_move_preserves_sold_category_and_revert_checks_physical
         assert reservation.category_id == sold_category_id
         assert reservation.total_amount == 100
 
+        with pytest.raises(RoomMovementGroupError, match="company management permission"):
+            revert_group(
+                db,
+                hotel_id=1,
+                group_id=movement_group.id,
+                reverted_by_user_id=10,
+            )
+
+        assert reservation.room_id == destination_room.id
+        assert movement_group.is_reverted is False
+
         result = revert_group(
             db,
             hotel_id=1,
             group_id=movement_group.id,
             reverted_by_user_id=10,
+            can_manage_company_reservations=True,
         )
 
         assert result["reverted"] == []

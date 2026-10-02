@@ -27,6 +27,7 @@ from app.models.audit_log import AuditLog
 from app.services.security import (
     create_access_token,
     create_signed_token,
+    decode_access_token,
     decode_signed_token,
     hash_password,
     verify_password,
@@ -1956,3 +1957,128 @@ def test_owner_and_co_owner_can_assign_receptionist(owner_ctx):
     )
     assert co_owner_invite.status_code == 201, co_owner_invite.text
     assert co_owner_invite.json()["user"]["role"] == "receptionist"
+
+
+def test_invitation_acceptance_commits_and_rotates_sessions_when_welcome_email_fails(
+    owner_ctx, monkeypatch, caplog
+):
+    client, db, ctx = owner_ctx
+    email = "existing-invitee@test.com"
+    user = User(
+        email=email,
+        password_hash=hash_password("StrongPassword123!"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+        token_version=0,
+    )
+    db.add(user)
+    db.flush()
+    membership = HotelMembership(
+        hotel_id=ctx["hotel_id"], user_id=user.id, role="manager", status="invited"
+    )
+    db.add(membership)
+    old_sessions = [create_session(db, user), create_session(db, user)]
+    db.commit()
+    old_access_token = create_access_token(
+        user.id, extra={"token_version": 0, "hotel_id": ctx["hotel_id"]}
+    )
+    token = _invitation_token(db, ctx, email, role="housekeeping")
+    invitation = db.query(StaffInvitation).filter_by(
+        token_hash=hash_invitation_token(token)
+    ).one()
+    calls = []
+
+    def fail_welcome_email(**kwargs):
+        db.refresh(invitation)
+        assert invitation.status == "accepted"
+        calls.append(kwargs)
+        raise RuntimeError("private provider response with message body")
+
+    monkeypatch.setattr("app.api.invitations.send_staff_welcome_email", fail_welcome_email)
+    accepted = client.post(
+        "/api/invitations/accept",
+        json={
+            "token": token,
+            "email": email,
+            "current_password": "StrongPassword123!",
+        },
+    )
+
+    assert accepted.status_code == 200, accepted.text
+    assert calls == [{"email": email, "role": "housekeeping"}]
+    db.refresh(invitation)
+    db.refresh(membership)
+    db.refresh(user)
+    assert invitation.status == "accepted"
+    assert membership.status == "active"
+    assert membership.role == "housekeeping"
+    assert user.token_version == 1
+    assert all(session.revoked_at is not None for session, _token, _csrf in old_sessions)
+    assert decode_access_token(accepted.json()["access_token"])["token_version"] == 1
+    fastapi_app.dependency_overrides.pop(get_auth_context_target(), None)
+    assert client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {old_access_token}"}
+    ).status_code == 401
+    assert "private provider response" not in caplog.text
+
+
+def test_role_change_commits_and_revokes_sessions_when_notice_email_fails(
+    owner_ctx, monkeypatch, caplog
+):
+    client, db, ctx = owner_ctx
+    staff = User(
+        email="role-notice-staff@test.com",
+        password_hash=hash_password("StrongPassword123!"),
+        role="manager",
+        is_active=True,
+        is_verified=True,
+        token_version=0,
+    )
+    db.add(staff)
+    db.flush()
+    membership = HotelMembership(
+        hotel_id=ctx["hotel_id"], user_id=staff.id, role="manager", status="active"
+    )
+    db.add(membership)
+    old_sessions = [create_session(db, staff), create_session(db, staff)]
+    db.commit()
+    old_access_token = create_access_token(
+        staff.id, extra={"token_version": 0, "hotel_id": ctx["hotel_id"]}
+    )
+    calls = []
+
+    def fail_role_email(**kwargs):
+        db.refresh(membership)
+        db.refresh(staff)
+        assert membership.role == "housekeeping"
+        assert staff.token_version == 1
+        calls.append(kwargs)
+        raise RuntimeError("private provider response with message body")
+
+    monkeypatch.setattr("app.api.users.send_staff_role_changed_email", fail_role_email)
+    response = _manage_users_request(
+        client,
+        "patch",
+        f"/api/users/{staff.id}/role",
+        json={"role": "housekeeping"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["role"] == "housekeeping"
+    assert calls == [{
+        "email": staff.email,
+        "previous_role": "manager",
+        "role": "housekeeping",
+        "hotel_name": db.get(HotelConfiguration, ctx["hotel_id"]).hotel_name,
+    }]
+    db.refresh(membership)
+    db.refresh(staff)
+    assert membership.role == "housekeeping"
+    assert staff.token_version == 1
+    assert all(session.revoked_at is not None for session, _token, _csrf in old_sessions)
+    fastapi_app.dependency_overrides.pop(get_auth_context_target(), None)
+    assert client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {old_access_token}"}
+    ).status_code == 401
+    assert "private provider response" not in caplog.text

@@ -43,7 +43,10 @@ from app.services.user_session_service import revoke_all_sessions
 from app.adapters.rate_limiter import invite_limiter
 from app.config import get_settings
 from app.services.email_service import mailer
-from app.services.invitation_email_service import send_staff_invitation_email
+from app.services.invitation_email_service import (
+    send_staff_invitation_email,
+    send_staff_role_changed_email,
+)
 from app.schemas.datetime_types import UTCDateTime
 from app.models.hotel_config import HotelConfiguration
 from app.services import audit_log_service
@@ -671,6 +674,11 @@ def update_role(
     if membership.user_id == context.user_id:
         raise HTTPException(status_code=400, detail="No puedes cambiar tu propio rol")
     _assert_manageable_membership(context.user_role, membership, action="modificar")
+    previous_role = membership.role
+    role_changed = previous_role != payload.role
+    target_email = membership.user.email if membership.user is not None else None
+    hotel = db.get(HotelConfiguration, context.hotel_id)
+    hotel_name = hotel.hotel_name if hotel is not None else None
     before = audit_log_service.model_snapshot(membership)
     try:
         validate_membership_change(
@@ -731,9 +739,29 @@ def update_role(
             "event": "staff.role_changed",
         },
     )
+    if role_changed and user is not None:
+        # JWTs carry a user-wide token version and user sessions are not
+        # hotel-scoped. Revoke them in the same transaction so stale role
+        # claims cannot survive this cross-account access change.
+        user.token_version = (user.token_version or 0) + 1
+        db.add(user)
+        revoke_all_sessions(db, user.id)
     db.commit()
     if user:
         db.refresh(user)
+    if role_changed and user is not None and target_email:
+        try:
+            send_staff_role_changed_email(
+                email=target_email,
+                previous_role=previous_role,
+                role=payload.role,
+                hotel_name=hotel_name,
+            )
+        except Exception:
+            # The membership/session transaction is already committed. Email
+            # delivery is best-effort and must not undo or mask the role change.
+            pass
+    if user:
         return _membership_user_info(user, membership.role)
     return _membership_user_info(membership.user, membership.role)
 

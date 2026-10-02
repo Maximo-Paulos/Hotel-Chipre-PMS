@@ -23,6 +23,7 @@ from app.models.hotel_membership import HotelMembership
 from app.models.daily_rate import DailyRate
 from app.models.laundry import LaundryBatch
 from app.models.operations import ReservationStatusHistory
+from app.models.permission import UserPermissionOverride
 from app.models.payment import PaymentLink
 from app.models.audit_log import AuditLog
 from app.models.commercial import SellableProduct
@@ -39,6 +40,7 @@ from app.models.transaction import (
 from app.models.user import User
 from app.schemas.reservation import ReservationUpdate
 from app.services.permission_service import (
+    PERMISSION_COMPANY_MANAGE,
     PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
     PERMISSION_RESERVATION_RATE_ADJUST,
     set_role_override,
@@ -1101,6 +1103,124 @@ def test_legacy_booking_mutations_require_current_client_version():
         db.refresh(reservation)
         assert reservation.notes is None
         assert reservation.version == original_version
+    finally:
+        _close(db, engine)
+
+
+@pytest.mark.parametrize("route_prefix", ["/api/bookings", "/api/reservations"])
+@pytest.mark.parametrize("action", ["edit", "cancel"])
+def test_company_booking_mutations_deny_reception_even_with_stale_individual_override(route_prefix, action):
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        company = Company(
+            hotel_id=1,
+            legal_name="Synthetic Company",
+            display_name="Synthetic Company",
+            payment_deferred=True,
+        )
+        db.add(company)
+        db.flush()
+        reservation.company_id = company.id
+        db.commit()
+
+        if action == "edit":
+            response = client.patch(
+                f"{route_prefix}/{reservation.id}",
+                json={"notes": "must not persist", "client_version": reservation.version},
+            )
+        else:
+            response = client.post(f"{route_prefix}/{reservation.id}/cancel")
+
+        assert response.status_code == 403, response.text
+        db.refresh(reservation)
+        assert reservation.notes is None
+        assert reservation.status == ReservationStatusEnum.PENDING
+
+        # Simulate a stale/legacy individual grant. The immutable role-family
+        # scope must deny it even though the database row says allowed=True.
+        db.add(
+            UserPermissionOverride(
+                hotel_id=1,
+                user_id=20,
+                permission_code=PERMISSION_COMPANY_MANAGE,
+                allowed=True,
+                updated_by_user_id=10,
+            )
+        )
+        db.commit()
+
+        if action == "edit":
+            permitted = client.patch(
+                f"{route_prefix}/{reservation.id}",
+                json={"notes": "must remain denied", "client_version": reservation.version},
+            )
+        else:
+            permitted = client.post(f"{route_prefix}/{reservation.id}/cancel")
+
+        assert permitted.status_code == 403, permitted.text
+        db.refresh(reservation)
+        assert reservation.notes is None
+        assert reservation.status == ReservationStatusEnum.PENDING
+    finally:
+        _close(db, engine)
+
+
+def test_receptionist_cannot_create_company_reservation_even_with_stale_individual_override():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        company = Company(
+            hotel_id=1,
+            legal_name="Synthetic Company",
+            display_name="Synthetic Company",
+        )
+        db.add(company)
+        db.flush()
+        db.add(
+            UserPermissionOverride(
+                hotel_id=1,
+                user_id=20,
+                permission_code=PERMISSION_COMPANY_MANAGE,
+                allowed=True,
+                updated_by_user_id=10,
+            )
+        )
+        db.commit()
+
+        check_in = date.today() + timedelta(days=3)
+        response = client.post(
+            "/api/reservations/",
+            json={
+                "guest_id": reservation.guest_id,
+                "category_id": reservation.category_id,
+                "room_id": reservation.room_id,
+                "company_id": company.id,
+                "check_in_date": check_in.isoformat(),
+                "check_out_date": (check_in + timedelta(days=2)).isoformat(),
+                "num_adults": 1,
+                "quote_token": "synthetic-quote-token-value",
+            },
+        )
+
+        assert response.status_code == 403, response.text
+        assert db.query(Reservation).filter(Reservation.hotel_id == 1).count() == 1
+
+        group_reservation = {
+            "guest_id": reservation.guest_id,
+            "category_id": reservation.category_id,
+            "room_id": reservation.room_id,
+            "company_id": company.id,
+            "check_in_date": check_in.isoformat(),
+            "check_out_date": (check_in + timedelta(days=2)).isoformat(),
+            "num_adults": 1,
+            "quote_token": "synthetic-quote-token-value",
+        }
+        grouped = client.post(
+            "/api/reservation-groups",
+            json={"reservations": [group_reservation, group_reservation]},
+        )
+
+        assert grouped.status_code == 403, grouped.text
+        assert db.query(Reservation).filter(Reservation.hotel_id == 1).count() == 1
     finally:
         _close(db, engine)
 

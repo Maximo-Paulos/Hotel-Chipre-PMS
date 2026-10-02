@@ -11,6 +11,7 @@ export type HousekeepingBoardRoom = {
   housekeeping_status: HousekeepingStatus;
   has_arrival_today: boolean;
   has_departure_today: boolean;
+  has_stayover_today: boolean;
   maintenance_blocked: boolean;
 };
 export type HousekeepingBoard = { date: string; rooms: HousekeepingBoardRoom[] };
