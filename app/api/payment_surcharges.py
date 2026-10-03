@@ -175,9 +175,8 @@ def create_payment_surcharge(
         created_at=datetime.now(timezone.utc),
     )
     db.add(surcharge)
-    db.commit()
-    db.refresh(surcharge)
-    audit_log_service.safe_create_audit_log(
+    db.flush()
+    audit_log_service.create_audit_log(
         db,
         hotel_id=context.hotel_id,
         table_name="payment_surcharges",
@@ -186,6 +185,8 @@ def create_payment_surcharge(
         actor_user_id=context.user_id,
         payload_after=audit_log_service.model_snapshot(surcharge),
     )
+    db.commit()
+    db.refresh(surcharge)
     return PaymentSurchargeRead.model_validate(surcharge)
 
 
@@ -226,9 +227,8 @@ def update_payment_surcharge(
     if payload.is_active is not None:
         surcharge.is_active = payload.is_active
 
-    db.commit()
-    db.refresh(surcharge)
-    audit_log_service.safe_create_audit_log(
+    db.flush()
+    audit_log_service.create_audit_log(
         db,
         hotel_id=context.hotel_id,
         table_name="payment_surcharges",
@@ -238,6 +238,8 @@ def update_payment_surcharge(
         payload_before=before,
         payload_after=audit_log_service.model_snapshot(surcharge),
     )
+    db.commit()
+    db.refresh(surcharge)
     return PaymentSurchargeRead.model_validate(surcharge)
 
 
@@ -250,9 +252,8 @@ def deactivate_payment_surcharge(
     surcharge = _get_surcharge_or_404(db, surcharge_id, context.hotel_id)
     before = audit_log_service.model_snapshot(surcharge)
     surcharge.is_active = False
-    db.commit()
-    db.refresh(surcharge)
-    audit_log_service.safe_create_audit_log(
+    db.flush()
+    audit_log_service.create_audit_log(
         db,
         hotel_id=context.hotel_id,
         table_name="payment_surcharges",
@@ -262,4 +263,6 @@ def deactivate_payment_surcharge(
         payload_before=before,
         payload_after=audit_log_service.model_snapshot(surcharge),
     )
+    db.commit()
+    db.refresh(surcharge)
     return PaymentSurchargeRead.model_validate(surcharge)

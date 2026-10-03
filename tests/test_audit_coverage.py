@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
+
+import pytest
 from starlette.requests import Request
 
-from app.api.daily_rates import DailyRateIn, upsert_daily_rate
+from app.api.payment_surcharges import PaymentSurchargeCreate, create_payment_surcharge
 from app.api.guests import update_guest
 from app.api.reservations import cancel_reservation
 from app.api.rooms import update_room
@@ -13,9 +16,13 @@ from app.models.audit_log import AuditActionEnum, AuditLog
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
+from app.models.operations import BillingAdjustment
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
 from app.models.user import User
+from app.services.reservation_operations_service import add_reservation_charge
+from app.services import audit_log_service
+from app.models.payment_surcharge import PaymentSurchargeTypeEnum
 from app.schemas.guest import GuestUpdate
 from app.schemas.room import RoomUpdate
 
@@ -178,6 +185,28 @@ def test_reservation_cancel_creates_audit_log(db):
     assert audit.action == AuditActionEnum.STATUS_CHANGE
 
 
+def test_reservation_charge_rolls_back_when_audit_cannot_be_written(db, monkeypatch):
+    reservation = _reservation(db)
+
+    def fail_audit(*args, **kwargs):
+        raise RuntimeError("audit unavailable")
+
+    monkeypatch.setattr(audit_log_service, "create_audit_log", fail_audit)
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        add_reservation_charge(
+            db,
+            reservation=reservation,
+            hotel_id=1,
+            amount=Decimal("45.00"),
+            currency_code="ARS",
+            description="Minibar charge",
+        )
+
+    db.rollback()
+    assert db.query(BillingAdjustment).filter_by(hotel_id=1, reservation_id=reservation.id).count() == 0
+    assert db.query(AuditLog).filter_by(hotel_id=1, table_name="billing_adjustments").count() == 0
+
+
 def test_room_update_creates_audit_log(db):
     _user(db, 9101)
     room = _room(db)
@@ -190,21 +219,29 @@ def test_room_update_creates_audit_log(db):
     assert audit.action == AuditActionEnum.UPDATE
 
 
-def test_daily_rate_upsert_creates_audit_log(db):
+def test_payment_surcharge_audit_is_written_before_commit(db, monkeypatch):
     _user(db, 9101)
-    category = _category(db)
+    _hotel(db)
+    real_commit = db.commit
+    commits = []
 
-    result = upsert_daily_rate(
-        category.id,
-        DailyRateIn(date=date(2026, 10, 1), price=150),
+    def checked_commit():
+        commits.append(db.query(AuditLog).filter_by(hotel_id=1, table_name="payment_surcharges").count())
+        real_commit()
+
+    monkeypatch.setattr(db, "commit", checked_commit)
+    create_payment_surcharge(
+        PaymentSurchargeCreate(
+            payment_method="credit_card",
+            surcharge_type=PaymentSurchargeTypeEnum.PERCENTAGE,
+            amount=5,
+            currency_code="ARS",
+        ),
         db=db,
         context=_context(role="manager"),
     )
 
-    audit = _audit_for(db, table_name="daily_rates", record_id=result.id)
-    assert audit is not None
-    assert audit.table_name == "daily_rates"
-    assert audit.action == AuditActionEnum.CREATE
+    assert commits == [1]
 
 
 def test_user_role_update_creates_audit_log(db):
@@ -268,25 +305,6 @@ def test_room_update_succeeds_when_audit_write_fails(db, monkeypatch):
     update_room(room.id, RoomUpdate(notes="Saved without audit"), db=db, context=_context(role="manager"))
 
     assert db.get(Room, room.id).notes == "Saved without audit"
-
-
-def test_daily_rate_upsert_succeeds_when_audit_write_fails(db, monkeypatch):
-    _user(db, 9101)
-    category = _category(db)
-
-    def raise_audit(*args, **kwargs):
-        raise RuntimeError("audit sink unavailable")
-
-    monkeypatch.setattr("app.services.audit_log_service.create_audit_log", raise_audit)
-
-    result = upsert_daily_rate(
-        category.id,
-        DailyRateIn(date=date(2026, 10, 2), price=175),
-        db=db,
-        context=_context(role="manager"),
-    )
-
-    assert result.id is not None
 
 
 def test_user_role_update_succeeds_when_audit_write_fails(db, monkeypatch):

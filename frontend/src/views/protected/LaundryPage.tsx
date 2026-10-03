@@ -121,6 +121,7 @@ export function LaundryPage() {
   const remitoFormVisible = isDesktop || mobileTab === "remito";
 
   const [message, setMessage] = useState<string | null>(null);
+  const [mutationErrors, setMutationErrors] = useState<Record<string, string>>({});
   const [selectedVendorId, setSelectedVendorId] = useState<number | null>(null);
   const [vendorForm, setVendorForm] = useState(emptyVendorForm);
   const [priceForm, setPriceForm] = useState(emptyPriceForm);
@@ -137,6 +138,14 @@ export function LaundryPage() {
   const [houseStockLocationId, setHouseStockLocationId] = useState<string>("");
   const [spendRange, setSpendRange] = useState(() => ({ from: startOfCurrentMonthIso(), to: todayIso() }));
   const [settlementYear, setSettlementYear] = useState(() => new Date().getFullYear());
+  const showMutationError = (key: string, error: unknown, fallback: string) => {
+    setMutationErrors((current) => ({ ...current, [key]: error instanceof Error ? error.message : fallback }));
+  };
+  const clearMutationError = (key: string) => setMutationErrors((current) => {
+    const next = { ...current };
+    delete next[key];
+    return next;
+  });
 
   const vendorsQuery = useQuery({
     queryKey: ["laundry-vendors", session.hotelId],
@@ -267,6 +276,10 @@ export function LaundryPage() {
     (balanceQueries[index]?.data ?? []).forEach((line) => map.set(line.linen_item_id, String(line.quantity)));
     return map;
   }, [vendors, remitoVendorId, balanceQueries]);
+  const remitoVendorBalanceQuery = useMemo(() => {
+    const index = vendors.findIndex((vendor) => vendor.id === remitoVendorId);
+    return index < 0 ? undefined : balanceQueries[index];
+  }, [vendors, remitoVendorId, balanceQueries]);
 
   // "En el hotel" per item, for the house location picked in the remito
   // form -- same current_stock() primitive as HouseStockPanel below, kept as
@@ -330,6 +343,8 @@ export function LaundryPage() {
     [spendQueries]
   );
   const spendFetching = spendQueries.some((query) => query.isFetching);
+  const spendLoading = vendorsQuery.isLoading || spendQueries.some((query) => query.isLoading);
+  const spendError = vendorsQuery.isError || spendQueries.some((query) => query.isError);
 
   // Task 5 backend: one request for every linen item's balance instead of
   // the old per-item useQueries N+1 loop (see LinenSummaryEntry docstring).
@@ -575,56 +590,60 @@ export function LaundryPage() {
   const handleCreateVendor = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    clearMutationError("vendor-create");
     if (!isOnline) {
-      setMessage("Sin conexión. Conectate para crear el lavadero.");
+      showMutationError("vendor-create", null, "Sin conexión. Conectate para crear el lavadero.");
       return;
     }
     try {
       await createVendorMutation.mutateAsync();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo crear el lavadero.");
+      showMutationError("vendor-create", error, "No se pudo crear el lavadero.");
     }
   };
 
   const handleSetPrice = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    clearMutationError("price-save");
     if (!isOnline) {
-      setMessage("Sin conexión. Conectate para guardar el precio.");
+      showMutationError("price-save", null, "Sin conexión. Conectate para guardar el precio.");
       return;
     }
     try {
       await setPriceMutation.mutateAsync();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo guardar el precio.");
+      showMutationError("price-save", error, "No se pudo guardar el precio.");
     }
   };
 
   const handleCreateLinenItem = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    clearMutationError("item-create");
     if (!isOnline) {
-      setMessage("Sin conexión. Conectate para crear el tipo de ropa blanca.");
+      showMutationError("item-create", null, "Sin conexión. Conectate para crear el tipo de ropa blanca.");
       return;
     }
     try {
       await createLinenItemMutation.mutateAsync();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo crear el tipo de ropa blanca.");
+      showMutationError("item-create", error, "No se pudo crear el tipo de ropa blanca.");
     }
   };
 
   const handleCreateLinenLocation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    clearMutationError("location-create");
     if (!isOnline) {
-      setMessage("Sin conexión. Conectate para crear la ubicación.");
+      showMutationError("location-create", null, "Sin conexión. Conectate para crear la ubicación.");
       return;
     }
     try {
       await createLinenLocationMutation.mutateAsync();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo crear la ubicación.");
+      showMutationError("location-create", error, "No se pudo crear la ubicación.");
     }
   };
 
@@ -633,26 +652,28 @@ export function LaundryPage() {
   const handleCreateLinenMovement = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    clearMutationError("movement-create");
     if (!isOnline) {
-      setMessage("Sin conexión. Conectate para registrar el movimiento.");
+      showMutationError("movement-create", null, "Sin conexión. Conectate para registrar el movimiento.");
       return;
     }
     try {
       await createLinenMovementMutation.mutateAsync();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo registrar el movimiento.");
+      showMutationError("movement-create", error, "No se pudo registrar el movimiento.");
     }
   };
 
   const handleCreateOpeningCounts = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    clearMutationError("opening-count");
     if (!isOnline) {
-      setMessage("Sin conexión. Conectate para guardar el conteo inicial.");
+      showMutationError("opening-count", null, "Sin conexión. Conectate para guardar el conteo inicial.");
       return;
     }
     if (!openingCountReason.trim()) {
-      setMessage("Escribí el motivo del conteo inicial.");
+      showMutationError("opening-count", null, "Escribí el motivo del conteo inicial.");
       return;
     }
 
@@ -678,23 +699,23 @@ export function LaundryPage() {
       });
     });
     if (invalidQuantity) {
-      setMessage("Revisá las cantidades: deben ser números mayores o iguales a cero.");
+      showMutationError("opening-count", null, "Revisá las cantidades: deben ser números mayores o iguales a cero.");
       return;
     }
     if (staleCount) {
-      setMessage("El stock cambió mientras cargabas. Actualizá los datos y revisá las ubicaciones con movimientos.");
+      showMutationError("opening-count", null, "El stock cambió mientras cargabas. Actualizá los datos y revisá las ubicaciones con movimientos.");
       await openingCountSummaryQuery.refetch();
       return;
     }
     if (counts.length === 0) {
-      setMessage("Ingresá una cantidad mayor que cero para al menos una combinación de ítem y ubicación.");
+      showMutationError("opening-count", null, "Ingresá una cantidad mayor que cero para al menos una combinación de ítem y ubicación.");
       return;
     }
 
     try {
       await createOpeningCountsMutation.mutateAsync({ counts, reason: openingCountReason.trim() });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo guardar el conteo inicial.");
+      showMutationError("opening-count", error, "No se pudo guardar el conteo inicial.");
       await openingCountSummaryQuery.refetch();
     }
   };
@@ -702,21 +723,22 @@ export function LaundryPage() {
   const handleCreateLinenTransfer = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    clearMutationError("linen-transfer");
     if (!isOnline) {
-      setMessage("Sin conexión. Conectate para guardar el traspaso.");
+      showMutationError("linen-transfer", null, "Sin conexión. Conectate para guardar el traspaso.");
       return;
     }
     const quantity = Number(linenTransferForm.quantity);
     if (!linenTransferForm.linen_item_id || !linenTransferForm.source_location_id || !linenTransferForm.destination_location_id) {
-      setMessage("Elegí el tipo de ropa blanca y las dos ubicaciones.");
+      showMutationError("linen-transfer", null, "Elegí el tipo de ropa blanca y las dos ubicaciones.");
       return;
     }
     if (linenTransferForm.source_location_id === linenTransferForm.destination_location_id) {
-      setMessage("El origen y el destino deben ser ubicaciones distintas.");
+      showMutationError("linen-transfer", null, "El origen y el destino deben ser ubicaciones distintas.");
       return;
     }
     if (!Number.isFinite(quantity) || quantity <= 0 || !linenTransferForm.reason.trim()) {
-      setMessage("Ingresá una cantidad positiva y el motivo del traspaso.");
+      showMutationError("linen-transfer", null, "Ingresá una cantidad positiva y el motivo del traspaso.");
       return;
     }
 
@@ -740,7 +762,7 @@ export function LaundryPage() {
         idempotencyKey: linenTransferAttemptRef.current.idempotencyKey
       });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo guardar el traspaso.");
+      showMutationError("linen-transfer", error, "No se pudo guardar el traspaso.");
       await openingCountSummaryQuery.refetch();
     }
   };
@@ -799,6 +821,12 @@ export function LaundryPage() {
 
       {message ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
 
+      {vendorsQuery.isLoading || itemsQuery.isLoading || locationsQuery.isLoading || remitosQuery.isLoading ? (
+        <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+          Cargando datos de lavandería...
+        </p>
+      ) : null}
+
       {!isOnline && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
           Sin conexión. Podés seguir mirando los datos ya cargados, pero remitos, movimientos y altas se habilitan cuando vuelvas a estar online.
@@ -833,7 +861,7 @@ export function LaundryPage() {
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Lavaderos</p>
             <h2 className="text-lg font-semibold text-slate-900">Lavaderos y precios ({vendors.length})</h2>
-            {vendorsQuery.error && <p className="text-xs text-rose-700">No se pudo cargar: {(vendorsQuery.error as Error).message}</p>}
+            {vendorsQuery.isError && <p role="alert" className="text-xs text-rose-700">No se pudo cargar: {(vendorsQuery.error as Error).message} <button type="button" onClick={() => void vendorsQuery.refetch()} className="font-semibold underline">Reintentar</button></p>}
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -844,11 +872,17 @@ export function LaundryPage() {
                   vendor={vendor}
                   selected={selectedVendorId === vendor.id}
                   onSelect={() => setSelectedVendorId(vendor.id)}
-                  onToggleActive={() => void updateVendorMutation.mutateAsync({ vendorId: vendor.id, active: !vendor.active }).catch((error: unknown) => setMessage(error instanceof Error ? error.message : "No se pudo actualizar el lavadero."))}
+                  onToggleActive={() => {
+                    const key = `vendor-${vendor.id}`;
+                    clearMutationError(key);
+                    void updateVendorMutation.mutateAsync({ vendorId: vendor.id, active: !vendor.active }).catch((error: unknown) => showMutationError(key, error, "No se pudo actualizar el lavadero."));
+                  }}
+                  actionError={mutationErrors[`vendor-${vendor.id}`]}
+                  onCloseActionError={() => clearMutationError(`vendor-${vendor.id}`)}
                   toggling={updateVendorMutation.isPending}
                 />
               ))}
-              {!vendorsQuery.isLoading && vendors.length === 0 && (
+              {!vendorsQuery.isLoading && !vendorsQuery.isError && vendors.length === 0 && (
                 <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600 sm:col-span-2">
                   Todavía no hay lavaderos cargados. Creá el primero al lado.
                 </div>
@@ -858,6 +892,7 @@ export function LaundryPage() {
             <div className="space-y-4">
               <form className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4" onSubmit={handleCreateVendor}>
                 <p className="text-sm font-semibold text-slate-700">Nuevo lavadero</p>
+                {mutationErrors["vendor-create"] && <LaundryMutationError error={mutationErrors["vendor-create"]} onClose={() => clearMutationError("vendor-create")} />}
                 <label className="space-y-1 text-sm">
                   <span className="text-slate-600">Nombre</span>
                   <input
@@ -896,6 +931,8 @@ export function LaundryPage() {
               {selectedVendor ? (
                 <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-sm font-semibold text-slate-700">Precios de {selectedVendor.name}</p>
+                  {pricesQuery.isLoading && <p role="status" className="text-xs text-slate-600">Cargando precios...</p>}
+                  {pricesQuery.isError && <p role="alert" className="text-xs text-rose-700">No se pudieron cargar los precios. <button type="button" onClick={() => void pricesQuery.refetch()} className="font-semibold underline">Reintentar</button></p>}
                   <ul className="space-y-1 text-sm">
                     {selectedVendorPrices.map((price) => {
                       const item = itemById.get(price.linen_item_id);
@@ -908,11 +945,12 @@ export function LaundryPage() {
                         </li>
                       );
                     })}
-                    {selectedVendorPrices.length === 0 && (
+                    {!pricesQuery.isLoading && !pricesQuery.isError && selectedVendorPrices.length === 0 && (
                       <li className="text-xs text-slate-500">Sin precios cargados todavía.</li>
                     )}
                   </ul>
                   {manageVendorPrices ? <form className="space-y-2" onSubmit={handleSetPrice}>
+                    {mutationErrors["price-save"] && <LaundryMutationError error={mutationErrors["price-save"]} onClose={() => clearMutationError("price-save")} />}
                     <label className="space-y-1 text-xs font-semibold text-slate-600">
                       Ítem
                       <select
@@ -973,6 +1011,7 @@ export function LaundryPage() {
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Ropa blanca</p>
             <h2 className="text-lg font-semibold text-slate-900">Tipos de ropa blanca ({items.length})</h2>
+            {itemsQuery.isError && <p role="alert" className="text-xs text-rose-700">No se pudieron cargar los tipos de ropa blanca. <button type="button" onClick={() => void itemsQuery.refetch()} className="font-semibold underline">Reintentar</button></p>}
             <p className="text-sm text-slate-600">
               Sabanas, toallas, fundas: separado del stock general de insumos (bolsas, detergentes, jabon), que se
               administra en Stock.
@@ -985,12 +1024,13 @@ export function LaundryPage() {
                   {item.name} <span className="text-xs text-slate-500">({item.unit})</span>
                 </li>
               ))}
-              {!itemsQuery.isLoading && items.length === 0 && (
+              {!itemsQuery.isLoading && !itemsQuery.isError && items.length === 0 && (
                 <li className="text-xs text-slate-500 sm:col-span-2">Todavía no hay tipos de ropa blanca cargados.</li>
               )}
             </ul>
             <form className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4" onSubmit={handleCreateLinenItem}>
               <p className="text-sm font-semibold text-slate-700">Nuevo tipo de ropa blanca</p>
+              {mutationErrors["item-create"] && <LaundryMutationError error={mutationErrors["item-create"]} onClose={() => clearMutationError("item-create")} />}
               <label className="space-y-1 text-sm">
                 <span className="text-slate-600">Nombre</span>
                 <input
@@ -1030,8 +1070,10 @@ export function LaundryPage() {
                 Completá las cantidades por tipo y ubicación. Las celdas vacías o en cero se omiten; las ubicaciones con movimientos previos quedan bloqueadas.
               </p>
               {openingCountSummaryQuery.error && (
-                <p className="mt-2 text-xs text-rose-700" role="alert">No se pudieron verificar los movimientos existentes.</p>
+                <p className="mt-2 text-xs text-rose-700" role="alert">No se pudieron verificar los movimientos existentes. <button type="button" onClick={() => void openingCountSummaryQuery.refetch()} className="font-semibold underline">Reintentar</button></p>
               )}
+              {mutationErrors["opening-count"] && <LaundryMutationError error={mutationErrors["opening-count"]} onClose={() => clearMutationError("opening-count")} />}
+              {openingCountSummaryQuery.isLoading && <p role="status" className="mt-2 text-xs text-slate-600">Cargando los conteos y movimientos existentes...</p>}
             </div>
             <label className="block space-y-1 text-sm">
               <span className="text-slate-600">Motivo</span>
@@ -1092,10 +1134,10 @@ export function LaundryPage() {
                       })}
                     </tr>
                   ))}
-                  {!itemsQuery.isLoading && items.length === 0 && (
+                  {!itemsQuery.isLoading && !itemsQuery.isError && items.length === 0 && (
                     <tr><td colSpan={Math.max(1, houseLocations.length + 1)} className="px-3 py-4 text-xs text-slate-500">Primero creá los tipos de ropa blanca.</td></tr>
                   )}
-                  {!locationsQuery.isLoading && houseLocations.length === 0 && (
+                  {!locationsQuery.isLoading && !locationsQuery.isError && houseLocations.length === 0 && (
                     <tr><td colSpan={Math.max(1, houseLocations.length + 1)} className="px-3 py-4 text-xs text-slate-500">Primero creá una ubicación del hotel.</td></tr>
                   )}
                 </tbody>
@@ -1119,6 +1161,7 @@ export function LaundryPage() {
               <p className="mt-1 text-xs text-slate-600">
                 Registra salida y entrada enlazadas en una sola operación. Para mover ropa hacia o desde un lavadero, usá un remito.
               </p>
+              {mutationErrors["linen-transfer"] && <LaundryMutationError error={mutationErrors["linen-transfer"]} onClose={() => clearMutationError("linen-transfer")} />}
             </div>
             <label className="space-y-1 text-sm">
               <span className="text-slate-600">Tipo de ropa blanca</span>
@@ -1194,6 +1237,8 @@ export function LaundryPage() {
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Ropa blanca</p>
             <h2 className="text-lg font-semibold text-slate-900">Ubicaciones y movimientos ({houseLocations.length})</h2>
+            {locationsQuery.isLoading && <p role="status" className="text-xs text-slate-600">Cargando ubicaciones...</p>}
+            {locationsQuery.isError && <p role="alert" className="text-xs text-rose-700">No se pudieron cargar las ubicaciones. <button type="button" onClick={() => void locationsQuery.refetch()} className="font-semibold underline">Reintentar</button></p>}
             <p className="text-sm text-slate-600">
               Depositos propios del hotel para ropa blanca (ej. "Deposito de blancos") y carga de saldo inicial o
               correcciones de inventario -- separado de las ubicaciones de Stock general.
@@ -1206,12 +1251,13 @@ export function LaundryPage() {
                   {location.name}
                 </li>
               ))}
-              {!locationsQuery.isLoading && houseLocations.length === 0 && (
+              {!locationsQuery.isLoading && !locationsQuery.isError && houseLocations.length === 0 && (
                 <li className="text-xs text-slate-500">Todavía no hay ubicaciones cargadas.</li>
               )}
             </ul>
             <form className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4" onSubmit={handleCreateLinenLocation}>
               <p className="text-sm font-semibold text-slate-700">Nueva ubicación</p>
+              {mutationErrors["location-create"] && <LaundryMutationError error={mutationErrors["location-create"]} onClose={() => clearMutationError("location-create")} />}
               <label className="space-y-1 text-sm">
                 <span className="text-slate-600">Nombre</span>
                 <input
@@ -1232,6 +1278,7 @@ export function LaundryPage() {
             </form>
             <form className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4" onSubmit={handleCreateLinenMovement}>
               <p className="text-sm font-semibold text-slate-700">Registrar movimiento</p>
+              {mutationErrors["movement-create"] && <LaundryMutationError error={mutationErrors["movement-create"]} onClose={() => clearMutationError("movement-create")} />}
               <label className="space-y-1 text-sm">
                 <span className="text-slate-600">Ítem</span>
                 <select
@@ -1372,21 +1419,24 @@ export function LaundryPage() {
           </div>
 
           <p className="text-2xl font-semibold text-slate-900">
-            Total del período: {formatMoney(spendTotal)}
-            {spendFetching && <span className="ml-2 text-xs font-normal text-slate-500">Actualizando...</span>}
+            Total del período: {spendError ? "no disponible" : spendLoading ? "calculando..." : formatMoney(spendTotal)}
+            {spendFetching && !spendLoading && <span className="ml-2 text-xs font-normal text-slate-500">Actualizando...</span>}
           </p>
+          {spendError && <p role="alert" className="text-sm text-rose-700">No se pudo cargar el gasto de uno o más lavaderos. <button type="button" onClick={() => { if (vendorsQuery.isError) void vendorsQuery.refetch(); spendQueries.forEach((query) => { if (query.isError) void query.refetch(); }); }} className="font-semibold underline">Reintentar</button></p>}
+          {spendLoading && <p role="status" className="text-sm text-slate-600">Cargando gastos por lavadero...</p>}
 
           <div className="grid gap-3 sm:grid-cols-2">
-            {vendors.map((vendor, index) => {
+          {vendors.map((vendor, index) => {
               const spend = spendQueries[index]?.data;
+              const spendQuery = spendQueries[index];
               const byItem = spend?.by_item ?? [];
               return (
                 <div key={vendor.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-slate-900">{vendor.name}</p>
-                    <p className="text-sm font-semibold text-slate-900">{formatMoney(spend?.total ?? 0)}</p>
+                    <p className="text-sm font-semibold text-slate-900">{spendQuery?.isError ? "No disponible" : spendQuery?.isLoading ? "Cargando..." : formatMoney(spend?.total ?? 0)}</p>
                   </div>
-                  {byItem.length === 0 ? (
+                  {spendQuery?.isError ? <p role="alert" className="mt-2 text-xs text-rose-700">No se pudo cargar este lavadero. <button type="button" onClick={() => void spendQuery.refetch()} className="font-semibold underline">Reintentar</button></p> : spendQuery?.isLoading ? <p role="status" className="mt-2 text-xs text-slate-600">Cargando detalle...</p> : byItem.length === 0 ? (
                     <p className="mt-2 text-xs text-slate-500">Sin remitos de salida en este período.</p>
                   ) : (
                     <ul className="mt-2 space-y-1 text-xs text-slate-700">
@@ -1403,7 +1453,7 @@ export function LaundryPage() {
                 </div>
               );
             })}
-            {vendors.length === 0 && <p className="text-xs text-slate-500">Todavía no hay lavaderos.</p>}
+            {vendorsQuery.isSuccess && vendors.length === 0 && <p className="text-xs text-slate-500">Todavía no hay lavaderos.</p>}
           </div>
         </section>
       )}
@@ -1415,8 +1465,9 @@ export function LaundryPage() {
           onYearChange={setSettlementYear}
           quarters={settlementQuarters}
           query={settlementsQuery}
-          onMark={(periodStart, paid, notes) => void markSettlementMutation.mutateAsync({ periodStart, paid, notes }).catch((error: unknown) => setMessage(error instanceof Error ? error.message : "No se pudo actualizar el pago."))}
+          onMark={(periodStart, paid, notes) => markSettlementMutation.mutateAsync({ periodStart, paid, notes })}
           marking={markSettlementMutation.isPending}
+          onRetry={() => void settlementsQuery.refetch()}
         />
       )}
 
@@ -1426,7 +1477,8 @@ export function LaundryPage() {
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Historial</p>
               <h2 className="text-lg font-semibold text-slate-900">Remitos ({remitos.length})</h2>
-              {remitosQuery.error && <p className="text-xs text-rose-700">No se pudo cargar: {(remitosQuery.error as Error).message}</p>}
+              {remitosQuery.isLoading && <p role="status" className="text-xs text-slate-600">Cargando remitos...</p>}
+              {remitosQuery.isError && <p role="alert" className="text-xs text-rose-700">No se pudo cargar: {(remitosQuery.error as Error).message} <button type="button" onClick={() => void remitosQuery.refetch()} className="font-semibold underline">Reintentar</button></p>}
             </div>
             <ul className="space-y-2" aria-label="Historial de remitos">
               {remitos.map((remito) => {
@@ -1458,7 +1510,7 @@ export function LaundryPage() {
                   </li>
                 );
               })}
-              {!remitosQuery.isLoading && remitos.length === 0 && (
+              {!remitosQuery.isLoading && !remitosQuery.isError && remitos.length === 0 && (
                 <li className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
                   Todavía no hay remitos registrados.
                 </li>
@@ -1472,11 +1524,12 @@ export function LaundryPage() {
               </h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {vendors.map((vendor, index) => {
-                  const balance = balanceQueries[index]?.data ?? [];
+                  const balanceQuery = balanceQueries[index];
+                  const balance = balanceQuery?.data ?? [];
                   return (
                     <div key={vendor.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <p className="text-sm font-semibold text-slate-900">{vendor.name}</p>
-                      {balance.length === 0 ? (
+                      {balanceQuery?.isLoading ? <p role="status" className="text-xs text-slate-600">Cargando balance...</p> : balanceQuery?.isError ? <p role="alert" className="text-xs text-rose-700">No se pudo cargar el balance. <button type="button" onClick={() => void balanceQuery.refetch()} className="font-semibold underline">Reintentar</button></p> : balance.length === 0 ? (
                         <p className="text-xs text-slate-500">Nada pendiente en este lavadero.</p>
                       ) : (
                         <ul className="mt-1 space-y-1 text-xs text-slate-700">
@@ -1491,7 +1544,7 @@ export function LaundryPage() {
                     </div>
                   );
                 })}
-                {vendors.length === 0 && <p className="text-xs text-slate-500">Todavía no hay lavaderos.</p>}
+            {vendorsQuery.isSuccess && vendors.length === 0 && <p className="text-xs text-slate-500">Todavía no hay lavaderos.</p>}
               </div>
             </div>
           </section>
@@ -1568,6 +1621,12 @@ export function LaundryPage() {
 
               <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Ítems</p>
+                {itemsQuery.isLoading && <p role="status" className="px-1 text-xs text-slate-600">Cargando tipos de ropa blanca...</p>}
+                {itemsQuery.isError && <p role="alert" className="px-1 text-xs text-rose-700">No se pudieron cargar los tipos de ropa blanca. <button type="button" onClick={() => void itemsQuery.refetch()} className="font-semibold underline">Reintentar</button></p>}
+                {remitoForm.house_location_id && remitoHouseStockQuery.isLoading && <p role="status" className="px-1 text-xs text-slate-600">Cargando stock del hotel...</p>}
+                {remitoForm.house_location_id && remitoHouseStockQuery.isError && <p role="alert" className="px-1 text-xs text-rose-700">No se pudo cargar el stock del hotel. <button type="button" onClick={() => void remitoHouseStockQuery.refetch()} className="font-semibold underline">Reintentar</button></p>}
+                {remitoVendorId && remitoVendorBalanceQuery?.isLoading && <p role="status" className="px-1 text-xs text-slate-600">Cargando balance del lavadero...</p>}
+                {remitoVendorId && remitoVendorBalanceQuery?.isError && <p role="alert" className="px-1 text-xs text-rose-700">No se pudo cargar el balance del lavadero. <button type="button" onClick={() => void remitoVendorBalanceQuery.refetch()} className="font-semibold underline">Reintentar</button></p>}
                 <ul className="space-y-2">
                   {items.map((item) => (
                     <li key={item.id} className="space-y-2 rounded-lg bg-white px-3 py-2 shadow-sm">
@@ -1575,10 +1634,10 @@ export function LaundryPage() {
                         <p className="text-sm font-medium text-slate-900">{item.name}</p>
                         <p className="text-xs text-slate-500">
                           Hotel:{" "}
-                          {remitoForm.house_location_id ? `${remitoHouseStockByItemId.get(item.id) ?? "0"} ${item.unit}` : "elegí ubicación"}
+                          {remitoForm.house_location_id ? remitoHouseStockQuery.isError ? "no disponible" : remitoHouseStockQuery.isSuccess ? `${remitoHouseStockByItemId.get(item.id) ?? "0"} ${item.unit}` : "cargando..." : "elegí ubicación"}
                           {" · "}
                           Lavadero:{" "}
-                          {remitoForm.vendor_id ? `${remitoVendorBalanceByItemId.get(item.id) ?? "0"} ${item.unit}` : "elegí lavadero"}
+                          {remitoVendorId ? remitoVendorBalanceQuery?.isError ? "no disponible" : remitoVendorBalanceQuery?.isSuccess ? `${remitoVendorBalanceByItemId.get(item.id) ?? "0"} ${item.unit}` : "cargando..." : "elegí lavadero"}
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -1601,7 +1660,7 @@ export function LaundryPage() {
                       </div>
                     </li>
                   ))}
-                  {items.length === 0 && (
+                  {itemsQuery.isSuccess && items.length === 0 && (
                     <li className="text-xs text-slate-500">Todavía no hay tipos de ropa blanca cargados.</li>
                   )}
                 </ul>
@@ -1625,6 +1684,7 @@ export function LaundryPage() {
               {remitoError && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">
                   {remitoError}
+                  <button type="button" aria-label="Cerrar error del remito" onClick={() => setRemitoError(null)} className="ml-3 font-semibold underline">Cerrar</button>
                 </div>
               )}
 
@@ -1657,8 +1717,11 @@ export function LaundryPage() {
                 onSaveMinimum={({ itemId, locationId, minQuantity }) =>
                   minimumMutation.mutateAsync({ itemId, locationId, minQuantity })
                 }
-                isLoading={houseStockSummaryQuery.isFetching}
+                isLoading={houseStockSummaryQuery.isLoading}
+                isError={houseStockSummaryQuery.isError}
+                onRetry={() => void houseStockSummaryQuery.refetch()}
                 summaryLoaded={houseStockSummaryQuery.isSuccess}
+                itemsLoaded={itemsQuery.isSuccess}
               />
             </div>
           </aside>
@@ -1716,17 +1779,30 @@ function QuantityStepper({
   );
 }
 
+function LaundryMutationError({ error, onClose }: { error: string; onClose: () => void }) {
+  return (
+    <div role="alert" className="flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+      <p>{error}</p>
+      <button type="button" aria-label="Cerrar error" onClick={onClose} className="shrink-0 font-semibold underline">Cerrar</button>
+    </div>
+  );
+}
+
 function VendorCard({
   vendor,
   selected,
   onSelect,
   onToggleActive,
+  actionError,
+  onCloseActionError,
   toggling
 }: {
   vendor: LaundryVendor;
   selected: boolean;
   onSelect: () => void;
   onToggleActive: () => void;
+  actionError?: string;
+  onCloseActionError: () => void;
   toggling: boolean;
 }) {
   return (
@@ -1752,6 +1828,7 @@ function VendorCard({
       >
         {vendor.active ? "Marcar inactivo" : "Reactivar"}
       </button>
+      {actionError && <LaundryMutationError error={actionError} onClose={onCloseActionError} />}
     </div>
   );
 }
@@ -1781,15 +1858,17 @@ function SettlementSection({
   quarters,
   query,
   onMark,
-  marking
+  marking,
+  onRetry
 }: {
   selectedVendor: LaundryVendor | null;
   year: number;
   onYearChange: (year: number) => void;
   quarters: LaundryVendorSettlementQuarter[];
   query: UseQueryResult<LaundryVendorSettlementQuarter[]>;
-  onMark: (periodStart: string, paid: boolean, notes?: string | null) => void;
+  onMark: (periodStart: string, paid: boolean, notes?: string | null) => Promise<unknown>;
   marking: boolean;
+  onRetry: () => void;
 }) {
   return (
     <section
@@ -1821,8 +1900,9 @@ function SettlementSection({
         <p className="text-xs text-slate-500">Elegí un lavadero arriba para ver su liquidación trimestral.</p>
       )}
       {selectedVendor && query.isFetching && <p className="text-xs text-slate-500">Actualizando...</p>}
+      {selectedVendor && query.isLoading && <p role="status" className="text-xs text-slate-600">Cargando liquidación...</p>}
       {selectedVendor && query.isError && (
-        <p className="text-xs text-rose-700">No se pudo cargar la liquidación de este lavadero.</p>
+        <p role="alert" className="text-xs text-rose-700">No se pudo cargar la liquidación de este lavadero. <button type="button" onClick={onRetry} className="font-semibold underline">Reintentar</button></p>
       )}
 
       {selectedVendor && (
@@ -1835,6 +1915,11 @@ function SettlementSection({
               marking={marking}
             />
           ))}
+          {query.isSuccess && quarters.length === 0 && (
+            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              No hay remitos para liquidar en este año.
+            </p>
+          )}
         </div>
       )}
     </section>
@@ -1847,10 +1932,19 @@ function SettlementQuarterRow({
   marking
 }: {
   quarter: LaundryVendorSettlementQuarter;
-  onMark: (periodStart: string, paid: boolean, notes?: string | null) => void;
+  onMark: (periodStart: string, paid: boolean, notes?: string | null) => Promise<unknown>;
   marking: boolean;
 }) {
   const [notesDraft, setNotesDraft] = useState(quarter.notes ?? "");
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const mark = async (paid: boolean, notes?: string | null) => {
+    setMutationError(null);
+    try {
+      await onMark(quarter.period_start, paid, notes);
+    } catch (error) {
+      setMutationError(error instanceof Error ? error.message : "No se pudo actualizar esta liquidación.");
+    }
+  };
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -1863,7 +1957,7 @@ function SettlementQuarterRow({
         </div>
         <button
           type="button"
-          onClick={() => onMark(quarter.period_start, !quarter.paid)}
+          onClick={() => void mark(!quarter.paid)}
           disabled={marking}
           className={`min-h-11 rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60 ${
             quarter.paid ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200" : "bg-amber-100 text-amber-800 hover:bg-amber-200"
@@ -1886,6 +1980,8 @@ function SettlementQuarterRow({
         </ul>
       )}
 
+      {mutationError && <LaundryMutationError error={mutationError} onClose={() => setMutationError(null)} />}
+
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
         <label className="flex-1 space-y-1 text-xs font-semibold text-slate-600">
           Notas (diferencias con la factura real)
@@ -1898,7 +1994,7 @@ function SettlementQuarterRow({
         </label>
         <button
           type="button"
-          onClick={() => onMark(quarter.period_start, quarter.paid, notesDraft)}
+          onClick={() => void mark(quarter.paid, notesDraft)}
           disabled={marking}
           className="min-h-11 shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
         >
@@ -1925,7 +2021,10 @@ function HouseStockPanel({
   savingMinimum,
   onSaveMinimum,
   isLoading,
-  summaryLoaded
+  isError,
+  onRetry,
+  summaryLoaded,
+  itemsLoaded
 }: {
   locations: Array<{ id: number; name: string }>;
   items: LinenItem[];
@@ -1937,7 +2036,10 @@ function HouseStockPanel({
   savingMinimum: boolean;
   onSaveMinimum: (input: { itemId: number; locationId: number; minQuantity: string }) => Promise<unknown>;
   isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
   summaryLoaded: boolean;
+  itemsLoaded: boolean;
 }) {
   const { t, i18n } = useTranslation("common");
   const [minimumDrafts, setMinimumDrafts] = useState<Record<number, string>>({});
@@ -1999,8 +2101,9 @@ function HouseStockPanel({
       </label>
       {selectedLocationId ? (
         <>
-          {isLoading && <p className="text-xs text-slate-500">Actualizando...</p>}
-          {lowStockItems.length > 0 && (
+          {isLoading && <p role="status" className="text-xs text-slate-500">Cargando stock...</p>}
+          {isError && <p role="alert" className="text-xs text-rose-700">No se pudo cargar el stock. <button type="button" onClick={onRetry} className="font-semibold underline">Reintentar</button></p>}
+          {!isError && lowStockItems.length > 0 && (
             <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
               <p className="font-semibold">{t("stockAlerts.linenLowTitle")}</p>
               <ul className="mt-1 list-disc pl-5">
@@ -2022,14 +2125,14 @@ function HouseStockPanel({
               </ul>
             </div>
           )}
-          {minimumError && <p role="alert" className="text-sm text-rose-700">{minimumError}</p>}
+          {minimumError && <div role="alert" className="flex items-start justify-between gap-3 text-sm text-rose-700"><p>{minimumError}</p><button type="button" onClick={() => setMinimumError(null)} className="shrink-0 font-semibold underline">Cerrar</button></div>}
           <ul className="space-y-1 text-sm">
             {items.map((item) => (
               <li key={item.id} className="space-y-2 rounded-lg bg-slate-50 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <span>{item.name}</span>
                   <span className="font-semibold text-slate-900">
-                    {currentByItemId.has(item.id) ? `${formatQuantity(currentByItemId.get(item.id)!)} ${item.unit}` : "..."}
+                    {isError ? "No disponible" : summaryLoaded ? `${formatQuantity(currentByItemId.get(item.id) ?? "0")} ${item.unit}` : "Cargando..."}
                   </span>
                 </div>
                 {canManageMinimums ? (
@@ -2060,7 +2163,7 @@ function HouseStockPanel({
                 ) : null}
               </li>
             ))}
-            {items.length === 0 && <li className="text-xs text-slate-500">No hay ítems de stock cargados.</li>}
+            {itemsLoaded && items.length === 0 && <li className="text-xs text-slate-500">No hay ítems de stock cargados.</li>}
           </ul>
         </>
       ) : (

@@ -37,6 +37,27 @@ _SPECIALIZED_TABLES = {
 }
 _MAX_CANDIDATES = 20_000
 
+# Operational audit is visible in the hotel UI. Expose only fields with a
+# stable operational meaning; arbitrary payload keys and free-form text stay
+# in the source audit stream and never become part of this projection.
+_SAFE_DETAIL_FIELDS = frozenset(
+    {
+        "record_id", "entity_id", "resource_type", "resource_id", "event_details",
+        "before", "after", "reservation_id", "room_id", "category_id",
+        "transaction_id", "session_id", "close_report_id", "closed_by_user_id",
+        "received_by_user_id", "amount", "currency_code", "transaction_type",
+        "provider_code", "payment_method", "status", "opening_balance",
+        "expected_balance", "declared_balance", "difference", "difference_approved",
+        "delivered_amount", "reason_code", "from_status", "to_status",
+        "origin_room_disposition", "origin_room_status_before", "origin_room_status_after",
+        "permission_code", "allowed", "role", "version", "source", "user_id",
+        "is_active", "date", "check_in_date", "check_out_date", "total_amount",
+        "amount_paid", "price", "price_cash", "price_transfer", "price_mercadopago",
+        "price_paypal", "price_credit_card", "price_debit_card", "price_booking",
+        "price_expedia", "surcharge_type", "updated_at", "created_at",
+    }
+)
+
 _AREA_BY_TABLE = {
     "reservations": "reservations",
     "reservation": "reservations",
@@ -74,7 +95,9 @@ _AREA_BY_TABLE = {
     "user_sessions": "users",
     "permissions": "permissions",
     "role_permission_defaults": "permissions",
+    "hotel_permission_override": "permissions",
     "hotel_permission_overrides": "permissions",
+    "user_permission_override": "permissions",
     "user_permission_overrides": "permissions",
     "hotel_configuration": "configuration",
     "hotel_configurations": "configuration",
@@ -131,6 +154,32 @@ def _area_for(entity_type: str | None) -> str:
     return _AREA_BY_TABLE.get(normalized, normalized)
 
 
+def _safe_detail_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _safe_detail_value(item)
+            for key, item in value.items()
+            if str(key) in _SAFE_DETAIL_FIELDS
+        }
+    if isinstance(value, (list, tuple)):
+        return [_safe_detail_value(item) for item in value]
+    if isinstance(value, str):
+        return _redact_text(value)
+    if isinstance(value, (int, float, bool, Decimal)) or value is None:
+        return value
+    return None
+
+
+def _safe_details(details: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(details, dict):
+        return {}
+    return {
+        str(key): _safe_detail_value(value)
+        for key, value in details.items()
+        if str(key) in _SAFE_DETAIL_FIELDS
+    }
+
+
 def _row(
     *,
     source: str,
@@ -152,7 +201,7 @@ def _row(
         "actor_user_id": actor_user_id,
         "actor_name": fields.pop("actor_name", "Sistema"),
         "occurred_at": _utc(occurred_at),
-        "details": details or {},
+        "details": _safe_details(details),
         **fields,
     }
 
@@ -267,7 +316,7 @@ def list_operational_audit(
             _row(
                 source="security_event",
                 source_id=event.id,
-                area="security",
+                area="permissions" if event.action.startswith("permission.") else "security",
                 action=event.action,
                 summary=f"Evento de seguridad: {event.action}",
                 actor_user_id=event.user_id,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -139,7 +140,7 @@ def test_detect_no_shows_marks_reservation(db, hotel_config, sample_guest, sampl
     db.refresh(reservation)
     assert reservation.status == ReservationStatusEnum.NO_SHOW
     assert reservation.outcome == ReservationOutcomeEnum.NO_SHOW
-    assert reservation.no_show_policy_applied == ReservationNoShowPolicyAppliedEnum.FULL_CHARGE
+    assert reservation.no_show_policy_applied == ReservationNoShowPolicyAppliedEnum.NONE
     assert reservation.no_show_confirmed_at is not None
     assert db.query(HotelAuditEvent).filter(HotelAuditEvent.action_code == "analytics.reservation.no_show_marked").count() == 1
 
@@ -216,6 +217,85 @@ def test_refresh_fact_reservation_daily_materializes_rows(db, hotel_config, samp
     assert sum(float(row.revenue_gross_ars) for row in rows) == pytest.approx(100.0)
     assert sum(float(row.variable_cost_ars) for row in rows) == pytest.approx(25.0)
     assert sum(float(row.margin_operating_ars) for row in rows) == pytest.approx(65.0)
+
+
+def test_partial_refresh_allocates_money_across_the_full_stay_idempotently(
+    db, hotel_config, sample_guest, sample_categories, sample_rooms
+):
+    sample_categories[0].variable_cost_per_night = Decimal("5.13")
+    reservation = Reservation(
+        confirmation_code="FACT-PARTIAL-WINDOW",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=sample_rooms[0].id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 4, 30),
+        check_out_date=date(2026, 5, 5),
+        total_amount=Decimal("100.01"),
+        subtotal_amount=Decimal("90.01"),
+        tax_amount=Decimal("10.00"),
+        net_amount=Decimal("90.01"),
+        amount_paid=Decimal("100.01"),
+        currency_code="ARS",
+        status=ReservationStatusEnum.FULLY_PAID,
+        outcome=ReservationOutcomeEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        channel_code=ReservationChannelCodeEnum.OTHER_DIRECT,
+        guest_segment=ReservationGuestSegmentEnum.LEISURE,
+        guest_segment_source=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
+        no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    # Refresh a middle slice first, then the earlier and later slices. Each
+    # row must keep the nightly allocation from the complete five-night stay.
+    for date_from, date_to in (
+        (date(2026, 5, 1), date(2026, 5, 2)),
+        (date(2026, 4, 30), date(2026, 4, 30)),
+        (date(2026, 5, 3), date(2026, 5, 4)),
+    ):
+        refresh_fact_reservation_daily(
+            db,
+            hotel_id=hotel_config.id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
+    rows = (
+        db.query(FactReservationDaily)
+        .filter(FactReservationDaily.hotel_id == hotel_config.id)
+        .order_by(FactReservationDaily.stay_date.asc())
+        .all()
+    )
+    assert [row.stay_date for row in rows] == [
+        date(2026, 4, 30),
+        date(2026, 5, 1),
+        date(2026, 5, 2),
+        date(2026, 5, 3),
+        date(2026, 5, 4),
+    ]
+    assert sum((Decimal(str(row.revenue_gross_ars)) for row in rows), Decimal("0")) == Decimal("100.01")
+    assert sum((Decimal(str(row.revenue_net_ars)) for row in rows), Decimal("0")) == Decimal("90.01")
+    assert all(Decimal(str(row.revenue_gross_ars)) == Decimal("20.00") for row in rows[1:])
+    assert Decimal(str(rows[0].revenue_gross_ars)) == Decimal("20.01")
+
+    refresh_fact_reservation_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date(2026, 5, 1),
+        date_to=date(2026, 5, 2),
+    )
+    repeated_rows = (
+        db.query(FactReservationDaily)
+        .filter(FactReservationDaily.hotel_id == hotel_config.id)
+        .order_by(FactReservationDaily.stay_date.asc())
+        .all()
+    )
+    assert len(repeated_rows) == 5
+    assert sum((Decimal(str(row.revenue_gross_ars)) for row in repeated_rows), Decimal("0")) == Decimal("100.01")
 
 
 def test_analytics_read_rebuilds_legacy_one_to_one_currency_facts(

@@ -13,6 +13,7 @@ from app.dependencies.auth import (
 from app.models.hotel_membership import HotelMembership
 from app.models.hotel_role import HotelRole
 from app.schemas.permission import (
+    PermissionOverrideBatchRequest,
     RolePermissionOverrideRequest,
     TemporaryActionGrantApproveRequest,
     TemporaryActionGrantRequest,
@@ -494,6 +495,114 @@ def update_user_override(
         "updated_by_user_id": override.updated_by_user_id,
         "updated_at": override.updated_at,
     }
+
+
+@router.put("/overrides/batch")
+def update_permission_overrides_batch(
+    payload: PermissionOverrideBatchRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission_administrator),
+):
+    """Apply a user-reviewed set of permission changes atomically with one MFA ticket."""
+    prepared = []
+    try:
+        # Validate every target before writing any row. The transaction below is
+        # still atomic, and each underlying service records its own audit row.
+        for change in payload.changes:
+            code = _validate_code(change.permission_code)
+            if change.scope == "role":
+                role = change.role or ""
+                _validate_role(db, context.hotel_id, role)
+                _assert_role_profile_mutation_allowed(
+                    context,
+                    role,
+                    code,
+                    restoring=change.operation == "restore",
+                )
+                prepared.append((change, code, None))
+                continue
+
+            user_id = change.user_id
+            if user_id is None:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Usuario invalido")
+            if user_id == context.user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="No puedes modificar tus propios permisos",
+                )
+            membership = _target_membership_or_404(db, context.hotel_id, user_id, lock=True)
+            _assert_manageable_membership(
+                db,
+                context.hotel_id,
+                context.user_role,
+                membership,
+                action="modificar permisos de",
+            )
+            prepared.append((change, code, membership))
+
+        for change, code, membership in prepared:
+            if change.scope == "role":
+                if change.operation == "set":
+                    set_role_override(
+                        db,
+                        context.hotel_id,
+                        change.role or "",
+                        code,
+                        bool(change.allowed),
+                        actor_user_id=context.user_id,
+                        expected_version=change.expected_version,
+                    )
+                else:
+                    restore_role_override(
+                        db,
+                        context.hotel_id,
+                        change.role or "",
+                        code,
+                        actor_user_id=context.user_id,
+                        expected_version=change.expected_version,
+                    )
+            elif change.operation == "set":
+                set_user_override(
+                    db,
+                    context.hotel_id,
+                    change.user_id,
+                    membership.role,
+                    code,
+                    bool(change.allowed),
+                    actor_user_id=context.user_id,
+                    expected_version=change.expected_version,
+                )
+            else:
+                restore_user_override(
+                    db,
+                    context.hotel_id,
+                    change.user_id,
+                    actor_user_id=context.user_id,
+                    code=code,
+                    expected_version=change.expected_version,
+                )
+        db.commit()
+    except PermissionVersionConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except StaleDataError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El permiso fue modificado por otra solicitud",
+        ) from exc
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except Exception:
+        db.rollback()
+        raise
+
+    publish_permission_invalidation(context.hotel_id)
+    return {"hotel_id": context.hotel_id, "updated": len(prepared)}
 
 
 @router.delete("/overrides/user/{user_id}/{permission_code}")

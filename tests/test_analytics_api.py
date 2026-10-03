@@ -929,6 +929,9 @@ def test_analytics_home_self_heals_when_derived_facts_were_never_materialized(ap
     assert Decimal(cards["home_revenue_gross"]["value_ars"]) > 0, payload
     assert Decimal(cards["home_revenue_net"]["value_ars"]) > 0, payload
     assert cards["home_occupancy"]["value_pct"] > 0, payload
+    assert Decimal(cards["home_adr"]["value_ars"]) == Decimal("90000.00"), payload
+    assert Decimal(cards["home_revpar"]["value_ars"]) == Decimal("5806.45"), payload
+    assert "USD" in payload["data"]["top_channels"][0]["unavailable_currencies"], payload
 
     with SessionLocal() as db:
         # Self-heal must have materialized the facts, not just computed them

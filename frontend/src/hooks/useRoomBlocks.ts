@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   createRoomBlock,
+  extendRoomBlock,
   listActiveRoomBlocks,
   resolveRoomBlock,
   type RoomBlock,
@@ -50,5 +51,10 @@ export function useRoomBlocks(options?: { enabled?: boolean }) {
     onSuccess: async () => invalidate()
   });
 
-  return { blocksQuery, createBlockMutation, resolveBlockMutation };
+  const extendBlockMutation = useGuardedMutation({
+    mutationFn: ({ blockId, endsAt }: { blockId: number; endsAt: string }) => extendRoomBlock(blockId, endsAt, session),
+    onSuccess: async () => invalidate()
+  });
+
+  return { blocksQuery, createBlockMutation, resolveBlockMutation, extendBlockMutation };
 }

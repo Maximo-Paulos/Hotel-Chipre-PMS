@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import secrets
 
 import pytest
 from fastapi.testclient import TestClient
@@ -82,7 +83,7 @@ def _bearer_headers(payload: dict[str, object]) -> dict[str, str]:
     }
 
 
-def test_create_validate_and_rotate_session(session_user: User, db: Session):
+def test_create_validate_and_rotate_session(session_user: User, db: Session, monkeypatch):
     session, token, csrf = user_session_service.create_session(db, session_user)
     db.commit()
 
@@ -95,8 +96,39 @@ def test_create_validate_and_rotate_session(session_user: User, db: Session):
     assert rotated_session.id == session.id
     assert new_token != token
     db.commit()
-    assert user_session_service.validate_and_touch_session(db, token, csrf, csrf) is None
+    last_seen = rotated_session.last_seen_at
+    recovered = user_session_service.validate_and_touch_session(db, token, csrf, csrf)
+    assert recovered == (rotated_session, new_token)
+    assert rotated_session.last_seen_at == last_seen
     assert user_session_service.validate_and_touch_session(db, new_token, csrf, csrf) is not None
+
+    current_time = user_session_service._now()
+    monkeypatch.setattr(
+        user_session_service,
+        "_now",
+        lambda: current_time + user_session_service.USER_SESSION_ROTATION_RECOVERY_WINDOW + timedelta(seconds=1),
+    )
+    assert user_session_service.validate_and_touch_session(db, token, csrf, csrf) is None
+
+
+def test_rotation_replay_requires_csrf_and_is_invalidated_by_next_rotation(session_user: User, db: Session):
+    _session, first_token, csrf = user_session_service.create_session(db, session_user)
+    db.commit()
+
+    first_rotation = user_session_service.validate_and_touch_session(db, first_token, csrf, csrf)
+    assert first_rotation is not None
+    _session, second_token = first_rotation
+    db.commit()
+
+    assert user_session_service.validate_and_touch_session(db, first_token, "wrong", csrf) is None
+    second_rotation = user_session_service.validate_and_touch_session(db, second_token, csrf, csrf)
+    assert second_rotation is not None
+    _session, third_token = second_rotation
+    db.commit()
+
+    assert user_session_service.validate_and_touch_session(db, first_token, csrf, csrf) is None
+    recovered = user_session_service.validate_and_touch_session(db, second_token, csrf, csrf)
+    assert recovered is not None and recovered[1] == third_token
 
 
 def test_absolute_expiration_rejects_and_revokes(session_user: User, db: Session, monkeypatch):
@@ -157,6 +189,60 @@ def test_global_revocation_invalidates_all_sessions(session_user: User, db: Sess
     assert user_session_service.list_active_sessions(db, session_user.id) == []
     for _session, token, csrf in sessions:
         assert user_session_service.validate_and_touch_session(db, token, csrf, csrf) is None
+
+
+def test_revocation_blocks_rotation_recovery(session_user: User, db: Session):
+    session, token, csrf = user_session_service.create_session(db, session_user)
+    db.commit()
+    assert user_session_service.validate_and_touch_session(db, token, csrf, csrf) is not None
+    db.commit()
+
+    user_session_service.revoke_session(db, session.id, session_user.id)
+    db.commit()
+    assert user_session_service.validate_and_touch_session(db, token, csrf, csrf) is None
+
+
+def test_postgres_concurrent_refreshes_recover_the_same_successor(pg_engine):
+    """Real row locks serialize overlapping refreshes without losing the cookie."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from sqlalchemy.orm import sessionmaker
+
+    session_factory = sessionmaker(bind=pg_engine, autocommit=False, autoflush=False)
+    with session_factory() as db:
+        user = User(
+            email=f"session-concurrency-{secrets.token_hex(6)}@example.test",
+            password_hash=hash_password("Demo123!pass"),
+            role="owner",
+            is_verified=True,
+            is_active=True,
+            token_version=0,
+        )
+        db.add(user)
+        db.flush()
+        server_session, token, csrf = user_session_service.create_session(db, user)
+        db.commit()
+        session_id = server_session.id
+
+    barrier = Barrier(2)
+
+    def refresh_with_old_cookie() -> str | None:
+        with session_factory() as db:
+            barrier.wait(timeout=5)
+            result = user_session_service.validate_and_touch_session(db, token, csrf, csrf)
+            db.commit()
+            return result[1] if result else None
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        successors = list(executor.map(lambda _index: refresh_with_old_cookie(), range(2)))
+
+    assert successors[0] is not None
+    assert successors[0] == successors[1]
+    with session_factory() as db:
+        stored = db.get(UserSession, session_id)
+        assert stored is not None
+        assert stored.session_token_hash == user_session_service._hash_value(successors[0])
 
 
 def test_user_session_cookie_cannot_disable_secure_in_production(monkeypatch):

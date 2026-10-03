@@ -221,127 +221,6 @@ def test_rate_payment_options_only_exposes_enabled_methods():
         _cleanup_client(db, engine)
 
 
-def test_daily_rate_patch_preserves_omitted_method_prices_and_allows_explicit_clear():
-    client, db, engine = _build_client()
-    try:
-        category = _seed_hotel(db, 1, "H1")
-        row = DailyRate(
-            hotel_id=1,
-            category_id=category.id,
-            date=date(2026, 5, 7),
-            price=100,
-            price_transfer=90,
-            price_paypal=80,
-        )
-        db.add(row)
-        db.commit()
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
-
-        preserved = client.post(
-            f"/api/rates/category/{category.id}/daily",
-            json={"date": "2026-05-07", "price": 110},
-        )
-        assert preserved.status_code == 200, preserved.text
-        assert row.price == 110
-        assert row.price_transfer == 90
-        assert row.price_paypal == 80
-
-        cleared = client.post(
-            f"/api/rates/category/{category.id}/daily",
-            json={"date": "2026-05-07", "price": 120, "price_transfer": None},
-        )
-        assert cleared.status_code == 200, cleared.text
-        assert row.price_transfer is None
-        assert row.price_paypal == 80
-    finally:
-        _cleanup_client(db, engine)
-
-
-def test_bulk_rate_patch_preserves_omitted_method_prices():
-    client, db, engine = _build_client()
-    try:
-        category = _seed_hotel(db, 1, "H1")
-        rows = [
-            DailyRate(
-                hotel_id=1,
-                category_id=category.id,
-                date=date(2026, 5, day),
-                price=100,
-                price_transfer=90 + day,
-                price_paypal=80 + day,
-            )
-            for day in (7, 8)
-        ]
-        db.add_all(rows)
-        db.commit()
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
-
-        response = client.post(
-            f"/api/rates/category/{category.id}/bulk",
-            json={"from_date": "2026-05-07", "to_date": "2026-05-08", "price": 125},
-        )
-
-        assert response.status_code == 200, response.text
-        assert response.json() == {"created": 0, "updated": 2}
-        assert [(row.price, row.price_transfer, row.price_paypal) for row in rows] == [
-            (125, 97, 87),
-            (125, 98, 88),
-        ]
-    finally:
-        _cleanup_client(db, engine)
-
-
-def test_bulk_field_percent_update_preserves_base_prices_and_excludes_dates():
-    client, db, engine = _build_client()
-    try:
-        category = _seed_hotel(db, 1, "H1")
-        db.add_all(
-            [
-                DailyRate(hotel_id=1, category_id=category.id, date=date(2026, 5, 7), price=100.0),
-                DailyRate(
-                    hotel_id=1,
-                    category_id=category.id,
-                    date=date(2026, 5, 8),
-                    price=200.0,
-                    price_transfer=180.0,
-                ),
-                DailyRate(hotel_id=1, category_id=category.id, date=date(2026, 5, 9), price=300.0),
-            ]
-        )
-        db.commit()
-        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
-
-        response = client.post(
-            f"/api/rates/category/{category.id}/bulk-field",
-            json={
-                "from_date": "2026-05-07",
-                "to_date": "2026-05-09",
-                "field": "price_transfer",
-                "mode": "percent_delta",
-                "value": -10,
-                "exclude_dates": ["2026-05-08"],
-            },
-        )
-
-        assert response.status_code == 200, response.text
-        assert response.json() == {"created": 0, "updated": 2}
-
-        rows = {
-            row.date.isoformat(): row
-            for row in db.query(DailyRate)
-            .filter(DailyRate.category_id == category.id)
-            .order_by(DailyRate.date)
-        }
-        assert rows["2026-05-07"].price == 100.0
-        assert rows["2026-05-07"].price_transfer == 90.0
-        assert rows["2026-05-08"].price == 200.0
-        assert rows["2026-05-08"].price_transfer == 180.0
-        assert rows["2026-05-09"].price == 300.0
-        assert rows["2026-05-09"].price_transfer == 270.0
-    finally:
-        _cleanup_client(db, engine)
-
-
 def test_multi_hotel_isolation_returns_404_for_foreign_category():
     client, db, engine = _build_client()
     try:
@@ -353,5 +232,33 @@ def test_multi_hotel_isolation_returns_404_for_foreign_category():
             params={"category_id": category_h2.id, "date_from": "2026-05-01", "date_to": "2026-05-01"},
         )
         assert response.status_code == 404
+    finally:
+        _cleanup_client(db, engine)
+
+
+def test_legacy_rate_write_endpoints_require_reviewable_drafts():
+    client, db, engine = _build_client()
+    try:
+        category = _seed_hotel(db, 1, "DRAFTS")
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        requests = [
+            ("post", f"/api/rates/category/{category.id}/daily", {"date": "2026-05-07", "price": 110}),
+            ("post", f"/api/rates/category/{category.id}/bulk", {"from_date": "2026-05-07", "to_date": "2026-05-08", "price": 110}),
+            ("post", f"/api/rates/category/{category.id}/bulk-field", {"from_date": "2026-05-07", "to_date": "2026-05-08", "field": "price", "mode": "set", "value": 110}),
+            ("post", "/api/rates/periods", {"category_id": category.id, "name": "Nueva", "start_date": "2026-05-07", "end_date": "2026-05-08", "price_per_night": 110}),
+            ("patch", "/api/rates/periods/1", {"price_per_night": 120}),
+            ("delete", "/api/rates/periods/1", None),
+            ("post", "/api/rates/periods/1/apply", None),
+        ]
+
+        for method, path, body in requests:
+            response = getattr(client, method)(path, json=body) if body is not None else getattr(client, method)(path)
+            assert response.status_code == 409, (method, path, response.text)
+            assert "rate-change-drafts" in response.json()["detail"]
+
+        assert db.query(DailyRate).filter_by(hotel_id=1, category_id=category.id).count() == 0
+        from app.models.daily_rate import PricePeriod
+
+        assert db.query(PricePeriod).filter_by(hotel_id=1, category_id=category.id).count() == 0
     finally:
         _cleanup_client(db, engine)

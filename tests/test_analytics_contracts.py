@@ -218,6 +218,41 @@ def test_even_split_and_no_show_allocation():
     assert waived[0].revenue_gross_ars == Decimal("0.00")
     assert waived[0].margin_operating_ars == Decimal("0.00")
 
+    pending = build_reservation_nightly_facts(
+        reservation=SimpleNamespace(
+            **{
+                **reservation.__dict__,
+                "status": ReservationStatusEnum.NO_SHOW,
+                "outcome": ReservationOutcomeEnum.NO_SHOW,
+            }
+        ),
+        stay_dates=[date(2026, 4, 1)],
+        totals=MonetaryTotals(
+            revenue_gross_ars=Decimal("10.00"),
+            revenue_gross_usd=Decimal("2.00"),
+            revenue_net_ars=Decimal("8.00"),
+            revenue_net_usd=Decimal("1.60"),
+            tax_ars=Decimal("1.00"),
+            tax_usd=Decimal("0.20"),
+            fee_ars=Decimal("0.50"),
+            fee_usd=Decimal("0.10"),
+            commission_ars=Decimal("0.25"),
+            commission_usd=Decimal("0.05"),
+            variable_cost_ars=Decimal("0.75"),
+            variable_cost_usd=Decimal("0.15"),
+            margin_operating_ars=Decimal("7.00"),
+            margin_operating_usd=Decimal("1.40"),
+            source_currency="ARS",
+            fx_rate_snapshot=Decimal("1.000000"),
+        ),
+        no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
+    )
+    assert pending[0].row_kind == FactReservationRowKindEnum.NO_SHOW_CHARGEABLE
+    assert pending[0].occupied_night is False
+    assert pending[0].chargeable_night is False
+    assert pending[0].revenue_gross_ars == Decimal("0.00")
+    assert pending[0].margin_operating_ars == Decimal("0.00")
+
 
 def test_room_occupancy_fact_and_metrics():
     occupancy_fact = build_room_occupancy_nightly_fact(

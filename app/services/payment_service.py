@@ -31,6 +31,7 @@ from app.services.reservation_service import (
 )
 from app.services.financial_ledger import (
     completed_paid_amount,
+    external_paid_balance_credit,
     operational_balance_due,
     paid_amount_with_legacy_fallback,
     reconciled_paid_amounts_by_reservation,
@@ -1191,6 +1192,8 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
         "total_amount": None if deferred_company_billing else reservation.total_amount,
         "deposit_required": None if deferred_company_billing else reservation.deposit_amount,
         "amount_paid": None if deferred_company_billing else d_paid,
+        "hotel_received_amount": None if deferred_company_billing else completed_payment_total,
+        "ota_prepaid_amount": None if deferred_company_billing else external_paid_balance_credit(reservation),
         "balance_due": None if deferred_company_billing else max(Decimal("0"), d_total - d_paid),
         "operational_total_amount": operational_total,
         "operational_balance_due": operational_balance_due,
@@ -1209,6 +1212,7 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
         "transactions": [
             {
                 "id": t.id,
+                "group_payment_batch_id": t.group_payment_batch_id,
                 "amount": t.tender_amount if t.tender_amount is not None else t.amount,
                 "applied_amount": t.amount,
                 "applied_currency": t.currency,

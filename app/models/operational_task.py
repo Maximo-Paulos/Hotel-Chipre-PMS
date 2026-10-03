@@ -11,6 +11,7 @@ import enum
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     DateTime,
     Enum,
@@ -194,6 +195,47 @@ class OperationalTaskEvent(Base):
 
     task = relationship("OperationalTask", back_populates="events")
     actor = relationship("User", lazy="joined")
+
+
+class OperationalTaskAttachment(Base):
+    """Tenant-scoped metadata pointing to a private stored task photo."""
+
+    __tablename__ = "operational_task_attachments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
+    task_id = Column(Integer, nullable=False)
+    stored_object_id = Column(String(36), nullable=False)
+    file_name = Column(String(255), nullable=False)
+    content_type = Column(String(80), nullable=False)
+    byte_size = Column(Integer, nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    task = relationship("OperationalTask", lazy="joined")
+    created_by = relationship("User", lazy="joined")
+
+    __table_args__ = (
+        CheckConstraint("byte_size > 0", name="ck_operational_task_attachments_byte_size_positive"),
+        CheckConstraint(
+            "content_type IN ('image/jpeg', 'image/png', 'image/webp')",
+            name="ck_operational_task_attachments_content_type_image",
+        ),
+        UniqueConstraint("hotel_id", "id", name="uq_operational_task_attachments_hotel_id_id"),
+        ForeignKeyConstraint(
+            ["hotel_id", "task_id"],
+            ["operational_tasks.hotel_id", "operational_tasks.id"],
+            name="fk_operational_task_attachments_hotel_task",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "stored_object_id"],
+            ["stored_objects.hotel_id", "stored_objects.id"],
+            name="fk_operational_task_attachments_hotel_stored_object",
+            ondelete="CASCADE",
+        ),
+        Index("ix_operational_task_attachments_hotel_task_created", "hotel_id", "task_id", "created_at"),
+    )
 
 
 class ShiftHandoff(Base):

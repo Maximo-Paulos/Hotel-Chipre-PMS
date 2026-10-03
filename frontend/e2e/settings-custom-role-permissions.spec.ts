@@ -272,14 +272,14 @@ async function installMocks(page: Page, options: {
       await json({ role: payload.role, past_hours: payload.past_hours, future_hours: payload.future_hours, updated_by_user_id: 1, updated_at: new Date().toISOString() });
       return;
     }
-    if (pathname.endsWith("/api/permissions/override") && method === "PUT") {
+    if (pathname.endsWith("/api/permissions/overrides/batch") && method === "PUT") {
       const payload = request.postDataJSON();
       writes.push({ path: pathname, method, payload });
       const responseBody = options.overrideStatus === 403
         ? { detail: "Not authorized" }
         : options.overrideStatus === 409
           ? { detail: "El permiso fue modificado por otra solicitud" }
-          : { hotel_id: 1, role: payload.role, permission_code: payload.permission_code, allowed: payload.allowed, version: 2, source: "role_override", locked: false };
+          : { hotel_id: 1, updated: payload.changes?.length ?? 0 };
       await json(responseBody, options.overrideStatus ?? 200);
       return;
     }
@@ -331,12 +331,20 @@ test("shows an active custom role by name and uses its code for permission and v
   await page.setViewportSize({ width: 1280, height: 900 });
 
   await page.getByTestId(`permission-toggle-${customRoleCode}-${permissionCode}`).click();
-  await expect.poll(() => writes.some((write) => (write.payload as { role?: string }).role === customRoleCode)).toBe(true);
-  expect(writes.find((write) => write.path.endsWith("/permissions/override"))?.payload).toMatchObject({
-    role: customRoleCode,
-    permission_code: permissionCode,
-    allowed: false,
-    expected_version: 0
+  await expect(page.getByTestId("permission-batch-draft")).toContainText("Cambios pendientes (1)");
+  expect(writes).toHaveLength(0);
+  await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+  await expect.poll(() => writes.some((write) =>
+    (write.payload as { changes?: Array<{ role?: string }> }).changes?.some((change) => change.role === customRoleCode)
+  )).toBe(true);
+  expect(writes.find((write) => write.path.endsWith("/permissions/overrides/batch"))?.payload).toMatchObject({
+    changes: [{
+      scope: "role",
+      role: customRoleCode,
+      permission_code: permissionCode,
+      allowed: false,
+      expected_version: 0
+    }]
   });
 
   const visibilityWindow = page.getByLabel("Ventana de visibilidad para Auditoría nocturna").first();
@@ -360,12 +368,18 @@ test("lets the hotel configure complimentary rate adjustments by role", async ({
   await expect(customRoleToggle).not.toBeChecked();
   await customRoleToggle.click();
 
-  await expect.poll(() => writes.some((write) => (write.payload as { permission_code?: string }).permission_code === rateAdjustPermissionCode)).toBe(true);
-  expect(writes.find((write) => (write.payload as { permission_code?: string }).permission_code === rateAdjustPermissionCode)?.payload).toMatchObject({
-    role: customRoleCode,
-    permission_code: rateAdjustPermissionCode,
-    allowed: true,
-    expected_version: 0
+  await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+  await expect.poll(() => writes.some((write) =>
+    (write.payload as { changes?: Array<{ permission_code?: string }> }).changes?.some((change) => change.permission_code === rateAdjustPermissionCode)
+  )).toBe(true);
+  expect(writes.find((write) => write.path.endsWith("/permissions/overrides/batch"))?.payload).toMatchObject({
+    changes: [{
+      scope: "role",
+      role: customRoleCode,
+      permission_code: rateAdjustPermissionCode,
+      allowed: true,
+      expected_version: 0
+    }]
   });
 });
 
@@ -377,16 +391,21 @@ test("lets the owner explicitly opt in to complimentary rate adjustments without
   await expect(ownerRateToggle).toBeEnabled();
   await expect(ownerRateToggle).not.toBeChecked();
   await ownerRateToggle.click();
+  await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
 
   await expect.poll(() => writes.some((write) =>
-    (write.payload as { role?: string; permission_code?: string }).role === "owner" &&
-    (write.payload as { permission_code?: string }).permission_code === rateAdjustPermissionCode
+    (write.payload as { changes?: Array<{ role?: string; permission_code?: string }> }).changes?.some((change) =>
+      change.role === "owner" && change.permission_code === rateAdjustPermissionCode
+    )
   )).toBe(true);
-  expect(writes.find((write) => write.path.endsWith("/permissions/override"))?.payload).toMatchObject({
-    role: "owner",
-    permission_code: rateAdjustPermissionCode,
-    allowed: true,
-    expected_version: 0
+  expect(writes.find((write) => write.path.endsWith("/permissions/overrides/batch"))?.payload).toMatchObject({
+    changes: [{
+      scope: "role",
+      role: "owner",
+      permission_code: rateAdjustPermissionCode,
+      allowed: true,
+      expected_version: 0
+    }]
   });
   await expect(page.getByTestId(`permission-toggle-owner-${permissionCode}`)).toBeDisabled();
 });
@@ -396,10 +415,12 @@ test("surfaces a 409 custom override conflict and leaves the permission unchange
   await openPermissions(page);
   const toggle = page.getByTestId(`permission-toggle-${customRoleCode}-${permissionCode}`);
   await toggle.click();
+  await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "cambió mientras editabas" })).toBeVisible();
-  await expect(toggle).toBeChecked();
+  await expect(toggle).not.toBeChecked();
   expect(writes).toHaveLength(1);
-  expect(writes[0].payload).toMatchObject({ role: customRoleCode, permission_code: permissionCode, expected_version: 0 });
+  expect(writes[0].path).toMatch(/\/permissions\/overrides\/batch$/);
+  expect(writes[0].payload).toMatchObject({ changes: [{ role: customRoleCode, permission_code: permissionCode, expected_version: 0 }] });
 });
 
 test("surfaces a 403 custom override rejection without applying it", async ({ page }) => {
@@ -407,10 +428,12 @@ test("surfaces a 403 custom override rejection without applying it", async ({ pa
   await openPermissions(page);
   const toggle = page.getByTestId(`permission-toggle-${customRoleCode}-${permissionCode}`);
   await toggle.click();
+  await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "rechazó el cambio" })).toBeVisible();
-  await expect(toggle).toBeChecked();
+  await expect(toggle).not.toBeChecked();
   expect(writes).toHaveLength(1);
-  expect(writes[0].payload).toMatchObject({ role: customRoleCode, permission_code: permissionCode });
+  expect(writes[0].path).toMatch(/\/permissions\/overrides\/batch$/);
+  expect(writes[0].payload).toMatchObject({ changes: [{ role: customRoleCode, permission_code: permissionCode }] });
 });
 
 test("blocks user overrides for protected built-ins and archived custom roles", async ({ page }) => {

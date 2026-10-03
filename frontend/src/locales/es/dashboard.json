@@ -59,11 +59,17 @@
       "amount": "Monto"
     },
     "deferredCompanyBilling": "Facturado fuera del PMS",
+    "loading": "Cargando próximas reservas...",
+    "error": "No se pudieron cargar las próximas reservas.",
+    "retry": "Reintentar",
     "empty": "Sin próximas reservas."
   },
   "activity": {
     "eyebrow": "Actividad",
     "title": "Hoy",
+    "loading": "Cargando actividad...",
+    "error": "No se pudo cargar la actividad.",
+    "retry": "Reintentar",
     "empty": "Sin actividad para hoy.",
     "checkIn": "Check-in previsto {{code}}",
     "checkOut": "Checkout previsto {{code}}",

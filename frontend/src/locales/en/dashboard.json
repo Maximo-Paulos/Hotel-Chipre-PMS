@@ -59,11 +59,17 @@
       "amount": "Amount"
     },
     "deferredCompanyBilling": "Billed outside the PMS",
+    "loading": "Loading upcoming reservations...",
+    "error": "Upcoming reservations could not be loaded.",
+    "retry": "Retry",
     "empty": "No upcoming reservations."
   },
   "activity": {
     "eyebrow": "Activity",
     "title": "Today",
+    "loading": "Loading activity...",
+    "error": "Today's activity could not be loaded.",
+    "retry": "Retry",
     "empty": "No activity for today.",
     "checkIn": "Check-in scheduled {{code}}",
     "checkOut": "Checkout scheduled {{code}}",

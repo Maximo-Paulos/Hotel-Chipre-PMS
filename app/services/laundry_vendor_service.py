@@ -16,6 +16,7 @@ from datetime import date, datetime, time, timezone
 from decimal import Decimal
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.hotel_config import HotelConfiguration
@@ -37,6 +38,27 @@ QUARTER_MONTHS = {1: (1, 3), 2: (4, 6), 3: (7, 9), 4: (10, 12)}
 
 class LaundryVendorError(ValueError):
     """Raised when a laundry vendor/remito operation is invalid."""
+
+
+class DuplicateLaundryRemitoError(LaundryVendorError):
+    """The vendor already has a remito with this number and direction."""
+
+
+def is_duplicate_remito_integrity_error(error: IntegrityError) -> bool:
+    original = getattr(error, "orig", error)
+    constraint_name = getattr(getattr(original, "diag", None), "constraint_name", None)
+    if constraint_name == "uq_laundry_remitos_hotel_vendor_direction_number":
+        return True
+    message = str(original).lower()
+    return all(
+        column in message
+        for column in (
+            "laundry_remitos.hotel_id",
+            "laundry_remitos.vendor_id",
+            "laundry_remitos.direction",
+            "laundry_remitos.remito_number",
+        )
+    ) and ("unique" in message or "duplicate" in message)
 
 
 def create_vendor(
@@ -196,8 +218,25 @@ def create_remito(
         raise LaundryVendorError("direction must be 'outbound' or 'inbound'")
     if not lines:
         raise LaundryVendorError("A remito needs at least one line")
+    remito_number = remito_number.strip()
+    if not remito_number:
+        raise LaundryVendorError("El número de remito es obligatorio")
 
     vendor = _get_vendor(db, hotel_id=hotel_id, vendor_id=vendor_id)
+    duplicate = (
+        db.query(LaundryRemito.id)
+        .filter(
+            LaundryRemito.hotel_id == hotel_id,
+            LaundryRemito.vendor_id == vendor_id,
+            LaundryRemito.direction == direction,
+            LaundryRemito.remito_number == remito_number,
+        )
+        .first()
+    )
+    if duplicate is not None:
+        raise DuplicateLaundryRemitoError(
+            "Ya existe un remito con ese número, lavadero y sentido. Revisá si es salida o entrada."
+        )
     linen_service.get_location(db, hotel_id=hotel_id, location_id=house_location_id)
 
     if direction == "outbound":
@@ -277,6 +316,13 @@ def create_remito(
                 )
             )
             db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        if is_duplicate_remito_integrity_error(exc):
+            raise DuplicateLaundryRemitoError(
+                "Ya existe un remito con ese número, lavadero y sentido. Revisá si es salida o entrada."
+            ) from exc
+        raise
     except Exception:
         db.rollback()
         raise

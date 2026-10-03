@@ -1084,6 +1084,20 @@ def build_home_payload(
     room_rows = _load_room_facts(db, hotel_id, window.date_from, window.date_to)
     pickup_30d = calculate_pickup_30d_count(db, hotel_id=hotel_id, date_from=window.date_from, date_to=window.date_to)
     physical_room_nights = calculate_physical_room_nights_for_hotel(db, hotel_id=hotel_id, date_from=window.date_from, date_to=window.date_to)
+    room_revenue_facts = [fact for fact in facts if fact.occupied_night and fact.chargeable_night]
+    room_revenue_net_ars = _sum_money(room_revenue_facts, "revenue_net_ars")
+    occupied_chargeable_nights = sum(1 for fact in room_revenue_facts)
+    sellable_room_nights = sum(1 for fact in room_rows if fact.is_sellable_night)
+    adr_ars = (
+        _money(room_revenue_net_ars / Decimal(occupied_chargeable_nights))
+        if occupied_chargeable_nights
+        else None
+    )
+    revpar_ars = (
+        _money(room_revenue_net_ars / Decimal(sellable_room_nights))
+        if sellable_room_nights
+        else None
+    )
     cards = [
         metric_card(
             "home_revenue_gross",
@@ -1096,6 +1110,18 @@ def build_home_payload(
             "Revenue neto",
             value_ars=_sum_money(facts, "revenue_net_ars"),
             value_ars_available=not _currency_unavailable_for(facts, "ARS"),
+        ).model_dump(),
+        metric_card(
+            "home_adr",
+            "ADR",
+            value_ars=adr_ars,
+            value_ars_available=not _currency_unavailable_for(room_revenue_facts, "ARS"),
+        ).model_dump(),
+        metric_card(
+            "home_revpar",
+            "RevPAR",
+            value_ars=revpar_ars,
+            value_ars_available=not _currency_unavailable_for(room_revenue_facts, "ARS"),
         ).model_dump(),
         metric_card(
             "home_occupancy",

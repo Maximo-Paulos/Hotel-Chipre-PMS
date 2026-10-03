@@ -294,6 +294,7 @@ def get_daily_summary(
                 "actor_user_id": collector_key,
                 "actor_name": collector_name,
                 "transaction_id": transaction.id,
+                "group_payment_batch_id": getattr(transaction, "group_payment_batch_id", None),
                 "reservation_id": transaction.reservation_id,
                 "amount": positive_amount,
                 "signed_amount": signed_amount,
@@ -444,11 +445,17 @@ def get_daily_summary(
             opening_balance += session_opening_balance
         elif opened_at is not None and start <= opened_at < end:
             opening_balance += session_opening_balance
-        if close_report is not None:
+        close_at = _utc(close_report.closed_at) if close_report is not None else None
+        close_occurred_today = close_at is not None and start <= close_at < end
+        if close_report is not None and close_occurred_today:
             declared = _decimal(close_report.declared_balance)
             difference = _decimal(close_report.difference)
             declared_values.append(declared)
             difference_values.append(difference)
+        else:
+            declared = None
+            difference = None
+        if close_report is not None:
             handoff = close_report.custody_handoff
             handoff_at = _utc(handoff.delivered_at) if handoff is not None else None
             if handoff_at is not None and start <= handoff_at < end:
@@ -458,10 +465,7 @@ def get_daily_summary(
                 # close difference to reconcile the ledger expectation to the
                 # amount actually counted before delivery.
                 custody_delivered_total += _decimal(handoff.delivered_amount)
-                custody_difference_total += difference
-        else:
-            declared = None
-            difference = None
+                custody_difference_total += _decimal(close_report.difference)
         session_reads.append(
             {
                 "session_id": session.id,
@@ -471,6 +475,8 @@ def get_daily_summary(
                 "closed_at": _utc(session.closed_at),
                 "opened_by_user_id": session.opened_by_user_id,
                 "closed_by_user_id": session.closed_by_user_id,
+                "opened_by_name": actor_labels.get(session.opened_by_user_id) if session.opened_by_user_id else None,
+                "closed_by_name": actor_labels.get(session.closed_by_user_id) if session.closed_by_user_id else None,
                 "opening_balance": session_opening_balance,
                 "expected_balance": None,
                 "declared_balance": declared,

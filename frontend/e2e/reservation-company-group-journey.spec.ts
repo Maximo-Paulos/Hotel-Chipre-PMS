@@ -87,10 +87,29 @@ test("owner creates a four-room company group and sees its total balance in the 
 
   const companyResponse = await request.post(`${backendURL}/api/companies`, {
     headers,
-    data: { legal_name: `${companyName} SRL`, display_name: companyName, country_code: "AR" }
+    data: {
+      legal_name: `${companyName} SRL`,
+      display_name: companyName,
+      country_code: "AR",
+      payment_deferred: false
+    }
   });
   expect(companyResponse.status()).toBe(201);
   const company = await companyResponse.json() as { id: number };
+
+  const existingGuestResponse = await request.post(`${backendURL}/api/guests/`, {
+    headers,
+    data: {
+      first_name: "Huésped",
+      last_name: guestLastName,
+      email: `${suffix}@example.test`,
+      phone: `119876${suffix.slice(-4)}`,
+      document_type: "DNI",
+      document_number: `EXISTING-${suffix}`
+    }
+  });
+  expect(existingGuestResponse.status(), await existingGuestResponse.text()).toBe(201);
+  const existingGuest = await existingGuestResponse.json() as { id: number };
 
   await login(page);
   await page.goto("/reservas");
@@ -105,6 +124,10 @@ test("owner creates a four-room company group and sees its total balance in the 
   await form.getByLabel("Tipo de documento").selectOption("DNI");
   await form.getByPlaceholder("Documento").fill(`GROUP-${suffix}`);
   await form.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();
+  const duplicateWarning = page.getByRole("region", { name: "Revisá posibles huéspedes duplicados" });
+  await expect(duplicateWarning).toBeVisible();
+  await expect(duplicateWarning).toContainText(guestLastName);
+  await duplicateWarning.getByRole("button", { name: "Crear huésped separado", exact: true }).click();
   await expect(page.getByText("Huésped creado y asignado", { exact: true })).toBeVisible();
 
   const categorySelect = form.locator("label").filter({ hasText: "Categoría" }).locator("select");
@@ -129,13 +152,17 @@ test("owner creates a four-room company group and sees its total balance in the 
   const group = await groupResponse.json() as {
     id: number;
     company_id: number;
+    guest_id: number;
     reservation_count: number;
     room_count: number;
     total_amount: number;
     amount_paid: number;
     balance_due: number;
+    reservation_codes: string[];
+    reservation_ids: number[];
   };
   expect(group.company_id).toBe(company.id);
+  expect(group.guest_id).not.toBe(existingGuest.id);
   expect(group.reservation_count).toBe(4);
   expect(group.room_count).toBe(4);
   expect(Number(group.total_amount)).toBe(800);
@@ -150,4 +177,52 @@ test("owner creates a four-room company group and sees its total balance in the 
   await page.getByTestId("reservation-company-filter").selectOption(String(company.id));
   const table = page.locator("table").filter({ hasText: "Código" });
   await expect(table.locator("tbody tr").filter({ hasText: guestLastName })).toHaveCount(4);
+
+  const cashSessionsResponse = await request.get(`${backendURL}/api/cash-register/sessions`, { headers });
+  expect(cashSessionsResponse.ok(), await cashSessionsResponse.text()).toBeTruthy();
+  const cashSessions = await cashSessionsResponse.json() as Array<{
+    id: number;
+    status: "open" | "closed";
+    currency_code: string;
+  }>;
+  if (!cashSessions.some((session) => session.status === "open" && session.currency_code === "ARS")) {
+    const openCashResponse = await request.post(`${backendURL}/api/cash-register/sessions`, {
+      headers,
+      data: { opening_balance: 0, currency_code: "ARS" }
+    });
+    expect(openCashResponse.status(), await openCashResponse.text()).toBe(201);
+  }
+
+  await page.getByTestId(`reservation-group-payment-${group.id}`).click();
+  const paymentDialog = page.getByTestId("reservation-group-payment-dialog");
+  await expect(paymentDialog).toBeVisible();
+  await paymentDialog.getByTestId("group-payment-method").selectOption("cash");
+  await paymentDialog.getByTestId("group-payment-received-amount").fill("100.00");
+  await paymentDialog.getByLabel(new RegExp(group.reservation_codes[0])).fill("50.00");
+  await paymentDialog.getByLabel(new RegExp(group.reservation_codes[1])).fill("50.00");
+  for (const code of group.reservation_codes.slice(2)) {
+    await paymentDialog.getByLabel(new RegExp(code)).fill("0");
+  }
+  const [groupPaymentResponse] = await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().includes(`/api/reservation-groups/${group.id}/payments`) &&
+      response.request().method() === "POST"
+    ),
+    paymentDialog.getByTestId("group-payment-submit").click()
+  ]);
+  expect(groupPaymentResponse.status(), await groupPaymentResponse.text()).toBe(201);
+  const payment = await groupPaymentResponse.json() as {
+    id: number;
+    received_amount: number;
+    allocations: Array<{ reservation_id: number; received_amount: number }>;
+  };
+  expect(Number(payment.received_amount)).toBe(100);
+  expect(payment.allocations.map((item) => Number(item.received_amount))).toEqual([50, 50]);
+  expect(payment.allocations.reduce((sum, item) => sum + Number(item.received_amount), 0)).toBe(100);
+  await expect(page.getByText("Cobro grupal registrado y distribuido entre las reservas.", { exact: true })).toBeVisible();
+
+  await page.goto("/caja");
+  const groupedCashReceipt = page.getByTestId(`group-payment-cash-entry-${payment.id}`);
+  await expect(groupedCashReceipt).toHaveCount(1);
+  await expect(groupedCashReceipt).toContainText("100");
 });

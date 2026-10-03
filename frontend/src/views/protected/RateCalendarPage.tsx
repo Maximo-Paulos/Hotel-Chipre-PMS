@@ -4,22 +4,18 @@ import { Link } from "react-router-dom";
 import { RateCalendarGrid } from "../../components/RateCalendarGrid";
 import { RateEditorGrid, type PriceField } from "../../components/RateEditorGrid";
 import { RateEditorMobileCards } from "../../components/RateEditorMobileCards";
-import type { DailyRatePrices } from "../../api/rate-calendar";
+import type { RateChangeDraft, RateChangeValues } from "../../api/rateChangeDrafts";
 import { useCategories } from "../../hooks/useCategories";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import {
   todayIso,
-  useBulkUpsertRates,
-  useBulkUpdateRateField,
   useCategoryDailyRates,
   usePricePeriods,
-  usePricePeriodMutations,
   useRateCalendar,
   useRatePaymentMethodOptions,
-  useUpsertDailyRate,
-  type SingleRateInput,
   type PricePeriodInput
 } from "../../hooks/useRateCalendar";
+import { useRateChangeDrafts } from "../../hooks/useRateChangeDrafts";
 
 const RANGE_LABEL = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short", year: "numeric" });
 
@@ -76,6 +72,18 @@ const yearStart = (year: number) => {
 };
 
 const yearEnd = (year: number) => `${year}-12-31`;
+
+const formatRateAmount = (value: number | null | undefined, currencyCode: string) =>
+  value == null ? "hereda precio base" : new Intl.NumberFormat("es-AR", { style: "currency", currency: currencyCode }).format(value);
+
+const formatPeriodDraftDetails = (value: Record<string, unknown> | null | undefined, currencyCode: string) => {
+  if (!value) return "Sin temporada";
+  const name = typeof value.name === "string" ? value.name : "Temporada";
+  const start = typeof value.start_date === "string" ? value.start_date : "—";
+  const end = typeof value.end_date === "string" ? value.end_date : "—";
+  const price = typeof value.price_per_night === "number" ? value.price_per_night : null;
+  return `${name} · ${start} → ${end} · ${formatRateAmount(price, currencyCode)}/noche`;
+};
 
 function Pill({ children, tone = "default" }: { children: React.ReactNode; tone?: "default" | "blue" | "green" | "amber" | "violet" }) {
   const styles = {
@@ -137,11 +145,19 @@ export function RateCalendarPage() {
     () => BULK_FIELD_OPTIONS.filter((option) => visiblePriceFields.includes(option.value)),
     [visiblePriceFields]
   );
-  const cellSave = useUpsertDailyRate(categoryId);
-  const bulkSave = useBulkUpsertRates(categoryId);
-  const bulkFieldSave = useBulkUpdateRateField(categoryId);
+  const rateDraftMutations = useRateChangeDrafts(categoryId);
+  const [stagedChangesByDate, setStagedChangesByDate] = useState<Record<string, RateChangeValues>>({});
+  const stagedChanges = useMemo(
+    () => Object.entries(stagedChangesByDate).sort(([left], [right]) => left.localeCompare(right)).map(([date, values]) => ({ date, values })),
+    [stagedChangesByDate]
+  );
+  const openDraft = useMemo(
+    () => (rateDraftMutations.draftsQuery.data ?? []).find((draft) => draft.status === "draft") ?? null,
+    [rateDraftMutations.draftsQuery.data]
+  );
+  const rateDraftBusy = rateDraftMutations.create.isPending || rateDraftMutations.confirm.isPending || rateDraftMutations.cancel.isPending;
+  const editorDisabled = !canEditRates || Boolean(openDraft) || rateDraftBusy;
   const periodsQuery = usePricePeriods(categoryId);
-  const periodMutations = usePricePeriodMutations(categoryId);
   const [periodForm, setPeriodForm] = useState<PricePeriodInput>({
     category_id: categoryId ?? 0,
     name: "",
@@ -151,16 +167,21 @@ export function RateCalendarPage() {
     priority: 0,
     is_active: true
   });
+  const [editingPeriodId, setEditingPeriodId] = useState<number | null>(null);
+  const [periodError, setPeriodError] = useState<string | null>(null);
 
   const [cellError, setCellError] = useState<string | null>(null);
-  const handleSaveCell = async (payload: SingleRateInput) => {
+  const handleStageCell = (payload: { date: string; values: RateChangeValues }) => {
     setCellError(null);
-    try {
-      await cellSave.mutateAsync(payload);
-    } catch (err: unknown) {
-      setCellError(err instanceof Error ? err.message : "No se pudo guardar la tarifa.");
-    }
+    setStagedChangesByDate((current) => ({
+      ...current,
+      [payload.date]: { ...(current[payload.date] ?? {}), ...payload.values }
+    }));
   };
+
+  useEffect(() => {
+    setStagedChangesByDate({});
+  }, [categoryId]);
 
   const [fromDate, setFromDate] = useState(dateFrom);
   const [toDate, setToDate] = useState(dateTo);
@@ -193,17 +214,69 @@ export function RateCalendarPage() {
   useEffect(() => {
     setFromDate(dateFrom);
     setToDate(dateTo);
-    setPeriodForm((current) => ({ ...current, category_id: categoryId ?? 0, start_date: dateFrom, end_date: dateTo }));
+    setEditingPeriodId(null);
+    setPeriodError(null);
+    setPeriodForm({ category_id: categoryId ?? 0, name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true });
   }, [dateFrom, dateTo, categoryId]);
 
-  const handleCreatePeriod = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSavePeriod = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!categoryId || !periodForm.name.trim() || periodForm.end_date < periodForm.start_date) return;
-    try {
-      await periodMutations.create.mutateAsync({ ...periodForm, category_id: categoryId, name: periodForm.name.trim() });
-    } catch {
-      // The mutation state renders the error below the form.
+    if (!categoryId || !periodForm.name.trim()) return;
+    if (periodForm.end_date < periodForm.start_date) {
+      setPeriodError("La fecha final debe ser igual o posterior a la inicial.");
+      return;
     }
+    setPeriodError(null);
+    try {
+      const values = { ...periodForm, category_id: categoryId, name: periodForm.name.trim() };
+      await rateDraftMutations.create.mutateAsync({
+        category_id: categoryId,
+        draft_type: "price_period",
+        period_operation: editingPeriodId === null
+          ? { action: "create", values }
+          : { action: "update", period_id: editingPeriodId, values }
+      });
+      setEditingPeriodId(null);
+      setPeriodForm({ category_id: categoryId, name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true });
+    } catch (error: unknown) {
+      setPeriodError(error instanceof Error ? error.message : "No se pudo preparar el cambio de temporada.");
+    }
+  };
+
+  const handleDeletePeriod = async (periodId: number) => {
+    if (!categoryId) return;
+    setPeriodError(null);
+    try {
+      await rateDraftMutations.create.mutateAsync({
+        category_id: categoryId,
+        draft_type: "price_period",
+        period_operation: { action: "delete", period_id: periodId }
+      });
+    } catch (error: unknown) {
+      setPeriodError(error instanceof Error ? error.message : "No se pudo preparar la baja de temporada.");
+    }
+  };
+
+  const handleEditPeriod = (period: NonNullable<typeof periodsQuery.data>[number]) => {
+    setEditingPeriodId(period.id);
+    setPeriodError(null);
+    setPeriodForm({
+      category_id: period.category_id,
+      name: period.name,
+      start_date: period.start_date,
+      end_date: period.end_date,
+      price_per_night: period.price_per_night,
+      price_cash: period.price_cash,
+      price_transfer: period.price_transfer,
+      price_mercadopago: period.price_mercadopago,
+      price_paypal: period.price_paypal,
+      price_credit_card: period.price_credit_card,
+      price_debit_card: period.price_debit_card,
+      price_booking: period.price_booking,
+      price_expedia: period.price_expedia,
+      priority: period.priority,
+      is_active: period.is_active
+    });
   };
 
   const rangeRows = useMemo(
@@ -261,13 +334,8 @@ export function RateCalendarPage() {
 
   const handleSaveRates = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!canEditRates) return;
+    if (editorDisabled) return;
     setSaveError(null);
-    const price = toNumberOrNull(basePrice);
-    if (bulkEditKind === "all" && price === null) {
-      setSaveError("Ingresá un precio base válido (>= 0).");
-      return;
-    }
     if (toDate < fromDate) {
       setSaveError("La fecha final debe ser mayor o igual a la inicial.");
       return;
@@ -280,49 +348,101 @@ export function RateCalendarPage() {
       setSaveError("No hay fechas afectadas dentro del rango y los días elegidos.");
       return;
     }
+    const excluded = new Set(excludedDates);
+    const eligibleRows = rangeRows.filter((row) => !excluded.has(row.date));
+    if (eligibleRows.length === 0) {
+      setSaveError("No hay fechas cargadas para preparar el cambio.");
+      return;
+    }
     if (bulkEditKind === "field") {
       const value = Number(bulkFieldValue.trim());
       if (!Number.isFinite(value)) {
         setSaveError("Ingresá un valor válido para la edición rápida.");
         return;
       }
-      try {
-        await bulkFieldSave.mutateAsync({
-          from_date: fromDate,
-          to_date: toDate,
-          field: bulkField,
-          mode: bulkAction,
-          value,
-          exclude_dates: excludedDates
-        });
-      } catch (err: unknown) {
-        setSaveError(err instanceof Error ? err.message : "No se pudieron guardar las tarifas.");
+      const updates: Record<string, RateChangeValues> = {};
+      for (const row of eligibleRows) {
+        const currentValue = row[bulkField] ?? row.price;
+        const nextValue = bulkAction === "set"
+          ? value
+          : bulkAction === "amount_delta"
+            ? currentValue + value
+            : currentValue * (1 + value / 100);
+        const rounded = Math.round(nextValue * 100) / 100;
+        if (!Number.isFinite(rounded) || rounded < 0) {
+          setSaveError(`El ajuste deja un precio negativo para ${row.date}.`);
+          return;
+        }
+        updates[row.date] = { [bulkField]: rounded };
       }
+      setStagedChangesByDate((current) => {
+        const next = { ...current };
+        Object.entries(updates).forEach(([date, values]) => {
+          next[date] = { ...(next[date] ?? {}), ...values };
+        });
+        return next;
+      });
       return;
     }
 
+    const price = toNumberOrNull(basePrice);
     if (price === null) {
       setSaveError("Ingresá un precio base válido (>= 0).");
       return;
     }
 
-    const optionalPrices: Partial<Omit<DailyRatePrices, "price">> = {};
-    if (visiblePriceFields.includes("price_cash")) optionalPrices.price_cash = toNumberOrNull(priceCash);
-    if (visiblePriceFields.includes("price_transfer")) optionalPrices.price_transfer = toNumberOrNull(priceTransfer);
-    if (visiblePriceFields.includes("price_mercadopago")) optionalPrices.price_mercadopago = toNumberOrNull(priceMercadopago);
-    if (visiblePriceFields.includes("price_paypal")) optionalPrices.price_paypal = toNumberOrNull(pricePaypal);
-    if (visiblePriceFields.includes("price_credit_card")) optionalPrices.price_credit_card = toNumberOrNull(priceCreditCard);
+    const rawOptionalValues: Partial<Record<PriceField, string>> = {
+      price_cash: priceCash,
+      price_transfer: priceTransfer,
+      price_mercadopago: priceMercadopago,
+      price_paypal: pricePaypal,
+      price_credit_card: priceCreditCard
+    };
+    const optionalValues: RateChangeValues = { price };
+    for (const field of visiblePriceFields) {
+      if (field === "price") continue;
+      const raw = rawOptionalValues[field] ?? "";
+      const parsed = toNumberOrNull(raw);
+      if (raw.trim() && parsed === null) {
+        setSaveError(`Ingresá un importe válido para ${PRICE_FIELD_LABEL[field]}.`);
+        return;
+      }
+      optionalValues[field] = parsed;
+    }
 
-    try {
-      await bulkSave.mutateAsync({
-        from_date: fromDate,
-        to_date: toDate,
-        price,
-        ...optionalPrices,
-        exclude_dates: excludedDates
+    setStagedChangesByDate((current) => {
+      const next = { ...current };
+      eligibleRows.forEach((row) => {
+        next[row.date] = { ...(next[row.date] ?? {}), ...optionalValues };
       });
+      return next;
+    });
+  };
+
+  const handleCreateDraft = async () => {
+    if (!categoryId || stagedChanges.length === 0 || editorDisabled) return;
+    setSaveError(null);
+    try {
+      await rateDraftMutations.create.mutateAsync({ category_id: categoryId, changes: stagedChanges });
+      setStagedChangesByDate({});
     } catch (err: unknown) {
-      setSaveError(err instanceof Error ? err.message : "No se pudieron guardar las tarifas.");
+      setSaveError(err instanceof Error ? err.message : "No se pudo guardar el borrador.");
+    }
+  };
+
+  const handleConfirmDraft = async (draft: RateChangeDraft) => {
+    try {
+      await rateDraftMutations.confirm.mutateAsync({ id: draft.id, version: draft.version });
+    } catch (err: unknown) {
+      setCellError(err instanceof Error ? err.message : "No se pudo confirmar el borrador.");
+    }
+  };
+
+  const handleCancelDraft = async (draft: RateChangeDraft) => {
+    try {
+      await rateDraftMutations.cancel.mutateAsync({ id: draft.id, version: draft.version });
+    } catch (err: unknown) {
+      setCellError(err instanceof Error ? err.message : "No se pudo cancelar el borrador.");
     }
   };
 
@@ -331,6 +451,9 @@ export function RateCalendarPage() {
   const labelClass = "flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500";
   const currencyCode = calendarQuery.data?.meta.hotel_currency_code ?? "ARS";
   const totalRooms = calendarQuery.data?.meta.total_rooms ?? null;
+  const openPeriodOperation = openDraft?.period_operation ?? null;
+  const periodDraftAfter = openPeriodOperation?.after as Record<string, unknown> | null | undefined;
+  const periodDraftBefore = openPeriodOperation?.before as Record<string, unknown> | null | undefined;
 
   return (
     <div className="space-y-4" data-testid="rate-calendar-page">
@@ -437,17 +560,11 @@ export function RateCalendarPage() {
               </div>
 
               <div className="flex flex-col items-stretch gap-2 sm:items-end">
-                <button
-                  type="button"
-                  disabled
-                  className="rounded-2xl bg-slate-200 px-6 py-3 text-sm font-bold text-slate-500"
-                  title="La publicación a canales se habilita desde integraciones conectadas."
-                >
-                  Sin cambios pendientes
-                </button>
                 <div className="flex flex-wrap justify-end gap-2">
-                  {cellSave.isPending ? <Pill>Guardando...</Pill> : null}
-                  {cellSave.isSuccess && !cellError ? <Pill tone="green">Guardado</Pill> : null}
+                  {openDraft ? <Pill tone="amber">Borrador #{openDraft.id} pendiente de confirmación</Pill> : null}
+                  {!openDraft && stagedChanges.length > 0 ? <Pill tone="amber">{stagedChanges.length} fechas preparadas localmente</Pill> : null}
+                  {!openDraft && stagedChanges.length === 0 ? <Pill>Sin cambios pendientes</Pill> : null}
+                  {rateDraftBusy ? <Pill>Procesando borrador...</Pill> : null}
                   {!canEditRates ? <Pill>Solo lectura</Pill> : null}
                   <Pill tone="amber">Mapeos OTA</Pill>
                 </div>
@@ -463,11 +580,11 @@ export function RateCalendarPage() {
                 dailyRates={dailyRatesQuery.data}
                 calendar={calendarQuery.data}
                 currencyCode={currencyCode}
-                onSaveCell={handleSaveCell}
+                onStageChange={handleStageCell}
                 onSelectCell={handleSelectCell}
                 selectedRange={selectedRange}
                 visibleFields={visiblePriceFields}
-                disabled={!canEditRates || cellSave.isPending}
+                disabled={editorDisabled}
               />
             </div>
             {/* Mobile alternative: card-per-day, step-through-the-week flow. */}
@@ -476,10 +593,92 @@ export function RateCalendarPage() {
                 dailyRates={dailyRatesQuery.data}
                 currencyCode={currencyCode}
                 visibleFields={visiblePriceFields}
-                onSaveCell={handleSaveCell}
-                disabled={!canEditRates || cellSave.isPending}
+                onStageChange={handleStageCell}
+                disabled={editorDisabled}
               />
             </div>
+
+            {rateDraftMutations.draftsQuery.isLoading && <p role="status" className="mx-4 my-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Consultando borradores de tarifa...</p>}
+            {rateDraftMutations.draftsQuery.isError && (
+              <p role="alert" className="mx-4 my-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+                No se pudieron cargar los borradores. <button type="button" onClick={() => void rateDraftMutations.draftsQuery.refetch()} className="font-semibold underline">Reintentar</button>
+              </p>
+            )}
+
+            {openDraft ? (
+              <section aria-label="Borrador de tarifas pendiente" className="mx-4 my-4 space-y-3 rounded-2xl border border-amber-300 bg-amber-50 p-4" data-testid="rate-change-draft-review">
+                <div>
+                  <h3 className="font-semibold text-amber-950">Revisar borrador antes de confirmar</h3>
+                  <p className="mt-1 text-sm text-amber-900">La confirmación cambia la tarifa del calendario. Los importes pactados en reservas existentes se conservan; ninguna reserva se recalcula automáticamente.</p>
+                </div>
+                <p className="text-sm text-amber-950">
+                  Impacto actual: {openDraft.impact.reservations_impacted} reservas · {openDraft.impact.reservation_nights} noches · {openDraft.impact.dates_with_reservations.length} fechas con reservas.
+                </p>
+                {openPeriodOperation ? (
+                  <div className="space-y-2 rounded-xl border border-amber-200 bg-white p-3 text-sm">
+                    <p className="font-semibold text-slate-900">Temporada · {openPeriodOperation.action === "create" ? "alta" : openPeriodOperation.action === "update" ? "edición" : "baja"}</p>
+                    {openPeriodOperation.action !== "create" && <p className="text-slate-700">Antes: {formatPeriodDraftDetails(periodDraftBefore, currencyCode)}</p>}
+                    {openPeriodOperation.action !== "delete" && <p className="text-slate-700">Después: {formatPeriodDraftDetails(periodDraftAfter, currencyCode)}</p>}
+                    <p className="text-xs text-slate-600">Noches con tarifa efectiva modificada: {openPeriodOperation.effective_changes.length}. Las tarifas diarias explícitas mantienen prioridad y las reservas contratadas no cambian.</p>
+                    {openPeriodOperation.effective_changes.length > 0 && (
+                      <ul className="max-h-40 space-y-1 overflow-auto text-xs text-slate-700">
+                        {openPeriodOperation.effective_changes.map((change) => (
+                          <li key={change.date}>{change.date}: {formatRateAmount(change.before.price ?? null, currencyCode)} → {formatRateAmount(change.after.price ?? null, currencyCode)}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
+                {openDraft.changes.length > 0 && (
+                  <ul className="max-h-64 space-y-2 overflow-auto text-sm">
+                    {openDraft.changes.map((change) => (
+                      <li key={change.date} className="rounded-lg border border-amber-200 bg-white p-2">
+                        <p className="font-semibold text-slate-900">{change.date}</p>
+                        <ul className="mt-1 space-y-1 text-xs text-slate-700">
+                          {Object.keys(change.values).map((field) => (
+                            <li key={field}>{PRICE_FIELD_LABEL[field as PriceField]}: {formatRateAmount(change.before[field as PriceField], currencyCode)} → {formatRateAmount(change.after[field as PriceField], currencyCode)}</li>
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {cellError && <div role="alert" className="flex items-start justify-between gap-3 text-sm text-rose-700"><p>{cellError}</p><button type="button" aria-label="Cerrar error" onClick={() => setCellError(null)} className="shrink-0 font-semibold underline">Cerrar</button></div>}
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button type="button" onClick={() => void handleCancelDraft(openDraft)} disabled={!canEditRates || rateDraftBusy} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-50">Cancelar borrador</button>
+                  <button type="button" onClick={() => void handleConfirmDraft(openDraft)} disabled={!canEditRates || rateDraftBusy} className="min-h-11 rounded-xl bg-brand-700 px-4 text-sm font-semibold text-white disabled:opacity-50">{rateDraftMutations.confirm.isPending ? "Confirmando..." : openPeriodOperation ? "Confirmar temporada" : "Confirmar tarifas"}</button>
+                </div>
+              </section>
+            ) : stagedChanges.length > 0 ? (
+              <section aria-label="Cambios locales de tarifas" className="mx-4 my-4 space-y-3 rounded-2xl border border-brand-200 bg-brand-50 p-4" data-testid="rate-change-local-preview">
+                <div>
+                  <h3 className="font-semibold text-brand-950">Vista previa local · {stagedChanges.length} fechas</h3>
+                  <p className="mt-1 text-sm text-brand-900">Guardá un borrador para consultar el impacto y después confirmarlo o cancelarlo. Las reservas existentes mantienen su precio pactado.</p>
+                </div>
+                <ul className="max-h-56 space-y-2 overflow-auto text-sm">
+                  {stagedChanges.map((change) => {
+                    const row = dailyRatesQuery.data?.find((item) => item.date === change.date);
+                    return (
+                      <li key={change.date} className="rounded-lg border border-brand-100 bg-white p-2">
+                        <p className="font-semibold text-slate-900">{change.date}</p>
+                        <ul className="mt-1 space-y-1 text-xs text-slate-700">
+                          {Object.entries(change.values).map(([field, value]) => {
+                            const priceField = field as PriceField;
+                            const before = row ? (priceField === "price" ? row.price : row[priceField] ?? row.price) : null;
+                            return <li key={field}>{PRICE_FIELD_LABEL[priceField]}: {formatRateAmount(before, currencyCode)} → {formatRateAmount(value, currencyCode)}</li>;
+                          })}
+                        </ul>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {rateDraftMutations.create.isError && <div role="alert" className="flex items-start justify-between gap-3 text-sm text-rose-700"><p>{(rateDraftMutations.create.error as Error).message}</p><button type="button" aria-label="Cerrar error" onClick={() => rateDraftMutations.create.reset()} className="shrink-0 font-semibold underline">Cerrar</button></div>}
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button type="button" onClick={() => setStagedChangesByDate({})} disabled={rateDraftBusy} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-50">Descartar cambios locales</button>
+                  <button type="button" onClick={() => void handleCreateDraft()} disabled={!canEditRates || rateDraftBusy} className="min-h-11 rounded-xl bg-brand-700 px-4 text-sm font-semibold text-white disabled:opacity-50">{rateDraftMutations.create.isPending ? "Guardando borrador..." : "Guardar borrador"}</button>
+                </div>
+              </section>
+            ) : null}
 
             {calendarQuery.data ? (
               <div className="border-t-2 border-slate-200">
@@ -524,7 +723,7 @@ export function RateCalendarPage() {
                   Tenés permiso para ver las tarifas, pero no para editarlas.
                 </p>
               ) : null}
-              <fieldset disabled={!canEditRates} className="contents">
+              <fieldset disabled={editorDisabled} className="contents">
               <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 xl:flex-row xl:items-center xl:justify-between">
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -703,13 +902,6 @@ export function RateCalendarPage() {
               </div>
 
               {saveError ? <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{saveError}</p> : null}
-              {(bulkSave.isSuccess || bulkFieldSave.isSuccess) && !saveError ? (
-                <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">
-                  Tarifas guardadas: {(bulkFieldSave.data ?? bulkSave.data)?.created ?? 0} creadas,{" "}
-                  {(bulkFieldSave.data ?? bulkSave.data)?.updated ?? 0} actualizadas.
-                </p>
-              ) : null}
-
               <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
@@ -732,11 +924,11 @@ export function RateCalendarPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={bulkSave.isPending || bulkFieldSave.isPending}
+                  disabled={editorDisabled}
                   data-testid="rate-editor-save"
                   className="rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-70"
                 >
-                  {bulkSave.isPending || bulkFieldSave.isPending ? "Guardando..." : "Aplicar al calendario"}
+                  "Preparar cambios"
                 </button>
               </div>
               </fieldset>
@@ -761,19 +953,29 @@ export function RateCalendarPage() {
                     <p className="font-semibold text-slate-900">{period.name} · {period.price_per_night} {currencyCode}</p>
                     <p className="text-xs text-slate-500">{period.start_date} → {period.end_date} · prioridad {period.priority} · {period.is_active ? "Activa" : "Inactiva"}</p>
                   </div>
-                  {canEditRates ? <button type="button" className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700" onClick={() => void periodMutations.remove.mutateAsync(period.id).catch(() => undefined)} disabled={periodMutations.remove.isPending}>Eliminar</button> : null}
+                  {canEditRates ? (
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 disabled:opacity-50" onClick={() => handleEditPeriod(period)} disabled={Boolean(openDraft) || rateDraftBusy}>Editar</button>
+                      <button type="button" className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 disabled:opacity-50" onClick={() => void handleDeletePeriod(period.id)} disabled={Boolean(openDraft) || rateDraftBusy}>Preparar baja</button>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
-            <form onSubmit={handleCreatePeriod} className="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-2 xl:grid-cols-6">
-              <label className={labelClass}>Nombre<input required className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.name} onChange={(event) => setPeriodForm((current) => ({ ...current, name: event.target.value }))} placeholder="Temporada alta" disabled={!canEditRates} /></label>
-              <label className={labelClass}>Desde<input required type="date" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.start_date} onChange={(event) => setPeriodForm((current) => ({ ...current, start_date: event.target.value }))} disabled={!canEditRates} /></label>
-              <label className={labelClass}>Hasta<input required type="date" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.end_date} onChange={(event) => setPeriodForm((current) => ({ ...current, end_date: event.target.value }))} disabled={!canEditRates} /></label>
-              <label className={labelClass}>Precio por noche<input required min={0} step="0.01" type="number" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.price_per_night} onChange={(event) => setPeriodForm((current) => ({ ...current, price_per_night: Number(event.target.value) }))} disabled={!canEditRates} /></label>
-              <label className={labelClass}>Prioridad<input min={0} type="number" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.priority} onChange={(event) => setPeriodForm((current) => ({ ...current, priority: Number(event.target.value) }))} disabled={!canEditRates} /></label>
-              <button type="submit" className="self-end rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={!canEditRates || periodMutations.create.isPending || !categoryId}>{periodMutations.create.isPending ? "Guardando..." : "Agregar temporada"}</button>
+            <form onSubmit={handleSavePeriod} className="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-2 xl:grid-cols-6">
+              <h3 className="md:col-span-2 xl:col-span-6 text-sm font-semibold text-slate-800">{editingPeriodId === null ? "Nueva temporada (borrador)" : "Editar temporada (borrador)"}</h3>
+              <label className={labelClass}>Nombre<input required className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.name} onChange={(event) => setPeriodForm((current) => ({ ...current, name: event.target.value }))} placeholder="Temporada alta" disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /></label>
+              <label className={labelClass}>Desde<input required type="date" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.start_date} onChange={(event) => setPeriodForm((current) => ({ ...current, start_date: event.target.value }))} disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /></label>
+              <label className={labelClass}>Hasta<input required type="date" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.end_date} onChange={(event) => setPeriodForm((current) => ({ ...current, end_date: event.target.value }))} disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /></label>
+              <label className={labelClass}>Precio por noche<input required min={0} step="0.01" type="number" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.price_per_night} onChange={(event) => setPeriodForm((current) => ({ ...current, price_per_night: Number(event.target.value) }))} disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /></label>
+              <label className={labelClass}>Prioridad<input min={-100000} type="number" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.priority} onChange={(event) => setPeriodForm((current) => ({ ...current, priority: Number(event.target.value) }))} disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /></label>
+              <label className={`${labelClass} flex-row items-center gap-2 self-end pb-3 normal-case tracking-normal`}><input type="checkbox" checked={periodForm.is_active} onChange={(event) => setPeriodForm((current) => ({ ...current, is_active: event.target.checked }))} disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /> Activa</label>
+              {periodError && <div role="alert" className="flex items-start justify-between gap-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700 md:col-span-2 xl:col-span-6"><p>{periodError}</p><button type="button" aria-label="Cerrar error de temporada" onClick={() => setPeriodError(null)} className="shrink-0 font-semibold underline">Cerrar</button></div>}
+              <div className="flex flex-wrap justify-end gap-2 md:col-span-2 xl:col-span-6">
+                {editingPeriodId !== null && <button type="button" className="self-end rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => { setEditingPeriodId(null); setPeriodError(null); setPeriodForm({ category_id: categoryId ?? 0, name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true }); }}>Descartar edición</button>}
+                <button type="submit" className="self-end rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy || !categoryId}>{rateDraftMutations.create.isPending ? "Preparando borrador..." : editingPeriodId === null ? "Preparar alta" : "Preparar edición"}</button>
+              </div>
             </form>
-            {periodMutations.create.isError || periodMutations.remove.isError ? <p className="mt-2 text-sm text-rose-700">No se pudo actualizar la temporada.</p> : null}
           </section>
         </main>
       ) : null}

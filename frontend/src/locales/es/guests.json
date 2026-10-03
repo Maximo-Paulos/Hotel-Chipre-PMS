@@ -153,8 +153,15 @@
     "fallbackName": "Huésped #{{id}}",
     "noDocument": "Sin documento",
     "noResults": "No se encontraron huéspedes para \"{{query}}\".",
-    "createNew": "¿No lo encontrás? Crear huésped nuevo",
-    "noPermissions": "No tenés permisos para consultar ni crear huéspedes.",
-    "createError": "No se pudo crear el huésped"
-  }
+  "createNew": "¿No lo encontrás? Crear huésped nuevo",
+  "noPermissions": "No tenés permisos para consultar ni crear huéspedes.",
+  "createError": "No se pudo crear el huésped",
+  "checkingDuplicates": "Revisando huéspedes similares...",
+  "duplicateWarningTitle": "Revisá posibles huéspedes duplicados",
+  "duplicateWarningBody": "Encontramos registros con el mismo nombre, email o teléfono. No se fusionó ningún registro; elegí uno existente o continuá para crear otro.",
+  "documentAlreadyExists": "Este tipo y número de documento ya están registrados. Elegí el huésped existente para evitar duplicar su documento.",
+  "duplicateCheckFailed": "No se pudieron revisar los huéspedes existentes. Corregí el problema e intentá de nuevo.",
+  "useExistingGuest": "Usar este huésped",
+  "createSeparateGuest": "Crear huésped separado"
+}
 }

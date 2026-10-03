@@ -8,16 +8,20 @@ from app.database import get_db
 from app.dependencies.auth import AuthContext, require_any_permission, require_permission
 from app.models.room_block import RoomBlockReasonEnum
 from app.services.permission_service import (
+    PERMISSION_ROOM_READ,
     PERMISSION_ROOM_BLOCK_CREATE,
     PERMISSION_ROOM_BLOCK_RELEASE,
 )
 from app.services.room_block_service import (
     ProtectedReservationConflictError,
+    RoomBlockExtensionConflictError,
     RoomBlockReleaseConflictError,
     RoomBlockError,
     create_block,
+    extend_block,
     get_block,
     list_active_blocks,
+    preview_block_extension,
     preview_block_conflicts,
     resolve_block,
 )
@@ -57,6 +61,16 @@ class RoomBlockConflictPreview(BaseModel):
     protected_reservation_count: int
 
 
+class RoomBlockExtensionConflictPreview(BaseModel):
+    reservation_count: int
+    protected_reservation_count: int
+    overlapping_block_count: int
+
+
+class RoomBlockExtensionInput(BaseModel):
+    ends_at: date
+
+
 @router.post("/", response_model=RoomBlockRead, status_code=status.HTTP_201_CREATED)
 def create_room_block(
     data: RoomBlockCreate,
@@ -93,11 +107,15 @@ def list_room_blocks(
     end_date: date | None = None,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(
-        require_any_permission(PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_ROOM_BLOCK_RELEASE)
+        require_any_permission(PERMISSION_ROOM_READ, PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_ROOM_BLOCK_RELEASE)
     ),
 ):
     try:
-        return list_active_blocks(db, hotel_id=context.hotel_id, start_date=start_date, end_date=end_date)
+        blocks = list_active_blocks(db, hotel_id=context.hotel_id, start_date=start_date, end_date=end_date)
+        if context.operational_role == "housekeeping":
+            visible_reasons = {RoomBlockReasonEnum.MAINTENANCE, RoomBlockReasonEnum.DEEP_CLEANING}
+            blocks = [block for block in blocks if block.reason_code in visible_reasons]
+        return blocks
     except RoomBlockError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -130,13 +148,54 @@ def get_room_block(
     block_id: int,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(
-        require_any_permission(PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_ROOM_BLOCK_RELEASE)
+        require_any_permission(PERMISSION_ROOM_READ, PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_ROOM_BLOCK_RELEASE)
     ),
 ):
     try:
         return get_block(db, hotel_id=context.hotel_id, block_id=block_id)
     except RoomBlockError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/{block_id}/extend-preview", response_model=RoomBlockExtensionConflictPreview)
+def preview_room_block_extension_endpoint(
+    block_id: int,
+    ends_at: date,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_BLOCK_CREATE)),
+):
+    try:
+        return preview_block_extension(db, hotel_id=context.hotel_id, block_id=block_id, ends_at=ends_at)
+    except RoomBlockError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/{block_id}/extend", response_model=RoomBlockRead)
+def extend_room_block(
+    block_id: int,
+    data: RoomBlockExtensionInput,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_ROOM_BLOCK_CREATE)),
+):
+    try:
+        block = extend_block(db, hotel_id=context.hotel_id, block_id=block_id, ends_at=data.ends_at)
+    except RoomBlockExtensionConflictError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": str(exc),
+                "protected_reservation_count": exc.protected_reservation_count,
+                "overlapping_block_count": exc.overlapping_block_count,
+            },
+        ) from exc
+    except RoomBlockError as exc:
+        db.rollback()
+        code = status.HTTP_404_NOT_FOUND if str(exc) == "Room block not found" else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+    db.commit()
+    db.refresh(block)
+    return block
 
 
 @router.post("/{block_id}/resolve", response_model=RoomBlockRead)

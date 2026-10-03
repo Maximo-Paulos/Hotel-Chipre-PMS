@@ -108,6 +108,21 @@ export type UserPermissionMutationResponse = {
   updated_at?: string | null;
 };
 
+export type PermissionOverrideBatchChange = {
+  scope: "role" | "user";
+  operation: "set" | "restore";
+  permission_code: string;
+  role?: PermissionRole;
+  user_id?: number;
+  allowed?: boolean;
+  expected_version: number;
+};
+
+export type PermissionOverrideBatchResponse = {
+  hotel_id: number;
+  updated: number;
+};
+
 export type VisibilityWindowHours = 12 | 24 | 48 | 72 | 168;
 
 export type VisibilityWindow = {
@@ -210,6 +225,16 @@ export const updateUserPermissionOverride = (
   apiFetch<UserPermissionMutationResponse>(`/api/permissions/user-overrides/${userId}`, {
     method: "PUT",
     data: payload,
+    session
+  });
+
+export const updatePermissionOverridesBatch = (
+  changes: PermissionOverrideBatchChange[],
+  session?: SessionLike
+) =>
+  apiFetch<PermissionOverrideBatchResponse>("/api/permissions/overrides/batch", {
+    method: "PUT",
+    data: { changes },
     session
   });
 

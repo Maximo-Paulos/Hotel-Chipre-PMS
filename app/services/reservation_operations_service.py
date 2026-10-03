@@ -341,7 +341,7 @@ def add_reservation_charge(
     )
     db.add(charge)
     db.flush()
-    audit_log_service.safe_create_audit_log(
+    audit_log_service.create_audit_log(
         db,
         hotel_id=hotel_id,
         table_name="billing_adjustments",

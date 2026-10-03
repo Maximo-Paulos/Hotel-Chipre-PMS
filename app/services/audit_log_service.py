@@ -92,6 +92,7 @@ def create_audit_log(
     payload_before: dict[str, Any] | str | None = None,
     payload_after: dict[str, Any] | str | None = None,
 ) -> AuditLog:
+    """Queue a strict audit row in the caller's transaction; the caller commits."""
     audit_action = action if isinstance(action, AuditActionEnum) else AuditActionEnum(action)
     audit_log = AuditLog(
         hotel_id=hotel_id,
@@ -103,7 +104,7 @@ def create_audit_log(
         payload_after=payload_json(payload_after, table_name=table_name),
     )
     db.add(audit_log)
-    db.commit()
+    db.flush()
     return audit_log
 
 
@@ -150,7 +151,9 @@ def safe_create_audit_log(
     failure wiped out the caller's pending stock-item soft-delete in the same
     session, so DELETE /api/stock/items/{id} returned 204 while the item was
     never actually deleted). Runs inside a SAVEPOINT so any failure here rolls
-    back only this audit row, never the caller's outer transaction.
+    back only this audit row, never the caller's outer transaction. It never
+    commits: a successful audit row is durable only with the caller's business
+    transaction.
     """
     audit_action = action if isinstance(action, AuditActionEnum) else AuditActionEnum(action)
     try:

@@ -99,6 +99,7 @@ export function SettingsHotelPage() {
   const { categoriesQuery, roomsQuery } = useRooms({ includeCategories: true });
   const [form, setForm] = useState<Partial<HotelConfig>>({});
   const [error, setError] = useState<string | null>(null);
+  const [fiscalPreviewOpen, setFiscalPreviewOpen] = useState(false);
 
   const [categoryForm, setCategoryForm] = useState<Omit<RoomCategory, "id">>({
     name: "",
@@ -398,6 +399,7 @@ export function SettingsHotelPage() {
   const canManageFxSettings = permissionsKnown && hasPermission("settings:fx:manage");
   const canDeleteRooms = permissionsKnown && hasPermission("hotel_settings:update");
   const canManageManualRatePolicy = permissionsKnown && hasPermission("reservation:manual_rate_policy_manage");
+  const canManageFiscalProfile = permissionsKnown && hasPermission("config:manage");
 
   if (!hasValidSession(session)) return <p className="text-sm text-slate-600">Iniciá sesión con un hotel activo para editar la configuración.</p>;
 
@@ -526,6 +528,104 @@ export function SettingsHotelPage() {
               <input maxLength={3} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase" value={form.jurisdiction_code ?? "AR"} onChange={(e) => handleChange("jurisdiction_code", e.target.value.toUpperCase())} />
             </label>
           </div>
+
+          {canManageFiscalProfile && (
+            <section className="rounded-lg border border-slate-200 p-4" data-testid="hotel-fiscal-profile">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-800">Perfil fiscal informativo</h3>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Guardá los datos del emisor para preparar comprobantes. Esta etapa no conecta con ARCA y no emite facturas fiscales.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFiscalPreviewOpen((open) => !open)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  data-testid="hotel-fiscal-preview-toggle"
+                >
+                  {fiscalPreviewOpen ? "Ocultar vista previa" : "Ver vista previa no fiscal"}
+                </button>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <label className="text-sm font-semibold text-slate-700">
+                  Razón social
+                  <input
+                    maxLength={200}
+                    value={form.fiscal_legal_name ?? ""}
+                    onChange={(event) => handleChange("fiscal_legal_name", event.target.value || null)}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  CUIT / identificador fiscal
+                  <input
+                    maxLength={20}
+                    value={form.fiscal_tax_id ?? ""}
+                    onChange={(event) => handleChange("fiscal_tax_id", event.target.value || null)}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    inputMode="numeric"
+                  />
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Condición frente al IVA
+                  <select
+                    value={form.fiscal_vat_condition ?? ""}
+                    onChange={(event) => handleChange("fiscal_vat_condition", (event.target.value || null) as HotelConfig["fiscal_vat_condition"])}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">Sin especificar</option>
+                    <option value="responsable_inscripto">Responsable inscripto</option>
+                    <option value="monotributo">Monotributo</option>
+                    <option value="exento">Exento</option>
+                    <option value="consumidor_final">Consumidor final</option>
+                    <option value="no_responsable">No responsable</option>
+                    <option value="otro">Otra</option>
+                  </select>
+                </label>
+                <label className="text-sm font-semibold text-slate-700">
+                  Punto de venta (referencial)
+                  <input
+                    type="number"
+                    min={1}
+                    max={99999}
+                    value={form.fiscal_point_of_sale ?? ""}
+                    onChange={(event) => handleChange("fiscal_point_of_sale", event.target.value === "" ? null : Number(event.target.value))}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="text-sm font-semibold text-slate-700 md:col-span-2">
+                  Domicilio fiscal
+                  <input
+                    maxLength={300}
+                    value={form.fiscal_address ?? ""}
+                    onChange={(event) => handleChange("fiscal_address", event.target.value || null)}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+              {fiscalPreviewOpen && (
+                <div className="relative mt-4 overflow-hidden rounded-lg border-2 border-dashed border-rose-300 bg-white p-5" data-testid="hotel-fiscal-preview">
+                  <div className="pointer-events-none absolute inset-0 grid place-items-center overflow-hidden" aria-hidden="true">
+                    <span className="rotate-[-24deg] whitespace-nowrap text-5xl font-black tracking-[0.25em] text-rose-100 sm:text-7xl">NO FISCAL</span>
+                  </div>
+                  <div className="relative">
+                    <p className="text-center text-xs font-bold tracking-widest text-rose-700">VISTA PREVIA · DOCUMENTO NO FISCAL</p>
+                    <h4 className="mt-4 text-lg font-semibold text-slate-900">{form.fiscal_legal_name || form.hotel_name || "Razón social sin cargar"}</h4>
+                    <dl className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                      <div><dt className="text-xs text-slate-500">CUIT / identificador</dt><dd>{form.fiscal_tax_id || "Sin cargar"}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Condición IVA</dt><dd>{form.fiscal_vat_condition || "Sin especificar"}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Punto de venta</dt><dd>{form.fiscal_point_of_sale || "Sin definir"}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Domicilio</dt><dd>{form.fiscal_address || "Sin cargar"}</dd></div>
+                    </dl>
+                    <p className="mt-4 border-t border-slate-200 pt-3 text-xs text-rose-800">
+                      Vista informativa para revisar los datos del hotel. No es una factura, no tiene validez fiscal y no fue emitida por ARCA.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
 
           {canManageFxSettings && (
             <section className="rounded-lg border border-slate-200 p-4">

@@ -13,6 +13,7 @@ import app.models  # noqa: F401
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.user import User
 from app.services.permission_service import resolve
@@ -144,6 +145,7 @@ def test_room_block_permission_defaults(db):
     assert resolve(db, 1, "receptionist", "room_block:release") is False
     assert resolve(db, 1, "housekeeping", "room_block:create") is False
     assert resolve(db, 1, "housekeeping", "room_block:release") is False
+    assert resolve(db, 1, "housekeeping", "room:read") is True
 
 
 def test_create_and_resolve_room_block_api(client):
@@ -240,6 +242,71 @@ def test_room_block_conflict_preview_uses_create_permission_and_validates_dates(
     assert invalid.json()["detail"] == "ends_at must be after starts_at"
 
 
+def test_housekeeping_can_read_active_blocks_but_cannot_extend_them_by_default(client):
+    test_client, db, app = client
+    room = _seed_room(db, hotel_id=1)
+    app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+    created = test_client.post(
+        "/api/room-blocks/",
+        json={
+            "room_id": room.id,
+            "starts_at": "2026-07-01",
+            "ends_at": "2026-07-05",
+            "reason_code": "maintenance",
+        },
+    )
+    assert created.status_code == 201, created.text
+    block_id = created.json()["id"]
+
+    app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping")
+    listing = test_client.get("/api/room-blocks/")
+    assert listing.status_code == 200, listing.text
+    assert [item["id"] for item in listing.json()] == [block_id]
+    denied = test_client.get(
+        f"/api/room-blocks/{block_id}/extend-preview",
+        params={"ends_at": "2026-07-08"},
+    )
+    assert denied.status_code == 403
+
+
+def test_room_block_extension_preview_and_mutation_keep_end_exclusive(client):
+    test_client, db, app = client
+    room = _seed_room(db, hotel_id=1)
+    app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+    created = test_client.post(
+        "/api/room-blocks/",
+        json={
+            "room_id": room.id,
+            "starts_at": "2026-07-01",
+            "ends_at": "2026-07-05",
+            "reason_code": "maintenance",
+        },
+    )
+    assert created.status_code == 201, created.text
+    block_id = created.json()["id"]
+
+    invalid_preview = test_client.get(
+        f"/api/room-blocks/{block_id}/extend-preview",
+        params={"ends_at": "2026-07-05"},
+    )
+    assert invalid_preview.status_code == 400
+
+    preview = test_client.get(
+        f"/api/room-blocks/{block_id}/extend-preview",
+        params={"ends_at": "2026-07-08"},
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json() == {
+        "reservation_count": 0,
+        "protected_reservation_count": 0,
+        "overlapping_block_count": 0,
+    }
+
+    extended = test_client.post(f"/api/room-blocks/{block_id}/extend", json={"ends_at": "2026-07-08"})
+    assert extended.status_code == 200, extended.text
+    assert extended.json()["ends_at"] == "2026-07-08"
+
+
 def test_receptionist_can_create_but_not_release_room_block_by_default(client):
     test_client, db, app = client
     room = _seed_room(db, hotel_id=1)
@@ -277,6 +344,32 @@ def test_housekeeping_cannot_create_room_block_by_default(client):
     )
 
     assert response.status_code == 403
+
+
+def test_housekeeping_only_reads_operational_room_block_reasons(client):
+    test_client, db, app = client
+    room = _seed_room(db, hotel_id=1)
+    reasons = list(RoomBlockReasonEnum)
+    for index, reason in enumerate(reasons):
+        start = date(2026, 7, 1 + index * 2)
+        db.add(RoomBlock(
+            hotel_id=1,
+            room_id=room.id,
+            reason_code=reason,
+            starts_at=start,
+            ends_at=date(2026, 7, 2 + index * 2),
+            is_indefinite=False,
+            reason_note=f"Detalle {reason.value}",
+            created_by_user_id=123,
+        ))
+    db.flush()
+    app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping")
+
+    response = test_client.get("/api/room-blocks/")
+
+    assert response.status_code == 200
+    assert {item["reason_code"] for item in response.json()} == {"maintenance", "deep_cleaning"}
+    assert {item["reason_note"] for item in response.json()} == {"Detalle maintenance", "Detalle deep_cleaning"}
 
 
 def test_room_block_api_is_hotel_scoped(client):

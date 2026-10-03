@@ -1,32 +1,17 @@
-import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { hasValidSession } from "../api/client";
 import {
-  bulkUpsertDailyRates,
-  bulkUpdateDailyRateField,
   getCategoryDailyRates,
   getRateCalendarDaily,
-  upsertDailyRate,
   listPricePeriods,
-  createPricePeriod,
-  updatePricePeriod,
-  deletePricePeriod,
   getRatePaymentMethodOptions,
-  type BulkRateResult,
-  type BulkRateField,
-  type BulkRateFieldMode,
-  type DailyRateOut,
-  type DailyRatePrices,
   type DailyRateRangeRow,
   type RateCalendarResponse,
   type PricePeriod,
-  type PricePeriodInput,
   type RatePaymentMethodOptions
 } from "../api/rate-calendar";
 import { useSession } from "../state/session";
-import { refreshAfterMutation } from "../api/queryInvalidation";
-
-import { useGuardedMutation } from "./useGuardedMutation";
 
 export type { PricePeriodInput } from "../api/rate-calendar";
 
@@ -64,69 +49,6 @@ export function useCategoryDailyRates(categoryId: number | null, dateFrom: strin
   });
 }
 
-export type SingleRateInput = DailyRatePrices & { date: string };
-
-export function useUpsertDailyRate(categoryId: number | null) {
-  const { session } = useSession();
-  const queryClient = useQueryClient();
-
-  return useGuardedMutation<DailyRateOut, Error, SingleRateInput>({
-    mutationFn: (payload) => {
-      if (typeof categoryId !== "number" || categoryId <= 0) {
-        throw new Error("Seleccioná una categoría válida antes de guardar tarifas.");
-      }
-      return upsertDailyRate(categoryId, payload, session);
-    },
-    // Prefix-match invalidation so every loaded date window refetches.
-    onSuccess: async () => refreshAfterMutation(queryClient, session.hotelId, ["rooms", "settings", "reservations", "analytics"])
-  });
-}
-
-export type BulkRateInput = DailyRatePrices & {
-  from_date: string;
-  to_date: string;
-  exclude_dates?: string[];
-};
-
-export type BulkRateFieldInput = {
-  from_date: string;
-  to_date: string;
-  field: BulkRateField;
-  mode: BulkRateFieldMode;
-  value: number;
-  exclude_dates?: string[];
-};
-
-export function useBulkUpsertRates(categoryId: number | null) {
-  const { session } = useSession();
-  const queryClient = useQueryClient();
-
-  return useGuardedMutation<BulkRateResult, Error, BulkRateInput>({
-    mutationFn: (payload) => {
-      if (typeof categoryId !== "number" || categoryId <= 0) {
-        throw new Error("Seleccioná una categoría válida antes de guardar tarifas.");
-      }
-      return bulkUpsertDailyRates(categoryId, payload, session);
-    },
-    onSuccess: async () => refreshAfterMutation(queryClient, session.hotelId, ["rooms", "settings", "reservations", "analytics"])
-  });
-}
-
-export function useBulkUpdateRateField(categoryId: number | null) {
-  const { session } = useSession();
-  const queryClient = useQueryClient();
-
-  return useGuardedMutation<BulkRateResult, Error, BulkRateFieldInput>({
-    mutationFn: (payload) => {
-      if (typeof categoryId !== "number" || categoryId <= 0) {
-        throw new Error("Seleccioná una categoría válida antes de guardar tarifas.");
-      }
-      return bulkUpdateDailyRateField(categoryId, payload, session);
-    },
-    onSuccess: async () => refreshAfterMutation(queryClient, session.hotelId, ["rooms", "settings", "reservations", "analytics"])
-  });
-}
-
 export function usePricePeriods(categoryId: number | null) {
   const { session } = useSession();
   return useQuery<PricePeriod[]>({
@@ -135,24 +57,4 @@ export function usePricePeriods(categoryId: number | null) {
     enabled: hasValidSession(session) && typeof categoryId === "number" && categoryId > 0,
     staleTime: 60_000
   });
-}
-
-export function usePricePeriodMutations(categoryId: number | null) {
-  const { session } = useSession();
-  const queryClient = useQueryClient();
-  void categoryId;
-  const invalidate = () => refreshAfterMutation(queryClient, session.hotelId, ["rooms", "settings", "reservations", "analytics"]);
-  const create = useGuardedMutation({
-    mutationFn: (payload: PricePeriodInput) => createPricePeriod(payload, session),
-    onSuccess: async () => invalidate()
-  });
-  const update = useGuardedMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<PricePeriodInput> }) => updatePricePeriod(id, payload, session),
-    onSuccess: async () => invalidate()
-  });
-  const remove = useGuardedMutation({
-    mutationFn: (id: number) => deletePricePeriod(id, session),
-    onSuccess: async () => invalidate()
-  });
-  return { create, update, remove };
 }

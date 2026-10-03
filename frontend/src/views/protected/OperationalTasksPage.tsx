@@ -7,12 +7,16 @@ import {
   acknowledgeShiftHandoff,
   createOperationalTask,
   createShiftHandoff,
+  getOperationalTaskAttachmentContent,
+  listOperationalTaskAttachments,
   listOperationalTaskHistory,
   listOperationalTasks,
   listShiftHandoffs,
   resolveOperationalTask,
+  uploadOperationalTaskAttachment,
   updateOperationalTask,
   type OperationalTask,
+  type OperationalTaskAttachment,
   type OperationalTaskCreate,
   type OperationalTaskPriority,
   type OperationalTaskStatus,
@@ -87,9 +91,11 @@ export function OperationalTasksPage() {
   const [form, setForm] = useState<TaskForm>(() => emptyForm(defaultTaskType));
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [historyTaskId, setHistoryTaskId] = useState<number | null>(null);
+  const [attachmentsTaskId, setAttachmentsTaskId] = useState<number | null>(null);
   const [taskComments, setTaskComments] = useState<Record<number, string>>({});
   const [includeLatestClose, setIncludeLatestClose] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
 
   const tasksQuery = useQuery({
     queryKey: ["operational-tasks", session.hotelId],
@@ -107,6 +113,12 @@ export function OperationalTasksPage() {
     queryKey: ["operational-task-history", session.hotelId, historyTaskId],
     queryFn: () => listOperationalTaskHistory(historyTaskId as number, session),
     enabled: enabled && historyTaskId !== null,
+    staleTime: 15 * 1000
+  });
+  const attachmentsQuery = useQuery({
+    queryKey: ["operational-task-attachments", session.hotelId, attachmentsTaskId],
+    queryFn: () => listOperationalTaskAttachments(attachmentsTaskId as number, session),
+    enabled: enabled && attachmentsTaskId !== null,
     staleTime: 15 * 1000
   });
 
@@ -194,24 +206,47 @@ export function OperationalTasksPage() {
     mutationFn: ({ id, version }: { id: number; version: number }) => acknowledgeShiftHandoff(id, version, session),
     onSuccess: refresh
   });
+  const attachmentMutation = useGuardedMutation({
+    mutationFn: ({ taskId, fileName, contentType, contentBase64 }: {
+      taskId: number;
+      fileName: string;
+      contentType: OperationalTaskAttachment["content_type"];
+      contentBase64: string;
+    }) => uploadOperationalTaskAttachment(taskId, {
+      file_name: fileName,
+      content_type: contentType,
+      content_base64: contentBase64
+    }, session),
+    onSuccess: async (_attachment, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["operational-task-attachments", session.hotelId, variables.taskId] });
+    }
+  });
 
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
   const handoffs = useMemo(() => handoffsQuery.data ?? [], [handoffsQuery.data]);
   const activeTasks = tasks.filter((task) => task.status !== "resolved");
 
-  const run = async (action: () => Promise<unknown>, success?: string) => {
+  const run = async (action: () => Promise<unknown>, success: string | undefined, errorKey: string) => {
     setMessage(null);
+    setActionErrors((current) => {
+      const next = { ...current };
+      delete next[errorKey];
+      return next;
+    });
     try {
       await action();
       if (success) setMessage(success);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo completar la acción.");
+      setActionErrors((current) => ({
+        ...current,
+        [errorKey]: error instanceof Error ? error.message : "No se pudo completar la acción."
+      }));
     }
   };
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void run(() => createMutation.mutateAsync(), "Tarea agregada al turno.");
+    void run(() => createMutation.mutateAsync(), "Tarea agregada al turno.", "create");
   };
 
   const handleTaskTypeChange = (taskType: OperationalTaskType) => {
@@ -224,6 +259,54 @@ export function OperationalTasksPage() {
 
   const toggleSelected = (id: number) => {
     setSelectedIds((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
+  };
+
+  const canOperateTask = (task: OperationalTask) => {
+    if (canManage) return true;
+    if (!canWork) return false;
+    if (session.baseRole === "housekeeping") return task.task_type === "housekeeping" || task.task_type === "maintenance";
+    if (session.baseRole === "receptionist") return task.task_type === "general" || task.task_type === "reception";
+    return true;
+  };
+
+  const handleTaskPhotoUpload = async (taskId: number, file: File | undefined) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setActionErrors((current) => ({ ...current, [`photo-${taskId}`]: "La foto debe pesar como máximo 5 MB." }));
+      return;
+    }
+    if (!(file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp")) {
+      setActionErrors((current) => ({ ...current, [`photo-${taskId}`]: "Usá una foto JPG, PNG o WebP." }));
+      return;
+    }
+    setActionErrors((current) => {
+      const next = { ...current };
+      delete next[`photo-${taskId}`];
+      return next;
+    });
+    try {
+      const contentBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("No se pudo leer la foto."));
+        reader.onload = () => typeof reader.result === "string"
+          ? resolve(reader.result)
+          : reject(new Error("No se pudo leer la foto."));
+        reader.readAsDataURL(file);
+      });
+      await attachmentMutation.mutateAsync({
+        taskId,
+        fileName: file.name,
+        contentType: file.type,
+        contentBase64
+      });
+      setAttachmentsTaskId(taskId);
+      setMessage("Foto privada adjuntada a la tarea.");
+    } catch (error) {
+      setActionErrors((current) => ({
+        ...current,
+        [`photo-${taskId}`]: error instanceof Error ? error.message : "No se pudo adjuntar la foto."
+      }));
+    }
   };
 
   return (
@@ -245,6 +328,7 @@ export function OperationalTasksPage() {
       {hasAnyPermission(["operations:tasks:report", "operations:tasks:manage"]) && (
         <form onSubmit={submit} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">Agregar pendiente</h2>
+          {actionErrors.create && <TaskMutationError error={actionErrors.create} onClose={() => setActionErrors((current) => { const next = { ...current }; delete next.create; return next; })} />}
           <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_180px_220px] lg:items-end">
             <label className="text-sm text-slate-700">
               Título
@@ -348,7 +432,7 @@ export function OperationalTasksPage() {
               <button
                 type="button"
                 disabled={!selectedIds.length || handoffMutation.isPending}
-                onClick={() => void run(() => handoffMutation.mutateAsync(), "Pase de turno preparado.")}
+                onClick={() => void run(() => handoffMutation.mutateAsync(), "Pase de turno preparado.", "handoff-create")}
                 className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800 disabled:opacity-50"
               >
                 Preparar pase ({selectedIds.length})
@@ -356,14 +440,15 @@ export function OperationalTasksPage() {
             </div>
           )}
         </div>
-        {tasksQuery.isLoading ? <p role="status" className="mt-4 text-sm text-slate-500">Cargando pendientes…</p> : tasks.length === 0 ? (
+        {actionErrors["handoff-create"] && <TaskMutationError error={actionErrors["handoff-create"]} onClose={() => setActionErrors((current) => { const next = { ...current }; delete next["handoff-create"]; return next; })} />}
+        {tasksQuery.isLoading ? <p role="status" className="mt-4 text-sm text-slate-500">Cargando pendientes…</p> : tasksQuery.isError ? null : tasks.length === 0 ? (
           <p className="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No hay pendientes registrados.</p>
         ) : (
           <div className="mt-4 space-y-3">
             {tasks.map((task) => (
               <article key={task.id} className="rounded-lg border border-slate-200 p-4">
                 <div className="flex items-start gap-3">
-                  {canHandoff && task.status !== "resolved" && (
+                  {canHandoff && task.status !== "resolved" && canOperateTask(task) && (
                     <input aria-label={`Incluir ${task.title} en el pase`} type="checkbox" checked={selectedIds.includes(task.id)} onChange={() => toggleSelected(task.id)} className="mt-1 h-4 w-4" />
                   )}
                   <div className="min-w-0 flex-1">
@@ -372,17 +457,22 @@ export function OperationalTasksPage() {
                       <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">{statusLabels[task.status]}</span>
                       <span className="rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-800">{priorityLabels[task.priority]}</span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">{typeLabels[task.task_type]} · {task.room_number ? `Habitación ${task.room_number}` : "Sin habitación"} · {formatDate(task.due_at)}</p>
+                    <p className="mt-1 text-xs text-slate-500">{typeLabels[task.task_type]} · {task.room_number ? `Habitación ${task.room_number}` : "Sin habitación"} · Vence: {formatDate(task.due_at)}</p>
+                    <p className="mt-1 text-xs text-slate-500">Creada por {task.created_by_name || "usuario interno"} · {formatDate(task.created_at)}</p>
+                    {task.description && <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{task.description}</p>}
+                    {session.baseRole === "housekeeping" && task.task_type === "general" && (
+                      <p className="mt-2 text-xs font-medium text-slate-500">Solo lectura para Limpieza.</p>
+                    )}
                   </div>
                   <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                    {canWork && task.status === "pending" && (
-                      <button type="button" onClick={() => void run(() => statusMutation.mutateAsync({ id: task.id, version: task.version, status: "in_progress" }), "Tarea tomada por el turno.")} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Tomar</button>
+                    {canOperateTask(task) && task.status === "pending" && (
+                      <button type="button" onClick={() => void run(() => statusMutation.mutateAsync({ id: task.id, version: task.version, status: "in_progress" }), "Tarea tomada por el turno.", `task-${task.id}`)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Tomar</button>
                     )}
-                    {canWork && task.status === "in_progress" && (
-                      <button type="button" onClick={() => void run(() => statusMutation.mutateAsync({ id: task.id, version: task.version, status: "pending_review" }), "Tarea enviada a revisión.")} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Enviar a revisión</button>
+                    {canOperateTask(task) && task.status === "in_progress" && (
+                      <button type="button" onClick={() => void run(() => statusMutation.mutateAsync({ id: task.id, version: task.version, status: "pending_review" }), "Tarea enviada a revisión.", `task-${task.id}`)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Enviar a revisión</button>
                     )}
-                    {canManage && task.status !== "resolved" && (
-                      <button type="button" onClick={() => void run(() => resolveMutation.mutateAsync({ id: task.id, version: task.version }), "Tarea resuelta.")} className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white">Resolver</button>
+                    {(canManage || (session.baseRole === "housekeeping" && canOperateTask(task))) && task.status !== "resolved" && (
+                      <button type="button" onClick={() => void run(() => resolveMutation.mutateAsync({ id: task.id, version: task.version }), "Tarea resuelta.", `task-${task.id}`)} className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white">Resolver</button>
                     )}
                     <button
                       type="button"
@@ -393,7 +483,8 @@ export function OperationalTasksPage() {
                     </button>
                   </div>
                 </div>
-                {canWork && task.status !== "resolved" && (
+                {actionErrors[`task-${task.id}`] && <TaskMutationError error={actionErrors[`task-${task.id}`]} onClose={() => setActionErrors((current) => { const next = { ...current }; delete next[`task-${task.id}`]; return next; })} />}
+                {canOperateTask(task) && task.status !== "resolved" && (
                   <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
                     <label className="min-w-0 flex-1 text-xs font-medium text-slate-600">
                       Comentario de seguimiento
@@ -409,16 +500,56 @@ export function OperationalTasksPage() {
                     <button
                       type="button"
                       disabled={!taskComments[task.id]?.trim() || commentMutation.isPending}
-                      onClick={() => void run(() => commentMutation.mutateAsync({ id: task.id, version: task.version, comment: taskComments[task.id].trim() }))}
+                      onClick={() => void run(() => commentMutation.mutateAsync({ id: task.id, version: task.version, comment: taskComments[task.id].trim() }), undefined, `task-${task.id}`)}
                       className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50"
                     >
                       {commentMutation.isPending ? "Guardando…" : "Agregar comentario"}
                     </button>
                   </div>
                 )}
-                {!canManage && task.status === "pending_review" && (
+                {!canManage && session.baseRole !== "housekeeping" && task.status === "pending_review" && (
                   <p className="mt-2 text-xs text-slate-500">La gerencia revisa y cierra este pendiente.</p>
                 )}
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setAttachmentsTaskId((current) => current === task.id ? null : task.id)}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+                  >
+                    {attachmentsTaskId === task.id ? "Ocultar fotos" : "Fotos y evidencia"}
+                  </button>
+                  {attachmentsTaskId === task.id && (
+                    <div className="mt-3 rounded-lg bg-slate-50 p-3">
+                      {attachmentsQuery.isLoading ? <p role="status" className="text-xs text-slate-600">Cargando fotos…</p> : null}
+                      {attachmentsQuery.isError ? (
+                        <p role="alert" className="text-xs text-rose-700">No se pudieron cargar las fotos. <button type="button" onClick={() => void attachmentsQuery.refetch()} className="font-semibold underline">Reintentar</button></p>
+                      ) : null}
+                      {!attachmentsQuery.isLoading && !attachmentsQuery.isError && (attachmentsQuery.data?.length ?? 0) === 0 && (
+                        <p className="text-xs text-slate-600">Todavía no hay fotos adjuntas.</p>
+                      )}
+                      {attachmentsQuery.data?.map((attachment) => (
+                        <TaskPhotoPreview key={attachment.id} taskId={task.id} attachment={attachment} />
+                      ))}
+                      {canOperateTask(task) && (
+                        <label className="mt-3 block text-xs font-medium text-slate-700">
+                          Adjuntar foto (JPG, PNG o WebP; hasta 5 MB)
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            aria-label={`Adjuntar foto a ${task.title}`}
+                            disabled={attachmentMutation.isPending}
+                            onChange={(event) => {
+                              void handleTaskPhotoUpload(task.id, event.currentTarget.files?.[0]);
+                              event.currentTarget.value = "";
+                            }}
+                            className="mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                          />
+                        </label>
+                      )}
+                      {actionErrors[`photo-${task.id}`] && <TaskMutationError error={actionErrors[`photo-${task.id}`]} onClose={() => setActionErrors((current) => { const next = { ...current }; delete next[`photo-${task.id}`]; return next; })} />}
+                    </div>
+                  )}
+                </div>
                 {historyTaskId === task.id && (
                   <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
                     {historyQuery.isLoading ? <p role="status">Cargando historial…</p> : historyQuery.isError ? (
@@ -427,7 +558,7 @@ export function OperationalTasksPage() {
                       <ol className="space-y-2">
                         {historyQuery.data.map((event) => (
                           <li key={event.id}>
-                            <span className="font-semibold">{statusLabels[event.to_status as OperationalTaskStatus] ?? "Actualización"}</span> · {formatDate(event.created_at)}{event.comment ? ` · ${event.comment}` : ""}
+                            <span className="font-semibold">{statusLabels[event.to_status as OperationalTaskStatus] ?? "Actualización"}</span> · {event.actor_name || "usuario interno"} · {formatDate(event.created_at)}{event.comment ? ` · ${event.comment}` : ""}
                           </li>
                         ))}
                       </ol>
@@ -443,18 +574,77 @@ export function OperationalTasksPage() {
       {canHandoff && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm" aria-labelledby="handoffs-title">
           <h2 id="handoffs-title" className="text-lg font-semibold text-slate-900">Pases recientes</h2>
-          {handoffsQuery.isError ? <p role="alert" className="mt-3 text-sm text-rose-700">No se pudieron cargar los pases. <button type="button" className="font-semibold underline" onClick={() => void handoffsQuery.refetch()}>Reintentar</button></p> : handoffs.length === 0 ? <p className="mt-3 text-sm text-slate-600">Todavía no hay pases de turno.</p> : (
+          {handoffsQuery.isLoading ? <p role="status" className="mt-3 text-sm text-slate-600">Cargando pases…</p> : handoffsQuery.isError ? <p role="alert" className="mt-3 text-sm text-rose-700">No se pudieron cargar los pases. <button type="button" className="font-semibold underline" onClick={() => void handoffsQuery.refetch()}>Reintentar</button></p> : handoffs.length === 0 ? <p className="mt-3 text-sm text-slate-600">Todavía no hay pases de turno.</p> : (
             <ul className="mt-3 space-y-2">
               {handoffs.map((handoff) => (
-                <li key={handoff.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-3 text-sm">
-                  <span><strong>{handoff.task_ids.length} pendientes</strong> · {formatDate(handoff.delivered_at)} · {handoff.status === "acknowledged" ? "Reconocido" : "Pendiente de reconocimiento"}</span>
-                  {handoff.status === "pending_acknowledgement" && <button type="button" onClick={() => void run(() => acknowledgeMutation.mutateAsync({ id: handoff.id, version: handoff.version }), "Pase reconocido.")} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Reconocer</button>}
+                <li key={handoff.id} className="rounded-lg bg-slate-50 px-3 py-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span><strong>{handoff.task_ids.length} pendientes</strong> · Preparó {handoff.delivered_by_name || "usuario interno"} · {formatDate(handoff.delivered_at)} · {handoff.status === "acknowledged" ? `Reconocido por ${handoff.received_by_name || "usuario interno"}` : "Pendiente de reconocimiento"}</span>
+                    {handoff.status === "pending_acknowledgement" && <button type="button" onClick={() => void run(() => acknowledgeMutation.mutateAsync({ id: handoff.id, version: handoff.version }), "Pase reconocido.", `handoff-${handoff.id}`)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Reconocer</button>}
+                  </div>
+                  {actionErrors[`handoff-${handoff.id}`] && <TaskMutationError error={actionErrors[`handoff-${handoff.id}`]} onClose={() => setActionErrors((current) => { const next = { ...current }; delete next[`handoff-${handoff.id}`]; return next; })} />}
+                  {handoff.notes && <p className="mt-2 whitespace-pre-wrap text-xs text-slate-700">{handoff.notes}</p>}
                 </li>
               ))}
             </ul>
           )}
         </section>
       )}
+    </div>
+  );
+}
+
+function TaskMutationError({ error, onClose }: { error: string; onClose: () => void }) {
+  return (
+    <div role="alert" className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+      <p>{error}</p>
+      <button type="button" aria-label="Cerrar error" onClick={onClose} className="shrink-0 font-semibold underline">Cerrar</button>
+    </div>
+  );
+}
+
+function TaskPhotoPreview({ taskId, attachment }: { taskId: number; attachment: OperationalTaskAttachment }) {
+  const { session } = useSession();
+  const [isOpen, setIsOpen] = useState(false);
+  const contentQuery = useQuery({
+    queryKey: ["operational-task-attachment-content", session.hotelId, taskId, attachment.id],
+    queryFn: () => getOperationalTaskAttachmentContent(taskId, attachment.id, session),
+    enabled: isOpen && hasValidSession(session),
+    staleTime: 4 * 60 * 1000,
+    retry: false
+  });
+
+  return (
+    <div className="mt-2 flex flex-wrap items-start gap-3 rounded-lg border border-slate-200 bg-white p-2">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-semibold text-slate-800">{attachment.file_name}</p>
+        <p className="mt-0.5 text-[11px] text-slate-500">
+          {attachment.created_by_name || "Usuario interno"} · {formatDate(attachment.created_at)}
+        </p>
+        {isOpen && contentQuery.isLoading ? <p role="status" className="mt-2 text-xs text-slate-600">Abriendo foto…</p> : null}
+        {isOpen && contentQuery.isError ? (
+          <p role="alert" className="mt-2 text-xs text-rose-700">
+            No se pudo abrir la foto. <button type="button" onClick={() => void contentQuery.refetch()} className="font-semibold underline">Reintentar</button>
+          </p>
+        ) : null}
+        {isOpen && contentQuery.data ? (
+          <img
+            src={`data:${contentQuery.data.content_type};base64,${contentQuery.data.content_base64}`}
+            alt={`Foto adjunta: ${attachment.file_name}`}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="mt-2 max-h-64 max-w-full rounded-lg object-contain"
+          />
+        ) : null}
+      </div>
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        aria-expanded={isOpen}
+        className="min-h-10 shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+      >
+        {isOpen ? "Ocultar" : "Ver foto"}
+      </button>
     </div>
   );
 }

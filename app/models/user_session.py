@@ -22,6 +22,8 @@ class UserSession(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     session_token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    previous_session_token_hash = Column(String(64), nullable=True)
+    previous_token_rotated_at = Column(DateTime(timezone=True), nullable=True)
     csrf_token_hash = Column(String(64), nullable=False)
     # This is a short, derived label (for example "Chrome en Windows"), not
     # the raw User-Agent header. It is safe to show in the user's device list.
@@ -36,4 +38,5 @@ class UserSession(Base):
     __table_args__ = (
         Index("ix_user_sessions_user_id", "user_id"),
         Index("ix_user_sessions_active_lookup", "user_id", "revoked_at", "expires_at"),
+        Index("ix_user_sessions_previous_token", "previous_session_token_hash", "previous_token_rotated_at"),
     )

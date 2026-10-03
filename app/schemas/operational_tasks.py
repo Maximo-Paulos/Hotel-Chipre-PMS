@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -59,8 +60,31 @@ class OperationalTaskEventRead(BaseModel):
     from_status: str | None = None
     to_status: str
     actor_user_id: int | None = None
+    actor_name: str | None = None
     comment: str | None = None
     created_at: datetime
+
+
+class OperationalTaskAttachmentUpload(BaseModel):
+    file_name: str = Field(min_length=1, max_length=255)
+    content_type: Literal["image/jpeg", "image/png", "image/webp"]
+    content_base64: str = Field(min_length=1, max_length=7_000_000)
+
+
+class OperationalTaskAttachmentRead(BaseModel):
+    id: int
+    file_name: str
+    content_type: Literal["image/jpeg", "image/png", "image/webp"]
+    byte_size: int
+    created_by_user_id: int | None = None
+    created_by_name: str | None = None
+    created_at: datetime
+
+
+class OperationalTaskAttachmentContent(BaseModel):
+    content_type: Literal["image/jpeg", "image/png", "image/webp"]
+    content_base64: str = Field(min_length=1, max_length=7_000_000)
+    byte_size: int = Field(gt=0, le=5 * 1024 * 1024)
 
 
 class OperationalTaskRead(BaseModel):
@@ -79,6 +103,7 @@ class OperationalTaskRead(BaseModel):
     assigned_to_user_id: int | None = None
     due_at: datetime | None = None
     created_by_user_id: int | None = None
+    created_by_name: str | None = None
     resolved_by_user_id: int | None = None
     resolved_at: datetime | None = None
     created_at: datetime
@@ -96,7 +121,9 @@ class ShiftHandoffRead(BaseModel):
     id: int
     hotel_id: int
     delivered_by_user_id: int | None = None
+    delivered_by_name: str | None = None
     received_by_user_id: int | None = None
+    received_by_name: str | None = None
     cash_close_report_id: int | None = None
     status: ShiftHandoffStatusEnum
     notes: str | None = None

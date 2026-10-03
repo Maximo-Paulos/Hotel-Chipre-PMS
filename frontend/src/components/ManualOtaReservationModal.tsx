@@ -317,7 +317,6 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
               form={guestForm}
               onFormChange={setGuestForm}
               onGuestCreated={() => undefined}
-              onError={setError}
             />
 
             <div className="grid gap-3 sm:grid-cols-2">

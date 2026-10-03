@@ -100,8 +100,8 @@ def detect_no_shows(
         before = _reservation_audit_snapshot(reservation)
         reservation.status = ReservationStatusEnum.NO_SHOW
         reservation.outcome = ReservationOutcomeEnum.NO_SHOW
-        if reservation.no_show_policy_applied == ReservationNoShowPolicyAppliedEnum.NONE:
-            reservation.no_show_policy_applied = ReservationNoShowPolicyAppliedEnum.FULL_CHARGE
+        # Detection records the operational status only. The hotel's deposit
+        # disposition remains pending until an authorized person decides it.
         reservation.no_show_confirmed_at = current_utc
         db.flush()
         marked_ids.append(reservation.id)
@@ -209,12 +209,18 @@ def refresh_fact_reservation_daily(
         stay_dates = _reservation_dates_in_window(reservation, date_from=date_from, date_to=date_to)
         if not stay_dates:
             continue
+        # Allocate the contract total over every night in the reservation,
+        # then persist only this refresh window. Allocating over the clipped
+        # dates makes a partial refresh redistribute the entire stay total
+        # into that partial period and causes results to depend on refresh
+        # order (for example, a May refresh can inflate a cross-month stay).
+        full_stay_dates = _reservation_dates_for_full_stay(reservation)
         policy = _resolve_no_show_policy(reservation)
         row_kind = _reservation_row_kind(reservation, policy)
         totals = _reservation_monetary_totals(
             reservation,
             category=category,
-            nights=len(stay_dates),
+            nights=len(full_stay_dates),
             row_kind=row_kind,
             policy=policy,
             company_billing_deferred=company_billing_deferred,
@@ -223,7 +229,7 @@ def refresh_fact_reservation_daily(
         channel_code = backfill_channel_code(reservation)
         facts = build_reservation_nightly_facts(
             reservation=reservation,
-            stay_dates=stay_dates,
+            stay_dates=full_stay_dates,
             totals=totals,
             row_kind=row_kind,
             no_show_policy_applied=policy,
@@ -236,6 +242,8 @@ def refresh_fact_reservation_daily(
             # unrecorded external invoices from PMS ADR/revenue denominators.
             facts = [replace(fact, chargeable_night=False) for fact in facts]
         for fact in facts:
+            if fact.stay_date < date_from or fact.stay_date > date_to:
+                continue
             db.add(
                 FactReservationDaily(
                     hotel_id=fact.hotel_id,
@@ -534,8 +542,6 @@ def _reservation_row_kind(
 
 def _resolve_no_show_policy(reservation: Reservation) -> ReservationNoShowPolicyAppliedEnum:
     policy = reservation.no_show_policy_applied or ReservationNoShowPolicyAppliedEnum.NONE
-    if policy == ReservationNoShowPolicyAppliedEnum.NONE and reservation.status == ReservationStatusEnum.NO_SHOW:
-        return ReservationNoShowPolicyAppliedEnum.FULL_CHARGE
     return policy
 
 
@@ -552,6 +558,10 @@ def _reservation_monetary_totals(
     fx_rate = _decimal_or_none(getattr(reservation, "fx_rate_snapshot", None))
     base_ratio = Decimal("1")
     if row_kind == FactReservationRowKindEnum.NO_SHOW_WAIVED:
+        base_ratio = Decimal("0")
+    elif row_kind == FactReservationRowKindEnum.NO_SHOW_CHARGEABLE and policy == ReservationNoShowPolicyAppliedEnum.NONE:
+        # A detected no-show with no recorded disposition is pending review,
+        # not recognized lodging revenue or an automatic deposit forfeiture.
         base_ratio = Decimal("0")
     elif row_kind == FactReservationRowKindEnum.NO_SHOW_CHARGEABLE and policy == ReservationNoShowPolicyAppliedEnum.PARTIAL_CHARGE:
         total = _decimal_or_zero(getattr(reservation, "total_amount", None))
@@ -626,6 +636,12 @@ def _reservation_dates_in_window(
     return result
 
 
+def _reservation_dates_for_full_stay(reservation: Reservation) -> list[date]:
+    """Return each occupied night so money is allocated independently of refresh windows."""
+    nights = max((reservation.check_out_date - reservation.check_in_date).days, 0)
+    return [reservation.check_in_date + timedelta(days=offset) for offset in range(nights)]
+
+
 def _occupied_nightly_fact_map(
     db: Session,
     reservations: list[Reservation],
@@ -662,9 +678,10 @@ def _occupied_nightly_fact_map(
             continue
         if reservation.status == ReservationStatusEnum.NO_SHOW:
             continue
-        stay_dates = _reservation_dates_in_window(reservation, date_from=date_from, date_to=date_to)
-        if not stay_dates:
+        window_dates = _reservation_dates_in_window(reservation, date_from=date_from, date_to=date_to)
+        if not window_dates:
             continue
+        full_stay_dates = _reservation_dates_for_full_stay(reservation)
         category = categories_by_id.get(reservation.category_id)
         if category is None:
             continue
@@ -682,7 +699,7 @@ def _occupied_nightly_fact_map(
         totals = _reservation_monetary_totals(
             reservation,
             category=category,
-            nights=len(stay_dates),
+            nights=len(full_stay_dates),
             row_kind=row_kind,
             policy=policy,
             company_billing_deferred=company_billing_deferred,
@@ -691,7 +708,7 @@ def _occupied_nightly_fact_map(
         channel_code = backfill_channel_code(reservation)
         for fact in build_reservation_nightly_facts(
             reservation=reservation,
-            stay_dates=stay_dates,
+            stay_dates=full_stay_dates,
             totals=totals,
             row_kind=row_kind,
             no_show_policy_applied=policy,
@@ -699,7 +716,11 @@ def _occupied_nightly_fact_map(
             guest_segment=guest_segment,
             guest_segment_source=guest_segment_source,
         ):
-            if fact.row_kind != FactReservationRowKindEnum.OCCUPIED:
+            if (
+                fact.stay_date < date_from
+                or fact.stay_date > date_to
+                or fact.row_kind != FactReservationRowKindEnum.OCCUPIED
+            ):
                 continue
             room_map[(fact.room_id or reservation.room_id, fact.stay_date)] = fact
     return room_map

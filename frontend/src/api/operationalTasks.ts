@@ -22,6 +22,8 @@ export type OperationalTask = {
   version: number;
   created_at: string;
   updated_at: string;
+  created_by_user_id?: number | null;
+  created_by_name?: string | null;
 };
 
 export type OperationalTaskEvent = {
@@ -29,6 +31,7 @@ export type OperationalTaskEvent = {
   from_status?: string | null;
   to_status: string;
   actor_user_id?: number | null;
+  actor_name?: string | null;
   comment?: string | null;
   created_at: string;
 };
@@ -37,7 +40,9 @@ export type ShiftHandoff = {
   id: number;
   hotel_id: number;
   delivered_by_user_id?: number | null;
+  delivered_by_name?: string | null;
   received_by_user_id?: number | null;
+  received_by_name?: string | null;
   cash_close_report_id?: number | null;
   status: "pending_acknowledgement" | "acknowledged";
   notes?: string | null;
@@ -45,6 +50,16 @@ export type ShiftHandoff = {
   acknowledged_at?: string | null;
   version: number;
   task_ids: number[];
+};
+
+export type OperationalTaskAttachment = {
+  id: number;
+  file_name: string;
+  content_type: "image/jpeg" | "image/png" | "image/webp";
+  byte_size: number;
+  created_by_user_id?: number | null;
+  created_by_name?: string | null;
+  created_at: string;
 };
 
 export type OperationalTaskCreate = {
@@ -73,6 +88,25 @@ export const updateOperationalTask = (
 
 export const listOperationalTaskHistory = (taskId: number, session?: SessionLike) =>
   apiFetch<OperationalTaskEvent[]>(`/api/operational-tasks/${taskId}/history`, { session });
+
+export const listOperationalTaskAttachments = (taskId: number, session?: SessionLike) =>
+  apiFetch<OperationalTaskAttachment[]>(`/api/operational-tasks/${taskId}/attachments`, { session });
+
+export const uploadOperationalTaskAttachment = (
+  taskId: number,
+  payload: { file_name: string; content_type: OperationalTaskAttachment["content_type"]; content_base64: string },
+  session?: SessionLike
+) => apiFetch<OperationalTaskAttachment>(`/api/operational-tasks/${taskId}/attachments`, {
+  method: "POST",
+  data: payload,
+  session
+});
+
+export const getOperationalTaskAttachmentContent = (taskId: number, attachmentId: number, session?: SessionLike) =>
+  apiFetch<{ content_type: OperationalTaskAttachment["content_type"]; content_base64: string; byte_size: number }>(
+    `/api/operational-tasks/${taskId}/attachments/${attachmentId}/content`,
+    { session }
+  );
 
 export const resolveOperationalTask = (taskId: number, clientVersion: number, comment?: string, session?: SessionLike) =>
   apiFetch<OperationalTask>(`/api/operational-tasks/${taskId}/resolve`, {

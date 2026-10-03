@@ -1,6 +1,7 @@
 import { apiFetch, type SessionLike } from "./client";
 import type { GuestUpdatePayload } from "./guests";
 import type { RestrictionOverride } from "./guestRestrictions";
+import type { PaymentMethod } from "./payments";
 
 export type ReservationStatus =
   | "pending"
@@ -147,6 +148,8 @@ export type ReservationFinancialSummary = {
   total_amount: number | null;
   deposit_required: number | null;
   amount_paid: number | null;
+  hotel_received_amount?: number | null;
+  ota_prepaid_amount?: number | null;
   balance_due: number | null;
   operational_total_amount: number;
   operational_balance_due: number;
@@ -363,6 +366,16 @@ export type ReservationGroupSummary = {
   room_count: number;
   reservation_ids: number[];
   reservation_codes: string[];
+  reservations: Array<{
+    id: number;
+    confirmation_code: string;
+    total_amount: number | null;
+    amount_paid: number | null;
+    balance_due: number | null;
+    currency_code: string;
+    status: ReservationStatus;
+    company_billing_deferred: boolean;
+  }>;
   total_amount: number | null;
   amount_paid: number | null;
   balance_due: number | null;
@@ -370,6 +383,53 @@ export type ReservationGroupSummary = {
   currency_code: string;
   created_at: string;
 };
+
+export type ReservationGroupPaymentPayload = {
+  received_amount: number;
+  currency?: string;
+  payment_method: Exclude<PaymentMethod, "mercado_pago" | "paypal">;
+  manual_reference?: string;
+  description?: string;
+  allocations: Array<{
+    reservation_id: number;
+    received_amount: number;
+    company_night_charge_ids?: number[];
+  }>;
+};
+
+export type ReservationGroupPaymentResult = {
+  id: number;
+  group_id: number;
+  received_amount: number;
+  currency: string;
+  payment_method: string;
+  manual_reference?: string | null;
+  description?: string | null;
+  created_by_user_id?: number | null;
+  created_at: string;
+  allocations: Array<{
+    reservation_id: number;
+    transaction_id: number;
+    received_amount: number;
+  }>;
+};
+
+export const newReservationGroupPaymentIdempotencyKey = () => {
+  const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `ui-group-payment-${requestId}`;
+};
+
+export const createReservationGroupPayment = (
+  groupId: number,
+  payload: ReservationGroupPaymentPayload,
+  session?: SessionLike,
+  idempotencyKey: string = newReservationGroupPaymentIdempotencyKey()
+) => apiFetch<ReservationGroupPaymentResult>(`/api/reservation-groups/${groupId}/payments`, {
+  method: "POST",
+  data: payload,
+  session,
+  headers: { "Idempotency-Key": idempotencyKey }
+});
 
 export const listReservationGroups = (session?: SessionLike) =>
   apiFetch<ReservationGroupSummary[]>("/api/reservation-groups?limit=50", { session });

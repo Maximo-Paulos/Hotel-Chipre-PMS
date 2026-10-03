@@ -14,8 +14,10 @@ from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.cash_register import CashCloseReport, CashMovement
+from app.models.cash_expense import CashExpense
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.hotel_membership import HotelMembership
 from app.models.cash_register import CashSession, CashSessionStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
@@ -26,6 +28,8 @@ from app.services.action_step_up_service import create_action_step_up_ticket
 from app.services.permission_service import (
     PERMISSION_CASH_APPROVE_DIFFERENCE,
     PERMISSION_CASH_CUSTODY_RECEIVE,
+    PERMISSION_CASH_EXPENSE,
+    set_user_override,
 )
 from app.services.operational_audit_service import list_operational_audit
 from app.services.timezones import hotel_today
@@ -55,6 +59,7 @@ def client_with_db():
                 is_active=True,
                 is_verified=True,
             ),
+            HotelMembership(hotel_id=1, user_id=50, role="receptionist", status="active", alias="Recepción QA"),
         ]
     )
     db.flush()
@@ -120,56 +125,128 @@ def test_cash_register_api_open_add_close_and_list(client_with_db):
     assert db.get(CashSession, session_id).status == CashSessionStatusEnum.CLOSED
 
 
-def test_manual_cash_expense_requires_manager_mfa_and_cannot_link_guest_refunds(client_with_db):
+def test_cash_expense_requires_permission_and_approval_mfa_before_affecting_drawer(client_with_db):
     client, db, ctx = client_with_db
     opened = client.post("/api/cash-register/sessions", json={"opening_balance": "100.00"})
     assert opened.status_code == 201, opened.text
     session_id = opened.json()["id"]
-    path = f"/api/cash-register/sessions/{session_id}/movements"
-    payload = {"movement_type": "expense", "amount": "30.00", "description": "manual expense"}
+    expense_path = f"/api/cash-register/sessions/{session_id}/expenses"
+    payload = {
+        "amount": "30.00",
+        "category": "Insumos",
+        "vendor": "Proveedor de prueba",
+        "description": "Compra para el hotel",
+        "receipt_reference": "FACT-30",
+    }
 
-    receptionist = client.post(path, json=payload)
+    receptionist = client.post(expense_path, json=payload)
     assert receptionist.status_code == 403
     assert db.query(CashMovement).count() == 0
+    assert db.query(CashExpense).count() == 0
+    legacy_direct_expense = client.post(
+        f"/api/cash-register/sessions/{session_id}/movements",
+        json={"movement_type": "expense", "amount": "30.00", "description": "gasto directo"},
+    )
+    assert legacy_direct_expense.status_code == 422
+    assert db.query(CashMovement).count() == 0
+
+    # The owner can delegate expense recording explicitly to this receptionist.
+    set_user_override(
+        db,
+        hotel_id=1,
+        target_user_id=50,
+        target_role="receptionist",
+        code=PERMISSION_CASH_EXPENSE,
+        allowed=True,
+        actor_user_id=50,
+    )
+    db.commit()
+    submitted = client.post(expense_path, json=payload)
+    assert submitted.status_code == 201, submitted.text
+    expense_id = submitted.json()["id"]
+    assert submitted.json()["status"] == "pending"
+    assert submitted.json()["category"] == "Insumos"
+    assert submitted.json()["vendor"] == "Proveedor de prueba"
+    assert db.query(CashMovement).count() == 0
+    assert client.get(f"/api/cash-register/sessions/{session_id}/summary").json()["expected_balance"] == "100.00"
+
+    blocked_close = client.post(
+        f"/api/cash-register/sessions/{session_id}/close",
+        json={"counted_balance": "100.00"},
+    )
+    assert blocked_close.status_code == 400
+    assert "pendientes" in blocked_close.json()["detail"].lower()
 
     ctx["role"] = "manager"
-    missing_step_up = client.post(path, json=payload)
+    approval_path = f"/api/cash-register/expenses/{expense_id}/approve"
+    missing_step_up = client.post(approval_path)
     assert missing_step_up.status_code == 428
-    assert missing_step_up.json()["detail"]["permission_code"] == "cash:expense"
+    assert missing_step_up.json()["detail"]["permission_code"] == "cash:expense_approve"
 
-    def expense_ticket():
+    def expense_ticket(path: str):
         return create_action_step_up_ticket(
             user_id=50,
             hotel_id=ctx["hotel_id"],
             token_version=0,
-            permission_code="cash:expense",
+            permission_code="cash:expense_approve",
             method="POST",
             path=path,
         )
 
-    allowed = client.post(
-        path,
-        json=payload,
-        headers={"X-Action-Step-Up-Ticket": expense_ticket()},
+    allowed = client.post(approval_path, headers={"X-Action-Step-Up-Ticket": expense_ticket(approval_path)})
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["status"] == "approved"
+    assert allowed.json()["cash_movement_id"] is not None
+    assert db.query(CashMovement).count() == 1
+    assert db.query(CashExpense).filter_by(id=expense_id).one().cash_movement_id is not None
+
+    rejected_payload = {**payload, "amount": "15.00", "receipt_reference": "FACT-15"}
+    rejected = client.post(expense_path, json=rejected_payload)
+    assert rejected.status_code == 201, rejected.text
+    reject_path = f"/api/cash-register/expenses/{rejected.json()['id']}/reject"
+    missing_reject_step_up = client.post(reject_path, json={"reason": "No corresponde"})
+    assert missing_reject_step_up.status_code == 428
+    rejected_response = client.post(
+        reject_path,
+        json={"reason": "No corresponde"},
+        headers={"X-Action-Step-Up-Ticket": expense_ticket(reject_path)},
     )
-    assert allowed.status_code == 201, allowed.text
+    assert rejected_response.status_code == 200, rejected_response.text
+    assert rejected_response.json()["status"] == "rejected"
     assert db.query(CashMovement).count() == 1
 
-    linked_refund = client.post(
-        path,
-        json={**payload, "reservation_id": 999},
-        headers={"X-Action-Step-Up-Ticket": expense_ticket()},
+    closed = client.post(
+        f"/api/cash-register/sessions/{session_id}/close",
+        json={"counted_balance": "70.00", "notes": "Conteo validado"},
     )
-    assert linked_refund.status_code == 400
-    assert "payment-refund" in linked_refund.json()["detail"]
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["expected_balance"] == "70.00"
+    assert closed.json()["notes"] == "Conteo validado"
+    assert closed.json()["closed_by_user_id"] == ctx["user_id"]
+    assert closed.json()["closed_by_name"]
+    assert closed.json()["closed_at"]
 
-    linked_transaction = client.post(
-        path,
-        json={**payload, "transaction_id": 999},
-        headers={"X-Action-Step-Up-Ticket": expense_ticket()},
+    daily = client.get(
+        "/api/cash-register/daily-summary",
+        params={"date": hotel_today(db, 1).isoformat(), "currency": "ARS"},
     )
-    assert linked_transaction.status_code == 400
-    assert "payment workflow" in linked_transaction.json()["detail"]
+    assert daily.status_code == 200, daily.text
+    shift = next(item for item in daily.json()["sessions"] if item["session_id"] == session_id)
+    assert shift["opening_balance"] == "100.00"
+    assert shift["expected_balance"] == "70.00"
+    assert shift["declared_balance"] == "70.00"
+    assert shift["difference"] == "0.00"
+    assert shift["opened_by_name"] == "Recepción QA"
+    assert shift["closed_by_name"] == "Recepción QA"
+
+    # Expense identifiers are always resolved within the active hotel.
+    ctx["hotel_id"] = 2
+    foreign_path = f"/api/cash-register/expenses/{expense_id}/approve"
+    foreign_expense = client.post(
+        foreign_path,
+        headers={"X-Action-Step-Up-Ticket": expense_ticket(foreign_path)},
+    )
+    assert foreign_expense.status_code == 404
     assert db.query(CashMovement).count() == 1
 
 
@@ -385,6 +462,8 @@ def test_cash_csv_treats_formula_prefixed_actor_alias_as_text(client_with_db, mo
     report = {
         "report_date": "2026-09-04",
         "hotel_id": 1,
+        "timezone": "America/Argentina/Buenos_Aires",
+        "sessions": [],
         "entries": [{"currency_code": "ARS", "actor_name": "@SUM(1+1)", "actor_user_id": 50}],
     }
     monkeypatch.setattr("app.api.cash_register.get_daily_summary", lambda *args, **kwargs: report)
@@ -392,7 +471,11 @@ def test_cash_csv_treats_formula_prefixed_actor_alias_as_text(client_with_db, mo
     response = client.get("/api/cash-register/export.csv?date=2026-09-04")
 
     assert response.status_code == 200, response.text
-    assert "'@SUM(1+1)" in response.text
+    assert response.headers["content-type"].startswith("text/csv")
+    assert response.text.startswith("\ufeff")
+    rows = list(csv.DictReader(StringIO(response.text.lstrip("\ufeff")), delimiter=";"))
+    assert rows[0]["responsable"] == "'@SUM(1+1)"
+    assert rows[0]["fecha_local"] == "04/09/2026"
 
 
 def test_cash_csv_refuses_to_return_a_silently_truncated_report(client_with_db, monkeypatch):
@@ -402,6 +485,8 @@ def test_cash_csv_refuses_to_return_a_silently_truncated_report(client_with_db, 
         lambda *args, **kwargs: {
             "report_date": "2026-09-04",
             "hotel_id": 1,
+            "timezone": "America/Argentina/Buenos_Aires",
+            "sessions": [],
             "entries": [{"currency_code": "ARS"}],
             "entries_truncated": True,
         },
@@ -585,18 +670,19 @@ def test_prior_receipt_api_requires_management_permission_and_stays_out_of_cash(
         f"/api/cash-register/export.csv?from={collected_on.isoformat()}&to={collected_on.isoformat()}&currency=ARS"
     )
     assert prior_export.status_code == 200, prior_export.text
-    export_rows = list(csv.DictReader(StringIO(prior_export.text)))
-    prior_export_rows = [row for row in export_rows if row["entry_type"] == "prior_receipt"]
+    export_rows = list(csv.DictReader(StringIO(prior_export.text.lstrip("\ufeff")), delimiter=";"))
+    prior_export_rows = [row for row in export_rows if row["tipo"] == "seña_previa"]
     assert len(prior_export_rows) == 1
-    assert prior_export_rows[0]["transaction_id"] == str(registered.json()["id"])
-    assert prior_export_rows[0]["report_date"] == collected_on.isoformat()
+    assert prior_export_rows[0]["transaccion_id"] == str(registered.json()["id"])
+    assert prior_export_rows[0]["fecha_local"] == collected_on.strftime("%d/%m/%Y")
+    assert prior_export_rows[0]["importe"] == "76,50"
 
     outside_range_export = client.get(
         f"/api/cash-register/export.csv?date={hotel_today(db, 1).isoformat()}&currency=ARS"
     )
     assert outside_range_export.status_code == 200, outside_range_export.text
-    outside_range_rows = list(csv.DictReader(StringIO(outside_range_export.text)))
-    assert not [row for row in outside_range_rows if row["entry_type"] == "prior_receipt"]
+    outside_range_rows = list(csv.DictReader(StringIO(outside_range_export.text.lstrip("\ufeff")), delimiter=";"))
+    assert not [row for row in outside_range_rows if row["tipo"] == "seña_previa"]
 
     future_payload = {**payload, "collected_on": (hotel_today(db, 1) + timedelta(days=1)).isoformat()}
     future = client.post(

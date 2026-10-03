@@ -6,6 +6,27 @@ import { useSession } from "../../state/session";
 import { formatHotelDateTime, todayIso } from "../../utils/date";
 
 const PAGE_SIZE = 50;
+const PERMISSION_DETAIL_LABELS: Record<string, string> = {
+  permission_code: "Permiso",
+  role: "Rol",
+  allowed: "Permitido",
+  version: "Versión",
+  source: "Origen"
+};
+
+function permissionChangeLines(details: Record<string, unknown>): string[] {
+  const eventDetails = details.event_details;
+  if (!eventDetails || typeof eventDetails !== "object" || Array.isArray(eventDetails)) return [];
+  const event = eventDetails as Record<string, unknown>;
+  return (["before", "after"] as const).flatMap((key) => {
+    const snapshot = event[key];
+    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return [];
+    const values = Object.entries(snapshot as Record<string, unknown>)
+      .filter(([field, value]) => field in PERMISSION_DETAIL_LABELS && ["string", "number", "boolean"].includes(typeof value))
+      .map(([field, value]) => `${PERMISSION_DETAIL_LABELS[field]}: ${field === "allowed" ? (value ? "Sí" : "No") : String(value)}`);
+    return values.length ? [`${key === "before" ? "Antes" : "Después"}: ${values.join(" · ")}`] : [];
+  });
+}
 
 export function OperationalAuditPage() {
   const { session } = useSession();
@@ -60,7 +81,7 @@ export function OperationalAuditPage() {
           <div className="divide-y divide-slate-100">
             {items.map((item) => <article key={`${item.source}-${item.source_id}`} className="grid gap-2 px-4 py-4 md:grid-cols-[150px_1fr_auto]">
               <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.area}</p><p className="text-xs text-slate-500">{formatHotelDateTime(item.occurred_at, hotelConfigQuery.data?.hotel_timezone)}</p></div>
-              <div><p className="font-semibold text-slate-900">{item.summary}</p><p className="text-sm text-slate-600">{item.action} · {item.actor_name}</p>{item.reason_code ? <p className="text-xs text-slate-500">Motivo: {item.reason_code}{item.reason_note ? ` · ${item.reason_note}` : ""}</p> : null}{item.origin_room_disposition ? <p className="text-xs text-brand-700">Habitación origen: {item.origin_room_disposition} ({item.origin_room_status_before ?? "?"} → {item.origin_room_status_after ?? "?"})</p> : null}</div>
+              <div><p className="font-semibold text-slate-900">{item.summary}</p><p className="text-sm text-slate-600">{item.action} · {item.actor_name}</p>{item.area === "permissions" ? permissionChangeLines(item.details).map((line) => <p key={line} className="text-xs text-slate-600">{line}</p>) : null}{item.reason_code ? <p className="text-xs text-slate-500">Motivo: {item.reason_code}{item.reason_note ? ` · ${item.reason_note}` : ""}</p> : null}{item.origin_room_disposition ? <p className="text-xs text-brand-700">Habitación origen: {item.origin_room_disposition} ({item.origin_room_status_before ?? "?"} → {item.origin_room_status_after ?? "?"})</p> : null}</div>
               <div className="text-right">{item.amount !== null && item.amount !== undefined ? <p className="font-semibold text-slate-900">{Number(item.amount).toLocaleString("es-AR", { style: "currency", currency: item.currency_code ?? "ARS" })}</p> : null}<p className="text-xs text-slate-500">#{item.source_id}</p></div>
             </article>)}
           </div>

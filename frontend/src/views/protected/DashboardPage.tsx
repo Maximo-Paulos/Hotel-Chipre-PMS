@@ -72,7 +72,8 @@ export function DashboardPage() {
   // The reservation list supports dashboard activity and remains paginated.
   // Financial KPIs use the separate permission-protected server aggregate.
   const { fromDate: monthFrom, toDate: monthTo } = useMemo(() => monthRangeIso(new Date(`${today}T00:00:00`)), [today]);
-  const { data: reservations = [] } = useReservations({ fromDate: monthFrom, toDate: monthTo, order: "check_in", limit: 200 });
+  const reservationsQuery = useReservations({ fromDate: monthFrom, toDate: monthTo, order: "check_in", limit: 200 });
+  const reservations = useMemo(() => reservationsQuery.data ?? [], [reservationsQuery.data]);
   const { hasPermission } = useEffectivePermissions();
   const canViewFinancial = hasPermission("reports:financial:view");
   // The monthly financial cards use the permission-protected server aggregate,
@@ -81,7 +82,8 @@ export function DashboardPage() {
   // Upcoming arrivals are filtered and ordered by the server from the
   // hotel's local day. This avoids hiding an arrival merely because newer
   // reservations were created afterwards.
-  const { data: upcomingReservations = [] } = useReservations({ upcomingOnly: true, order: "check_in", limit: 5 });
+  const upcomingReservationsQuery = useReservations({ upcomingOnly: true, order: "check_in", limit: 5 });
+  const upcomingReservations = upcomingReservationsQuery.data ?? [];
   const pendingActionsQuery = usePendingReservationActions(8);
   const canApproveCashDifferences = hasPermission("cash:approve_difference");
   const pendingCashApprovalsQuery = usePendingCashCloseReports({ enabled: canApproveCashDifferences });
@@ -262,6 +264,26 @@ export function DashboardPage() {
               {t("pipeline.viewAll")}
             </Link>
           </div>
+          {upcomingReservationsQuery.isLoading ? (
+            <p className="mt-3 text-sm text-slate-500" role="status" data-testid="dashboard-upcoming-loading">
+              {t("pipeline.loading")}
+            </p>
+          ) : upcomingReservationsQuery.isError ? (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert" data-testid="dashboard-upcoming-error">
+              <span>{t("pipeline.error")}</span>
+              <button
+                type="button"
+                onClick={() => void upcomingReservationsQuery.refetch()}
+                className="min-h-11 rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-800 hover:bg-rose-100"
+              >
+                {t("pipeline.retry")}
+              </button>
+            </div>
+          ) : upcomingReservations.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-500" data-testid="dashboard-upcoming-empty">
+              {t("pipeline.empty")}
+            </p>
+          ) : null}
           <div className="mt-3 hidden overflow-x-auto rounded-lg border border-slate-200 sm:block">
             <table className="w-full min-w-[640px] divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
@@ -303,13 +325,6 @@ export function DashboardPage() {
                     </td>
                   </tr>
                 ))}
-                {arrivals.length === 0 && (
-                  <tr>
-                    <td className="px-4 py-3 text-sm text-slate-500" colSpan={5}>
-                      {t("pipeline.empty")}
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
@@ -351,7 +366,6 @@ export function DashboardPage() {
                 </dl>
               </article>
             ))}
-            {arrivals.length === 0 && <p className="text-sm text-slate-500">{t("pipeline.empty")}</p>}
           </div>
         </div>
 
@@ -359,7 +373,24 @@ export function DashboardPage() {
           <p className="text-xs uppercase tracking-wide text-slate-500">{t("activity.eyebrow")}</p>
           <h2 className="text-lg font-semibold text-slate-900">{t("activity.title")}</h2>
           <div className="mt-3 space-y-3">
-            {activities.map((activity) => (
+            {reservationsQuery.isLoading ? (
+              <p className="text-sm text-slate-500" role="status" data-testid="dashboard-activity-loading">
+                {t("activity.loading")}
+              </p>
+            ) : reservationsQuery.isError ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert" data-testid="dashboard-activity-error">
+                <span>{t("activity.error")}</span>
+                <button
+                  type="button"
+                  onClick={() => void reservationsQuery.refetch()}
+                  className="min-h-11 rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-800 hover:bg-rose-100"
+                >
+                  {t("activity.retry")}
+                </button>
+              </div>
+            ) : activities.length === 0 ? (
+              <p className="text-sm text-slate-500" data-testid="dashboard-activity-empty">{t("activity.empty")}</p>
+            ) : activities.map((activity) => (
               <div
                 key={activity.key}
                 className={`rounded-lg border px-3 py-2 text-sm ${
@@ -370,7 +401,6 @@ export function DashboardPage() {
                 <div>{activity.description}</div>
               </div>
             ))}
-            {activities.length === 0 && <p className="text-sm text-slate-500">{t("activity.empty")}</p>}
           </div>
         </div>
       </div>

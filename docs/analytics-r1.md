@@ -98,6 +98,14 @@ Only XLSX creates a job row in `analytics_export_jobs`.
 
 Facts are hotel-scoped and use the canonical contracts established in the core services layer.
 
+Reservation totals are allocated over the complete stay before a requested date window is selected. Partial or repeated refreshes therefore preserve the same nightly amounts independent of refresh order. `ADR` is PMS net room revenue over chargeable occupied nights; `RevPAR` is PMS net room revenue over sellable room nights. When a source currency cannot be converted with its saved FX snapshot, analytics tables mark that target currency unavailable instead of presenting zero as a real converted amount.
+
+Financial report booked value includes stays overlapping the selected local hotel dates and allocates the contractual total evenly over the stay nights before summing the selected nights. Collected payments and refunds remain grouped by the tender currency; analytics and reports do not infer an FX rate.
+
+To rebuild historical reservation and occupancy facts after an allocation fix, use the idempotent command `python scripts/repair_analytics_facts.py --hotel-id <id>` or `python scripts/repair_analytics_facts.py --all-hotels`. Optional `--date-from YYYY-MM-DD --date-to YYYY-MM-DD` flags restrict the rebuilt interval. The command commits one hotel at a time and never prints guest or payment details.
+
+Rate, surcharge, and room-status audit records are inserted in the same SQL transaction as their business mutation. These paths fail the request if the audit insert fails; the caller owns the commit.
+
 ## Dashboard Analytics and IA chat
 
 The Analytics dashboard and the Analytics IA chat are separate experiences.

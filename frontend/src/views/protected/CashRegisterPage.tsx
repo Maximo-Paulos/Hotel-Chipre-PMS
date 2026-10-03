@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-import { downloadCashLedgerCsv, type CashCloseReport, type CashMovementPayload } from "../../api/cashRegister";
+import {
+  downloadCashExpenseReceipt,
+  downloadCashLedgerCsv,
+  type CashCloseReport,
+  type CashDailyEntry,
+  type CashMovement,
+  type CashMovementPayload
+} from "../../api/cashRegister";
 import {
   cashMovementTypeLabel,
   cashSessionStatusLabel,
@@ -11,6 +18,7 @@ import {
   useCashMovements,
   useCashDailySummary,
   useCashRegisterMutations,
+  useCashExpenses,
   useCashSessions,
   useCashSessionSummary
 } from "../../hooks/useCashRegister";
@@ -25,6 +33,7 @@ const emptyMovementForm: CashMovementPayload = {
   amount: 0,
   description: ""
 };
+const emptyDailyEntries: CashDailyEntry[] = [];
 
 const money = (value?: number | string | null, currency = "ARS") =>
   Number(value ?? 0).toLocaleString("es-AR", { style: "currency", currency });
@@ -38,14 +47,37 @@ export function CashRegisterPage() {
   const [openingCurrency, setOpeningCurrency] = useState("ARS");
   const [openingNotes, setOpeningNotes] = useState("");
   const [movementForm, setMovementForm] = useState<CashMovementPayload>(emptyMovementForm);
-  const [countedBalance, setCountedBalance] = useState(0);
+  const [countedBalances, setCountedBalances] = useState<Record<number, number>>({});
   const [successorFloatAmounts, setSuccessorFloatAmounts] = useState<Record<number, string>>({});
   const [closeNotes, setCloseNotes] = useState("");
   const [approveOnClose, setApproveOnClose] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [cashActionErrors, setCashActionErrors] = useState<Record<string, string>>({});
   const [closeReport, setCloseReport] = useState<CashCloseReport | null>(null);
   const [reportDate, setReportDate] = useState(() => todayIso());
   const [reportCurrency, setReportCurrency] = useState("");
+  const [exportFromDate, setExportFromDate] = useState(() => todayIso());
+  const [exportToDate, setExportToDate] = useState(() => todayIso());
+  const [expenseCategory, setExpenseCategory] = useState("");
+  const [expenseVendor, setExpenseVendor] = useState("");
+  const [expenseReceiptReference, setExpenseReceiptReference] = useState("");
+  const [expenseReceiptImage, setExpenseReceiptImage] = useState<string | null>(null);
+  const [expenseReceiptFilename, setExpenseReceiptFilename] = useState<string | null>(null);
+  const [expenseRejectionReasons, setExpenseRejectionReasons] = useState<Record<number, string>>({});
+
+  const setCashActionError = (key: string, error: unknown, fallback: string) => {
+    setCashActionErrors((current) => ({
+      ...current,
+      [key]: error instanceof Error ? error.message : fallback
+    }));
+  };
+  const dismissCashActionError = (key: string) => {
+    setCashActionErrors((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  };
 
   const sessionsQuery = useCashSessions();
   const latestCloseReportQuery = useLatestCashCloseReport({ currency: openingCurrency });
@@ -59,6 +91,9 @@ export function CashRegisterPage() {
     [pendingCashCustodyReportsQuery.data]
   );
   const dailySummaryQuery = useCashDailySummary(reportDate, reportCurrency || undefined);
+  const canViewCash = hasPermission("cash:view");
+  const canApproveCashExpenses = hasPermission("cash:expense_approve");
+  const cashExpensesQuery = useCashExpenses({ enabled: canViewCash });
   const hotelTimeZone = dailySummaryQuery.data?.timezone ?? hotelConfigQuery.data?.hotel_timezone;
   const availableCurrencies = useMemo(
     () => Array.from(new Set([
@@ -85,6 +120,10 @@ export function CashRegisterPage() {
     () => sessions.find((session) => session.id === selectedSessionId) ?? openSession ?? sessions[0] ?? null,
     [openSession, selectedSessionId, sessions]
   );
+  const countedBalance = selectedSession ? countedBalances[selectedSession.id] ?? 0 : 0;
+  const movementFormErrorKey = `movement-form:${selectedSession?.id ?? "none"}`;
+  const closeSessionErrorKey = `close-session:${selectedSession?.id ?? "none"}`;
+  const cashNotesErrorKey = `notes:${selectedSession?.id ?? "none"}`;
   const selectedSessionCloseReportQuery = useCashSessionCloseReport(selectedSession?.id);
   const collaborativeCashSession = useCollaborativeResource({
     resourceType: "cash_session",
@@ -96,6 +135,62 @@ export function CashRegisterPage() {
   const summaryQuery = useCashSessionSummary(selectedSession?.id);
   const mutations = useCashRegisterMutations(selectedSession?.id);
   const movements = useMemo(() => movementsQuery.data ?? [], [movementsQuery.data]);
+  const displayedMovements = useMemo(() => {
+    const result: CashMovement[] = [];
+    const groupPositions = new Map<number, number>();
+    for (const movement of movements) {
+      const batchId = movement.group_payment_batch_id;
+      if (!batchId) {
+        result.push(movement);
+        continue;
+      }
+      const currentIndex = groupPositions.get(batchId);
+      if (currentIndex === undefined) {
+        const reservationCount = movement.group_payment_reservation_count ?? 1;
+        result.push({
+          ...movement,
+          amount: Number(movement.group_payment_total ?? movement.amount),
+          description: `Cobro grupal · ${reservationCount} reserva(s)`
+        });
+        groupPositions.set(batchId, result.length - 1);
+      }
+    }
+    return result;
+  }, [movements]);
+  const dailyEntries = dailySummaryQuery.data?.entries ?? emptyDailyEntries;
+  const displayedDailyEntries = useMemo<typeof dailyEntries>(() => {
+    const result: typeof dailyEntries = [];
+    const groups = new Map<number, (typeof dailyEntries)[number]>();
+    for (const entry of dailyEntries) {
+      const batchId = entry.group_payment_batch_id;
+      if (!batchId || entry.entry_type !== "payment") {
+        result.push(entry);
+        continue;
+      }
+      const existing = groups.get(batchId);
+      if (existing) {
+        existing.amount += Number(entry.amount);
+        existing.signed_amount += Number(entry.signed_amount);
+        continue;
+      }
+      const grouped = {
+        ...entry,
+        amount: Number(entry.amount),
+        signed_amount: Number(entry.signed_amount),
+        transaction_id: null,
+        reservation_id: null,
+        description: "Cobro grupal · 1 reserva(s)"
+      };
+      groups.set(batchId, grouped);
+    }
+    for (const [batchId, entry] of groups) {
+      const count = dailyEntries.filter((item) => item.group_payment_batch_id === batchId).length;
+      entry.description = `Cobro grupal · ${count} reserva(s)`;
+      result.push(entry);
+    }
+    return result.sort((left, right) => left.occurred_at.localeCompare(right.occurred_at));
+  }, [dailyEntries]);
+  const cashExpenses = useMemo(() => cashExpensesQuery.data ?? [], [cashExpensesQuery.data]);
   const latestCloseReport = latestCloseReportQuery.data;
   const selectedSessionCloseReport =
     closeReport?.session_id === selectedSession?.id
@@ -133,7 +228,10 @@ export function CashRegisterPage() {
     mutations.addMovementMutation.isPending ||
     mutations.closeSessionMutation.isPending ||
     mutations.approveDifferenceMutation.isPending ||
-    mutations.confirmCustodyMutation.isPending;
+    mutations.confirmCustodyMutation.isPending ||
+    mutations.createExpenseMutation.isPending ||
+    mutations.approveExpenseMutation.isPending ||
+    mutations.rejectExpenseMutation.isPending;
 
   const handleOpenSession = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -148,10 +246,10 @@ export function CashRegisterPage() {
       setSelectedSessionId(session.id);
       setOpeningBalance(null);
       setOpeningNotes("");
-      setCountedBalance(0);
+      setCountedBalances((current) => ({ ...current, [session.id]: 0 }));
       setMessage("Caja abierta.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo abrir la caja.");
+      setCashActionError(`open:${openingCurrency}`, error, "No se pudo abrir la caja.");
     }
   };
 
@@ -160,6 +258,25 @@ export function CashRegisterPage() {
     if (!selectedSession || selectedSession.status !== "open") return;
     setMessage(null);
     try {
+      if (movementForm.movement_type === "expense") {
+        await mutations.createExpenseMutation.mutateAsync({
+          amount: Number(movementForm.amount),
+          category: expenseCategory.trim(),
+          vendor: expenseVendor.trim(),
+          description: movementForm.description?.trim() || null,
+          receipt_reference: expenseReceiptReference.trim() || null,
+          receipt_image_base64: expenseReceiptImage,
+          receipt_filename: expenseReceiptFilename
+        });
+        setMovementForm(emptyMovementForm);
+        setExpenseCategory("");
+        setExpenseVendor("");
+        setExpenseReceiptReference("");
+        setExpenseReceiptImage(null);
+        setExpenseReceiptFilename(null);
+        setMessage("Gasto pendiente de aprobación. Todavía no modifica el saldo de caja.");
+        return;
+      }
       await mutations.addMovementMutation.mutateAsync({
         ...movementForm,
         amount: Number(movementForm.amount),
@@ -168,7 +285,80 @@ export function CashRegisterPage() {
       setMovementForm(emptyMovementForm);
       setMessage("Movimiento registrado.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo registrar el movimiento.");
+      setCashActionError(movementFormErrorKey, error, "No se pudo registrar el movimiento.");
+    }
+  };
+
+  const handleExpenseReceiptFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setMessage(null);
+    const file = event.target.files?.[0];
+    if (!file) {
+      setExpenseReceiptImage(null);
+      setExpenseReceiptFilename(null);
+      return;
+    }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setCashActionErrors((current) => ({
+        ...current,
+        [movementFormErrorKey]: "El comprobante debe ser una imagen JPEG, PNG o WEBP de hasta 5 MB."
+      }));
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setCashActionErrors((current) => ({ ...current, [movementFormErrorKey]: "No se pudo leer la imagen del comprobante." }));
+        return;
+      }
+      setExpenseReceiptImage(reader.result);
+      setExpenseReceiptFilename(file.name);
+      setMessage(null);
+    };
+    reader.onerror = () => setCashActionErrors((current) => ({ ...current, [movementFormErrorKey]: "No se pudo leer la imagen del comprobante." }));
+    reader.readAsDataURL(file);
+  };
+
+  const handleApproveExpense = async (expenseId: number) => {
+    setMessage(null);
+    try {
+      await mutations.approveExpenseMutation.mutateAsync(expenseId);
+      setMessage("Gasto aprobado y registrado en caja.");
+    } catch (error) {
+      setCashActionError(`expense:${expenseId}`, error, "No se pudo aprobar el gasto.");
+    }
+  };
+
+  const handleRejectExpense = async (expenseId: number) => {
+    const reason = (expenseRejectionReasons[expenseId] ?? "").trim();
+    if (!reason) {
+      setCashActionErrors((current) => ({ ...current, [`expense:${expenseId}`]: "Ingresá el motivo para rechazar el gasto." }));
+      return;
+    }
+    setMessage(null);
+    try {
+      await mutations.rejectExpenseMutation.mutateAsync({ expenseId, reason });
+      setExpenseRejectionReasons((current) => ({ ...current, [expenseId]: "" }));
+      setMessage("Gasto rechazado. No se modificó la caja.");
+    } catch (error) {
+      setCashActionError(`expense:${expenseId}`, error, "No se pudo rechazar el gasto.");
+    }
+  };
+
+  const handleExpenseReceiptDownload = async (expenseId: number) => {
+    setMessage(null);
+    try {
+      const blob = await downloadCashExpenseReceipt(expenseId, session);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "comprobante-caja";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setCashActionError(`expense:${expenseId}`, error, "No se pudo abrir el comprobante.");
     }
   };
 
@@ -184,16 +374,16 @@ export function CashRegisterPage() {
       });
       setCloseReport(report);
       setSelectedSessionId(report.session_id);
-      setCountedBalance(0);
+      setCountedBalances((current) => ({ ...current, [report.session_id]: 0 }));
       setCloseNotes("");
       setApproveOnClose(false);
       setMessage("Caja cerrada.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo cerrar la caja.");
+      setCashActionError(closeSessionErrorKey, error, "No se pudo cerrar la caja.");
     }
   };
 
-  const handleApproveDifference = async (reportId?: number) => {
+  const handleApproveDifference = async (reportId?: number, errorScope = "selected") => {
     const reportToApprove = reportId
       ? pendingCloseReports.find((report) => report.id === reportId) ??
         (selectedSessionCloseReport?.id === reportId ? selectedSessionCloseReport : null) ??
@@ -208,11 +398,11 @@ export function CashRegisterPage() {
       setSelectedSessionId(approved.session_id);
       setMessage("Diferencia aprobada.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo aprobar la diferencia.");
+      setCashActionError(`difference:${errorScope}:${reportToApprove.id}`, error, "No se pudo aprobar la diferencia.");
     }
   };
 
-  const handleConfirmCustody = async (reportToConfirm: CashCloseReport) => {
+  const handleConfirmCustody = async (reportToConfirm: CashCloseReport, errorScope = "selected") => {
     setMessage(null);
     const floatAmount = Number(successorFloatAmounts[reportToConfirm.id] ?? "0");
     try {
@@ -223,39 +413,50 @@ export function CashRegisterPage() {
       setCloseReport(confirmed);
       setMessage(`Recepción confirmada. Fondo de cambio para la sucesora: ${money(floatAmount, reportToConfirm.currency_code)}.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo confirmar la custodia.");
+      setCashActionError(`custody:${errorScope}:${reportToConfirm.id}`, error, "No se pudo confirmar la custodia.");
     }
   };
 
   const handleCashNotesSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setMessage(null);
     if (!selectedSession || !collaborativeCashSession.isDirty) return;
     if (Object.keys(collaborativeCashSession.conflicts).length > 0) {
-      setMessage("Hay un conflicto en las notas de caja. Elegí qué valor conservar.");
+      setCashActionErrors((current) => ({ ...current, [cashNotesErrorKey]: "Hay un conflicto en las notas de caja. Elegí qué valor conservar." }));
       return;
     }
     try {
       await collaborativeCashSession.save();
       setMessage("Notas de caja actualizadas.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudieron guardar las notas de caja.");
+      setCashActionError(cashNotesErrorKey, error, "No se pudieron guardar las notas de caja.");
     }
   };
 
   const handleExport = async () => {
+    setMessage(null);
+    if (!exportFromDate || !exportToDate || exportToDate < exportFromDate) {
+      setCashActionErrors((current) => ({ ...current, export: "Elegí un rango válido para exportar." }));
+      return;
+    }
     try {
-      const blob = await downloadCashLedgerCsv(reportDate, session, reportCurrency || dailySummaryQuery.data?.currency_code);
+      const blob = await downloadCashLedgerCsv(
+        exportFromDate,
+        exportToDate,
+        session,
+        reportCurrency || dailySummaryQuery.data?.currency_code
+      );
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `caja-${reportDate}.csv`;
+      anchor.download = `caja-${exportFromDate}-${exportToDate}.csv`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
       setMessage("Exportación de caja descargada.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo exportar la caja.");
+      setCashActionError("export", error, "No se pudo exportar la caja.");
     }
   };
 
@@ -270,7 +471,7 @@ export function CashRegisterPage() {
         {sessionsQuery.isFetching && <p className="text-xs text-slate-500">Actualizando caja...</p>}
       </header>
 
-      {message ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
+      {message ? <div role="status" aria-live="polite" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
 
       <section className="space-y-4 rounded-xl border border-brand-100 bg-brand-50/40 p-5 shadow-sm" data-testid="cash-daily-summary">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -304,14 +505,41 @@ export function CashRegisterPage() {
               Si hay más de una moneda, elegí una para no mezclar importes.
             </span>
           </label>
+          <label className="space-y-1 text-sm font-semibold text-slate-700">
+            <span>Exportar desde</span>
+            <input
+              type="date"
+              value={exportFromDate}
+              onChange={(event) => setExportFromDate(event.target.value)}
+              className="block rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+              data-testid="cash-export-from"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-semibold text-slate-700">
+            <span>Exportar hasta</span>
+            <input
+              type="date"
+              value={exportToDate}
+              onChange={(event) => setExportToDate(event.target.value)}
+              min={exportFromDate}
+              className="block rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+              data-testid="cash-export-to"
+            />
+          </label>
           <button
             type="button"
             onClick={() => void handleExport()}
-            disabled={dailySummaryQuery.isLoading || dailySummaryQuery.isError || !hasPermission("cash:view")}
+            disabled={dailySummaryQuery.isLoading || dailySummaryQuery.isError || !hasPermission("cash:view") || !exportFromDate || !exportToDate || exportToDate < exportFromDate}
             className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Exportar CSV
           </button>
+          <div className="basis-full">
+            <PersistentActionError
+              message={cashActionErrors.export}
+              onClose={() => dismissCashActionError("export")}
+            />
+          </div>
         </div>
         {dailySummaryQuery.isLoading ? <p className="text-sm text-slate-600">Cargando resumen diario...</p> : null}
         {dailySummaryQuery.isError ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">No se pudo cargar el resumen diario: {(dailySummaryQuery.error as Error).message}</p> : null}
@@ -356,6 +584,47 @@ export function CashRegisterPage() {
                   <SummaryLine label="Diferencia" value={money(dailySummaryQuery.data.physical_cash.difference, dailySummaryQuery.data.currency_code)} />
                 </div>
               </div>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white" data-testid="cash-shift-reconciliation">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <h3 className="font-semibold text-slate-900">Conciliación por turno</h3>
+                <p className="text-xs text-slate-500">Cada turno muestra apertura, movimientos, esperado, contado y diferencia por separado.</p>
+              </div>
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Turno</th>
+                    <th className="px-4 py-3">Apertura</th>
+                    <th className="px-4 py-3">Cierre</th>
+                    <th className="px-4 py-3">Saldo inicial</th>
+                    <th className="px-4 py-3">Esperado</th>
+                    <th className="px-4 py-3">Contado</th>
+                    <th className="px-4 py-3">Diferencia</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {dailySummaryQuery.data.sessions.length === 0 ? (
+                    <tr><td colSpan={7} className="px-4 py-4 text-slate-500">No hay turnos que conciliar en la fecha seleccionada.</td></tr>
+                  ) : dailySummaryQuery.data.sessions.map((shift) => (
+                    <tr key={shift.session_id}>
+                      <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-800">#{shift.session_id} · {cashSessionStatusLabel[shift.status] ?? shift.status}</td>
+                      <td className="min-w-48 px-4 py-3 text-slate-600">
+                        <span className="block">{formatHotelDateTime(shift.opened_at, hotelTimeZone)}</span>
+                        <span className="text-xs text-slate-500">{shift.opened_by_name ?? "Usuario no disponible"}</span>
+                      </td>
+                      <td className="min-w-48 px-4 py-3 text-slate-600">
+                        {shift.closed_at ? <><span className="block">{formatHotelDateTime(shift.closed_at, hotelTimeZone)}</span><span className="text-xs text-slate-500">{shift.closed_by_name ?? "Usuario no disponible"}</span></> : "En curso"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">{money(shift.opening_balance, shift.currency_code)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 font-semibold">{money(shift.expected_balance, shift.currency_code)}</td>
+                      <td className="whitespace-nowrap px-4 py-3">{shift.declared_balance == null ? "—" : money(shift.declared_balance, shift.currency_code)}</td>
+                      <td className={`whitespace-nowrap px-4 py-3 font-semibold ${Number(shift.difference ?? 0) === 0 ? "text-slate-700" : "text-amber-800"}`}>
+                        {shift.difference == null ? "—" : money(shift.difference, shift.currency_code)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             <div className="overflow-hidden rounded-lg border border-amber-200 bg-amber-50/50" data-testid="cash-prior-receipts">
               <div className="border-b border-amber-200 px-4 py-3">
@@ -435,8 +704,11 @@ export function CashRegisterPage() {
                   <tr><th className="px-4 py-3">Cobrador</th><th className="px-4 py-3">Medio</th><th className="px-4 py-3">Reserva</th><th className="px-4 py-3">Operación</th><th className="px-4 py-3">Importe</th><th className="px-4 py-3">Hora</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {dailySummaryQuery.data.entries.length === 0 ? <tr><td colSpan={6} className="px-4 py-4 text-slate-500">Sin movimientos en la fecha seleccionada.</td></tr> : dailySummaryQuery.data.entries.map((entry) => (
-                    <tr key={`${entry.entry_type}-${entry.transaction_id ?? entry.cash_movement_id}`}>
+                  {displayedDailyEntries.length === 0 ? <tr><td colSpan={6} className="px-4 py-4 text-slate-500">Sin movimientos en la fecha seleccionada.</td></tr> : displayedDailyEntries.map((entry) => (
+                    <tr
+                      key={`${entry.entry_type}-${entry.group_payment_batch_id ?? entry.transaction_id ?? entry.cash_movement_id}`}
+                      data-testid={entry.group_payment_batch_id ? `group-payment-cash-entry-${entry.group_payment_batch_id}` : undefined}
+                    >
                       <td className="px-4 py-3 font-medium text-slate-800">{entry.actor_name}</td>
                       <td className="px-4 py-3 text-slate-600">{entry.payment_method ? paymentMethodLabel(entry.payment_method) : "Caja física"}</td>
                       <td className="px-4 py-3 text-slate-600">{entry.reservation_id ? `#${entry.reservation_id}` : "-"}</td>
@@ -461,7 +733,7 @@ export function CashRegisterPage() {
           </div>
           <ul className="divide-y divide-amber-200">
             {pendingCloseReports.map((report) => (
-              <li key={report.id} className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
+              <li key={report.id} className="grid gap-2 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                 <span>
                   Caja #{report.session_id} · diferencia {money(report.difference, report.currency_code || currency)}
                 </span>
@@ -469,12 +741,18 @@ export function CashRegisterPage() {
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void handleApproveDifference(report.id)}
+                    onClick={() => void handleApproveDifference(report.id, "pending")}
                     className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60"
                   >
                     Aprobar diferencia
                   </button>
                 ) : null}
+                <div className="sm:col-span-2">
+                  <PersistentActionError
+                    message={cashActionErrors[`difference:pending:${report.id}`]}
+                    onClose={() => dismissCashActionError(`difference:pending:${report.id}`)}
+                  />
+                </div>
               </li>
             ))}
           </ul>
@@ -509,14 +787,20 @@ export function CashRegisterPage() {
                     aria-label={`Cambio para caja sucesora de caja ${report.session_id}`}
                   />
                 </label>
-                <button
-                  type="button"
-                  disabled={busy || Number(successorFloatAmounts[report.id] ?? "0") < 0 || Number(successorFloatAmounts[report.id] ?? "0") > 9999999999.99}
-                  onClick={() => void handleConfirmCustody(report)}
-                  className="rounded-lg border border-sky-300 bg-white px-3 py-2 text-sm font-semibold text-sky-900 hover:bg-sky-100 disabled:opacity-60"
-                >
-                  Confirmar custodia y cambio
-                </button>
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    disabled={busy || Number(successorFloatAmounts[report.id] ?? "0") < 0 || Number(successorFloatAmounts[report.id] ?? "0") > 9999999999.99}
+                    onClick={() => void handleConfirmCustody(report, "pending")}
+                    className="rounded-lg border border-sky-300 bg-white px-3 py-2 text-sm font-semibold text-sky-900 hover:bg-sky-100 disabled:opacity-60"
+                  >
+                    Confirmar custodia y cambio
+                  </button>
+                  <PersistentActionError
+                    message={cashActionErrors[`custody:pending:${report.id}`]}
+                    onClose={() => dismissCashActionError(`custody:pending:${report.id}`)}
+                  />
+                </div>
               </li>
             ))}
           </ul>
@@ -588,6 +872,10 @@ export function CashRegisterPage() {
                 </p>
               ) : null}
             </div>
+            <PersistentActionError
+              message={cashActionErrors[`open:${openingCurrency}`]}
+              onClose={() => dismissCashActionError(`open:${openingCurrency}`)}
+            />
             <label className="space-y-1 text-sm">
               <span className="text-slate-600">Saldo inicial</span>
               <input
@@ -676,6 +964,10 @@ export function CashRegisterPage() {
                   rows={2}
                   className="mt-2 w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm"
                 />
+                <PersistentActionError
+                  message={cashActionErrors[cashNotesErrorKey]}
+                  onClose={() => dismissCashActionError(cashNotesErrorKey)}
+                />
                 {Object.values(collaborativeCashSession.conflicts).map((conflict) => (
                   <div key={conflict.field} className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-950" data-testid={`cash-conflict-${conflict.field}`}>
                     <p className="font-semibold">Conflicto en {conflict.field}</p>
@@ -710,7 +1002,7 @@ export function CashRegisterPage() {
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 >
                   <option value="income">Ingreso</option>
-                  <option value="expense" disabled={!canRecordCashExpense}>Egreso manual (responsable + MFA)</option>
+                  <option value="expense" disabled={!canRecordCashExpense}>Gasto pendiente de aprobación</option>
                   <option value="adjustment" disabled={!canAdjustCash}>Ajuste manual (responsable + MFA)</option>
                 </select>
               </label>
@@ -733,18 +1025,70 @@ export function CashRegisterPage() {
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 />
               </label>
+              {movementForm.movement_type === "expense" ? (
+                <>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-slate-600">Categoría</span>
+                    <input
+                      required
+                      maxLength={64}
+                      value={expenseCategory}
+                      onChange={(event) => setExpenseCategory(event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-slate-600">Proveedor</span>
+                    <input
+                      required
+                      maxLength={120}
+                      value={expenseVendor}
+                      onChange={(event) => setExpenseVendor(event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-slate-600">Referencia del comprobante</span>
+                    <input
+                      required={!expenseReceiptImage}
+                      maxLength={120}
+                      value={expenseReceiptReference}
+                      onChange={(event) => setExpenseReceiptReference(event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-slate-600">O adjuntá una imagen</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleExpenseReceiptFile}
+                      className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                    />
+                    <span className="block text-xs text-slate-500">JPEG, PNG o WEBP · hasta 5 MB. El archivo se guarda en almacenamiento privado.</span>
+                    {expenseReceiptFilename ? <span className="block text-xs text-emerald-700">Adjunto: {expenseReceiptFilename}</span> : null}
+                  </label>
+                  <p className="text-xs text-amber-800 md:col-span-2">El gasto queda pendiente. Solo Dueño, Codueña o Gerencia pueden aprobarlo con MFA; hasta entonces no cambia el saldo de caja.</p>
+                </>
+              ) : null}
               {movementForm.movement_type === "expense" && !canRecordCashExpense ? (
                 <p className="text-xs text-amber-800 md:col-span-2">
                   Los egresos manuales requieren autorización de responsable y MFA. Las devoluciones a huéspedes se registran desde el flujo de reembolso.
                 </p>
               ) : null}
+              <div className="md:col-span-2">
+                <PersistentActionError
+                  message={cashActionErrors[movementFormErrorKey]}
+                  onClose={() => dismissCashActionError(movementFormErrorKey)}
+                />
+              </div>
               <div className="md:col-span-2 flex justify-end">
                 <button
                   type="submit"
                   disabled={busy || !canOperateCash || (movementForm.movement_type === "expense" && !canRecordCashExpense) || (movementForm.movement_type === "adjustment" && !canAdjustCash) || !selectedSession || selectedSession.status !== "open" || Number(movementForm.amount) <= 0}
                   className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                 >
-                  Registrar movimiento
+                  {movementForm.movement_type === "expense" ? "Registrar gasto pendiente" : "Registrar movimiento"}
                 </button>
               </div>
             </form>
@@ -752,11 +1096,11 @@ export function CashRegisterPage() {
             <div className="mt-5 overflow-hidden rounded-lg border border-slate-200">
               {movementsQuery.isLoading ? (
                 <p className="px-4 py-3 text-sm text-slate-500">Cargando movimientos...</p>
-              ) : movements.length === 0 ? (
+              ) : displayedMovements.length === 0 ? (
                 <p className="px-4 py-3 text-sm text-slate-500">No hay movimientos para esta caja.</p>
               ) : (
                 <div className="divide-y divide-slate-200">
-                  {movements.map((movement) => (
+                  {displayedMovements.map((movement) => (
                     <div key={movement.id} className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_auto]">
                       <div>
                         <p className="font-semibold text-slate-900">{cashMovementTypeLabel[movement.movement_type]}</p>
@@ -770,14 +1114,79 @@ export function CashRegisterPage() {
                 </div>
               )}
             </div>
+
+            {canViewCash ? (
+              <section className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white" data-testid="cash-expenses">
+                <div className="border-b border-slate-200 px-4 py-3">
+                  <h3 className="font-semibold text-slate-900">Gastos de caja</h3>
+                  <p className="text-xs text-slate-500">Los gastos pendientes no afectan el arqueo hasta que se aprueben.</p>
+                </div>
+                {cashExpensesQuery.isLoading ? <p className="px-4 py-3 text-sm text-slate-500">Cargando gastos…</p> : null}
+                {cashExpensesQuery.isError ? <p className="px-4 py-3 text-sm text-rose-700">No se pudieron cargar los gastos. {(cashExpensesQuery.error as Error).message}</p> : null}
+                {!cashExpensesQuery.isLoading && !cashExpensesQuery.isError && cashExpenses.length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-slate-500">No hay gastos registrados.</p>
+                ) : null}
+                <ul className="divide-y divide-slate-100">
+                  {cashExpenses.map((expense) => (
+                    <li key={expense.id} className="grid gap-3 px-4 py-3 text-sm lg:grid-cols-[minmax(0,1fr)_minmax(260px,auto)]">
+                      <div>
+                        <p className="font-semibold text-slate-900">{expense.category} · {expense.vendor} · {money(expense.amount, expense.currency_code)}</p>
+                        <p className="text-xs text-slate-600">Caja #{expense.session_id} · {formatHotelDateTime(expense.created_at, hotelTimeZone)} · registrado por {expense.recorded_by_name ?? "Usuario"}</p>
+                        <p className="text-xs text-slate-500">{expense.description || expense.receipt_reference || "Sin detalle adicional"}</p>
+                        {expense.status === "approved" ? <p className="text-xs text-emerald-700">Aprobado por {expense.approved_by_name ?? "Usuario"} · {expense.approved_at ? formatHotelDateTime(expense.approved_at, hotelTimeZone) : ""}</p> : null}
+                        {expense.status === "rejected" ? <p className="text-xs text-rose-700">Rechazado por {expense.rejected_by_name ?? "Usuario"}: {expense.rejection_reason}</p> : null}
+                        {expense.receipt_reference ? <p className="text-xs text-slate-500">Comprobante: {expense.receipt_reference}</p> : null}
+                        <PersistentActionError
+                          message={cashActionErrors[`expense:${expense.id}`]}
+                          onClose={() => dismissCashActionError(`expense:${expense.id}`)}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                        {expense.has_receipt_image ? (
+                          <button type="button" onClick={() => void handleExpenseReceiptDownload(expense.id)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700">
+                            Abrir comprobante
+                          </button>
+                        ) : null}
+                        {expense.status === "pending" ? <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900">Pendiente de aprobación</span> : null}
+                        {expense.status === "pending" && canApproveCashExpenses ? (
+                          <div className="flex flex-col gap-2 sm:min-w-64">
+                            <button type="button" disabled={busy} onClick={() => void handleApproveExpense(expense.id)} className="rounded bg-brand-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                              Aprobar gasto · MFA
+                            </button>
+                            <input
+                              value={expenseRejectionReasons[expense.id] ?? ""}
+                              onChange={(event) => setExpenseRejectionReasons((current) => ({ ...current, [expense.id]: event.target.value }))}
+                              maxLength={1000}
+                              placeholder="Motivo para rechazar"
+                              aria-label={`Motivo para rechazar gasto ${expense.id}`}
+                              className="rounded border border-slate-300 px-2 py-1 text-xs"
+                            />
+                            <button type="button" disabled={busy || !(expenseRejectionReasons[expense.id] ?? "").trim()} onClick={() => void handleRejectExpense(expense.id)} className="rounded border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-50">
+                              Rechazar · MFA
+                            </button>
+                          </div>
+                        ) : expense.status !== "pending" ? <span className={`rounded-full px-2 py-1 text-xs font-semibold ${expense.status === "approved" ? "bg-emerald-100 text-emerald-900" : "bg-rose-100 text-rose-900"}`}>
+                          {expense.status === "approved" ? "Aprobado" : "Rechazado"}
+                        </span> : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
           </div>
 
+          {selectedSession?.status === "open" ? (
           <form className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm" onSubmit={handleCloseSession}>
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Arqueo</p>
               <h2 className="text-lg font-semibold text-slate-900">Cerrar caja</h2>
               <p className="text-sm text-slate-600">Saldo esperado: {money(expectedBalance, currency)}</p>
             </div>
+            <PersistentActionError
+              message={cashActionErrors[closeSessionErrorKey]}
+              onClose={() => dismissCashActionError(closeSessionErrorKey)}
+            />
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-1 text-sm">
                 <span className="text-slate-600">Saldo contado</span>
@@ -786,7 +1195,11 @@ export function CashRegisterPage() {
                   min={0}
                   step="0.01"
                   value={countedBalance || ""}
-                  onChange={(event) => setCountedBalance(Number(event.target.value))}
+                  onChange={(event) => {
+                    if (selectedSession) {
+                      setCountedBalances((current) => ({ ...current, [selectedSession.id]: Number(event.target.value) }));
+                    }
+                  }}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 />
               </label>
@@ -822,6 +1235,7 @@ export function CashRegisterPage() {
               </button>
             </div>
           </form>
+          ) : null}
 
           {selectedSessionCloseReport ? (
             <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -834,6 +1248,10 @@ export function CashRegisterPage() {
                 <Metric label="Declarado" value={money(selectedSessionCloseReport.declared_balance, closeReportCurrency)} />
                 <Metric label="Diferencia" value={money(selectedSessionCloseReport.difference, closeReportCurrency)} />
               </div>
+              <div className="border-t border-slate-200 pt-3 text-sm text-slate-600">
+                <p>Cerrada el {formatHotelDateTime(selectedSessionCloseReport.closed_at, hotelTimeZone)} por {selectedSessionCloseReport.closed_by_name ?? "Usuario no disponible"}.</p>
+                <p className="mt-1">Notas de cierre: {selectedSessionCloseReport.notes?.trim() || "Sin notas"}</p>
+              </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-slate-600">
                   Estado: {Number(selectedSessionCloseReport.difference) === 0 ? "sin diferencia" : selectedSessionCloseReport.difference_approved ? "diferencia aprobada" : "pendiente de aprobación"}
@@ -842,13 +1260,17 @@ export function CashRegisterPage() {
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void handleApproveDifference(selectedSessionCloseReport.id)}
+                    onClick={() => void handleApproveDifference(selectedSessionCloseReport.id, "report")}
                     className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                   >
                     Aprobar diferencia
                   </button>
                 ) : null}
               </div>
+              <PersistentActionError
+                message={cashActionErrors[`difference:report:${selectedSessionCloseReport.id}`]}
+                onClose={() => dismissCashActionError(`difference:report:${selectedSessionCloseReport.id}`)}
+              />
               <div className="border-t border-slate-200 pt-3 text-sm text-slate-600">
                 <p>
                   Caja sucesora: {selectedSessionCloseReport.successor_session_id
@@ -865,7 +1287,7 @@ export function CashRegisterPage() {
                     ? "pendiente"
                     : `${money(selectedSessionCloseReport.successor_float_declared_amount, closeReportCurrency)} para la caja sucesora`}
                   {selectedSessionCloseReport.successor_float_declared_by_user_id
-                    ? ` · usuario ${selectedSessionCloseReport.successor_float_declared_by_user_id}`
+                    ? ` · declarado por ${selectedSessionCloseReport.successor_float_declared_by_name ?? "Usuario no disponible"}`
                     : ""}.
                 </p>
                 {canReceiveCustody && selectedSessionCloseReport.custody_handoff?.status === "pending" ? (
@@ -884,14 +1306,20 @@ export function CashRegisterPage() {
                   </label>
                 ) : null}
                 {canReceiveCustody && selectedSessionCloseReport.custody_handoff?.status === "pending" ? (
-                  <button
-                    type="button"
-                    disabled={busy || Number(successorFloatAmounts[selectedSessionCloseReport.id] ?? "0") < 0 || Number(successorFloatAmounts[selectedSessionCloseReport.id] ?? "0") > 9999999999.99}
-                    onClick={() => void handleConfirmCustody(selectedSessionCloseReport)}
-                    className="mt-3 rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-                  >
-                    Confirmar custodia y cambio
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      disabled={busy || Number(successorFloatAmounts[selectedSessionCloseReport.id] ?? "0") < 0 || Number(successorFloatAmounts[selectedSessionCloseReport.id] ?? "0") > 9999999999.99}
+                      onClick={() => void handleConfirmCustody(selectedSessionCloseReport, "report")}
+                      className="mt-3 rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                    >
+                      Confirmar custodia y cambio
+                    </button>
+                    <PersistentActionError
+                      message={cashActionErrors[`custody:report:${selectedSessionCloseReport.id}`]}
+                      onClose={() => dismissCashActionError(`custody:report:${selectedSessionCloseReport.id}`)}
+                    />
+                  </>
                 ) : null}
               </div>
             </section>
@@ -907,6 +1335,24 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <p className="text-sm text-slate-500">{label}</p>
       <p className="mt-1 text-xl font-semibold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function PersistentActionError({ message, onClose }: { message?: string; onClose: () => void }) {
+  if (!message) return null;
+
+  return (
+    <div role="alert" data-testid="cash-action-error" className="mt-2 flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+      <p className="min-w-0 flex-1">{message}</p>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Cerrar error"
+        className="shrink-0 rounded px-1 font-semibold text-rose-900 hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-500"
+      >
+        Cerrar
+      </button>
     </div>
   );
 }

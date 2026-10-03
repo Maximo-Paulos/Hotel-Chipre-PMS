@@ -9,21 +9,17 @@ import {
   fetchUserPermissionOverrides,
   fetchVisibilityWindows,
   restoreRoleDefaults,
-  restoreRolePermissionOverride,
   restoreUserDefaults,
-  restoreUserPermissionOverride,
-  updatePermissionOverride,
-  updateUserPermissionOverride,
+  updatePermissionOverridesBatch,
   updateVisibilityWindow,
   type PermissionCatalogItem,
   type PermissionMatrixResponse,
   type BuiltinPermissionRole,
   type PermissionRole,
   type PermissionProfileMatrix,
-  type PermissionOverrideResponse,
+  type PermissionOverrideBatchChange,
+  type PermissionOverrideBatchResponse,
   type RestoreRoleDefaultsResponse,
-  type RestoreRolePermissionResponse,
-  type UserPermissionMutationResponse,
   type UserPermissionOverrideResponse,
   type VisibilityWindow,
   type VisibilityWindowHours
@@ -72,9 +68,8 @@ const visibilityOptions = [
 
 type VisibilityOptionValue = (typeof visibilityOptions)[number]["value"];
 type RolePermissionMap = PermissionMatrixResponse["matrix"];
-type RoleVersionMap = Record<string, number>;
 
-const permissionKey = (role: string, code: string) => `${role}:${code}`;
+const draftPermissionKey = (scope: "role" | "user", target: string | number, code: string) => `${scope}:${target}:${code}`;
 
 const isReadPermission = (permission: PermissionCatalogItem) => /(?:^|[_:])(read|view)$/.test(permission.code);
 
@@ -84,6 +79,7 @@ const sourceLabel: Record<string, string> = {
   override: "Override de rol",
   role_override: "Override de rol",
   user_override: "Override de usuario",
+  pending: "Pendiente de guardar",
   legacy_role_deny: "Denegación heredada del rol",
   legacy_user_deny: "Denegación heredada del usuario",
   invariant: "Regla de seguridad",
@@ -114,7 +110,7 @@ type PermissionTableProps = {
   matrix: RolePermissionMap;
   visibilityWindows: VisibilityWindow[];
   roles: PermissionRoleColumn[];
-  roleVersions: RoleVersionMap;
+  draftChanges: Record<string, PermissionOverrideBatchChange>;
   isBusy: boolean;
   onToggle: (role: string, code: string, allowed: boolean, expectedVersion: number) => void;
   onRestorePermission: (role: string, code: string, expectedVersion: number) => void;
@@ -127,7 +123,7 @@ function PermissionTable({
   matrix,
   visibilityWindows,
   roles,
-  roleVersions,
+  draftChanges,
   isBusy,
   onToggle,
   onRestorePermission,
@@ -153,9 +149,9 @@ function PermissionTable({
       </th>
       {roles.map((role) => {
         const cell = matrix[role.code]?.[permission.code];
-        const key = permissionKey(role.code, permission.code);
-        const hasOverride = cell?.source === "override";
-        const currentVersion = cell?.version ?? roleVersions[key] ?? undefined;
+        const draft = draftChanges[draftPermissionKey("role", role.code, permission.code)];
+        const hasOverride = cell?.source === "override" && !draft;
+        const currentVersion = cell?.version ?? undefined;
         const expectedVersion = currentVersion ?? 0;
         const restoreVersion = currentVersion ?? 1;
         const versionUnavailable = hasOverride && currentVersion === undefined;
@@ -168,7 +164,7 @@ function PermissionTable({
                 type="checkbox"
                 data-testid={`permission-toggle-${role.code}-${permission.code}`}
                 aria-label={`${permission.description} para ${role.label}`}
-                checked={Boolean(cell?.allowed)}
+                checked={draft?.operation === "set" ? Boolean(draft.allowed) : Boolean(cell?.allowed)}
                 disabled={!cell || locked || versionUnavailable || isBusy || !permissionEditable}
                 onChange={(event) => onToggle(role.code, permission.code, event.target.checked, expectedVersion)}
                 className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50"
@@ -177,12 +173,14 @@ function PermissionTable({
                 className={`rounded-full px-2 py-0.5 text-[11px] ${
                   locked
                     ? "bg-amber-50 text-amber-700"
+                    : draft
+                      ? "bg-amber-50 text-amber-800"
                     : hasOverride
                       ? "bg-brand-50 text-brand-700"
                       : "bg-slate-100 text-slate-500"
                 }`}
               >
-                {locked ? "Bloqueado" : formatPermissionSource(cell?.source ?? "deny")}
+                {locked ? "Bloqueado" : draft ? "Pendiente de guardar" : formatPermissionSource(cell?.source ?? "deny")}
               </span>
               {hasOverride && !locked && permissionEditable ? (
                 <button
@@ -304,7 +302,7 @@ type UserOverridesPanelProps = {
   roleName: (roleCode: string) => string;
   isRoleEditable: (roleCode: string) => boolean;
   userQuery: UseQueryResult<UserPermissionOverrideResponse, Error>;
-  userVersions: RoleVersionMap;
+  draftChanges: Record<string, PermissionOverrideBatchChange>;
   isBusy: boolean;
   onSelectUser: (userId: number) => void;
   onToggle: (userId: number, code: string, allowed: boolean, expectedVersion: number) => void;
@@ -322,7 +320,7 @@ function UserOverridesPanel({
   roleName,
   isRoleEditable,
   userQuery,
-  userVersions,
+  draftChanges,
   isBusy,
   onSelectUser,
   onToggle,
@@ -407,10 +405,10 @@ function UserOverridesPanel({
                   {permissions.map((permission) => {
                     const roleCell = roleProfiles?.[userRole]?.[permission.code];
                     const detail = details[permission.code];
-                    const userOverride = detail?.source === "user_override";
                     const targetUserId = userQuery.data?.user_id ?? selectedUserId;
-                    const key = permissionKey(String(targetUserId ?? ""), permission.code);
-                    const currentVersion = detail?.version ?? userVersions[key] ?? undefined;
+                    const draft = draftChanges[draftPermissionKey("user", targetUserId ?? "", permission.code)];
+                    const userOverride = detail?.source === "user_override" && !draft;
+                    const currentVersion = detail?.version ?? undefined;
                     const expectedVersion = currentVersion ?? 0;
                     const restoreVersion = currentVersion ?? 1;
                     const versionUnavailable = userOverride && currentVersion === undefined;
@@ -436,13 +434,17 @@ function UserOverridesPanel({
                               type="checkbox"
                               data-testid={`user-permission-toggle-${permission.code}`}
                               aria-label={`${permission.description} para ${selectedUser?.email ?? "usuario"}`}
-                              checked={Boolean(detail?.allowed)}
+                              checked={draft?.operation === "set"
+                                ? Boolean(draft.allowed)
+                                : draft?.operation === "restore"
+                                  ? Boolean(roleCell?.allowed)
+                                  : Boolean(detail?.allowed)}
                               disabled={!detail || !roleCell || locked || versionUnavailable || isBusy || userQuery.isError || userQuery.isFetching || !canEditSelectedRole}
                               onChange={(event) => onToggle(userQuery.data.user_id, permission.code, event.target.checked, expectedVersion)}
                               className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50"
                             />
-                            <span className={`rounded-full px-2 py-0.5 text-[11px] ${userOverride ? "bg-brand-50 text-brand-700" : "bg-slate-100 text-slate-500"}`}>
-                              {locked ? "Bloqueado" : formatPermissionSource(detail?.source ?? "deny")}
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] ${draft ? "bg-amber-50 text-amber-800" : userOverride ? "bg-brand-50 text-brand-700" : "bg-slate-100 text-slate-500"}`}>
+                              {locked ? "Bloqueado" : draft ? "Pendiente de guardar" : formatPermissionSource(detail?.source ?? "deny")}
                             </span>
                             {detail?.legacy_permission_code ? (
                               <code className="text-[10px] text-slate-400">{detail.legacy_permission_code}</code>
@@ -481,8 +483,7 @@ export function SettingsPermissionsPage() {
   const canManage = session.baseRole === "owner" || session.baseRole === "co_owner";
   const enabled = hasValidSession(session) && canManage;
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-  const [roleVersions, setRoleVersions] = useState<RoleVersionMap>({});
-  const [userVersions, setUserVersions] = useState<RoleVersionMap>({});
+  const [draftChanges, setDraftChanges] = useState<Record<string, PermissionOverrideBatchChange>>({});
   const [message, setMessage] = useState<string | null>(null);
   const permissionErrorMessage = (error: unknown) =>
     error instanceof ApiError && error.status === 409
@@ -608,45 +609,86 @@ export function SettingsPermissionsPage() {
 
   const invalidatePermissionQueries = () => refreshAfterMutation(qc, session.hotelId, ["security", "users", "settings"]);
 
-  const roleOverrideMutation = useGuardedMutation<PermissionOverrideResponse, Error, { role: PermissionRole; code: string; allowed: boolean; expectedVersion: number }>({
-    mutationFn: ({ role, code, allowed, expectedVersion }) => {
-      if (!isRolePermissionEditable(role, code)) throw new Error(t("hotelRoles.readOnlyRoleError", { role: roleName(role) }));
-      return updatePermissionOverride({ role, permission_code: code, allowed, expected_version: expectedVersion }, session);
-    },
-    onSuccess: async (response, variables) => {
-      setRoleVersions((current) => ({ ...current, [permissionKey(variables.role, variables.code)]: response.version }));
-      setMessage(null);
-      await invalidatePermissionQueries();
-    },
-    onError: (error) => setMessage(permissionErrorMessage(error))
-  });
+  const stagePermissionChange = (
+    key: string,
+    change: PermissionOverrideBatchChange
+  ) => {
+    if (!draftChanges[key] && Object.keys(draftChanges).length >= 200) {
+      setMessage("El máximo por guardado es de 200 cambios. Guardá este lote antes de seguir.");
+      return;
+    }
+    setDraftChanges((current) => {
+      return {
+        ...current,
+        [key]: {
+          ...change,
+          expected_version: current[key]?.expected_version ?? change.expected_version
+        }
+      };
+    });
+    setMessage(null);
+  };
 
-  const restoreRolePermissionMutation = useGuardedMutation<RestoreRolePermissionResponse, Error, { role: PermissionRole; code: string; expectedVersion: number }>({
-    mutationFn: ({ role, code, expectedVersion }) => {
-      if (!isRolePermissionEditable(role, code)) throw new Error(t("hotelRoles.readOnlyRoleError", { role: roleName(role) }));
-      return restoreRolePermissionOverride(role, code, expectedVersion, session);
-    },
-    onSuccess: async (_response, variables) => {
-      setRoleVersions((current) => {
-        const next = { ...current };
-        delete next[permissionKey(variables.role, variables.code)];
-        return next;
-      });
-      setMessage(null);
-      await invalidatePermissionQueries();
-    },
-    onError: (error) => setMessage(permissionErrorMessage(error))
-  });
+  const stageRoleSet = (role: string, code: string, allowed: boolean, expectedVersion: number) => {
+    if (!isRolePermissionEditable(role, code)) return;
+    stagePermissionChange(draftPermissionKey("role", role, code), {
+      scope: "role",
+      operation: "set",
+      role,
+      permission_code: code,
+      allowed,
+      expected_version: expectedVersion
+    });
+  };
+
+  const stageRoleRestore = (role: string, code: string, expectedVersion: number) => {
+    if (!isRolePermissionEditable(role, code)) return;
+    stagePermissionChange(draftPermissionKey("role", role, code), {
+      scope: "role",
+      operation: "restore",
+      role,
+      permission_code: code,
+      expected_version: expectedVersion
+    });
+  };
+
+  const stageUserSet = (userId: number, code: string, allowed: boolean, expectedVersion: number) => {
+    const targetRole = usersQuery.data?.find((user) => user.id === userId)?.role;
+    if (!targetRole || !isRoleEditable(targetRole)) return;
+    stagePermissionChange(draftPermissionKey("user", userId, code), {
+      scope: "user",
+      operation: "set",
+      user_id: userId,
+      permission_code: code,
+      allowed,
+      expected_version: expectedVersion
+    });
+  };
+
+  const stageUserRestore = (userId: number, code: string, expectedVersion: number) => {
+    const targetRole = usersQuery.data?.find((user) => user.id === userId)?.role;
+    if (!targetRole || !isRoleEditable(targetRole)) return;
+    stagePermissionChange(draftPermissionKey("user", userId, code), {
+      scope: "user",
+      operation: "restore",
+      user_id: userId,
+      permission_code: code,
+      expected_version: expectedVersion
+    });
+  };
+
+  const pendingPermissionEntries = Object.entries(draftChanges);
+  const submitPermissionBatch = () => {
+    if (pendingPermissionEntries.length === 0 || permissionBatchMutation.isPending) return;
+    void permissionBatchMutation.mutateAsync(pendingPermissionEntries.map(([, change]) => change));
+  };
 
   const restoreRoleMutation = useGuardedMutation<RestoreRoleDefaultsResponse, Error, PermissionRole>({
     mutationFn: (role) => {
       ensureEditableRole(role);
       return restoreRoleDefaults(role, session);
     },
-    onSuccess: async (_response, role) => {
-      setRoleVersions((current) => Object.fromEntries(
-        Object.entries(current).filter(([key]) => !key.startsWith(`${role}:`))
-      ));
+    onSuccess: async () => {
       setMessage(null);
       await invalidatePermissionQueries();
     },
@@ -666,40 +708,11 @@ export function SettingsPermissionsPage() {
     onError: (error) => setMessage(permissionErrorMessage(error))
   });
 
-  const userOverrideMutation = useGuardedMutation<UserPermissionMutationResponse, Error, { userId: number; code: string; allowed: boolean; expectedVersion: number }>({
-    mutationFn: ({ userId, code, allowed, expectedVersion }) => {
-      const targetRole = usersQuery.data?.find((user) => user.id === userId)?.role;
-      if (!targetRole) throw new Error(t("hotelRoles.roleUnavailable"));
-      ensureEditableRole(targetRole);
-      return updateUserPermissionOverride(userId, { permission_code: code, allowed, expected_version: expectedVersion }, session);
-    },
-    onSuccess: async (response, variables) => {
-      if (typeof response.version === "number") {
-        setUserVersions((current) => ({
-          ...current,
-          [permissionKey(String(variables.userId), variables.code)]: response.version as number
-        }));
-      }
-      setMessage(null);
-      await invalidatePermissionQueries();
-    },
-    onError: (error) => setMessage(permissionErrorMessage(error))
-  });
-
-  const restoreUserPermissionMutation = useGuardedMutation<UserPermissionMutationResponse, Error, { userId: number; code: string; expectedVersion: number }>({
-    mutationFn: ({ userId, code, expectedVersion }) => {
-      const targetRole = usersQuery.data?.find((user) => user.id === userId)?.role;
-      if (!targetRole) throw new Error(t("hotelRoles.roleUnavailable"));
-      ensureEditableRole(targetRole);
-      return restoreUserPermissionOverride(userId, code, expectedVersion, session);
-    },
-    onSuccess: async (_response, variables) => {
-      setUserVersions((current) => {
-        const next = { ...current };
-        delete next[permissionKey(String(variables.userId), variables.code)];
-        return next;
-      });
-      setMessage(null);
+  const permissionBatchMutation = useGuardedMutation<PermissionOverrideBatchResponse, Error, PermissionOverrideBatchChange[]>({
+    mutationFn: (changes) => updatePermissionOverridesBatch(changes, session),
+    onSuccess: async (response) => {
+      setDraftChanges({});
+      setMessage(`${response.updated} cambio(s) de permisos guardado(s).`);
       await invalidatePermissionQueries();
     },
     onError: (error) => setMessage(permissionErrorMessage(error))
@@ -712,10 +725,7 @@ export function SettingsPermissionsPage() {
       ensureEditableRole(targetRole);
       return restoreUserDefaults(userId, session);
     },
-    onSuccess: async (_response, userId) => {
-      setUserVersions((current) => Object.fromEntries(
-        Object.entries(current).filter(([key]) => !key.startsWith(`${userId}:`))
-      ));
+    onSuccess: async () => {
       setMessage(null);
       await invalidatePermissionQueries();
     },
@@ -723,13 +733,10 @@ export function SettingsPermissionsPage() {
   });
 
   const isBusy =
-    roleOverrideMutation.isPending ||
-    restoreRolePermissionMutation.isPending ||
     restoreRoleMutation.isPending ||
     visibilityMutation.isPending ||
-    userOverrideMutation.isPending ||
-    restoreUserPermissionMutation.isPending ||
-    restoreUserMutation.isPending;
+    restoreUserMutation.isPending ||
+    permissionBatchMutation.isPending;
 
   if (!hasValidSession(session)) {
     return <p className="text-sm text-slate-600">Iniciá sesión con un hotel activo para editar permisos.</p>;
@@ -759,6 +766,63 @@ export function SettingsPermissionsPage() {
       <HotelRoleManagement rolesQuery={rolesQuery} />
 
       {message ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" role="alert">{message}</p> : null}
+      {pendingPermissionEntries.length > 0 ? (
+        <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4" data-testid="permission-batch-draft">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-semibold text-amber-950">Cambios pendientes ({pendingPermissionEntries.length})</h2>
+              <p className="text-xs text-amber-900">Se guardarán juntos con una sola verificación MFA. Si una versión cambió, no se aplicará ningún cambio del lote.</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDraftChanges({})}
+                disabled={permissionBatchMutation.isPending}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50"
+              >
+                Descartar
+              </button>
+              <button
+                type="button"
+                onClick={submitPermissionBatch}
+                disabled={permissionBatchMutation.isPending}
+                className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {permissionBatchMutation.isPending ? "Guardando…" : "Guardar cambios"}
+              </button>
+            </div>
+          </div>
+          <ul className="divide-y divide-amber-200 text-sm text-amber-950">
+            {pendingPermissionEntries.map(([key, change]) => {
+              const target = change.scope === "role"
+                ? `Rol ${roleName(change.role ?? "")}`
+                : `Usuario ${(usersQuery.data ?? []).find((user) => user.id === change.user_id)?.email ?? `#${change.user_id}`}`;
+              const permission = catalogQuery.data?.permissions.find((item) => item.code === change.permission_code);
+              const action = change.operation === "restore"
+                ? "restaurar al valor heredado"
+                : change.allowed ? "permitir" : "denegar";
+              return (
+                <li key={key} className="flex items-center justify-between gap-3 py-2">
+                  <span>{target} · {permission?.description ?? change.permission_code}: {action}</span>
+                  <button
+                    type="button"
+                    onClick={() => setDraftChanges((current) => {
+                      const next = { ...current };
+                      delete next[key];
+                      return next;
+                    })}
+                    disabled={permissionBatchMutation.isPending}
+                    aria-label={`Quitar cambio pendiente de ${permission?.description ?? change.permission_code}`}
+                    className="shrink-0 text-xs font-semibold text-amber-900 underline disabled:opacity-50"
+                  >
+                    Quitar
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
       {loading ? <p className="text-sm text-slate-600" role="status">Cargando permisos...</p> : null}
       {queryError ? <p className="text-sm text-rose-600">No se pudo cargar la configuración de permisos. {(queryError as Error).message}</p> : null}
       {customRoleContractMismatch && !queryError ? (
@@ -781,18 +845,20 @@ export function SettingsPermissionsPage() {
             matrix={matrixQuery.data.matrix}
             visibilityWindows={visibilityQuery.data.windows}
             roles={roleColumns}
-            roleVersions={roleVersions}
+            draftChanges={draftChanges}
             isBusy={isBusy || matrixIsFetching}
             onToggle={(role, code, allowed, expectedVersion) => {
-              if (!isRolePermissionEditable(role, code)) return;
-              void roleOverrideMutation.mutateAsync({ role, code, allowed, expectedVersion }).catch(() => undefined);
+              stageRoleSet(role, code, allowed, expectedVersion);
             }}
             onRestorePermission={(role, code, expectedVersion) => {
-              if (!isRolePermissionEditable(role, code)) return;
-              void restoreRolePermissionMutation.mutateAsync({ role, code, expectedVersion }).catch(() => undefined);
+              stageRoleRestore(role, code, expectedVersion);
             }}
             onRestoreRole={(role) => {
               if (!isRoleEditable(role)) return;
+              if (pendingPermissionEntries.some(([, change]) => change.scope === "role" && change.role === role)) {
+                setMessage("Guardá o descartá los cambios pendientes de este rol antes de restaurar todos sus permisos.");
+                return;
+              }
               void restoreRoleMutation.mutateAsync(role).catch(() => undefined);
             }}
             onVisibilityChange={(role, value) => {
@@ -815,16 +881,20 @@ export function SettingsPermissionsPage() {
           roleName={roleName}
           isRoleEditable={isRoleEditable}
           userQuery={userOverridesQuery}
-          userVersions={userVersions}
+          draftChanges={draftChanges}
           isBusy={isBusy}
           onSelectUser={setSelectedUserId}
           onToggle={(userId, code, allowed, expectedVersion) => {
-            void userOverrideMutation.mutateAsync({ userId, code, allowed, expectedVersion }).catch(() => undefined);
+            stageUserSet(userId, code, allowed, expectedVersion);
           }}
           onRestorePermission={(userId, code, expectedVersion) => {
-            void restoreUserPermissionMutation.mutateAsync({ userId, code, expectedVersion }).catch(() => undefined);
+            stageUserRestore(userId, code, expectedVersion);
           }}
           onRestoreAll={(userId) => {
+            if (pendingPermissionEntries.some(([, change]) => change.scope === "user" && change.user_id === userId)) {
+              setMessage("Guardá o descartá los cambios pendientes de este usuario antes de restaurar todos sus overrides.");
+              return;
+            }
             void restoreUserMutation.mutateAsync(userId).catch(() => undefined);
           }}
         />

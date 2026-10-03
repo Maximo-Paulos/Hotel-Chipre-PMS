@@ -40,7 +40,7 @@ async function openReservationForm(
   lastName: string,
   checkIn: string,
   checkOut: string,
-  options: { expectCreated?: boolean } = {}
+  options: { expectCreated?: boolean; assignRoom?: boolean } = {}
 ) {
   await page.goto("/reservas");
   await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
@@ -63,12 +63,14 @@ async function openReservationForm(
   expect(categoryValue).toBeTruthy();
   await categorySelect.selectOption(categoryValue!);
 
-  const roomSelect = form.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
-  const roomOption = roomSelect.locator("option").filter({ hasText: "101" });
-  await expect(roomOption).toHaveCount(1);
-  const roomValue = await roomOption.getAttribute("value");
-  expect(roomValue).toBeTruthy();
-  await roomSelect.selectOption(roomValue!);
+  if (options.assignRoom !== false) {
+    const roomSelect = form.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
+    const roomOption = roomSelect.locator("option").filter({ hasText: "101" });
+    await expect(roomOption).toHaveCount(1);
+    const roomValue = await roomOption.getAttribute("value");
+    expect(roomValue).toBeTruthy();
+    await roomSelect.selectOption(roomValue!);
+  }
   await form.getByLabel("Check-in", { exact: true }).fill(checkIn);
   await form.getByLabel("Check-out", { exact: true }).fill(checkOut);
   await expect(form.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
@@ -109,6 +111,33 @@ test("owner preserves availability dates after querying a category", async ({ pa
   await expect(page.getByText(/Disponibles: \d+ habitaciones/, { exact: false })).toBeVisible();
   await expect(checkInField).toHaveValue(displayDate(checkIn));
   await expect(checkOutField).toHaveValue(displayDate(checkOut));
+});
+
+test("owner is told when the browser blocks the reservation voucher window", async ({ page }) => {
+  const suffix = `${Date.now()}`;
+  const guestLastName = `Voucher Popup ${suffix}`;
+
+  await login(page);
+  await openReservationForm(page, guestLastName, localIsoDate(35), localIsoDate(37), { assignRoom: false });
+
+  const reservationTable = page.locator("table").filter({ hasText: "Código" });
+  const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
+  await expect(reservationRow).toHaveCount(1);
+  await reservationRow.getByRole("button", { name: "Ficha", exact: true }).click();
+
+  const details = page.locator("div.fixed").filter({ has: page.getByRole("button", { name: "Exportar voucher PDF", exact: true }) });
+  await expect(details).toBeVisible();
+  await expect(details.getByText("Saldo", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await page.evaluate(() => Object.defineProperty(window, "open", { configurable: true, value: () => null }));
+
+  await details.getByRole("button", { name: "Exportar voucher PDF", exact: true }).click();
+  await expect(page.getByText(/El navegador bloqueó la ventana del comprobante/)).toBeVisible();
+
+  await details.getByTestId("reservation-details-action-error").getByRole("button", { name: "Cerrar", exact: true }).click();
+  await details.getByRole("button", { name: "Cerrar", exact: true }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await reservationRow.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(page.getByText("Reserva cancelada", { exact: true })).toBeVisible();
 });
 
 test("owner edits, extends, rejects an overlap and cancels a reservation", async ({ page }, testInfo) => {

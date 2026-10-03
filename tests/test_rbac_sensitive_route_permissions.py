@@ -1988,10 +1988,24 @@ def test_rate_read_and_update_follow_revocation_and_grant_without_partial_mutati
 
         set_user_override(db, 1, 30, "manager", "rates:update", True, actor_user_id=10)
         db.commit()
-        assert client.post(
-            f"{path}/daily",
-            json={"date": target_date.isoformat(), "price": 123.45},
-        ).status_code == 200
+        draft = client.post(
+            "/api/rate-change-drafts",
+            json={
+                "category_id": category.id,
+                "changes": [{"date": target_date.isoformat(), "values": {"price": 123.45}}],
+            },
+        )
+        assert draft.status_code == 201, draft.text
+        assert db.query(DailyRate).filter_by(
+            hotel_id=1,
+            category_id=category.id,
+            date=target_date,
+        ).one_or_none() is None
+        confirmed = client.post(
+            f"/api/rate-change-drafts/{draft.json()['id']}/confirm",
+            json={"expected_version": draft.json()["version"]},
+        )
+        assert confirmed.status_code == 200, confirmed.text
         assert db.query(DailyRate).filter_by(
             hotel_id=1,
             category_id=category.id,

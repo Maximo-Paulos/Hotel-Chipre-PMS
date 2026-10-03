@@ -12,8 +12,13 @@ from app.services.reservation_service import check_room_availability, find_avail
 from app.services.allocation_engine import build_slots_from_db
 from app.services.room_block_service import (
     ProtectedReservationConflictError,
+    RoomBlockExtensionConflictError,
+    RoomBlockError,
     create_block,
+    extend_block,
     list_active_blocks,
+    preview_block_extension,
+    room_has_active_block,
     resolve_block,
 )
 
@@ -88,6 +93,8 @@ def _reservation(
     status: ReservationStatusEnum = ReservationStatusEnum.PENDING,
     allocation_locked: bool = False,
     company_id: int | None = None,
+    check_in: date = date(2026, 7, 10),
+    check_out: date = date(2026, 7, 14),
 ) -> Reservation:
     reservation = Reservation(
         hotel_id=hotel_id,
@@ -95,8 +102,8 @@ def _reservation(
         guest_id=_guest(db, hotel_id).id,
         room_id=room_id,
         category_id=category_id,
-        check_in_date=date(2026, 7, 10),
-        check_out_date=date(2026, 7, 14),
+        check_in_date=check_in,
+        check_out_date=check_out,
         status=status,
         total_amount=400,
         allocation_locked=allocation_locked,
@@ -195,6 +202,72 @@ def test_resolved_block_frees_room(db):
 
     assert resolved.resolved_by_user_id == 7
     assert check_room_availability(db, room.id, date(2026, 7, 2), date(2026, 7, 4), hotel_id=1) is True
+
+
+def test_block_extension_uses_exclusive_end_and_previews_added_nights(db):
+    _hotel(db, 1)
+    category = _category(db, 1)
+    room = _room(db, 1, category.id, "101")
+    reservation = _reservation(
+        db,
+        hotel_id=1,
+        room_id=room.id,
+        category_id=category.id,
+        check_in=date(2026, 7, 5),
+        check_out=date(2026, 7, 6),
+    )
+    block = create_block(
+        db,
+        hotel_id=1,
+        room_id=room.id,
+        starts_at=date(2026, 7, 1),
+        ends_at=date(2026, 7, 5),
+        reason_code=RoomBlockReasonEnum.MAINTENANCE,
+    )
+
+    preview = preview_block_extension(db, hotel_id=1, block_id=block.id, ends_at=date(2026, 7, 6))
+    assert preview == {
+        "reservation_count": 1,
+        "protected_reservation_count": 0,
+        "overlapping_block_count": 0,
+    }
+    # The original end is exclusive, so the added night is unblocked before extension.
+    assert room_has_active_block(db, hotel_id=1, room_id=room.id, start_date=date(2026, 7, 5), end_date=date(2026, 7, 6)) is False
+    extended = extend_block(db, hotel_id=1, block_id=block.id, ends_at=date(2026, 7, 6))
+    assert extended.ends_at == date(2026, 7, 6)
+    assert room_has_active_block(db, hotel_id=1, room_id=room.id, start_date=date(2026, 7, 5), end_date=date(2026, 7, 6)) is True
+    assert check_room_availability(db, room.id, date(2026, 7, 6), date(2026, 7, 7), hotel_id=1) is True
+    assert reservation.check_in_date == date(2026, 7, 5)
+
+
+def test_block_extension_rejects_protected_reservation_and_shorter_end(db):
+    _hotel(db, 1)
+    category = _category(db, 1)
+    room = _room(db, 1, category.id, "101")
+    _reservation(
+        db,
+        hotel_id=1,
+        room_id=room.id,
+        category_id=category.id,
+        allocation_locked=True,
+        check_in=date(2026, 7, 5),
+        check_out=date(2026, 7, 6),
+    )
+    block = create_block(
+        db,
+        hotel_id=1,
+        room_id=room.id,
+        starts_at=date(2026, 7, 1),
+        ends_at=date(2026, 7, 5),
+        reason_code=RoomBlockReasonEnum.MAINTENANCE,
+    )
+
+    with pytest.raises(RoomBlockExtensionConflictError) as conflict:
+        extend_block(db, hotel_id=1, block_id=block.id, ends_at=date(2026, 7, 6))
+    assert conflict.value.protected_reservation_count == 1
+    assert block.ends_at == date(2026, 7, 5)
+    with pytest.raises(RoomBlockError, match="posterior"):
+        preview_block_extension(db, hotel_id=1, block_id=block.id, ends_at=date(2026, 7, 5))
 
 
 def test_room_blocks_are_hotel_scoped(db):

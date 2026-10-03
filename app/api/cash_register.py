@@ -1,21 +1,26 @@
 import csv
-from datetime import date as date_type, timedelta
+from datetime import date as date_type, datetime, timedelta, timezone
 from io import StringIO
+from zoneinfo import ZoneInfo
 
 from decimal import Decimal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_permission
 from app.models.cash_register import CashMovementTypeEnum
+from app.models.cash_expense import CashExpenseStatusEnum
 from app.models.reservation import Reservation
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum
 from app.schemas.cash_register import (
     CashCloseReportRead,
+    CashExpenseCreate,
+    CashExpenseRead,
+    CashExpenseReject,
     CashCustodyReceipt,
     CashMovementCreate,
     CashMovementRead,
@@ -46,6 +51,7 @@ from app.services.permission_service import (
     PERMISSION_CASH_APPROVE_DIFFERENCE,
     PERMISSION_CASH_CUSTODY_RECEIVE,
     PERMISSION_CASH_EXPENSE,
+    PERMISSION_CASH_EXPENSE_APPROVE,
     PERMISSION_CASH_OPERATE,
     PERMISSION_CASH_VIEW,
 )
@@ -53,9 +59,90 @@ from app.services.distributed_lock import DistributedLockBusy, DistributedLockUn
 from app.services.actor_label_service import resolve_hotel_actor_labels
 from app.services.cash_daily_summary_service import ENTRY_LIMIT, get_daily_summary
 from app.services.csv_export_safety import spreadsheet_safe_row
+from app.services.cash_expense_service import (
+    CashExpenseError,
+    approve_cash_expense,
+    create_cash_expense,
+    get_cash_expense_receipt_bytes,
+    list_cash_expenses,
+    recover_failed_cash_expense_commit,
+    reject_cash_expense,
+)
 
 
 router = APIRouter(tags=["Cash Register"])
+
+
+def _close_report_read(db: Session, report) -> dict | None:
+    if report is None:
+        return None
+    actor_ids = (
+        report.closed_by_user_id,
+        report.approved_by_user_id,
+        report.successor_float_declared_by_user_id,
+    )
+    labels = resolve_hotel_actor_labels(db, hotel_id=report.hotel_id, user_ids=actor_ids)
+    data = CashCloseReportRead.model_validate(report).model_dump()
+    data["closed_by_name"] = labels.get(report.closed_by_user_id) if report.closed_by_user_id else None
+    data["approved_by_name"] = labels.get(report.approved_by_user_id) if report.approved_by_user_id else None
+    data["successor_float_declared_by_name"] = (
+        labels.get(report.successor_float_declared_by_user_id)
+        if report.successor_float_declared_by_user_id else None
+    )
+    return data
+
+
+def _cash_expense_read(db: Session, expense) -> dict:
+    actor_ids = (expense.recorded_by_user_id, expense.approved_by_user_id, expense.rejected_by_user_id)
+    labels = resolve_hotel_actor_labels(db, hotel_id=expense.hotel_id, user_ids=actor_ids)
+    return CashExpenseRead(
+        id=expense.id,
+        hotel_id=expense.hotel_id,
+        session_id=expense.session_id,
+        amount=expense.amount,
+        currency_code=expense.currency_code,
+        category=expense.category,
+        vendor=expense.vendor,
+        description=expense.description,
+        receipt_reference=expense.receipt_reference,
+        receipt_filename=expense.receipt_filename,
+        has_receipt_image=bool(expense.receipt_object_id),
+        status=expense.status,
+        cash_movement_id=expense.cash_movement_id,
+        recorded_by_user_id=expense.recorded_by_user_id,
+        recorded_by_name=labels.get(expense.recorded_by_user_id) if expense.recorded_by_user_id else None,
+        approved_by_user_id=expense.approved_by_user_id,
+        approved_by_name=labels.get(expense.approved_by_user_id) if expense.approved_by_user_id else None,
+        rejected_by_user_id=expense.rejected_by_user_id,
+        rejected_by_name=labels.get(expense.rejected_by_user_id) if expense.rejected_by_user_id else None,
+        rejection_reason=expense.rejection_reason,
+        created_at=expense.created_at,
+        approved_at=expense.approved_at,
+        rejected_at=expense.rejected_at,
+    ).model_dump()
+
+
+def _csv_local_datetime(value: datetime | None, timezone_name: str) -> str:
+    if value is None:
+        return ""
+    instant = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+    return instant.astimezone(ZoneInfo(timezone_name)).strftime("%d/%m/%Y %H:%M:%S")
+
+
+def _csv_local_date(value: date_type | str | None) -> str:
+    if value is None:
+        return ""
+    parsed = date_type.fromisoformat(value) if isinstance(value, str) else value
+    return parsed.strftime("%d/%m/%Y")
+
+
+def _csv_decimal(value) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        return format(Decimal(str(value)), ".2f").replace(".", ",")
+    except (ValueError, ArithmeticError):
+        return ""
 
 
 def _require_cash_difference_approval_when_requested(
@@ -188,75 +275,176 @@ def export_cash_ledger_csv(
         )
 
     columns = [
-        "report_date", "hotel_id", "currency_code", "entry_type", "occurred_at",
-        "actor", "actor_user_id", "reservation_id", "transaction_id", "cash_movement_id",
-        "amount", "signed_amount", "payment_method", "transaction_type", "movement_type",
-        "provider_code", "description", "recorded_at",
+        "fecha_local", "hotel_id", "moneda", "tipo", "fecha_hora_local", "responsable",
+        "usuario_id", "reserva_id", "transaccion_id", "movimiento_id", "lote_grupal_id",
+        "sesion_id", "importe", "importe_neto", "medio_pago", "tipo_transaccion",
+        "tipo_movimiento", "proveedor", "descripcion", "apertura", "esperado",
+        "contado", "diferencia", "estado_turno", "registrado_el",
     ]
     output = StringIO(newline="")
-    writer = csv.DictWriter(output, fieldnames=columns, lineterminator="\n")
+    writer = csv.DictWriter(output, fieldnames=columns, delimiter=";", lineterminator="\r\n")
     writer.writeheader()
+    export_entries: list[tuple[dict, dict]] = []
     for report in reports:
-        for entry in report.get("entries", []):
-            entry_currency = str(entry.get("currency_code") or "").upper()
-            if selected_currency and entry_currency != selected_currency:
+        export_entries.extend((report, entry) for entry in report.get("entries", []))
+
+    # A group collection is one operator action. Keep the child transactions in
+    # their ledgers, but show one reconciled line in the human-facing export.
+    entries_by_batch: dict[int, list[tuple[dict, dict]]] = {}
+    ordinary_entries: list[tuple[dict, dict]] = []
+    for report, entry in export_entries:
+        batch_id = entry.get("group_payment_batch_id")
+        if batch_id and entry.get("entry_type") == "payment":
+            entries_by_batch.setdefault(int(batch_id), []).append((report, entry))
+        else:
+            ordinary_entries.append((report, entry))
+    for batch_id, batch_rows in entries_by_batch.items():
+        first_report, first_entry = min(
+            batch_rows,
+            key=lambda item: item[1].get("occurred_at") or datetime.min.replace(tzinfo=timezone.utc),
+        )
+        grouped_entry = dict(first_entry)
+        grouped_entry.update(
+            {
+                "transaction_id": None,
+                "reservation_id": None,
+                "amount": sum((Decimal(str(entry.get("amount") or 0)) for _report, entry in batch_rows), Decimal("0.00")),
+                "signed_amount": sum((Decimal(str(entry.get("signed_amount") or 0)) for _report, entry in batch_rows), Decimal("0.00")),
+                "description": f"Cobro grupal · {len(batch_rows)} reserva(s)",
+                "group_payment_batch_id": batch_id,
+            }
+        )
+        ordinary_entries.append((first_report, grouped_entry))
+
+    for report, entry in sorted(
+        ordinary_entries,
+        key=lambda item: (
+        item[1].get("occurred_at") or datetime.min.replace(tzinfo=timezone.utc),
+        item[1].get("transaction_id") or item[1].get("cash_movement_id") or item[1].get("group_payment_batch_id") or 0,
+        ),
+    ):
+        entry_currency = str(entry.get("currency_code") or "").upper()
+        if selected_currency and entry_currency != selected_currency:
+            continue
+        occurred_at = entry.get("occurred_at")
+        row = {
+            "fecha_local": _csv_local_date(report["report_date"]),
+            "hotel_id": report["hotel_id"],
+            "moneda": entry_currency,
+            "tipo": "cobro" if entry.get("entry_type") == "payment" else "movimiento_manual",
+            "fecha_hora_local": _csv_local_datetime(occurred_at, report["timezone"]),
+            "responsable": entry.get("actor_name"),
+            "usuario_id": entry.get("actor_user_id"),
+            "reserva_id": entry.get("reservation_id"),
+            "transaccion_id": entry.get("transaction_id"),
+            "movimiento_id": entry.get("cash_movement_id"),
+            "lote_grupal_id": entry.get("group_payment_batch_id"),
+            "sesion_id": "",
+            "importe": entry.get("amount"),
+            "importe_neto": entry.get("signed_amount"),
+            "medio_pago": entry.get("payment_method"),
+            "tipo_transaccion": entry.get("transaction_type"),
+            "tipo_movimiento": entry.get("movement_type"),
+            "proveedor": entry.get("provider_code"),
+            "descripcion": entry.get("description"),
+            "apertura": "",
+            "esperado": "",
+            "contado": "",
+            "diferencia": "",
+            "estado_turno": "",
+            "registrado_el": "",
+        }
+        safe_row = spreadsheet_safe_row(row)
+        safe_row["importe"] = _csv_decimal(entry.get("amount"))
+        safe_row["importe_neto"] = _csv_decimal(entry.get("signed_amount"))
+        writer.writerow(safe_row)
+
+    # Include each turno's reconciliation once in the selected local date
+    # range. Open sessions carry an expected balance with blank count fields.
+    for report in reports:
+        for shift in report.get("sessions", []):
+            shift_currency = str(shift.get("currency_code") or report.get("currency_code") or "").upper()
+            if selected_currency and shift_currency != selected_currency:
                 continue
-            writer.writerow(
-                spreadsheet_safe_row({
-                    "report_date": report["report_date"],
-                    "hotel_id": report["hotel_id"],
-                    "currency_code": entry_currency,
-                    "entry_type": entry.get("entry_type"),
-                    "occurred_at": entry.get("occurred_at").isoformat() if entry.get("occurred_at") else "",
-                    "actor": entry.get("actor_name"),
-                    "actor_user_id": entry.get("actor_user_id"),
-                    "reservation_id": entry.get("reservation_id"),
-                    "transaction_id": entry.get("transaction_id"),
-                    "cash_movement_id": entry.get("cash_movement_id"),
-                    "amount": entry.get("amount"),
-                    "signed_amount": entry.get("signed_amount"),
-                    "payment_method": entry.get("payment_method"),
-                    "transaction_type": entry.get("transaction_type"),
-                    "movement_type": entry.get("movement_type"),
-                    "provider_code": entry.get("provider_code"),
-                    "description": entry.get("description"),
-                    "recorded_at": "",
-                })
-            )
+            occurred_at = shift.get("closed_at") or shift.get("opened_at")
+            row = {
+                "fecha_local": _csv_local_date(report["report_date"]),
+                "hotel_id": report["hotel_id"],
+                "moneda": shift_currency,
+                "tipo": "conciliacion_turno",
+                "fecha_hora_local": _csv_local_datetime(occurred_at, report["timezone"]),
+                "responsable": shift.get("closed_by_name") or shift.get("opened_by_name"),
+                "usuario_id": shift.get("closed_by_user_id") or shift.get("opened_by_user_id"),
+                "reserva_id": "",
+                "transaccion_id": "",
+                "movimiento_id": "",
+                "lote_grupal_id": "",
+                "sesion_id": shift.get("session_id"),
+                "importe": "",
+                "importe_neto": "",
+                "medio_pago": "",
+                "tipo_transaccion": "",
+                "tipo_movimiento": "",
+                "proveedor": "",
+                "descripcion": "",
+                "apertura": shift.get("opening_balance"),
+                "esperado": shift.get("expected_balance"),
+                "contado": shift.get("declared_balance"),
+                "diferencia": shift.get("difference"),
+                "estado_turno": shift.get("status"),
+                "registrado_el": "",
+            }
+            safe_row = spreadsheet_safe_row(row)
+            for field in ("apertura", "esperado", "contado", "diferencia"):
+                safe_row[field] = _csv_decimal(row[field])
+            writer.writerow(safe_row)
+
     actor_labels = resolve_hotel_actor_labels(
         db,
         hotel_id=context.hotel_id,
         user_ids=(transaction.created_by_user_id for transaction, _ in prior_receipt_rows),
     )
-    for transaction, confirmation_code in prior_receipt_rows:
+    for transaction, _confirmation_code in prior_receipt_rows:
         receipt_currency = str(transaction.tender_currency or transaction.currency or "ARS").upper()
         if selected_currency and receipt_currency != selected_currency:
             continue
-        writer.writerow(
-            spreadsheet_safe_row({
-                "report_date": transaction.collected_on.isoformat(),
-                "hotel_id": context.hotel_id,
-                "currency_code": receipt_currency,
-                "entry_type": "prior_receipt",
-                "occurred_at": transaction.collected_on.isoformat(),
-                "actor": actor_labels.get(transaction.created_by_user_id, "Usuario") if transaction.created_by_user_id else "Sistema",
-                "actor_user_id": transaction.created_by_user_id,
-                "reservation_id": transaction.reservation_id,
-                "transaction_id": transaction.id,
-                "cash_movement_id": "",
-                "amount": transaction.tender_amount if transaction.tender_amount is not None else transaction.amount,
-                "signed_amount": transaction.tender_amount if transaction.tender_amount is not None else transaction.amount,
-                "payment_method": "cash",
-                "transaction_type": "",
-                "movement_type": "",
-                "provider_code": "",
-                "description": transaction.prior_receipt_note,
-                "recorded_at": transaction.created_at.isoformat() if transaction.created_at else "",
-            })
-        )
+        occurred_at = transaction.created_at
+        row = {
+            "fecha_local": _csv_local_date(transaction.collected_on),
+            "hotel_id": context.hotel_id,
+            "moneda": receipt_currency,
+            "tipo": "seña_previa",
+            "fecha_hora_local": _csv_local_datetime(occurred_at, reports[0]["timezone"] if reports else "UTC"),
+            "responsable": actor_labels.get(transaction.created_by_user_id, "Usuario") if transaction.created_by_user_id else "Sistema",
+            "usuario_id": transaction.created_by_user_id,
+            "reserva_id": transaction.reservation_id,
+            "transaccion_id": transaction.id,
+            "movimiento_id": "",
+            "lote_grupal_id": "",
+            "sesion_id": "",
+            "importe": transaction.tender_amount if transaction.tender_amount is not None else transaction.amount,
+            "importe_neto": transaction.tender_amount if transaction.tender_amount is not None else transaction.amount,
+            "medio_pago": "cash",
+            "tipo_transaccion": "",
+            "tipo_movimiento": "",
+            "proveedor": "",
+            "descripcion": transaction.prior_receipt_note,
+            "apertura": "",
+            "esperado": "",
+            "contado": "",
+            "diferencia": "",
+            "estado_turno": "",
+            "registrado_el": _csv_local_datetime(transaction.created_at, reports[0]["timezone"] if reports else "UTC"),
+        }
+        safe_row = spreadsheet_safe_row(row)
+        amount = transaction.tender_amount if transaction.tender_amount is not None else transaction.amount
+        safe_row["importe"] = _csv_decimal(amount)
+        safe_row["importe_neto"] = _csv_decimal(amount)
+        writer.writerow(safe_row)
+
     filename = f"caja-{start.isoformat()}-{end.isoformat()}.csv"
     return StreamingResponse(
-        iter([output.getvalue()]),
+        iter(["\ufeff" + output.getvalue()]),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -302,7 +490,10 @@ def latest_cash_close_report(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
-    return get_latest_close_report(db, hotel_id=context.hotel_id, currency_code=currency)
+    return _close_report_read(
+        db,
+        get_latest_close_report(db, hotel_id=context.hotel_id, currency_code=currency),
+    )
 
 
 @router.get("/api/cash-register/close-reports/pending", response_model=list[CashCloseReportRead])
@@ -311,7 +502,10 @@ def pending_cash_close_reports(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
-    return list_pending_close_reports(db, hotel_id=context.hotel_id)
+    return [
+        _close_report_read(db, report)
+        for report in list_pending_close_reports(db, hotel_id=context.hotel_id)
+    ]
 
 
 @router.get(
@@ -326,7 +520,10 @@ def pending_cash_custody_reports(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
-    return list_pending_cash_custody_reports(db, hotel_id=context.hotel_id)
+    return [
+        _close_report_read(db, report)
+        for report in list_pending_cash_custody_reports(db, hotel_id=context.hotel_id)
+    ]
 
 
 @router.get(
@@ -342,7 +539,10 @@ def cash_session_close_report(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
-    return get_close_report_for_session(db, hotel_id=context.hotel_id, session_id=session_id)
+    return _close_report_read(
+        db,
+        get_close_report_for_session(db, hotel_id=context.hotel_id, session_id=session_id),
+    )
 
 
 @router.post(
@@ -364,7 +564,10 @@ def add_cash_movement(
 ):
     try:
         if payload.movement_type == CashMovementTypeEnum.EXPENSE:
-            authorize_permission(request, db, context, PERMISSION_CASH_EXPENSE)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Los gastos manuales requieren categoría, proveedor y comprobante; usá el registro de gastos pendientes.",
+            )
         elif payload.movement_type == CashMovementTypeEnum.ADJUSTMENT:
             authorize_permission(request, db, context, PERMISSION_CASH_ADJUSTMENT_MANAGE)
         movement = add_movement(
@@ -409,6 +612,175 @@ def list_cash_movements(
     return list_movements(db, hotel_id=context.hotel_id, session_id=session_id)
 
 
+@router.post(
+    "/api/cash-register/sessions/{session_id}/expenses",
+    response_model=CashExpenseRead,
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/cash-register/sessions/{session_id}/expenses",
+    response_model=CashExpenseRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def record_cash_expense(
+    session_id: int,
+    payload: CashExpenseCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+):
+    authorized = authorize_permission(request, db, context, PERMISSION_CASH_EXPENSE)
+    try:
+        expense = create_cash_expense(
+            db,
+            hotel_id=authorized.hotel_id,
+            session_id=session_id,
+            recorded_by_user_id=authorized.user_id,
+            amount=payload.amount,
+            category=payload.category,
+            vendor=payload.vendor,
+            description=payload.description,
+            receipt_reference=payload.receipt_reference,
+            receipt_image_base64=payload.receipt_image_base64,
+            receipt_filename=payload.receipt_filename,
+        )
+        try:
+            db.commit()
+        except Exception:
+            persisted, resolved = recover_failed_cash_expense_commit(db, expense)
+            if persisted is not None and resolved:
+                expense = persisted
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="No se pudo confirmar el registro del gasto; verificá la lista antes de reintentar.",
+                )
+        db.refresh(expense)
+        return _cash_expense_read(db, expense)
+    except CashExpenseError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.get("/api/cash-register/expenses", response_model=list[CashExpenseRead])
+@router.get("/cash-register/expenses", response_model=list[CashExpenseRead])
+def read_cash_expenses(
+    expense_status: str | None = Query(default=None, alias="status", max_length=20),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
+):
+    try:
+        return [
+            _cash_expense_read(db, expense)
+            for expense in list_cash_expenses(db, hotel_id=context.hotel_id, status=expense_status)
+        ]
+    except CashExpenseError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post(
+    "/api/cash-register/expenses/{expense_id}/approve",
+    response_model=CashExpenseRead,
+)
+@router.post(
+    "/cash-register/expenses/{expense_id}/approve",
+    response_model=CashExpenseRead,
+)
+def approve_cash_expense_route(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_EXPENSE_APPROVE)),
+):
+    try:
+        expense = approve_cash_expense(
+            db,
+            hotel_id=context.hotel_id,
+            expense_id=expense_id,
+            approved_by_user_id=context.user_id or 0,
+        )
+        db.commit()
+        db.refresh(expense)
+        return _cash_expense_read(db, expense)
+    except CashExpenseError as exc:
+        db.rollback()
+        status_code = status.HTTP_404_NOT_FOUND if str(exc) == "Gasto no encontrado" else status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.post(
+    "/api/cash-register/expenses/{expense_id}/reject",
+    response_model=CashExpenseRead,
+)
+@router.post(
+    "/cash-register/expenses/{expense_id}/reject",
+    response_model=CashExpenseRead,
+)
+def reject_cash_expense_route(
+    expense_id: int,
+    payload: CashExpenseReject,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_EXPENSE_APPROVE)),
+):
+    try:
+        expense = reject_cash_expense(
+            db,
+            hotel_id=context.hotel_id,
+            expense_id=expense_id,
+            rejected_by_user_id=context.user_id or 0,
+            reason=payload.reason,
+        )
+        db.commit()
+        db.refresh(expense)
+        return _cash_expense_read(db, expense)
+    except CashExpenseError as exc:
+        db.rollback()
+        status_code = status.HTTP_404_NOT_FOUND if str(exc) == "Gasto no encontrado" else status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.get("/api/cash-register/expenses/{expense_id}/receipt")
+@router.get("/cash-register/expenses/{expense_id}/receipt")
+def read_cash_expense_receipt(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
+):
+    try:
+        content, content_type, _filename = get_cash_expense_receipt_bytes(
+            db,
+            hotel_id=context.hotel_id,
+            expense_id=expense_id,
+        )
+        safe_extension = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}.get(content_type)
+        if safe_extension is None:
+            raise CashExpenseError("Comprobante no encontrado")
+        return Response(
+            content=content,
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f'inline; filename="comprobante.{safe_extension}"',
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+    except CashExpenseError as exc:
+        db.rollback()
+        status_code = status.HTTP_404_NOT_FOUND if "no encontrado" in str(exc).lower() else status.HTTP_503_SERVICE_UNAVAILABLE
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
+
 @router.post("/api/cash-register/sessions/{session_id}/close", response_model=CashCloseReportRead)
 @router.post("/cash-register/sessions/{session_id}/close", response_model=CashCloseReportRead)
 def close_cash_session(
@@ -431,7 +803,7 @@ def close_cash_session(
         enqueue_pending_difference_notification(db, report)
         db.commit()
         db.refresh(report)
-        return report
+        return _close_report_read(db, report)
     except CashRegisterError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
@@ -467,7 +839,7 @@ def confirm_cash_custody_receipt(
         )
         db.commit()
         db.refresh(report)
-        return report
+        return _close_report_read(db, report)
     except CashRegisterError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
@@ -489,7 +861,7 @@ def approve_cash_close_difference(
         )
         db.commit()
         db.refresh(report)
-        return report
+        return _close_report_read(db, report)
     except CashRegisterError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))

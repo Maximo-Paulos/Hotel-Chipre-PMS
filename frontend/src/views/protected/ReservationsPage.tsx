@@ -6,14 +6,18 @@ import { type TFunction } from "i18next";
 
 import {
   addReservationCharge,
+  createReservationGroupPayment,
   createReservationGroup,
   isDeferredCompanyReservation,
   listReservationGroups,
+  newReservationGroupPaymentIdempotencyKey,
   markReservationNoShow,
   moveReservationRoom,
   type Reservation,
   type ReservationChargePayload,
   type ReservationGroupSummary,
+  type ReservationGroupPaymentPayload,
+  type ReservationGroupPaymentResult,
   type ReservationNoShowPayload,
   type ReservationPayload,
   type ReservationPendingAction,
@@ -249,6 +253,14 @@ export function ReservationsPage() {
   const [paymentAmountInput, setPaymentAmountInput] = useState("");
   const [paymentTenderCurrencyInput, setPaymentTenderCurrencyInput] = useState("");
   const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
+  const [payingGroup, setPayingGroup] = useState<ReservationGroupSummary | null>(null);
+  const [groupPaymentTotalInput, setGroupPaymentTotalInput] = useState("");
+  const [groupPaymentAllocations, setGroupPaymentAllocations] = useState<Record<number, string>>({});
+  const [groupPaymentMethod, setGroupPaymentMethod] = useState<PaymentMethod>("cash");
+  const [groupPaymentReference, setGroupPaymentReference] = useState("");
+  const [groupPaymentDescription, setGroupPaymentDescription] = useState("");
+  const [groupPaymentError, setGroupPaymentError] = useState<string | null>(null);
+  const groupPaymentAttemptKeysRef = useRef(new Map<string, string>());
   const [collectedBefore, setCollectedBefore] = useState(false);
   const [collectedOn, setCollectedOn] = useState("");
   const [priorReceiptNote, setPriorReceiptNote] = useState("");
@@ -280,8 +292,12 @@ export function ReservationsPage() {
     check_in_date: todayIso(),
     check_out_date: addDaysIso(todayIso(), 1)
   });
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [allocationError, setAllocationError] = useState<string | null>(null);
   const [calendarRange, setCalendarRange] = useState<"week" | "month">("week");
   const [detailsReservationId, setDetailsReservationId] = useState<number | null>(null);
+  const [detailsActionError, setDetailsActionError] = useState<{ reservationId: number; message: string } | null>(null);
+  const [pageActionError, setPageActionError] = useState<string | null>(null);
   const [communicationRecipient, setCommunicationRecipient] = useState("");
   const [roomMoveForm, setRoomMoveForm] = useState({
     to_room_id: "",
@@ -420,6 +436,38 @@ export function ReservationsPage() {
       await queryClient.invalidateQueries({ queryKey: ["reservation-groups", session.hotelId] });
     }
   });
+  const groupPaymentMutation = useGuardedMutation<
+    ReservationGroupPaymentResult,
+    unknown,
+    { groupId: number; payload: ReservationGroupPaymentPayload }
+  >({
+    mutationFn: ({ groupId, payload }) => {
+      const fingerprint = JSON.stringify({ groupId, payload });
+      let key = groupPaymentAttemptKeysRef.current.get(fingerprint);
+      if (!key) {
+        key = newReservationGroupPaymentIdempotencyKey();
+        if (groupPaymentAttemptKeysRef.current.size >= 20) {
+          const oldest = groupPaymentAttemptKeysRef.current.keys().next().value;
+          if (oldest) groupPaymentAttemptKeysRef.current.delete(oldest);
+        }
+        groupPaymentAttemptKeysRef.current.set(fingerprint, key);
+      }
+      return createReservationGroupPayment(groupId, payload, session, key);
+    },
+    onSuccess: async (_result, variables) => {
+      groupPaymentAttemptKeysRef.current.delete(JSON.stringify(variables));
+      await Promise.all([
+        refreshReservationState(queryClient, session.hotelId),
+        queryClient.invalidateQueries({ queryKey: ["reservation-groups", session.hotelId] })
+      ]);
+      setPayingGroup(null);
+      setGroupPaymentError(null);
+      showToast("success", t("page.groups.paymentSuccess"));
+    },
+    onError: (cause) => {
+      setGroupPaymentError(cause instanceof Error ? cause.message : t("page.groups.paymentError"));
+    }
+  });
   const restrictionOverridePrompt = useRestrictionOverridePrompt();
   const { resolveExternalMutation, clearManualReviewMutation } = useReservationActionMutations(filters);
   const movementGroupsQuery = useQuery<RoomMovementGroup[]>({
@@ -531,7 +579,20 @@ export function ReservationsPage() {
     onSuccess: async () => invalidateAllocationState()
   });
 
-  const showToast = (type: "success" | "error" | "info", message: string) => {
+  function showToast(type: "success" | "error" | "info", message: string) {
+    if (type === "error") {
+      if (toastTimeout.current) window.clearTimeout(toastTimeout.current);
+      toastTimeout.current = null;
+      setToast(null);
+      if (formOpen) {
+        setFormError(message);
+      } else if (detailsReservationId) {
+        setDetailsActionError({ reservationId: detailsReservationId, message });
+      } else {
+        setPageActionError(message);
+      }
+      return;
+    }
     if (toastTimeout.current) {
       window.clearTimeout(toastTimeout.current);
     }
@@ -606,12 +667,46 @@ export function ReservationsPage() {
     return grouped;
   }, [roomsQuery.data]);
 
-  const availableRooms = formValues.category_id ? roomsByCategory[formValues.category_id] ?? [] : roomsQuery.data ?? [];
+  const roomsInSelectedCategory = formValues.category_id ? roomsByCategory[formValues.category_id] ?? [] : roomsQuery.data ?? [];
   const selectedFormCategory = useMemo(
     () => categoriesData.find((category) => String(category.id) === formValues.category_id) ?? null,
     [categoriesData, formValues.category_id]
   );
   const quoteNights = diffNights(formValues.check_in_date, formValues.check_out_date);
+  const formAvailabilityQuery = useQuery<RoomAvailabilityResponse>({
+    queryKey: [
+      "reservation-form-availability",
+      session.hotelId,
+      formValues.category_id,
+      formValues.check_in_date,
+      formValues.check_out_date
+    ],
+    queryFn: () => checkRoomAvailability({
+      category_id: Number(formValues.category_id),
+      check_in_date: formValues.check_in_date,
+      check_out_date: formValues.check_out_date
+    }, session),
+    enabled: Boolean(
+      !editing && hasValidSession(session) && formValues.category_id &&
+      formValues.check_in_date && formValues.check_out_date && quoteNights > 0
+    ),
+    staleTime: 10_000
+  });
+  const formAvailableRoomIds = useMemo(
+    () => new Set(formAvailabilityQuery.data?.status === "ok" ? formAvailabilityQuery.data.available_rooms : []),
+    [formAvailabilityQuery.data]
+  );
+  const availableRooms = editing
+    ? roomsInSelectedCategory
+    : roomsInSelectedCategory.filter((room) => formAvailableRoomIds.has(room.id));
+  const requestedGroupRoomCount = Number(formValues.group_size) || 1;
+  const hasEnoughGroupRooms = formAvailabilityQuery.data?.status === "ok" &&
+    formAvailabilityQuery.data.count >= requestedGroupRoomCount;
+  const groupAvailabilityBlocked = Boolean(
+    !editing && requestedGroupRoomCount > 1 && formValues.category_id && quoteNights > 0 &&
+    (formAvailabilityQuery.isFetching || formAvailabilityQuery.isError ||
+      formAvailabilityQuery.data?.status !== "ok" || !hasEnoughGroupRooms)
+  );
   const quoteCategoryId =
     !editing && selectedFormCategory && quoteNights > 0 ? Number(selectedFormCategory.id) : null;
   const quoteGuestId = Number(formValues.guest_id);
@@ -1186,13 +1281,18 @@ export function ReservationsPage() {
     editing && ["checked_in", "checked_out", "cancelled", "no_show"].includes(editing.status)
   );
 
+  const showReservationActionError = (reservationId: number, message: string) => {
+    setDetailsReservationId(reservationId);
+    setDetailsActionError({ reservationId, message });
+  };
+
   const handleCancel = async (reservation: Reservation) => {
     if (!canManageCompanyReservation(reservation)) return;
     try {
       await cancelMutation.mutateAsync(reservation.id);
       showToast("success", t("page.messages.cancelled"));
     } catch (err: unknown) {
-      showToast("error", err instanceof Error ? err.message : t("page.errors.cancelFailed"));
+      showReservationActionError(reservation.id, err instanceof Error ? err.message : t("page.errors.cancelFailed"));
     }
   };
 
@@ -1224,13 +1324,14 @@ export function ReservationsPage() {
         showToast("info", `${message}${t("page.messages.checkOutBalanceHint")}`);
         return;
       }
-      showToast("error", message);
+      showReservationActionError(reservation.id, message);
     }
   };
 
   const handleCheckAvailability = async () => {
+    setAvailabilityError(null);
     if (!availabilityForm.category_id || !availabilityForm.check_in_date || !availabilityForm.check_out_date) {
-      showToast("error", t("page.errors.availabilityFieldsRequired"));
+      setAvailabilityError(t("page.errors.availabilityFieldsRequired"));
       return;
     }
     const payload = {
@@ -1246,13 +1347,14 @@ export function ReservationsPage() {
         showToast("info", data.message);
       }
     } catch (err: unknown) {
-      showToast("error", err instanceof Error ? err.message : t("page.errors.availabilityFailed"));
+      setAvailabilityError(err instanceof Error ? err.message : t("page.errors.availabilityFailed"));
     }
   };
 
   const handleAllocationRun = async () => {
+    setAllocationError(null);
     if (subscriptionBlocked) {
-      showToast("error", subscriptionBlockReason || t("page.errors.blockedBySubscriptionAllocation"));
+      setAllocationError(subscriptionBlockReason || t("page.errors.blockedBySubscriptionAllocation"));
       return;
     }
     if (
@@ -1260,7 +1362,7 @@ export function ReservationsPage() {
       allocationForm.horizon_end &&
       new Date(allocationForm.horizon_end) < new Date(allocationForm.horizon_start)
     ) {
-      showToast("error", t("page.errors.horizonInvalid"));
+      setAllocationError(t("page.errors.horizonInvalid"));
       return;
     }
 
@@ -1270,7 +1372,7 @@ export function ReservationsPage() {
       const run = await allocationRunMutation.mutateAsync(allocationForm);
       showToast("success", t("page.messages.allocationRecalculated", { created: run.assignments_created, moved: run.moved_count }));
     } catch (err: unknown) {
-      showToast("error", err instanceof Error ? err.message : t("page.errors.allocationFailed"));
+      setAllocationError(err instanceof Error ? err.message : t("page.errors.allocationFailed"));
     }
   };
 
@@ -1427,6 +1529,92 @@ export function ReservationsPage() {
     () => (surchargesQuery.data ?? []).find((s) => s.payment_method === paymentMethod && s.is_active) ?? null,
     [surchargesQuery.data, paymentMethod]
   );
+  const groupPaymentMethods = availablePaymentMethods.filter(
+    (method): method is Exclude<PaymentMethod, "mercado_pago" | "paypal"> =>
+      method !== "mercado_pago" && method !== "paypal"
+  );
+  const groupPaymentSurcharge = (surchargesQuery.data ?? []).find(
+    (surcharge) => surcharge.payment_method === groupPaymentMethod && surcharge.is_active
+  ) ?? null;
+  const groupPaymentTotal = Number(groupPaymentTotalInput);
+  const groupPaymentGross = Number.isFinite(groupPaymentTotal)
+    ? grossWithSurcharge(groupPaymentTotal, groupPaymentSurcharge)
+    : 0;
+  const groupAllocatedCents = Object.values(groupPaymentAllocations).reduce((sum, raw) => {
+    const amount = Number(raw);
+    return Number.isFinite(amount) && amount > 0 ? sum + Math.round((amount + Number.EPSILON) * 100) : sum;
+  }, 0);
+  const groupRequestedCents = Number.isFinite(groupPaymentTotal) && groupPaymentTotal > 0
+    ? Math.round((groupPaymentTotal + Number.EPSILON) * 100)
+    : 0;
+  const groupPaymentManualMethod = manualPaymentMethods.includes(groupPaymentMethod);
+
+  const openGroupPayment = (group: ReservationGroupSummary) => {
+    if (group.company_billing_deferred) return;
+    const remaining = group.reservations.filter((child) => Number(child.balance_due ?? 0) > 0);
+    const initialAllocations = Object.fromEntries(
+      remaining.map((child) => [child.id, Number(child.balance_due).toFixed(2)])
+    );
+    const initialTotal = remaining.reduce((sum, child) => sum + Number(child.balance_due ?? 0), 0);
+    setPayingGroup(group);
+    setGroupPaymentAllocations(initialAllocations);
+    setGroupPaymentTotalInput(initialTotal > 0 ? initialTotal.toFixed(2) : "");
+    setGroupPaymentMethod(groupPaymentMethods[0] ?? "cash");
+    setGroupPaymentReference("");
+    setGroupPaymentDescription("");
+    setGroupPaymentError(null);
+  };
+
+  const submitGroupPayment = async () => {
+    if (!payingGroup || groupPaymentMutation.isPending) return;
+    const receivedAmount = Number(groupPaymentTotalInput);
+    if (!Number.isFinite(receivedAmount) || receivedAmount <= 0) {
+      setGroupPaymentError(t("page.groups.paymentInvalidTotal"));
+      return;
+    }
+    if (!groupPaymentMethods.includes(groupPaymentMethod as Exclude<PaymentMethod, "mercado_pago" | "paypal">)) {
+      setGroupPaymentError(t("page.groups.paymentMethodUnavailable"));
+      return;
+    }
+    if (groupPaymentManualMethod && !groupPaymentReference.trim()) {
+      setGroupPaymentError(t("page.groups.paymentReferenceRequired"));
+      return;
+    }
+    const allocations = payingGroup.reservations
+      .map((child) => ({
+        reservation_id: child.id,
+        received_amount: Number(groupPaymentAllocations[child.id] || 0)
+      }))
+      .filter((item) => Number.isFinite(item.received_amount) && item.received_amount > 0);
+    const allocationCents = allocations.reduce(
+      (sum, item) => sum + Math.round((item.received_amount + Number.EPSILON) * 100),
+      0
+    );
+    if (!allocations.length || allocationCents !== Math.round((receivedAmount + Number.EPSILON) * 100)) {
+      setGroupPaymentError(t("page.groups.paymentAllocationMismatch"));
+      return;
+    }
+    if (allocations.some((allocation) => {
+      const child = payingGroup.reservations.find((item) => item.id === allocation.reservation_id);
+      return child?.balance_due == null || allocation.received_amount - Number(child.balance_due) > 0.01;
+    })) {
+      setGroupPaymentError(t("page.groups.paymentExceedsBalance"));
+      return;
+    }
+    const payload: ReservationGroupPaymentPayload = {
+      received_amount: receivedAmount,
+      currency: payingGroup.currency_code,
+      payment_method: groupPaymentMethod as Exclude<PaymentMethod, "mercado_pago" | "paypal">,
+      manual_reference: groupPaymentManualMethod ? groupPaymentReference.trim() : undefined,
+      description: groupPaymentDescription.trim() || undefined,
+      allocations
+    };
+    try {
+      await groupPaymentMutation.mutateAsync({ groupId: payingGroup.id, payload });
+    } catch {
+      // The guarded mutation keeps its detailed API error in this form until closed.
+    }
+  };
   const editingGuest = useGuest(editing?.guest_id || undefined).data;
   const paymentLinksQuery = usePaymentLinks(editing?.id || undefined);
   const paymentLinkCreate = usePaymentLinkCreate(editing?.id || undefined);
@@ -1884,6 +2072,7 @@ export function ReservationsPage() {
   const openDetails = (reservation: Reservation) => {
     clearToast();
     setDetailsReservationId(reservation.id);
+    setDetailsActionError(null);
     setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep", origin_room_disposition: "", origin_room_disposition_note: "" });
     setNoShowNotes("");
     setChargeForm({ description: "", amount: "" });
@@ -1891,12 +2080,14 @@ export function ReservationsPage() {
   const openDetailsById = (reservationId: number) => {
     clearToast();
     setDetailsReservationId(reservationId);
+    setDetailsActionError(null);
     setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep", origin_room_disposition: "", origin_room_disposition_note: "" });
     setNoShowNotes("");
     setChargeForm({ description: "", amount: "" });
   };
   const closeDetails = () => {
     setDetailsReservationId(null);
+    setDetailsActionError(null);
     setCommunicationRecipient("");
     setRoomMoveForm({ to_room_id: "", reason_code: "", notes: "", price_action: "keep", origin_room_disposition: "", origin_room_disposition_note: "" });
     setNoShowNotes("");
@@ -1992,7 +2183,10 @@ export function ReservationsPage() {
     }
     const guest = detailsGuest;
     const win = window.open("", "_blank");
-    if (!win) return;
+    if (!win) {
+      showToast("error", t("page.details.receipt.popupBlocked"));
+      return;
+    }
     const htmlText = (value: unknown) => escapeHtml(value);
     const html = `
       <html>
@@ -2177,6 +2371,14 @@ export function ReservationsPage() {
             <p className="text-sm text-slate-700">{toast.message}</p>
           </div>
           <button className="ml-auto text-xs text-slate-500 hover:text-slate-800" onClick={() => setToast(null)} type="button">
+            {t("page.toast.close")}
+          </button>
+        </div>
+      )}
+      {pageActionError && (
+        <div className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" data-testid="reservation-page-action-error" role="alert" aria-live="assertive">
+          <p className="flex-1">{pageActionError}</p>
+          <button type="button" className="text-xs font-semibold hover:text-rose-950" onClick={() => setPageActionError(null)}>
             {t("page.toast.close")}
           </button>
         </div>
@@ -2572,6 +2774,14 @@ export function ReservationsPage() {
             )}
           </div>
         )}
+        {availabilityError && (
+          <div className="mt-3 flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" data-testid="availability-action-error" role="alert" aria-live="assertive">
+            <p className="flex-1">{availabilityError}</p>
+            <button type="button" className="text-xs font-semibold hover:text-rose-950" onClick={() => setAvailabilityError(null)}>
+              {t("page.toast.close")}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -2634,6 +2844,15 @@ export function ReservationsPage() {
             </button>
           </div>
         </div>
+
+        {allocationError && (
+          <div className="mt-3 flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" data-testid="allocation-action-error" role="alert" aria-live="assertive">
+            <p className="flex-1">{allocationError}</p>
+            <button type="button" className="text-xs font-semibold hover:text-rose-950" onClick={() => setAllocationError(null)}>
+              {t("page.toast.close")}
+            </button>
+          </div>
+        )}
 
         {allocationRunMutation.data ? (
           <div className="mt-3 grid gap-2 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900 sm:grid-cols-4">
@@ -2739,7 +2958,8 @@ export function ReservationsPage() {
             <div className="grid gap-3 lg:grid-cols-2">
               {reservationGroupsQuery.data?.slice(0, 6).map((group) => {
                 const groupDeferredBilling = Boolean(
-                  group.company_id && companyOptions.find((company) => company.id === group.company_id)?.payment_deferred !== false
+                  group.company_billing_deferred ||
+                  (group.company_id && companyOptions.find((company) => company.id === group.company_id)?.payment_deferred !== false)
                 );
                 return (
                   <article
@@ -2766,6 +2986,17 @@ export function ReservationsPage() {
                     <div><dt className="text-slate-500">{t("page.groups.paid")}</dt><dd className="font-semibold">{formatMoney(group.amount_paid, group.currency_code)}</dd></div>
                     <div><dt className="text-slate-500">{t("page.groups.balance")}</dt><dd className="font-semibold">{formatMoney(group.balance_due, group.currency_code)}</dd></div>
                   </dl>}
+                  {hasPermission("cash:operate") && !groupDeferredBilling && Number(group.balance_due ?? 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => openGroupPayment(group)}
+                      disabled={groupPaymentMutation.isPending || groupPaymentMethods.length === 0}
+                      className="mt-3 rounded-lg bg-brand-700 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-800 disabled:opacity-50"
+                      data-testid={`reservation-group-payment-${group.id}`}
+                    >
+                      {t("page.groups.registerPayment")}
+                    </button>
+                  )}
                   </article>
                 );
               })}
@@ -3094,7 +3325,6 @@ export function ReservationsPage() {
                   form={guestForm}
                   onFormChange={setGuestForm}
                   onGuestCreated={() => showToast("success", t("page.form.guestCreatedMessage"))}
-                  onError={(msg) => showToast("error", msg)}
                 />
                 <label className="text-xs font-semibold text-slate-600">
                   {t("page.form.category")}
@@ -3187,7 +3417,13 @@ export function ReservationsPage() {
                       title={metadataOnlyEdit ? t("page.form.metadataOnlyEditTitle") : undefined}
                       className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                     >
-                      <option value="">{t("page.common.unassigned")}</option>
+                      <option value="">
+                        {!editing && formValues.category_id && quoteNights > 0 && formAvailabilityQuery.isFetching
+                          ? t("page.form.roomAvailability.loading")
+                          : availableRooms.length > 0 || editing
+                            ? t("page.common.unassigned")
+                            : t("page.form.roomAvailability.noRooms")}
+                      </option>
                       {availableRooms.map((room) => (
                         <option key={room.id} value={room.id}>
                           {t("page.form.roomOption", { number: room.room_number || t("page.common.informationUnavailable"), category: categoryNameById.get(room.category_id) ?? t("page.common.informationUnavailable") })}
@@ -3254,6 +3490,47 @@ export function ReservationsPage() {
                   invalidMessage={t("page.dateInput.invalidDate")}
                 />
               </div>
+
+              {!editing && formValues.category_id && quoteNights > 0 ? (
+                <div
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"
+                  data-testid="reservation-form-availability"
+                >
+                  {formAvailabilityQuery.isFetching ? (
+                    <p role="status" aria-live="polite" className="text-slate-600">
+                      {t("page.form.roomAvailability.loading")}
+                    </p>
+                  ) : formAvailabilityQuery.isError ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2" role="alert">
+                      <p className="text-rose-800">
+                        {t("page.form.roomAvailability.error", {
+                          message: formAvailabilityQuery.error instanceof Error
+                            ? formAvailabilityQuery.error.message
+                            : t("page.common.informationUnavailable")
+                        })}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void formAvailabilityQuery.refetch()}
+                        className="font-semibold text-brand-700 underline"
+                      >
+                        {t("page.form.roomAvailability.retry")}
+                      </button>
+                    </div>
+                  ) : formAvailabilityQuery.data?.status === "placeholder" ? (
+                    <p role="alert" className="text-amber-900">{t("page.form.roomAvailability.unavailable")}</p>
+                  ) : formAvailabilityQuery.data?.status === "ok" ? (
+                    <p className={hasEnoughGroupRooms || requestedGroupRoomCount === 1 ? "text-emerald-800" : "text-rose-800"}>
+                      {requestedGroupRoomCount > 1
+                        ? t("page.form.roomAvailability.groupCount", {
+                            available: formAvailabilityQuery.data.count,
+                            requested: requestedGroupRoomCount
+                          })
+                        : t("page.form.roomAvailability.count", { count: formAvailabilityQuery.data.count })}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               {!editing && !deferredCompanyBooking && (
                 <div className="rounded-lg border border-brand-100 bg-brand-50 p-3">
@@ -4349,6 +4626,7 @@ export function ReservationsPage() {
                     updateMutation.isPending ||
                     collaborativeReservation.isSaving ||
                     subscriptionBlocked ||
+                    groupAvailabilityBlocked ||
                     Boolean(lastCreatedReservation) ||
                     (!editing &&
                       manualTotalAmountInput.trim() === "" &&
@@ -4414,6 +4692,15 @@ export function ReservationsPage() {
                 </button>
               </div>
             </div>
+
+            {detailsActionError?.reservationId === detailsReservation.id && (
+              <div className="mt-4 flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" data-testid="reservation-details-action-error" role="alert" aria-live="assertive">
+                <p className="flex-1">{detailsActionError.message}</p>
+                <button type="button" className="text-xs font-semibold hover:text-rose-950" onClick={() => setDetailsActionError(null)}>
+                  {t("page.toast.close")}
+                </button>
+              </div>
+            )}
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50 p-3 md:col-span-2">
@@ -4544,11 +4831,15 @@ export function ReservationsPage() {
                   <div className="grid grid-cols-2 gap-2 text-sm text-slate-800">
                     <div>
                       <p className="text-xs text-slate-500">{t("page.details.financeTotal")}</p>
-                      <p className="font-semibold">{formatMoney(detailsSummary.total_amount, detailsCurrencyCode)}</p>
+                      <p className="font-semibold">{formatMoney(detailsReservation.total_amount ?? detailsSummary.total_amount, detailsCurrencyCode)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">{t("page.details.financePaid")}</p>
-                      <p className="font-semibold">{formatMoney(detailsSummary.amount_paid, detailsCurrencyCode)}</p>
+                      <p className="text-xs text-slate-500">{t("page.details.financeHotelReceived")}</p>
+                      <p className="font-semibold">{formatMoney(detailsSummary.hotel_received_amount ?? 0, detailsCurrencyCode)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">{t("page.details.financeOtaPrepaid")}</p>
+                      <p className="font-semibold">{formatMoney(detailsSummary.ota_prepaid_amount ?? 0, detailsCurrencyCode)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">{t("page.details.financeDeposit")}</p>
@@ -4556,7 +4847,12 @@ export function ReservationsPage() {
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">{t("page.details.financeBalance")}</p>
-                      <p className="font-semibold">{formatMoney(detailsSummary.balance_due, detailsCurrencyCode)}</p>
+                      <p className="font-semibold">
+                        {formatMoney(
+                          detailsOperations?.financial_summary.operational_balance_due ?? detailsSummary.operational_balance_due ?? detailsSummary.balance_due,
+                          detailsCurrencyCode
+                        )}
+                      </p>
                     </div>
                   </div>
                 ) : (
@@ -5085,6 +5381,155 @@ export function ReservationsPage() {
               </div>
             ) : null}
           </div>
+        </div>
+      )}
+
+      {payingGroup && (
+        <div className="fixed inset-0 z-40 flex animate-fade-in items-center justify-center bg-slate-900/40 px-4 py-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="group-payment-title"
+            className="max-h-[90vh] w-full max-w-2xl animate-scale-in overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
+            data-testid="reservation-group-payment-dialog"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="group-payment-title" className="text-lg font-semibold text-slate-900">
+                  {t("page.groups.paymentTitle", { guest: payingGroup.guest_name })}
+                </h2>
+                <p className="mt-1 text-xs text-slate-600">{t("page.groups.paymentHint")}</p>
+              </div>
+              <button
+                type="button"
+                disabled={groupPaymentMutation.isPending}
+                onClick={() => { setPayingGroup(null); setGroupPaymentError(null); }}
+                className="text-sm text-slate-600 hover:text-slate-900 disabled:opacity-50"
+              >
+                {t("page.common.close")}
+              </button>
+            </div>
+
+            {groupPaymentError && (
+              <div className="mt-4 flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
+                <p>{groupPaymentError}</p>
+                <button type="button" onClick={() => setGroupPaymentError(null)} className="shrink-0 text-xs font-semibold underline">
+                  {t("page.groups.paymentCloseError")}
+                </button>
+              </div>
+            )}
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="text-sm font-semibold text-slate-700">
+                {t("page.groups.paymentTotal")}
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={groupPaymentTotalInput}
+                    onChange={(event) => setGroupPaymentTotalInput(event.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                    data-testid="group-payment-received-amount"
+                  />
+                  <span className="text-xs text-slate-500">{payingGroup.currency_code}</span>
+                </div>
+              </label>
+              <label className="text-sm font-semibold text-slate-700">
+                {t("page.groups.paymentMethod")}
+                <select
+                  value={groupPaymentMethod}
+                  onChange={(event) => setGroupPaymentMethod(event.target.value as PaymentMethod)}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                  data-testid="group-payment-method"
+                >
+                  {groupPaymentMethods.map((method) => (
+                    <option key={method} value={method}>{t(`page.paymentMethods.${method}`)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-slate-200">
+              <div className="grid grid-cols-[1fr_9rem] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                <span>{t("page.groups.paymentAllocation")}</span>
+                <span className="text-right">{payingGroup.currency_code}</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {payingGroup.reservations.map((child) => (
+                  <label key={child.id} className="grid grid-cols-[1fr_9rem] items-center gap-3 px-3 py-2 text-sm">
+                    <span className="min-w-0">
+                      <span className="block font-medium text-slate-800">{child.confirmation_code}</span>
+                      <span className="block text-xs text-slate-500">
+                        {t("page.groups.balance")}: {formatMoney(child.balance_due, child.currency_code)}
+                      </span>
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      max={child.balance_due ?? undefined}
+                      disabled={child.company_billing_deferred || child.balance_due === null}
+                      value={groupPaymentAllocations[child.id] ?? ""}
+                      onChange={(event) => setGroupPaymentAllocations((current) => ({ ...current, [child.id]: event.target.value }))}
+                      className="w-full rounded-lg border border-slate-200 px-2 py-2 text-right"
+                      aria-label={`${t("page.groups.paymentAllocation")} ${child.confirmation_code}`}
+                    />
+                  </label>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+                <span className="text-slate-600">{t("page.groups.paymentAllocated")}</span>
+                <strong className={groupRequestedCents === groupAllocatedCents ? "text-emerald-700" : "text-rose-700"}>
+                  {formatMoney(groupAllocatedCents / 100, payingGroup.currency_code)} / {formatMoney(groupPaymentTotalInput, payingGroup.currency_code)}
+                </strong>
+              </div>
+            </div>
+
+            {groupPaymentManualMethod && (
+              <label className="mt-4 block text-sm font-semibold text-slate-700">
+                {t("page.groups.paymentReference")}
+                <input
+                  value={groupPaymentReference}
+                  onChange={(event) => setGroupPaymentReference(event.target.value)}
+                  maxLength={120}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                  data-testid="group-payment-reference"
+                />
+              </label>
+            )}
+            <label className="mt-4 block text-sm font-semibold text-slate-700">
+              {t("page.groups.paymentDescription")}
+              <input
+                value={groupPaymentDescription}
+                onChange={(event) => setGroupPaymentDescription(event.target.value)}
+                maxLength={300}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              />
+            </label>
+            <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
+              {t("page.groups.paymentCashTotal")}: <strong>{formatMoney(groupPaymentGross, payingGroup.currency_code)}</strong>
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={groupPaymentMutation.isPending}
+                onClick={() => { setPayingGroup(null); setGroupPaymentError(null); }}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+              >
+                {t("page.common.close")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitGroupPayment()}
+                disabled={groupPaymentMutation.isPending || groupRequestedCents === 0 || groupRequestedCents !== groupAllocatedCents}
+                className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-50"
+                data-testid="group-payment-submit"
+              >
+                {groupPaymentMutation.isPending ? t("page.common.saving") : t("page.groups.paymentSubmit")}
+              </button>
+            </div>
+          </section>
         </div>
       )}
 

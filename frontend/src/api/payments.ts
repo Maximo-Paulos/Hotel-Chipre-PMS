@@ -32,6 +32,10 @@ export type PaymentSummary = {
   total_amount: number | null;
   deposit_required: number | null;
   amount_paid: number | null;
+  /** Hotel-collected completed payments; excludes OTA amounts paid elsewhere. */
+  hotel_received_amount?: number | null;
+  /** Confirmed OTA prepayment; shown for revenue context and never cash. */
+  ota_prepaid_amount?: number | null;
   balance_due: number | null;
   // total_amount/balance_due only reflect the reservation's base price; they
   // ignore consumption charges (BillingAdjustment). operational_* includes

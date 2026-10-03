@@ -162,6 +162,7 @@ class ReservationCompanyNightRefundableAllocationRead(BaseModel):
 
 class ReservationTransactionSummaryRead(BaseModel):
     id: int
+    group_payment_batch_id: Optional[int] = None
     amount: float
     applied_amount: Optional[float] = None
     applied_currency: Optional[str] = None
@@ -201,6 +202,8 @@ class ReservationFinancialSummaryRead(BaseModel):
     total_amount: float | None
     deposit_required: float | None
     amount_paid: float | None
+    hotel_received_amount: float | None = None
+    ota_prepaid_amount: float | None = None
     balance_due: float | None
     operational_total_amount: float
     operational_balance_due: float
