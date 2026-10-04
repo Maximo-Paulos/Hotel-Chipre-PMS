@@ -101,13 +101,44 @@ def test_master_admin_reproduces_the_bug_then_the_bypass_fixes_it():
     try:
         # Seed through the ORM (for column defaults) with the bypass enabled,
         # since a plain insert would otherwise hit the same RLS WITH CHECK gap.
+        # Keep app.hotel_id aligned with each seeded tenant as well: the ORM
+        # change collector writes tenant-scoped domain_event_outbox rows, whose
+        # own RLS policy intentionally requires a matching hotel context.
         with Session(engine) as session, session.begin():
             session.execute(text("SELECT set_config('app.master_admin', 'true', true)"))
-            session.add(HotelConfiguration(id=hotel_a, hotel_name="PG RLS Hotel A", owner_email="a@example.test", subscription_active=True))
-            session.add(HotelConfiguration(id=hotel_b, hotel_name="PG RLS Hotel B", owner_email="b@example.test", subscription_active=True))
-            session.flush()
-            session.add(Subscription(hotel_id=hotel_a, plan="starter", status="active", room_limit=15, staff_limit=3, can_write_cache=True))
-            session.add(Subscription(hotel_id=hotel_b, plan="starter", status="active", room_limit=15, staff_limit=3, can_write_cache=True))
+            for hotel_id, hotel_name, owner_email in (
+                (hotel_a, "PG RLS Hotel A", "a@example.test"),
+                (hotel_b, "PG RLS Hotel B", "b@example.test"),
+            ):
+                session.execute(
+                    text("SELECT set_config('app.hotel_id', :hotel_id, true)"),
+                    {"hotel_id": str(hotel_id)},
+                )
+                session.add(
+                    HotelConfiguration(
+                        id=hotel_id,
+                        hotel_name=hotel_name,
+                        owner_email=owner_email,
+                        subscription_active=True,
+                    )
+                )
+                session.flush()
+                session.add(
+                    Subscription(
+                        hotel_id=hotel_id,
+                        plan="starter",
+                        status="active",
+                        room_limit=15,
+                        staff_limit=3,
+                        can_write_cache=True,
+                    )
+                )
+                session.flush()
+                # ``after_flush`` queues the subscription's outbox rows for
+                # the next flush. Persist them before switching app.hotel_id
+                # to the next tenant, or they would be checked against that
+                # tenant's RLS context.
+                session.flush()
 
         count_sql = text("SELECT count(*) FROM subscriptions WHERE hotel_id IN (:a, :b)")
 
@@ -135,4 +166,93 @@ def test_master_admin_reproduces_the_bug_then_the_bypass_fixes_it():
             conn.execute(text("SELECT set_config('app.master_admin', 'true', true)"))
             conn.execute(text("DELETE FROM subscriptions WHERE hotel_id IN (:a, :b)"), {"a": hotel_a, "b": hotel_b})
             conn.execute(text("DELETE FROM hotel_configuration WHERE id IN (:a, :b)"), {"a": hotel_a, "b": hotel_b})
+        engine.dispose()
+
+
+@skip_if_no_pg
+def test_master_admin_dashboard_reads_hotels_without_outbox_rls_failure(monkeypatch):
+    """A master-admin dashboard read may seed a missing subscription safely.
+
+    Snapshot generation can flush a subscription and its durable domain events.
+    The dashboard must set each tenant context for those writes while retaining
+    the verified master-admin context needed to enumerate hotels.
+    """
+    from fastapi import Request
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.orm import Session
+
+    from app.master_admin import router as master_admin_router
+    from app.models.hotel_config import HotelConfiguration
+    from app.models.subscription import (
+        HotelEntitlementOverride,
+        HotelSubscription,
+        SubscriptionEntitlement,
+        SubscriptionPlan,
+    )
+    from app.services import subscription_entitlements
+
+    safe_dsn = validate_postgres_test_target(PG_DSN, os.environ)
+    cwd = os.path.dirname(os.path.dirname(__file__))
+    env = {**os.environ, "DATABASE_URL": safe_dsn}
+    _reset_and_migrate_to_head(safe_dsn, env, cwd)
+
+    engine = create_engine(safe_dsn)
+    hotel_ids = (99203, 99204)
+    try:
+        # This legacy catalog table is created by the app's metadata bootstrap
+        # rather than an Alembic migration; ensure the isolated DB matches that
+        # runtime setup before exercising the snapshot path.
+        from app.database import Base
+
+        Base.metadata.create_all(
+            engine,
+            tables=[
+                SubscriptionPlan.__table__,
+                HotelSubscription.__table__,
+                SubscriptionEntitlement.__table__,
+                HotelEntitlementOverride.__table__,
+            ],
+        )
+        # Create a tenant with no v2 subscription. Flush twice so its own
+        # outbox rows are persisted before the transaction commits.
+        with Session(engine) as session, session.begin():
+            session.execute(text("SELECT set_config('app.master_admin', 'true', true)"))
+            for hotel_id in hotel_ids:
+                session.execute(
+                    text("SELECT set_config('app.hotel_id', :hotel_id, true)"),
+                    {"hotel_id": str(hotel_id)},
+                )
+                session.add(
+                    HotelConfiguration(
+                        id=hotel_id,
+                        hotel_name=f"PG master dashboard synthetic {hotel_id}",
+                        owner_email=f"master-dashboard-{hotel_id}@example.test",
+                        subscription_active=True,
+                    )
+                )
+                session.flush()
+                session.flush()
+
+        def authorize_master_admin(*, request, db, write=False):
+            db.execute(text("SELECT set_config('app.master_admin', 'true', true)"))
+
+        monkeypatch.setattr(master_admin_router, "require_master_admin", authorize_master_admin)
+        monkeypatch.setattr(subscription_entitlements, "_is_enforcement_enabled", lambda: False)
+        request = Request(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/api/master-admin/dashboard/hotels",
+                "headers": [],
+                "query_string": b"",
+            }
+        )
+
+        with Session(engine) as session:
+            result = master_admin_router.dashboard_hotels(request=request, db=session)
+            matching = [item for item in result["items"] if item["hotel_id"] in hotel_ids]
+            assert len(matching) == len(hotel_ids)
+            assert {item["status"] for item in matching} == {"active"}
+            session.rollback()
+    finally:
         engine.dispose()

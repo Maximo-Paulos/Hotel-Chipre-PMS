@@ -17,6 +17,7 @@ from app.schemas.auth import MfaChallengeResponse, MfaEnrollmentResponse, MfaRec
 from app.services import mfa_service
 from app.services.security import verify_password
 from app.services.subscription_entitlements import get_subscription_snapshot
+from app.services.tenant_context import set_tenant_hotel_context
 from app.services import marketing_service
 from app.api.webhook_payloads import read_bounded_body
 from app.schemas.marketing import (
@@ -340,6 +341,15 @@ def dashboard_hotels(request: Request, db: Session = Depends(get_db)):
     hotels = db.query(HotelConfiguration).order_by(HotelConfiguration.id.asc()).all()
     result = []
     for hotel in hotels:
+        if result:
+            # Flush pending events from the previous hotel before changing
+            # app.hotel_id, so RLS checks them against their own tenant.
+            db.flush()
+        # The master-admin bypass is intentionally limited to subscription
+        # tables. Snapshot generation may seed or reconcile tenant data and
+        # queue domain-event outbox rows, whose RLS policy still requires the
+        # corresponding hotel context.
+        set_tenant_hotel_context(db, hotel.id)
         snapshot = get_subscription_snapshot(db, hotel.id)
         decision: BillingDecision = evaluate_hotel_write_access(db, hotel.id, snapshot=snapshot)
         result.append(
@@ -356,6 +366,7 @@ def dashboard_hotels(request: Request, db: Session = Depends(get_db)):
                 "updated_at": hotel.updated_at,
             }
         )
+    set_tenant_hotel_context(db, None)
     return {"items": result}
 
 
