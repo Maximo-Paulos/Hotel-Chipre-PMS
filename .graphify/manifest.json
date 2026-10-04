@@ -3236,8 +3236,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1791086148928.2673,
-    "hash": "f4a20662eaadcab67094680fab4fa5ea"
+    "mtime": 1791086754695.645,
+    "hash": "165b070fdc4b7ca3678c9223a92a555e"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1791082128320.8926,
@@ -6486,5 +6486,21 @@
   "docs/operations/rate-change-drafts.md": {
     "mtime": 1791082128195.377,
     "hash": "dc825cd4b4a013f0df84494c078ee0a3"
+  },
+  "frontend/api-request-timeout.test.mjs": {
+    "mtime": 1791085414279.5789,
+    "hash": "0f7b80fed43a6a68b2b035583cdb777c"
+  },
+  "frontend/dashboard-occupancy-source.test.mjs": {
+    "mtime": 1791084884702.2458,
+    "hash": "f4c88f50831f89daf532d67d4d333d54"
+  },
+  "frontend/e2e/cash-daily-summary-currency.spec.ts": {
+    "mtime": 1791084945265.7566,
+    "hash": "faabc4154aa4b4d8b41c70e0d420cada"
+  },
+  "frontend/e2e/dashboard-occupancy-matches-report.spec.ts": {
+    "mtime": 1791084884702.478,
+    "hash": "96569823c3555a089aa74dff2b73a944"
   }
 }
