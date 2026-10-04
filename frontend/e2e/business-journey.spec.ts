@@ -116,7 +116,7 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
   await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
   await reservationForm.getByPlaceholder("Email").fill(`journey.${suffix}@example.test`);
-  await reservationForm.getByPlaceholder("Teléfono").fill("1112345678");
+  await reservationForm.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
   await reservationForm.getByLabel("Tipo de documento").selectOption("DNI");
   await reservationForm.getByPlaceholder("Documento").fill(`E2E-${suffix}`);
   await reservationForm.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();
@@ -124,6 +124,11 @@ test("owner completes the core reservation journey through the UI", async ({ pag
 
   const categorySelect = reservationForm.locator("label").filter({ hasText: "Categoría" }).locator("select");
   await expect(categorySelect).toHaveCount(1);
+  const checkIn = reservationForm.getByLabel("Check-in", { exact: true });
+  const checkOut = reservationForm.getByLabel("Check-out", { exact: true });
+  await checkIn.fill(localIsoDate(0));
+  await checkOut.fill(localIsoDate(1));
+
   const categoryOption = categorySelect.locator("option").filter({ hasText: categoryName });
   await expect(categoryOption).toHaveCount(1);
   const categoryValue = await categoryOption.getAttribute("value");
@@ -137,11 +142,6 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   const roomValue = await roomOption.getAttribute("value");
   expect(roomValue).toBeTruthy();
   await roomSelect.selectOption(roomValue!);
-
-  const checkIn = reservationForm.getByLabel("Check-in", { exact: true });
-  const checkOut = reservationForm.getByLabel("Check-out", { exact: true });
-  await checkIn.fill(localIsoDate(0));
-  await checkOut.fill(localIsoDate(1));
   await reservationForm.getByPlaceholder("Usar configuración del hotel").fill("1000");
 
   const createReservationButton = reservationForm.getByRole("button", { name: "Crear", exact: true });
@@ -165,6 +165,7 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await expect(pendingBalanceDrawer.getByLabel("Método de pago")).toBeVisible();
   await expect(pendingBalanceDrawer.getByTestId("checkin-capture-form")).toBeVisible();
   await pendingBalanceDrawer.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
+  await reservationRow.getByRole("button", { name: "Editar", exact: true }).click();
   const editModal = page.locator("div.fixed").filter({ hasText: "Pagos y balance" });
   const editForm = editModal.locator("form").filter({ hasText: "Pagos y balance" });
   await expect(editForm.getByText("Resumen financiero y acciones rápidas.", { exact: true })).toBeVisible();
@@ -231,6 +232,7 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await captureForm.getByLabel("País de nacimiento").fill("Argentina");
   await captureForm.getByLabel("Estado civil").fill("Soltero/a");
   await captureForm.getByLabel("Profesión").fill("QA");
+  await captureForm.getByLabel("Acepta términos y condiciones").check();
   await drawer.getByRole("button", { name: "Confirmar check-in", exact: true }).click();
   await expect(drawer.getByText("Check-in registrado.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
@@ -399,7 +401,7 @@ test("owner manages a room move and no-show from the reservation ficha", async (
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
   await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
   await reservationForm.getByPlaceholder("Email").fill(`operations.${suffix}@example.test`);
-  await reservationForm.getByPlaceholder("Teléfono").fill("1112345678");
+  await reservationForm.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
   await reservationForm.getByLabel("Tipo de documento").selectOption("DNI");
   await reservationForm.getByPlaceholder("Documento").fill(`OPS-${suffix}`);
   await reservationForm.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();
@@ -411,14 +413,14 @@ test("owner manages a room move and no-show from the reservation ficha", async (
   const categoryValue = await categoryOption.getAttribute("value");
   expect(categoryValue).toBeTruthy();
   await categorySelect.selectOption(categoryValue!);
+  await reservationForm.getByLabel("Check-in", { exact: true }).fill(localIsoDate(2));
+  await reservationForm.getByLabel("Check-out", { exact: true }).fill(localIsoDate(4));
   const roomSelect = reservationForm.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
   const roomOption = roomSelect.locator("option").filter({ hasText: firstRoomNumber });
   await expect(roomOption).toHaveCount(1);
   const roomValue = await roomOption.getAttribute("value");
   expect(roomValue).toBeTruthy();
   await roomSelect.selectOption(roomValue!);
-  await reservationForm.getByLabel("Check-in", { exact: true }).fill(localIsoDate(2));
-  await reservationForm.getByLabel("Check-out", { exact: true }).fill(localIsoDate(4));
   await expect(reservationForm.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
   await reservationForm.getByRole("button", { name: "Crear", exact: true }).click();
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();

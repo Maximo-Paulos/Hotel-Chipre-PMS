@@ -162,11 +162,6 @@ def _to_read(
         max(0, float(r.total_amount or 0) - float(r.amount_paid or 0)),
     )
     result.nights = getattr(r, "nights", (r.check_out_date - r.check_in_date).days)
-    additional_guests = getattr(r, "additional_guests", None) or []
-    result.additional_guests = [
-        {"id": g.id, "first_name": g.first_name, "last_name": g.last_name, "document_type": g.document_type, "document_number": g.document_number}
-        for g in additional_guests
-    ]
     is_deferred = company_billing_deferred
     if is_deferred is None:
         is_deferred = (

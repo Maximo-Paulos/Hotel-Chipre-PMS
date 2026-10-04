@@ -141,8 +141,13 @@ test("an owner without onboarding permission gets an access message without a de
   await page.reload();
   await Promise.all([refreshedSession, effectivePermissions]);
   await expect(page.getByRole("heading", { name: "Visión general" })).toBeVisible();
+  const onboardingEffectivePermissions = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === "GET" && url.pathname === "/api/permissions/effective";
+  });
   await page.goto("/onboarding");
   await expect(page.getByTestId("permission-denied-page")).toBeVisible();
+  await onboardingEffectivePermissions;
   await expect(page).toHaveURL(/\/onboarding$/);
   expect(onboardingStatusRequests).toBe(0);
 });

@@ -48,7 +48,7 @@ test("owner creates a lodging restriction, it blocks booking, override unblocks 
   await createForm.getByPlaceholder("Nombre").fill("Huésped");
   await createForm.getByPlaceholder("Apellido").fill(guestLastName);
   await createForm.getByPlaceholder("Email").fill(`restriccion.${suffix}@example.test`);
-  await createForm.getByPlaceholder("Teléfono").fill("1112345678");
+  await createForm.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
   await createForm.getByLabel("Tipo de documento").selectOption("DNI");
   await createForm.getByPlaceholder("Documento").fill(`RESTR-${suffix}`);
   await createForm.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();

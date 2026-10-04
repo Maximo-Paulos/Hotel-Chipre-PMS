@@ -582,9 +582,9 @@ export function AppShell() {
                 id="mobile-menu-panel"
                 ref={mobileMenuPanelRef}
                 tabIndex={-1}
-                className="flex h-full w-full max-w-xs animate-slide-in-right flex-col overflow-y-auto border-l border-slate-200 bg-white shadow-xl outline-none"
+                className="flex h-full w-full max-w-xs animate-slide-in-right flex-col overflow-hidden border-l border-slate-200 bg-white shadow-xl outline-none"
               >
-                <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                   {/* Same "where am I" as the desktop sidebar header: without
                       it a single-hotel operator on a phone saw the hotel's name
                       nowhere once the one-option selector stopped rendering.
@@ -607,33 +607,15 @@ export function AppShell() {
                   </button>
                 </div>
 
-                <nav aria-label={t("mobileMenu.navAriaLabel")} className="flex flex-col gap-1 px-3 py-3">
-                  {visibleDailyNav.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      className={({ isActive }) =>
-                        cx(
-                          "flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium",
-                          isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
-                        )
-                      }
-                    >
-                      {t(item.label)}
-                    </NavLink>
-                  ))}
-                </nav>
-
-                {visibleNavSections.map((section) => (
-                  <nav key={section.title} aria-label={t(section.title)} className="flex flex-col gap-1 border-t border-slate-100 px-3 py-3">
-                    <p className="px-3 pb-1 text-[13px] font-semibold text-slate-500">{t(section.title)}</p>
-                    {section.items.map((item) => (
+                <div data-testid="mobile-menu-scroll-region" className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+                  <nav aria-label={t("mobileMenu.navAriaLabel")} className="flex shrink-0 flex-col gap-1 px-3 py-3">
+                    {visibleDailyNav.map((item) => (
                       <NavLink
                         key={item.to}
                         to={item.to}
                         className={({ isActive }) =>
                           cx(
-                            "flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium",
+                            "flex min-h-11 shrink-0 items-center rounded-lg px-3 py-2 text-sm font-medium",
                             isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
                           )
                         }
@@ -642,12 +624,32 @@ export function AppShell() {
                       </NavLink>
                     ))}
                   </nav>
-                ))}
 
-                <div className="flex flex-col gap-3 border-t border-slate-100 px-3 py-3">
-                  {hasAnyPermission(["reservation:create", "checkin:perform"]) && <ReservationGlobalSearch />}
-                  <HotelSelector />
-                  <UserBadge />
+                  {visibleNavSections.map((section) => (
+                    <nav key={section.title} aria-label={t(section.title)} className="flex shrink-0 flex-col gap-1 border-t border-slate-100 px-3 py-3">
+                      <p className="px-3 pb-1 text-[13px] font-semibold text-slate-500">{t(section.title)}</p>
+                      {section.items.map((item) => (
+                        <NavLink
+                          key={item.to}
+                          to={item.to}
+                          className={({ isActive }) =>
+                            cx(
+                              "flex min-h-11 shrink-0 items-center rounded-lg px-3 py-2 text-sm font-medium",
+                              isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
+                            )
+                          }
+                        >
+                          {t(item.label)}
+                        </NavLink>
+                      ))}
+                    </nav>
+                  ))}
+
+                  <div className="flex shrink-0 flex-col gap-3 border-t border-slate-100 px-3 py-3">
+                    {hasAnyPermission(["reservation:create", "checkin:perform"]) && <ReservationGlobalSearch />}
+                    <HotelSelector />
+                    <UserBadge />
+                  </div>
                 </div>
               </div>
             </div>

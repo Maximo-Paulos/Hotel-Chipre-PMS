@@ -68,7 +68,7 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
   await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
   await reservationForm.getByPlaceholder("Email").fill(`qa.recepcion.${suffix}@example.test`);
-  await reservationForm.getByPlaceholder("Teléfono").fill("1112345678");
+  await reservationForm.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
   await reservationForm.getByLabel("Tipo de documento").selectOption("DNI");
   await reservationForm.getByPlaceholder("Documento").fill(`QA-RECEP-${suffix}`);
   const [guestCreateRequest] = await Promise.all([
@@ -85,15 +85,15 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   expect(categoryValue).toBeTruthy();
   await categorySelect.selectOption(categoryValue!);
 
+  await reservationForm.getByLabel("Check-in", { exact: true }).fill(checkIn);
+  await reservationForm.getByLabel("Check-out", { exact: true }).fill(checkOut);
+
   const roomSelect = reservationForm.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
   const roomOption = roomSelect.locator("option").filter({ hasText: "102" });
   await expect(roomOption).toHaveCount(1);
   const roomValue = await roomOption.getAttribute("value");
   expect(roomValue).toBeTruthy();
   await roomSelect.selectOption(roomValue!);
-
-  await reservationForm.getByLabel("Check-in", { exact: true }).fill(checkIn);
-  await reservationForm.getByLabel("Check-out", { exact: true }).fill(checkOut);
 
   const createReservationButton = reservationForm.getByRole("button", { name: "Crear", exact: true });
   await expect(createReservationButton).toBeEnabled();

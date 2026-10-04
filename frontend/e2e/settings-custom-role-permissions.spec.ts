@@ -477,7 +477,7 @@ test("denies matrix editing when the hotel role catalog fails to load", async ({
   await expect(page.getByRole("button", { name: "Crear rol" })).toBeDisabled();
 });
 
-test("canceling permission step-up closes one shared challenge without retrying protected reads", async ({ page }) => {
+test("canceling the permission catalog step-up does not start or retry protected reads", async ({ page }) => {
   const { permissionReadAttempts } = await installMocks(page, { permissionReadsRequireStepUp: true });
   await page.goto("/login", { waitUntil: "domcontentloaded" });
   await page.locator('input[type="email"]').fill("owner@example.com");
@@ -488,7 +488,10 @@ test("canceling permission step-up closes one shared challenge without retrying 
 
   const dialog = page.getByRole("dialog", { name: "Confirmá que sos vos" });
   await expect(dialog).toBeVisible();
-  await expect.poll(() => permissionReadAttempts.length).toBeGreaterThan(1);
+  // The page loads the catalog first because its 428 preflight owns the single
+  // reusable step-up challenge. Other protected reads stay disabled until the
+  // catalog succeeds; cancellation must therefore leave exactly one request.
+  await expect.poll(() => permissionReadAttempts.length).toBe(1);
   await dialog.getByRole("button", { name: "Cancelar" }).click();
   await expect(dialog).toHaveCount(0);
 
@@ -496,6 +499,6 @@ test("canceling permission step-up closes one shared challenge without retrying 
   // the challenge after the operator had explicitly canceled it.
   await page.waitForTimeout(1_500);
   await expect(dialog).toHaveCount(0);
-  expect(permissionReadAttempts.length).toBeGreaterThan(1);
+  expect(permissionReadAttempts).toHaveLength(1);
   expect(new Set(permissionReadAttempts).size).toBe(permissionReadAttempts.length);
 });

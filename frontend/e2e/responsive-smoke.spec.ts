@@ -25,7 +25,11 @@ test.describe("Responsive mobile smoke", () => {
   test("dashboard fits an iPhone viewport and exposes operational navigation", async ({ page }) => {
     await login(page);
 
-    await expect(page.getByTestId("dashboard-mobile-reservations")).toBeVisible();
+    const mobileReservations = page.getByTestId("dashboard-mobile-reservations");
+    await expect(mobileReservations).toHaveCount(1);
+    await expect
+      .poll(() => mobileReservations.evaluate((element) => window.getComputedStyle(element).display))
+      .not.toBe("none");
     await expect(page.getByTestId("mobile-menu-button")).toBeVisible();
 
     await openMobileMenu(page);
@@ -85,7 +89,25 @@ test.describe("Responsive mobile smoke", () => {
 
     // Tap 3: an item from the "Configuración" group.
     await openMobileMenu(page);
-    await page.locator('nav[aria-label="Configuración"] a[href="/settings/hotel"]').click();
+    const mobileMenuScrollRegion = page.getByTestId("mobile-menu-scroll-region");
+    const hotelSettingsLink = page.locator('nav[aria-label="Configuración"] a[href="/settings/hotel"]');
+    await mobileMenuScrollRegion.evaluate((element) => element.scrollTo({ top: element.scrollHeight, behavior: "instant" }));
+    await expect.poll(() => mobileMenuScrollRegion.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await expect(hotelSettingsLink).toBeInViewport({ ratio: 1 });
+    const hotelTapPoint = await hotelSettingsLink.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const x = rect.left + Math.min(24, rect.width / 2);
+      const y = rect.top + rect.height / 2;
+      const hitTarget = document.elementFromPoint(x, y);
+      return {
+        x,
+        y,
+        receivesTap: hitTarget === element || Boolean(hitTarget && element.contains(hitTarget)),
+        interceptedBy: hitTarget?.closest("a")?.getAttribute("href") ?? hitTarget?.tagName ?? "no element"
+      };
+    });
+    expect(hotelTapPoint.receivesTap, `Hotel link tap is intercepted by ${hotelTapPoint.interceptedBy}`).toBe(true);
+    await page.touchscreen.tap(hotelTapPoint.x, hotelTapPoint.y);
     await expect(page).toHaveURL(/\/settings\/hotel$/);
 
     // The panel exposes every daily link plus every grouped section, not

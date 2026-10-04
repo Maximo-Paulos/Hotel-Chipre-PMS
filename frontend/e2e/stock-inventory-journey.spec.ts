@@ -57,7 +57,7 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
   await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
   await reservationForm.getByPlaceholder("Email").fill(`qa.stock.${suffix}@example.test`);
-  await reservationForm.getByPlaceholder("Teléfono").fill("1112345678");
+  await reservationForm.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
   await reservationForm.getByLabel("Tipo de documento").selectOption("DNI");
   await reservationForm.getByPlaceholder("Documento").fill(`QA-STOCK-${suffix}`);
   await reservationForm.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();
@@ -67,10 +67,6 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   const categoryOption = categorySelect.locator("option").filter({ hasText: categoryName });
   const categoryValue = await categoryOption.getAttribute("value");
   await categorySelect.selectOption(categoryValue!);
-  const roomSelect = reservationForm.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
-  const roomOption = roomSelect.locator("option").filter({ hasText: roomNumber });
-  const roomValue = await roomOption.getAttribute("value");
-  await roomSelect.selectOption(roomValue!);
 
   const localIsoDate = (offsetDays: number) => {
     const value = new Date();
@@ -80,6 +76,12 @@ test("owner runs the full inventory journey: item/location, movements, adjustmen
   };
   await reservationForm.getByLabel("Check-in", { exact: true }).fill(localIsoDate(50));
   await reservationForm.getByLabel("Check-out", { exact: true }).fill(localIsoDate(52));
+
+  const roomSelect = reservationForm.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
+  const roomOption = roomSelect.locator("option").filter({ hasText: roomNumber });
+  const roomValue = await roomOption.getAttribute("value");
+  await roomSelect.selectOption(roomValue!);
+
   await reservationForm.getByRole("button", { name: "Crear", exact: true }).click();
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
 

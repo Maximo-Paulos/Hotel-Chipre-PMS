@@ -206,13 +206,20 @@ test("owner can log out mid-onboarding, resume without losing progress, and conf
   await rateForm.getByLabel("Transferencia", { exact: true }).fill("78000");
   await rateForm.getByLabel("Mercado Pago", { exact: true }).fill("82000");
   await page.getByTestId("rate-editor-save").click();
-  const savedSummary = page.getByText(/Tarifas guardadas: \d+ creadas, \d+ actualizadas\./);
-  await expect(savedSummary).toBeVisible();
-  const summaryText = (await savedSummary.textContent()) ?? "";
-  const createdOrUpdated = summaryText.match(/(\d+) creadas, (\d+) actualizadas/);
-  expect(createdOrUpdated).not.toBeNull();
-  const [, createdCount, updatedCount] = createdOrUpdated!;
-  expect(Number(createdCount) + Number(updatedCount)).toBeGreaterThan(0);
+  const localPreview = page.getByTestId("rate-change-local-preview");
+  await expect(localPreview).toBeVisible();
+  await expect(localPreview).toContainText("Vista previa local · 7 fechas");
+  await expect(localPreview).toContainText("Las reservas existentes mantienen su precio pactado.");
+  await localPreview.getByRole("button", { name: "Guardar borrador", exact: true }).click();
+
+  const draftReview = page.getByTestId("rate-change-draft-review");
+  await expect(draftReview).toBeVisible();
+  await expect(draftReview).toContainText("Revisar borrador antes de confirmar");
+  await expect(draftReview).toContainText("reservas ·");
+  const confirmRates = draftReview.getByRole("button", { name: "Confirmar tarifas", exact: true });
+  await expect(confirmRates).toBeEnabled();
+  await confirmRates.click();
+  await expect(draftReview).toHaveCount(0);
 
   // Reload and confirm the per-date, per-category, per-payment-method prices
   // were actually persisted server-side (not just an optimistic UI toast).

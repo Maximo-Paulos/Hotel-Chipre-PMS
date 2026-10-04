@@ -118,17 +118,29 @@ test("owner can delegate cash adjustments and the permitted role sees the adjust
   try {
     const grantResponsePromise = page.waitForResponse((response) => {
       const url = new URL(response.url());
-      return url.pathname === "/api/permissions/override" && response.request().method() === "PUT" && response.ok();
+      return url.pathname === "/api/permissions/overrides/batch" && response.request().method() === "PUT" && response.ok();
     });
     await managerToggle.click();
+    const profilesResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/permissions/role-overrides" && response.ok();
+    });
+    await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
     lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
     const grantResponse = await grantResponsePromise;
-    grantVersion = ((await grantResponse.json()) as { version: number }).version;
+    expect((await grantResponse.json() as { updated: number }).updated).toBe(1);
     await expect(managerToggle).toBeChecked();
     const managerPermissionRow = page.getByTestId("permissions-matrix").getByRole("row").filter({
       has: page.getByText("cash:adjustment_manage", { exact: true })
     });
     await expect(managerPermissionRow).toContainText("Override de rol");
+
+    const profilesResponse = await profilesResponsePromise;
+    const profiles = await profilesResponse.json() as {
+      matrix: Record<string, Record<string, { version?: number | null }>>;
+    };
+    grantVersion = profiles.matrix.manager?.["cash:adjustment_manage"]?.version ?? null;
+    expect(grantVersion).toBeGreaterThan(0);
 
     await page.context().clearCookies();
     await login(page, manager);

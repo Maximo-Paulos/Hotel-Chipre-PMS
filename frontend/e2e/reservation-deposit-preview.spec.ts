@@ -61,7 +61,7 @@ test("QA- default hotel deposit shown before confirming matches the deposit stor
   await form.getByPlaceholder("Nombre").fill("Huésped");
   await form.getByPlaceholder("Apellido").fill(guestLastName);
   await form.getByPlaceholder("Email").fill(`${guestLastName.toLowerCase().replaceAll(" ", ".")}@example.com`);
-  await form.getByPlaceholder("Teléfono").fill("1112345678");
+  await form.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
   await form.getByLabel("Tipo de documento").selectOption("DNI");
   await form.getByPlaceholder("Documento").fill(`QADEP-${suffix}`);
   await form.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();
@@ -72,13 +72,13 @@ test("QA- default hotel deposit shown before confirming matches the deposit stor
   await expect(categoryOption).toHaveCount(1);
   await categorySelect.selectOption((await categoryOption.getAttribute("value"))!);
 
+  await form.getByLabel("Check-in", { exact: true }).fill(checkIn);
+  await form.getByLabel("Check-out", { exact: true }).fill(checkOut);
+
   const roomSelect = form.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
   const roomOption = roomSelect.locator("option").filter({ hasText: "101" });
   await expect(roomOption).toHaveCount(1);
   await roomSelect.selectOption((await roomOption.getAttribute("value"))!);
-
-  await form.getByLabel("Check-in", { exact: true }).fill(checkIn);
-  await form.getByLabel("Check-out", { exact: true }).fill(checkOut);
 
   // Dejar "Seña manual" vacía a propósito: el operador espera usar la seña
   // porcentual configurada por el hotel, no una seña de $0 ni "sin definir".

@@ -49,7 +49,7 @@ test("manager reads the operational arrival without receiving the reservation's 
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
   await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
   await reservationForm.getByPlaceholder("Email").fill(`qa.manager.${suffix}@example.test`);
-  await reservationForm.getByPlaceholder("Teléfono").fill("1112345678");
+  await reservationForm.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
   await reservationForm.getByLabel("Tipo de documento").selectOption("DNI");
   await reservationForm.getByPlaceholder("Documento").fill(`QA-MGR-${suffix}`);
   await reservationForm.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();
@@ -62,18 +62,19 @@ test("manager reads the operational arrival without receiving the reservation's 
   expect(categoryValue).toBeTruthy();
   await categorySelect.selectOption(categoryValue!);
 
+  // El selector de habitación solo incluye disponibilidad para estas fechas.
+  await reservationForm.getByLabel("Check-in", { exact: true }).fill(displayDate(todayIso()));
+  await reservationForm.getByLabel("Check-out", { exact: true }).fill(displayDate(todayIso(1)));
+
   const roomSelect = reservationForm.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
-  const roomOption = roomSelect.locator("option").filter({ hasText: "101" });
-  await expect(roomOption).toHaveCount(1);
+  const roomOption = roomSelect.locator("option").filter({ hasText: "Cat Standard E2E" }).first();
+  await expect(roomOption).toBeAttached();
   const roomValue = await roomOption.getAttribute("value");
   expect(roomValue).toBeTruthy();
   await roomSelect.selectOption(roomValue!);
 
   // Check-in hoy, 1 noche: el reporte diario por defecto usa la fecha de hoy,
   // y a $100/noche (Standard E2E) el total/saldo esperado es exactamente $100.
-  await reservationForm.getByLabel("Check-in", { exact: true }).fill(displayDate(todayIso()));
-  await reservationForm.getByLabel("Check-out", { exact: true }).fill(displayDate(todayIso(1)));
-
   const createReservationButton = reservationForm.getByRole("button", { name: "Crear", exact: true });
   await expect(createReservationButton).toBeEnabled();
   await createReservationButton.click();
@@ -106,13 +107,12 @@ test("manager reads the operational arrival without receiving the reservation's 
   await expect(arrivalRow).toContainText(guestLastName);
   await expect(arrivalRow).toContainText("pending");
 
-  // Cleanup: this test pins room 101 for today/tomorrow so its own report
+  // Cleanup: this test assigns an available room for today/tomorrow so its own report
   // assertions are deterministic. Only 2 rooms exist in the seeded E2E
   // category, and the WebKit Apple matrix reruns this exact spec once per
   // device project against the same shared database, so a stale "pending"
   // reservation left behind here would make the very next device run fail
-  // room availability with "Room 101 is not available for the requested
-  // dates" -- a false negative caused by test leftovers, not a real defect.
+  // room availability -- a false negative caused by test leftovers, not a real defect.
   // Cancelling (not checking out) frees the room for the next device run.
   await page.goto("/reservas");
   const reservasTable = page.locator("table").filter({ hasText: "Código" });

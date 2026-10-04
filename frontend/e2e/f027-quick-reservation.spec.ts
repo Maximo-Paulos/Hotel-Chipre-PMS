@@ -423,6 +423,28 @@ test("F-027 reservation file translates allocation and payment enum values", asy
         settlement_status: "pending",
         pending_action_count: 0,
         pending_actions: [],
+        financial_summary: {
+          reservation_id: 9001,
+          confirmation_code: "F027-ENUM",
+          status: "pending",
+          currency_code: "ARS",
+          total_amount: 200000,
+          deposit_required: 60000,
+          amount_paid: 50000,
+          hotel_received_amount: 50000,
+          ota_prepaid_amount: 0,
+          balance_due: 150000,
+          operational_total_amount: 200000,
+          operational_balance_due: 150000,
+          billing_adjustment_total: 0,
+          payment_collection_model: "hotel_collect",
+          settlement_status: "pending",
+          has_financial_reconciliation_gap: false,
+          financial_reconciliation_gap: null,
+          transactions: [],
+          billing_adjustments: [],
+          completed_payments: 1
+        },
         open_adjustments: []
       })
     })

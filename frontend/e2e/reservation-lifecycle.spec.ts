@@ -40,7 +40,7 @@ async function openReservationForm(
   lastName: string,
   checkIn: string,
   checkOut: string,
-  options: { expectCreated?: boolean; assignRoom?: boolean } = {}
+  options: { expectCreated?: boolean; assignRoom?: boolean; submit?: boolean } = {}
 ) {
   await page.goto("/reservas");
   await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
@@ -50,7 +50,7 @@ async function openReservationForm(
   await form.getByPlaceholder("Nombre").fill("Huésped");
   await form.getByPlaceholder("Apellido").fill(lastName);
   await form.getByPlaceholder("Email").fill(`${lastName.toLowerCase().replaceAll(" ", ".")}@example.test`);
-  await form.getByPlaceholder("Teléfono").fill("1112345678");
+  await form.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
   await form.getByLabel("Tipo de documento").selectOption("DNI");
   await form.getByPlaceholder("Documento").fill(`LIFECYCLE-${Date.now()}`);
   await form.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();
@@ -63,22 +63,35 @@ async function openReservationForm(
   expect(categoryValue).toBeTruthy();
   await categorySelect.selectOption(categoryValue!);
 
-  if (options.assignRoom !== false) {
-    const roomSelect = form.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
-    const roomOption = roomSelect.locator("option").filter({ hasText: "101" });
-    await expect(roomOption).toHaveCount(1);
-    const roomValue = await roomOption.getAttribute("value");
-    expect(roomValue).toBeTruthy();
-    await roomSelect.selectOption(roomValue!);
-  }
+  // El selector de habitación se filtra por las fechas; primero fijamos el rango.
   await form.getByLabel("Check-in", { exact: true }).fill(checkIn);
   await form.getByLabel("Check-out", { exact: true }).fill(checkOut);
-  await expect(form.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
-  await form.getByRole("button", { name: "Crear", exact: true }).click();
-  if (options.expectCreated !== false) {
-    await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
+
+  let selectedRoomNumber: string | null = null;
+  if (options.assignRoom !== false) {
+    await expect(form.getByText(/Habitaciones disponibles para estas fechas: \d+/)).toBeVisible();
+    const roomSelect = form.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
+    const availableRoomOptions = await roomSelect.locator("option").evaluateAll((elements) =>
+      elements.flatMap((element) => {
+        const option = element as HTMLOptionElement;
+        if (!option.value) return [];
+        return [{ value: option.value, label: option.textContent?.trim() ?? "" }];
+      })
+    );
+    expect(availableRoomOptions.length, "the chosen dates should have an available room").toBeGreaterThan(0);
+    const roomOption = availableRoomOptions[0];
+    selectedRoomNumber = roomOption.label.match(/\b\d+\b/)?.[0] ?? null;
+    expect(selectedRoomNumber).toBeTruthy();
+    await roomSelect.selectOption(roomOption.value);
   }
-  return form;
+  if (options.submit !== false) {
+    await expect(form.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
+    await form.getByRole("button", { name: "Crear", exact: true }).click();
+    if (options.expectCreated !== false) {
+      await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
+    }
+  }
+  return { form, selectedRoomNumber };
 }
 
 test("owner preserves availability dates after querying a category", async ({ page }) => {
@@ -140,7 +153,7 @@ test("owner is told when the browser blocks the reservation voucher window", asy
   await expect(page.getByText("Reserva cancelada", { exact: true })).toBeVisible();
 });
 
-test("owner edits, extends, rejects an overlap and cancels a reservation", async ({ page }, testInfo) => {
+test("owner edits, extends, blocks overlapping room selection and cancels a reservation", async ({ page }, testInfo) => {
   const salt = projectDateSalt(testInfo);
   // WebKit clamps Date.now() precision, so concurrent device projects can
   // get the exact same millisecond suffix. Append the (already per-project
@@ -148,15 +161,16 @@ test("owner edits, extends, rejects an overlap and cancels a reservation", async
   const suffix = `${Date.now()}-${salt}`;
   const guestLastName = `Lifecycle ${suffix}`;
   const conflictGuestLastName = `Conflict ${suffix}`;
-  // Offset 150, not 60: payment-journey-full-matrix.spec.ts pins room-agnostic
-  // reservations across localIsoDate(60..70) and never cancels them, so that
-  // range is permanently occupied for the rest of a full chromium run.
-  const checkIn = localIsoDate(150 + salt);
-  const originalCheckOut = localIsoDate(152 + salt);
-  const extendedCheckOut = localIsoDate(154 + salt);
+  // Keep this range clear of other room-101 fixtures and within the
+  // availability API's supported booking horizon. Device projects add
+  // 100-day salts so they do not compete in a shared run.
+  const checkIn = localIsoDate(55 + salt);
+  const originalCheckOut = localIsoDate(57 + salt);
+  const extendedCheckOut = localIsoDate(59 + salt);
 
   await login(page);
-  await openReservationForm(page, guestLastName, checkIn, originalCheckOut);
+  const { selectedRoomNumber } = await openReservationForm(page, guestLastName, checkIn, originalCheckOut);
+  expect(selectedRoomNumber).toBeTruthy();
 
   const reservationTable = page.locator("table").filter({ hasText: "Código" });
   const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
@@ -183,17 +197,19 @@ test("owner edits, extends, rejects an overlap and cancels a reservation", async
   await expect(page.getByText("Reserva actualizada", { exact: true })).toBeVisible();
   await expect(reservationTable.locator("tbody tr").filter({ hasText: guestLastName })).toContainText(extendedCheckOut);
 
-  const conflictForm = await openReservationForm(
+  const { form: conflictForm } = await openReservationForm(
     page,
     conflictGuestLastName,
-    localIsoDate(151 + salt),
-    localIsoDate(153 + salt),
-    { expectCreated: false }
+    localIsoDate(56 + salt),
+    localIsoDate(58 + salt),
+    { assignRoom: false, submit: false }
   );
-  const conflictModal = page.locator("div.fixed").filter({ hasText: "Datos de la reserva" });
-  const conflictError = conflictModal.getByText(/Room 101 is not available for the requested dates/i);
-  await expect(conflictError).toBeVisible();
-  await expect(reservationTable.locator("tbody tr").filter({ hasText: conflictGuestLastName })).toHaveCount(0);
+  await expect(page.getByText(/Habitaciones disponibles para estas fechas: \d+\./)).toBeVisible();
+  const conflictRoomSelect = conflictForm
+    .locator("label")
+    .filter({ hasText: "Habitación (opcional)" })
+    .locator("select");
+  await expect(conflictRoomSelect.locator("option").filter({ hasText: selectedRoomNumber! })).toHaveCount(0);
   await conflictForm.getByRole("button", { name: "Cancelar", exact: true }).click();
 
   const updatedRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
@@ -219,11 +235,9 @@ test("editing a reservation cannot silently no-op a category/status change throu
   // unique) date salt to keep guest names unique too.
   const suffix = `${Date.now()}-${salt}`;
   const guestLastName = `QA-EditLock ${suffix}`;
-  // Offset 160, not 70: payment-journey-full-matrix.spec.ts pins room-agnostic
-  // reservations across localIsoDate(60..70) and never cancels them, so that
-  // range is permanently occupied for the rest of a full chromium run.
-  const checkIn = localIsoDate(160 + salt);
-  const checkOut = localIsoDate(162 + salt);
+  // Adjacent to, but not overlapping, this file's first test reservation.
+  const checkIn = localIsoDate(58 + salt);
+  const checkOut = localIsoDate(60 + salt);
 
   await login(page);
   await openReservationForm(page, guestLastName, checkIn, checkOut);
@@ -265,7 +279,7 @@ test("editing a reservation cannot silently no-op a category/status change throu
   // un control que nunca debio ofrecerse como editable).
   await expect(reservationRow).toContainText("Pendiente");
 
-  // Cleanup: this test pins room 101 for localIsoDate(160..162). The WebKit
+  // Cleanup: this test pins room 101 for localIsoDate(58..60). The WebKit
   // Apple business matrix reruns this exact spec once per device project
   // against the shared database, so leaving this reservation pending would
   // make the next device run fail room availability with a false "Room 101
