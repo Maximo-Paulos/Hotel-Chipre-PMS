@@ -3236,8 +3236,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1791112817604.3904,
-    "hash": "2437dda583d77a4c37eacd492b3c6a7c"
+    "mtime": 1791116357108.0552,
+    "hash": "6cddc4319ca8ac2f3ba3f39701d7a314"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1791082128320.8926,
@@ -6000,8 +6000,8 @@
     "hash": "b342981e54a2755cea3a98aa693ff059"
   },
   "frontend/e2e/prior-cash-receipt-journey.spec.ts": {
-    "mtime": 1791101759379.0894,
-    "hash": "e9bf07f07f637dbe8d11acb486fe57c7"
+    "mtime": 1791117761100.7317,
+    "hash": "91abed6e2b36b16bfa48ef929c993077"
   },
   "frontend/e2e/cash-close-approval-journey.spec.ts": {
     "mtime": 1791082128230.2842,
@@ -6504,7 +6504,7 @@
     "hash": "96569823c3555a089aa74dff2b73a944"
   },
   "qa/operational/runs/day2-live-role-retest-20261004-0ddeb59c/report.md": {
-    "mtime": 1791106075623.4756,
-    "hash": "f7159061c45a51d19c39ce0d894266d8"
+    "mtime": 1791116294903.4724,
+    "hash": "0869c5560b9769baaf3774b80038df02"
   }
 }

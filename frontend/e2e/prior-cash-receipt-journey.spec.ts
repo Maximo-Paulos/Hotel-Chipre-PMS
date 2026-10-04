@@ -40,12 +40,30 @@ async function ensureCashSessionOpen(page: Page) {
 }
 
 async function readDailyCashSummary(page: Page) {
-  const responsePromise = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return url.pathname === "/api/cash-register/daily-summary" && response.request().method() === "GET";
+  const requestPromise = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/cash-register/daily-summary" && request.method() === "GET";
   });
   await page.goto("/caja");
-  const response = await responsePromise;
+  const appRequest = await requestPromise;
+  const appHeaders = new Headers(await appRequest.allHeaders());
+  const authorization = appHeaders.get("authorization");
+  const hotelId = appHeaders.get("x-hotel-id");
+  const userId = appHeaders.get("x-user-id");
+  expect(authorization).toBeTruthy();
+  expect(hotelId).toBeTruthy();
+  expect(userId).toBeTruthy();
+
+  // The browser Response can outlive its CDP body resource during navigation.
+  // Replay the same authenticated GET through Playwright's API context, whose
+  // response body is buffered independently of the browser network lifecycle.
+  const response = await page.request.get(appRequest.url(), {
+    headers: {
+      Authorization: authorization!,
+      "X-Hotel-Id": hotelId!,
+      "X-User-Id": userId!
+    }
+  });
   expect(response.ok()).toBeTruthy();
   return await response.json() as {
     gross_collected: string | number;
