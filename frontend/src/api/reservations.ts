@@ -498,17 +498,17 @@ const buildQueryString = (filters: ReservationFilters = {}) => {
   return qs ? `?${qs}` : "";
 };
 
-export const listReservations = (filters: ReservationFilters = {}, session?: SessionLike) =>
-  apiFetch<Reservation[]>(`/api/reservations/${buildQueryString(filters)}`, { session });
+export const listReservations = (filters: ReservationFilters = {}, session?: SessionLike, signal?: AbortSignal) =>
+  apiFetch<Reservation[]>(`/api/reservations/${buildQueryString(filters)}`, { session, signal });
 
-export const getReservation = (id: number, session?: SessionLike) =>
-  apiFetch<Reservation>(`/api/reservations/${id}`, { session });
+export const getReservation = (id: number, session?: SessionLike, signal?: AbortSignal) =>
+  apiFetch<Reservation>(`/api/reservations/${id}`, { session, signal });
 
-export const getReservationOperationsSummary = (id: number, session?: SessionLike) =>
-  apiFetch<ReservationOperationsSummary>(`/api/reservations/${id}/operations-summary`, { session });
+export const getReservationOperationsSummary = (id: number, session?: SessionLike, signal?: AbortSignal) =>
+  apiFetch<ReservationOperationsSummary>(`/api/reservations/${id}/operations-summary`, { session, signal });
 
-export const listPendingReservationActions = (limit = 100, session?: SessionLike) =>
-  apiFetch<ReservationPendingAction[]>(`/api/reservations/actions/pending?limit=${limit}`, { session });
+export const listPendingReservationActions = (limit = 100, session?: SessionLike, signal?: AbortSignal) =>
+  apiFetch<ReservationPendingAction[]>(`/api/reservations/actions/pending?limit=${limit}`, { session, signal });
 
 export const createReservation = (payload: ReservationPayload, session?: SessionLike) =>
   apiFetch<Reservation>("/api/reservations/", { method: "POST", data: payload, session });
@@ -548,7 +548,7 @@ export type ManualOtaReservationPayload = {
 export const createManualOtaReservation = (payload: ManualOtaReservationPayload, session?: SessionLike) =>
   apiFetch<Reservation>("/api/reservations/manual-ota", { method: "POST", data: payload, session });
 
-export const getReservationQuote = (params: ReservationQuoteParams, session?: SessionLike) => {
+export const getReservationQuote = (params: ReservationQuoteParams, session?: SessionLike, signal?: AbortSignal) => {
   const query = new URLSearchParams({
     category_id: String(params.category_id),
     check_in_date: params.check_in_date,
@@ -558,7 +558,7 @@ export const getReservationQuote = (params: ReservationQuoteParams, session?: Se
   if (params.occupancy && params.occupancy > 0) query.set("occupancy", String(params.occupancy));
   if (params.guest_id) query.set("guest_id", String(params.guest_id));
   if (params.company_id) query.set("company_id", String(params.company_id));
-  return apiFetch<ReservationQuote>(`/api/bookings/price-quote?${query.toString()}`, { session });
+  return apiFetch<ReservationQuote>(`/api/bookings/price-quote?${query.toString()}`, { session, signal });
 };
 
 export const updateReservation = (id: number, payload: ReservationUpdatePayload, session?: SessionLike) =>
@@ -721,8 +721,9 @@ export type OccupancyGridResponse = {
 
 export const getOccupancyGrid = (
   params: { dateFrom: string; dateTo: string },
-  session?: SessionLike
+  session?: SessionLike,
+  signal?: AbortSignal
 ) => {
   const query = new URLSearchParams({ date_from: params.dateFrom, date_to: params.dateTo });
-  return apiFetch<OccupancyGridResponse>(`/api/reservations/occupancy-grid?${query.toString()}`, { session });
+  return apiFetch<OccupancyGridResponse>(`/api/reservations/occupancy-grid?${query.toString()}`, { session, signal });
 };

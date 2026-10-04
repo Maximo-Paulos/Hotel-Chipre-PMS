@@ -39,9 +39,10 @@ export function useDailyOperationalReport(reportDate: string) {
   const { session } = useSession();
   return useQuery<DailyOperationalReport>({
     queryKey: dailyReportKey(session.hotelId, reportDate),
-    queryFn: () => getDailyOperationalReport(reportDate, session),
+    queryFn: ({ signal }) => getDailyOperationalReport(reportDate, session, signal),
     enabled: Boolean(reportDate) && hasValidSession(session),
-    staleTime: 30 * 1000
+    staleTime: 30 * 1000,
+    retry: false
   });
 }
 
@@ -49,9 +50,10 @@ export function useTodayArrivalCount() {
   const { session } = useSession();
   return useQuery<ArrivalCount>({
     queryKey: [...queryKeys.reports(session.hotelId, "today-arrival-count")],
-    queryFn: () => getTodayArrivalCount(session),
+    queryFn: ({ signal }) => getTodayArrivalCount(session, signal),
     enabled: hasValidSession(session),
-    staleTime: 30 * 1000
+    staleTime: 30 * 1000,
+    retry: false
   });
 }
 
@@ -59,19 +61,21 @@ export function useOperationalAlerts(reportDate: string) {
   const { session } = useSession();
   return useQuery<NightlyOperationalSummary>({
     queryKey: alertsKey(session.hotelId, reportDate),
-    queryFn: () => getOperationalAlerts(reportDate, session),
+    queryFn: ({ signal }) => getOperationalAlerts(reportDate, session, signal),
     enabled: Boolean(reportDate) && hasValidSession(session),
-    staleTime: 30 * 1000
+    staleTime: 30 * 1000,
+    retry: false
   });
 }
 
-export function useOccupancyReport(startDate: string, endDate: string) {
+export function useOccupancyReport(startDate: string, endDate: string, enabled = true) {
   const { session } = useSession();
   return useQuery<OccupancyReport>({
     queryKey: occupancyKey(session.hotelId, startDate, endDate),
-    queryFn: () => getOccupancyReport(startDate, endDate, session),
-    enabled: Boolean(startDate && endDate) && hasValidSession(session),
-    staleTime: 30 * 1000
+    queryFn: ({ signal }) => getOccupancyReport(startDate, endDate, session, signal),
+    enabled: enabled && Boolean(startDate && endDate) && hasValidSession(session),
+    staleTime: 30 * 1000,
+    retry: false
   });
 }
 
@@ -79,8 +83,9 @@ export function useRevenueReport(startDate: string, endDate: string, enabled = t
   const { session } = useSession();
   return useQuery<RevenueReport>({
     queryKey: revenueKey(session.hotelId, startDate, endDate),
-    queryFn: () => getRevenueReport(startDate, endDate, session),
+    queryFn: ({ signal }) => getRevenueReport(startDate, endDate, session, signal),
     enabled: enabled && Boolean(startDate && endDate) && hasValidSession(session),
-    staleTime: 30 * 1000
+    staleTime: 30 * 1000,
+    retry: false
   });
 }

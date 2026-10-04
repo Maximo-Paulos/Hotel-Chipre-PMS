@@ -58,6 +58,12 @@ class _ActionCandidate:
 def get_reservation_operations_summary(db: Session, *, hotel_id: int, reservation_id: int) -> dict[str, Any]:
     reservation = _get_reservation_or_error(db, hotel_id=hotel_id, reservation_id=reservation_id)
     financial_summary = get_reservation_financial_summary(db, hotel_id, reservation.id)
+    if (
+        reservation.status == ReservationStatusEnum.CANCELLED
+        and financial_summary.get("recommended_next_action") == "collect_from_guest"
+    ):
+        # ReservationsPage also renders this field as a suggested next action.
+        financial_summary["recommended_next_action"] = None
     ota_link = _get_latest_ota_link(db, hotel_id=hotel_id, reservation_id=reservation.id)
     related_adjustments = _get_related_adjustments(db, hotel_id=hotel_id, reservation_id=reservation.id)
     latest_room_move = _get_latest_room_move(db, hotel_id=hotel_id, reservation_id=reservation.id)
@@ -235,8 +241,13 @@ def _row_could_generate_action(
         return True
     if row.payment_collection_model == "ota_prepaid" and row.settlement_status in {"pending", "unknown"}:
         return True
-    if row.payment_collection_model == "hotel_collect" and (
-        Decimal(str(row.amount_paid or 0)) < Decimal(str(row.total_amount or 0)) or row.id in billing_adjustment_ids
+    if (
+        row.status != ReservationStatusEnum.CANCELLED
+        and row.payment_collection_model == "hotel_collect"
+        and (
+            Decimal(str(row.amount_paid or 0)) < Decimal(str(row.total_amount or 0))
+            or row.id in billing_adjustment_ids
+        )
     ):
         return True
 
@@ -400,7 +411,10 @@ def _build_pending_actions(
                 reference_id=ota_link.id if ota_link else None,
             )
         )
-    elif recommended_next_action == "collect_from_guest":
+    elif (
+        recommended_next_action == "collect_from_guest"
+        and reservation.status != ReservationStatusEnum.CANCELLED
+    ):
         add(
             _ActionCandidate(
                 action_key="collect_from_guest",

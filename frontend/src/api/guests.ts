@@ -217,8 +217,8 @@ export type GuestCheckinValidation = {
 // B3.3/B3.4: lets the check-in UI know *before* attempting the check-in
 // whether the guest is missing required data, so it can show the capture
 // form up front instead of surfacing a raw 400 after the fact.
-export const validateGuestForCheckin = (guestId: number, session?: SessionLike) =>
-  apiFetch<GuestCheckinValidation>(`/api/checkin/validate/${guestId}`, { session });
+export const validateGuestForCheckin = (guestId: number, session?: SessionLike, signal?: AbortSignal) =>
+  apiFetch<GuestCheckinValidation>(`/api/checkin/validate/${guestId}`, { session, signal });
 
 export const checkInGuestReservation = (
   reservationId: number,

@@ -191,31 +191,31 @@ export type RevenueReport = {
   };
 };
 
-export const getDailyOperationalReport = (reportDate: string, session?: SessionLike) =>
+export const getDailyOperationalReport = (reportDate: string, session?: SessionLike, signal?: AbortSignal) =>
   apiFetch<DailyOperationalReport>(
     `/api/reports/operational/daily?report_date=${encodeURIComponent(reportDate)}`,
-    { session }
+    { session, signal }
   );
 
-export const getTodayArrivalCount = (session?: SessionLike) =>
-  apiFetch<ArrivalCount>("/api/reports/operational/arrivals/count", { session });
+export const getTodayArrivalCount = (session?: SessionLike, signal?: AbortSignal) =>
+  apiFetch<ArrivalCount>("/api/reports/operational/arrivals/count", { session, signal });
 
-export const getOperationalAlerts = (reportDate: string, session?: SessionLike) =>
+export const getOperationalAlerts = (reportDate: string, session?: SessionLike, signal?: AbortSignal) =>
   apiFetch<NightlyOperationalSummary>(
     `/api/reports/operational/alerts?report_date=${encodeURIComponent(reportDate)}`,
-    { session }
+    { session, signal }
   );
 
-export const getOccupancyReport = (startDate: string, endDate: string, session?: SessionLike) =>
+export const getOccupancyReport = (startDate: string, endDate: string, session?: SessionLike, signal?: AbortSignal) =>
   apiFetch<OccupancyReport>(
     `/api/reports/occupancy?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
-    { session }
+    { session, signal }
   );
 
-export const getRevenueReport = (startDate: string, endDate: string, session?: SessionLike) =>
+export const getRevenueReport = (startDate: string, endDate: string, session?: SessionLike, signal?: AbortSignal) =>
   apiFetch<RevenueReport>(
     `/api/reports/revenue?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
-    { session }
+    { session, signal }
   );
 
 export const downloadRevenueReportCsv = async (

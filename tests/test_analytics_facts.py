@@ -35,6 +35,7 @@ from app.services.analytics_facts import (
     refresh_fact_room_occupancy_daily,
 )
 from app.services import analytics_service
+from app.services.analytics_service import build_home_payload
 
 
 def test_sync_fact_refresh_defaults_to_enabled():
@@ -296,6 +297,72 @@ def test_partial_refresh_allocates_money_across_the_full_stay_idempotently(
     )
     assert len(repeated_rows) == 5
     assert sum((Decimal(str(row.revenue_gross_ars)) for row in repeated_rows), Decimal("0")) == Decimal("100.01")
+
+
+def test_partial_cross_month_refresh_home_metrics_use_only_selected_local_nights(
+    db, hotel_config, sample_guest, sample_categories, sample_rooms
+):
+    reservation = Reservation(
+        confirmation_code="FACT-PARTIAL-HOME-METRICS",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=sample_rooms[0].id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 4, 30),
+        check_out_date=date(2026, 5, 3),
+        total_amount=Decimal("100.01"),
+        subtotal_amount=Decimal("90.01"),
+        net_amount=Decimal("90.01"),
+        amount_paid=Decimal("100.01"),
+        currency_code="ARS",
+        status=ReservationStatusEnum.FULLY_PAID,
+        outcome=ReservationOutcomeEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        channel_code=ReservationChannelCodeEnum.OTHER_DIRECT,
+        guest_segment=ReservationGuestSegmentEnum.LEISURE,
+        guest_segment_source=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
+        no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    # Rebuild only the May 1 local night for an Apr 30–May 3 stay. The
+    # selected night must keep its full-stay nightly allocation, and all
+    # home KPIs must use that same local-night window.
+    refresh_fact_reservation_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date(2026, 5, 1),
+        date_to=date(2026, 5, 1),
+    )
+    refresh_fact_room_occupancy_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date(2026, 5, 1),
+        date_to=date(2026, 5, 1),
+    )
+
+    payload = build_home_payload(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date(2026, 5, 1),
+        date_to=date(2026, 5, 1),
+        compare_previous=False,
+        compare_yoy=False,
+        currency_display="ARS",
+    )
+    cards = {card["card_code"]: card for card in payload["data"]["cards"]}
+
+    assert payload["date_from"] == date(2026, 5, 1)
+    assert payload["date_to"] == date(2026, 5, 1)
+    assert Decimal(cards["home_revenue_gross"]["value_ars"]) == Decimal("33.34")
+    assert Decimal(cards["home_revenue_net"]["value_ars"]) == Decimal("30.00")
+    assert Decimal(cards["home_adr"]["value_ars"]) == Decimal("30.00")
+    assert Decimal(cards["home_revpar"]["value_ars"]) == Decimal("0.79")
+    assert cards["home_occupancy"]["value_pct"] == pytest.approx(100 / len(sample_rooms), abs=0.01)
+    assert cards["home_physical_room_nights"]["value_count"] == len(sample_rooms)
 
 
 def test_analytics_read_rebuilds_legacy_one_to_one_currency_facts(

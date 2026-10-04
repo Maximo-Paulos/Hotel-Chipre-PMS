@@ -25,7 +25,7 @@
     "description": "Manage two-step verification for your account."
   },
   "currency": {
-    "historicalRateUnavailable": "Historical exchange rate unavailable"
+    "historicalRateUnavailable": "Unavailable"
   },
   "realtime": {
     "connected": "Connected: real-time changes active.",

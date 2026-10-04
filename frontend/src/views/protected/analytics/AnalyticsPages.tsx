@@ -349,7 +349,7 @@ const tableValue = (
   value: unknown,
   key = "",
   row?: Record<string, unknown>,
-  unavailableCurrencyLabel = "Sin cotización histórica"
+  unavailableCurrencyLabel = "No disponible"
 ): string => {
   if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "Sí" : "No";

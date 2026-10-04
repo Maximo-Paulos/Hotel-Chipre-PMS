@@ -60,6 +60,32 @@ test("network failures also use the bounded session recovery path", async ({ pag
   await expect(page).toHaveURL(/\/dashboard$/);
 });
 
+test("two tabs recover the protected route during concurrent session restoration", async ({ page }) => {
+  await loginAsOwner(page);
+  const context = page.context();
+  const secondPage = await context.newPage();
+
+  let refreshAttempts = 0;
+  const refreshStatuses: number[] = [];
+  await context.route("**/api/auth/session/refresh", async (route) => {
+    refreshAttempts += 1;
+    const response = await route.fetch();
+    refreshStatuses.push(response.status());
+    await route.fulfill({ response });
+  });
+
+  try {
+    await Promise.all([page.reload(), secondPage.goto("/dashboard")]);
+    await expect(page.getByRole("heading", { name: "Visión general" })).toBeVisible();
+    await expect(secondPage.getByRole("heading", { name: "Visión general" })).toBeVisible();
+    expect(refreshAttempts).toBeGreaterThan(0);
+    expect(refreshStatuses.every((status) => status === 200)).toBe(true);
+  } finally {
+    await secondPage.close();
+    await context.unroute("**/api/auth/session/refresh");
+  }
+});
+
 test("a fresh login page does not wait for a session refresh when no session is stored", async ({ page }) => {
   let refreshAttempts = 0;
   await page.route("**/api/auth/session/refresh", async (route) => {

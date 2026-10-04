@@ -715,9 +715,17 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm text-slate-700">
           {reservationQuery.isLoading && <p className="text-slate-500">{t("drawer.loading")}</p>}
           {reservationQuery.isError && (
-            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
-              {t("drawer.loadError")}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700" role="alert" data-testid="reservation-drawer-load-error">
+              <span>{t("drawer.loadError")}</span>
+              <button
+                type="button"
+                onClick={() => void reservationQuery.refetch()}
+                disabled={reservationQuery.isFetching}
+                className="min-h-11 rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
+              >
+                {t("drawer.loadRetry")}
+              </button>
+            </div>
           )}
 
           {reservation && (
@@ -1031,6 +1039,19 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   <p className="text-xs uppercase tracking-wide text-slate-500">{t("drawer.billing.title")}</p>
                   {summaryQuery.isFetching && <span className="text-xs text-slate-500">{t("drawer.billing.updating")}</span>}
                 </div>
+                {operationsQuery.isError ? (
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert" data-testid="reservation-drawer-operations-error">
+                    <span>{t("drawer.operationLoadError")}</span>
+                    <button
+                      type="button"
+                      onClick={() => void operationsQuery.refetch()}
+                      disabled={operationsQuery.isFetching}
+                      className="min-h-11 rounded-lg border border-rose-300 bg-white px-3 py-1 font-semibold hover:bg-rose-100 disabled:opacity-60"
+                    >
+                      {t("drawer.operationRetry")}
+                    </button>
+                  </div>
+                ) : null}
                 {deferredCompanyBilling ? (
                   <p className="mt-2 text-sm text-slate-700" data-testid="deferred-company-billing-note">
                     {t("drawer.billing.deferredCompany")}

@@ -4,15 +4,16 @@ import { downloadRevenueReportCsv, type CurrencyAmount, type OperationalReservat
 import { ApiError } from "../../api/client";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
-import { useDailyOperationalReport, useOccupancyReport, useOperationalAlerts, useRevenueReport } from "../../hooks/useReports";
+import { useDailyOperationalReport, useOccupancyReport, useOperationalAlerts, useRevenueReport, useTodayArrivalCount } from "../../hooks/useReports";
 import { formatHotelDateTime, todayIso } from "../../utils/date";
 import { useSession } from "../../state/session";
 
 const money = (value?: CurrencyAmount | null, currency = "ARS") =>
   Number(value ?? 0).toLocaleString("es-AR", { style: "currency", currency: currency.toUpperCase() });
 
-const hotelTodayIso = (timeZone?: string | null) => {
-  if (!timeZone) return todayIso();
+const hotelTodayIso = (timeZone?: string | null, serverDate?: string | null) => {
+  const serverLocalDate = serverDate && /^\d{4}-\d{2}-\d{2}$/.test(serverDate) ? serverDate : null;
+  if (!timeZone) return serverLocalDate ?? todayIso();
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
       timeZone,
@@ -23,7 +24,7 @@ const hotelTodayIso = (timeZone?: string | null) => {
     const dateParts = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
     return `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
   } catch {
-    return todayIso();
+    return serverLocalDate ?? todayIso();
   }
 };
 
@@ -57,9 +58,10 @@ export function ReportsPage() {
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
   const hotelConfigQuery = useHotelConfig();
+  const arrivalCountQuery = useTodayArrivalCount();
   const canViewFinancial = hasPermission("reports:financial:view");
   const [selectedReportDate, setSelectedReportDate] = useState("");
-  const reportDate = selectedReportDate || hotelTodayIso(hotelConfigQuery.data?.hotel_timezone);
+  const reportDate = selectedReportDate || hotelTodayIso(hotelConfigQuery.data?.hotel_timezone, arrivalCountQuery.data?.report_date);
   const reportQuery = useDailyOperationalReport(reportDate);
   const alertsQuery = useOperationalAlerts(reportDate);
   const occupancyQuery = useOccupancyReport(reportDate, reportDate);

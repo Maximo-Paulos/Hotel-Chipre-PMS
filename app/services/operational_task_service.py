@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.services.row_locks import lock_query
 from app.models.cash_register import CashCloseReport
 from app.models.hotel_membership import HotelMembership
+from app.models.hotel_role import HotelRole
 from app.models.operational_task import (
     OperationalTaskAttachment,
     OperationalTask,
@@ -25,6 +26,7 @@ from app.models.operational_task import (
     ShiftHandoffStatusEnum,
 )
 from app.models.stored_object import StoredObject
+from app.models.user import User
 from app.models.reservation import Reservation
 from app.models.room import Room
 from app.models.room_block import RoomBlock
@@ -478,6 +480,63 @@ def task_history(db: Session, *, hotel_id: int, task_id: int) -> list[Operationa
     )
 
 
+_TASK_AUTHOR_ROLE_LABELS = {
+    "owner": "Dueño",
+    "co_owner": "Codueña",
+    "manager": "Gerencia",
+    "receptionist": "Recepción",
+    "housekeeping": "Limpieza",
+}
+_UNKNOWN_TASK_AUTHOR_LABEL = "Personal del hotel"
+
+
+def task_author_labels(
+    db: Session,
+    *,
+    hotel_id: int,
+    user_ids: set[int | None],
+) -> dict[int, str]:
+    """Resolve task author names only through membership in the task's hotel.
+
+    The display name is selected without retrieving email or other account
+    fields. If it is missing, a built-in role label (including a custom role's
+    hotel-scoped base role) gives operators useful context without identifying
+    the person. Memberships are not filtered by active status so old tasks
+    remain attributable after a membership is revoked.
+    """
+    scoped_user_ids = {user_id for user_id in user_ids if user_id is not None}
+    if not scoped_user_ids:
+        return {}
+
+    rows = (
+        db.query(
+            HotelMembership.user_id,
+            HotelMembership.role,
+            HotelRole.base_role,
+            User.display_name,
+        )
+        .join(User, User.id == HotelMembership.user_id)
+        .outerjoin(
+            HotelRole,
+            and_(
+                HotelRole.hotel_id == HotelMembership.hotel_id,
+                HotelRole.code == HotelMembership.role,
+            ),
+        )
+        .filter(
+            HotelMembership.hotel_id == hotel_id,
+            HotelMembership.user_id.in_(scoped_user_ids),
+        )
+        .all()
+    )
+    labels: dict[int, str] = {}
+    for user_id, role, base_role, display_name in rows:
+        cleaned_name = display_name.strip() if isinstance(display_name, str) else ""
+        role_key = base_role if role.startswith("cr_") else role
+        labels[user_id] = cleaned_name or _TASK_AUTHOR_ROLE_LABELS.get(role_key, _UNKNOWN_TASK_AUTHOR_LABEL)
+    return labels
+
+
 def create_handoff(
     db: Session,
     *,
@@ -557,7 +616,12 @@ def acknowledge_handoff(
     return handoff
 
 
-def serialize_task(task: OperationalTask, *, include_reservation_context: bool = True) -> dict:
+def serialize_task(
+    task: OperationalTask,
+    *,
+    author_name: str | None = None,
+    include_reservation_context: bool = True,
+) -> dict:
     room = getattr(task, "room", None)
     reservation = getattr(task, "reservation", None)
     return {
@@ -576,7 +640,7 @@ def serialize_task(task: OperationalTask, *, include_reservation_context: bool =
         "assigned_to_user_id": task.assigned_to_user_id,
         "due_at": task.due_at,
         "created_by_user_id": task.created_by_user_id,
-        "created_by_name": getattr(getattr(task, "created_by", None), "display_name", None),
+        "created_by_name": (author_name or "").strip() or _UNKNOWN_TASK_AUTHOR_LABEL,
         "resolved_by_user_id": task.resolved_by_user_id,
         "resolved_at": task.resolved_at,
         "created_at": task.created_at,

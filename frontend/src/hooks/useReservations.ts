@@ -70,13 +70,14 @@ export function useReservations(filters: ReservationFilters) {
 
   return useQuery<Reservation[]>({
     queryKey: reservationsKey(session.hotelId, filters),
-    queryFn: () => listReservations(filters, session),
+    queryFn: ({ signal }) => listReservations(filters, session, signal),
     // A caller-provided search term shorter than 2 chars is not useful (and
     // noisy against the DB), so hold off until there's enough to match on.
     // Filters without a search term behave exactly as before.
     enabled: hasValidSession(session) && (!filters.search || filters.search.trim().length >= 2),
     placeholderData: keepPreviousData,
-    staleTime: 1000 * 15
+    staleTime: 1000 * 15,
+    retry: false
   });
 }
 
@@ -86,9 +87,10 @@ export function useReservation(reservationId?: number) {
 
   return useQuery<Reservation>({
     queryKey,
-    queryFn: () => getReservation(reservationId!, session),
+    queryFn: ({ signal }) => getReservation(reservationId!, session, signal),
     enabled: Boolean(reservationId) && hasValidSession(session),
-    staleTime: 1000 * 15
+    staleTime: 1000 * 15,
+    retry: false
   });
 }
 
@@ -98,7 +100,7 @@ export function useValidateGuestCheckin(guestId?: number) {
   const { session } = useSession();
   return useQuery<GuestCheckinValidation>({
     queryKey: guestId ? ["guest-checkin-validation", session.hotelId, guestId] : ["guest-checkin-validation", "none"],
-    queryFn: () => validateGuestForCheckin(guestId!, session),
+    queryFn: ({ signal }) => validateGuestForCheckin(guestId!, session, signal),
     enabled: Boolean(guestId) && hasValidSession(session),
     staleTime: 0,
     // Do not silently retry a prerequisite that gates check-in. Show the
@@ -121,7 +123,7 @@ export function useReservationQuote(params: ReservationQuoteParams | null) {
       params?.guest_id ?? null,
       params?.company_id ?? null
     ],
-    queryFn: () => getReservationQuote(params!, session),
+    queryFn: ({ signal }) => getReservationQuote(params!, session, signal),
     enabled: Boolean(params) && hasValidSession(session),
     staleTime: 30 * 1000,
     gcTime: 1000 * 60 * 10,
@@ -140,9 +142,10 @@ export function useReservationOperationsSummary(reservationId?: number) {
 
   return useQuery<ReservationOperationsSummary>({
     queryKey,
-    queryFn: () => getReservationOperationsSummary(reservationId!, session),
+    queryFn: ({ signal }) => getReservationOperationsSummary(reservationId!, session, signal),
     enabled: Boolean(reservationId) && hasValidSession(session),
-    staleTime: 1000 * 15
+    staleTime: 1000 * 15,
+    retry: false
   });
 }
 
@@ -151,9 +154,10 @@ export function usePendingReservationActions(limit = 100) {
 
   return useQuery<ReservationPendingAction[]>({
     queryKey: pendingReservationActionsKey(session.hotelId, limit),
-    queryFn: () => listPendingReservationActions(limit, session),
+    queryFn: ({ signal }) => listPendingReservationActions(limit, session, signal),
     enabled: hasValidSession(session),
-    staleTime: 1000 * 15
+    staleTime: 1000 * 15,
+    retry: false
   });
 }
 
@@ -325,9 +329,10 @@ export function useReservationActionMutations(filters?: ReservationFilters) {
 function occupancyGridQueryOptions(session: SessionState, dateFrom: string, dateTo: string) {
   return {
     queryKey: occupancyGridKey(session.hotelId, dateFrom, dateTo),
-    queryFn: () => getOccupancyGrid({ dateFrom, dateTo }, session),
+    queryFn: ({ signal }: { signal: AbortSignal }) => getOccupancyGrid({ dateFrom, dateTo }, session, signal),
     enabled: hasValidSession(session),
-    staleTime: 30_000
+    staleTime: 30_000,
+    retry: false
   };
 }
 

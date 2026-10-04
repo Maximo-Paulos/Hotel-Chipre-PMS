@@ -13,9 +13,12 @@
       "helper_other": "{{count}} llegadas",
       "helperLoading": "Consultando llegadas...",
       "helperError": "No se pudieron consultar las llegadas",
-      "roomsLoading": "Cargando ocupación…",
-      "roomsError": "No se pudo cargar la ocupación.",
-      "noActiveRooms": "No hay habitaciones activas."
+      "loading": "Cargando ocupación…",
+      "error": "No se pudo cargar la ocupación.",
+      "noActiveRooms": "No hay habitaciones activas.",
+      "noData": "No hay datos de ocupación para esta fecha.",
+      "permissionUnavailable": "Este dato no está disponible para tu permiso.",
+      "retry": "Reintentar"
     },
     "adr": {
       "label": "Promedio reservado por noche",

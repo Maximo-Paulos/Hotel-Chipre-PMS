@@ -345,7 +345,7 @@ export function ReservationsPage() {
     companyId: companyFilter ? Number(companyFilter) : undefined
   };
 
-  const { data: reservations = [], isLoading, isFetching, error } = useReservations(filters);
+  const { data: reservations = [], isLoading, isFetching, error, refetch: refetchReservations } = useReservations(filters);
   const pendingActionsQuery = usePendingReservationActions(12);
   const { roomsQuery } = useRooms();
   const { data: categoriesData = [] } = useCategories();
@@ -2476,9 +2476,9 @@ export function ReservationsPage() {
 
         <div className="mt-4 space-y-3">
           {pendingActionsQuery.isLoading ? (
-            <p className="text-sm text-slate-500">{t("page.pendingActions.loading")}</p>
+            <p className="text-sm text-slate-500" role="status" data-testid="reservations-pending-actions-loading">{t("page.pendingActions.loading")}</p>
           ) : pendingActionsQuery.isError ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert" data-testid="reservations-pending-actions-error">
               <span>{t("page.pendingActions.error")}</span>
               <button
                 type="button"
@@ -2948,7 +2948,18 @@ export function ReservationsPage() {
             <p className="text-xs uppercase tracking-wide text-slate-500">{t("page.list.eyebrow")}</p>
             <h2 className="text-lg font-semibold text-slate-900">{t("page.list.title")}</h2>
             {isFetching && <p className="text-xs text-slate-500">{t("page.list.updating")}</p>}
-            {error && <p className="text-xs text-rose-700">{t("page.list.loadError", { message: (error as Error).message })}</p>}
+            {error && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-rose-700" role="alert" data-testid="reservations-load-error">
+                <span>{t("page.list.loadError", { message: (error as Error).message })}</span>
+                <button
+                  type="button"
+                  onClick={() => void refetchReservations()}
+                  className="min-h-11 rounded-lg border border-rose-300 bg-white px-3 py-1 font-semibold text-rose-800 hover:bg-rose-100"
+                >
+                  {t("page.list.retry")}
+                </button>
+              </div>
+            )}
           </div>
           <span className="text-xs text-slate-500">{t("page.list.total", { count: reservations.length })}</span>
         </div>
@@ -4906,6 +4917,19 @@ export function ReservationsPage() {
                   <p className="text-xs uppercase tracking-wide text-slate-500">{t("page.details.operationEyebrow")}</p>
                   {detailsOperationsQuery.isFetching ? <span className="text-xs text-slate-500">{t("page.details.operationUpdating")}</span> : null}
                 </div>
+                {detailsOperationsQuery.isError ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert" data-testid="reservation-operations-summary-error">
+                    <span>{t("page.details.operationLoadError")}</span>
+                    <button
+                      type="button"
+                      onClick={() => void detailsOperationsQuery.refetch()}
+                      disabled={detailsOperationsQuery.isFetching}
+                      className="min-h-11 rounded-lg border border-rose-300 bg-white px-3 py-1 font-semibold hover:bg-rose-100 disabled:opacity-60"
+                    >
+                      {t("page.details.operationRetry")}
+                    </button>
+                  </div>
+                ) : null}
                 <div className="grid grid-cols-2 gap-2 text-sm text-slate-800">
                   <div>
                     <p className="text-xs text-slate-500">{t("page.details.operationAllocation")}</p>

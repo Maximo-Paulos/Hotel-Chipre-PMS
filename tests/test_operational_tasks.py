@@ -11,6 +11,7 @@ from app.api.operational_tasks import (
 from app.api import operational_tasks as operational_tasks_api
 from app.models.hotel_membership import HotelMembership
 from app.models.operational_task import (
+    OperationalTask,
     OperationalTaskPriorityEnum,
     OperationalTaskStatusEnum,
     OperationalTaskTypeEnum,
@@ -32,6 +33,7 @@ from app.services.operational_task_service import (
     serialize_handoff,
     serialize_task,
     task_history,
+    task_author_labels,
     update_task,
     validate_task_operator_scope,
 )
@@ -202,6 +204,137 @@ def test_housekeeping_can_read_all_general_tasks_but_cannot_operate_them(db, hot
         )
     assert error.value.status_code == 403
     assert general.status == OperationalTaskStatusEnum.PENDING
+
+
+def test_task_author_fallback_is_hotel_scoped_and_used_by_list_create_and_update(
+    db,
+    hotel_config,
+    sample_rooms_hotel2,
+):
+    manager = _user(db, "author-fallback@example.test", role=ROLE_MANAGER)
+    manager.display_name = None
+    db.add(HotelMembership(hotel_id=2, user_id=manager.id, role="owner", status="active"))
+    db.flush()
+
+    assert task_author_labels(db, hotel_id=hotel_config.id, user_ids={manager.id}) == {manager.id: "Gerencia"}
+    assert task_author_labels(db, hotel_id=2, user_ids={manager.id}) == {manager.id: "Dueño"}
+
+    context = AuthContext(
+        hotel_id=hotel_config.id,
+        user_id=manager.id,
+        user_email=manager.email,
+        user_role=ROLE_MANAGER,
+        is_verified=True,
+    )
+    listed_task = create_task(
+        db,
+        hotel_id=hotel_config.id,
+        task_type=OperationalTaskTypeEnum.GENERAL,
+        priority=OperationalTaskPriorityEnum.MEDIUM,
+        title="Tarea existente",
+        description="Descripción original.",
+        created_by_user_id=manager.id,
+    )
+    visible = get_operational_tasks(
+        status_filter=None,
+        task_type=None,
+        room_id=None,
+        limit=100,
+        db=db,
+        context=context,
+    )
+    serialized = next(task for task in visible if task["id"] == listed_task.id)
+    assert serialized["created_by_name"] == "Gerencia"
+    assert serialized["description"] == "Descripción original."
+    assert manager.email not in str(serialized)
+
+    created = create_operational_task(
+        OperationalTaskCreate(title="Tarea nueva", description="Con detalle."),
+        db=db,
+        context=context,
+    )
+    assert created["created_by_name"] == "Gerencia"
+    assert created["description"] == "Con detalle."
+    assert created["created_at"] is not None
+
+    updated = patch_operational_task(
+        created["id"],
+        OperationalTaskUpdate(client_version=created["version"], description="Detalle actualizado."),
+        db=db,
+        context=context,
+    )
+    assert updated["created_by_name"] == "Gerencia"
+    assert updated["description"] == "Detalle actualizado."
+    assert updated["created_at"] == created["created_at"]
+
+
+def test_task_create_does_not_commit_before_author_resolution(db, hotel_config, monkeypatch):
+    manager = _user(db, "author-resolution-failure@example.test")
+    context = AuthContext(
+        hotel_id=hotel_config.id,
+        user_id=manager.id,
+        user_email=manager.email,
+        user_role=ROLE_MANAGER,
+        is_verified=True,
+    )
+
+    def fail_author_lookup(*_args, **_kwargs):
+        raise RuntimeError("author lookup unavailable")
+
+    monkeypatch.setattr(operational_tasks_api, "task_author_labels", fail_author_lookup)
+    with pytest.raises(RuntimeError, match="author lookup unavailable"):
+        create_operational_task(
+            OperationalTaskCreate(title="No confirmar", description="Debe quedar sin guardar."),
+            db=db,
+            context=context,
+        )
+
+    db.rollback()
+    assert db.query(OperationalTask).filter_by(hotel_id=hotel_config.id, title="No confirmar").count() == 0
+
+
+def test_task_author_without_hotel_membership_does_not_expose_global_profile(db, hotel_config, sample_rooms_hotel2):
+    observer = _user(db, "observer-task-author@example.test", role=ROLE_MANAGER)
+    foreign_user = User(
+        email="foreign-task-author@example.test",
+        password_hash="test",
+        display_name="Nombre de otro hotel",
+        is_verified=True,
+        is_active=True,
+    )
+    db.add(foreign_user)
+    db.flush()
+    db.add(HotelMembership(hotel_id=2, user_id=foreign_user.id, role="manager", status="active"))
+    task = create_task(
+        db,
+        hotel_id=hotel_config.id,
+        task_type=OperationalTaskTypeEnum.GENERAL,
+        priority=OperationalTaskPriorityEnum.LOW,
+        title="Tarea histórica sin membresía local",
+    )
+    task.created_by_user_id = foreign_user.id
+    db.flush()
+
+    labels = task_author_labels(db, hotel_id=hotel_config.id, user_ids={foreign_user.id})
+    assert labels == {}
+    visible = get_operational_tasks(
+        status_filter=None,
+        task_type=None,
+        room_id=None,
+        limit=100,
+        db=db,
+        context=AuthContext(
+            hotel_id=hotel_config.id,
+            user_id=observer.id,
+            user_email=observer.email,
+            user_role=ROLE_MANAGER,
+            is_verified=True,
+        ),
+    )
+    serialized = next(item for item in visible if item["id"] == task.id)
+    assert serialized["created_by_name"] == "Personal del hotel"
+    assert "Nombre de otro hotel" not in str(serialized)
+    assert foreign_user.email not in str(serialized)
 
 
 def test_maintenance_task_keeps_block_until_authorized_release(db, hotel_config, sample_rooms):

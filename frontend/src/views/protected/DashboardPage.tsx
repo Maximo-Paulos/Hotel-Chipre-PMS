@@ -4,13 +4,12 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
 import { usePendingReservationActions, useReservations } from "../../hooks/useReservations";
-import { useRevenueReport, useTodayArrivalCount } from "../../hooks/useReports";
+import { useOccupancyReport, useRevenueReport, useTodayArrivalCount } from "../../hooks/useReports";
 import { isDeferredCompanyReservation } from "../../api/reservations";
 import { usePendingCashCloseReports } from "../../hooks/useCashRegister";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
-import { useRooms } from "../../hooks/useRooms";
 import { formatMoney } from "../../utils/currency";
 import { todayIso } from "../../utils/date";
 // Single source of truth for reservation status colors/labels (also used by
@@ -55,6 +54,8 @@ type DashboardCard = {
   value: string;
   helper: string;
   helperRole?: "status" | "alert";
+  testId?: string;
+  retry?: { label: string; run: () => void; disabled: boolean };
 };
 const reservationGuestLabel = (
   reservation: {
@@ -76,6 +77,8 @@ export function DashboardPage() {
   const reservations = useMemo(() => reservationsQuery.data ?? [], [reservationsQuery.data]);
   const { hasPermission } = useEffectivePermissions();
   const canViewFinancial = hasPermission("reports:financial:view");
+  const canViewOperationalReports = hasPermission("reports:operational:view");
+  const occupancyQuery = useOccupancyReport(today, today, canViewOperationalReports);
   // The monthly financial cards use the permission-protected server aggregate,
   // not this paginated reservation list (which is capped for activity views).
   const bookedValueQuery = useRevenueReport(monthFrom, monthTo, canViewFinancial);
@@ -89,18 +92,21 @@ export function DashboardPage() {
   const pendingCashApprovalsQuery = usePendingCashCloseReports({ enabled: canApproveCashDifferences });
   const pendingCashApprovals = pendingCashApprovalsQuery.data ?? [];
   const { openReservation } = useReservationDrawer();
-  const { roomsQuery } = useRooms();
-  const rooms = useMemo(() => roomsQuery.data || [], [roomsQuery.data]);
   const pendingActions = pendingActionsQuery.data || [];
   const criticalPendingActions = pendingActions.filter((item) => item.priority === "critical").length;
+  const occupancyReport = occupancyQuery.data;
+  const occupancyLoading = occupancyQuery.isLoading;
+  const occupancyError = occupancyQuery.isError;
+  const occupancyFetching = occupancyQuery.isFetching;
+  const refetchOccupancy = occupancyQuery.refetch;
 
   const cards = useMemo<DashboardCard[]>(() => {
-    const activeRooms = rooms.filter((room) => room.is_active);
-    const occupied = activeRooms.filter((room) => room.status === "occupied").length;
-    const occupancy = activeRooms.length > 0 ? Math.round((occupied / activeRooms.length) * 100) : null;
-    const occupancyLoadingText = t("cards.occupancyToday.roomsLoading");
-    const occupancyErrorText = t("cards.occupancyToday.roomsError");
+    const occupancy = occupancyReport?.daily[0];
+    const occupancyLoadingText = t("cards.occupancyToday.loading");
+    const occupancyErrorText = t("cards.occupancyToday.error");
     const noActiveRoomsText = t("cards.occupancyToday.noActiveRooms");
+    const noOccupancyDataText = t("cards.occupancyToday.noData");
+    const occupancyUnavailableText = t("cards.occupancyToday.permissionUnavailable");
 
     const bookedCurrencies = bookedValueQuery.data?.booked_value.by_currency ?? [];
     const hasBookedReservations = bookedCurrencies.length > 0;
@@ -113,28 +119,42 @@ export function DashboardPage() {
       .join(" · ");
     const arrivalsToday = arrivalCountQuery.data?.count;
 
-    const occupancyHelper = roomsQuery.isLoading
-      ? occupancyLoadingText
-      : roomsQuery.isError
-        ? occupancyErrorText
-        : activeRooms.length === 0
-          ? noActiveRoomsText
-          : arrivalCountQuery.isLoading
-            ? t("cards.occupancyToday.helperLoading")
-            : arrivalCountQuery.isError
-              ? t("cards.occupancyToday.helperError")
-              : t("cards.occupancyToday.helper", { count: arrivalsToday ?? 0 });
+    const occupancyHelper = !canViewOperationalReports
+      ? occupancyUnavailableText
+      : occupancyLoading
+        ? occupancyLoadingText
+        : occupancyError
+          ? occupancyErrorText
+          : occupancyReport?.total_rooms === 0
+            ? noActiveRoomsText
+            : !occupancy
+              ? noOccupancyDataText
+              : arrivalCountQuery.isLoading
+                ? t("cards.occupancyToday.helperLoading")
+                : arrivalCountQuery.isError
+                  ? t("cards.occupancyToday.helperError")
+                  : t("cards.occupancyToday.helper", { count: arrivalsToday ?? 0 });
 
     return [
       {
         label: t("cards.occupancyToday.label"),
-        value: roomsQuery.isLoading || roomsQuery.isError || occupancy === null ? "—" : `${occupancy}%`,
+        value: !canViewOperationalReports || occupancyLoading || occupancyError || !occupancy
+          ? "—"
+          : `${occupancy.rate}%`,
         helper: occupancyHelper,
-        helperRole: roomsQuery.isError || (!roomsQuery.isLoading && arrivalCountQuery.isError)
+        helperRole: occupancyError || (!arrivalCountQuery.isLoading && arrivalCountQuery.isError)
           ? "alert"
-          : roomsQuery.isLoading || arrivalCountQuery.isLoading
+          : occupancyLoading || arrivalCountQuery.isLoading
             ? "status"
-            : undefined
+            : undefined,
+        testId: "dashboard-occupancy-card",
+        ...(canViewOperationalReports && occupancyError ? {
+          retry: {
+            label: t("cards.occupancyToday.retry"),
+            run: () => void refetchOccupancy(),
+            disabled: occupancyFetching
+          }
+        } : {})
       },
       ...(canViewFinancial ? [{
         label: t("cards.adr.label"),
@@ -182,7 +202,7 @@ export function DashboardPage() {
         helperRole: pendingActionsQuery.isError ? "alert" : undefined
       }
     ];
-  }, [arrivalCountQuery.data?.count, arrivalCountQuery.isError, arrivalCountQuery.isLoading, bookedValueQuery.data, bookedValueQuery.isError, bookedValueQuery.isLoading, canViewFinancial, criticalPendingActions, pendingActions.length, pendingActionsQuery.isError, rooms, roomsQuery.isError, roomsQuery.isLoading, t]);
+  }, [arrivalCountQuery.data?.count, arrivalCountQuery.isError, arrivalCountQuery.isLoading, bookedValueQuery.data, bookedValueQuery.isError, bookedValueQuery.isLoading, canViewFinancial, canViewOperationalReports, criticalPendingActions, occupancyError, occupancyFetching, occupancyLoading, occupancyReport, pendingActions.length, pendingActionsQuery.isError, refetchOccupancy, t]);
 
   const arrivals = upcomingReservations;
 
@@ -229,10 +249,20 @@ export function DashboardPage() {
 
       <div className={`grid gap-4 ${canViewFinancial ? "md:grid-cols-4" : "md:grid-cols-2"}`}>
         {cards.map((card) => (
-          <div key={card.label} className="rounded-panel bg-white p-5 shadow-raise ring-1 ring-slate-900/5">
+          <div key={card.label} className="rounded-panel bg-white p-5 shadow-raise ring-1 ring-slate-900/5" data-testid={card.testId}>
             <p className="text-sm text-slate-500">{card.label}</p>
             <div className="numeric mt-2 break-words text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{card.value}</div>
             <p className="text-xs text-slate-500" role={card.helperRole}>{card.helper}</p>
+            {card.retry ? (
+              <button
+                type="button"
+                onClick={card.retry.run}
+                disabled={card.retry.disabled}
+                className="mt-2 min-h-11 rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
+              >
+                {card.retry.label}
+              </button>
+            ) : null}
           </div>
         ))}
       </div>
@@ -417,9 +447,9 @@ export function DashboardPage() {
         </div>
         <div className="mt-3 space-y-3">
           {pendingActionsQuery.isLoading ? (
-            <p className="text-sm text-slate-500">{t("operations.loading")}</p>
+            <p className="text-sm text-slate-500" role="status" data-testid="dashboard-pending-actions-loading">{t("operations.loading")}</p>
           ) : pendingActionsQuery.isError ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert" data-testid="dashboard-pending-actions-error">
               <span>{t("operations.error")}</span>
               <button
                 type="button"
@@ -430,7 +460,7 @@ export function DashboardPage() {
               </button>
             </div>
           ) : pendingActions.length === 0 ? (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" data-testid="dashboard-pending-actions-empty">
               {t("operations.empty")}
             </div>
           ) : (

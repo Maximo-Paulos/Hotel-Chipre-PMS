@@ -354,6 +354,50 @@ def _mk_reservation(db, *, code, guest_id, category_id, hotel_id=1, room_id=None
     return reservation
 
 
+def test_cancelled_reservation_never_offers_collection_action(
+    db, hotel_config, sample_categories, sample_guest,
+):
+    cancelled = _mk_reservation(
+        db,
+        code="CANCELLED-UNPAID",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        hotel_id=hotel_config.id,
+        status=ReservationStatusEnum.CANCELLED,
+        source=ReservationSourceEnum.DIRECT,
+        payment_collection_model="hotel_collect",
+        total_amount=100.0,
+        amount_paid=0.0,
+    )
+    active = _mk_reservation(
+        db,
+        code="ACTIVE-UNPAID",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        hotel_id=hotel_config.id,
+        status=ReservationStatusEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        payment_collection_model="hotel_collect",
+        total_amount=100.0,
+        amount_paid=0.0,
+    )
+    db.commit()
+
+    cancelled_summary = get_reservation_operations_summary(
+        db, hotel_id=hotel_config.id, reservation_id=cancelled.id,
+    )
+    active_summary = get_reservation_operations_summary(
+        db, hotel_id=hotel_config.id, reservation_id=active.id,
+    )
+    actions = list_pending_reservation_actions(db, hotel_id=hotel_config.id, limit=50)
+    collection_actions = [action for action in actions if action["code"] == "collect_from_guest"]
+
+    assert all(action["code"] != "collect_from_guest" for action in cancelled_summary["pending_actions"])
+    assert cancelled_summary["financial_summary"]["recommended_next_action"] is None
+    assert active_summary["financial_summary"]["recommended_next_action"] == "collect_from_guest"
+    assert {action["reservation_id"] for action in collection_actions} == {active.id}
+
+
 def _count_queries(db, fn):
     engine = db.get_bind()
     counts = [0]
