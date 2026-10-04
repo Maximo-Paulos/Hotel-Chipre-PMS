@@ -506,21 +506,25 @@ export function SettingsPermissionsPage() {
     queryFn: () => fetchPermissionCatalog(session),
     retry: retryPermissionAdminQuery
   });
+  // Fetch the remaining MFA-protected RBAC reads only after the fresh catalog
+  // request completes. This lets its reusable, tenant-scoped read ticket cover
+  // the whole page instead of racing several first-load challenges together.
+  const permissionReadsEnabled = enabled && catalogQuery.isSuccess && catalogQuery.isFetchedAfterMount;
   const matrixQuery = useQuery({
     queryKey: ["permissions-matrix", session.hotelId],
-    enabled,
+    enabled: permissionReadsEnabled,
     queryFn: () => fetchPermissionMatrix(session),
     retry: retryPermissionAdminQuery
   });
   const roleProfilesQuery = useQuery({
     queryKey: ["permissions-role-profiles", session.hotelId],
-    enabled,
+    enabled: permissionReadsEnabled,
     queryFn: () => fetchRolePermissionProfiles(session),
     retry: retryPermissionAdminQuery
   });
   const visibilityQuery = useQuery({
     queryKey: ["permissions-visibility-windows", session.hotelId],
-    enabled,
+    enabled: permissionReadsEnabled,
     queryFn: () => fetchVisibilityWindows(session),
     retry: retryPermissionAdminQuery
   });
@@ -532,7 +536,7 @@ export function SettingsPermissionsPage() {
   });
   const userOverridesQuery = useQuery<UserPermissionOverrideResponse>({
     queryKey: ["permissions-user-overrides", session.hotelId, selectedUserId],
-    enabled: enabled && selectedUserId !== null,
+    enabled: permissionReadsEnabled && selectedUserId !== null,
     queryFn: () => fetchUserPermissionOverrides(selectedUserId as number, session),
     retry: retryPermissionAdminQuery
   });

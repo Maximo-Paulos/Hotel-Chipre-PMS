@@ -202,6 +202,7 @@ export default defineConfig({
         E2E_POSTGRES_SEED_DATABASE_URL: postgresE2eEnabled ? postgresE2eSeedDatabaseURL : "",
         E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT: postgresE2eEnabled ? explicitPostgresE2eSeedDatabaseURL : "",
         E2E_F003_LOAD: process.env.E2E_F003_LOAD === "true" ? "true" : "",
+        FRONTEND_URL: baseURL,
         // Keep local E2E deterministic even when the developer's .env enables
         // provider traffic. Payment-link tests must exercise the persisted
         // local_only artifact and never call an external gateway.

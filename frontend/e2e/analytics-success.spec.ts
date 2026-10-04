@@ -45,3 +45,39 @@ test("operations keeps rendering when a legacy analytics response omits data_sou
   await expect(page.getByRole("status", { name: /Datos PostgreSQL/ })).toBeVisible();
   await expect(page.getByText("Unexpected Application Error!", { exact: true })).toHaveCount(0);
 });
+
+test("analytics marks a missing historical currency quote as unavailable without changing other metrics", async ({ page }) => {
+  await page.route("**/api/analytics/home**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        hotel_id: 1,
+        date_from: "2026-01-01",
+        date_to: "2026-01-31",
+        generated_at: "2026-01-31T12:00:00Z",
+        data_as_of: "2026-01-31T12:00:00Z",
+        source_lag_seconds: 0,
+        data_source: "postgresql",
+        data: {
+          cards: [{ card_code: "test_nights", label: "Noches", value_count: 42 }],
+          top_channels: [{
+            channel_code: "booking",
+            revenue_gross_usd: "100.00",
+            source_currency: "ARS",
+            fx_rate_snapshot: null,
+            unavailable_currencies: ["USD"]
+          }]
+        }
+      })
+    });
+  });
+
+  await login(page);
+  await page.goto("/analytics");
+
+  await expect(page.getByRole("heading", { name: "Analítica", exact: true })).toBeVisible();
+  await expect(page.getByText("No disponible", { exact: true })).toBeVisible();
+  await expect(page.getByText("42", { exact: true })).toBeVisible();
+  await expect(page.getByText("Sin cotización histórica", { exact: true })).toHaveCount(0);
+});

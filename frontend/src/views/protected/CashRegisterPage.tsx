@@ -42,6 +42,7 @@ export function CashRegisterPage() {
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
   const hotelConfigQuery = useHotelConfig();
+  const defaultCurrency = (hotelConfigQuery.data?.default_currency || "ARS").toUpperCase();
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [openingBalance, setOpeningBalance] = useState<number | null>(null);
   const [openingCurrency, setOpeningCurrency] = useState("ARS");
@@ -90,21 +91,20 @@ export function CashRegisterPage() {
     () => pendingCashCustodyReportsQuery.data ?? [],
     [pendingCashCustodyReportsQuery.data]
   );
-  const dailySummaryQuery = useCashDailySummary(reportDate, reportCurrency || undefined);
+  const dailySummaryQuery = useCashDailySummary(reportDate, reportCurrency || defaultCurrency);
   const canViewCash = hasPermission("cash:view");
   const canApproveCashExpenses = hasPermission("cash:expense_approve");
   const cashExpensesQuery = useCashExpenses({ enabled: canViewCash });
   const hotelTimeZone = dailySummaryQuery.data?.timezone ?? hotelConfigQuery.data?.hotel_timezone;
   const availableCurrencies = useMemo(
     () => Array.from(new Set([
-      "ARS", "USD", "EUR", "BRL", "CLP", "UYU",
+      defaultCurrency, "ARS", "USD", "EUR", "BRL", "CLP", "UYU",
       ...sessions.map((item) => item.currency_code.toUpperCase()),
       ...(dailySummaryQuery.data?.prior_receipt_totals ?? []).map((item) => item.currency_code.toUpperCase())
     ])).sort(),
-    [dailySummaryQuery.data?.prior_receipt_totals, sessions]
+    [dailySummaryQuery.data?.prior_receipt_totals, defaultCurrency, sessions]
   );
   const openSessions = useMemo(() => sessions.filter((session) => session.status === "open"), [sessions]);
-  const defaultCurrency = (hotelConfigQuery.data?.default_currency || "ARS").toUpperCase();
   useEffect(() => {
     setOpeningCurrency(defaultCurrency);
   }, [defaultCurrency]);
@@ -493,16 +493,19 @@ export function CashRegisterPage() {
           <label className="space-y-1 text-sm font-semibold text-slate-700">
             <span>Moneda</span>
             <select
-              value={reportCurrency}
+              value={reportCurrency || defaultCurrency}
               onChange={(event) => setReportCurrency(event.target.value)}
               className="block rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
               aria-describedby="cash-daily-currency-help"
             >
-              <option value="">Detectar automáticamente</option>
-              {availableCurrencies.map((currencyCode) => <option key={currencyCode} value={currencyCode}>{currencyCode}</option>)}
+              {availableCurrencies.map((currencyCode) => (
+                <option key={currencyCode} value={currencyCode}>
+                  {currencyCode}{currencyCode === defaultCurrency ? " · moneda del hotel" : ""}
+                </option>
+              ))}
             </select>
             <span id="cash-daily-currency-help" className="block max-w-48 text-xs font-normal text-slate-500">
-              Si hay más de una moneda, elegí una para no mezclar importes.
+              Usa la moneda del hotel por defecto. No se convierten ni mezclan importes entre monedas.
             </span>
           </label>
           <label className="space-y-1 text-sm font-semibold text-slate-700">

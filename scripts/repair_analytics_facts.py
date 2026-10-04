@@ -1,6 +1,10 @@
 """Idempotently rebuild reservation and room analytics facts for a bounded scope.
 
-Run after deploying a corrected fact-allocation algorithm, for example:
+Preview the scope and row counts before applying a historical rebuild:
+
+    python scripts/repair_analytics_facts.py --all-hotels --dry-run
+
+After reviewing the report, omit ``--dry-run`` to apply it:
 
     python scripts/repair_analytics_facts.py --all-hotels
 
@@ -11,6 +15,7 @@ the requested date range.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -25,7 +30,9 @@ import app.models  # noqa: F401 - ensure every mapped model is registered.
 from app.database import get_session_factory
 from app.models.analytics import FactReservationDaily, FactRoomOccupancyDaily
 from app.models.hotel_config import HotelConfiguration
-from app.models.reservation import Reservation
+from app.models.reservation import Reservation, ReservationStatusEnum
+from app.services.reservation_service import active_reservations
+from app.services.room_service import active_rooms
 from app.services.analytics_facts import (
     refresh_fact_reservation_daily,
     refresh_fact_room_occupancy_daily,
@@ -46,6 +53,11 @@ def _parser() -> argparse.ArgumentParser:
     scope.add_argument("--all-hotels", action="store_true", help="Rebuild all hotels with reservations")
     parser.add_argument("--date-from", type=_parse_date)
     parser.add_argument("--date-to", type=_parse_date)
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="report the selected scope and row counts without changing facts",
+    )
     return parser
 
 
@@ -108,6 +120,54 @@ def _hotel_ranges(db, args: argparse.Namespace) -> list[tuple[int, date, date]]:
     ]
 
 
+def _build_dry_run_report(db, ranges: list[tuple[int, date, date]]) -> dict[str, object]:
+    hotels: list[dict[str, int | str]] = []
+    for hotel_id, date_from, date_to in ranges:
+        day_count = (date_to - date_from).days + 1
+        reservation_count = (
+            active_reservations(db, hotel_id)
+            .filter(
+                Reservation.check_in_date <= date_to,
+                Reservation.check_out_date > date_from,
+                Reservation.status != ReservationStatusEnum.CANCELLED,
+            )
+            .count()
+        )
+        active_room_count = active_rooms(db, hotel_id).count()
+        reservation_fact_count = (
+            db.query(FactReservationDaily.id)
+            .filter(
+                FactReservationDaily.hotel_id == hotel_id,
+                FactReservationDaily.stay_date >= date_from,
+                FactReservationDaily.stay_date <= date_to,
+            )
+            .count()
+        )
+        occupancy_fact_count = (
+            db.query(FactRoomOccupancyDaily.id)
+            .filter(
+                FactRoomOccupancyDaily.hotel_id == hotel_id,
+                FactRoomOccupancyDaily.stay_date >= date_from,
+                FactRoomOccupancyDaily.stay_date <= date_to,
+            )
+            .count()
+        )
+        hotels.append(
+            {
+                "hotel_id": hotel_id,
+                "date_from": date_from.isoformat(),
+                "date_to": date_to.isoformat(),
+                "days": day_count,
+                "overlapping_active_reservations": reservation_count,
+                "rooms_in_occupancy_projection": active_room_count,
+                "reservation_fact_rows_to_replace": reservation_fact_count,
+                "occupancy_fact_rows_to_replace": occupancy_fact_count,
+                "estimated_occupancy_fact_rows_after_rebuild": active_room_count * day_count,
+            }
+        )
+    return {"mode": "dry-run", "writes_performed": False, "hotels": hotels}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -119,6 +179,10 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(exc))
         if args.hotel_id is not None and not ranges:
             parser.error("No hay reservas para el hotel solicitado")
+
+        if args.dry_run:
+            print(json.dumps(_build_dry_run_report(db, ranges), ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
 
         for hotel_id, date_from, date_to in ranges:
             try:

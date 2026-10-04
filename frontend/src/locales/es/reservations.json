@@ -4,6 +4,9 @@
     "closeAria": "Cerrar detalle de reserva",
     "loading": "Cargando reserva...",
     "loadError": "No se pudo cargar la reserva. Cerrá y volvé a intentar.",
+    "loadRetry": "Reintentar",
+    "operationLoadError": "No se pudo cargar el resumen operativo.",
+    "operationRetry": "Reintentar",
     "stay": {
       "title": "Estadía",
       "roomNumber": "Habitación #{{id}}",
@@ -625,6 +628,7 @@
       "title": "Reservas recientes",
       "updating": "Actualizando...",
       "loadError": "No se pudo cargar: {{message}}",
+      "retry": "Reintentar",
       "total": "Total: {{count}}",
       "columns": {
         "code": "Código",
@@ -918,6 +922,8 @@
       "financeNextAction": "Próxima acción sugerida: {{action}}",
       "operationEyebrow": "Operación",
       "operationUpdating": "Actualizando...",
+      "operationLoadError": "No se pudo cargar el resumen operativo.",
+      "operationRetry": "Reintentar",
       "operationAllocation": "Asignación",
       "operationManualReview": "Revisión manual",
       "operationYes": "Sí",

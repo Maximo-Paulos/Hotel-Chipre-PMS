@@ -25,7 +25,7 @@
     "description": "Administrá la verificación en dos pasos de tu cuenta."
   },
   "currency": {
-    "historicalRateUnavailable": "Sin cotización histórica"
+    "historicalRateUnavailable": "No disponible"
   },
   "realtime": {
     "connected": "Conectado: cambios en tiempo real activos.",

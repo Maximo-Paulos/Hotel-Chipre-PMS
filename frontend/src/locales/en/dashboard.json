@@ -13,9 +13,12 @@
       "helper_other": "{{count}} arrivals",
       "helperLoading": "Loading arrivals...",
       "helperError": "Arrivals could not be loaded",
-      "roomsLoading": "Loading occupancy…",
-      "roomsError": "Occupancy could not be loaded.",
-      "noActiveRooms": "No active rooms."
+      "loading": "Loading occupancy…",
+      "error": "Occupancy could not be loaded.",
+      "noActiveRooms": "No active rooms.",
+      "noData": "There is no occupancy data for this date.",
+      "permissionUnavailable": "This data is not available for your permission.",
+      "retry": "Retry"
     },
     "adr": {
       "label": "Average booked per night",

@@ -32,9 +32,11 @@ function loadClient(fetchImpl, { locks } = {}) {
       require: () => ({ broadcastDomainChange() {} }),
       fetch: fetchImpl,
       navigator: locks ? { locks } : undefined,
+      AbortController,
       Headers,
       URL,
       setTimeout,
+      clearTimeout,
       atob,
       window: {
         location: {

@@ -1,0 +1,34 @@
+{
+  "case_count": 45,
+  "catalog_file": "qa/operational/shared-sandbox-catalog.json",
+  "catalog_sha256": "sha256:0d451e76ce4e7c9482f3294cbc40a0005f160474bce16d520ca1701607813365",
+  "certification": "none",
+  "code_sha": "0ddeb59c3e9252c7062856e0560ed56980da16ca",
+  "completed_at": "2026-10-04T09:28:24.730620Z",
+  "environment_class": "production-labelled-shared-sandbox",
+  "evidence_limitations": [
+    "Manual visible UI notes only; screenshots were not persisted as artifacts.",
+    "Observations JSON intentionally empty; this run is not case-validated release evidence."
+  ],
+  "external_exclusions": [
+    "payment completion",
+    "outgoing email",
+    "provider webhooks",
+    "OTA synchronization",
+    "provider load testing"
+  ],
+  "mutation_policy": "synthetic-tagged",
+  "pr_number": 115,
+  "pr_state_at_review": "OPEN",
+  "production_build_sha": "0ddeb59c3e9252c7062856e0560ed56980da16ca",
+  "record_type": "operational-shared-sandbox-run",
+  "release_gate_eligible": false,
+  "run_id": "day2-live-role-retest-20261004-0ddeb59c",
+  "schema_version": 1,
+  "started_at": "2026-10-04T09:26:47.033630Z",
+  "tested_roles": [
+    "owner",
+    "manager",
+    "reception"
+  ]
+}

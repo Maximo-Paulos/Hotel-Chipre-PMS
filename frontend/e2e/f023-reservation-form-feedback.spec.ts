@@ -40,7 +40,7 @@ test("F-023: guest selection assigns once, quote locks inputs, and errors stay b
   await form.getByPlaceholder("Nombre").fill("F023");
   await form.getByPlaceholder("Apellido").fill(`Reproduccion-${suffix}`);
   await form.getByPlaceholder("Email").fill(`f023.${suffix}@example.test`);
-  await form.getByPlaceholder("Teléfono").fill("1112345678");
+  await form.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
   await form.getByLabel("Tipo de documento").selectOption("DNI");
   await form.getByPlaceholder("Documento").fill(`F023-${suffix}`);
   await form.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();

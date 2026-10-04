@@ -29,7 +29,7 @@ test("owner creates a guest and records a documented companion from the guest fi
   await reservationForm.getByPlaceholder("Nombre").fill("Huésped");
   await reservationForm.getByPlaceholder("Apellido").fill(guestLastName);
   await reservationForm.getByPlaceholder("Email").fill("guest." + suffix + "@example.test");
-  await reservationForm.getByPlaceholder("Teléfono").fill("1112345678");
+  await reservationForm.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
   await reservationForm.getByLabel("Tipo de documento").selectOption("DNI");
   await reservationForm.getByPlaceholder("Documento").fill(guestDocument);
   await reservationForm.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();

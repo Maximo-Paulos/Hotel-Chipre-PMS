@@ -28,16 +28,13 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
 }
 
-async function selectCategoryAndRoom(form: Locator) {
+async function selectCategoryAndDates(form: Locator, checkIn: string, checkOut: string) {
   const categorySelect = form.locator("label").filter({ hasText: "Categoría" }).locator("select");
   const categoryOption = categorySelect.locator("option").filter({ hasText: "Standard E2E" });
   await expect(categoryOption).toHaveCount(1);
   await categorySelect.selectOption((await categoryOption.getAttribute("value"))!);
-
-  const roomSelect = form.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
-  const roomOption = roomSelect.locator("option").filter({ hasText: "101" });
-  await expect(roomOption).toHaveCount(1);
-  await roomSelect.selectOption((await roomOption.getAttribute("value"))!);
+  await form.getByLabel("Check-in", { exact: true }).fill(checkIn);
+  await form.getByLabel("Check-out", { exact: true }).fill(checkOut);
 }
 
 test("seleccionar huésped al instante, revisar su tarjeta de datos y respetar guestIdDisabled al editar", async ({
@@ -46,7 +43,7 @@ test("seleccionar huésped al instante, revisar su tarjeta de datos y respetar g
   const suffix = `${Date.now()}`;
   const guestLastName = `Buscador ${suffix}`;
   const guestEmail = `buscador.${suffix}@example.test`;
-  const guestPhone = "1155667788";
+  const guestPhone = `11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`;
   const guestDocument = `SRCH-${suffix}`;
   const checkInA = localIsoDate(530);
   const checkOutA = localIsoDate(532);
@@ -82,9 +79,9 @@ test("seleccionar huésped al instante, revisar su tarjeta de datos y respetar g
   // quick-create fields anymore.
   await expect(firstForm.getByTestId("guest-confirm-card")).toContainText(guestLastName);
 
-  await selectCategoryAndRoom(firstForm);
-  await firstForm.getByLabel("Check-in", { exact: true }).fill(checkInA);
-  await firstForm.getByLabel("Check-out", { exact: true }).fill(checkOutA);
+  // Guest search is the behavior under test; leave room assignment optional
+  // so availability in the shared E2E seed cannot make this scenario brittle.
+  await selectCategoryAndDates(firstForm, checkInA, checkOutA);
   await expect(firstForm.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
   await firstForm.getByRole("button", { name: "Crear", exact: true }).click();
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
@@ -126,9 +123,7 @@ test("seleccionar huésped al instante, revisar su tarjeta de datos y respetar g
   await expect(searchInput).toBeHidden();
   await expect(confirmedCard).toContainText(guestLastName);
 
-  await selectCategoryAndRoom(form);
-  await form.getByLabel("Check-in", { exact: true }).fill(checkInB);
-  await form.getByLabel("Check-out", { exact: true }).fill(checkOutB);
+  await selectCategoryAndDates(form, checkInB, checkOutB);
   await expect(form.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
   await form.getByRole("button", { name: "Crear", exact: true }).click();
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();

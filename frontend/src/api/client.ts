@@ -56,6 +56,13 @@ export class ApiError extends Error {
   }
 }
 
+// Bound API calls so a slow or unreachable service cannot leave an
+// operator-facing query in a permanent loading state. Writes get a longer
+// window because reporting a timeout for a mutation can leave its outcome
+// uncertain.
+export const DEFAULT_API_REQUEST_TIMEOUT_MS = 20_000;
+export const DEFAULT_API_MUTATION_TIMEOUT_MS = 60_000;
+
 // Default to local backend so the dev/preview build doesn't hit the Vite preview origin.
 // Use 8040 to avoid conflicts with other local services; override with VITE_API_URL if set.
 //
@@ -340,7 +347,36 @@ type RequestOptions = {
   data?: unknown;
   headers?: HeadersInit;
   signal?: AbortSignal;
+  timeoutMs?: number;
   session?: SessionLike;
+};
+
+const createRequestDeadline = (callerSignal: AbortSignal | undefined, timeoutMs: number) => {
+  const controller = new AbortController();
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+
+  if (callerSignal?.aborted) abortFromCaller();
+  else callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      reject(new Error("API request timed out"));
+    }, timeoutMs);
+  });
+
+  return {
+    signal: controller.signal,
+    timeoutPromise,
+    didTimeout: () => timedOut,
+    dispose: () => {
+      if (timer !== null) clearTimeout(timer);
+      callerSignal?.removeEventListener("abort", abortFromCaller);
+    }
+  };
 };
 
 export const buildUrl = (path: string) => {
@@ -470,18 +506,25 @@ export async function refreshSession(session?: SessionLike): Promise<AuthRespons
     if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
 
     const requestRefresh = async () => {
-      const response = await fetch(buildUrl("/api/auth/session/refresh"), {
-        method: "POST",
-        headers,
-        credentials: "include"
-      });
-      const text = await response.text();
-      const payload = text ? safeJson(text) : null;
-      if (!response.ok) throw makeApiError(response, payload);
-      if (!isAuthResponsePayload(payload)) {
-        throw new ApiError(500, "La respuesta de renovación de sesión es inválida", payload);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), DEFAULT_API_REQUEST_TIMEOUT_MS);
+      try {
+        const response = await fetch(buildUrl("/api/auth/session/refresh"), {
+          method: "POST",
+          headers,
+          credentials: "include",
+          signal: controller.signal
+        });
+        const text = await response.text();
+        const payload = text ? safeJson(text) : null;
+        if (!response.ok) throw makeApiError(response, payload);
+        if (!isAuthResponsePayload(payload)) {
+          throw new ApiError(500, "La respuesta de renovación de sesión es inválida", payload);
+        }
+        return payload;
+      } finally {
+        clearTimeout(timeout);
       }
-      return payload;
     };
 
     const retryAfterRotationRace = async () => {
@@ -646,7 +689,33 @@ async function requestWithRefresh<T>(
 }
 
 export async function apiFetch<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
-  return requestWithRefresh(path, options, true);
+  const method = options.method ?? "GET";
+  const timeoutMs = options.timeoutMs ?? (
+    MUTATING_METHODS.has(method.toUpperCase())
+      ? DEFAULT_API_MUTATION_TIMEOUT_MS
+      : DEFAULT_API_REQUEST_TIMEOUT_MS
+  );
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new RangeError("timeoutMs must be a positive finite number");
+  }
+
+  const deadline = createRequestDeadline(options.signal, timeoutMs);
+  try {
+    return await Promise.race<T>([
+      requestWithRefresh<T>(path, { ...options, signal: deadline.signal }, true),
+      deadline.timeoutPromise
+    ]);
+  } catch (error) {
+    if (deadline.didTimeout()) {
+      const message = MUTATING_METHODS.has(method.toUpperCase())
+        ? "No se pudo confirmar el resultado a tiempo. Revisá el estado antes de repetir la operación."
+        : "La solicitud tardó demasiado. Revisá la conexión y reintentá.";
+      throw new ApiError(408, message);
+    }
+    throw error;
+  } finally {
+    deadline.dispose();
+  }
 }
 
 // FastAPI returns `detail` as a string for HTTPException, but as an array of

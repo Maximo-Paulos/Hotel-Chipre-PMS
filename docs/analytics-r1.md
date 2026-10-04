@@ -104,6 +104,8 @@ Financial report booked value includes stays overlapping the selected local hote
 
 To rebuild historical reservation and occupancy facts after an allocation fix, use the idempotent command `python scripts/repair_analytics_facts.py --hotel-id <id>` or `python scripts/repair_analytics_facts.py --all-hotels`. Optional `--date-from YYYY-MM-DD --date-to YYYY-MM-DD` flags restrict the rebuilt interval. The command commits one hotel at a time and never prints guest or payment details.
 
+Preview the exact hotel/date scopes and aggregate row counts before rebuilding by adding `--dry-run`, for example `python scripts/repair_analytics_facts.py --all-hotels --dry-run`. The report includes overlapping reservation counts, existing fact rows that would be replaced, and the estimated occupancy rows to generate; it never writes or prints reservation details. Run an applying command only after reviewing the report and confirming the configured database is the intended isolated environment.
+
 Rate, surcharge, and room-status audit records are inserted in the same SQL transaction as their business mutation. These paths fail the request if the audit insert fails; the caller owns the commit.
 
 ## Dashboard Analytics and IA chat

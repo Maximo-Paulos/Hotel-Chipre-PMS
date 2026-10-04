@@ -48,7 +48,7 @@ test("the hotel selector preserves the authorized list across a two-hotel round 
       json: {
         hotel_id: 2,
         role: "owner",
-        permissions: ["permissions:manage", "reports:operational:view", "reports:financial:view"]
+        permissions: ["permissions:manage", "hotel_settings:read", "reports:operational:view", "reports:financial:view"]
       }
     });
   });

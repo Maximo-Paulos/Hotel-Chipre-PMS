@@ -90,7 +90,7 @@ test("F-015 owner configures a bounded rate, manager records it with reason, rec
     await form.getByPlaceholder("Nombre").fill("Huésped");
     await form.getByPlaceholder("Apellido").fill(guestLastName);
     await form.getByPlaceholder("Email").fill(`qa-f015-${suffix}@example.test`);
-    await form.getByPlaceholder("Teléfono").fill("1112345678");
+    await form.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
     await form.getByLabel("Tipo de documento").selectOption("DNI");
     await form.getByPlaceholder("Documento").fill(`QAF015-${suffix}`);
     await form.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();

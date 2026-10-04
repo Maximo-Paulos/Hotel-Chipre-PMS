@@ -114,19 +114,28 @@ test("owner can revoke OTA recording for receptionist and the UI hides the entry
     await expect(otaToggle).toBeChecked();
     const overrideResponsePromise = page.waitForResponse((response) => {
       const url = new URL(response.url());
-      // The first 428 is the expected step-up challenge. The client retries
-      // the same mutation after MFA; capture that final response so cleanup
-      // can restore the override even when this assertion fails later.
-      return url.pathname === "/api/permissions/override"
+      // Permission edits are staged and committed as one MFA-protected batch.
+      return url.pathname === "/api/permissions/overrides/batch"
         && response.request().method() === "PUT"
         && response.ok();
     });
     await otaToggle.click();
+    const profilesResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/permissions/role-overrides" && response.ok();
+    });
+    await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
     lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
     const overrideResponse = await overrideResponsePromise;
     expect(overrideResponse.ok(), `Permission override returned ${overrideResponse.status()}: ${await overrideResponse.text()}`).toBeTruthy();
-    overrideVersion = (await overrideResponse.json() as { version: number }).version;
+    expect((await overrideResponse.json() as { updated: number }).updated).toBe(1);
+    const profilesResponse = await profilesResponsePromise;
     await expect(page.getByText("Override de rol", { exact: true })).toBeVisible();
+    const profiles = await profilesResponse.json() as {
+      matrix: Record<string, Record<string, { version?: number | null }>>;
+    };
+    overrideVersion = profiles.matrix.receptionist?.["reservation:ota_record"]?.version ?? null;
+    expect(overrideVersion).toBeGreaterThan(0);
 
     await page.context().clearCookies();
     await login(page, receptionist);

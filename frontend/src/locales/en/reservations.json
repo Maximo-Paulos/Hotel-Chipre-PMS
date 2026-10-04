@@ -4,6 +4,9 @@
     "closeAria": "Close reservation details",
     "loading": "Loading reservation...",
     "loadError": "Could not load the reservation. Close and try again.",
+    "loadRetry": "Retry",
+    "operationLoadError": "Could not load the operational summary.",
+    "operationRetry": "Retry",
     "stay": {
       "title": "Stay",
       "roomNumber": "Room #{{id}}",
@@ -625,6 +628,7 @@
       "title": "Recent reservations",
       "updating": "Updating...",
       "loadError": "Could not load: {{message}}",
+      "retry": "Retry",
       "total": "Total: {{count}}",
       "columns": {
         "code": "Code",
@@ -918,6 +922,8 @@
       "financeNextAction": "Suggested next action: {{action}}",
       "operationEyebrow": "Operations",
       "operationUpdating": "Updating...",
+      "operationLoadError": "Could not load the operational summary.",
+      "operationRetry": "Retry",
       "operationAllocation": "Allocation",
       "operationManualReview": "Manual review",
       "operationYes": "Yes",

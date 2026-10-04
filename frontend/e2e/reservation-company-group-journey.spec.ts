@@ -120,7 +120,7 @@ test("owner creates a four-room company group and sees its total balance in the 
   await form.getByPlaceholder("Nombre").fill("Huésped");
   await form.getByPlaceholder("Apellido").fill(guestLastName);
   await form.getByPlaceholder("Email").fill(`${suffix}@example.test`);
-  await form.getByPlaceholder("Teléfono").fill("1112345678");
+  await form.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
   await form.getByLabel("Tipo de documento").selectOption("DNI");
   await form.getByPlaceholder("Documento").fill(`GROUP-${suffix}`);
   await form.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();

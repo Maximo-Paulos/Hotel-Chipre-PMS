@@ -25,7 +25,9 @@ test("dashboard separates loading, error, and empty states for reservations and 
       ? "upcoming"
       : url.searchParams.has("from_date")
         ? "activity"
-        : null;
+        : url.pathname.endsWith("/reservations/actions/pending")
+          ? "pending"
+          : null;
     if (!key) return route.continue();
     stalledKeys.add(key);
 
@@ -43,17 +45,22 @@ test("dashboard separates loading, error, and empty states for reservations and 
   await login(page);
   await expect(page.getByTestId("dashboard-upcoming-loading")).toBeVisible();
   await expect(page.getByTestId("dashboard-activity-loading")).toBeVisible();
-  expect([...stalledKeys].sort()).toEqual(["activity", "upcoming"]);
+  await expect(page.getByTestId("dashboard-pending-actions-loading")).toBeVisible();
+  expect([...stalledKeys].sort()).toEqual(["activity", "pending", "upcoming"]);
   releaseRequests();
 
   await expect(page.getByTestId("dashboard-upcoming-error")).toBeVisible();
   await expect(page.getByTestId("dashboard-activity-error")).toBeVisible();
+  await expect(page.getByTestId("dashboard-pending-actions-error")).toBeVisible();
   await expect(page.getByTestId("dashboard-upcoming-empty")).toHaveCount(0);
   await expect(page.getByTestId("dashboard-activity-empty")).toHaveCount(0);
+  await expect(page.getByTestId("dashboard-pending-actions-empty")).toHaveCount(0);
 
   allowRecovery = true;
   await page.getByTestId("dashboard-upcoming-error").getByRole("button", { name: "Reintentar" }).click();
   await page.getByTestId("dashboard-activity-error").getByRole("button", { name: "Reintentar" }).click();
+  await page.getByTestId("dashboard-pending-actions-error").getByRole("button", { name: "Reintentar" }).click();
   await expect(page.getByTestId("dashboard-upcoming-empty")).toBeVisible();
   await expect(page.getByTestId("dashboard-activity-empty")).toBeVisible();
+  await expect(page.getByTestId("dashboard-pending-actions-empty")).toBeVisible();
 });

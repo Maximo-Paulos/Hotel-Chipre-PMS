@@ -37,6 +37,7 @@ from app.services.operational_task_service import (
     serialize_task,
     serialize_task_attachment,
     serialize_task_event,
+    task_author_labels,
     task_attachment_content,
     task_history,
     update_task,
@@ -129,10 +130,19 @@ def get_operational_tasks(
         assigned_to_user_ids={None, context.user_id} if operator_scoped else None,
         limit=limit,
     )
+    visible_tasks = [task for task in tasks if task_type is None or task.task_type == task_type]
+    author_names = task_author_labels(
+        db,
+        hotel_id=context.hotel_id,
+        user_ids={task.created_by_user_id for task in visible_tasks},
+    )
     return [
-        serialize_task(task, include_reservation_context=_can_read_reservation_context(db, context))
-        for task in tasks
-        if task_type is None or task.task_type == task_type
+        serialize_task(
+            task,
+            author_name=author_names.get(task.created_by_user_id),
+            include_reservation_context=_can_read_reservation_context(db, context),
+        )
+        for task in visible_tasks
     ]
 
 
@@ -166,9 +176,18 @@ def create_operational_task(
             due_at=data.due_at,
             created_by_user_id=context.user_id,
         )
+        author_names = task_author_labels(
+            db,
+            hotel_id=context.hotel_id,
+            user_ids={task.created_by_user_id},
+        )
         db.commit()
         db.refresh(task)
-        return serialize_task(task, include_reservation_context=_can_read_reservation_context(db, context))
+        return serialize_task(
+            task,
+            author_name=author_names.get(task.created_by_user_id),
+            include_reservation_context=_can_read_reservation_context(db, context),
+        )
     except OperationalTaskError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -218,9 +237,18 @@ def patch_operational_task(
             due_at=data.due_at if can_manage else None,
             comment=data.comment,
         )
+        author_names = task_author_labels(
+            db,
+            hotel_id=context.hotel_id,
+            user_ids={task.created_by_user_id},
+        )
         db.commit()
         db.refresh(task)
-        return serialize_task(task, include_reservation_context=_can_read_reservation_context(db, context))
+        return serialize_task(
+            task,
+            author_name=author_names.get(task.created_by_user_id),
+            include_reservation_context=_can_read_reservation_context(db, context),
+        )
     except TaskVersionConflict as exc:
         db.rollback()
         raise _conflict(exc) from exc
@@ -265,9 +293,18 @@ def resolve_operational_task(
             status=OperationalTaskStatusEnum.RESOLVED,
             comment=data.comment,
         )
+        author_names = task_author_labels(
+            db,
+            hotel_id=context.hotel_id,
+            user_ids={task.created_by_user_id},
+        )
         db.commit()
         db.refresh(task)
-        return serialize_task(task, include_reservation_context=_can_read_reservation_context(db, context))
+        return serialize_task(
+            task,
+            author_name=author_names.get(task.created_by_user_id),
+            include_reservation_context=_can_read_reservation_context(db, context),
+        )
     except TaskVersionConflict as exc:
         db.rollback()
         raise _conflict(exc) from exc
