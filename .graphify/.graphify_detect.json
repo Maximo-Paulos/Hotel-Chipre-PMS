@@ -1637,9 +1637,9 @@
     "video": []
   },
   "total_files": 1627,
-  "total_words": 2125288,
+  "total_words": 2130619,
   "needs_graph": true,
-  "warning": "Large corpus: 1627 files · ~2,125,288 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1627 files · ~2,130,619 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1660,7 +1660,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "7899f9d828c39e899dfa398a3a2e58a61aa9289f",
+    "source_hash": "d4fcd5c191a8a7629cda404cfb7849f9b116c5de",
     "branches": [
       "codex/day2-feedback",
       "fix/day0-day1-final-patches",
@@ -1668,6 +1668,7 @@
       "fix/day1-company-fx-routes",
       "fix/day2-runtime-followup",
       "fix/hotel-sim-day0-day1",
+      "fix/master-admin-dashboard-rls-context",
       "fix/operational-task-version-cache",
       "fix/postmerge-day2-reliability",
       "main",
@@ -1683,11 +1684,11 @@
     "source": "default-auto",
     "root": ".",
     "git_root": ".",
-    "head": "7899f9d828c39e899dfa398a3a2e58a61aa9289f",
+    "head": "d4fcd5c191a8a7629cda404cfb7849f9b116c5de",
     "candidate_count": 1800,
     "included_count": 1627,
     "excluded_untracked_count": 0,
-    "excluded_ignored_count": 17504,
+    "excluded_ignored_count": 17746,
     "excluded_sensitive_count": 15,
     "missing_committed_count": 0,
     "warnings": [],
