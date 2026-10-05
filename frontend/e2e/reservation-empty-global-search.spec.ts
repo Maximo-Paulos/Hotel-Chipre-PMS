@@ -40,7 +40,10 @@ test("empty global reservation search does not fetch the full reservations list"
   expect(listRequests.length).toBeGreaterThan(0);
   expect(listRequests.some((value) => {
     const params = new URL(value).searchParams;
-    return params.get("limit") === "200" && params.get("order") === "check_in";
+    return params.get("limit") === "200" &&
+      params.get("order") === "check_in" &&
+      !params.has("from_date") &&
+      !params.has("to_date");
   })).toBe(true);
   expect(listRequests.some((value) => new URL(value).search === "")).toBe(false);
 });
