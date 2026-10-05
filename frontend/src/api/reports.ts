@@ -191,6 +191,17 @@ export type RevenueReport = {
   };
 };
 
+export type BookedValueReport = {
+  total: CurrencyAmount | null;
+  currency_code: string | null;
+  by_currency: Array<{
+    currency_code: string;
+    amount: CurrencyAmount;
+    reservation_count: number;
+    booked_night_count: number;
+  }>;
+};
+
 export const getDailyOperationalReport = (reportDate: string, session?: SessionLike, signal?: AbortSignal) =>
   apiFetch<DailyOperationalReport>(
     `/api/reports/operational/daily?report_date=${encodeURIComponent(reportDate)}`,
@@ -215,6 +226,12 @@ export const getOccupancyReport = (startDate: string, endDate: string, session?:
 export const getRevenueReport = (startDate: string, endDate: string, session?: SessionLike, signal?: AbortSignal) =>
   apiFetch<RevenueReport>(
     `/api/reports/revenue?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+    { session, signal }
+  );
+
+export const getBookedValueReport = (startDate: string, endDate: string, session?: SessionLike, signal?: AbortSignal) =>
+  apiFetch<BookedValueReport>(
+    `/api/reports/booked-value?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
     { session, signal }
   );
 

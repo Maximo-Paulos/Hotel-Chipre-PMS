@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
 import { usePendingReservationActions, useReservations } from "../../hooks/useReservations";
-import { useOccupancyReport, useRevenueReport, useTodayArrivalCount } from "../../hooks/useReports";
+import { useBookedValueReport, useOccupancyReport, useTodayArrivalCount } from "../../hooks/useReports";
 import { isDeferredCompanyReservation } from "../../api/reservations";
 import { usePendingCashCloseReports } from "../../hooks/useCashRegister";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
@@ -81,7 +81,7 @@ export function DashboardPage() {
   const occupancyQuery = useOccupancyReport(today, today, canViewOperationalReports);
   // The monthly financial cards use the permission-protected server aggregate,
   // not this paginated reservation list (which is capped for activity views).
-  const bookedValueQuery = useRevenueReport(monthFrom, monthTo, canViewFinancial);
+  const bookedValueQuery = useBookedValueReport(monthFrom, monthTo, canViewFinancial);
   // Upcoming arrivals are filtered and ordered by the server from the
   // hotel's local day. This avoids hiding an arrival merely because newer
   // reservations were created afterwards.
@@ -108,7 +108,7 @@ export function DashboardPage() {
     const noOccupancyDataText = t("cards.occupancyToday.noData");
     const occupancyUnavailableText = t("cards.occupancyToday.permissionUnavailable");
 
-    const bookedCurrencies = bookedValueQuery.data?.booked_value.by_currency ?? [];
+    const bookedCurrencies = bookedValueQuery.data?.by_currency ?? [];
     const hasBookedReservations = bookedCurrencies.length > 0;
     const reservationValueByCurrency = bookedCurrencies
       .map((item) => formatMoney(Number(item.amount), item.currency_code))

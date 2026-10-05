@@ -19,12 +19,13 @@ from app.models.transaction import Transaction, TransactionStatusEnum, Transacti
 from app.models.room import Room
 from app.schemas.reports import (
     ArrivalCountRead,
+    BookedValueRead,
     DailyOperationalReportRead,
     NightlyOperationalSummaryRead,
     OperationalReportDeliveryRead,
     RevenueReportRead,
 )
-from app.services.financial_report_service import build_financial_report
+from app.services.financial_report_service import build_booked_value_report, build_financial_report
 from app.services.financial_report_service import _hotel_bounds
 from app.services.hotel_outbound_email_service import HotelOutboundEmailError, send_hotel_email
 from app.services.operational_report_service import (
@@ -447,6 +448,31 @@ def revenue_report(
 
     try:
         return build_financial_report(
+            db,
+            hotel_id=context.hotel_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/booked-value", response_model=BookedValueRead)
+def booked_value_report(
+    start_date: date = Query(default=None),
+    end_date: date = Query(default=None),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
+):
+    """Return the lightweight booked-value KPI without building the full finance report."""
+    if start_date is None or end_date is None:
+        default_date = hotel_today(db, context.hotel_id)
+        if start_date is None:
+            start_date = default_date - timedelta(days=30)
+        if end_date is None:
+            end_date = default_date
+    try:
+        return build_booked_value_report(
             db,
             hotel_id=context.hotel_id,
             start_date=start_date,

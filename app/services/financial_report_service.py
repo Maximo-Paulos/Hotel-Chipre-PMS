@@ -85,6 +85,101 @@ def _booked_amount_in_window(reservation: Reservation, *, start_date: date, end_
     return sum(nightly_amounts[first_night:first_night + window_nights], ZERO)
 
 
+def _validate_report_window(*, start_date: date, end_date: date) -> None:
+    if end_date < start_date:
+        raise ValueError("La fecha final debe ser igual o posterior a la inicial")
+    if (end_date - start_date).days > 366:
+        raise ValueError("El período no puede superar 366 días")
+
+
+def _build_booked_value_projection(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservations: list[Reservation],
+    start_date: date,
+    end_date: date,
+) -> tuple[dict, set[int]]:
+    """Build the booked-value contract and return its deferred reservation IDs."""
+    deferred_ids = deferred_company_reservation_ids(
+        db,
+        hotel_id=hotel_id,
+        reservations=reservations,
+    )
+    booked_by_currency: dict[str, Decimal] = defaultdict(lambda: ZERO)
+    booked_count_by_currency: dict[str, int] = defaultdict(int)
+    booked_night_count_by_currency: dict[str, int] = defaultdict(int)
+    for reservation in reservations:
+        if reservation.id in deferred_ids:
+            continue
+        currency = str(reservation.currency_code or "ARS").strip().upper()
+        booked_by_currency[currency] += _booked_amount_in_window(
+            reservation,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        booked_count_by_currency[currency] += 1
+        booked_night_count_by_currency[currency] += _booked_nights_in_window(
+            reservation,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    currencies = [
+        {
+            "currency_code": currency,
+            "amount": _money(amount),
+            "reservation_count": booked_count_by_currency[currency],
+            "booked_night_count": booked_night_count_by_currency[currency],
+        }
+        for currency, amount in sorted(booked_by_currency.items())
+    ]
+    return {
+        "total": currencies[0]["amount"] if len(currencies) == 1 else None,
+        "currency_code": currencies[0]["currency_code"] if len(currencies) == 1 else None,
+        "by_currency": currencies,
+    }, deferred_ids
+
+
+def build_booked_value_report(
+    db: Session,
+    *,
+    hotel_id: int,
+    start_date: date,
+    end_date: date,
+) -> dict:
+    """Return only the booked-value projection used by the dashboard KPIs."""
+    _validate_report_window(start_date=start_date, end_date=end_date)
+    reservations = (
+        db.query(
+            Reservation.id,
+            Reservation.hotel_id,
+            Reservation.company_id,
+            Reservation.settlement_status,
+            Reservation.check_in_date,
+            Reservation.check_out_date,
+            Reservation.total_amount,
+            Reservation.currency_code,
+        )
+        .filter(
+            Reservation.hotel_id == hotel_id,
+            Reservation.deleted_at.is_(None),
+            Reservation.check_in_date <= end_date,
+            Reservation.check_out_date > start_date,
+            Reservation.status.notin_([ReservationStatusEnum.CANCELLED, ReservationStatusEnum.NO_SHOW]),
+        )
+        .all()
+    )
+    booked_value, _deferred_ids = _build_booked_value_projection(
+        db,
+        hotel_id=hotel_id,
+        reservations=reservations,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return booked_value
+
+
 def build_financial_report(
     db: Session,
     *,
@@ -92,10 +187,7 @@ def build_financial_report(
     start_date: date,
     end_date: date,
 ) -> dict:
-    if end_date < start_date:
-        raise ValueError("La fecha final debe ser igual o posterior a la inicial")
-    if (end_date - start_date).days > 366:
-        raise ValueError("El período no puede superar 366 días")
+    _validate_report_window(start_date=start_date, end_date=end_date)
 
     hotel = db.get(HotelConfiguration, hotel_id)
     timezone_name = normalize_timezone((hotel.hotel_timezone if hotel else None) or "UTC")
@@ -217,9 +309,6 @@ def build_financial_report(
 
     # Booked room value is not revenue recognized or money collected. Keep it
     # as a separate reservation measure and group it by the reservation currency.
-    booked_by_currency: dict[str, Decimal] = defaultdict(lambda: ZERO)
-    booked_count_by_currency: dict[str, int] = defaultdict(int)
-    booked_night_count_by_currency: dict[str, int] = defaultdict(int)
     booked_reservations = (
         db.query(Reservation)
         .filter(
@@ -231,34 +320,13 @@ def build_financial_report(
         )
         .all()
     )
-    booked_deferred_ids = deferred_company_reservation_ids(
-        db, hotel_id=hotel_id, reservations=booked_reservations
+    booked_value, booked_deferred_ids = _build_booked_value_projection(
+        db,
+        hotel_id=hotel_id,
+        reservations=booked_reservations,
+        start_date=start_date,
+        end_date=end_date,
     )
-    for reservation in booked_reservations:
-        if reservation.id in booked_deferred_ids:
-            continue
-        currency = str(reservation.currency_code or "ARS").strip().upper()
-        booked_by_currency[currency] += _booked_amount_in_window(
-            reservation,
-            start_date=start_date,
-            end_date=end_date,
-        )
-        booked_count_by_currency[currency] += 1
-        booked_night_count_by_currency[currency] += _booked_nights_in_window(
-            reservation,
-            start_date=start_date,
-            end_date=end_date,
-        )
-    booked_currencies = [
-        {
-            "currency_code": currency,
-            "amount": _money(amount),
-            "reservation_count": booked_count_by_currency[currency],
-            "booked_night_count": booked_night_count_by_currency[currency],
-        }
-        for currency, amount in sorted(booked_by_currency.items())
-    ]
-    booked_total = booked_currencies[0]["amount"] if len(booked_currencies) == 1 else None
 
     # Deprecated compatibility projection. Historically `expected` included
     # lodging value for non-deferred stays and selected company-night charges
@@ -476,9 +544,7 @@ def build_financial_report(
             "by_currency": expected_currencies,
         },
         "booked_value": {
-            "total": booked_total,
-            "currency_code": booked_currencies[0]["currency_code"] if len(booked_currencies) == 1 else None,
-            "by_currency": booked_currencies,
+            **booked_value,
         },
         "external_ota_collected": {
             "by_currency": [

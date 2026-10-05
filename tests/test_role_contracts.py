@@ -217,10 +217,12 @@ def test_report_permissions_split_operational_from_financial(role_client):
     assert client.get("/api/reports/occupancy").status_code == 200
     assert client.get("/api/reports/daily").status_code == 403
     assert client.get("/api/reports/revenue").status_code == 403
+    assert client.get("/api/reports/booked-value").status_code == 403
 
     auth["role"] = "owner"
     assert client.get("/api/reports/daily").status_code == 200
     assert client.get("/api/reports/revenue").status_code == 200
+    assert client.get("/api/reports/booked-value").status_code == 200
 
     co_owner_permissions = set(get_effective_permissions(db, 1, "co_owner"))
     assert PERMISSION_CASH_APPROVE_DIFFERENCE in co_owner_permissions

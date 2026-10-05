@@ -2,12 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   getDailyOperationalReport,
+  getBookedValueReport,
   getTodayArrivalCount,
   getOccupancyReport,
   getOperationalAlerts,
   getRevenueReport,
   type DailyOperationalReport,
   type ArrivalCount,
+  type BookedValueReport,
   type NightlyOperationalSummary,
   type OccupancyReport,
   type RevenueReport
@@ -31,6 +33,11 @@ const occupancyKey = (hotelId: number | null, startDate: string, endDate: string
 ];
 const revenueKey = (hotelId: number | null, startDate: string, endDate: string) => [
   ...queryKeys.reports(hotelId, "revenue"),
+  startDate,
+  endDate
+];
+const bookedValueKey = (hotelId: number | null, startDate: string, endDate: string) => [
+  ...queryKeys.reports(hotelId, "booked-value"),
   startDate,
   endDate
 ];
@@ -84,6 +91,17 @@ export function useRevenueReport(startDate: string, endDate: string, enabled = t
   return useQuery<RevenueReport>({
     queryKey: revenueKey(session.hotelId, startDate, endDate),
     queryFn: ({ signal }) => getRevenueReport(startDate, endDate, session, signal),
+    enabled: enabled && Boolean(startDate && endDate) && hasValidSession(session),
+    staleTime: 30 * 1000,
+    retry: false
+  });
+}
+
+export function useBookedValueReport(startDate: string, endDate: string, enabled = true) {
+  const { session } = useSession();
+  return useQuery<BookedValueReport>({
+    queryKey: bookedValueKey(session.hotelId, startDate, endDate),
+    queryFn: ({ signal }) => getBookedValueReport(startDate, endDate, session, signal),
     enabled: enabled && Boolean(startDate && endDate) && hasValidSession(session),
     staleTime: 30 * 1000,
     retry: false

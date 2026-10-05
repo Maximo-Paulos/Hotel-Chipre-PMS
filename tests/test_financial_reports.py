@@ -19,6 +19,7 @@ import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
+from app.models.company import Company
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import (
@@ -267,6 +268,116 @@ def test_booked_value_includes_and_prorates_stays_overlapping_the_report_window(
             "booked_night_count": 1,
         }
     ]
+
+
+def test_booked_value_endpoint_matches_full_report_with_bounded_query_count(reports_client):
+    client, db, base_reservation_id = reports_client
+    base_reservation = db.get(Reservation, base_reservation_id)
+    company = Company(
+        hotel_id=1,
+        legal_name="Deferred Company",
+        display_name="Deferred Company",
+        payment_deferred=True,
+    )
+    db.add(company)
+    db.flush()
+
+    crossing = _reservation_for_report(
+        db,
+        base_reservation=base_reservation,
+        confirmation_code="RES-BOOKED-CROSSING",
+        check_in_date=date(2026, 4, 30),
+        amount="300.01",
+        currency="ARS",
+    )
+    crossing.check_out_date = date(2026, 5, 3)
+    _reservation_for_report(
+        db,
+        base_reservation=base_reservation,
+        confirmation_code="RES-BOOKED-USD",
+        check_in_date=date(2026, 5, 1),
+        amount="80.00",
+        currency="USD",
+    )
+    deferred = _reservation_for_report(
+        db,
+        base_reservation=base_reservation,
+        confirmation_code="RES-BOOKED-DEFERRED",
+        check_in_date=date(2026, 5, 1),
+        amount="900.00",
+        currency="ARS",
+    )
+    deferred.company_id = company.id
+    cancelled = _reservation_for_report(
+        db,
+        base_reservation=base_reservation,
+        confirmation_code="RES-BOOKED-CANCELLED",
+        check_in_date=date(2026, 5, 1),
+        amount="500.00",
+        currency="ARS",
+    )
+    cancelled.status = ReservationStatusEnum.CANCELLED
+    db.flush()
+
+    statements = []
+
+    def capture_select(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", capture_select)
+    try:
+        narrow_response = client.get(
+            "/api/reports/booked-value",
+            params={"start_date": "2026-05-01", "end_date": "2026-05-01"},
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_select)
+
+    assert narrow_response.status_code == 200, narrow_response.text
+    booked_value_selects = [
+        statement.lower()
+        for statement in statements
+        if " from reservations" in statement.lower() or " from companies" in statement.lower()
+    ]
+    assert len(booked_value_selects) <= 2
+    assert narrow_response.json() == {
+        "total": None,
+        "currency_code": None,
+        "by_currency": [
+            {
+                "currency_code": "ARS",
+                "amount": "100.00",
+                "reservation_count": 1,
+                "booked_night_count": 1,
+            },
+            {
+                "currency_code": "USD",
+                "amount": "80.00",
+                "reservation_count": 1,
+                "booked_night_count": 1,
+            },
+        ],
+    }
+
+    full_statements = []
+
+    def capture_full_select(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            full_statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture_full_select)
+    try:
+        full_response = client.get(
+            "/api/reports/revenue",
+            params={"start_date": "2026-05-01", "end_date": "2026-05-01"},
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_full_select)
+    assert full_response.status_code == 200, full_response.text
+    assert narrow_response.json() == full_response.json()["booked_value"]
+    assert len(statements) < len(full_statements)
 
 
 def _reservation_for_report(
