@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-05T08:21:46.591Z",
+  "generatedAt": "2026-10-05T22:30:51.437Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -9317,58 +9317,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_financial_ledger_paid_amounts_by_reservation",
-      "name": "paid_amounts_by_reservation",
-      "entryPoint": "services_financial_ledger_paid_amounts_by_reservation",
-      "entryPointId": "services_financial_ledger_paid_amounts_by_reservation",
-      "path": [
-        "services_financial_ledger_paid_amounts_by_reservation",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_financial_ledger_paid_amounts_by_reservation",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_ledger.py"
-      ],
-      "criticality": 0.2325,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_financial_ledger_reconciled_paid_amounts_by_reservation",
-      "name": "reconciled_paid_amounts_by_reservation",
-      "entryPoint": "services_financial_ledger_reconciled_paid_amounts_by_reservation",
-      "entryPointId": "services_financial_ledger_reconciled_paid_amounts_by_reservation",
-      "path": [
-        "services_financial_ledger_reconciled_paid_amounts_by_reservation",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_financial_ledger_reconciled_paid_amounts_by_reservation",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_ledger.py"
-      ],
-      "criticality": 0.2325,
-      "warnings": []
-    },
-    {
       "id": "flow:versions_20260724_billing_adjustment_enum_values_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_20260724_billing_adjustment_enum_values_upgrade",
@@ -9468,36 +9416,6 @@
         "app/config.py"
       ],
       "criticality": 0.2325,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_financial_ledger_has_payment_history_for_cancellation",
-      "name": "has_payment_history_for_cancellation",
-      "entryPoint": "services_financial_ledger_has_payment_history_for_cancellation",
-      "entryPointId": "services_financial_ledger_has_payment_history_for_cancellation",
-      "path": [
-        "services_financial_ledger_has_payment_history_for_cancellation",
-        "services_financial_ledger_paid_amount_with_legacy_fallback",
-        "services_financial_ledger_completed_paid_amount",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_financial_ledger_has_payment_history_for_cancellation",
-        "services_financial_ledger_paid_amount_with_legacy_fallback",
-        "services_financial_ledger_completed_paid_amount",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "depth": 4,
-      "nodeCount": 6,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_ledger.py"
-      ],
-      "criticality": 0.2317,
       "warnings": []
     },
     {
@@ -9778,38 +9696,6 @@
       "fileCount": 1,
       "files": [
         "app/services/ota_service.py"
-      ],
-      "criticality": 0.2257,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_financial_ledger_operational_balance_due",
-      "name": "operational_balance_due",
-      "entryPoint": "services_financial_ledger_operational_balance_due",
-      "entryPointId": "services_financial_ledger_operational_balance_due",
-      "path": [
-        "services_financial_ledger_operational_balance_due",
-        "services_financial_ledger_billing_adjustment_totals_by_reservation",
-        "services_financial_ledger_paid_amount_with_legacy_fallback",
-        "services_financial_ledger_completed_paid_amount",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_financial_ledger_operational_balance_due",
-        "services_financial_ledger_billing_adjustment_totals_by_reservation",
-        "services_financial_ledger_paid_amount_with_legacy_fallback",
-        "services_financial_ledger_completed_paid_amount",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "depth": 4,
-      "nodeCount": 7,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_ledger.py"
       ],
       "criticality": 0.2257,
       "warnings": []
@@ -13949,6 +13835,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_financial_ledger_has_payment_history_for_cancellation",
+      "name": "has_payment_history_for_cancellation",
+      "entryPoint": "services_financial_ledger_has_payment_history_for_cancellation",
+      "entryPointId": "services_financial_ledger_has_payment_history_for_cancellation",
+      "path": [
+        "services_financial_ledger_has_payment_history_for_cancellation",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_completed_paid_amounts_by_reservation"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_has_payment_history_for_cancellation",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_completed_paid_amounts_by_reservation"
+      ],
+      "depth": 3,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
       "id": "flow:api_movement_groups_list_movement_groups",
       "name": "list_movement_groups",
       "entryPoint": "api_movement_groups_list_movement_groups",
@@ -14114,6 +14028,36 @@
       "fileCount": 1,
       "files": [
         "tests/perf/benchmark_pg.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_financial_ledger_operational_balance_due",
+      "name": "operational_balance_due",
+      "entryPoint": "services_financial_ledger_operational_balance_due",
+      "entryPointId": "services_financial_ledger_operational_balance_due",
+      "path": [
+        "services_financial_ledger_operational_balance_due",
+        "services_financial_ledger_billing_adjustment_totals_by_reservation",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_completed_paid_amounts_by_reservation"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_operational_balance_due",
+        "services_financial_ledger_billing_adjustment_totals_by_reservation",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_completed_paid_amounts_by_reservation"
+      ],
+      "depth": 3,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
       ],
       "criticality": 0.18,
       "warnings": []
@@ -16281,6 +16225,50 @@
       "warnings": []
     },
     {
+      "id": "flow:services_reservation_action_service_get_reservation_operations_summary",
+      "name": "get_reservation_operations_summary",
+      "entryPoint": "services_reservation_action_service_get_reservation_operations_summary",
+      "entryPointId": "services_reservation_action_service_get_reservation_operations_summary",
+      "path": [
+        "services_reservation_action_service_get_reservation_operations_summary",
+        "services_reservation_action_service_build_pending_actions",
+        "services_reservation_action_service_get_operations_related_data",
+        "services_reservation_action_service_get_reservation_or_error",
+        "services_reservation_action_service_serialize_adjustment",
+        "services_reservation_action_service_serialize_ota_link",
+        "services_reservation_action_service_serialize_room_move",
+        "services_reservation_action_service_actioncandidate",
+        "services_reservation_action_service_decorate_action",
+        "services_reservation_action_service_dedupe_candidates",
+        "services_reservation_action_service_fmt_date",
+        "services_reservation_action_service_guest_display_name",
+        "services_reservation_action_service_reservationactionerror"
+      ],
+      "qualifiedPath": [
+        "services_reservation_action_service_get_reservation_operations_summary",
+        "services_reservation_action_service_build_pending_actions",
+        "services_reservation_action_service_get_operations_related_data",
+        "services_reservation_action_service_get_reservation_or_error",
+        "services_reservation_action_service_serialize_adjustment",
+        "services_reservation_action_service_serialize_ota_link",
+        "services_reservation_action_service_serialize_room_move",
+        "services_reservation_action_service_actioncandidate",
+        "services_reservation_action_service_decorate_action",
+        "services_reservation_action_service_dedupe_candidates",
+        "services_reservation_action_service_fmt_date",
+        "services_reservation_action_service_guest_display_name",
+        "services_reservation_action_service_reservationactionerror"
+      ],
+      "depth": 2,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_action_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_collaboration_get_resource",
       "name": "get_resource",
       "entryPoint": "services_collaboration_get_resource",
@@ -16541,7 +16529,6 @@
         "services_reservation_action_service_list_pending_reservation_actions",
         "services_reservation_action_service_build_pending_actions",
         "services_reservation_action_service_candidate_reservation_ids",
-        "services_reservation_action_service_get_reservation_operations_summary",
         "services_reservation_action_service_latest_ota_links_by_reservation",
         "services_reservation_action_service_load_pending_action_reservations",
         "services_reservation_action_service_pending_action_financial_inputs",
@@ -16551,22 +16538,12 @@
         "services_reservation_action_service_decorate_action",
         "services_reservation_action_service_dedupe_candidates",
         "services_reservation_action_service_fmt_date",
-        "services_reservation_action_service_guest_display_name",
-        "services_reservation_action_service_row_could_generate_action",
-        "services_reservation_action_service_get_latest_ota_link",
-        "services_reservation_action_service_get_latest_room_move",
-        "services_reservation_action_service_get_operations_related_data",
-        "services_reservation_action_service_get_related_adjustments",
-        "services_reservation_action_service_get_reservation_or_error",
-        "services_reservation_action_service_serialize_adjustment",
-        "services_reservation_action_service_serialize_ota_link",
-        "services_reservation_action_service_serialize_room_move"
+        "services_reservation_action_service_guest_display_name"
       ],
       "qualifiedPath": [
         "services_reservation_action_service_list_pending_reservation_actions",
         "services_reservation_action_service_build_pending_actions",
         "services_reservation_action_service_candidate_reservation_ids",
-        "services_reservation_action_service_get_reservation_operations_summary",
         "services_reservation_action_service_latest_ota_links_by_reservation",
         "services_reservation_action_service_load_pending_action_reservations",
         "services_reservation_action_service_pending_action_financial_inputs",
@@ -16576,19 +16553,10 @@
         "services_reservation_action_service_decorate_action",
         "services_reservation_action_service_dedupe_candidates",
         "services_reservation_action_service_fmt_date",
-        "services_reservation_action_service_guest_display_name",
-        "services_reservation_action_service_row_could_generate_action",
-        "services_reservation_action_service_get_latest_ota_link",
-        "services_reservation_action_service_get_latest_room_move",
-        "services_reservation_action_service_get_operations_related_data",
-        "services_reservation_action_service_get_related_adjustments",
-        "services_reservation_action_service_get_reservation_or_error",
-        "services_reservation_action_service_serialize_adjustment",
-        "services_reservation_action_service_serialize_ota_link",
-        "services_reservation_action_service_serialize_room_move"
+        "services_reservation_action_service_guest_display_name"
       ],
       "depth": 2,
-      "nodeCount": 23,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/reservation_action_service.py"
@@ -24521,28 +24489,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_rooms_list_categories",
-      "name": "list_categories",
-      "entryPoint": "api_rooms_list_categories",
-      "entryPointId": "api_rooms_list_categories",
-      "path": [
-        "api_rooms_list_categories",
-        "api_rooms_attach_current_rate"
-      ],
-      "qualifiedPath": [
-        "api_rooms_list_categories",
-        "api_rooms_attach_current_rate"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/rooms.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:api_laundry_vendor_list_laundry_remitos",
       "name": "list_laundry_remitos",
       "entryPoint": "api_laundry_vendor_list_laundry_remitos",
@@ -25255,6 +25201,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_financial_ledger_paid_amounts_by_reservation",
+      "name": "paid_amounts_by_reservation",
+      "entryPoint": "services_financial_ledger_paid_amounts_by_reservation",
+      "entryPointId": "services_financial_ledger_paid_amounts_by_reservation",
+      "path": [
+        "services_financial_ledger_paid_amounts_by_reservation",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_external_paid_balance_credit"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_paid_amounts_by_reservation",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_external_paid_balance_credit"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:utils_localizeddateinput_parsedateinputvalue",
       "name": "parseDateInputValue",
       "entryPoint": "utils_localizeddateinput_parsedateinputvalue",
@@ -25694,6 +25664,30 @@
       "fileCount": 1,
       "files": [
         "app/api/settings_security.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_financial_ledger_reconciled_paid_amounts_by_reservation",
+      "name": "reconciled_paid_amounts_by_reservation",
+      "entryPoint": "services_financial_ledger_reconciled_paid_amounts_by_reservation",
+      "entryPointId": "services_financial_ledger_reconciled_paid_amounts_by_reservation",
+      "path": [
+        "services_financial_ledger_reconciled_paid_amounts_by_reservation",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_external_paid_balance_credit"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_reconciled_paid_amounts_by_reservation",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_external_paid_balance_credit"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
       ],
       "criticality": 0.16,
       "warnings": []
