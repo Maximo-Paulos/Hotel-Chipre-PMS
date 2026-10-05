@@ -210,13 +210,26 @@ def _invalidate_availability_cache(hotel_id: int) -> None:
         pass
 
 
-def _touch_facts(db: Session, hotel_id: int, date_from: date, date_to: date) -> None:
+def _touch_facts(
+    db: Session,
+    hotel_id: int,
+    date_from: date,
+    date_to: date,
+    *,
+    reservation_id: int | None = None,
+) -> None:
     """Same convention as _invalidate_availability_cache: these orchestration
     functions mutate reservation dates/room/total_amount directly instead of
     going through create_reservation/update_reservation_fields (which already
     carry this hook), so they need their own call.
     """
-    touch_reservation_fact_window(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+    touch_reservation_fact_window(
+        db,
+        hotel_id=hotel_id,
+        date_from=date_from,
+        date_to=date_to,
+        reservation_id=reservation_id,
+    )
 
 
 def _hotel_default_currency(db: Session, hotel_id: int) -> str:
@@ -688,7 +701,13 @@ def change_reservation_dates(
         # window; this one is now cancelled and must disappear from its
         # original window's facts immediately (revenue was previously
         # counted there).
-        _touch_facts(db, hotel_id, original_check_in, original_check_out)
+        _touch_facts(
+            db,
+            hotel_id,
+            original_check_in,
+            original_check_out,
+            reservation_id=reservation.id,
+        )
         requested_nights = (check_out_date - check_in_date).days
         if pricing_mode == "keep_current_total":
             explicit_total = reservation.total_amount
@@ -741,6 +760,7 @@ def change_reservation_dates(
         client_version=client_version,
         recalculate_pricing=pricing_mode == "recalculate",
         recalculate_explicit_price=pricing_mode == "recalculate",
+        refresh_facts=False,
     )
     status_transitioned = False
     if (
@@ -755,19 +775,19 @@ def change_reservation_dates(
             reason_code="date_change_auto_fully_paid",
             notes="Date change recalculated total below or equal to paid amount",
             changed_by_user_id=changed_by_user_id,
+            refresh_facts=False,
         )
         status_transitioned = True
     reservation.notes = ((reservation.notes or "") + f"\n[DATE CHANGE] {reason or 'Date changed with payments preserved'}").strip()
     db.flush()
-    # update_reservation_fields() already touched the union of old/new dates,
-    # but a keep_current_total override (or the FULLY_PAID transition above)
-    # changes revenue/status *after* that touch ran -- re-touch with the
-    # final values so the fact rows don't lag behind this request.
+    # Update and status transition deferred their individual refreshes so the
+    # final values are materialized once for the union of old/new stay dates.
     _touch_facts(
         db,
         hotel_id,
         min(original_check_in, reservation.check_in_date),
         max(original_check_out, reservation.check_out_date),
+        reservation_id=reservation.id,
     )
     return ReservationDateChangeResult(
         original_reservation=reservation,
@@ -1059,7 +1079,13 @@ def extend_reservation_stay(
 
     db.flush()
     _invalidate_availability_cache(hotel_id)
-    _touch_facts(db, hotel_id, reservation.check_in_date, max(original_check_out, reservation.check_out_date))
+    _touch_facts(
+        db,
+        hotel_id,
+        reservation.check_in_date,
+        max(original_check_out, reservation.check_out_date),
+        reservation_id=reservation.id,
+    )
     return ReservationExtensionResult(
         reservation=reservation,
         extension_amount=amount,
@@ -1279,7 +1305,13 @@ def move_reservation_room(
             created_by_user_id=moved_by_user_id,
         )
     _invalidate_availability_cache(hotel_id)
-    _touch_facts(db, hotel_id, reservation.check_in_date, reservation.check_out_date)
+    _touch_facts(
+        db,
+        hotel_id,
+        reservation.check_in_date,
+        reservation.check_out_date,
+        reservation_id=reservation.id,
+    )
     record_manual_override_feedback(
         db,
         hotel_id=hotel_id,

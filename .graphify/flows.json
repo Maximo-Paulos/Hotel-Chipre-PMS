@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-05T00:20:25.722Z",
+  "generatedAt": "2026-10-05T03:42:43.884Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -12723,7 +12723,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_currency_unavailable_for"
       ],
       "qualifiedPath": [
@@ -12744,7 +12744,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 4,
@@ -12779,7 +12779,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_currency_unavailable_for"
       ],
       "qualifiedPath": [
@@ -12800,7 +12800,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 4,
@@ -13234,7 +13234,7 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
-        "services_analytics_service_ensure_utc",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
         "services_analytics_service_currency_unavailable_for"
@@ -13250,7 +13250,7 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
-        "services_analytics_service_ensure_utc",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
         "services_analytics_service_currency_unavailable_for"
@@ -13290,7 +13290,7 @@
         "services_analytics_service_unavailable_currency_metadata",
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc"
+        "services_analytics_service_analytics_fact_refresh_guard"
       ],
       "qualifiedPath": [
         "services_analytics_service_build_home_payload",
@@ -13313,7 +13313,7 @@
         "services_analytics_service_unavailable_currency_metadata",
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc"
+        "services_analytics_service_analytics_fact_refresh_guard"
       ],
       "depth": 3,
       "nodeCount": 21,
@@ -13345,7 +13345,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_currency_unavailable_for"
       ],
       "qualifiedPath": [
@@ -13364,7 +13364,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 3,
@@ -13441,7 +13441,7 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
-        "services_analytics_service_ensure_utc",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
         "services_analytics_service_currency_unavailable_for"
@@ -13460,7 +13460,7 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
-        "services_analytics_service_ensure_utc",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
         "services_analytics_service_currency_unavailable_for"
@@ -13491,8 +13491,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc",
-        "services_analytics_service_now",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_currency_unavailable_for"
       ],
       "qualifiedPath": [
@@ -13507,12 +13506,11 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc",
-        "services_analytics_service_now",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 3,
-      "nodeCount": 14,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -13545,7 +13543,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_currency_unavailable_for"
       ],
       "qualifiedPath": [
@@ -13568,7 +13566,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc",
+        "services_analytics_service_analytics_fact_refresh_guard",
         "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 3,
@@ -13599,7 +13597,7 @@
         "services_analytics_service_money_str",
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
-        "services_analytics_service_ensure_utc"
+        "services_analytics_service_analytics_fact_refresh_guard"
       ],
       "qualifiedPath": [
         "services_analytics_service_build_starter_summary_payload",
@@ -13615,7 +13613,7 @@
         "services_analytics_service_money_str",
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
-        "services_analytics_service_ensure_utc"
+        "services_analytics_service_analytics_fact_refresh_guard"
       ],
       "depth": 3,
       "nodeCount": 14,
@@ -15934,8 +15932,7 @@
         "services_analytics_service_money_str",
         "services_analytics_service_serialize_company",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc",
-        "services_analytics_service_now"
+        "services_analytics_service_analytics_fact_refresh_guard"
       ],
       "qualifiedPath": [
         "services_analytics_service_get_company_fact_detail",
@@ -15948,11 +15945,10 @@
         "services_analytics_service_money_str",
         "services_analytics_service_serialize_company",
         "services_analytics_service_unavailable_currencies",
-        "services_analytics_service_ensure_utc",
-        "services_analytics_service_now"
+        "services_analytics_service_analytics_fact_refresh_guard"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 11,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"

@@ -293,7 +293,14 @@ def _invalidate_availability_cache(hotel_id: int | None) -> None:
         )
 
 
-def _touch_facts(db: Session, hotel_id: int | None, date_from: date | None, date_to: date | None) -> None:
+def _touch_facts(
+    db: Session,
+    hotel_id: int | None,
+    date_from: date | None,
+    date_to: date | None,
+    *,
+    reservation_id: int | None = None,
+) -> None:
     """Keep FactReservationDaily/FactRoomOccupancyDaily in sync with a
     reservation write, called at the same sites as _invalidate_availability_cache.
     """
@@ -301,7 +308,13 @@ def _touch_facts(db: Session, hotel_id: int | None, date_from: date | None, date
         return
     from app.services.analytics_facts import touch_reservation_fact_window
 
-    touch_reservation_fact_window(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+    touch_reservation_fact_window(
+        db,
+        hotel_id=hotel_id,
+        date_from=date_from,
+        date_to=date_to,
+        reservation_id=reservation_id,
+    )
 
 
 def _notify_reservation_event(
@@ -1574,7 +1587,13 @@ def create_reservation(
             reservation_id=reservation.id,
         )
     _invalidate_availability_cache(hotel_id)
-    _touch_facts(db, hotel_id, reservation.check_in_date, reservation.check_out_date)
+    _touch_facts(
+        db,
+        hotel_id,
+        reservation.check_in_date,
+        reservation.check_out_date,
+        reservation_id=reservation.id,
+    )
     _notify_reservation_event(
         db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.created",
         title=f"New reservation {reservation.confirmation_code}", dedupe_suffix="created",
@@ -1638,6 +1657,7 @@ def transition_reservation_status(
     reason_code: Optional[str] = None,
     notes: Optional[str] = None,
     changed_by_user_id: Optional[int] = None,
+    refresh_facts: bool = True,
 ) -> Reservation:
     """
     Transition a reservation to a new status following the state machine rules.
@@ -1671,7 +1691,14 @@ def transition_reservation_status(
     )
     db.flush()
     _invalidate_availability_cache(reservation.hotel_id)
-    _touch_facts(db, reservation.hotel_id, reservation.check_in_date, reservation.check_out_date)
+    if refresh_facts:
+        _touch_facts(
+            db,
+            reservation.hotel_id,
+            reservation.check_in_date,
+            reservation.check_out_date,
+            reservation_id=reservation.id,
+        )
     if new_status == ReservationStatusEnum.CANCELLED:
         _notify_reservation_event(
             db, hotel_id=reservation.hotel_id, reservation=reservation, event_type="reservation.cancelled",
@@ -2113,6 +2140,7 @@ def update_reservation_fields(
     recalculate_pricing: bool = True,
     recalculate_explicit_price: bool = False,
     preserve_unclassified_price: bool = False,
+    refresh_facts: bool = True,
 ) -> Reservation:
     hotel_id = _resolve_hotel_id(hotel_id, room=reservation.room if hasattr(reservation, "room") else None)
     if client_version is not None:
@@ -2416,12 +2444,14 @@ def update_reservation_fields(
     # Touch the union of old+new stay range: a date/room change can move a
     # reservation out of a window that was already materialized, and the
     # narrow self-heal on read only fires for windows with zero rows.
-    _touch_facts(
-        db,
-        hotel_id,
-        min(original_check_in, reservation.check_in_date),
-        max(original_check_out, reservation.check_out_date),
-    )
+    if refresh_facts:
+        _touch_facts(
+            db,
+            hotel_id,
+            min(original_check_in, reservation.check_in_date),
+            max(original_check_out, reservation.check_out_date),
+            reservation_id=reservation.id,
+        )
     _notify_reservation_event(
         db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.updated",
         title=f"Reservation {reservation.confirmation_code} updated", dedupe_suffix=f"updated:{reservation.version}",
@@ -2476,7 +2506,13 @@ def mark_reservation_no_show(
     reservation.version = (reservation.version or 0) + 1
     db.flush()
     _invalidate_availability_cache(hotel_id)
-    _touch_facts(db, hotel_id, reservation.check_in_date, reservation.check_out_date)
+    _touch_facts(
+        db,
+        hotel_id,
+        reservation.check_in_date,
+        reservation.check_out_date,
+        reservation_id=reservation.id,
+    )
     _notify_reservation_event(
         db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.no_show",
         title=f"Reservation {reservation.confirmation_code} marked no-show", dedupe_suffix=f"no_show:{reservation.version}",

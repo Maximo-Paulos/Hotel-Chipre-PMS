@@ -98,8 +98,10 @@ Only XLSX creates a job row in `analytics_export_jobs`.
 
 Facts are hotel-scoped and use the canonical contracts established in the core services layer.
 
-Reservation mutations refresh their affected PostgreSQL fact windows in the
-same transaction. Analytics reads can repair a missing or aged fact window
+Reservation mutations refresh the reservation's daily facts and the occupancy
+rows for its previous/current rooms and affected dates in the same transaction.
+Full-window refreshes remain available to recovery and maintenance paths.
+Analytics reads can repair a missing or aged fact window
 when `SYNC_FACT_REFRESH_ENABLED=true` (default) and the entire requested range
 is no wider than `SYNC_FACT_REFRESH_MAX_DAYS` (default 31, hard-capped at 31).
 An existing window is considered aged after
@@ -107,8 +109,12 @@ An existing window is considered aged after
 date ranges are never partially rebuilt on each read; their `data_as_of` and
 `source_lag_seconds` continue to report the oldest materialized row honestly.
 These fields describe fact materialization time, not a separate watermark of
-source-table writes. ClickHouse projection schedules are a distinct pipeline
-and do not refresh the PostgreSQL reservation and occupancy fact tables.
+source-table writes. A targeted write does not make unrelated older rows fresh;
+the first bounded analytics read after the age limit can still perform a full
+synchronous repair. This preserves freshness/FX reconciliation and means the
+targeted write path does not remove that separate read-time cost. ClickHouse
+projection schedules are a distinct pipeline and do not refresh the PostgreSQL
+reservation and occupancy fact tables.
 
 Reservation totals are allocated over the complete stay before a requested date window is selected. Partial or repeated refreshes therefore preserve the same nightly amounts independent of refresh order. `ADR` is PMS net room revenue over chargeable occupied nights; `RevPAR` is PMS net room revenue over sellable room nights. When a source currency cannot be converted with its saved FX snapshot, analytics tables mark that target currency unavailable instead of presenting zero as a real converted amount.
 
