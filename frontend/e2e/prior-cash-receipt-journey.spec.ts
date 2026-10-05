@@ -1,5 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const localizedName = (spanish: string, english: string) =>
+  new RegExp(`^(?:${escapeRegExp(spanish)}|${escapeRegExp(english)})$`, "i");
+const localizedText = (spanish: string, english: string) =>
+  new RegExp(`(?:${escapeRegExp(spanish)}|${escapeRegExp(english)})`, "i");
+
 const manager = {
   email: process.env.E2E_MANAGER_EMAIL || "manager@e2e.com",
   password: process.env.E2E_MANAGER_PASSWORD || "E2eManager1234!"
@@ -30,12 +36,15 @@ async function ensureCashSessionOpen(page: Page) {
   );
   await page.goto("/caja");
   await sessionsResponse;
-  const openingForm = page.locator("form").filter({ hasText: "Saldo inicial" }).filter({ hasText: "Abrir caja" });
-  const openButton = openingForm.getByRole("button", { name: "Abrir caja", exact: true });
+  const openingForm = page
+    .locator("form")
+    .filter({ hasText: localizedText("Saldo inicial", "Opening balance") })
+    .filter({ hasText: localizedText("Abrir caja", "Open cash register") });
+  const openButton = openingForm.getByRole("button", { name: localizedName("Abrir caja", "Open cash register") });
   if (await openButton.isVisible().catch(() => false)) {
-    await openingForm.getByText("Saldo inicial", { exact: true }).locator("..").locator("input").fill("50000");
+    await openingForm.getByText(localizedName("Saldo inicial", "Opening balance")).locator("..").locator("input").fill("50000");
     await openButton.click();
-    await expect(page.getByText("Caja abierta.", { exact: true })).toBeVisible();
+    await expect(page.getByText(localizedName("Caja abierta.", "Cash register opened."))).toBeVisible();
   }
 }
 
@@ -77,30 +86,32 @@ async function readDailyCashSummary(page: Page) {
 async function createReservation(page: Page, suffix: string) {
   const guestLastName = `QA-Previo ${suffix}`;
   await page.goto("/reservas");
-  await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
-  const form = page.locator("form").filter({ hasText: "Datos de la reserva" });
+  await page.getByRole("button", { name: /^(?:Crear reserva|Create reservation)$/i }).click();
+  const form = page.locator("form").filter({ hasText: localizedText("Datos de la reserva", "Reservation details") });
   await expect(form).toBeVisible();
 
-  await form.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
-  await form.getByPlaceholder("Nombre").fill("Huésped");
-  await form.getByPlaceholder("Apellido").fill(guestLastName);
-  await form.getByPlaceholder("Email").fill(`qa.prior.${suffix}@example.test`);
-  await form.getByPlaceholder("Teléfono").fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
-  await form.getByLabel("Tipo de documento").selectOption("DNI");
-  await form.getByPlaceholder("Documento").fill(`QAPREVIO-${suffix}`);
-  await form.getByRole("button", { name: "Crear Huésped y asignar ID", exact: true }).click();
-  await expect(page.getByText("Huésped creado y asignado", { exact: true })).toBeVisible();
+  await form
+    .getByRole("button", { name: localizedName("¿No lo encontrás? Crear huésped nuevo", "Can't find them? Create a new guest") })
+    .click();
+  await form.getByPlaceholder(localizedName("Nombre", "First name")).fill("Huésped");
+  await form.getByPlaceholder(localizedName("Apellido", "Last name")).fill(guestLastName);
+  await form.getByPlaceholder(localizedName("Email", "Email")).fill(`qa.prior.${suffix}@example.test`);
+  await form.getByPlaceholder(localizedName("Teléfono", "Phone")).fill(`11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`);
+  await form.getByLabel(localizedName("Tipo de documento", "Document type")).selectOption("DNI");
+  await form.getByPlaceholder(localizedName("Documento", "Document")).fill(`QAPREVIO-${suffix}`);
+  await form.getByRole("button", { name: localizedName("Crear Huésped y asignar ID", "Create guest and assign ID") }).click();
+  await expect(page.getByText(localizedName("Huésped creado y asignado", "Guest created and assigned"))).toBeVisible();
 
-  const categorySelect = form.locator("label").filter({ hasText: "Categoría" }).locator("select");
+  const categorySelect = form.locator("label").filter({ hasText: localizedText("Categoría", "Category") }).locator("select");
   const categoryOption = categorySelect.locator("option").filter({ hasText: "Standard E2E" });
   await expect(categoryOption).toHaveCount(1);
   await categorySelect.selectOption((await categoryOption.getAttribute("value"))!);
-  await form.getByLabel("Check-in", { exact: true }).fill(localIsoDate(60));
-  await form.getByLabel("Check-out", { exact: true }).fill(localIsoDate(63));
-  await form.getByRole("button", { name: "Crear", exact: true }).click();
-  await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
+  await form.getByLabel(localizedName("Check-in", "Check-in")).fill(localIsoDate(60));
+  await form.getByLabel(localizedName("Check-out", "Check-out")).fill(localIsoDate(63));
+  await form.getByRole("button", { name: localizedName("Crear", "Create") }).click();
+  await expect(page.getByText(localizedName("Reserva creada", "Reservation created"))).toBeVisible();
 
-  const row = page.locator("table").filter({ hasText: "Código" }).locator("tbody tr").filter({ hasText: guestLastName });
+  const row = page.locator("table").filter({ hasText: localizedText("Código", "Code") }).locator("tbody tr").filter({ hasText: guestLastName });
   await expect(row).toHaveCount(1);
   return { guestLastName, row };
 }
@@ -117,10 +128,14 @@ test("manager records prior cash outside the open drawer and reception cannot se
   await ensureCashSessionOpen(page);
   const beforePriorReceipt = await readDailyCashSummary(page);
   const { guestLastName, row } = await createReservation(page, suffix);
-  await row.getByRole("button", { name: "Editar", exact: true }).click();
-  const editForm = page.locator("div.fixed").filter({ hasText: "Pagos y balance" }).locator("form").filter({ hasText: "Pagos y balance" });
+  await row.getByRole("button", { name: localizedName("Editar", "Edit") }).click();
+  const editForm = page
+    .locator("div.fixed")
+    .filter({ hasText: localizedText("Pagos y balance", "Payments and balance") })
+    .locator("form")
+    .filter({ hasText: localizedText("Pagos y balance", "Payments and balance") });
   await expect(editForm).toBeVisible();
-  await expect(editForm.getByText("Cargando resumen...", { exact: true })).toHaveCount(0);
+  await expect(editForm.getByText(localizedName("Cargando resumen...", "Loading summary..."))).toHaveCount(0);
 
   await editForm.getByTestId("prior-receipt-toggle").check();
   await editForm.getByTestId("prior-receipt-date").fill(localIsoDate(-2));
@@ -129,7 +144,7 @@ test("manager records prior cash outside the open drawer and reception cannot se
     const url = new URL(request.url());
     return url.pathname === "/api/payments" && request.method() === "POST";
   });
-  await editForm.getByRole("button", { name: /Registrar Seña/ }).click();
+  await editForm.getByRole("button", { name: localizedText("Registrar Seña", "Register deposit") }).click();
   const payload = await paymentRequest.then((request) => request.postDataJSON()) as {
     amount: number;
     collected_before: boolean;
@@ -146,12 +161,12 @@ test("manager records prior cash outside the open drawer and reception cannot se
     transaction_type: "deposit"
   });
   expect(payload.amount).toBeGreaterThan(0);
-  await expect(page.getByText("Se registró la Seña", { exact: true })).toBeVisible();
+  await expect(page.getByText(localizedName("Se registró la Seña", "Deposit registered"))).toBeVisible();
   await expect(editForm.getByText(new RegExp(reason))).toBeVisible();
 
   const afterPriorReceipt = await readDailyCashSummary(page);
   const priorReceipts = page.getByTestId("cash-prior-receipts");
-  await expect(priorReceipts).toContainText("1 cobro(s)");
+  await expect(priorReceipts).toContainText(/1\s+(?:cobro\(s\)|receipt(?:\(s\))?)/i);
   await expect(priorReceipts).toContainText(reason);
   for (const field of ["gross_collected", "refunds", "net_collected", "physical_cash_net_collected"] as const) {
     expect(Number(afterPriorReceipt[field])).toBe(Number(beforePriorReceipt[field]));
@@ -171,10 +186,14 @@ test("manager records prior cash outside the open drawer and reception cannot se
   await page.context().clearCookies();
   await login(page, receptionist);
   await page.goto("/reservas");
-  const receptionistRow = page.locator("table").filter({ hasText: "Código" }).locator("tbody tr").filter({ hasText: guestLastName });
+  const receptionistRow = page.locator("table").filter({ hasText: localizedText("Código", "Code") }).locator("tbody tr").filter({ hasText: guestLastName });
   await expect(receptionistRow).toHaveCount(1);
-  await receptionistRow.getByRole("button", { name: "Editar", exact: true }).click();
-  const receptionistForm = page.locator("div.fixed").filter({ hasText: "Pagos y balance" }).locator("form").filter({ hasText: "Pagos y balance" });
+  await receptionistRow.getByRole("button", { name: localizedName("Editar", "Edit") }).click();
+  const receptionistForm = page
+    .locator("div.fixed")
+    .filter({ hasText: localizedText("Pagos y balance", "Payments and balance") })
+    .locator("form")
+    .filter({ hasText: localizedText("Pagos y balance", "Payments and balance") });
   await expect(receptionistForm).toBeVisible();
   await expect(receptionistForm.getByTestId("prior-receipt-toggle")).toHaveCount(0);
 });

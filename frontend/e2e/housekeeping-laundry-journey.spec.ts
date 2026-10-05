@@ -137,71 +137,52 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
 
 test("housekeeping board is usable on a mobile viewport in English", async ({ page }) => {
   test.setTimeout(120_000);
-  let originalLanguage: string | null = null;
+  await page.route("**/api/config/interface-language", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ interface_language: "en" })
+    })
+  );
 
-  try {
-    await login(page, owner, "/dashboard");
-    await page.goto("/settings/hotel");
-    const languageSelect = page.getByRole("combobox", { name: "Idioma de la interfaz", exact: true });
-    await expect(languageSelect).toBeVisible();
-    originalLanguage = await languageSelect.inputValue();
-    await languageSelect.selectOption("en");
-    await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
-    await expect(page.getByText("Cambios guardados.", { exact: true })).toBeVisible();
-    await logout(page);
-
-    await page.setViewportSize({ width: 390, height: 844 });
-    await login(page, housekeeping, "/habitaciones");
-    const boardResponsePromise = page.waitForResponse((response) =>
-      response.request().method() === "GET"
-        && new URL(response.url()).pathname === "/api/rooms/housekeeping-board"
-    );
-    await page.goto("/operacion/limpieza-hoy");
-    const boardResponse = await boardResponsePromise;
-    expect(boardResponse.status()).toBe(200);
-    const board = await boardResponse.json() as {
-      rooms: Array<Record<string, unknown>>;
-    };
-    const expectedRoomFields = [
-      "room_id",
-      "room_number",
-      "floor",
-      "category_name",
-      "operational_status",
-      "housekeeping_status",
-      "has_arrival_today",
-      "has_departure_today",
-      "has_stayover_today",
-      "maintenance_blocked"
-    ].sort();
-    for (const room of board.rooms) {
-      expect(Object.keys(room).sort()).toEqual(expectedRoomFields);
-    }
-
-    const main = page.locator("main");
-    await expect(main.getByRole("heading", { name: "Housekeeping today", exact: true })).toBeVisible();
-    await expect(main.getByRole("button", { name: "Refresh", exact: true })).toBeVisible();
-    await expect(main.getByRole("combobox", { name: "Cleaning status · 101", exact: true })).toBeVisible();
-    const layout = await page.evaluate(() => ({
-      viewportWidth: window.innerWidth,
-      documentWidth: document.documentElement.scrollWidth,
-      mainWidth: document.querySelector("main")?.clientWidth ?? 0,
-      mainContentWidth: document.querySelector("main")?.scrollWidth ?? 0
-    }));
-    expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth);
-    expect(layout.mainContentWidth).toBeLessThanOrEqual(layout.mainWidth);
-  } finally {
-    if (originalLanguage !== null && !page.isClosed()) {
-      await page.setViewportSize({ width: 1280, height: 800 });
-      if (await page.getByTestId("logout-btn").count()) await logout(page);
-      await login(page, owner, "/dashboard");
-      await page.goto("/settings/hotel");
-      const languageSelect = page.getByRole("combobox", { name: "Idioma de la interfaz", exact: true });
-      if ((await languageSelect.inputValue()) !== originalLanguage) {
-        await languageSelect.selectOption(originalLanguage);
-        await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
-        await expect(page.getByText("Cambios guardados.", { exact: true })).toBeVisible();
-      }
-    }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page, housekeeping, "/habitaciones");
+  const boardResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === "GET"
+      && new URL(response.url()).pathname === "/api/rooms/housekeeping-board"
+  );
+  await page.goto("/operacion/limpieza-hoy");
+  const boardResponse = await boardResponsePromise;
+  expect(boardResponse.status()).toBe(200);
+  const board = await boardResponse.json() as {
+    rooms: Array<Record<string, unknown>>;
+  };
+  const expectedRoomFields = [
+    "room_id",
+    "room_number",
+    "floor",
+    "category_name",
+    "operational_status",
+    "housekeeping_status",
+    "has_arrival_today",
+    "has_departure_today",
+    "has_stayover_today",
+    "maintenance_blocked"
+  ].sort();
+  for (const room of board.rooms) {
+    expect(Object.keys(room).sort()).toEqual(expectedRoomFields);
   }
+
+  const main = page.locator("main");
+  await expect(main.getByRole("heading", { name: "Housekeeping today", exact: true })).toBeVisible();
+  await expect(main.getByRole("button", { name: "Refresh", exact: true })).toBeVisible();
+  await expect(main.getByRole("combobox", { name: "Cleaning status · 101", exact: true })).toBeVisible();
+  const layout = await page.evaluate(() => ({
+    viewportWidth: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    mainWidth: document.querySelector("main")?.clientWidth ?? 0,
+    mainContentWidth: document.querySelector("main")?.scrollWidth ?? 0
+  }));
+  expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth);
+  expect(layout.mainContentWidth).toBeLessThanOrEqual(layout.mainWidth);
 });
