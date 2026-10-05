@@ -1641,9 +1641,9 @@
     "video": []
   },
   "total_files": 1631,
-  "total_words": 2141805,
+  "total_words": 2142009,
   "needs_graph": true,
-  "warning": "Large corpus: 1631 files · ~2,141,805 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1631 files · ~2,142,009 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1664,7 +1664,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "0a37da4cba223e5cb6f7fffebf0a02620e60de3a",
+    "source_hash": "790d7a1975541eda2a6906d90d33f76e62431d2a",
     "branches": [
       "codex/day2-feedback",
       "codex/postmerge-day2-fixes",
@@ -1678,6 +1678,7 @@
       "fix/outbox-publish-fastpath",
       "fix/pms-performance",
       "fix/postmerge-day2-reliability",
+      "fix/reject-unverified-gateway-payments",
       "main",
       "test/operational-prod-day-20261001",
       "test/stabilize-company-group-e2e"
@@ -1691,11 +1692,11 @@
     "source": "default-auto",
     "root": ".",
     "git_root": ".",
-    "head": "0a37da4cba223e5cb6f7fffebf0a02620e60de3a",
+    "head": "790d7a1975541eda2a6906d90d33f76e62431d2a",
     "candidate_count": 1807,
     "included_count": 1631,
-    "excluded_untracked_count": 0,
-    "excluded_ignored_count": 17812,
+    "excluded_untracked_count": 1,
+    "excluded_ignored_count": 17817,
     "excluded_sensitive_count": 15,
     "missing_committed_count": 0,
     "warnings": [],

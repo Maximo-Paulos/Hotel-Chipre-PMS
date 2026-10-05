@@ -24,6 +24,9 @@ from app.services.timezones import hotel_today
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
 
 router = APIRouter(prefix="/api/payments", tags=["Payments"])
+EXTERNAL_GATEWAY_METHODS = frozenset(
+    {PaymentMethodEnum.MERCADO_PAGO, PaymentMethodEnum.PAYPAL}
+)
 
 
 @router.post("", response_model=TransactionRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)
@@ -44,6 +47,14 @@ def make_payment(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="The prior receipt date cannot be in the future.",
                 )
+        if not is_refund and data.payment_method in EXTERNAL_GATEWAY_METHODS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Los pagos con Mercado Pago y PayPal requieren una respuesta verificada "
+                    "del proveedor; usá un link de pago."
+                ),
+            )
         if is_refund:
             authorize_permission(request, db, context, PERMISSION_PAYMENT_REFUND)
             if data.payment_method != PaymentMethodEnum.CASH:

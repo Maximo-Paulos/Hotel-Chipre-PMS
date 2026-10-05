@@ -316,8 +316,8 @@
     "hash": "bfd1c86da0ba53a3553b477d409cee11"
   },
   "app/api/payments.py": {
-    "mtime": 1791167661038.1416,
-    "hash": "7cffcf9c0e066f26f4027cd16a1ca960"
+    "mtime": 1791210526463.4375,
+    "hash": "b71d5f8f49144b9ebdc7a1737298bc20"
   },
   "app/api/permissions.py": {
     "mtime": 1791167661038.325,
@@ -3236,8 +3236,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1791206317669.2256,
-    "hash": "c72db42888e36457a1d3c8be398e3b49"
+    "mtime": 1791210730410.1543,
+    "hash": "f9e187b342dd248d0d31996b05e7a4ee"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1791167661258.7695,
@@ -3476,8 +3476,8 @@
     "hash": "ec7a2643efef092974c2fbf97d24c6d7"
   },
   "tests/test_payment_api_idempotency.py": {
-    "mtime": 1791167661293.0886,
-    "hash": "867372cd9367129cc3f505ea7d89bf4a"
+    "mtime": 1791210553251.4558,
+    "hash": "6a925a6512d3e5a1bfaecd0e712ab70a"
   },
   "frontend/e2e/role-journey.spec.ts": {
     "mtime": 1791167661152.584,
