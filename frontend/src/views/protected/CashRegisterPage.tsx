@@ -207,6 +207,7 @@ export function CashRegisterPage() {
   const canOperateCash = hasPermission("cash:operate");
   const canAdjustCash = hasPermission("cash:adjustment_manage");
   const canRecordCashExpense = hasPermission("cash:expense");
+  const canSubmitCashExpense = canOperateCash && canRecordCashExpense;
 
   // Authoritative figures come from the backend summary (same logic as the
   // arqueo), so the displayed "Esperado" always matches what the close computes.
@@ -255,6 +256,11 @@ export function CashRegisterPage() {
 
   const handleMovementSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (
+      !canOperateCash ||
+      (movementForm.movement_type === "expense" && !canSubmitCashExpense) ||
+      (movementForm.movement_type === "adjustment" && !canAdjustCash)
+    ) return;
     if (!selectedSession || selectedSession.status !== "open") return;
     setMessage(null);
     try {
@@ -933,9 +939,22 @@ export function CashRegisterPage() {
                   {selectedSession ? cashSessionStatusLabel[selectedSession.status] || selectedSession.status : "Selecciona una sesión"}
                 </p>
               </div>
-              <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
-                {movements.length} movimientos
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {canSubmitCashExpense ? (
+                  <button
+                    type="button"
+                    data-testid="cash-create-expense-button"
+                    aria-pressed={movementForm.movement_type === "expense"}
+                    onClick={() => setMovementForm((current) => ({ ...current, movement_type: "expense" }))}
+                    className="rounded-lg border border-brand-200 bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700"
+                  >
+                    Registrar gasto
+                  </button>
+                ) : null}
+                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+                  {movements.length} movimientos
+                </span>
+              </div>
             </div>
 
             {selectedSession && hasPermission("cash:operate") ? (
@@ -1005,7 +1024,7 @@ export function CashRegisterPage() {
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 >
                   <option value="income">Ingreso</option>
-                  <option value="expense" disabled={!canRecordCashExpense}>Gasto pendiente de aprobación</option>
+                  <option value="expense" disabled={!canSubmitCashExpense}>Gasto pendiente de aprobación</option>
                   <option value="adjustment" disabled={!canAdjustCash}>Ajuste manual (responsable + MFA)</option>
                 </select>
               </label>
@@ -1074,9 +1093,14 @@ export function CashRegisterPage() {
                   <p className="text-xs text-amber-800 md:col-span-2">El gasto queda pendiente. Solo Dueño, Codueña o Gerencia pueden aprobarlo con MFA; hasta entonces no cambia el saldo de caja.</p>
                 </>
               ) : null}
-              {movementForm.movement_type === "expense" && !canRecordCashExpense ? (
+              {movementForm.movement_type === "expense" && !canSubmitCashExpense ? (
                 <p className="text-xs text-amber-800 md:col-span-2">
-                  Los egresos manuales requieren autorización de responsable y MFA. Las devoluciones a huéspedes se registran desde el flujo de reembolso.
+                  Para cargar un gasto necesitás autorización para operar caja y registrar gastos. Las devoluciones a huéspedes se registran desde el flujo de reembolso.
+                </p>
+              ) : null}
+              {movementForm.movement_type === "expense" && canSubmitCashExpense && (!selectedSession || selectedSession.status !== "open") ? (
+                <p className="text-xs text-amber-800 md:col-span-2">
+                  Abrí una caja o seleccioná una sesión abierta para registrar el gasto.
                 </p>
               ) : null}
               <div className="md:col-span-2">
@@ -1088,7 +1112,7 @@ export function CashRegisterPage() {
               <div className="md:col-span-2 flex justify-end">
                 <button
                   type="submit"
-                  disabled={busy || !canOperateCash || (movementForm.movement_type === "expense" && !canRecordCashExpense) || (movementForm.movement_type === "adjustment" && !canAdjustCash) || !selectedSession || selectedSession.status !== "open" || Number(movementForm.amount) <= 0}
+                  disabled={busy || !canOperateCash || (movementForm.movement_type === "expense" && !canSubmitCashExpense) || (movementForm.movement_type === "adjustment" && !canAdjustCash) || !selectedSession || selectedSession.status !== "open" || Number(movementForm.amount) <= 0}
                   className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                 >
                   {movementForm.movement_type === "expense" ? "Registrar gasto pendiente" : "Registrar movimiento"}

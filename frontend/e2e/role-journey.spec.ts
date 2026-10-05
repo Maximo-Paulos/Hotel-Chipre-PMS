@@ -96,9 +96,22 @@ for (const persona of personas) {
     }
 
     await expect(allowedLink).toBeVisible();
+    const managerCashLink = navigation.locator('a[href="/caja"]');
+    if (persona.label === "manager") {
+      await revealCollapsedNavLink(managerCashLink);
+      await expect(managerCashLink).toBeVisible();
+    }
     await allowedLink.click();
     await expect(page).toHaveURL(new RegExp(`${persona.allowedPath.replaceAll("/", "\\/")}$`));
     await expect(page.getByRole("heading", { name: persona.allowedHeading })).toBeVisible();
+    if (persona.label === "manager") {
+      await managerCashLink.click();
+      await expect(page.getByRole("heading", { name: "Caja", exact: true })).toBeVisible();
+      await expect(page.getByTestId("cash-create-expense-button")).toBeVisible();
+    }
+    if (persona.label === "receptionist") {
+      await expect(page.getByTestId("cash-create-expense-button")).toHaveCount(0);
+    }
   });
 }
 

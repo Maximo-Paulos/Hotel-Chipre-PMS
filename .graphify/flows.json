@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-02T06:37:13.170Z",
+  "generatedAt": "2026-10-05T00:20:25.722Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1555,56 +1555,24 @@
       "warnings": []
     },
     {
-      "id": "flow:api_queryinvalidation_refreshdomains",
-      "name": "refreshDomains",
-      "entryPoint": "api_queryinvalidation_refreshdomains",
-      "entryPointId": "api_queryinvalidation_refreshdomains",
-      "path": [
-        "api_queryinvalidation_refreshdomains",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueries",
-        "api_queryinvalidation_validhotelid",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "qualifiedPath": [
-        "api_queryinvalidation_refreshdomains",
-        "api_queryinvalidation_refreshaftermutation",
-        "api_queryinvalidation_refreshhotelqueries",
-        "api_queryinvalidation_validhotelid",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/queryInvalidation.ts"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
       "id": "flow:api_queryinvalidation_refreshpaymentstate",
       "name": "refreshPaymentState",
       "entryPoint": "api_queryinvalidation_refreshpaymentstate",
       "entryPointId": "api_queryinvalidation_refreshpaymentstate",
       "path": [
         "api_queryinvalidation_refreshpaymentstate",
-        "api_queryinvalidation_refreshaftermutation",
         "api_queryinvalidation_refreshreservationqueries",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix",
         "api_queryinvalidation_refreshhotelqueries",
         "api_queryinvalidation_validhotelid"
       ],
       "qualifiedPath": [
         "api_queryinvalidation_refreshpaymentstate",
-        "api_queryinvalidation_refreshaftermutation",
         "api_queryinvalidation_refreshreservationqueries",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix",
         "api_queryinvalidation_refreshhotelqueries",
         "api_queryinvalidation_validhotelid"
       ],
       "depth": 2,
-      "nodeCount": 6,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "frontend/src/api/queryInvalidation.ts"
@@ -1643,22 +1611,18 @@
       "entryPointId": "api_queryinvalidation_refreshreservationgueststate",
       "path": [
         "api_queryinvalidation_refreshreservationgueststate",
-        "api_queryinvalidation_refreshaftermutation",
         "api_queryinvalidation_refreshreservationqueries",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix",
         "api_queryinvalidation_refreshhotelqueries",
         "api_queryinvalidation_validhotelid"
       ],
       "qualifiedPath": [
         "api_queryinvalidation_refreshreservationgueststate",
-        "api_queryinvalidation_refreshaftermutation",
         "api_queryinvalidation_refreshreservationqueries",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix",
         "api_queryinvalidation_refreshhotelqueries",
         "api_queryinvalidation_validhotelid"
       ],
       "depth": 2,
-      "nodeCount": 6,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "frontend/src/api/queryInvalidation.ts"
@@ -1699,22 +1663,18 @@
       "entryPointId": "api_queryinvalidation_refreshreservationstate",
       "path": [
         "api_queryinvalidation_refreshreservationstate",
-        "api_queryinvalidation_refreshaftermutation",
         "api_queryinvalidation_refreshreservationqueries",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix",
         "api_queryinvalidation_refreshhotelqueries",
         "api_queryinvalidation_validhotelid"
       ],
       "qualifiedPath": [
         "api_queryinvalidation_refreshreservationstate",
-        "api_queryinvalidation_refreshaftermutation",
         "api_queryinvalidation_refreshreservationqueries",
-        "api_queryinvalidation_refreshhotelqueriesbyprefix",
         "api_queryinvalidation_refreshhotelqueries",
         "api_queryinvalidation_validhotelid"
       ],
       "depth": 2,
-      "nodeCount": 6,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "frontend/src/api/queryInvalidation.ts"
@@ -3467,6 +3427,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_queryinvalidation_refreshdomains",
+      "name": "refreshDomains",
+      "entryPoint": "api_queryinvalidation_refreshdomains",
+      "entryPointId": "api_queryinvalidation_refreshdomains",
+      "path": [
+        "api_queryinvalidation_refreshdomains",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshdomains",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:api_auth_regenerate_mfa_recovery_codes",
       "name": "regenerate_mfa_recovery_codes",
       "entryPoint": "api_auth_regenerate_mfa_recovery_codes",
@@ -3905,6 +3889,32 @@
       "warnings": []
     },
     {
+      "id": "flow:state_session_shouldrestoreinitialsession",
+      "name": "shouldRestoreInitialSession",
+      "entryPoint": "state_session_shouldrestoreinitialsession",
+      "entryPointId": "state_session_shouldrestoreinitialsession",
+      "path": [
+        "state_session_shouldrestoreinitialsession",
+        "state_session_ismasteradminpath",
+        "state_session_issessionrecoveryloginpath",
+        "state_session_readstoredcsrftoken"
+      ],
+      "qualifiedPath": [
+        "state_session_shouldrestoreinitialsession",
+        "state_session_ismasteradminpath",
+        "state_session_issessionrecoveryloginpath",
+        "state_session_readstoredcsrftoken"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/state/session.tsx"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:api_auth_unlink_apple",
       "name": "unlink_apple",
       "entryPoint": "api_auth_unlink_apple",
@@ -3944,6 +3954,36 @@
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_permissions_update_permission_overrides_batch",
+      "name": "update_permission_overrides_batch",
+      "entryPoint": "api_permissions_update_permission_overrides_batch",
+      "entryPointId": "api_permissions_update_permission_overrides_batch",
+      "path": [
+        "api_permissions_update_permission_overrides_batch",
+        "api_permissions_assert_manageable_membership",
+        "api_permissions_assert_role_profile_mutation_allowed",
+        "api_permissions_target_membership_or_404",
+        "api_permissions_validate_code",
+        "api_permissions_validate_role"
+      ],
+      "qualifiedPath": [
+        "api_permissions_update_permission_overrides_batch",
+        "api_permissions_assert_manageable_membership",
+        "api_permissions_assert_role_profile_mutation_allowed",
+        "api_permissions_target_membership_or_404",
+        "api_permissions_validate_code",
+        "api_permissions_validate_role"
+      ],
+      "depth": 1,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -4214,7 +4254,7 @@
         "services_user_session_service_as_aware",
         "services_user_session_service_csrf_double_submit_matches",
         "services_user_session_service_hash_value",
-        "services_user_session_service_issue_token",
+        "services_user_session_service_issue_rotation_successor",
         "services_user_session_service_now"
       ],
       "qualifiedPath": [
@@ -4222,7 +4262,7 @@
         "services_user_session_service_as_aware",
         "services_user_session_service_csrf_double_submit_matches",
         "services_user_session_service_hash_value",
-        "services_user_session_service_issue_token",
+        "services_user_session_service_issue_rotation_successor",
         "services_user_session_service_now"
       ],
       "depth": 1,
@@ -4583,6 +4623,8 @@
       "entryPointId": "api_client_apifetch",
       "path": [
         "api_client_apifetch",
+        "api_client_apierror",
+        "api_client_createrequestdeadline",
         "api_client_requestwithrefresh",
         "api_client_buildurl",
         "api_client_clearpermissionadminreadstepupcache",
@@ -4606,7 +4648,6 @@
         "api_client_normalizedsessionuserid",
         "api_client_normalizehotelid",
         "api_client_hassamesession",
-        "api_client_apierror",
         "api_client_formaterrordetail",
         "api_client_issamerefreshcontext",
         "api_client_buildauthheaders",
@@ -4614,6 +4655,8 @@
       ],
       "qualifiedPath": [
         "api_client_apifetch",
+        "api_client_apierror",
+        "api_client_createrequestdeadline",
         "api_client_requestwithrefresh",
         "api_client_buildurl",
         "api_client_clearpermissionadminreadstepupcache",
@@ -4637,19 +4680,18 @@
         "api_client_normalizedsessionuserid",
         "api_client_normalizehotelid",
         "api_client_hassamesession",
-        "api_client_apierror",
         "api_client_formaterrordetail",
         "api_client_issamerefreshcontext",
         "api_client_buildauthheaders",
         "api_client_hasvalidsession"
       ],
       "depth": 4,
-      "nodeCount": 29,
+      "nodeCount": 30,
       "fileCount": 1,
       "files": [
         "frontend/src/api/client.ts"
       ],
-      "criticality": 0.3452,
+      "criticality": 0.3483,
       "warnings": []
     },
     {
@@ -4768,30 +4810,6 @@
       "fileCount": 1,
       "files": [
         "app/services/mfa_service.py"
-      ],
-      "criticality": 0.3267,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_reservations_update_company_extension_request",
-      "name": "update_company_extension_request",
-      "entryPoint": "api_reservations_update_company_extension_request",
-      "entryPointId": "api_reservations_update_company_extension_request",
-      "path": [
-        "api_reservations_update_company_extension_request",
-        "api_reservations_authorize_company_reservation_management",
-        "api_reservations_to_read"
-      ],
-      "qualifiedPath": [
-        "api_reservations_update_company_extension_request",
-        "api_reservations_authorize_company_reservation_management",
-        "api_reservations_to_read"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/api/reservations.py"
       ],
       "criticality": 0.3267,
       "warnings": []
@@ -5395,6 +5413,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_cash_register_cash_session_close_report",
+      "name": "cash_session_close_report",
+      "entryPoint": "api_cash_register_cash_session_close_report",
+      "entryPointId": "api_cash_register_cash_session_close_report",
+      "path": [
+        "api_cash_register_cash_session_close_report",
+        "api_cash_register_close_report_read"
+      ],
+      "qualifiedPath": [
+        "api_cash_register_cash_session_close_report",
+        "api_cash_register_close_report_read"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/cash_register.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:api_checkin_checkin",
       "name": "checkin",
       "entryPoint": "api_checkin_checkin",
@@ -5434,6 +5474,28 @@
       "fileCount": 1,
       "files": [
         "app/api/checkin.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_cash_register_close_cash_session",
+      "name": "close_cash_session",
+      "entryPoint": "api_cash_register_close_cash_session",
+      "entryPointId": "api_cash_register_close_cash_session",
+      "path": [
+        "api_cash_register_close_cash_session",
+        "api_cash_register_close_report_read"
+      ],
+      "qualifiedPath": [
+        "api_cash_register_close_cash_session",
+        "api_cash_register_close_report_read"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/cash_register.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -5742,6 +5804,28 @@
       "fileCount": 1,
       "files": [
         "app/services/domain_events.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_rate_change_drafts_get_draft",
+      "name": "get_draft",
+      "entryPoint": "api_rate_change_drafts_get_draft",
+      "entryPointId": "api_rate_change_drafts_get_draft",
+      "path": [
+        "api_rate_change_drafts_get_draft",
+        "api_rate_change_drafts_raise_draft_http"
+      ],
+      "qualifiedPath": [
+        "api_rate_change_drafts_get_draft",
+        "api_rate_change_drafts_raise_draft_http"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/rate_change_drafts.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -6444,6 +6528,28 @@
       "fileCount": 1,
       "files": [
         "app/api/whatsapp_crm.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_reservations_update_company_extension_request",
+      "name": "update_company_extension_request",
+      "entryPoint": "api_reservations_update_company_extension_request",
+      "entryPointId": "api_reservations_update_company_extension_request",
+      "path": [
+        "api_reservations_update_company_extension_request",
+        "api_reservations_to_read"
+      ],
+      "qualifiedPath": [
+        "api_reservations_update_company_extension_request",
+        "api_reservations_to_read"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -7624,6 +7730,54 @@
       "warnings": []
     },
     {
+      "id": "flow:api_operational_tasks_get_operational_task_photo_content",
+      "name": "get_operational_task_photo_content",
+      "entryPoint": "api_operational_tasks_get_operational_task_photo_content",
+      "entryPointId": "api_operational_tasks_get_operational_task_photo_content",
+      "path": [
+        "api_operational_tasks_get_operational_task_photo_content",
+        "api_operational_tasks_authorize_task_photo_scope",
+        "api_operational_tasks_can"
+      ],
+      "qualifiedPath": [
+        "api_operational_tasks_get_operational_task_photo_content",
+        "api_operational_tasks_authorize_task_photo_scope",
+        "api_operational_tasks_can"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/operational_tasks.py"
+      ],
+      "criticality": 0.2533,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_operational_tasks_get_operational_task_photos",
+      "name": "get_operational_task_photos",
+      "entryPoint": "api_operational_tasks_get_operational_task_photos",
+      "entryPointId": "api_operational_tasks_get_operational_task_photos",
+      "path": [
+        "api_operational_tasks_get_operational_task_photos",
+        "api_operational_tasks_authorize_task_photo_scope",
+        "api_operational_tasks_can"
+      ],
+      "qualifiedPath": [
+        "api_operational_tasks_get_operational_task_photos",
+        "api_operational_tasks_authorize_task_photo_scope",
+        "api_operational_tasks_can"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/operational_tasks.py"
+      ],
+      "criticality": 0.2533,
+      "warnings": []
+    },
+    {
       "id": "flow:services_cash_register_service_get_session_summary",
       "name": "get_session_summary",
       "entryPoint": "services_cash_register_service_get_session_summary",
@@ -7787,6 +7941,30 @@
       "fileCount": 1,
       "files": [
         "app/services/email_service.py"
+      ],
+      "criticality": 0.2533,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_operational_tasks_upload_operational_task_photo",
+      "name": "upload_operational_task_photo",
+      "entryPoint": "api_operational_tasks_upload_operational_task_photo",
+      "entryPointId": "api_operational_tasks_upload_operational_task_photo",
+      "path": [
+        "api_operational_tasks_upload_operational_task_photo",
+        "api_operational_tasks_authorize_task_photo_scope",
+        "api_operational_tasks_can"
+      ],
+      "qualifiedPath": [
+        "api_operational_tasks_upload_operational_task_photo",
+        "api_operational_tasks_authorize_task_photo_scope",
+        "api_operational_tasks_can"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/operational_tasks.py"
       ],
       "criticality": 0.2533,
       "warnings": []
@@ -8146,7 +8324,6 @@
         "api_users_resend_invitation",
         "api_users_assert_manageable_membership",
         "api_users_inviteresponse",
-        "api_users_membership_for_invitation",
         "api_users_membership_user_info",
         "api_users_send_invitation_email",
         "api_users_assert_manageable_role"
@@ -8155,13 +8332,12 @@
         "api_users_resend_invitation",
         "api_users_assert_manageable_membership",
         "api_users_inviteresponse",
-        "api_users_membership_for_invitation",
         "api_users_membership_user_info",
         "api_users_send_invitation_email",
         "api_users_assert_manageable_role"
       ],
       "depth": 2,
-      "nodeCount": 7,
+      "nodeCount": 6,
       "fileCount": 2,
       "files": [
         "app/api/users.py",
@@ -8291,6 +8467,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_rate_change_drafts_cancel_draft",
+      "name": "cancel_draft",
+      "entryPoint": "api_rate_change_drafts_cancel_draft",
+      "entryPointId": "api_rate_change_drafts_cancel_draft",
+      "path": [
+        "api_rate_change_drafts_cancel_draft",
+        "api_rate_change_drafts_raise_draft_http",
+        "api_rate_change_drafts_safe_rollback"
+      ],
+      "qualifiedPath": [
+        "api_rate_change_drafts_cancel_draft",
+        "api_rate_change_drafts_raise_draft_http",
+        "api_rate_change_drafts_safe_rollback"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/rate_change_drafts.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:api_reservations_cancel_reservation",
       "name": "cancel_reservation",
       "entryPoint": "api_reservations_cancel_reservation",
@@ -8310,6 +8510,30 @@
       "fileCount": 1,
       "files": [
         "app/api/reservations.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_rate_change_drafts_confirm_draft",
+      "name": "confirm_draft",
+      "entryPoint": "api_rate_change_drafts_confirm_draft",
+      "entryPointId": "api_rate_change_drafts_confirm_draft",
+      "path": [
+        "api_rate_change_drafts_confirm_draft",
+        "api_rate_change_drafts_raise_draft_http",
+        "api_rate_change_drafts_safe_rollback"
+      ],
+      "qualifiedPath": [
+        "api_rate_change_drafts_confirm_draft",
+        "api_rate_change_drafts_raise_draft_http",
+        "api_rate_change_drafts_safe_rollback"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/rate_change_drafts.py"
       ],
       "criticality": 0.2433,
       "warnings": []
@@ -8345,6 +8569,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_rate_change_drafts_create_draft",
+      "name": "create_draft",
+      "entryPoint": "api_rate_change_drafts_create_draft",
+      "entryPointId": "api_rate_change_drafts_create_draft",
+      "path": [
+        "api_rate_change_drafts_create_draft",
+        "api_rate_change_drafts_raise_draft_http",
+        "api_rate_change_drafts_safe_rollback"
+      ],
+      "qualifiedPath": [
+        "api_rate_change_drafts_create_draft",
+        "api_rate_change_drafts_raise_draft_http",
+        "api_rate_change_drafts_safe_rollback"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/rate_change_drafts.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:services_operational_task_service_create_handoff",
       "name": "create_handoff",
       "entryPoint": "services_operational_task_service_create_handoff",
@@ -8364,6 +8612,30 @@
       "fileCount": 1,
       "files": [
         "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_group_payment_service_create_reservation_group_payment",
+      "name": "create_reservation_group_payment",
+      "entryPoint": "services_reservation_group_payment_service_create_reservation_group_payment",
+      "entryPointId": "services_reservation_group_payment_service_create_reservation_group_payment",
+      "path": [
+        "services_reservation_group_payment_service_create_reservation_group_payment",
+        "services_reservation_group_payment_service_canonical_hash",
+        "services_reservation_group_payment_service_read_batch"
+      ],
+      "qualifiedPath": [
+        "services_reservation_group_payment_service_create_reservation_group_payment",
+        "services_reservation_group_payment_service_canonical_hash",
+        "services_reservation_group_payment_service_read_batch"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_group_payment_service.py"
       ],
       "criticality": 0.2433,
       "warnings": []
@@ -8580,6 +8852,30 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_service.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_task_service_validate_task_operator_read_scope",
+      "name": "validate_task_operator_read_scope",
+      "entryPoint": "services_operational_task_service_validate_task_operator_read_scope",
+      "entryPointId": "services_operational_task_service_validate_task_operator_read_scope",
+      "path": [
+        "services_operational_task_service_validate_task_operator_read_scope",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_validate_task_operator_read_scope",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
       ],
       "criticality": 0.2433,
       "warnings": []
@@ -10519,6 +10815,36 @@
       "warnings": []
     },
     {
+      "id": "flow:services_operational_task_service_create_task_attachment",
+      "name": "create_task_attachment",
+      "entryPoint": "services_operational_task_service_create_task_attachment",
+      "entryPointId": "services_operational_task_service_create_task_attachment",
+      "path": [
+        "services_operational_task_service_create_task_attachment",
+        "services_operational_task_service_decode_task_photo",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_safe_task_photo_name",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_create_task_attachment",
+        "services_operational_task_service_decode_task_photo",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_safe_task_photo_name",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.2117,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_warehouse_get_clickhouse_client",
       "name": "get_clickhouse_client",
       "entryPoint": "services_analytics_warehouse_get_clickhouse_client",
@@ -10784,6 +11110,34 @@
       "fileCount": 1,
       "files": [
         "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.21,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_cash_expense_service_approve_cash_expense",
+      "name": "approve_cash_expense",
+      "entryPoint": "services_cash_expense_service_approve_cash_expense",
+      "entryPointId": "services_cash_expense_service_approve_cash_expense",
+      "path": [
+        "services_cash_expense_service_approve_cash_expense",
+        "services_cash_expense_service_cashexpenseerror",
+        "services_cash_expense_service_get_cash_expense",
+        "services_cash_expense_service_money",
+        "services_cash_expense_service_require_open_session"
+      ],
+      "qualifiedPath": [
+        "services_cash_expense_service_approve_cash_expense",
+        "services_cash_expense_service_cashexpenseerror",
+        "services_cash_expense_service_get_cash_expense",
+        "services_cash_expense_service_money",
+        "services_cash_expense_service_require_open_session"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/cash_expense_service.py"
       ],
       "criticality": 0.21,
       "warnings": []
@@ -11146,6 +11500,38 @@
         "app/services/analytics_exports.py"
       ],
       "criticality": 0.2092,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_room_block_service_extend_block",
+      "name": "extend_block",
+      "entryPoint": "services_room_block_service_extend_block",
+      "entryPointId": "services_room_block_service_extend_block",
+      "path": [
+        "services_room_block_service_extend_block",
+        "services_room_block_service_invalidate_availability_cache",
+        "services_room_block_service_preview_block_extension",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_roomblockextensionconflicterror",
+        "services_room_block_service_get_block",
+        "services_room_block_service_protected_reservation_filter"
+      ],
+      "qualifiedPath": [
+        "services_room_block_service_extend_block",
+        "services_room_block_service_invalidate_availability_cache",
+        "services_room_block_service_preview_block_extension",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_roomblockextensionconflicterror",
+        "services_room_block_service_get_block",
+        "services_room_block_service_protected_reservation_filter"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/room_block_service.py"
+      ],
+      "criticality": 0.2057,
       "warnings": []
     },
     {
@@ -11731,6 +12117,42 @@
       "warnings": []
     },
     {
+      "id": "flow:services_rate_change_draft_service_create_rate_change_draft",
+      "name": "create_rate_change_draft",
+      "entryPoint": "services_rate_change_draft_service_create_rate_change_draft",
+      "entryPointId": "services_rate_change_draft_service_create_rate_change_draft",
+      "path": [
+        "services_rate_change_draft_service_create_rate_change_draft",
+        "services_rate_change_draft_service_audit_payload",
+        "services_rate_change_draft_service_category_or_error",
+        "services_rate_change_draft_service_effective_value",
+        "services_rate_change_draft_service_impact_for_dates",
+        "services_rate_change_draft_service_load_rate_state",
+        "services_rate_change_draft_service_ratedrafterror",
+        "services_rate_change_draft_service_validate_changes",
+        "services_rate_change_draft_service_money"
+      ],
+      "qualifiedPath": [
+        "services_rate_change_draft_service_create_rate_change_draft",
+        "services_rate_change_draft_service_audit_payload",
+        "services_rate_change_draft_service_category_or_error",
+        "services_rate_change_draft_service_effective_value",
+        "services_rate_change_draft_service_impact_for_dates",
+        "services_rate_change_draft_service_load_rate_state",
+        "services_rate_change_draft_service_ratedrafterror",
+        "services_rate_change_draft_service_validate_changes",
+        "services_rate_change_draft_service_money"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/rate_change_draft_service.py"
+      ],
+      "criticality": 0.1978,
+      "warnings": []
+    },
+    {
       "id": "flow:services_temporary_action_grant_service_deny_grant",
       "name": "deny_grant",
       "entryPoint": "services_temporary_action_grant_service_deny_grant",
@@ -11836,6 +12258,38 @@
         "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.1978,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_cash_expense_service_create_cash_expense",
+      "name": "create_cash_expense",
+      "entryPoint": "services_cash_expense_service_create_cash_expense",
+      "entryPointId": "services_cash_expense_service_create_cash_expense",
+      "path": [
+        "services_cash_expense_service_create_cash_expense",
+        "services_cash_expense_service_cashexpenseerror",
+        "services_cash_expense_service_decode_receipt",
+        "services_cash_expense_service_delete_object_key",
+        "services_cash_expense_service_money",
+        "services_cash_expense_service_require_open_session",
+        "services_cash_expense_service_safe_filename"
+      ],
+      "qualifiedPath": [
+        "services_cash_expense_service_create_cash_expense",
+        "services_cash_expense_service_cashexpenseerror",
+        "services_cash_expense_service_decode_receipt",
+        "services_cash_expense_service_delete_object_key",
+        "services_cash_expense_service_money",
+        "services_cash_expense_service_require_open_session",
+        "services_cash_expense_service_safe_filename"
+      ],
+      "depth": 1,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/cash_expense_service.py"
+      ],
+      "criticality": 0.1957,
       "warnings": []
     },
     {
@@ -12269,6 +12723,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc",
         "services_analytics_service_currency_unavailable_for"
       ],
       "qualifiedPath": [
@@ -12289,10 +12744,11 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc",
         "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 4,
-      "nodeCount": 18,
+      "nodeCount": 19,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -12323,6 +12779,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc",
         "services_analytics_service_currency_unavailable_for"
       ],
       "qualifiedPath": [
@@ -12343,10 +12800,11 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc",
         "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 4,
-      "nodeCount": 18,
+      "nodeCount": 19,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -12776,6 +13234,7 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_utc",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
         "services_analytics_service_currency_unavailable_for"
@@ -12791,12 +13250,13 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_utc",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
         "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 3,
-      "nodeCount": 13,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -12819,6 +13279,7 @@
         "services_analytics_service_load_reservation_facts",
         "services_analytics_service_load_room_facts",
         "services_analytics_service_metric_card",
+        "services_analytics_service_money",
         "services_analytics_service_now",
         "services_analytics_service_sum_money",
         "services_analytics_service_comparison_read",
@@ -12827,9 +13288,9 @@
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
         "services_analytics_service_unavailable_currency_metadata",
-        "services_analytics_service_money",
         "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_unavailable_currencies"
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc"
       ],
       "qualifiedPath": [
         "services_analytics_service_build_home_payload",
@@ -12841,6 +13302,7 @@
         "services_analytics_service_load_reservation_facts",
         "services_analytics_service_load_room_facts",
         "services_analytics_service_metric_card",
+        "services_analytics_service_money",
         "services_analytics_service_now",
         "services_analytics_service_sum_money",
         "services_analytics_service_comparison_read",
@@ -12849,12 +13311,12 @@
         "services_analytics_service_group_rows",
         "services_analytics_service_money_str",
         "services_analytics_service_unavailable_currency_metadata",
-        "services_analytics_service_money",
         "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_unavailable_currencies"
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc"
       ],
       "depth": 3,
-      "nodeCount": 20,
+      "nodeCount": 21,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -12883,6 +13345,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc",
         "services_analytics_service_currency_unavailable_for"
       ],
       "qualifiedPath": [
@@ -12901,10 +13364,11 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc",
         "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 3,
-      "nodeCount": 16,
+      "nodeCount": 17,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -12977,6 +13441,7 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_utc",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
         "services_analytics_service_currency_unavailable_for"
@@ -12995,12 +13460,13 @@
         "services_analytics_service_comparison_read",
         "services_analytics_service_datewindow",
         "services_analytics_service_utc_date_range",
+        "services_analytics_service_ensure_utc",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
         "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 3,
-      "nodeCount": 16,
+      "nodeCount": 17,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -13025,6 +13491,8 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc",
+        "services_analytics_service_now",
         "services_analytics_service_currency_unavailable_for"
       ],
       "qualifiedPath": [
@@ -13039,10 +13507,12 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc",
+        "services_analytics_service_now",
         "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 3,
-      "nodeCount": 12,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -13075,6 +13545,7 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc",
         "services_analytics_service_currency_unavailable_for"
       ],
       "qualifiedPath": [
@@ -13097,10 +13568,57 @@
         "services_analytics_service_ensure_facts_materialized",
         "services_analytics_service_money",
         "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc",
         "services_analytics_service_currency_unavailable_for"
       ],
       "depth": 3,
-      "nodeCount": 20,
+      "nodeCount": 21,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_service.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_service_build_starter_summary_payload",
+      "name": "build_starter_summary_payload",
+      "entryPoint": "services_analytics_service_build_starter_summary_payload",
+      "entryPointId": "services_analytics_service_build_starter_summary_payload",
+      "path": [
+        "services_analytics_service_build_starter_summary_payload",
+        "services_analytics_service_currency_unavailable_for",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_now",
+        "services_analytics_service_sum_money",
+        "services_analytics_service_utc_date_range",
+        "services_analytics_service_money",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_money_str",
+        "services_analytics_service_comparison_read",
+        "services_analytics_service_datewindow",
+        "services_analytics_service_ensure_utc"
+      ],
+      "qualifiedPath": [
+        "services_analytics_service_build_starter_summary_payload",
+        "services_analytics_service_currency_unavailable_for",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_load_reservation_facts",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_now",
+        "services_analytics_service_sum_money",
+        "services_analytics_service_utc_date_range",
+        "services_analytics_service_money",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_money_str",
+        "services_analytics_service_comparison_read",
+        "services_analytics_service_datewindow",
+        "services_analytics_service_ensure_utc"
+      ],
+      "depth": 3,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
@@ -13146,6 +13664,50 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_service.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_rate_change_draft_service_confirm_rate_change_draft",
+      "name": "confirm_rate_change_draft",
+      "entryPoint": "services_rate_change_draft_service_confirm_rate_change_draft",
+      "entryPointId": "services_rate_change_draft_service_confirm_rate_change_draft",
+      "path": [
+        "services_rate_change_draft_service_confirm_rate_change_draft",
+        "services_rate_change_draft_service_audit_payload",
+        "services_rate_change_draft_service_category_or_error",
+        "services_rate_change_draft_service_check_draft_version",
+        "services_rate_change_draft_service_confirm_price_period_draft",
+        "services_rate_change_draft_service_draft_for_update",
+        "services_rate_change_draft_service_effective_value",
+        "services_rate_change_draft_service_load_rate_state",
+        "services_rate_change_draft_service_money",
+        "services_rate_change_draft_service_ratedrafterror",
+        "services_rate_change_draft_service_daily_rate_scope_snapshot",
+        "services_rate_change_draft_service_period_snapshot_rows",
+        "services_rate_change_draft_service_period_values"
+      ],
+      "qualifiedPath": [
+        "services_rate_change_draft_service_confirm_rate_change_draft",
+        "services_rate_change_draft_service_audit_payload",
+        "services_rate_change_draft_service_category_or_error",
+        "services_rate_change_draft_service_check_draft_version",
+        "services_rate_change_draft_service_confirm_price_period_draft",
+        "services_rate_change_draft_service_draft_for_update",
+        "services_rate_change_draft_service_effective_value",
+        "services_rate_change_draft_service_load_rate_state",
+        "services_rate_change_draft_service_money",
+        "services_rate_change_draft_service_ratedrafterror",
+        "services_rate_change_draft_service_daily_rate_scope_snapshot",
+        "services_rate_change_draft_service_period_snapshot_rows",
+        "services_rate_change_draft_service_period_values"
+      ],
+      "depth": 3,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/rate_change_draft_service.py"
       ],
       "criticality": 0.18,
       "warnings": []
@@ -13388,6 +13950,48 @@
       "fileCount": 1,
       "files": [
         "app/api/movement_groups.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_audit_service_list_operational_audit",
+      "name": "list_operational_audit",
+      "entryPoint": "services_operational_audit_service_list_operational_audit",
+      "entryPointId": "services_operational_audit_service_list_operational_audit",
+      "path": [
+        "services_operational_audit_service_list_operational_audit",
+        "services_operational_audit_service_actor_name",
+        "services_operational_audit_service_area_for",
+        "services_operational_audit_service_bounds",
+        "services_operational_audit_service_date_filter",
+        "services_operational_audit_service_matches",
+        "services_operational_audit_service_money",
+        "services_operational_audit_service_row",
+        "services_operational_audit_service_utc",
+        "services_operational_audit_service_value",
+        "services_operational_audit_service_safe_details",
+        "services_operational_audit_service_safe_detail_value"
+      ],
+      "qualifiedPath": [
+        "services_operational_audit_service_list_operational_audit",
+        "services_operational_audit_service_actor_name",
+        "services_operational_audit_service_area_for",
+        "services_operational_audit_service_bounds",
+        "services_operational_audit_service_date_filter",
+        "services_operational_audit_service_matches",
+        "services_operational_audit_service_money",
+        "services_operational_audit_service_row",
+        "services_operational_audit_service_utc",
+        "services_operational_audit_service_value",
+        "services_operational_audit_service_safe_details",
+        "services_operational_audit_service_safe_detail_value"
+      ],
+      "depth": 3,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_audit_service.py"
       ],
       "criticality": 0.18,
       "warnings": []
@@ -13900,6 +14504,7 @@
         "services_analytics_facts_refresh_fact_reservation_daily",
         "services_analytics_facts_refresh_fact_room_occupancy_daily",
         "services_analytics_facts_factrefreshresult",
+        "services_analytics_facts_reservation_dates_for_full_stay",
         "services_analytics_facts_reservation_dates_in_window",
         "services_analytics_facts_reservation_monetary_totals",
         "services_analytics_facts_reservation_row_kind",
@@ -13919,6 +14524,7 @@
         "services_analytics_facts_refresh_fact_reservation_daily",
         "services_analytics_facts_refresh_fact_room_occupancy_daily",
         "services_analytics_facts_factrefreshresult",
+        "services_analytics_facts_reservation_dates_for_full_stay",
         "services_analytics_facts_reservation_dates_in_window",
         "services_analytics_facts_reservation_monetary_totals",
         "services_analytics_facts_reservation_row_kind",
@@ -13934,7 +14540,7 @@
         "services_analytics_facts_room_event_status"
       ],
       "depth": 3,
-      "nodeCount": 17,
+      "nodeCount": 18,
       "fileCount": 1,
       "files": [
         "app/services/analytics_facts.py"
@@ -13972,6 +14578,50 @@
         "app/services/stock_service.py"
       ],
       "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_rate_change_draft_service_create_price_period_draft",
+      "name": "create_price_period_draft",
+      "entryPoint": "services_rate_change_draft_service_create_price_period_draft",
+      "entryPointId": "services_rate_change_draft_service_create_price_period_draft",
+      "path": [
+        "services_rate_change_draft_service_create_price_period_draft",
+        "services_rate_change_draft_service_audit_payload",
+        "services_rate_change_draft_service_category_or_error",
+        "services_rate_change_draft_service_daily_rate_scope_snapshot",
+        "services_rate_change_draft_service_dates_for_range",
+        "services_rate_change_draft_service_effective_period_prices",
+        "services_rate_change_draft_service_impact_for_dates",
+        "services_rate_change_draft_service_money",
+        "services_rate_change_draft_service_period_from_values",
+        "services_rate_change_draft_service_period_snapshot_rows",
+        "services_rate_change_draft_service_period_values",
+        "services_rate_change_draft_service_ratedrafterror",
+        "services_rate_change_draft_service_validate_period_values"
+      ],
+      "qualifiedPath": [
+        "services_rate_change_draft_service_create_price_period_draft",
+        "services_rate_change_draft_service_audit_payload",
+        "services_rate_change_draft_service_category_or_error",
+        "services_rate_change_draft_service_daily_rate_scope_snapshot",
+        "services_rate_change_draft_service_dates_for_range",
+        "services_rate_change_draft_service_effective_period_prices",
+        "services_rate_change_draft_service_impact_for_dates",
+        "services_rate_change_draft_service_money",
+        "services_rate_change_draft_service_period_from_values",
+        "services_rate_change_draft_service_period_snapshot_rows",
+        "services_rate_change_draft_service_period_values",
+        "services_rate_change_draft_service_ratedrafterror",
+        "services_rate_change_draft_service_validate_period_values"
+      ],
+      "depth": 1,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/rate_change_draft_service.py"
+      ],
+      "criticality": 0.1792,
       "warnings": []
     },
     {
@@ -14102,6 +14752,32 @@
       "fileCount": 1,
       "files": [
         "app/services/object_storage.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:protected_ratecalendarpage_ratecalendarpage",
+      "name": "RateCalendarPage",
+      "entryPoint": "protected_ratecalendarpage_ratecalendarpage",
+      "entryPointId": "protected_ratecalendarpage_ratecalendarpage",
+      "path": [
+        "protected_ratecalendarpage_ratecalendarpage",
+        "protected_ratecalendarpage_formatperioddraftdetails",
+        "protected_ratecalendarpage_formatrange",
+        "protected_ratecalendarpage_formatrateamount"
+      ],
+      "qualifiedPath": [
+        "protected_ratecalendarpage_ratecalendarpage",
+        "protected_ratecalendarpage_formatperioddraftdetails",
+        "protected_ratecalendarpage_formatrange",
+        "protected_ratecalendarpage_formatrateamount"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/RateCalendarPage.tsx"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -14327,50 +15003,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_analytics_service_build_starter_summary_payload",
-      "name": "build_starter_summary_payload",
-      "entryPoint": "services_analytics_service_build_starter_summary_payload",
-      "entryPointId": "services_analytics_service_build_starter_summary_payload",
-      "path": [
-        "services_analytics_service_build_starter_summary_payload",
-        "services_analytics_service_currency_unavailable_for",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_load_reservation_facts",
-        "services_analytics_service_metric_card",
-        "services_analytics_service_now",
-        "services_analytics_service_sum_money",
-        "services_analytics_service_utc_date_range",
-        "services_analytics_service_money",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money_str",
-        "services_analytics_service_comparison_read",
-        "services_analytics_service_datewindow"
-      ],
-      "qualifiedPath": [
-        "services_analytics_service_build_starter_summary_payload",
-        "services_analytics_service_currency_unavailable_for",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_load_reservation_facts",
-        "services_analytics_service_metric_card",
-        "services_analytics_service_now",
-        "services_analytics_service_sum_money",
-        "services_analytics_service_utc_date_range",
-        "services_analytics_service_money",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_money_str",
-        "services_analytics_service_comparison_read",
-        "services_analytics_service_datewindow"
-      ],
-      "depth": 2,
-      "nodeCount": 13,
-      "fileCount": 1,
-      "files": [
-        "app/services/analytics_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_contracts_calculate_pickup_30d_count",
       "name": "calculate_pickup_30d_count",
       "entryPoint": "services_analytics_contracts_calculate_pickup_30d_count",
@@ -14436,6 +15068,34 @@
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_rate_change_draft_service_cancel_rate_change_draft",
+      "name": "cancel_rate_change_draft",
+      "entryPoint": "services_rate_change_draft_service_cancel_rate_change_draft",
+      "entryPointId": "services_rate_change_draft_service_cancel_rate_change_draft",
+      "path": [
+        "services_rate_change_draft_service_cancel_rate_change_draft",
+        "services_rate_change_draft_service_audit_payload",
+        "services_rate_change_draft_service_check_draft_version",
+        "services_rate_change_draft_service_draft_for_update",
+        "services_rate_change_draft_service_ratedrafterror"
+      ],
+      "qualifiedPath": [
+        "services_rate_change_draft_service_cancel_rate_change_draft",
+        "services_rate_change_draft_service_audit_payload",
+        "services_rate_change_draft_service_check_draft_version",
+        "services_rate_change_draft_service_draft_for_update",
+        "services_rate_change_draft_service_ratedrafterror"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/rate_change_draft_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -15259,6 +15919,48 @@
       "warnings": []
     },
     {
+      "id": "flow:services_analytics_service_get_company_fact_detail",
+      "name": "get_company_fact_detail",
+      "entryPoint": "services_analytics_service_get_company_fact_detail",
+      "entryPointId": "services_analytics_service_get_company_fact_detail",
+      "path": [
+        "services_analytics_service_get_company_fact_detail",
+        "services_analytics_service_currency_unavailable_for",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_get_company_or_404",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_money",
+        "services_analytics_service_money_str",
+        "services_analytics_service_serialize_company",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc",
+        "services_analytics_service_now"
+      ],
+      "qualifiedPath": [
+        "services_analytics_service_get_company_fact_detail",
+        "services_analytics_service_currency_unavailable_for",
+        "services_analytics_service_ensure_facts_materialized",
+        "services_analytics_service_facts_data_as_of",
+        "services_analytics_service_get_company_or_404",
+        "services_analytics_service_metric_card",
+        "services_analytics_service_money",
+        "services_analytics_service_money_str",
+        "services_analytics_service_serialize_company",
+        "services_analytics_service_unavailable_currencies",
+        "services_analytics_service_ensure_utc",
+        "services_analytics_service_now"
+      ],
+      "depth": 2,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_fx_service_get_conversion_quote_sync",
       "name": "get_conversion_quote_sync",
       "entryPoint": "services_fx_service_get_conversion_quote_sync",
@@ -15869,6 +16571,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_operational_task_service_list_task_attachments",
+      "name": "list_task_attachments",
+      "entryPoint": "services_operational_task_service_list_task_attachments",
+      "entryPointId": "services_operational_task_service_list_task_attachments",
+      "path": [
+        "services_operational_task_service_list_task_attachments",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_list_task_attachments",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:scripts_repair_cash_handoff_schema_main",
       "name": "main",
       "entryPoint": "scripts_repair_cash_handoff_schema_main",
@@ -16422,32 +17148,6 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_action_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_operational_tasks_resolve_operational_task",
-      "name": "resolve_operational_task",
-      "entryPoint": "api_operational_tasks_resolve_operational_task",
-      "entryPointId": "api_operational_tasks_resolve_operational_task",
-      "path": [
-        "api_operational_tasks_resolve_operational_task",
-        "api_operational_tasks_can_read_reservation_context",
-        "api_operational_tasks_conflict",
-        "api_operational_tasks_can"
-      ],
-      "qualifiedPath": [
-        "api_operational_tasks_resolve_operational_task",
-        "api_operational_tasks_can_read_reservation_context",
-        "api_operational_tasks_conflict",
-        "api_operational_tasks_can"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/api/operational_tasks.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -18837,6 +19537,30 @@
       "warnings": []
     },
     {
+      "id": "flow:components_guestquickcreatepanel_guestquickcreatepanel",
+      "name": "GuestQuickCreatePanel",
+      "entryPoint": "components_guestquickcreatepanel_guestquickcreatepanel",
+      "entryPointId": "components_guestquickcreatepanel_guestquickcreatepanel",
+      "path": [
+        "components_guestquickcreatepanel_guestquickcreatepanel",
+        "components_guestquickcreatepanel_normalizeidentity",
+        "components_guestquickcreatepanel_normalizephone"
+      ],
+      "qualifiedPath": [
+        "components_guestquickcreatepanel_guestquickcreatepanel",
+        "components_guestquickcreatepanel_normalizeidentity",
+        "components_guestquickcreatepanel_normalizephone"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/components/GuestQuickCreatePanel.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:components_guestquickcreatepanel_guestsummarycard",
       "name": "GuestSummaryCard",
       "entryPoint": "components_guestquickcreatepanel_guestsummarycard",
@@ -18949,28 +19673,6 @@
       "warnings": []
     },
     {
-      "id": "flow:protected_ratecalendarpage_ratecalendarpage",
-      "name": "RateCalendarPage",
-      "entryPoint": "protected_ratecalendarpage_ratecalendarpage",
-      "entryPointId": "protected_ratecalendarpage_ratecalendarpage",
-      "path": [
-        "protected_ratecalendarpage_ratecalendarpage",
-        "protected_ratecalendarpage_formatrange"
-      ],
-      "qualifiedPath": [
-        "protected_ratecalendarpage_ratecalendarpage",
-        "protected_ratecalendarpage_formatrange"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/RateCalendarPage.tsx"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:components_rateeditorgrid_rateeditorgrid",
       "name": "RateEditorGrid",
       "entryPoint": "components_rateeditorgrid_rateeditorgrid",
@@ -19002,7 +19704,6 @@
         "protected_reportspage_cashstatuslabel",
         "protected_reportspage_currencyamounts",
         "protected_reportspage_hoteltodayiso",
-        "protected_reportspage_money",
         "protected_reportspage_reportserrormessage"
       ],
       "qualifiedPath": [
@@ -19010,11 +19711,10 @@
         "protected_reportspage_cashstatuslabel",
         "protected_reportspage_currencyamounts",
         "protected_reportspage_hoteltodayiso",
-        "protected_reportspage_money",
         "protected_reportspage_reportserrormessage"
       ],
       "depth": 1,
-      "nodeCount": 6,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/ReportsPage.tsx"
@@ -19156,6 +19856,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/LaundryPage.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:protected_operationaltaskspage_taskphotopreview",
+      "name": "TaskPhotoPreview",
+      "entryPoint": "protected_operationaltaskspage_taskphotopreview",
+      "entryPointId": "protected_operationaltaskspage_taskphotopreview",
+      "path": [
+        "protected_operationaltaskspage_taskphotopreview",
+        "protected_operationaltaskspage_formatdate"
+      ],
+      "qualifiedPath": [
+        "protected_operationaltaskspage_taskphotopreview",
+        "protected_operationaltaskspage_formatdate"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/OperationalTasksPage.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -19409,14 +20131,16 @@
       "entryPointId": "api_daily_rates_apply_period_to_daily_rates",
       "path": [
         "api_daily_rates_apply_period_to_daily_rates",
-        "api_daily_rates_applyperiodout"
+        "api_daily_rates_applyperiodout",
+        "api_daily_rates_reject_direct_rate_write"
       ],
       "qualifiedPath": [
         "api_daily_rates_apply_period_to_daily_rates",
-        "api_daily_rates_applyperiodout"
+        "api_daily_rates_applyperiodout",
+        "api_daily_rates_reject_direct_rate_write"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/daily_rates.py"
@@ -19474,6 +20198,50 @@
       "fileCount": 1,
       "files": [
         "app/services/gemma_action_run_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_cash_register_approve_cash_close_difference",
+      "name": "approve_cash_close_difference",
+      "entryPoint": "api_cash_register_approve_cash_close_difference",
+      "entryPointId": "api_cash_register_approve_cash_close_difference",
+      "path": [
+        "api_cash_register_approve_cash_close_difference",
+        "api_cash_register_close_report_read"
+      ],
+      "qualifiedPath": [
+        "api_cash_register_approve_cash_close_difference",
+        "api_cash_register_close_report_read"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/cash_register.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_cash_register_approve_cash_expense_route",
+      "name": "approve_cash_expense_route",
+      "entryPoint": "api_cash_register_approve_cash_expense_route",
+      "entryPointId": "api_cash_register_approve_cash_expense_route",
+      "path": [
+        "api_cash_register_approve_cash_expense_route",
+        "api_cash_register_cash_expense_read"
+      ],
+      "qualifiedPath": [
+        "api_cash_register_approve_cash_expense_route",
+        "api_cash_register_cash_expense_read"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/cash_register.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -19717,6 +20485,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_financial_report_service_build_financial_report",
+      "name": "build_financial_report",
+      "entryPoint": "services_financial_report_service_build_financial_report",
+      "entryPointId": "services_financial_report_service_build_financial_report",
+      "path": [
+        "services_financial_report_service_build_financial_report",
+        "services_financial_report_service_aggregate_rows",
+        "services_financial_report_service_booked_amount_in_window",
+        "services_financial_report_service_booked_nights_in_window",
+        "services_financial_report_service_hotel_bounds",
+        "services_financial_report_service_local_day",
+        "services_financial_report_service_money"
+      ],
+      "qualifiedPath": [
+        "services_financial_report_service_build_financial_report",
+        "services_financial_report_service_aggregate_rows",
+        "services_financial_report_service_booked_amount_in_window",
+        "services_financial_report_service_booked_nights_in_window",
+        "services_financial_report_service_hotel_bounds",
+        "services_financial_report_service_local_day",
+        "services_financial_report_service_money"
+      ],
+      "depth": 1,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_report_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_gemma_context_service_build_gemma_hotel_context",
       "name": "build_gemma_hotel_context",
       "entryPoint": "services_gemma_context_service_build_gemma_hotel_context",
@@ -19894,6 +20694,7 @@
         "api_daily_rates_bulk_field_value",
         "api_daily_rates_bulkrateout",
         "api_daily_rates_get_category_or_404",
+        "api_daily_rates_reject_direct_rate_write",
         "api_daily_rates_resolve_source"
       ],
       "qualifiedPath": [
@@ -19901,10 +20702,11 @@
         "api_daily_rates_bulk_field_value",
         "api_daily_rates_bulkrateout",
         "api_daily_rates_get_category_or_404",
+        "api_daily_rates_reject_direct_rate_write",
         "api_daily_rates_resolve_source"
       ],
       "depth": 1,
-      "nodeCount": 5,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "app/api/daily_rates.py"
@@ -19920,15 +20722,17 @@
       "path": [
         "api_daily_rates_bulk_upsert_daily_rates",
         "api_daily_rates_bulkrateout",
-        "api_daily_rates_get_category_or_404"
+        "api_daily_rates_get_category_or_404",
+        "api_daily_rates_reject_direct_rate_write"
       ],
       "qualifiedPath": [
         "api_daily_rates_bulk_upsert_daily_rates",
         "api_daily_rates_bulkrateout",
-        "api_daily_rates_get_category_or_404"
+        "api_daily_rates_get_category_or_404",
+        "api_daily_rates_reject_direct_rate_write"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/api/daily_rates.py"
@@ -20453,6 +21257,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_cash_register_confirm_cash_custody_receipt",
+      "name": "confirm_cash_custody_receipt",
+      "entryPoint": "api_cash_register_confirm_cash_custody_receipt",
+      "entryPointId": "api_cash_register_confirm_cash_custody_receipt",
+      "path": [
+        "api_cash_register_confirm_cash_custody_receipt",
+        "api_cash_register_close_report_read"
+      ],
+      "qualifiedPath": [
+        "api_cash_register_confirm_cash_custody_receipt",
+        "api_cash_register_close_report_read"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/cash_register.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_action_step_up_service_consume_action_step_up_tickets",
       "name": "consume_action_step_up_tickets",
       "entryPoint": "services_action_step_up_service_consume_action_step_up_tickets",
@@ -20809,14 +21635,16 @@
       "entryPointId": "api_daily_rates_create_price_period",
       "path": [
         "api_daily_rates_create_price_period",
-        "api_daily_rates_get_category_or_404"
+        "api_daily_rates_get_category_or_404",
+        "api_daily_rates_reject_direct_rate_write"
       ],
       "qualifiedPath": [
         "api_daily_rates_create_price_period",
-        "api_daily_rates_get_category_or_404"
+        "api_daily_rates_get_category_or_404",
+        "api_daily_rates_reject_direct_rate_write"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/daily_rates.py"
@@ -20855,14 +21683,18 @@
       "entryPointId": "services_laundry_vendor_service_create_remito",
       "path": [
         "services_laundry_vendor_service_create_remito",
+        "services_laundry_vendor_service_duplicatelaundryremitoerror",
+        "services_laundry_vendor_service_is_duplicate_remito_integrity_error",
         "services_laundry_vendor_service_laundryvendorerror"
       ],
       "qualifiedPath": [
         "services_laundry_vendor_service_create_remito",
+        "services_laundry_vendor_service_duplicatelaundryremitoerror",
+        "services_laundry_vendor_service_is_duplicate_remito_integrity_error",
         "services_laundry_vendor_service_laundryvendorerror"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/services/laundry_vendor_service.py"
@@ -21128,6 +21960,28 @@
       "fileCount": 1,
       "files": [
         "app/api/company_documents.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_daily_rates_delete_price_period",
+      "name": "delete_price_period",
+      "entryPoint": "api_daily_rates_delete_price_period",
+      "entryPointId": "api_daily_rates_delete_price_period",
+      "path": [
+        "api_daily_rates_delete_price_period",
+        "api_daily_rates_reject_direct_rate_write"
+      ],
+      "qualifiedPath": [
+        "api_daily_rates_delete_price_period",
+        "api_daily_rates_reject_direct_rate_write"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/daily_rates.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -21889,6 +22743,30 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_d2a7e93f4c2b_day2_feedback_schema_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_d2a7e93f4c2b_day2_feedback_schema_downgrade",
+      "entryPointId": "versions_d2a7e93f4c2b_day2_feedback_schema_downgrade",
+      "path": [
+        "versions_d2a7e93f4c2b_day2_feedback_schema_downgrade",
+        "versions_d2a7e93f4c2b_day2_feedback_schema_guard_day2_downgrade_data",
+        "versions_d2a7e93f4c2b_day2_feedback_schema_remove_rls"
+      ],
+      "qualifiedPath": [
+        "versions_d2a7e93f4c2b_day2_feedback_schema_downgrade",
+        "versions_d2a7e93f4c2b_day2_feedback_schema_guard_day2_downgrade_data",
+        "versions_d2a7e93f4c2b_day2_feedback_schema_remove_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/d2a7e93f4c2b_day2_feedback_schema.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_d4f8c21e7b10_extend_payment_link_tests_states_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_d4f8c21e7b10_extend_payment_link_tests_states_downgrade",
@@ -22110,6 +22988,32 @@
       "fileCount": 1,
       "files": [
         "app/services/waitlist_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_cash_register_export_cash_ledger_csv",
+      "name": "export_cash_ledger_csv",
+      "entryPoint": "api_cash_register_export_cash_ledger_csv",
+      "entryPointId": "api_cash_register_export_cash_ledger_csv",
+      "path": [
+        "api_cash_register_export_cash_ledger_csv",
+        "api_cash_register_csv_decimal",
+        "api_cash_register_csv_local_date",
+        "api_cash_register_csv_local_datetime"
+      ],
+      "qualifiedPath": [
+        "api_cash_register_export_cash_ledger_csv",
+        "api_cash_register_csv_decimal",
+        "api_cash_register_csv_local_date",
+        "api_cash_register_csv_local_datetime"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/cash_register.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -22541,6 +23445,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_cash_expense_service_get_cash_expense_receipt_bytes",
+      "name": "get_cash_expense_receipt_bytes",
+      "entryPoint": "services_cash_expense_service_get_cash_expense_receipt_bytes",
+      "entryPointId": "services_cash_expense_service_get_cash_expense_receipt_bytes",
+      "path": [
+        "services_cash_expense_service_get_cash_expense_receipt_bytes",
+        "services_cash_expense_service_cashexpenseerror",
+        "services_cash_expense_service_get_cash_expense"
+      ],
+      "qualifiedPath": [
+        "services_cash_expense_service_get_cash_expense_receipt_bytes",
+        "services_cash_expense_service_cashexpenseerror",
+        "services_cash_expense_service_get_cash_expense"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/cash_expense_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_rooms_get_category",
       "name": "get_category",
       "entryPoint": "api_rooms_get_category",
@@ -22628,44 +23556,6 @@
       "fileCount": 1,
       "files": [
         "app/services/company_document_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_analytics_service_get_company_fact_detail",
-      "name": "get_company_fact_detail",
-      "entryPoint": "services_analytics_service_get_company_fact_detail",
-      "entryPointId": "services_analytics_service_get_company_fact_detail",
-      "path": [
-        "services_analytics_service_get_company_fact_detail",
-        "services_analytics_service_currency_unavailable_for",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_get_company_or_404",
-        "services_analytics_service_metric_card",
-        "services_analytics_service_money",
-        "services_analytics_service_money_str",
-        "services_analytics_service_serialize_company",
-        "services_analytics_service_unavailable_currencies"
-      ],
-      "qualifiedPath": [
-        "services_analytics_service_get_company_fact_detail",
-        "services_analytics_service_currency_unavailable_for",
-        "services_analytics_service_ensure_facts_materialized",
-        "services_analytics_service_facts_data_as_of",
-        "services_analytics_service_get_company_or_404",
-        "services_analytics_service_metric_card",
-        "services_analytics_service_money",
-        "services_analytics_service_money_str",
-        "services_analytics_service_serialize_company",
-        "services_analytics_service_unavailable_currencies"
-      ],
-      "depth": 1,
-      "nodeCount": 10,
-      "fileCount": 1,
-      "files": [
-        "app/services/analytics_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -22812,6 +23702,28 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_exports.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_group_payment_service_get_group_payment_batch",
+      "name": "get_group_payment_batch",
+      "entryPoint": "services_reservation_group_payment_service_get_group_payment_batch",
+      "entryPointId": "services_reservation_group_payment_service_get_group_payment_batch",
+      "path": [
+        "services_reservation_group_payment_service_get_group_payment_batch",
+        "services_reservation_group_payment_service_read_batch"
+      ],
+      "qualifiedPath": [
+        "services_reservation_group_payment_service_get_group_payment_batch",
+        "services_reservation_group_payment_service_read_batch"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_group_payment_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -23070,6 +23982,28 @@
       "fileCount": 1,
       "files": [
         "app/adapters/paypal_adapter.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_rate_change_draft_service_get_rate_change_draft",
+      "name": "get_rate_change_draft",
+      "entryPoint": "services_rate_change_draft_service_get_rate_change_draft",
+      "entryPointId": "services_rate_change_draft_service_get_rate_change_draft",
+      "path": [
+        "services_rate_change_draft_service_get_rate_change_draft",
+        "services_rate_change_draft_service_ratedrafterror"
+      ],
+      "qualifiedPath": [
+        "services_rate_change_draft_service_get_rate_change_draft",
+        "services_rate_change_draft_service_ratedrafterror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/rate_change_draft_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -23421,6 +24355,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_cash_register_latest_cash_close_report",
+      "name": "latest_cash_close_report",
+      "entryPoint": "api_cash_register_latest_cash_close_report",
+      "entryPointId": "api_cash_register_latest_cash_close_report",
+      "path": [
+        "api_cash_register_latest_cash_close_report",
+        "api_cash_register_close_report_read"
+      ],
+      "qualifiedPath": [
+        "api_cash_register_latest_cash_close_report",
+        "api_cash_register_close_report_read"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/cash_register.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_room_block_service_list_active_blocks",
       "name": "list_active_blocks",
       "entryPoint": "services_room_block_service_list_active_blocks",
@@ -23460,6 +24416,28 @@
       "fileCount": 1,
       "files": [
         "app/api/bookings.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_cash_expense_service_list_cash_expenses",
+      "name": "list_cash_expenses",
+      "entryPoint": "services_cash_expense_service_list_cash_expenses",
+      "entryPointId": "services_cash_expense_service_list_cash_expenses",
+      "path": [
+        "services_cash_expense_service_list_cash_expenses",
+        "services_cash_expense_service_cashexpenseerror"
+      ],
+      "qualifiedPath": [
+        "services_cash_expense_service_list_cash_expenses",
+        "services_cash_expense_service_cashexpenseerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/cash_expense_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -23528,44 +24506,6 @@
       "fileCount": 1,
       "files": [
         "app/api/laundry_vendor.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_operational_audit_service_list_operational_audit",
-      "name": "list_operational_audit",
-      "entryPoint": "services_operational_audit_service_list_operational_audit",
-      "entryPointId": "services_operational_audit_service_list_operational_audit",
-      "path": [
-        "services_operational_audit_service_list_operational_audit",
-        "services_operational_audit_service_actor_name",
-        "services_operational_audit_service_area_for",
-        "services_operational_audit_service_bounds",
-        "services_operational_audit_service_date_filter",
-        "services_operational_audit_service_matches",
-        "services_operational_audit_service_money",
-        "services_operational_audit_service_row",
-        "services_operational_audit_service_utc",
-        "services_operational_audit_service_value"
-      ],
-      "qualifiedPath": [
-        "services_operational_audit_service_list_operational_audit",
-        "services_operational_audit_service_actor_name",
-        "services_operational_audit_service_area_for",
-        "services_operational_audit_service_bounds",
-        "services_operational_audit_service_date_filter",
-        "services_operational_audit_service_matches",
-        "services_operational_audit_service_money",
-        "services_operational_audit_service_row",
-        "services_operational_audit_service_utc",
-        "services_operational_audit_service_value"
-      ],
-      "depth": 1,
-      "nodeCount": 10,
-      "fileCount": 1,
-      "files": [
-        "app/services/operational_audit_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -23914,6 +24854,32 @@
       "fileCount": 1,
       "files": [
         "scripts/knowledge/generate_inventories.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:scripts_repair_analytics_facts_main",
+      "name": "main",
+      "entryPoint": "scripts_repair_analytics_facts_main",
+      "entryPointId": "scripts_repair_analytics_facts_main",
+      "path": [
+        "scripts_repair_analytics_facts_main",
+        "scripts_repair_analytics_facts_build_dry_run_report",
+        "scripts_repair_analytics_facts_hotel_ranges",
+        "scripts_repair_analytics_facts_parser"
+      ],
+      "qualifiedPath": [
+        "scripts_repair_analytics_facts_main",
+        "scripts_repair_analytics_facts_build_dry_run_report",
+        "scripts_repair_analytics_facts_hotel_ranges",
+        "scripts_repair_analytics_facts_parser"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "scripts/repair_analytics_facts.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -24349,6 +25315,50 @@
       "warnings": []
     },
     {
+      "id": "flow:api_cash_register_pending_cash_close_reports",
+      "name": "pending_cash_close_reports",
+      "entryPoint": "api_cash_register_pending_cash_close_reports",
+      "entryPointId": "api_cash_register_pending_cash_close_reports",
+      "path": [
+        "api_cash_register_pending_cash_close_reports",
+        "api_cash_register_close_report_read"
+      ],
+      "qualifiedPath": [
+        "api_cash_register_pending_cash_close_reports",
+        "api_cash_register_close_report_read"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/cash_register.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_cash_register_pending_cash_custody_reports",
+      "name": "pending_cash_custody_reports",
+      "entryPoint": "api_cash_register_pending_cash_custody_reports",
+      "entryPointId": "api_cash_register_pending_cash_custody_reports",
+      "path": [
+        "api_cash_register_pending_cash_custody_reports",
+        "api_cash_register_close_report_read"
+      ],
+      "qualifiedPath": [
+        "api_cash_register_pending_cash_custody_reports",
+        "api_cash_register_close_report_read"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/cash_register.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_checkin_service_perform_checkout",
       "name": "perform_checkout",
       "entryPoint": "services_checkin_service_perform_checkout",
@@ -24539,6 +25549,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_cash_register_read_cash_expenses",
+      "name": "read_cash_expenses",
+      "entryPoint": "api_cash_register_read_cash_expenses",
+      "entryPointId": "api_cash_register_read_cash_expenses",
+      "path": [
+        "api_cash_register_read_cash_expenses",
+        "api_cash_register_cash_expense_read"
+      ],
+      "qualifiedPath": [
+        "api_cash_register_read_cash_expenses",
+        "api_cash_register_cash_expense_read"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/cash_register.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_roles_read_roles",
       "name": "read_roles",
       "entryPoint": "api_roles_read_roles",
@@ -24611,6 +25643,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_cash_register_record_cash_expense",
+      "name": "record_cash_expense",
+      "entryPoint": "api_cash_register_record_cash_expense",
+      "entryPointId": "api_cash_register_record_cash_expense",
+      "path": [
+        "api_cash_register_record_cash_expense",
+        "api_cash_register_cash_expense_read"
+      ],
+      "qualifiedPath": [
+        "api_cash_register_record_cash_expense",
+        "api_cash_register_cash_expense_read"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/cash_register.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_company_night_charge_service_record_company_night_charge_payment_allocations",
       "name": "record_company_night_charge_payment_allocations",
       "entryPoint": "services_company_night_charge_service_record_company_night_charge_payment_allocations",
@@ -24676,6 +25730,28 @@
       "fileCount": 1,
       "files": [
         "app/services/guest_restriction_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_cash_expense_service_recover_failed_cash_expense_commit",
+      "name": "recover_failed_cash_expense_commit",
+      "entryPoint": "services_cash_expense_service_recover_failed_cash_expense_commit",
+      "entryPointId": "services_cash_expense_service_recover_failed_cash_expense_commit",
+      "path": [
+        "services_cash_expense_service_recover_failed_cash_expense_commit",
+        "services_cash_expense_service_delete_object_key"
+      ],
+      "qualifiedPath": [
+        "services_cash_expense_service_recover_failed_cash_expense_commit",
+        "services_cash_expense_service_delete_object_key"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/cash_expense_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -24884,6 +25960,52 @@
       "fileCount": 1,
       "files": [
         "app/services/gemma_action_run_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_cash_expense_service_reject_cash_expense",
+      "name": "reject_cash_expense",
+      "entryPoint": "services_cash_expense_service_reject_cash_expense",
+      "entryPointId": "services_cash_expense_service_reject_cash_expense",
+      "path": [
+        "services_cash_expense_service_reject_cash_expense",
+        "services_cash_expense_service_cashexpenseerror",
+        "services_cash_expense_service_get_cash_expense"
+      ],
+      "qualifiedPath": [
+        "services_cash_expense_service_reject_cash_expense",
+        "services_cash_expense_service_cashexpenseerror",
+        "services_cash_expense_service_get_cash_expense"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/cash_expense_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_cash_register_reject_cash_expense_route",
+      "name": "reject_cash_expense_route",
+      "entryPoint": "api_cash_register_reject_cash_expense_route",
+      "entryPointId": "api_cash_register_reject_cash_expense_route",
+      "path": [
+        "api_cash_register_reject_cash_expense_route",
+        "api_cash_register_cash_expense_read"
+      ],
+      "qualifiedPath": [
+        "api_cash_register_reject_cash_expense_route",
+        "api_cash_register_cash_expense_read"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/cash_register.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -25242,6 +26364,32 @@
       "fileCount": 1,
       "files": [
         "app/services/guest_room_avoidance_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_operational_tasks_resolve_operational_task",
+      "name": "resolve_operational_task",
+      "entryPoint": "api_operational_tasks_resolve_operational_task",
+      "entryPointId": "api_operational_tasks_resolve_operational_task",
+      "path": [
+        "api_operational_tasks_resolve_operational_task",
+        "api_operational_tasks_can",
+        "api_operational_tasks_can_read_reservation_context",
+        "api_operational_tasks_conflict"
+      ],
+      "qualifiedPath": [
+        "api_operational_tasks_resolve_operational_task",
+        "api_operational_tasks_can",
+        "api_operational_tasks_can_read_reservation_context",
+        "api_operational_tasks_conflict"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/operational_tasks.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -25769,6 +26917,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_rate_change_draft_service_serialize_draft",
+      "name": "serialize_draft",
+      "entryPoint": "services_rate_change_draft_service_serialize_draft",
+      "entryPointId": "services_rate_change_draft_service_serialize_draft",
+      "path": [
+        "services_rate_change_draft_service_serialize_draft",
+        "services_rate_change_draft_service_impact_for_dates"
+      ],
+      "qualifiedPath": [
+        "services_rate_change_draft_service_serialize_draft",
+        "services_rate_change_draft_service_impact_for_dates"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/rate_change_draft_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_operational_task_service_serialize_handoff",
       "name": "serialize_handoff",
       "entryPoint": "services_operational_task_service_serialize_handoff",
@@ -26075,6 +27245,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_operational_task_service_task_attachment_content",
+      "name": "task_attachment_content",
+      "entryPoint": "services_operational_task_service_task_attachment_content",
+      "entryPointId": "services_operational_task_service_task_attachment_content",
+      "path": [
+        "services_operational_task_service_task_attachment_content",
+        "services_operational_task_service_decode_task_photo",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_task_attachment_content",
+        "services_operational_task_service_decode_task_photo",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_membership_service_transfer_primary_owner",
       "name": "transfer_primary_owner",
       "entryPoint": "services_membership_service_transfer_primary_owner",
@@ -26212,6 +27406,28 @@
       "fileCount": 1,
       "files": [
         "app/api/payment_surcharges.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_daily_rates_update_price_period",
+      "name": "update_price_period",
+      "entryPoint": "api_daily_rates_update_price_period",
+      "entryPointId": "api_daily_rates_update_price_period",
+      "path": [
+        "api_daily_rates_update_price_period",
+        "api_daily_rates_reject_direct_rate_write"
+      ],
+      "qualifiedPath": [
+        "api_daily_rates_update_price_period",
+        "api_daily_rates_reject_direct_rate_write"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/daily_rates.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -27135,6 +28351,30 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_d2a7e93f4c2b_day2_feedback_schema_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_d2a7e93f4c2b_day2_feedback_schema_upgrade",
+      "entryPointId": "versions_d2a7e93f4c2b_day2_feedback_schema_upgrade",
+      "path": [
+        "versions_d2a7e93f4c2b_day2_feedback_schema_upgrade",
+        "versions_d2a7e93f4c2b_day2_feedback_schema_assert_no_duplicate_remitos",
+        "versions_d2a7e93f4c2b_day2_feedback_schema_install_rls"
+      ],
+      "qualifiedPath": [
+        "versions_d2a7e93f4c2b_day2_feedback_schema_upgrade",
+        "versions_d2a7e93f4c2b_day2_feedback_schema_assert_no_duplicate_remitos",
+        "versions_d2a7e93f4c2b_day2_feedback_schema_install_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/d2a7e93f4c2b_day2_feedback_schema.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_d4f8c21e7b10_extend_payment_link_tests_states_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_d4f8c21e7b10_extend_payment_link_tests_states_upgrade",
@@ -27231,14 +28471,16 @@
       "entryPointId": "api_daily_rates_upsert_daily_rate",
       "path": [
         "api_daily_rates_upsert_daily_rate",
-        "api_daily_rates_get_category_or_404"
+        "api_daily_rates_get_category_or_404",
+        "api_daily_rates_reject_direct_rate_write"
       ],
       "qualifiedPath": [
         "api_daily_rates_upsert_daily_rate",
-        "api_daily_rates_get_category_or_404"
+        "api_daily_rates_get_category_or_404",
+        "api_daily_rates_reject_direct_rate_write"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/daily_rates.py"
@@ -27304,6 +28546,28 @@
       "qualifiedPath": [
         "hooks_usecashregister_usecashdailysummary",
         "hooks_usecashregister_dailysummarykey"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useCashRegister.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:hooks_usecashregister_usecashexpenses",
+      "name": "useCashExpenses",
+      "entryPoint": "hooks_usecashregister_usecashexpenses",
+      "entryPointId": "hooks_usecashregister_usecashexpenses",
+      "path": [
+        "hooks_usecashregister_usecashexpenses",
+        "hooks_usecashregister_cashexpenseskey"
+      ],
+      "qualifiedPath": [
+        "hooks_usecashregister_usecashexpenses",
+        "hooks_usecashregister_cashexpenseskey"
       ],
       "depth": 1,
       "nodeCount": 2,

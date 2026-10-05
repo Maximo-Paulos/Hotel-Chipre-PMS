@@ -914,7 +914,7 @@
       "financeDeposit": "Deposit",
       "financeBalance": "Balance",
       "deferredCompanyFinance": "This company's accommodation is billed outside the PMS. The accommodation amount is not shown or collected here.",
-      "financeLoadError": "Could not load the financial summary. Retry opening the details.",
+      "financeLoadError": "Could not load the financial summary.",
       "financeOperationalTotal": "Operational total",
       "financeOperationalBalance": "Operational balance",
       "financeCollection": "Collection",

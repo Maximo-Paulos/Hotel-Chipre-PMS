@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
+import threading
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -10,7 +13,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -53,6 +56,9 @@ PLAN_ORDER = {"starter": 0, "pro": 1, "ultra": 2}
 AI_MONTHLY_QUOTA_FALLBACK = 20
 logger = logging.getLogger(__name__)
 
+_ANALYTICS_FACT_REFRESH_LOCKS: dict[int, threading.Lock] = {}
+_ANALYTICS_FACT_REFRESH_LOCKS_GUARD = threading.Lock()
+
 _FACT_CURRENCY_PAIRS = (
     ("revenue_gross_ars", "revenue_gross_usd"),
     ("revenue_net_ars", "revenue_net_usd"),
@@ -76,20 +82,14 @@ def _now() -> datetime:
 
 
 def _facts_data_as_of(*fact_row_groups: list[Any]) -> datetime | None:
-    """Honest freshness for payloads built from derived fact tables.
+    """Return the oldest materialization timestamp among the facts used.
 
-    FactReservationDaily/FactRoomOccupancyDaily are only refreshed by the
-    Celery beat job (analytics.project_all_derived_facts_incremental, every
-    5 minutes) or the nightly reconciliation -- never synchronously on
-    reservation/payment writes. Without this, `annotate_analytics_payload`
-    falls back to "generated_at" (the instant this query ran) and always
-    reports source_lag_seconds=0, which lies about data that can be minutes,
-    hours, or (if the worker is down) indefinitely stale.
-
-    Returns the oldest `updated_at` among the fact rows actually used to
-    build the payload -- the conservative, honest worst case for this
-    window. Returns None (falls back to "now") only when the window has no
-    fact rows at all, i.e. nothing to be stale.
+    This is a conservative fact-refresh timestamp, not an independent
+    watermark of source-table writes. Reservation write paths update their
+    affected fact windows transactionally; bounded read-time recovery also
+    repairs missing or aged windows when enabled. Returning the oldest row
+    keeps mixed-age windows visibly stale instead of letting a newer row mask
+    an older one. An empty window returns None because it has no fact rows.
     """
     timestamps = [row.updated_at for group in fact_row_groups for row in group if getattr(row, "updated_at", None)]
     return min(timestamps) if timestamps else None
@@ -884,77 +884,211 @@ def _company_lookup_map(db: Session, hotel_id: int) -> dict[int, Company]:
 
 
 def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date_to: date) -> None:
-    """Optionally self-heal empty or stale FX fact windows for single-service hosts.
+    """Repair missing, aged, or FX-incomplete facts within a bounded window.
 
-    These tables are meant to be kept fresh by a scheduled job (Celery beat
-    -> analytics.refresh_fact_*). Until that worker exists, the bounded
-    synchronous fallback keeps the free single-service deployment useful.
-    It is explicitly configurable and refreshes a bounded requested window
-    when its facts are missing or contain a converted amount without a saved
-    FX snapshot. A concurrent loser is harmless because both fact tables have
-    a unique constraint and the refresh is idempotent.
+    Age-based recovery only runs when the full requested window fits inside
+    the hard 31-day cap. Wider historical requests keep their existing
+    freshness metadata and never trigger a partial refresh on every read.
     """
     settings = get_settings()
     if not bool(getattr(settings, "SYNC_FACT_REFRESH_ENABLED", True)):
         return
 
-    max_days = max(int(getattr(settings, "SYNC_FACT_REFRESH_MAX_DAYS", 31)), 1)
+    # The setting can narrow this work, but it cannot expand an API request
+    # into a large historical recompute.
+    max_days = min(max(int(getattr(settings, "SYNC_FACT_REFRESH_MAX_DAYS", 31)), 1), 31)
+    requested_days = max((date_to - date_from).days + 1, 1)
+    if requested_days > 31:
+        logger.info(
+            "analytics.sync_fact_refresh.skipped_wide_window",
+            extra={
+                "hotel_id": hotel_id,
+                "requested_date_from": date_from.isoformat(),
+                "requested_date_to": date_to.isoformat(),
+                "requested_days": requested_days,
+                "max_days": 31,
+                "reason": "wide_window_preserves_stale_metadata",
+            },
+        )
+        return
     refresh_date_from = max(date_from, date_to - timedelta(days=max_days - 1))
-    already_materialized = (
-        db.query(FactReservationDaily.id)
-        .filter(
-            FactReservationDaily.hotel_id == hotel_id,
-            FactReservationDaily.stay_date.between(refresh_date_from, date_to),
-        )
-        .first()
-        or db.query(FactRoomOccupancyDaily.id)
-        .filter(
-            FactRoomOccupancyDaily.hotel_id == hotel_id,
-            FactRoomOccupancyDaily.stay_date.between(refresh_date_from, date_to),
-        )
-        .first()
-    )
+    stale_after_seconds = max(int(getattr(settings, "SYNC_FACT_REFRESH_STALE_AFTER_SECONDS", 900)), 0)
     ars_amounts = [getattr(FactReservationDaily, ars) for ars, _usd in _FACT_CURRENCY_PAIRS]
     usd_amounts = [getattr(FactReservationDaily, usd) for _ars, usd in _FACT_CURRENCY_PAIRS]
     has_nonzero_ars = or_(*(column != 0 for column in ars_amounts))
     has_nonzero_usd = or_(*(column != 0 for column in usd_amounts))
     has_any_money = or_(has_nonzero_ars, has_nonzero_usd)
     missing_fx = or_(FactReservationDaily.fx_rate_snapshot.is_(None), FactReservationDaily.fx_rate_snapshot <= 0)
-    stale_fx_fact = (
-        db.query(FactReservationDaily.id)
-        .filter(
-            FactReservationDaily.hotel_id == hotel_id,
-            FactReservationDaily.stay_date.between(refresh_date_from, date_to),
-            missing_fx,
-            or_(
-                and_(FactReservationDaily.source_currency == "ARS", has_nonzero_usd),
-                and_(FactReservationDaily.source_currency == "USD", has_nonzero_ars),
-                and_(FactReservationDaily.source_currency.notin_(["ARS", "USD"]), has_any_money),
-            ),
+
+    def fact_refresh_state() -> tuple[bool, bool, bool]:
+        reservation_count, reservation_fact_as_of = (
+            db.query(func.count(FactReservationDaily.id), func.min(FactReservationDaily.updated_at))
+            .filter(
+                FactReservationDaily.hotel_id == hotel_id,
+                FactReservationDaily.stay_date.between(refresh_date_from, date_to),
+            )
+            .one()
         )
-        .first()
-    )
-    if already_materialized and not stale_fx_fact:
+        room_count, room_fact_as_of = (
+            db.query(func.count(FactRoomOccupancyDaily.id), func.min(FactRoomOccupancyDaily.updated_at))
+            .filter(
+                FactRoomOccupancyDaily.hotel_id == hotel_id,
+                FactRoomOccupancyDaily.stay_date.between(refresh_date_from, date_to),
+            )
+            .one()
+        )
+        reservation_date_ranges = (
+            active_reservations(db, hotel_id)
+            # refresh_fact_reservation_daily skips reservations whose category
+            # is absent. Match that source filter so legacy/orphaned rows do
+            # not cause an endless "incomplete" refresh loop.
+            .join(
+                RoomCategory,
+                and_(RoomCategory.id == Reservation.category_id, RoomCategory.hotel_id == hotel_id),
+            )
+            .filter(
+                Reservation.check_in_date <= date_to,
+                Reservation.check_out_date > refresh_date_from,
+                Reservation.status != ReservationStatusEnum.CANCELLED,
+            )
+            .with_entities(Reservation.check_in_date, Reservation.check_out_date)
+            .all()
+        )
+        expected_reservation_rows = sum(
+            max(
+                (
+                    min(check_out, date_to + timedelta(days=1))
+                    - max(check_in, refresh_date_from)
+                ).days,
+                0,
+            )
+            for check_in, check_out in reservation_date_ranges
+        )
+        expected_room_rows = active_rooms(db, hotel_id).count() * max(
+            (date_to - refresh_date_from).days + 1,
+            0,
+        )
+        coverage_complete = (
+            reservation_count == expected_reservation_rows
+            and room_count == expected_room_rows
+        )
+        materialized_timestamps = [
+            timestamp
+            for timestamp in (reservation_fact_as_of, room_fact_as_of)
+            if timestamp is not None
+        ]
+        stale_facts = False
+        if requested_days <= max_days and stale_after_seconds > 0 and materialized_timestamps:
+            normalized_as_of = _ensure_utc(min(materialized_timestamps))
+            stale_facts = bool(
+                normalized_as_of is not None
+                and (_now() - normalized_as_of).total_seconds() >= stale_after_seconds
+            )
+        stale_fx_fact = (
+            db.query(FactReservationDaily.id)
+            .filter(
+                FactReservationDaily.hotel_id == hotel_id,
+                FactReservationDaily.stay_date.between(refresh_date_from, date_to),
+                missing_fx,
+                or_(
+                    and_(FactReservationDaily.source_currency == "ARS", has_nonzero_usd),
+                    and_(FactReservationDaily.source_currency == "USD", has_nonzero_ars),
+                    and_(FactReservationDaily.source_currency.notin_(["ARS", "USD"]), has_any_money),
+                ),
+            )
+            .first()
+        )
+        return coverage_complete, bool(stale_fx_fact), stale_facts
+
+    coverage_complete, stale_fx_fact, stale_facts = fact_refresh_state()
+    if coverage_complete and not stale_fx_fact and not stale_facts:
         return
 
-    logger.warning(
-        "analytics.sync_fact_currency_refresh.inline" if stale_fx_fact else "analytics.sync_fact_refresh.inline",
-        extra={
-            "hotel_id": hotel_id,
-            "requested_date_from": date_from.isoformat(),
-            "requested_date_to": date_to.isoformat(),
-            "refresh_date_from": refresh_date_from.isoformat(),
-            "refresh_date_to": date_to.isoformat(),
-            "max_days": max_days,
-            "reason": "missing_fx_snapshot_on_converted_fact" if stale_fx_fact else "empty_window",
-        },
-    )
+    with _analytics_fact_refresh_guard(db, hotel_id) as acquired:
+        if not acquired:
+            logger.info(
+                "analytics.sync_fact_refresh.skipped_lock",
+                extra={
+                    "hotel_id": hotel_id,
+                    "requested_date_from": date_from.isoformat(),
+                    "requested_date_to": date_to.isoformat(),
+                    "reason": "another_refresh_is_running",
+                },
+            )
+            return
+
+        # Another request may have completed while this request was waiting
+        # to enter the guard. Recheck under the lock before deleting rows.
+        coverage_complete, stale_fx_fact, stale_facts = fact_refresh_state()
+        if coverage_complete and not stale_fx_fact and not stale_facts:
+            db.commit()
+            return
+
+        logger.warning(
+            "analytics.sync_fact_currency_refresh.inline" if stale_fx_fact else "analytics.sync_fact_refresh.inline",
+            extra={
+                "hotel_id": hotel_id,
+                "requested_date_from": date_from.isoformat(),
+                "requested_date_to": date_to.isoformat(),
+                "refresh_date_from": refresh_date_from.isoformat(),
+                "refresh_date_to": date_to.isoformat(),
+                "max_days": max_days,
+                "reason": (
+                    "missing_fx_snapshot_on_converted_fact"
+                    if stale_fx_fact
+                    else "stale_fact_window"
+                    if stale_facts
+                    else "empty_window"
+                ),
+                "stale_after_seconds": stale_after_seconds,
+                "requested_days": requested_days,
+            },
+        )
+        try:
+            refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=refresh_date_from, date_to=date_to)
+            refresh_fact_room_occupancy_daily(db, hotel_id=hotel_id, date_from=refresh_date_from, date_to=date_to)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+
+
+@contextmanager
+def _analytics_fact_refresh_guard(db: Session, hotel_id: int):
+    """Nonblocking per-hotel refresh guard across API processes and threads.
+
+    PostgreSQL's transaction-scoped advisory lock coordinates Render
+    instances. SQLite and other local test engines use a process-local lock;
+    both are try-locks so a concurrent read serves the current stale timestamp
+    instead of waiting or repeating the same rebuild.
+    """
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        key_material = f"hotel-chipre:analytics-fact-refresh:{hotel_id}".encode("utf-8")
+        lock_key = int.from_bytes(hashlib.blake2b(key_material, digest_size=8).digest(), "big", signed=True)
+        acquired = bool(
+            db.execute(
+                text("SELECT pg_try_advisory_xact_lock(:lock_key)"),
+                {"lock_key": lock_key},
+            ).scalar()
+        )
+        try:
+            yield acquired
+        finally:
+            # Refresh paths commit or roll back before returning. Release a
+            # lock on exceptional exits while preserving tenant context via
+            # app.database's after_begin hook.
+            if acquired and db.in_transaction():
+                db.rollback()
+        return
+
+    with _ANALYTICS_FACT_REFRESH_LOCKS_GUARD:
+        lock = _ANALYTICS_FACT_REFRESH_LOCKS.setdefault(hotel_id, threading.Lock())
+    acquired = lock.acquire(blocking=False)
     try:
-        refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=refresh_date_from, date_to=date_to)
-        refresh_fact_room_occupancy_daily(db, hotel_id=hotel_id, date_from=refresh_date_from, date_to=date_to)
-        db.commit()
-    except IntegrityError:
-        db.rollback()
+        yield acquired
+    finally:
+        if acquired:
+            lock.release()
 
 
 def _load_reservation_facts(db: Session, hotel_id: int, date_from: date, date_to: date) -> list[FactReservationDaily]:

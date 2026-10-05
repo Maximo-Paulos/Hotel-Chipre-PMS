@@ -914,7 +914,7 @@
       "financeDeposit": "Depósito",
       "financeBalance": "Saldo",
       "deferredCompanyFinance": "El alojamiento de esta empresa se factura fuera del PMS. No se muestra ni se cobra aquí el importe del alojamiento.",
-      "financeLoadError": "No se pudo cargar el resumen financiero. Reintentá abrir la ficha.",
+      "financeLoadError": "No se pudo cargar el resumen financiero.",
       "financeOperationalTotal": "Total operativo",
       "financeOperationalBalance": "Saldo operativo",
       "financeCollection": "Cobro",

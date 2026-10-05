@@ -4867,9 +4867,17 @@ export function ReservationsPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                    {t("page.details.financeLoadError")}
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert" data-testid="reservation-financial-summary-error">
+                    <span>{t("page.details.financeLoadError")}</span>
+                    <button
+                      type="button"
+                      onClick={() => void detailsSummaryQuery.refetch()}
+                      disabled={detailsSummaryQuery.isFetching}
+                      className="min-h-11 rounded-lg border border-rose-300 bg-white px-3 py-1 font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
+                    >
+                      {t("page.details.operationRetry")}
+                    </button>
+                  </div>
                 )}
                 {!detailsDeferredCompanyBilling && detailsOperations?.financial_summary ? (
                   <div className="rounded-lg border border-slate-200 bg-white/70 p-3 text-xs text-slate-700">

@@ -1082,7 +1082,17 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                     </div>
                   </div>
                 ) : (
-                  <p className="mt-2 text-rose-700">{t("drawer.billing.loadError")}</p>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert" data-testid="reservation-drawer-financial-summary-error">
+                    <span>{t("drawer.billing.loadError")}</span>
+                    <button
+                      type="button"
+                      onClick={() => void summaryQuery.refetch()}
+                      disabled={summaryQuery.isFetching}
+                      className="min-h-11 rounded-lg border border-rose-300 bg-white px-3 py-1 font-semibold hover:bg-rose-100 disabled:opacity-60"
+                    >
+                      {t("drawer.operationRetry")}
+                    </button>
+                  </div>
                 )}
                 {!deferredCompanyBilling && (reservation.quoted_amount_ars != null || reservation.quoted_amount_usd != null) && (
                   <div className="mt-3 rounded-md border border-slate-200 bg-white p-2">
