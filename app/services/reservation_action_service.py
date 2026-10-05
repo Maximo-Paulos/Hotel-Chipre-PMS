@@ -15,7 +15,7 @@ from app.models.reservation import Reservation, ReservationSourceEnum, Reservati
 from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.models.guest import Guest
 from app.services.payment_service import _recommended_financial_action, get_reservation_financial_summary
-from app.services.financial_ledger import external_paid_balance_credit, reconciled_paid_amounts_by_reservation
+from app.services.financial_ledger import external_paid_balance_credit
 from app.services.reservation_service import (
     active_reservations,
     active_reservations_select,
@@ -184,9 +184,8 @@ def list_pending_reservation_actions(
     hotel_id: int,
     limit: int = 100,
 ) -> list[dict[str, Any]]:
-    candidate_ids = _candidate_reservation_ids(db, hotel_id=hotel_id)
     cap = max(_MIN_CANDIDATE_CAP, limit * _CANDIDATE_CAP_MULTIPLIER)
-    candidate_ids = candidate_ids[:cap]
+    candidate_ids = _candidate_reservation_ids(db, hotel_id=hotel_id, limit=cap)
     if not candidate_ids:
         return []
 
@@ -476,148 +475,169 @@ def _pending_action_financial_inputs(
     return summaries
 
 
-def _candidate_reservation_ids(db: Session, *, hotel_id: int) -> list[int]:
+def _candidate_reservation_ids(
+    db: Session,
+    *,
+    hotel_id: int,
+    limit: int | None = None,
+) -> list[int]:
     """Bulk-compute reservation ids that could produce a pending action.
 
-    A handful of grouped/EXISTS-style queries replace the old N per-reservation
-    query fan-out. The predicate mirrors `_build_pending_actions` /
-    `_recommended_financial_action` exactly (not a rough approximation) so no
-    real action is silently dropped -- see tests/test_reservation_action_service.py
-    for the before/after correctness comparison.
+    The SQL predicate mirrors the pending-action builders and financial
+    recommendation rules. It preserves actionable terminal history, but does not transfer
+    clean terminal reservations or their financial/reconciliation inputs into
+    Python. The optional limit is pushed into this source query so history after
+    the displayed candidate cap never fans out into detail reads.
     """
-    # Keep the active window bounded while retaining terminal reservations:
-    # checked-out/cancelled stays can still have an unresolved OTA settlement,
-    # adjustment or payment reconciliation gap. Clean historical reservations
-    # outside the window are therefore skipped, but terminal rows remain
-    # eligible for the explicit reconciliation checks below.
     cutoff = hotel_today(db, hotel_id) - timedelta(days=_ACTIVE_WINDOW_DAYS)
-    rows = db.execute(
-        active_reservations_select(hotel_id)
-        .with_only_columns(
-            Reservation.id,
-            Reservation.status,
-            Reservation.source,
-            Reservation.room_id,
-            Reservation.allocation_status,
-            Reservation.requires_manual_review,
-            Reservation.settlement_status,
-            Reservation.payment_collection_model,
-            Reservation.amount_paid,
-            Reservation.total_amount,
-            Reservation.check_in_date,
-        )
+    is_terminal = Reservation.status.in_(_TERMINAL_STATUSES)
+    is_active = Reservation.status.notin_(_TERMINAL_STATUSES)
+    is_ota = or_(
+        func.coalesce(Reservation.source_provider_code, "") != "",
+        func.coalesce(Reservation.external_id, "") != "",
+    )
+
+    ota_manual_resolution = (
+        select(1)
+        .select_from(OTAReservationLink)
         .where(
-            or_(
-                Reservation.check_out_date >= cutoff,
-                Reservation.status.in_(_TERMINAL_STATUSES),
-            )
+            OTAReservationLink.hotel_id == hotel_id,
+            OTAReservationLink.reservation_id == Reservation.id,
+            OTAReservationLink.provider_state == OTAReservationLifecycleEnum.MANUAL_RESOLUTION_REQUIRED,
         )
-        .order_by(Reservation.check_in_date, Reservation.id)
-    ).all()
-    if not rows:
-        return []
-
-    ids = [row.id for row in rows]
-
-    ota_manual_resolution_ids = {
-        reservation_id
-        for (reservation_id,) in db.execute(
-            select(OTAReservationLink.reservation_id).where(
-                OTAReservationLink.hotel_id == hotel_id,
-                OTAReservationLink.reservation_id.in_(ids),
-                OTAReservationLink.provider_state == OTAReservationLifecycleEnum.MANUAL_RESOLUTION_REQUIRED,
-            )
-        )
-    }
-
-    adjustment_flag_ids: set[int] = set()
-    for reservation_id, resulting_reservation_id in db.execute(
-        select(ReservationAdjustment.reservation_id, ReservationAdjustment.resulting_reservation_id).where(
+        .exists()
+    )
+    pending_adjustment = (
+        select(1)
+        .select_from(ReservationAdjustment)
+        .where(
             ReservationAdjustment.hotel_id == hotel_id,
             or_(
-                ReservationAdjustment.reservation_id.in_(ids),
-                ReservationAdjustment.resulting_reservation_id.in_(ids),
+                ReservationAdjustment.reservation_id == Reservation.id,
+                ReservationAdjustment.resulting_reservation_id == Reservation.id,
             ),
             or_(
                 ReservationAdjustment.status.in_(_PENDING_ADJUSTMENT_STATUSES),
                 ReservationAdjustment.external_resolution_status.in_(_PROBLEM_SETTLEMENT_STATUSES),
             ),
         )
-    ):
-        if reservation_id in ids:
-            adjustment_flag_ids.add(reservation_id)
-        if resulting_reservation_id in ids:
-            adjustment_flag_ids.add(resulting_reservation_id)
+        .exists()
+    )
+    has_billing_adjustment = (
+        select(1)
+        .select_from(BillingAdjustment)
+        .where(
+            BillingAdjustment.hotel_id == hotel_id,
+            BillingAdjustment.reservation_id == Reservation.id,
+        )
+        .exists()
+    )
 
-    billing_adjustment_ids = {
-        reservation_id
-        for (reservation_id,) in db.execute(
-            select(BillingAdjustment.reservation_id).where(
-                BillingAdjustment.hotel_id == hotel_id,
-                BillingAdjustment.reservation_id.in_(ids),
+    # This mirrors reconciled_paid_amounts_by_reservation(): completed local
+    # payments/refunds plus a confirmed same-currency OTA credit, without the
+    # legacy amount_paid fallback. Keeping the arithmetic in SQL lets old
+    # clean terminal history stay inside the database instead of becoming an
+    # unbounded Python-side reconciliation batch.
+    signed_completed_amount = func.coalesce(
+        select(
+            func.sum(
+                case(
+                    (Transaction.transaction_type == TransactionTypeEnum.REFUND, -Transaction.amount),
+                    else_=Transaction.amount,
+                )
             )
         )
-    }
-
-    paid_by_reservation = reconciled_paid_amounts_by_reservation(db, hotel_id, ids)
-
-    return [
-        row.id
-        for row in rows
-        if _row_could_generate_action(
-            row,
-            ota_manual_resolution_ids=ota_manual_resolution_ids,
-            adjustment_flag_ids=adjustment_flag_ids,
-            billing_adjustment_ids=billing_adjustment_ids,
-            paid_by_reservation=paid_by_reservation,
+        .where(
+            Transaction.hotel_id == hotel_id,
+            Transaction.reservation_id == Reservation.id,
+            Transaction.status == TransactionStatusEnum.COMPLETED,
         )
-    ]
-
-
-def _row_could_generate_action(
-    row: Any,
-    *,
-    ota_manual_resolution_ids: set[int],
-    adjustment_flag_ids: set[int],
-    billing_adjustment_ids: set[int],
-    paid_by_reservation: dict[int, Decimal],
-) -> bool:
-    if row.requires_manual_review:
-        return True
-
-    active = row.status not in _TERMINAL_STATUSES
-    if active and row.room_id is None:
-        return True
-    if active and row.allocation_status in _PROBLEM_ALLOCATION_STATUSES:
-        return True
-
-    if row.status == ReservationStatusEnum.CANCELLED and row.source != ReservationSourceEnum.DIRECT:
-        return True
-    if row.settlement_status in _PROBLEM_SETTLEMENT_STATUSES:
-        return True
-    if row.payment_collection_model == "ota_prepaid" and row.settlement_status in {"pending", "unknown"}:
-        return True
-    if (
-        row.status != ReservationStatusEnum.CANCELLED
-        and row.payment_collection_model == "hotel_collect"
-        and (
-            Decimal(str(row.amount_paid or 0)) < Decimal(str(row.total_amount or 0))
-            or row.id in billing_adjustment_ids
+        .correlate(Reservation)
+        .scalar_subquery(),
+        Decimal("0.00"),
+    )
+    reservation_currency_value = case(
+        (
+            or_(Reservation.currency_code.is_(None), Reservation.currency_code == ""),
+            "ARS",
+        ),
+        else_=Reservation.currency_code,
+    )
+    reservation_currency = func.upper(func.trim(reservation_currency_value))
+    external_paid_currency_value = case(
+        (
+            or_(Reservation.external_paid_currency.is_(None), Reservation.external_paid_currency == ""),
+            reservation_currency_value,
+        ),
+        else_=Reservation.external_paid_currency,
+    )
+    external_paid_currency = func.upper(func.trim(external_paid_currency_value))
+    confirmed_external_credit = case(
+        (
+            and_(
+                is_ota,
+                Reservation.external_paid_confirmed.is_(True),
+                Reservation.external_paid_amount > Decimal("0.00"),
+                external_paid_currency == reservation_currency,
+            ),
+            Reservation.external_paid_amount,
+        ),
+        else_=Decimal("0.00"),
+    )
+    has_financial_reconciliation_gap = (
+        func.abs(
+            func.coalesce(Reservation.amount_paid, Decimal("0.00"))
+            - signed_completed_amount
+            - confirmed_external_credit
         )
-    ):
-        return True
+        > Decimal("0.01")
+    )
 
-    if row.id in ota_manual_resolution_ids:
-        return True
-    if row.id in adjustment_flag_ids:
-        return True
+    has_operational_action = or_(
+        Reservation.requires_manual_review.is_(True),
+        and_(
+            is_active,
+            or_(
+                Reservation.room_id.is_(None),
+                Reservation.allocation_status.in_(_PROBLEM_ALLOCATION_STATUSES),
+            ),
+        ),
+        and_(
+            Reservation.status == ReservationStatusEnum.CANCELLED,
+            Reservation.source != ReservationSourceEnum.DIRECT,
+        ),
+        Reservation.settlement_status.in_(_PROBLEM_SETTLEMENT_STATUSES),
+        and_(
+            Reservation.payment_collection_model == "ota_prepaid",
+            Reservation.settlement_status.in_({"pending", "unknown"}),
+        ),
+        and_(
+            Reservation.status != ReservationStatusEnum.CANCELLED,
+            Reservation.payment_collection_model == "hotel_collect",
+            or_(
+                func.coalesce(Reservation.amount_paid, Decimal("0.00"))
+                < func.coalesce(Reservation.total_amount, Decimal("0.00")),
+                has_billing_adjustment,
+            ),
+        ),
+        ota_manual_resolution,
+        pending_adjustment,
+        has_financial_reconciliation_gap,
+    )
 
-    materialized_paid = Decimal(str(row.amount_paid or 0))
-    canonical_paid = paid_by_reservation.get(row.id, Decimal("0"))
-    if abs(materialized_paid - canonical_paid) > Decimal("0.01"):
-        return True
+    query = (
+        active_reservations_select(hotel_id)
+        .with_only_columns(Reservation.id)
+        .where(
+            or_(Reservation.check_out_date >= cutoff, is_terminal),
+            has_operational_action,
+        )
+        .order_by(Reservation.check_in_date, Reservation.id)
+    )
+    if limit is not None:
+        query = query.limit(max(0, limit))
 
-    return False
+    return [reservation_id for (reservation_id,) in db.execute(query).all()]
 
 
 

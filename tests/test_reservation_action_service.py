@@ -1126,6 +1126,183 @@ def test_pending_actions_query_count_scales_with_candidates_not_total_reservatio
     )
 
 
+def test_historical_terminal_candidate_query_returns_only_actionable_rows_and_is_hotel_scoped(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_categories_hotel2,
+    sample_guest,
+):
+    """Old terminal cases remain actionable without materializing clean history."""
+    old_check_out = date.today() - timedelta(days=900)
+    old_check_in = old_check_out - timedelta(days=2)
+
+    def _old_reservation(code, **overrides):
+        reservation_fields = {
+            "check_in_date": old_check_in,
+            "check_out_date": old_check_out,
+            "status": ReservationStatusEnum.CHECKED_OUT,
+        }
+        reservation_fields.update(overrides)
+        return _mk_reservation(
+            db,
+            code=code,
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            hotel_id=hotel_config.id,
+            **reservation_fields,
+        )
+
+    ota_settlement = _old_reservation(
+        "HIST-OTA-SETTLEMENT",
+        source=ReservationSourceEnum.EXPEDIA,
+        external_id="historical-settlement",
+        payment_collection_model="ota_prepaid",
+        settlement_status="pending",
+        total_amount=Decimal("100.00"),
+    )
+    cancelled_ota_manual = _old_reservation(
+        "HIST-OTA-MANUAL",
+        status=ReservationStatusEnum.CANCELLED,
+        source=ReservationSourceEnum.BOOKING,
+        external_id="historical-manual-resolution",
+    )
+    adjustment_source = _old_reservation("HIST-ADJUSTMENT-SOURCE")
+    adjustment_result = _old_reservation("HIST-ADJUSTMENT-RESULT")
+    adjustment_external = _old_reservation("HIST-ADJUSTMENT-EXTERNAL")
+    billing_adjustment_reservation = _old_reservation(
+        "HIST-BILLING-ADJUSTMENT",
+        total_amount=Decimal("100.00"),
+        amount_paid=Decimal("100.00"),
+    )
+    hotel_collect_balance = _old_reservation(
+        "HIST-HOTEL-COLLECT",
+        total_amount=Decimal("100.00"),
+        amount_paid=Decimal("25.00"),
+    )
+    manual_review = _old_reservation("HIST-MANUAL-REVIEW", requires_manual_review=True)
+    reconciliation_gap = _old_reservation(
+        "HIST-RECONCILIATION-GAP",
+        total_amount=Decimal("100.00"),
+        amount_paid=Decimal("100.00"),
+    )
+    blank_currency_reconciliation_gap = _old_reservation(
+        "HIST-RECONCILIATION-BLANK-CURRENCY",
+        external_id="historical-blank-external-currency",
+        external_paid_amount=Decimal("100.00"),
+        external_paid_currency=" ",
+        external_paid_confirmed=True,
+        total_amount=Decimal("100.00"),
+        amount_paid=Decimal("100.00"),
+    )
+    for index in range(250):
+        _old_reservation(f"HIST-CLEAN-{index:03d}")
+
+    # This foreign-tenant action is otherwise equivalent to the local manual
+    # review case and must never enter hotel 1's candidate set.
+    foreign_guest = Guest(first_name="Synthetic", last_name="Foreign", hotel_id=2, terms_accepted=True)
+    db.add(foreign_guest)
+    db.flush()
+    foreign_reservation = _mk_reservation(
+        db,
+        code="HIST-FOREIGN-TENANT",
+        guest_id=foreign_guest.id,
+        category_id=sample_categories_hotel2[0].id,
+        hotel_id=2,
+        check_in_date=old_check_in,
+        check_out_date=old_check_out,
+        status=ReservationStatusEnum.CHECKED_OUT,
+        requires_manual_review=True,
+    )
+
+    db.flush()
+    provider = OTAProvider(
+        code="historical_pending_actions",
+        name="Historical pending actions",
+        auth_type="api_key",
+        security_model="shared_secret",
+    )
+    db.add(provider)
+    db.flush()
+    db.add(
+        OTAReservationLink(
+            hotel_id=hotel_config.id,
+            provider_id=provider.id,
+            reservation_id=cancelled_ota_manual.id,
+            external_reservation_id="historical-manual-link",
+            provider_state=OTAReservationLifecycleEnum.MANUAL_RESOLUTION_REQUIRED,
+            sync_status="manual_resolution_required",
+        )
+    )
+    db.add_all(
+        [
+            ReservationAdjustment(
+                hotel_id=hotel_config.id,
+                reservation_id=adjustment_source.id,
+                resulting_reservation_id=adjustment_result.id,
+                kind=ReservationAdjustmentKindEnum.OTHER,
+                status=ReservationAdjustmentStatusEnum.PENDING,
+                reason_code="historical_pending",
+                request_source="hotel",
+            ),
+            ReservationAdjustment(
+                hotel_id=hotel_config.id,
+                reservation_id=adjustment_external.id,
+                kind=ReservationAdjustmentKindEnum.OTHER,
+                status=ReservationAdjustmentStatusEnum.APPLIED,
+                reason_code="historical_external_resolution",
+                request_source="hotel",
+                external_resolution_status="manual_resolution_required",
+            ),
+            BillingAdjustment(
+                hotel_id=hotel_config.id,
+                reservation_id=billing_adjustment_reservation.id,
+                adjustment_type=BillingAdjustmentTypeEnum.CHARGE,
+                amount=Decimal("25.00"),
+                total_amount=Decimal("25.00"),
+            ),
+        ]
+    )
+    hotel_id = hotel_config.id
+    db.commit()
+
+    expected_candidate_ids = {
+        ota_settlement.id,
+        cancelled_ota_manual.id,
+        adjustment_source.id,
+        adjustment_result.id,
+        adjustment_external.id,
+        billing_adjustment_reservation.id,
+        hotel_collect_balance.id,
+        manual_review.id,
+        reconciliation_gap.id,
+        blank_currency_reconciliation_gap.id,
+    }
+
+    # Clean terminal rows stay inside the SQL predicate; only the ten
+    # actionable historical reservation ids cross the DB driver boundary.
+    candidate_ids = _candidate_reservation_ids(db, hotel_id=hotel_id)
+    assert set(candidate_ids) == expected_candidate_ids
+    assert len(candidate_ids) == len(expected_candidate_ids)
+    assert foreign_reservation.id not in candidate_ids
+    assert _candidate_reservation_ids(db, hotel_id=hotel_id, limit=3) == candidate_ids[:3]
+
+    actions = list_pending_reservation_actions(db, hotel_id=hotel_id, limit=100)
+    action_reservation_ids = {action["reservation_id"] for action in actions}
+    assert action_reservation_ids == expected_candidate_ids
+    assert {action["code"] for action in actions} >= {
+        "await_channel_settlement",
+        "review_cancellation_settlement",
+        "resolve_external_channel",
+        "review_adjustment",
+        "resolve_adjustment_external_action",
+        "collect_from_guest",
+        "manual_review_required",
+        "financial_reconciliation_gap",
+    }
+    assert foreign_reservation.id not in action_reservation_ids
+
+
 def test_pending_actions_batch_query_count_is_constant_for_five_vs_twenty_five_candidates(
     db, hotel_config, sample_categories, sample_rooms, sample_guest,
 ):
