@@ -905,6 +905,15 @@ def delete_booking(
     before = audit_log_service.model_snapshot(booking)
     booking.deleted_at = datetime.now(timezone.utc)
     booking.deleted_by_user_id = context.user_id
+    from app.services.analytics_facts import touch_reservation_fact_window
+
+    touch_reservation_fact_window(
+        db,
+        hotel_id=context.hotel_id,
+        date_from=booking.check_in_date,
+        date_to=booking.check_out_date,
+        reservation_id=booking.id,
+    )
     db.commit()
     db.refresh(booking)
     audit_log_service.safe_create_audit_log(

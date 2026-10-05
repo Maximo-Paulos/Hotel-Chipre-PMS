@@ -152,6 +152,102 @@ def test_date_change_with_payments_requires_manager_and_preserves_history(
     assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 1
 
 
+def test_paid_date_change_refreshes_analytics_facts_once(
+    db,
+    hotel_config,
+    sample_guest,
+    sample_categories,
+    sample_rooms,
+    monkeypatch,
+):
+    reservation = _create_sample_reservation(db, sample_guest, sample_categories, sample_rooms)
+    payment = _completed_transaction(db, reservation)
+
+    from app.models.analytics import FactReservationDaily, FactRoomOccupancyDaily
+    from app.services.analytics_facts import refresh_fact_reservation_daily, refresh_fact_room_occupancy_daily
+
+    original_check_in = reservation.check_in_date
+    original_check_out = reservation.check_out_date
+    changed_check_in = date.today() + timedelta(days=11)
+    changed_check_out = date.today() + timedelta(days=13)
+    refresh_date_from = min(original_check_in, changed_check_in)
+    refresh_date_to = max(original_check_out, changed_check_out)
+    refresh_fact_reservation_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=refresh_date_from,
+        date_to=refresh_date_to,
+    )
+    refresh_fact_room_occupancy_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=refresh_date_from,
+        date_to=refresh_date_to,
+    )
+
+    from app.services import analytics_facts, reservation_operations_service
+
+    original_touch = analytics_facts.touch_reservation_fact_window
+    calls = []
+
+    def record_touch(*args, **kwargs):
+        calls.append(kwargs.copy())
+        return original_touch(*args, **kwargs)
+
+    monkeypatch.setattr(analytics_facts, "touch_reservation_fact_window", record_touch)
+    monkeypatch.setattr(reservation_operations_service, "touch_reservation_fact_window", record_touch)
+
+    result = change_reservation_dates(
+        db,
+        reservation=reservation,
+        hotel_id=1,
+        check_in_date=changed_check_in,
+        check_out_date=changed_check_out,
+        client_version=reservation.version,
+        manager_authorized=True,
+        pricing_mode="keep_current_total",
+    )
+
+    assert result.recreated is False
+    assert len(calls) == 1
+    assert calls[0]["reservation_id"] == reservation.id
+    assert calls[0]["date_from"] == refresh_date_from
+    assert calls[0]["date_to"] == refresh_date_to
+    assert db.get(Transaction, payment.id).status == TransactionStatusEnum.COMPLETED
+
+    reservation_facts = (
+        db.query(FactReservationDaily)
+        .filter_by(hotel_id=hotel_config.id, reservation_id=reservation.id)
+        .order_by(FactReservationDaily.stay_date.asc())
+        .all()
+    )
+    new_stay_dates = [changed_check_in + timedelta(days=offset) for offset in range(2)]
+    assert [fact.stay_date for fact in reservation_facts] == new_stay_dates
+    assert sum((fact.revenue_gross_ars for fact in reservation_facts), Decimal("0")) == Decimal(
+        str(reservation.total_amount)
+    )
+    assert sum((fact.revenue_net_ars for fact in reservation_facts), Decimal("0")) == Decimal(
+        str(reservation.net_amount)
+    )
+
+    room_facts = {
+        fact.stay_date: fact
+        for fact in db.query(FactRoomOccupancyDaily)
+        .filter(
+            FactRoomOccupancyDaily.hotel_id == hotel_config.id,
+            FactRoomOccupancyDaily.room_id == reservation.room_id,
+            FactRoomOccupancyDaily.stay_date.between(refresh_date_from, refresh_date_to),
+        )
+        .all()
+    }
+    old_stay_dates = [original_check_in + timedelta(days=offset) for offset in range(2)]
+    assert all(room_facts[stay_date].is_occupied is False for stay_date in old_stay_dates)
+    assert all(room_facts[stay_date].reservation_id is None for stay_date in old_stay_dates)
+    assert all(room_facts[stay_date].status_at_night.value == "available" for stay_date in old_stay_dates)
+    assert all(room_facts[stay_date].is_occupied is True for stay_date in new_stay_dates)
+    assert all(room_facts[stay_date].reservation_id == reservation.id for stay_date in new_stay_dates)
+
+
 def test_extension_requires_payment_or_link_action(db, hotel_config, sample_guest, sample_categories, sample_rooms):
     reservation = _create_sample_reservation(db, sample_guest, sample_categories, sample_rooms)
     new_checkout_date = date.today() + timedelta(days=10)

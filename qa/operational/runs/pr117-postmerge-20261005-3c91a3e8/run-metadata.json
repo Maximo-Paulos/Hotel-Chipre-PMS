@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "record_type": "operational-shared-sandbox-run",
+  "run_id": "pr117-postmerge-20261005-3c91a3e8",
+  "pr_number": 117,
+  "pr_state_at_review": "CLOSED_MERGED",
+  "environment_class": "production-labelled-shared-sandbox",
+  "production_build_sha": "e36f1d90daf415858fb4a44cdcacdca17d4a750c",
+  "code_sha": "e36f1d90daf415858fb4a44cdcacdca17d4a750c",
+  "tested_roles": ["owner", "manager", "reception"],
+  "case_count": 5,
+  "certification": "none",
+  "release_gate_eligible": false,
+  "mutation_policy": "read-only",
+  "external_exclusions": [
+    "payment completion",
+    "cash movement or expense creation",
+    "outgoing email",
+    "provider webhooks",
+    "OTA synchronization"
+  ],
+  "evidence_limitations": [
+    "Manual visible UI observations only; no screenshots persisted.",
+    "Shared production-labelled environment; no business mutations performed.",
+    "This run is not release evidence."
+  ],
+  "started_at": "2026-10-05T03:22:21Z",
+  "completed_at": "2026-10-05T03:23:55Z"
+}

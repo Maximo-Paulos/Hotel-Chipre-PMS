@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "record_type": "operational-observations",
+  "observations": [
+    {
+      "role": "owner",
+      "route": "/dashboard",
+      "action": "Opened the page and waited for initial loading states to clear.",
+      "result": "Dashboard indicators and operational queue rendered.",
+      "status": "pass",
+      "evidence": "Manual visible UI observation; no screenshot persisted."
+    },
+    {
+      "role": "owner",
+      "route": "/caja",
+      "action": "Read the daily summary and shift reconciliation.",
+      "result": "Summary, shift table, movements, and controls rendered.",
+      "status": "pass_read_only",
+      "evidence": "Manual visible UI observation; no screenshot persisted."
+    },
+    {
+      "role": "manager",
+      "route": "/dashboard",
+      "action": "Opened the page and waited for initial loading states to clear.",
+      "result": "Dashboard indicators and operational queue rendered.",
+      "status": "pass",
+      "evidence": "Manual visible UI observation; no screenshot persisted."
+    },
+    {
+      "role": "manager",
+      "route": "/caja",
+      "action": "Opened the route without submitting any action.",
+      "result": "Application displayed access denied.",
+      "status": "needs_verification",
+      "evidence": "Manual visible UI observation; no screenshot persisted."
+    },
+    {
+      "role": "reception",
+      "route": "/reservas",
+      "action": "Inspected an existing synthetic QA reservation detail.",
+      "result": "Detail opened; financial summary API returned HTTP 403 on repeated read-only attempts; no payment was submitted.",
+      "status": "fail",
+      "evidence": "Manual visible UI observation; no screenshot persisted."
+    }
+  ]
+}

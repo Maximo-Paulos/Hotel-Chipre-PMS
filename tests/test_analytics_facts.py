@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -17,6 +17,7 @@ from app.models.analytics import (
     RoomStateEventTypeEnum,
 )
 from app.models.company import Company
+from app.models.guest import Guest
 from app.models.hotel_membership import HotelMembership
 from app.models.reservation import (
     Reservation,
@@ -33,6 +34,7 @@ from app.services.analytics_facts import (
     detect_no_shows,
     refresh_fact_reservation_daily,
     refresh_fact_room_occupancy_daily,
+    touch_reservation_fact_window,
 )
 from app.services import analytics_service
 from app.services.analytics_service import build_home_payload
@@ -207,6 +209,133 @@ def test_partial_fact_window_refreshes_both_tables(
     assert len(reservation_rows) == 2
     assert min(analytics_service._ensure_utc(row.updated_at) for row in reservation_rows) > stale_since
     assert len(occupancy_rows) == len(sample_rooms) * 3
+
+
+def test_targeted_touch_keeps_unaffected_age_visible_and_read_repairs_ttl_and_fx(
+    monkeypatch,
+    db,
+    hotel_config,
+    sample_guest,
+    sample_categories,
+    sample_rooms,
+):
+    _enable_bounded_fact_refresh(monkeypatch)
+    date_from = date(2026, 4, 1)
+    date_to = date(2026, 4, 3)
+    target = _make_fact_refresh_reservation(
+        db,
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[0].id,
+        confirmation_code="FACT-TOUCH-FRESHNESS-TARGET",
+        check_in_date=date_from,
+        check_out_date=date_to,
+    )
+    unaffected = _make_fact_refresh_reservation(
+        db,
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[1].id,
+        confirmation_code="FACT-TOUCH-FRESHNESS-OTHER",
+        check_in_date=date_from,
+        check_out_date=date_to,
+    )
+    refresh_fact_reservation_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    refresh_fact_room_occupancy_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    stale_since = datetime.now(timezone.utc) - timedelta(hours=2)
+    db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == hotel_config.id).update(
+        {FactReservationDaily.updated_at: stale_since},
+        synchronize_session=False,
+    )
+    db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id).update(
+        {FactRoomOccupancyDaily.updated_at: stale_since},
+        synchronize_session=False,
+    )
+    db.commit()
+
+    touch_reservation_fact_window(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+        reservation_id=target.id,
+    )
+    unaffected_fact = (
+        db.query(FactReservationDaily)
+        .filter_by(reservation_id=unaffected.id)
+        .order_by(FactReservationDaily.stay_date.asc())
+        .first()
+    )
+    unaffected_room_fact = (
+        db.query(FactRoomOccupancyDaily)
+        .filter_by(room_id=sample_rooms[1].id, stay_date=date_from)
+        .one()
+    )
+    assert analytics_service._ensure_utc(unaffected_fact.updated_at) == stale_since
+    assert analytics_service._ensure_utc(unaffected_room_fact.updated_at) == stale_since
+    db.expunge(unaffected_fact)
+    db.expunge(unaffected_room_fact)
+
+    analytics_service._ensure_facts_materialized(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    refreshed_reservation_timestamps = [
+        analytics_service._ensure_utc(row.updated_at)
+        for row in db.query(FactReservationDaily.updated_at)
+        .filter(FactReservationDaily.hotel_id == hotel_config.id)
+        .all()
+    ]
+    refreshed_room_timestamps = [
+        analytics_service._ensure_utc(row.updated_at)
+        for row in db.query(FactRoomOccupancyDaily.updated_at)
+        .filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id)
+        .all()
+    ]
+    assert refreshed_reservation_timestamps
+    assert refreshed_room_timestamps
+    assert min(refreshed_reservation_timestamps) > stale_since
+    assert min(refreshed_room_timestamps) > stale_since
+
+    # A fresh timestamp must not hide the independent legacy-FX repair signal.
+    legacy_fact = (
+        db.query(FactReservationDaily)
+        .filter_by(reservation_id=unaffected.id)
+        .order_by(FactReservationDaily.stay_date.asc())
+        .first()
+    )
+    legacy_fact.revenue_net_usd = legacy_fact.revenue_net_ars
+    legacy_fact.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.expunge(legacy_fact)
+    analytics_service._ensure_facts_materialized(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    db.expire_all()
+    repaired_fact = (
+        db.query(FactReservationDaily)
+        .filter_by(reservation_id=unaffected.id, stay_date=date_from)
+        .one()
+    )
+    assert repaired_fact.revenue_net_usd == Decimal("0.00")
 
 
 def test_wide_fact_window_does_not_refresh_or_mask_stale_metadata(
@@ -850,3 +979,547 @@ def test_move_reservation_room_moves_occupancy_fact_rows_immediately(db, hotel_c
     assert db.query(FactRoomOccupancyDaily).filter(
         FactRoomOccupancyDaily.room_id == new_room_id, FactRoomOccupancyDaily.is_occupied.is_(True)
     ).count() == 2
+
+
+def _make_fact_refresh_reservation(
+    db,
+    *,
+    hotel_id,
+    guest_id,
+    category_id,
+    room_id,
+    confirmation_code,
+    check_in_date=date(2026, 6, 1),
+    check_out_date=date(2026, 6, 3),
+):
+    reservation = Reservation(
+        confirmation_code=confirmation_code,
+        hotel_id=hotel_id,
+        guest_id=guest_id,
+        room_id=room_id,
+        category_id=category_id,
+        check_in_date=check_in_date,
+        check_out_date=check_out_date,
+        total_amount=Decimal("100.00"),
+        subtotal_amount=Decimal("100.00"),
+        net_amount=Decimal("100.00"),
+        amount_paid=Decimal("0.00"),
+        currency_code="ARS",
+        status=ReservationStatusEnum.PENDING,
+        outcome=ReservationOutcomeEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        channel_code=ReservationChannelCodeEnum.OTHER_DIRECT,
+        guest_segment=ReservationGuestSegmentEnum.LEISURE,
+        guest_segment_source=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
+        no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+    return reservation
+
+
+def _fact_business_snapshot(
+    db,
+    model,
+    *,
+    hotel_id,
+    date_from,
+    date_to,
+    room_id=None,
+    reservation_id=None,
+):
+    fields = [
+        column.name
+        for column in model.__table__.columns
+        if column.name not in {"id", "created_at", "updated_at"}
+    ]
+    query = db.query(*(getattr(model, field) for field in fields)).filter(
+        model.hotel_id == hotel_id,
+        model.stay_date >= date_from,
+        model.stay_date <= date_to,
+    )
+    if room_id is not None and hasattr(model, "room_id"):
+        query = query.filter(model.room_id == room_id)
+    if reservation_id is not None and hasattr(model, "reservation_id"):
+        query = query.filter(model.reservation_id == reservation_id)
+    rows = query.all()
+    return tuple(sorted((tuple(row) for row in rows), key=repr))
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected_room_indexes"),
+    [
+        ("create", {0}),
+        ("cancel", {0}),
+        ("date_move", {0}),
+        ("room_move", {0, 2}),
+        ("unassigned", {0}),
+        ("no_show", {0}),
+        ("soft_delete", {0}),
+    ],
+)
+def test_targeted_reservation_fact_touch_matches_full_refresh(
+    db,
+    hotel_config,
+    sample_guest,
+    sample_categories,
+    sample_rooms,
+    monkeypatch,
+    scenario,
+    expected_room_indexes,
+):
+    date_from = date(2026, 6, 1)
+    date_to = date(2026, 6, 4)
+    _make_fact_refresh_reservation(
+        db,
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[1].id,
+        confirmation_code=f"FACT-TOUCH-STABLE-{scenario}",
+        check_in_date=date_from,
+        check_out_date=date(2026, 6, 5),
+    )
+
+    target = None
+    if scenario != "create":
+        target = _make_fact_refresh_reservation(
+            db,
+            hotel_id=hotel_config.id,
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            room_id=sample_rooms[0].id,
+            confirmation_code=f"FACT-TOUCH-TARGET-{scenario}",
+        )
+
+    # Materialize the pre-change state so room moves and removals have stale
+    # occupancy rows from which the targeted refresh must discover old rooms.
+    refresh_fact_reservation_daily(db, hotel_id=hotel_config.id, date_from=date_from, date_to=date_to)
+    refresh_fact_room_occupancy_daily(db, hotel_id=hotel_config.id, date_from=date_from, date_to=date_to)
+
+    if scenario == "create":
+        target = _make_fact_refresh_reservation(
+            db,
+            hotel_id=hotel_config.id,
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            room_id=sample_rooms[0].id,
+            confirmation_code="FACT-TOUCH-TARGET-create",
+        )
+    elif scenario == "cancel":
+        target.status = ReservationStatusEnum.CANCELLED
+        target.outcome = ReservationOutcomeEnum.CANCELLED
+    elif scenario == "date_move":
+        target.check_in_date = date(2026, 6, 3)
+        target.check_out_date = date(2026, 6, 5)
+    elif scenario == "room_move":
+        target.room_id = sample_rooms[2].id
+    elif scenario == "unassigned":
+        # The previously materialized occupancy rows are now the only source
+        # from which the targeted refresh can discover the old room.
+        target.room_id = None
+    elif scenario == "no_show":
+        target.status = ReservationStatusEnum.NO_SHOW
+        target.outcome = ReservationOutcomeEnum.NO_SHOW
+        target.no_show_confirmed_at = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    elif scenario == "soft_delete":
+        target.deleted_at = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    db.flush()
+
+    import app.services.analytics_facts as analytics_facts
+
+    original_room_refresh = analytics_facts.refresh_fact_room_occupancy_daily
+    observed_room_refreshes = []
+
+    def record_room_refresh(*args, **kwargs):
+        result = original_room_refresh(*args, **kwargs)
+        observed_room_refreshes.append((kwargs.get("room_ids"), result.inserted))
+        return result
+
+    monkeypatch.setattr(analytics_facts, "refresh_fact_room_occupancy_daily", record_room_refresh)
+    touch_reservation_fact_window(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+        reservation_id=target.id,
+    )
+
+    assert len(observed_room_refreshes) == 1
+    affected_room_ids, inserted_room_rows = observed_room_refreshes[0]
+    assert affected_room_ids == {sample_rooms[index].id for index in expected_room_indexes}
+    assert inserted_room_rows == len(expected_room_indexes) * ((date_to - date_from).days + 1)
+
+    targeted_reservation_snapshot = _fact_business_snapshot(
+        db,
+        FactReservationDaily,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    targeted_occupancy_snapshot = _fact_business_snapshot(
+        db,
+        FactRoomOccupancyDaily,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    # A legacy full-window refresh is the correctness oracle for the optimized
+    # write-time path; compare business columns, excluding surrogate ids/times.
+    refresh_fact_reservation_daily(db, hotel_id=hotel_config.id, date_from=date_from, date_to=date_to)
+    original_room_refresh(db, hotel_id=hotel_config.id, date_from=date_from, date_to=date_to)
+    assert targeted_reservation_snapshot == _fact_business_snapshot(
+        db,
+        FactReservationDaily,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    assert targeted_occupancy_snapshot == _fact_business_snapshot(
+        db,
+        FactRoomOccupancyDaily,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+def test_targeted_refresh_preserves_facts_outside_union_window(
+    db,
+    hotel_config,
+    sample_guest,
+    sample_categories,
+    sample_rooms,
+):
+    target = _make_fact_refresh_reservation(
+        db,
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[0].id,
+        confirmation_code="FACT-TOUCH-OUTSIDE-TARGET",
+        check_in_date=date(2026, 6, 3),
+        check_out_date=date(2026, 6, 5),
+    )
+    _make_fact_refresh_reservation(
+        db,
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[1].id,
+        confirmation_code="FACT-TOUCH-OUTSIDE-STABLE",
+        check_in_date=date(2026, 6, 1),
+        check_out_date=date(2026, 6, 11),
+    )
+    outer_from = date(2026, 6, 1)
+    outer_to = date(2026, 6, 10)
+    refresh_fact_reservation_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=outer_from,
+        date_to=outer_to,
+    )
+    refresh_fact_room_occupancy_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=outer_from,
+        date_to=outer_to,
+    )
+
+    old_check_in = target.check_in_date
+    old_check_out = target.check_out_date
+    target.check_in_date = date(2026, 6, 6)
+    target.check_out_date = date(2026, 6, 8)
+    db.flush()
+
+    left_range = (outer_from, old_check_in - timedelta(days=1))
+    right_range = (target.check_out_date + timedelta(days=1), outer_to)
+    outside_before = tuple(
+        (
+            _fact_business_snapshot(
+                db,
+                FactReservationDaily,
+                hotel_id=hotel_config.id,
+                date_from=start,
+                date_to=end,
+            ),
+            _fact_business_snapshot(
+                db,
+                FactRoomOccupancyDaily,
+                hotel_id=hotel_config.id,
+                date_from=start,
+                date_to=end,
+            ),
+        )
+        for start, end in (left_range, right_range)
+    )
+
+    touch_reservation_fact_window(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=old_check_in,
+        date_to=max(old_check_out, target.check_out_date),
+        reservation_id=target.id,
+    )
+
+    outside_after = tuple(
+        (
+            _fact_business_snapshot(
+                db,
+                FactReservationDaily,
+                hotel_id=hotel_config.id,
+                date_from=start,
+                date_to=end,
+            ),
+            _fact_business_snapshot(
+                db,
+                FactRoomOccupancyDaily,
+                hotel_id=hotel_config.id,
+                date_from=start,
+                date_to=end,
+            ),
+        )
+        for start, end in (left_range, right_range)
+    )
+    assert outside_after == outside_before
+
+
+def test_targeted_room_refresh_reapplies_events_only_for_affected_rooms(
+    db,
+    hotel_config,
+    sample_guest,
+    sample_categories,
+    sample_rooms,
+    monkeypatch,
+):
+    import app.services.analytics_facts as analytics_facts
+
+    date_from = date(2026, 6, 1)
+    date_to = date(2026, 6, 3)
+    target = _make_fact_refresh_reservation(
+        db,
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[0].id,
+        confirmation_code="FACT-TOUCH-ROOM-EVENTS",
+        check_in_date=date_from,
+        check_out_date=date(2026, 6, 4),
+    )
+    event_actor = User(
+        email="room-event-owner@example.com",
+        password_hash="x",
+        role="owner",
+        is_verified=True,
+        is_active=True,
+    )
+    db.add(event_actor)
+    db.flush()
+    event_start = datetime(2026, 6, 2, 0, 0, tzinfo=timezone.utc)
+    event_end = datetime(2026, 6, 3, 0, 0, tzinfo=timezone.utc)
+    db.add_all(
+        [
+            RoomStateEvent(
+                hotel_id=hotel_config.id,
+                room_id=sample_rooms[0].id,
+                event_type=RoomStateEventTypeEnum.MAINTENANCE,
+                reason_code=RoomStateEventReasonCodeEnum.INSPECTION,
+                started_at=event_start,
+                ended_at=event_end,
+                created_by_user_id=event_actor.id,
+            ),
+            RoomStateEvent(
+                hotel_id=hotel_config.id,
+                room_id=sample_rooms[2].id,
+                event_type=RoomStateEventTypeEnum.OUT_OF_SERVICE,
+                reason_code=RoomStateEventReasonCodeEnum.PLUMBING,
+                started_at=event_start,
+                ended_at=event_end,
+                created_by_user_id=event_actor.id,
+            ),
+            RoomStateEvent(
+                hotel_id=hotel_config.id,
+                room_id=sample_rooms[1].id,
+                event_type=RoomStateEventTypeEnum.RENOVATION,
+                reason_code=RoomStateEventReasonCodeEnum.OTHER,
+                started_at=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+                ended_at=event_start,
+                created_by_user_id=event_actor.id,
+            ),
+        ]
+    )
+    db.flush()
+    refresh_fact_reservation_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    refresh_fact_room_occupancy_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    unaffected_before = _fact_business_snapshot(
+        db,
+        FactRoomOccupancyDaily,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+        room_id=sample_rooms[1].id,
+    )
+
+    target.room_id = sample_rooms[2].id
+    db.flush()
+    original_room_refresh = analytics_facts.refresh_fact_room_occupancy_daily
+    observed_refreshes = []
+
+    def record_room_refresh(*args, **kwargs):
+        result = original_room_refresh(*args, **kwargs)
+        observed_refreshes.append((kwargs.get("room_ids"), result.inserted))
+        return result
+
+    monkeypatch.setattr(analytics_facts, "refresh_fact_room_occupancy_daily", record_room_refresh)
+    touch_reservation_fact_window(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+        reservation_id=target.id,
+    )
+
+    assert observed_refreshes == [({sample_rooms[0].id, sample_rooms[2].id}, 2 * 3)]
+    old_room_event_row = (
+        db.query(FactRoomOccupancyDaily)
+        .filter_by(room_id=sample_rooms[0].id, stay_date=date(2026, 6, 2))
+        .one()
+    )
+    new_room_event_row = (
+        db.query(FactRoomOccupancyDaily)
+        .filter_by(room_id=sample_rooms[2].id, stay_date=date(2026, 6, 2))
+        .one()
+    )
+    assert old_room_event_row.status_at_night.value == "maintenance"
+    assert old_room_event_row.is_occupied is False
+    assert new_room_event_row.status_at_night.value == "out_of_service"
+    assert new_room_event_row.is_occupied is False
+    assert new_room_event_row.reservation_id == target.id
+    assert unaffected_before == _fact_business_snapshot(
+        db,
+        FactRoomOccupancyDaily,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+        room_id=sample_rooms[1].id,
+    )
+
+    targeted_reservations = _fact_business_snapshot(
+        db,
+        FactReservationDaily,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    targeted_occupancy = _fact_business_snapshot(
+        db,
+        FactRoomOccupancyDaily,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    refresh_fact_reservation_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    original_room_refresh(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    assert targeted_reservations == _fact_business_snapshot(
+        db,
+        FactReservationDaily,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    assert targeted_occupancy == _fact_business_snapshot(
+        db,
+        FactRoomOccupancyDaily,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+def test_targeted_reservation_fact_touch_isolated_by_hotel(
+    db,
+    hotel_config,
+    sample_guest,
+    sample_categories,
+    sample_rooms,
+    sample_categories_hotel2,
+    sample_rooms_hotel2,
+):
+    from app.services import analytics_facts
+
+    date_from = date(2026, 6, 1)
+    date_to = date(2026, 6, 2)
+    target = _make_fact_refresh_reservation(
+        db,
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[0].id,
+        confirmation_code="FACT-TOUCH-HOTEL-1",
+    )
+    guest_hotel2 = Guest(hotel_id=2, first_name="QA", last_name="Hotel Two")
+    db.add(guest_hotel2)
+    db.flush()
+    other_hotel_reservation = _make_fact_refresh_reservation(
+        db,
+        hotel_id=2,
+        guest_id=guest_hotel2.id,
+        category_id=sample_categories_hotel2[0].id,
+        room_id=sample_rooms_hotel2[0].id,
+        confirmation_code="FACT-TOUCH-HOTEL-2",
+    )
+
+    for hotel_id in (hotel_config.id, 2):
+        refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+        refresh_fact_room_occupancy_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+
+    other_hotel_before = (
+        _fact_business_snapshot(db, FactReservationDaily, hotel_id=2, date_from=date_from, date_to=date_to),
+        _fact_business_snapshot(db, FactRoomOccupancyDaily, hotel_id=2, date_from=date_from, date_to=date_to),
+    )
+    target.room_id = sample_rooms[2].id
+    db.flush()
+
+    analytics_facts.touch_reservation_fact_window(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+        reservation_id=target.id,
+    )
+    # A mismatched id must be a no-op and must never cross hotel boundaries.
+    analytics_facts.touch_reservation_fact_window(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+        reservation_id=other_hotel_reservation.id,
+    )
+
+    assert other_hotel_before == (
+        _fact_business_snapshot(db, FactReservationDaily, hotel_id=2, date_from=date_from, date_to=date_to),
+        _fact_business_snapshot(db, FactRoomOccupancyDaily, hotel_id=2, date_from=date_from, date_to=date_to),
+    )

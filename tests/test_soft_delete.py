@@ -13,12 +13,14 @@ import app.main as main_module
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.models.audit_log import AuditActionEnum, AuditLog
+from app.models.analytics import FactReservationDaily, FactRoomOccupancyDaily
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.daily_rate import PricePeriod
 from app.models.user import User
+from app.services.analytics_facts import refresh_fact_reservation_daily, refresh_fact_room_occupancy_daily
 
 
 @pytest.fixture
@@ -134,6 +136,34 @@ def test_reservation_delete_soft_deletes_hides_and_audits(soft_delete_client):
     assert created.status_code == 201, created.text
     reservation_id = created.json()["id"]
 
+    with SessionLocal() as db:
+        refresh_fact_reservation_daily(
+            db,
+            hotel_id=1,
+            date_from=today,
+            date_to=today + timedelta(days=1),
+        )
+        refresh_fact_room_occupancy_daily(
+            db,
+            hotel_id=1,
+            date_from=today,
+            date_to=today + timedelta(days=1),
+        )
+        db.commit()
+        reservation_facts = (
+            db.query(FactReservationDaily)
+            .filter_by(hotel_id=1, reservation_id=reservation_id)
+            .all()
+        )
+        assert [fact.stay_date for fact in reservation_facts] == [today]
+        occupied_fact = (
+            db.query(FactRoomOccupancyDaily)
+            .filter_by(hotel_id=1, room_id=room.id, stay_date=today)
+            .one()
+        )
+        assert occupied_fact.is_occupied is True
+        assert occupied_fact.reservation_id == reservation_id
+
     deleted = client.delete(f"/api/bookings/{reservation_id}")
     assert deleted.status_code == 200, deleted.text
     assert deleted.json()["deleted"] is True
@@ -145,6 +175,20 @@ def test_reservation_delete_soft_deletes_hides_and_audits(soft_delete_client):
         assert reservation is not None
         assert reservation.deleted_at is not None
         assert reservation.deleted_by_user_id == 1
+        assert (
+            db.query(FactReservationDaily)
+            .filter_by(hotel_id=1, reservation_id=reservation_id)
+            .count()
+            == 0
+        )
+        released_fact = (
+            db.query(FactRoomOccupancyDaily)
+            .filter_by(hotel_id=1, room_id=room.id, stay_date=today)
+            .one()
+        )
+        assert released_fact.is_occupied is False
+        assert released_fact.reservation_id is None
+        assert released_fact.status_at_night.value == "available"
         audit = _delete_audit(db, table_name="reservations", record_id=reservation_id)
         assert audit.actor_user_id == 1
         assert audit.payload_after is not None

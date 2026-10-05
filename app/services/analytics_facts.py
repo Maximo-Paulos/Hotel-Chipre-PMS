@@ -134,21 +134,21 @@ def refresh_fact_reservation_daily(
     hotel_id: int,
     date_from: date,
     date_to: date,
+    reservation_id: int | None = None,
 ) -> FactRefreshResult:
     if date_to < date_from:
         raise ValueError("date_to must be greater than or equal to date_from")
 
-    deleted = (
-        db.query(FactReservationDaily)
-        .filter(
-            FactReservationDaily.hotel_id == hotel_id,
-            FactReservationDaily.stay_date >= date_from,
-            FactReservationDaily.stay_date <= date_to,
-        )
-        .delete(synchronize_session=False)
+    fact_query = db.query(FactReservationDaily).filter(
+        FactReservationDaily.hotel_id == hotel_id,
+        FactReservationDaily.stay_date >= date_from,
+        FactReservationDaily.stay_date <= date_to,
     )
+    if reservation_id is not None:
+        fact_query = fact_query.filter(FactReservationDaily.reservation_id == reservation_id)
+    deleted = fact_query.delete(synchronize_session=False)
 
-    reservations = (
+    reservation_query = (
         active_reservations(db, hotel_id)
         .options(
             noload(Reservation.guest),
@@ -166,8 +166,10 @@ def refresh_fact_reservation_daily(
             Reservation.status != ReservationStatusEnum.CANCELLED,
         )
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
-        .all()
     )
+    if reservation_id is not None:
+        reservation_query = reservation_query.filter(Reservation.id == reservation_id)
+    reservations = reservation_query.all()
 
     category_ids = {reservation.category_id for reservation in reservations}
     categories_by_id = {
@@ -295,21 +297,31 @@ def refresh_fact_room_occupancy_daily(
     hotel_id: int,
     date_from: date,
     date_to: date,
+    room_ids: set[int] | None = None,
 ) -> FactRefreshResult:
     if date_to < date_from:
         raise ValueError("date_to must be greater than or equal to date_from")
 
-    deleted = (
-        db.query(FactRoomOccupancyDaily)
-        .filter(
-            FactRoomOccupancyDaily.hotel_id == hotel_id,
-            FactRoomOccupancyDaily.stay_date >= date_from,
-            FactRoomOccupancyDaily.stay_date <= date_to,
+    target_room_ids = set(room_ids) if room_ids is not None else None
+    if target_room_ids == set():
+        return FactRefreshResult(
+            hotel_id=hotel_id,
+            date_from=date_from,
+            date_to=date_to,
+            deleted=0,
+            inserted=0,
         )
-        .delete(synchronize_session=False)
-    )
 
-    reservations = (
+    fact_query = db.query(FactRoomOccupancyDaily).filter(
+        FactRoomOccupancyDaily.hotel_id == hotel_id,
+        FactRoomOccupancyDaily.stay_date >= date_from,
+        FactRoomOccupancyDaily.stay_date <= date_to,
+    )
+    if target_room_ids is not None:
+        fact_query = fact_query.filter(FactRoomOccupancyDaily.room_id.in_(target_room_ids))
+    deleted = fact_query.delete(synchronize_session=False)
+
+    reservation_query = (
         active_reservations(db, hotel_id)
         .options(
             noload(Reservation.guest),
@@ -327,14 +339,19 @@ def refresh_fact_room_occupancy_daily(
             Reservation.status != ReservationStatusEnum.CANCELLED,
         )
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
-        .all()
     )
-    rooms = (
+    if target_room_ids is not None:
+        reservation_query = reservation_query.filter(Reservation.room_id.in_(target_room_ids))
+    reservations = reservation_query.all()
+
+    room_query = (
         active_rooms(db, hotel_id)
         .with_entities(Room.id, Room.category_id, Room.is_active)
         .order_by(Room.id.asc())
-        .all()
     )
+    if target_room_ids is not None:
+        room_query = room_query.filter(Room.id.in_(target_room_ids))
+    rooms = room_query.all()
 
     reservation_map = _occupied_nightly_fact_map(
         db,
@@ -343,7 +360,13 @@ def refresh_fact_room_occupancy_daily(
         date_from=date_from,
         date_to=date_to,
     )
-    room_events = _room_state_events_map(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+    room_events = _room_state_events_map(
+        db,
+        hotel_id=hotel_id,
+        date_from=date_from,
+        date_to=date_to,
+        room_ids=target_room_ids,
+    )
 
     inserted = 0
     for room in rooms:
@@ -435,6 +458,7 @@ def touch_reservation_fact_window(
     hotel_id: int,
     date_from: date,
     date_to: date,
+    reservation_id: int | None = None,
 ) -> None:
     """Write-time hook: re-derive both fact tables for a narrow window right
     when the source data that feeds them changes (reservation created/moved/
@@ -445,10 +469,10 @@ def touch_reservation_fact_window(
     scripts/migrations that never call this hook.
 
     Reuses the existing idempotent refresh_fact_* functions (delete+rebuild
-    only inside [date_from, date_to]) so a single reservation write stays
-    cheap regardless of how wide an open Analytics dashboard window is --
-    call sites pass just the affected reservation's stay range, not whatever
-    range a report happens to be showing.
+    only inside [date_from, date_to]). When a reservation id is provided, it
+    refreshes only that reservation's daily facts and the room/date rows for
+    its previous and current rooms. Omitting the id preserves the full-window
+    behavior used by analytics recovery and maintenance paths.
 
     Runs inside a SAVEPOINT so a lost race against another write touching an
     overlapping window (rare for a small single-property hotel) rolls back
@@ -459,8 +483,52 @@ def touch_reservation_fact_window(
         return
     try:
         with db.begin_nested():
-            refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
-            refresh_fact_room_occupancy_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+            if reservation_id is None:
+                refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+                refresh_fact_room_occupancy_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+                return
+
+            previous_room_ids = {
+                row.room_id
+                for row in (
+                    db.query(FactRoomOccupancyDaily.room_id)
+                    .filter(
+                        FactRoomOccupancyDaily.hotel_id == hotel_id,
+                        FactRoomOccupancyDaily.reservation_id == reservation_id,
+                        FactRoomOccupancyDaily.stay_date >= date_from,
+                        FactRoomOccupancyDaily.stay_date <= date_to,
+                    )
+                    .distinct()
+                    .all()
+                )
+            }
+            current_room_id = (
+                db.query(Reservation.room_id)
+                .filter(
+                    Reservation.hotel_id == hotel_id,
+                    Reservation.id == reservation_id,
+                )
+                .scalar()
+            )
+            affected_room_ids = previous_room_ids
+            if current_room_id is not None:
+                affected_room_ids.add(current_room_id)
+
+            refresh_fact_reservation_daily(
+                db,
+                hotel_id=hotel_id,
+                date_from=date_from,
+                date_to=date_to,
+                reservation_id=reservation_id,
+            )
+            if affected_room_ids:
+                refresh_fact_room_occupancy_daily(
+                    db,
+                    hotel_id=hotel_id,
+                    date_from=date_from,
+                    date_to=date_to,
+                    room_ids=affected_room_ids,
+                )
     except IntegrityError:
         pass
 
@@ -732,18 +800,21 @@ def _room_state_events_map(
     hotel_id: int,
     date_from: date,
     date_to: date,
+    room_ids: set[int] | None = None,
 ) -> dict[tuple[int, date], FactRoomOccupancyStatusAtNightEnum]:
     from app.models.analytics import RoomStateEvent
 
-    events = (
+    event_query = (
         db.query(RoomStateEvent)
         .filter(
             RoomStateEvent.hotel_id == hotel_id,
             RoomStateEvent.started_at < datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=timezone.utc),
             (RoomStateEvent.ended_at.is_(None) | (RoomStateEvent.ended_at >= datetime.combine(date_from, time.min, tzinfo=timezone.utc))),
         )
-        .all()
     )
+    if room_ids is not None:
+        event_query = event_query.filter(RoomStateEvent.room_id.in_(room_ids))
+    events = event_query.all()
     mapped: dict[tuple[int, date], FactRoomOccupancyStatusAtNightEnum] = {}
     for event in events:
         for stay_date in _date_range(date_from, date_to):
