@@ -431,8 +431,13 @@ export const createReservationGroupPayment = (
   headers: { "Idempotency-Key": idempotencyKey }
 });
 
+export const RESERVATION_GROUP_SUMMARY_LIMIT = 6;
+
 export const listReservationGroups = (session?: SessionLike) =>
-  apiFetch<ReservationGroupSummary[]>("/api/reservation-groups?limit=50", { session });
+  apiFetch<ReservationGroupSummary[]>(
+    `/api/reservation-groups?limit=${RESERVATION_GROUP_SUMMARY_LIMIT}`,
+    { session }
+  );
 
 export const createReservationGroup = (reservations: ReservationPayload[], session?: SessionLike) =>
   apiFetch<ReservationGroupSummary>("/api/reservation-groups", {
