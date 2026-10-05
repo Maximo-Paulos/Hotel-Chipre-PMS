@@ -123,10 +123,10 @@ services:
       # Flip this to true when the paid Redis service is actually available.
       - key: READ_MODEL_CACHE_ENABLED
         value: "false"
-      # The Blueprint includes beat; the current free service was created
-      # manually outside this file and keeps the default true fallback.
+      # Missing or aged fact windows can be repaired synchronously on reads,
+      # but only when the complete requested range is at most 31 days.
       - key: SYNC_FACT_REFRESH_ENABLED
-        value: "false"
+        value: "true"
       - key: DISTRIBUTED_LOCK_ENABLED
         value: "true"
       - key: DISTRIBUTED_LOCK_REQUIRED

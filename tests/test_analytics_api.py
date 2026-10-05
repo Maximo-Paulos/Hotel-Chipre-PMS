@@ -15,6 +15,7 @@ import app.database as db_module
 import app.main as main_module
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
+from app.config import Settings
 from app.models.analytics import (
     AnalyticsAIUsageMonthly,
     AnalyticsExportJob,
@@ -820,16 +821,23 @@ def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatc
         get_object_storage().get_bytes(object_key)
 
 
-def test_analytics_freshness_reflects_stale_derived_facts(api_client):
-    # Fase 8: the analytics home/rooms/etc payloads are built entirely from
-    # FactReservationDaily/FactRoomOccupancyDaily, which are only refreshed by
-    # the Celery beat job (every 5 minutes in prod; never in this test
-    # environment unless a test calls refresh_fact_* directly, same as
-    # _seed_analytics_data does above). If those derived rows go stale
-    # (worker lagging, or -- in this local/E2E environment -- no worker at
-    # all), the UI must say so via source_lag_seconds/data_as_of instead of
-    # silently claiming "al dia" for data that predates a real operation.
+def test_analytics_freshness_reflects_stale_derived_facts(api_client, monkeypatch):
+    # Fact timestamps are materialization metadata, not a source-write
+    # watermark. A complete in-cap window older than the configured threshold
+    # should be refreshed on this authenticated read and report its new age.
     client, SessionLocal, headers, plan_state = api_client
+    import app.services.analytics_service as analytics_service_module
+
+    monkeypatch.setattr(
+        analytics_service_module,
+        "get_settings",
+        lambda: Settings(
+            _env_file=None,
+            SYNC_FACT_REFRESH_ENABLED=True,
+            SYNC_FACT_REFRESH_MAX_DAYS=31,
+            SYNC_FACT_REFRESH_STALE_AFTER_SECONDS=900,
+        ),
+    )
     _seed_analytics_data(SessionLocal)
     plan_state["plan"] = "pro"
 
@@ -847,9 +855,8 @@ def test_analytics_freshness_reflects_stale_derived_facts(api_client):
     assert resp.status_code == 200, resp.text
     payload = resp.json()
     assert_freshness_metadata(payload)
-    # The derived facts backing this payload were computed 2 hours ago: the
-    # reported lag must reflect that, not the instant the request ran.
-    assert payload["source_lag_seconds"] >= 7000, payload
+    # Recovery rebuilt both fact tables within the bounded window.
+    assert payload["source_lag_seconds"] < 900, payload
 
 
 def test_analytics_home_self_heals_when_derived_facts_were_never_materialized(api_client):

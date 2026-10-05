@@ -58,6 +58,12 @@ test("owner controls manual cash movements, approves an arqueo difference and co
     .filter({ hasText: "Tipo" })
     .filter({ hasText: "Importe" })
     .filter({ hasText: "Descripción" });
+  const createExpenseButton = page.getByTestId("cash-create-expense-button");
+  await expect(createExpenseButton).toBeVisible();
+  await createExpenseButton.click();
+  await expect(movementForm.getByText("Categoría", { exact: true })).toBeVisible();
+  await expect(movementForm.getByText("Proveedor", { exact: true })).toBeVisible();
+  await expect(movementForm.getByText("Referencia del comprobante", { exact: true })).toBeVisible();
   await expect(movementForm.getByText("Reserva ID", { exact: true })).not.toBeVisible();
   await expect(movementForm.getByText("Transaccion ID", { exact: true })).not.toBeVisible();
   await movementForm.getByText("Tipo", { exact: true }).locator("..").locator("select").selectOption("income");
@@ -66,7 +72,7 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   await movementForm.getByRole("button", { name: "Registrar movimiento", exact: true }).click();
   await expect(page.getByText("Movimiento registrado.", { exact: true })).toBeVisible();
 
-  await movementForm.getByText("Tipo", { exact: true }).locator("..").locator("select").selectOption("expense");
+  await createExpenseButton.click();
   await movementForm.getByText("Importe", { exact: true }).locator("..").locator("input").fill("200");
   await movementForm.getByText("Descripción", { exact: true }).locator("..").locator("input").fill("Compra de insumos");
   await movementForm.getByText("Categoría", { exact: true }).locator("..").locator("input").fill("Insumos");

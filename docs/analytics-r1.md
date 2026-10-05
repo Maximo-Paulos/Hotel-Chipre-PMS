@@ -98,6 +98,18 @@ Only XLSX creates a job row in `analytics_export_jobs`.
 
 Facts are hotel-scoped and use the canonical contracts established in the core services layer.
 
+Reservation mutations refresh their affected PostgreSQL fact windows in the
+same transaction. Analytics reads can repair a missing or aged fact window
+when `SYNC_FACT_REFRESH_ENABLED=true` (default) and the entire requested range
+is no wider than `SYNC_FACT_REFRESH_MAX_DAYS` (default 31, hard-capped at 31).
+An existing window is considered aged after
+`SYNC_FACT_REFRESH_STALE_AFTER_SECONDS` (default 900 seconds). Wider custom
+date ranges are never partially rebuilt on each read; their `data_as_of` and
+`source_lag_seconds` continue to report the oldest materialized row honestly.
+These fields describe fact materialization time, not a separate watermark of
+source-table writes. ClickHouse projection schedules are a distinct pipeline
+and do not refresh the PostgreSQL reservation and occupancy fact tables.
+
 Reservation totals are allocated over the complete stay before a requested date window is selected. Partial or repeated refreshes therefore preserve the same nightly amounts independent of refresh order. `ADR` is PMS net room revenue over chargeable occupied nights; `RevPAR` is PMS net room revenue over sellable room nights. When a source currency cannot be converted with its saved FX snapshot, analytics tables mark that target currency unavailable instead of presenting zero as a real converted amount.
 
 Financial report booked value includes stays overlapping the selected local hotel dates and allocates the contractual total evenly over the stay nights before summing the selected nights. Collected payments and refunds remain grouped by the tender currency; analytics and reports do not infer an FX rate.

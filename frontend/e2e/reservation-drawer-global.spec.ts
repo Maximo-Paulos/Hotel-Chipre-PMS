@@ -95,6 +95,18 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   const reservationId: number = created.id;
   const confirmationCode: string = created.confirmation_code;
   expect(reservationId).toBeGreaterThan(0);
+  let allowFinancialSummaryToRecover = false;
+  await page.route(`**/api/payments/summary/${reservationId}`, async (route) => {
+    if (allowFinancialSummaryToRecover) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Temporary financial summary failure" })
+    });
+  });
 
   // 1) Open from the dashboard.
   await page.goto("/dashboard");
@@ -103,6 +115,15 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   const drawer = page.getByRole("dialog", { name: confirmationCode });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByText("Pendiente", { exact: true })).toBeVisible();
+  const financialSummaryError = drawer.getByTestId("reservation-drawer-financial-summary-error");
+  await expect(financialSummaryError).toBeVisible();
+  allowFinancialSummaryToRecover = true;
+  const summaryRetryResponse = page.waitForResponse(
+    (response) => response.url().includes(`/api/payments/summary/${reservationId}`) && response.status() === 200
+  );
+  await financialSummaryError.getByRole("button", { name: "Reintentar", exact: true }).click();
+  await summaryRetryResponse;
+  await expect(financialSummaryError).toHaveCount(0);
   // B6.2 pending-action titles can now also contain the guest's full name
   // (e.g. "Cobrar saldo pendiente a Huésped ..."), so scope this assertion to
   // the drawer's own guest-name field instead of a substring search over the

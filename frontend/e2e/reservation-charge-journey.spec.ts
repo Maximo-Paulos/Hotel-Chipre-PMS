@@ -68,15 +68,42 @@ test("owner records a reservation consumption from the guest stay file", async (
 
   const createButton = reservationForm.getByRole("button", { name: "Crear", exact: true });
   await expect(createButton).toBeEnabled();
-  await createButton.click();
+  const [createResponse] = await Promise.all([
+    page.waitForResponse((response) => response.url().includes("/api/reservations/") && response.request().method() === "POST"),
+    createButton.click()
+  ]);
+  const reservationId = Number((await createResponse.json()).id);
+  expect(reservationId).toBeGreaterThan(0);
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
 
   const reservationRow = page.locator("table").filter({ hasText: "Código" }).locator("tbody tr").filter({ hasText: guestLastName });
   await expect(reservationRow).toHaveCount(1);
+  let allowFinancialSummaryToRecover = false;
+  await page.route(`**/api/payments/summary/${reservationId}`, async (route) => {
+    if (allowFinancialSummaryToRecover) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Temporary financial summary failure" })
+    });
+  });
   await reservationRow.getByRole("button", { name: "Ficha", exact: true }).click();
 
   const detailsModal = page.locator("div.fixed").filter({ hasText: "Consumos y cargos" });
   await expect(detailsModal).toBeVisible();
+  const financialSummaryError = detailsModal.getByTestId("reservation-financial-summary-error");
+  await expect(financialSummaryError).toBeVisible();
+  await expect(financialSummaryError).toContainText("No se pudo cargar el resumen financiero.");
+  allowFinancialSummaryToRecover = true;
+  const summaryRetryResponse = page.waitForResponse(
+    (response) => response.url().includes(`/api/payments/summary/${reservationId}`) && response.status() === 200
+  );
+  await financialSummaryError.getByRole("button", { name: "Reintentar", exact: true }).click();
+  await summaryRetryResponse;
+  await expect(financialSummaryError).toHaveCount(0);
   const chargeRegion = detailsModal.getByRole("region", { name: "Consumos y cargos" });
   await expect(chargeRegion).toContainText("Todavía no hay consumos cargados.");
   await chargeRegion.getByLabel("Detalle del consumo").fill("Desayuno y minibar");

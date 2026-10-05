@@ -39,7 +39,9 @@ from app.services.analytics_service import build_home_payload
 
 
 def test_sync_fact_refresh_defaults_to_enabled():
-    assert Settings(_env_file=None).SYNC_FACT_REFRESH_ENABLED is True
+    settings = Settings(_env_file=None)
+    assert settings.SYNC_FACT_REFRESH_ENABLED is True
+    assert settings.SYNC_FACT_REFRESH_STALE_AFTER_SECONDS == 900
 
 
 def test_inline_fact_refresh_can_be_disabled(monkeypatch, db):
@@ -66,7 +68,7 @@ def test_inline_fact_refresh_can_be_disabled(monkeypatch, db):
     )
 
 
-def test_inline_fact_refresh_is_bounded_and_logged(monkeypatch, caplog, db):
+def test_inline_fact_refresh_is_bounded_and_logged(monkeypatch, caplog, db, hotel_config, sample_rooms):
     monkeypatch.setattr(
         analytics_service,
         "get_settings",
@@ -86,7 +88,7 @@ def test_inline_fact_refresh_is_bounded_and_logged(monkeypatch, caplog, db):
     with caplog.at_level("WARNING", logger="app.services.analytics_service"):
         analytics_service._ensure_facts_materialized(
             db,
-            hotel_id=1,
+            hotel_id=hotel_config.id,
             date_from=date(2026, 1, 1),
             date_to=date(2026, 1, 10),
         )
@@ -96,6 +98,187 @@ def test_inline_fact_refresh_is_bounded_and_logged(monkeypatch, caplog, db):
         (date(2026, 1, 8), date(2026, 1, 10)),
     ]
     assert sum(record.message == "analytics.sync_fact_refresh.inline" for record in caplog.records) == 1
+
+
+def _make_refresh_test_reservation(hotel_config, sample_guest, sample_categories, sample_rooms):
+    return Reservation(
+        confirmation_code="ANALYTICS-REFRESH-001",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=sample_rooms[0].id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 4, 1),
+        check_out_date=date(2026, 4, 3),
+        total_amount=200.0,
+        subtotal_amount=180.0,
+        tax_amount=20.0,
+        fee_amount=0.0,
+        commission_amount=0.0,
+        net_amount=180.0,
+        amount_paid=200.0,
+        deposit_amount=0.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.FULLY_PAID,
+        outcome=ReservationOutcomeEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        channel_code=ReservationChannelCodeEnum.OTHER_DIRECT,
+        guest_segment=ReservationGuestSegmentEnum.LEISURE,
+        guest_segment_source=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
+        no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
+        num_adults=2,
+        num_children=0,
+    )
+
+
+def _enable_bounded_fact_refresh(monkeypatch):
+    monkeypatch.setattr(
+        analytics_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            SYNC_FACT_REFRESH_ENABLED=True,
+            SYNC_FACT_REFRESH_MAX_DAYS=31,
+            SYNC_FACT_REFRESH_STALE_AFTER_SECONDS=900,
+        ),
+    )
+
+
+def test_stale_fact_window_is_refreshed_within_31_day_cap(
+    monkeypatch, db, hotel_config, sample_guest, sample_categories, sample_rooms
+):
+    _enable_bounded_fact_refresh(monkeypatch)
+    db.add(_make_refresh_test_reservation(hotel_config, sample_guest, sample_categories, sample_rooms))
+    db.flush()
+    refresh_fact_reservation_daily(db, hotel_id=hotel_config.id, date_from=date(2026, 4, 1), date_to=date(2026, 4, 3))
+    refresh_fact_room_occupancy_daily(db, hotel_id=hotel_config.id, date_from=date(2026, 4, 1), date_to=date(2026, 4, 3))
+
+    stale_since = datetime.now(timezone.utc) - pytest.importorskip("datetime").timedelta(hours=2)
+    db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == hotel_config.id).update(
+        {FactReservationDaily.updated_at: stale_since}
+    )
+    db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id).update(
+        {FactRoomOccupancyDaily.updated_at: stale_since}
+    )
+    db.commit()
+
+    analytics_service._ensure_facts_materialized(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date(2026, 4, 1),
+        date_to=date(2026, 4, 3),
+    )
+
+    reservation_as_of = min(
+        analytics_service._ensure_utc(row.updated_at)
+        for row in db.query(FactReservationDaily.updated_at).filter(FactReservationDaily.hotel_id == hotel_config.id).all()
+    )
+    occupancy_as_of = min(
+        analytics_service._ensure_utc(row.updated_at)
+        for row in db.query(FactRoomOccupancyDaily.updated_at).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id).all()
+    )
+    assert reservation_as_of > stale_since
+    assert occupancy_as_of > stale_since
+
+
+def test_partial_fact_window_refreshes_both_tables(
+    monkeypatch, db, hotel_config, sample_guest, sample_categories, sample_rooms
+):
+    _enable_bounded_fact_refresh(monkeypatch)
+    db.add(_make_refresh_test_reservation(hotel_config, sample_guest, sample_categories, sample_rooms))
+    db.flush()
+    refresh_fact_reservation_daily(db, hotel_id=hotel_config.id, date_from=date(2026, 4, 1), date_to=date(2026, 4, 3))
+    refresh_fact_room_occupancy_daily(db, hotel_id=hotel_config.id, date_from=date(2026, 4, 1), date_to=date(2026, 4, 3))
+
+    stale_since = datetime.now(timezone.utc) - pytest.importorskip("datetime").timedelta(hours=2)
+    db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == hotel_config.id).update(
+        {FactReservationDaily.updated_at: stale_since}
+    )
+    db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id).delete()
+    db.commit()
+
+    analytics_service._ensure_facts_materialized(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date(2026, 4, 1),
+        date_to=date(2026, 4, 3),
+    )
+
+    reservation_rows = db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == hotel_config.id).all()
+    occupancy_rows = db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id).all()
+    assert len(reservation_rows) == 2
+    assert min(analytics_service._ensure_utc(row.updated_at) for row in reservation_rows) > stale_since
+    assert len(occupancy_rows) == len(sample_rooms) * 3
+
+
+def test_wide_fact_window_does_not_refresh_or_mask_stale_metadata(
+    monkeypatch, db, hotel_config, sample_rooms
+):
+    _enable_bounded_fact_refresh(monkeypatch)
+    date_from = date(2026, 4, 1)
+    date_to = date(2026, 5, 2)  # 32 days, above the hard refresh cap.
+    refresh_fact_reservation_daily(db, hotel_id=hotel_config.id, date_from=date_from, date_to=date_to)
+    refresh_fact_room_occupancy_daily(db, hotel_id=hotel_config.id, date_from=date_from, date_to=date_to)
+    stale_since = datetime.now(timezone.utc) - pytest.importorskip("datetime").timedelta(hours=2)
+    db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id).update(
+        {FactRoomOccupancyDaily.updated_at: stale_since}
+    )
+    db.commit()
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("wide analytics windows must retain honest stale metadata without a read-time rebuild")
+
+    monkeypatch.setattr(analytics_service, "refresh_fact_reservation_daily", fail_if_called)
+    monkeypatch.setattr(analytics_service, "refresh_fact_room_occupancy_daily", fail_if_called)
+    analytics_service._ensure_facts_materialized(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    remaining_timestamps = [
+        analytics_service._ensure_utc(row.updated_at)
+        for row in db.query(FactRoomOccupancyDaily.updated_at)
+        .filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id)
+        .all()
+    ]
+    assert remaining_timestamps
+    assert min(remaining_timestamps) == stale_since
+
+
+def test_fact_refresh_guard_is_nonblocking_per_hotel(db):
+    with analytics_service._analytics_fact_refresh_guard(db, hotel_id=1) as first:
+        assert first is True
+        with analytics_service._analytics_fact_refresh_guard(db, hotel_id=1) as second:
+            assert second is False
+
+
+def test_missing_fact_window_skips_refresh_while_another_request_holds_lock(
+    monkeypatch, db, hotel_config, sample_rooms
+):
+    monkeypatch.setattr(
+        analytics_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            SYNC_FACT_REFRESH_ENABLED=True,
+            SYNC_FACT_REFRESH_MAX_DAYS=31,
+            SYNC_FACT_REFRESH_STALE_AFTER_SECONDS=900,
+        ),
+    )
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("a concurrent request already owns this hotel's refresh guard")
+
+    monkeypatch.setattr(analytics_service, "refresh_fact_reservation_daily", fail_if_called)
+    monkeypatch.setattr(analytics_service, "refresh_fact_room_occupancy_daily", fail_if_called)
+
+    with analytics_service._analytics_fact_refresh_guard(db, hotel_config.id) as acquired:
+        assert acquired is True
+        analytics_service._ensure_facts_materialized(
+            db,
+            hotel_id=hotel_config.id,
+            date_from=date(2026, 1, 1),
+            date_to=date(2026, 1, 3),
+        )
 
 
 def test_detect_no_shows_marks_reservation(db, hotel_config, sample_guest, sample_categories, sample_rooms):

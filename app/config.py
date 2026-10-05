@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     READ_MODEL_ANALYTICS_TTL_SECONDS: int = 60
     SYNC_FACT_REFRESH_ENABLED: bool = True
     SYNC_FACT_REFRESH_MAX_DAYS: int = 31
+    SYNC_FACT_REFRESH_STALE_AFTER_SECONDS: int = 900
     # Disabled by default; bound SQL parameters are never included in logs.
     SLOW_QUERY_LOG_MS: float = 0
     DISTRIBUTED_LOCK_ENABLED: bool = True
