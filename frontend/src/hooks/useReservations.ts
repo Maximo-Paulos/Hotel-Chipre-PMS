@@ -67,6 +67,7 @@ const occupancyGridKey = (hotelId: number | null, dateFrom: string, dateTo: stri
 
 export function useReservations(filters: ReservationFilters) {
   const { session } = useSession();
+  const searchFilterReady = filters.search === undefined || filters.search.trim().length >= 2;
 
   return useQuery<Reservation[]>({
     queryKey: reservationsKey(session.hotelId, filters),
@@ -74,7 +75,7 @@ export function useReservations(filters: ReservationFilters) {
     // A caller-provided search term shorter than 2 chars is not useful (and
     // noisy against the DB), so hold off until there's enough to match on.
     // Filters without a search term behave exactly as before.
-    enabled: hasValidSession(session) && (!filters.search || filters.search.trim().length >= 2),
+    enabled: hasValidSession(session) && searchFilterReady,
     placeholderData: keepPreviousData,
     staleTime: 1000 * 15,
     retry: false
