@@ -12,7 +12,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.cash_register import (
     CashCloseReport,
@@ -313,7 +313,7 @@ def get_daily_summary(
     cash_income = ZERO
     cash_expense = ZERO
     cash_adjustment = ZERO
-    physical_movements: list[CashMovement] = []
+    physical_movement_net_by_session: dict[int, Decimal] = defaultdict(lambda: ZERO)
     for movement in movements:
         movement_currency = session_currencies.get(
             movement.session_id,
@@ -333,7 +333,6 @@ def get_daily_summary(
             # A failed/pending/digital transaction cannot alter physical cash,
             # even if a stale or manually imported movement points at it.
             continue
-        physical_movements.append(movement)
         signed_amount = _decimal(movement.amount)
         movement_type = _value(movement.movement_type)
         if movement_type == CashMovementTypeEnum.EXPENSE.value:
@@ -347,6 +346,7 @@ def get_daily_summary(
             cash_income += signed_amount
             if movement.transaction_id is None:
                 manual_income += signed_amount
+        physical_movement_net_by_session[movement.session_id] += signed_amount
         if movement.transaction_id is None:
             entries.append(
                 {
@@ -382,6 +382,53 @@ def get_daily_summary(
     custody_delivered_total = ZERO
     custody_difference_total = ZERO
     prior_net_by_session: dict[int, Decimal] = defaultdict(lambda: ZERO)
+    report_currency_session_ids = [
+        session.id for session in sessions if session_currencies.get(session.id) == report_currency
+    ]
+    close_reports_by_session = {
+        report.session_id: report
+        for report in (
+            db.query(CashCloseReport)
+            .options(joinedload(CashCloseReport.custody_handoff))
+            .filter(
+                CashCloseReport.hotel_id == hotel_id,
+                CashCloseReport.session_id.in_(report_currency_session_ids),
+            )
+            .all()
+            if report_currency_session_ids
+            else []
+        )
+    }
+    boundary_session_ids = [
+        session.id
+        for session in sessions
+        if session_currencies.get(session.id) == report_currency
+        and _utc(session.opened_at) is not None
+        and _utc(session.opened_at) <= start
+        and (_utc(session.closed_at) is None or _utc(session.closed_at) > start)
+    ]
+    legacy_carry_by_successor = {
+        successor_session_id: handoff
+        for successor_session_id, handoff in (
+            db.query(CashCloseReport.successor_session_id, CashCustodyHandoff)
+            .join(
+                CashCustodyHandoff,
+                and_(
+                    CashCustodyHandoff.close_report_id == CashCloseReport.id,
+                    CashCustodyHandoff.hotel_id == CashCloseReport.hotel_id,
+                ),
+            )
+            .filter(
+                CashCloseReport.hotel_id == hotel_id,
+                CashCloseReport.successor_session_id.in_(boundary_session_ids),
+                CashCloseReport.successor_float_declared_amount.is_(None),
+                CashCustodyHandoff.status == CashCustodyStatusEnum.CONFIRMED,
+            )
+            .all()
+            if boundary_session_ids
+            else []
+        )
+    }
     for movement in prior_movements:
         linked_transaction = movement_transactions.get(movement.transaction_id) if movement.transaction_id else None
         if movement.transaction_id is not None and (
@@ -404,10 +451,7 @@ def get_daily_summary(
     for session in sessions:
         if session_currencies.get(session.id) != report_currency:
             continue
-        close_report = db.query(CashCloseReport).filter(
-            CashCloseReport.hotel_id == hotel_id,
-            CashCloseReport.session_id == session.id,
-        ).one_or_none()
+        close_report = close_reports_by_session.get(session.id)
         opened_at = _utc(session.opened_at)
         closed_at = _utc(session.closed_at)
         session_opening_balance = _decimal(session.opening_balance)
@@ -415,25 +459,8 @@ def get_daily_summary(
             # Include prior movements on a session that was already open at
             # the hotel-local day boundary. Any declared successor float is
             # already represented by session.opening_balance.
-            legacy_carry = (
-                db.query(CashCloseReport, CashCustodyHandoff)
-                .join(
-                    CashCustodyHandoff,
-                    and_(
-                        CashCustodyHandoff.close_report_id == CashCloseReport.id,
-                        CashCustodyHandoff.hotel_id == CashCloseReport.hotel_id,
-                    ),
-                )
-                .filter(
-                    CashCloseReport.hotel_id == hotel_id,
-                    CashCloseReport.successor_session_id == session.id,
-                    CashCloseReport.successor_float_declared_amount.is_(None),
-                    CashCustodyHandoff.status == CashCustodyStatusEnum.CONFIRMED,
-                )
-                .one_or_none()
-            )
-            if legacy_carry is not None:
-                _prior_report, prior_handoff = legacy_carry
+            prior_handoff = legacy_carry_by_successor.get(session.id)
+            if prior_handoff is not None:
                 acknowledged_at = _utc(prior_handoff.received_at or prior_handoff.delivered_at)
                 if acknowledged_at is not None and acknowledged_at <= start:
                     # Rows predating explicit float declarations used the
@@ -496,17 +523,7 @@ def get_daily_summary(
         - custody_delivered_total
     )
     for session_read in session_reads:
-        session_movements = [
-            movement for movement in physical_movements if movement.session_id == session_read["session_id"]
-        ]
-        session_net = sum(
-            (
-                _decimal(movement.amount)
-                if _value(movement.movement_type) != CashMovementTypeEnum.EXPENSE.value
-                else -_decimal(movement.amount)
-            )
-            for movement in session_movements
-        )
+        session_net = physical_movement_net_by_session.get(session_read["session_id"], ZERO)
         session_read["expected_balance"] = _decimal(session_read["opening_balance"] + session_net)
 
     entries_truncated = len(entries) > ENTRY_LIMIT

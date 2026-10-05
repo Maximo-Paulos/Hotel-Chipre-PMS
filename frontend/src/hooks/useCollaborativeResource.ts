@@ -246,6 +246,14 @@ export function useCollaborativeResource({
       } catch (cause) {
         if (cancelledRef.current) return;
         setError(cause instanceof Error ? cause.message : "No se pudo conectar la colaboración");
+        // Ticket issuance depends on Redis/Valkey. A 503 here is a known
+        // non-ready state, so retrying would keep hammering the API until the
+        // editor is remounted or refreshed. WebSocket close handling above
+        // still reconnects normally when ticket issuance is available.
+        if (cause instanceof ApiError && cause.status === 503) {
+          setStatus("degraded");
+          return;
+        }
         reconnectAttemptRef.current += 1;
         setStatus(reconnectAttemptRef.current >= 3 ? "degraded" : "reconnecting");
         const delay = Math.min(retryDelay, MAX_RECONNECT_DELAY_MS) + Math.floor(Math.random() * 250);

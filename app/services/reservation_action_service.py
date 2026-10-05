@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session, aliased, joinedload, lazyload, load_only
 
 from app.models.operations import BillingAdjustment, ReservationAdjustment, ReservationAdjustmentStatusEnum, RoomMoveEvent
@@ -42,6 +42,7 @@ _TERMINAL_STATUSES = {ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHE
 _PROBLEM_ALLOCATION_STATUSES = {"manual_review", "unassigned", "error"}
 _PROBLEM_SETTLEMENT_STATUSES = {"manual_resolution_required", "pending_hotel_action", "review_cancellation"}
 _PENDING_ADJUSTMENT_STATUSES = {ReservationAdjustmentStatusEnum.DRAFT, ReservationAdjustmentStatusEnum.PENDING}
+_PENDING_ADJUSTMENT_EXTERNAL_STATUSES = {"manual_resolution_required", "pending_hotel_action"}
 _ACTIVE_WINDOW_DAYS = 1
 # ponytail: known ceiling -- if a hotel legitimately has more real candidates
 # than this, only the first `_CANDIDATE_CAP_MULTIPLIER * limit` (min 100) get a
@@ -335,6 +336,9 @@ def _related_adjustments_by_reservation(
     hotel_id: int,
     reservation_ids: list[int],
 ) -> dict[int, list[ReservationAdjustment]]:
+    if not reservation_ids:
+        return {}
+
     candidate_ids = set(reservation_ids)
     grouped: dict[int, list[ReservationAdjustment]] = defaultdict(list)
     rows = (
@@ -344,6 +348,10 @@ def _related_adjustments_by_reservation(
             or_(
                 ReservationAdjustment.reservation_id.in_(reservation_ids),
                 ReservationAdjustment.resulting_reservation_id.in_(reservation_ids),
+            ),
+            or_(
+                ReservationAdjustment.status.in_(_PENDING_ADJUSTMENT_STATUSES),
+                ReservationAdjustment.external_resolution_status.in_(_PENDING_ADJUSTMENT_EXTERNAL_STATUSES),
             ),
         )
         .order_by(ReservationAdjustment.requested_at.desc(), ReservationAdjustment.id.desc())
@@ -377,31 +385,27 @@ def _pending_action_financial_inputs(
     if not reservation_ids:
         return {}
 
+    signed_amount = case(
+        (Transaction.transaction_type == TransactionTypeEnum.REFUND, -Transaction.amount),
+        else_=Transaction.amount,
+    )
+    completed_amount = case(
+        (Transaction.status == TransactionStatusEnum.COMPLETED, signed_amount),
+        else_=Decimal("0.00"),
+    )
     transaction_rows = db.execute(
         select(
             Transaction.reservation_id,
-            Transaction.status,
-            Transaction.transaction_type,
-            Transaction.amount,
+            func.sum(completed_amount).label("completed_paid_amount"),
         ).where(
             Transaction.hotel_id == hotel_id,
             Transaction.reservation_id.in_(reservation_ids),
-        )
+        ).group_by(Transaction.reservation_id)
     ).all()
-    reservations_with_transactions: set[int] = set()
-    completed_paid_by_reservation: dict[int, Decimal] = defaultdict(lambda: Decimal("0.00"))
-    for row in transaction_rows:
-        reservations_with_transactions.add(row.reservation_id)
-        if row.status != TransactionStatusEnum.COMPLETED:
-            continue
-        amount = Decimal(str(row.amount or 0))
-        if row.transaction_type == TransactionTypeEnum.REFUND:
-            amount = -amount
-        completed_paid_by_reservation[row.reservation_id] += amount
-
+    reservations_with_transactions = {row.reservation_id for row in transaction_rows}
     completed_paid_by_reservation = {
-        reservation_id: amount.quantize(Decimal("0.01"))
-        for reservation_id, amount in completed_paid_by_reservation.items()
+        row.reservation_id: Decimal(str(row.completed_paid_amount or 0)).quantize(Decimal("0.01"))
+        for row in transaction_rows
     }
 
     adjustments_by_reservation: dict[int, list[Decimal]] = defaultdict(list)
