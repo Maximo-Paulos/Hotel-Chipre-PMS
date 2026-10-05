@@ -69,7 +69,11 @@ class DomainEventOutbox(Base):
 
     __table_args__ = (
         Index("ix_domain_event_outbox_pending", "hotel_id", "published_at", "id"),
-        Index("ix_domain_event_outbox_recovery_cursor", "hotel_id", "stream_cursor", "id"),
+        Index(
+            "ix_domain_event_outbox_recovery_cursor",
+            "hotel_id",
+            func.coalesce(stream_cursor, id),
+        ),
         Index("ix_domain_event_outbox_retry", "status", "next_attempt_at", "id"),
         CheckConstraint("revision >= 0", name="ck_domain_event_outbox_revision_nonnegative"),
         CheckConstraint("attempts >= 0", name="ck_domain_event_outbox_attempts_nonnegative"),

@@ -35,6 +35,17 @@ test("reservation mutations avoid refreshing unrelated room and analytics domain
   assert.match(invalidation, /throwOnError: false/);
 });
 
+test("reservation group summaries only fetch the six rows rendered on the page", async () => {
+  const [api, page] = await Promise.all([
+    source("./src/api/reservations.ts"),
+    source("./src/views/protected/ReservationsPage.tsx")
+  ]);
+
+  assert.match(api, /RESERVATION_GROUP_SUMMARY_LIMIT\s*=\s*6/);
+  assert.match(api, /\/api\/reservation-groups\?limit=\$\{RESERVATION_GROUP_SUMMARY_LIMIT\}/);
+  assert.match(page, /data\?\.slice\(0, RESERVATION_GROUP_SUMMARY_LIMIT\)/);
+});
+
 test("reservation creation does not refetch cash sessions when no payment was recorded", async () => {
   const invalidation = await source("./src/api/queryInvalidation.ts");
   const reservations = await source("./src/hooks/useReservations.ts");

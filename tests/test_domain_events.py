@@ -8,7 +8,9 @@ from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.schema import CreateIndex
 
 from app.api import events
 from app.config import Settings
@@ -67,6 +69,18 @@ def test_realtime_fallback_poll_budget_is_below_ten_seconds():
     assert _settings().REALTIME_EVENTS_FALLBACK_POLL_SECONDS == 2.0
     with pytest.raises(ValueError):
         _settings(REALTIME_EVENTS_FALLBACK_POLL_SECONDS=6)
+
+
+def test_outbox_recovery_index_matches_tenant_scoped_effective_cursor_expression():
+    recovery_index = next(
+        index
+        for index in DomainEventOutbox.__table__.indexes
+        if index.name == "ix_domain_event_outbox_recovery_cursor"
+    )
+
+    ddl = str(CreateIndex(recovery_index).compile(dialect=postgresql.dialect())).lower()
+
+    assert "(hotel_id, coalesce(stream_cursor, id))" in ddl
 
 
 def test_publish_domain_event_scopes_channel_and_increments_revision(monkeypatch: pytest.MonkeyPatch):

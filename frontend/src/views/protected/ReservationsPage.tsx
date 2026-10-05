@@ -13,6 +13,7 @@ import {
   newReservationGroupPaymentIdempotencyKey,
   markReservationNoShow,
   moveReservationRoom,
+  RESERVATION_GROUP_SUMMARY_LIMIT,
   type Reservation,
   type ReservationChargePayload,
   type ReservationGroupSummary,
@@ -2967,7 +2968,7 @@ export function ReservationsPage() {
           <section className="border-b border-slate-200 p-4" aria-label={t("page.groups.title")}>
             <h3 className="mb-3 text-sm font-semibold text-slate-800">{t("page.groups.title")}</h3>
             <div className="grid gap-3 lg:grid-cols-2">
-              {reservationGroupsQuery.data?.slice(0, 6).map((group) => {
+              {reservationGroupsQuery.data?.slice(0, RESERVATION_GROUP_SUMMARY_LIMIT).map((group) => {
                 const groupDeferredBilling = Boolean(
                   group.company_billing_deferred ||
                   (group.company_id && companyOptions.find((company) => company.id === group.company_id)?.payment_deferred !== false)
