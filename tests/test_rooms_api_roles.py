@@ -17,6 +17,7 @@ from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 import app.models  # noqa: F401
 from app.models.hotel_config import HotelConfiguration
+from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.room import Room, RoomCategory
 from app.services.permission_service import ROLE_HOUSEKEEPING, create_custom_role
 
@@ -92,14 +93,24 @@ def client(tmp_path):
     engine.dispose()
 
 
-def test_receptionist_can_list_rooms(client):
-    test_client, app, hotel_id, _category_id, _db = client
+def test_receptionist_can_list_rooms_without_loading_reservations(client):
+    test_client, app, hotel_id, _category_id, db = client
     app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "receptionist")
 
-    response = test_client.get("/api/rooms/")
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement.lower())
+
+    event.listen(db.get_bind(), "before_cursor_execute", capture)
+    try:
+        response = test_client.get("/api/rooms/")
+    finally:
+        event.remove(db.get_bind(), "before_cursor_execute", capture)
 
     assert response.status_code == 200, response.text
     assert len(response.json()) == 1
+    assert not any("from reservations" in statement for statement in statements)
 
 
 def test_receptionist_can_check_room_availability(client):
@@ -136,6 +147,93 @@ def test_receptionist_can_list_room_categories(client):
 
     assert response.status_code == 200, response.text
     assert any(cat["id"] == category_id for cat in response.json())
+
+
+def test_room_category_rates_are_batched_and_keep_daily_period_and_base_precedence(
+    client, monkeypatch
+):
+    test_client, app, hotel_id, base_category_id, db = client
+    app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "receptionist")
+    today = date(2026, 10, 5)
+    monkeypatch.setattr(rooms_api, "local_today", lambda _timezone: today)
+
+    daily_category = RoomCategory(
+        hotel_id=hotel_id,
+        name="QA-Daily",
+        code="QADAILY",
+        base_price_per_night=150,
+        max_occupancy=2,
+    )
+    period_category = RoomCategory(
+        hotel_id=hotel_id,
+        name="QA-Period",
+        code="QAPERIOD",
+        base_price_per_night=160,
+        max_occupancy=2,
+    )
+    db.add_all([daily_category, period_category])
+    db.flush()
+    db.add_all(
+        [
+            DailyRate(
+                hotel_id=hotel_id,
+                category_id=daily_category.id,
+                date=today,
+                price=275,
+            ),
+            PricePeriod(
+                hotel_id=hotel_id,
+                category_id=daily_category.id,
+                name="QA daily overrides period",
+                start_date=today,
+                end_date=today,
+                price_per_night=240,
+                priority=10,
+            ),
+            PricePeriod(
+                hotel_id=hotel_id,
+                category_id=period_category.id,
+                name="QA low priority",
+                start_date=today,
+                end_date=today,
+                price_per_night=210,
+                priority=1,
+            ),
+            PricePeriod(
+                hotel_id=hotel_id,
+                category_id=period_category.id,
+                name="QA high priority",
+                start_date=today,
+                end_date=today,
+                price_per_night=230,
+                priority=2,
+            ),
+        ]
+    )
+    db.commit()
+
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement.lower())
+
+    event.listen(db.get_bind(), "before_cursor_execute", capture)
+    try:
+        response = test_client.get("/api/rooms/categories")
+    finally:
+        event.remove(db.get_bind(), "before_cursor_execute", capture)
+
+    assert response.status_code == 200, response.text
+    by_id = {category["id"]: category for category in response.json()}
+    assert by_id[base_category_id]["current_rate"] == 100
+    assert by_id[base_category_id]["current_rate_source"] == "category_base"
+    assert by_id[daily_category.id]["current_rate"] == 275
+    assert by_id[daily_category.id]["current_rate_source"] == "daily_rate"
+    assert by_id[period_category.id]["current_rate"] == 230
+    assert by_id[period_category.id]["current_rate_source"] == "price_period"
+    assert sum("from daily_rates" in statement for statement in statements) == 1
+    assert sum("from price_periods" in statement for statement in statements) == 1
+    assert not any("from rooms" in statement for statement in statements)
 
 
 def test_custom_housekeeping_role_receives_safe_room_projection(client):

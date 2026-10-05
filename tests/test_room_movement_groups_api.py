@@ -110,12 +110,29 @@ def test_receptionist_can_read_but_cannot_revert_room_movement_group():
         reservation, _, to_room, group = _seed_group(db, hotel_id=1)
         db.commit()
 
-        listing = client.get("/api/room-movement-groups/")
+        statements: list[str] = []
+
+        def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+            statements.append(statement.lower())
+
+        event.listen(engine, "before_cursor_execute", capture)
+        try:
+            listing = client.get("/api/room-movement-groups/")
+        finally:
+            event.remove(engine, "before_cursor_execute", capture)
         denied = client.post(f"/api/room-movement-groups/{group.id}/revert")
 
         db.refresh(reservation)
         db.refresh(group)
         assert listing.status_code == 200, listing.text
+        assert listing.json()[0]["move_events"][0]["reservation_id"] == reservation.id
+        event_queries = [statement for statement in statements if "from room_move_events" in statement]
+        assert len(event_queries) == 1
+        assert not any(
+            f"join {table}" in statement
+            for statement in event_queries
+            for table in ("reservations", "rooms", "users")
+        )
         assert denied.status_code == 403, denied.text
         assert group.is_reverted is False
         assert reservation.room_id == to_room.id

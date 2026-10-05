@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, raiseload, selectinload
 
 from app.services.row_locks import lock_query
 from app.models.audit_log import AuditActionEnum
@@ -160,6 +160,10 @@ def list_groups(db: Session, *, hotel_id: int, limit: int = 50) -> list[RoomMove
     safe_limit = max(1, min(limit, 200))
     return (
         db.query(RoomMovementGroup)
+        .options(
+            raiseload("*"),
+            selectinload(RoomMovementGroup.move_events).raiseload("*"),
+        )
         .filter(RoomMovementGroup.hotel_id == hotel_id)
         .order_by(RoomMovementGroup.created_at.desc(), RoomMovementGroup.id.desc())
         .limit(safe_limit)

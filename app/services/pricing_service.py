@@ -227,6 +227,65 @@ def resolve_rate_calendar(
     return result
 
 
+def resolve_current_rates_for_categories(
+    db: Session,
+    *,
+    hotel_id: int,
+    categories: list[RoomCategory],
+    target_date: date,
+) -> dict[int, dict[str, float | str]]:
+    """Resolve today's effective base rate for a set of hotel categories.
+
+    This is the batched equivalent of calling ``resolve_rate_calendar`` once
+    per category for a single date. It keeps the category inventory response
+    at a fixed two pricing queries as a hotel adds room categories.
+    """
+    hotel_categories = [category for category in categories if category.hotel_id == hotel_id]
+    category_ids = [category.id for category in hotel_categories]
+    if not category_ids:
+        return {}
+
+    daily_by_category = {
+        row.category_id: row
+        for row in db.query(DailyRate).filter(
+            DailyRate.hotel_id == hotel_id,
+            DailyRate.category_id.in_(category_ids),
+            DailyRate.date == target_date,
+        )
+    }
+    periods = (
+        db.query(PricePeriod)
+        .filter(
+            PricePeriod.hotel_id == hotel_id,
+            PricePeriod.category_id.in_(category_ids),
+            PricePeriod.deleted_at.is_(None),
+            PricePeriod.is_active == True,
+            PricePeriod.start_date <= target_date,
+            PricePeriod.end_date >= target_date,
+        )
+        .order_by(PricePeriod.category_id, PricePeriod.priority.desc(), PricePeriod.id.desc())
+        .all()
+    )
+    period_by_category: dict[int, PricePeriod] = {}
+    for period in periods:
+        period_by_category.setdefault(period.category_id, period)
+
+    resolved: dict[int, dict[str, float | str]] = {}
+    for category in hotel_categories:
+        daily = daily_by_category.get(category.id)
+        period = period_by_category.get(category.id)
+        if daily is not None:
+            value = {"price": float(daily.price), "source": "daily_rate"}
+        elif period is not None:
+            value = {"price": float(period.price_per_night), "source": "price_period"}
+        elif category.base_price_per_night is not None:
+            value = {"price": float(category.base_price_per_night), "source": "category_base"}
+        else:
+            value = {"price": 0.0, "source": "none"}
+        resolved[category.id] = value
+    return resolved
+
+
 def get_prices_for_range(
     db: Session,
     hotel_id: int,
