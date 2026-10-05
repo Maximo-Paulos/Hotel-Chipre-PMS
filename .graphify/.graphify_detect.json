@@ -1503,9 +1503,9 @@
     "video": []
   },
   "total_files": 1493,
-  "total_words": 2098637,
+  "total_words": 2098641,
   "needs_graph": true,
-  "warning": "Large corpus: 1493 files · ~2,098,637 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1493 files · ~2,098,641 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1526,7 +1526,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "77b44fd2b19f402e1bb267a44336a104a69f11cd",
+    "source_hash": "51655616f675030bd78215eed21f549a30e80708",
     "branches": [
       "codex/day2-feedback",
       "codex/fix-ronda-2-week-simulation",
@@ -1560,7 +1560,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "77b44fd2b19f402e1bb267a44336a104a69f11cd",
+    "head": "51655616f675030bd78215eed21f549a30e80708",
     "candidate_count": null,
     "included_count": 1493,
     "excluded_untracked_count": 0,
