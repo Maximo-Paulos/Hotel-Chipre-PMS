@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-05T03:42:43.884Z",
+  "generatedAt": "2026-10-05T05:13:50.414Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -8905,74 +8905,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_read_model_cache_invalidate_hotel_analytics_cache",
-      "name": "invalidate_hotel_analytics_cache",
-      "entryPoint": "services_read_model_cache_invalidate_hotel_analytics_cache",
-      "entryPointId": "services_read_model_cache_invalidate_hotel_analytics_cache",
-      "path": [
-        "services_read_model_cache_invalidate_hotel_analytics_cache",
-        "services_read_model_cache_invalidate_hotel_cache_prefixes",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_mark_redis_available",
-        "services_read_model_cache_mark_redis_unavailable",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_settings",
-        "services_read_model_cache_redis_failure_cooldown_seconds"
-      ],
-      "qualifiedPath": [
-        "services_read_model_cache_invalidate_hotel_analytics_cache",
-        "services_read_model_cache_invalidate_hotel_cache_prefixes",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_mark_redis_available",
-        "services_read_model_cache_mark_redis_unavailable",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_settings",
-        "services_read_model_cache_redis_failure_cooldown_seconds"
-      ],
-      "depth": 3,
-      "nodeCount": 8,
-      "fileCount": 1,
-      "files": [
-        "app/services/read_model_cache.py"
-      ],
-      "criticality": 0.2425,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_read_model_cache_invalidate_hotel_operational_caches",
-      "name": "invalidate_hotel_operational_caches",
-      "entryPoint": "services_read_model_cache_invalidate_hotel_operational_caches",
-      "entryPointId": "services_read_model_cache_invalidate_hotel_operational_caches",
-      "path": [
-        "services_read_model_cache_invalidate_hotel_operational_caches",
-        "services_read_model_cache_invalidate_hotel_cache_prefixes",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_mark_redis_available",
-        "services_read_model_cache_mark_redis_unavailable",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_settings",
-        "services_read_model_cache_redis_failure_cooldown_seconds"
-      ],
-      "qualifiedPath": [
-        "services_read_model_cache_invalidate_hotel_operational_caches",
-        "services_read_model_cache_invalidate_hotel_cache_prefixes",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_mark_redis_available",
-        "services_read_model_cache_mark_redis_unavailable",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_settings",
-        "services_read_model_cache_redis_failure_cooldown_seconds"
-      ],
-      "depth": 3,
-      "nodeCount": 8,
-      "fileCount": 1,
-      "files": [
-        "app/services/read_model_cache.py"
-      ],
-      "criticality": 0.2425,
-      "warnings": []
-    },
-    {
       "id": "flow:support_totp_nexttotpafter",
       "name": "nextTotpAfter",
       "entryPoint": "support_totp_nexttotpafter",
@@ -9102,6 +9034,78 @@
         "app/services/gemma_service.py"
       ],
       "criticality": 0.2403,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_read_model_cache_invalidate_hotel_analytics_cache",
+      "name": "invalidate_hotel_analytics_cache",
+      "entryPoint": "services_read_model_cache_invalidate_hotel_analytics_cache",
+      "entryPointId": "services_read_model_cache_invalidate_hotel_analytics_cache",
+      "path": [
+        "services_read_model_cache_invalidate_hotel_analytics_cache",
+        "services_read_model_cache_invalidate_hotel_cache_prefixes",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_mark_redis_available",
+        "services_read_model_cache_mark_redis_unavailable",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
+        "services_read_model_cache_settings",
+        "services_read_model_cache_redis_failure_cooldown_seconds"
+      ],
+      "qualifiedPath": [
+        "services_read_model_cache_invalidate_hotel_analytics_cache",
+        "services_read_model_cache_invalidate_hotel_cache_prefixes",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_mark_redis_available",
+        "services_read_model_cache_mark_redis_unavailable",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
+        "services_read_model_cache_settings",
+        "services_read_model_cache_redis_failure_cooldown_seconds"
+      ],
+      "depth": 3,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/read_model_cache.py"
+      ],
+      "criticality": 0.2356,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_read_model_cache_invalidate_hotel_operational_caches",
+      "name": "invalidate_hotel_operational_caches",
+      "entryPoint": "services_read_model_cache_invalidate_hotel_operational_caches",
+      "entryPointId": "services_read_model_cache_invalidate_hotel_operational_caches",
+      "path": [
+        "services_read_model_cache_invalidate_hotel_operational_caches",
+        "services_read_model_cache_invalidate_hotel_cache_prefixes",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_mark_redis_available",
+        "services_read_model_cache_mark_redis_unavailable",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
+        "services_read_model_cache_settings",
+        "services_read_model_cache_redis_failure_cooldown_seconds"
+      ],
+      "qualifiedPath": [
+        "services_read_model_cache_invalidate_hotel_operational_caches",
+        "services_read_model_cache_invalidate_hotel_cache_prefixes",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_mark_redis_available",
+        "services_read_model_cache_mark_redis_unavailable",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
+        "services_read_model_cache_settings",
+        "services_read_model_cache_redis_failure_cooldown_seconds"
+      ],
+      "depth": 3,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/read_model_cache.py"
+      ],
+      "criticality": 0.2356,
       "warnings": []
     },
     {
@@ -11843,90 +11847,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_read_model_cache_get_cached_home_payload",
-      "name": "get_cached_home_payload",
-      "entryPoint": "services_read_model_cache_get_cached_home_payload",
-      "entryPointId": "services_read_model_cache_get_cached_home_payload",
-      "path": [
-        "services_read_model_cache_get_cached_home_payload",
-        "services_read_model_cache_analytics_home_key",
-        "services_read_model_cache_get_cached_or_compute",
-        "services_read_model_cache_settings",
-        "services_read_model_cache_date_token",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_load_json",
-        "services_read_model_cache_mark_redis_available",
-        "services_read_model_cache_mark_redis_unavailable",
-        "services_read_model_cache_store_json",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_redis_failure_cooldown_seconds"
-      ],
-      "qualifiedPath": [
-        "services_read_model_cache_get_cached_home_payload",
-        "services_read_model_cache_analytics_home_key",
-        "services_read_model_cache_get_cached_or_compute",
-        "services_read_model_cache_settings",
-        "services_read_model_cache_date_token",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_load_json",
-        "services_read_model_cache_mark_redis_available",
-        "services_read_model_cache_mark_redis_unavailable",
-        "services_read_model_cache_store_json",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_redis_failure_cooldown_seconds"
-      ],
-      "depth": 3,
-      "nodeCount": 12,
-      "fileCount": 1,
-      "files": [
-        "app/services/read_model_cache.py"
-      ],
-      "criticality": 0.2008,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_read_model_cache_get_cached_starter_summary_payload",
-      "name": "get_cached_starter_summary_payload",
-      "entryPoint": "services_read_model_cache_get_cached_starter_summary_payload",
-      "entryPointId": "services_read_model_cache_get_cached_starter_summary_payload",
-      "path": [
-        "services_read_model_cache_get_cached_starter_summary_payload",
-        "services_read_model_cache_analytics_starter_key",
-        "services_read_model_cache_get_cached_or_compute",
-        "services_read_model_cache_settings",
-        "services_read_model_cache_date_token",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_load_json",
-        "services_read_model_cache_mark_redis_available",
-        "services_read_model_cache_mark_redis_unavailable",
-        "services_read_model_cache_store_json",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_redis_failure_cooldown_seconds"
-      ],
-      "qualifiedPath": [
-        "services_read_model_cache_get_cached_starter_summary_payload",
-        "services_read_model_cache_analytics_starter_key",
-        "services_read_model_cache_get_cached_or_compute",
-        "services_read_model_cache_settings",
-        "services_read_model_cache_date_token",
-        "services_read_model_cache_get_redis_client",
-        "services_read_model_cache_load_json",
-        "services_read_model_cache_mark_redis_available",
-        "services_read_model_cache_mark_redis_unavailable",
-        "services_read_model_cache_store_json",
-        "services_read_model_cache_cache_enabled",
-        "services_read_model_cache_redis_failure_cooldown_seconds"
-      ],
-      "depth": 3,
-      "nodeCount": 12,
-      "fileCount": 1,
-      "files": [
-        "app/services/read_model_cache.py"
-      ],
-      "criticality": 0.2008,
-      "warnings": []
-    },
-    {
       "id": "flow:services_subscription_entitlements_change_subscription_plan",
       "name": "change_subscription_plan",
       "entryPoint": "services_subscription_entitlements_change_subscription_plan",
@@ -12114,6 +12034,94 @@
         "app/services/fx_service.py"
       ],
       "criticality": 0.2,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_read_model_cache_get_cached_home_payload",
+      "name": "get_cached_home_payload",
+      "entryPoint": "services_read_model_cache_get_cached_home_payload",
+      "entryPointId": "services_read_model_cache_get_cached_home_payload",
+      "path": [
+        "services_read_model_cache_get_cached_home_payload",
+        "services_read_model_cache_analytics_home_key",
+        "services_read_model_cache_get_cached_or_compute",
+        "services_read_model_cache_settings",
+        "services_read_model_cache_date_token",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_load_json",
+        "services_read_model_cache_mark_redis_available",
+        "services_read_model_cache_mark_redis_unavailable",
+        "services_read_model_cache_store_json",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
+        "services_read_model_cache_redis_failure_cooldown_seconds"
+      ],
+      "qualifiedPath": [
+        "services_read_model_cache_get_cached_home_payload",
+        "services_read_model_cache_analytics_home_key",
+        "services_read_model_cache_get_cached_or_compute",
+        "services_read_model_cache_settings",
+        "services_read_model_cache_date_token",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_load_json",
+        "services_read_model_cache_mark_redis_available",
+        "services_read_model_cache_mark_redis_unavailable",
+        "services_read_model_cache_store_json",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
+        "services_read_model_cache_redis_failure_cooldown_seconds"
+      ],
+      "depth": 3,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/read_model_cache.py"
+      ],
+      "criticality": 0.1992,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_read_model_cache_get_cached_starter_summary_payload",
+      "name": "get_cached_starter_summary_payload",
+      "entryPoint": "services_read_model_cache_get_cached_starter_summary_payload",
+      "entryPointId": "services_read_model_cache_get_cached_starter_summary_payload",
+      "path": [
+        "services_read_model_cache_get_cached_starter_summary_payload",
+        "services_read_model_cache_analytics_starter_key",
+        "services_read_model_cache_get_cached_or_compute",
+        "services_read_model_cache_settings",
+        "services_read_model_cache_date_token",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_load_json",
+        "services_read_model_cache_mark_redis_available",
+        "services_read_model_cache_mark_redis_unavailable",
+        "services_read_model_cache_store_json",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
+        "services_read_model_cache_redis_failure_cooldown_seconds"
+      ],
+      "qualifiedPath": [
+        "services_read_model_cache_get_cached_starter_summary_payload",
+        "services_read_model_cache_analytics_starter_key",
+        "services_read_model_cache_get_cached_or_compute",
+        "services_read_model_cache_settings",
+        "services_read_model_cache_date_token",
+        "services_read_model_cache_get_redis_client",
+        "services_read_model_cache_load_json",
+        "services_read_model_cache_mark_redis_available",
+        "services_read_model_cache_mark_redis_unavailable",
+        "services_read_model_cache_store_json",
+        "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
+        "services_read_model_cache_redis_failure_cooldown_seconds"
+      ],
+      "depth": 3,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/read_model_cache.py"
+      ],
+      "criticality": 0.1992,
       "warnings": []
     },
     {
@@ -13726,6 +13734,7 @@
         "services_read_model_cache_mark_redis_unavailable",
         "services_read_model_cache_store_json",
         "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
         "services_read_model_cache_redis_failure_cooldown_seconds"
       ],
       "qualifiedPath": [
@@ -13739,10 +13748,11 @@
         "services_read_model_cache_mark_redis_unavailable",
         "services_read_model_cache_store_json",
         "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
         "services_read_model_cache_redis_failure_cooldown_seconds"
       ],
       "depth": 3,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/read_model_cache.py"
@@ -13766,6 +13776,7 @@
         "services_read_model_cache_mark_redis_unavailable",
         "services_read_model_cache_store_json",
         "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
         "services_read_model_cache_redis_failure_cooldown_seconds"
       ],
       "qualifiedPath": [
@@ -13779,10 +13790,11 @@
         "services_read_model_cache_mark_redis_unavailable",
         "services_read_model_cache_store_json",
         "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
         "services_read_model_cache_redis_failure_cooldown_seconds"
       ],
       "depth": 3,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/read_model_cache.py"
@@ -13806,6 +13818,7 @@
         "services_read_model_cache_mark_redis_unavailable",
         "services_read_model_cache_store_json",
         "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
         "services_read_model_cache_redis_failure_cooldown_seconds"
       ],
       "qualifiedPath": [
@@ -13819,10 +13832,11 @@
         "services_read_model_cache_mark_redis_unavailable",
         "services_read_model_cache_store_json",
         "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
         "services_read_model_cache_redis_failure_cooldown_seconds"
       ],
       "depth": 3,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/read_model_cache.py"
@@ -13846,6 +13860,7 @@
         "services_read_model_cache_mark_redis_unavailable",
         "services_read_model_cache_store_json",
         "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
         "services_read_model_cache_redis_failure_cooldown_seconds"
       ],
       "qualifiedPath": [
@@ -13859,10 +13874,11 @@
         "services_read_model_cache_mark_redis_unavailable",
         "services_read_model_cache_store_json",
         "services_read_model_cache_cache_enabled",
+        "services_read_model_cache_redis_timeout_seconds",
         "services_read_model_cache_redis_failure_cooldown_seconds"
       ],
       "depth": 3,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/read_model_cache.py"
@@ -13990,60 +14006,6 @@
       "fileCount": 1,
       "files": [
         "app/services/operational_audit_service.py"
-      ],
-      "criticality": 0.18,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_reservation_action_service_list_pending_reservation_actions",
-      "name": "list_pending_reservation_actions",
-      "entryPoint": "services_reservation_action_service_list_pending_reservation_actions",
-      "entryPointId": "services_reservation_action_service_list_pending_reservation_actions",
-      "path": [
-        "services_reservation_action_service_list_pending_reservation_actions",
-        "services_reservation_action_service_candidate_reservation_ids",
-        "services_reservation_action_service_get_reservation_operations_summary",
-        "services_reservation_action_service_row_could_generate_action",
-        "services_reservation_action_service_build_pending_actions",
-        "services_reservation_action_service_get_latest_ota_link",
-        "services_reservation_action_service_get_latest_room_move",
-        "services_reservation_action_service_get_related_adjustments",
-        "services_reservation_action_service_get_reservation_or_error",
-        "services_reservation_action_service_serialize_adjustment",
-        "services_reservation_action_service_serialize_ota_link",
-        "services_reservation_action_service_serialize_room_move",
-        "services_reservation_action_service_actioncandidate",
-        "services_reservation_action_service_decorate_action",
-        "services_reservation_action_service_dedupe_candidates",
-        "services_reservation_action_service_fmt_date",
-        "services_reservation_action_service_guest_display_name",
-        "services_reservation_action_service_reservationactionerror"
-      ],
-      "qualifiedPath": [
-        "services_reservation_action_service_list_pending_reservation_actions",
-        "services_reservation_action_service_candidate_reservation_ids",
-        "services_reservation_action_service_get_reservation_operations_summary",
-        "services_reservation_action_service_row_could_generate_action",
-        "services_reservation_action_service_build_pending_actions",
-        "services_reservation_action_service_get_latest_ota_link",
-        "services_reservation_action_service_get_latest_room_move",
-        "services_reservation_action_service_get_related_adjustments",
-        "services_reservation_action_service_get_reservation_or_error",
-        "services_reservation_action_service_serialize_adjustment",
-        "services_reservation_action_service_serialize_ota_link",
-        "services_reservation_action_service_serialize_room_move",
-        "services_reservation_action_service_actioncandidate",
-        "services_reservation_action_service_decorate_action",
-        "services_reservation_action_service_dedupe_candidates",
-        "services_reservation_action_service_fmt_date",
-        "services_reservation_action_service_guest_display_name",
-        "services_reservation_action_service_reservationactionerror"
-      ],
-      "depth": 3,
-      "nodeCount": 18,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_action_service.py"
       ],
       "criticality": 0.18,
       "warnings": []
@@ -16532,6 +16494,70 @@
       "fileCount": 1,
       "files": [
         "app/services/company_night_charge_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_action_service_list_pending_reservation_actions",
+      "name": "list_pending_reservation_actions",
+      "entryPoint": "services_reservation_action_service_list_pending_reservation_actions",
+      "entryPointId": "services_reservation_action_service_list_pending_reservation_actions",
+      "path": [
+        "services_reservation_action_service_list_pending_reservation_actions",
+        "services_reservation_action_service_build_pending_actions",
+        "services_reservation_action_service_candidate_reservation_ids",
+        "services_reservation_action_service_get_reservation_operations_summary",
+        "services_reservation_action_service_latest_ota_links_by_reservation",
+        "services_reservation_action_service_load_pending_action_reservations",
+        "services_reservation_action_service_pending_action_financial_inputs",
+        "services_reservation_action_service_related_adjustments_by_reservation",
+        "services_reservation_action_service_reservationactionerror",
+        "services_reservation_action_service_actioncandidate",
+        "services_reservation_action_service_decorate_action",
+        "services_reservation_action_service_dedupe_candidates",
+        "services_reservation_action_service_fmt_date",
+        "services_reservation_action_service_guest_display_name",
+        "services_reservation_action_service_row_could_generate_action",
+        "services_reservation_action_service_get_latest_ota_link",
+        "services_reservation_action_service_get_latest_room_move",
+        "services_reservation_action_service_get_operations_related_data",
+        "services_reservation_action_service_get_related_adjustments",
+        "services_reservation_action_service_get_reservation_or_error",
+        "services_reservation_action_service_serialize_adjustment",
+        "services_reservation_action_service_serialize_ota_link",
+        "services_reservation_action_service_serialize_room_move"
+      ],
+      "qualifiedPath": [
+        "services_reservation_action_service_list_pending_reservation_actions",
+        "services_reservation_action_service_build_pending_actions",
+        "services_reservation_action_service_candidate_reservation_ids",
+        "services_reservation_action_service_get_reservation_operations_summary",
+        "services_reservation_action_service_latest_ota_links_by_reservation",
+        "services_reservation_action_service_load_pending_action_reservations",
+        "services_reservation_action_service_pending_action_financial_inputs",
+        "services_reservation_action_service_related_adjustments_by_reservation",
+        "services_reservation_action_service_reservationactionerror",
+        "services_reservation_action_service_actioncandidate",
+        "services_reservation_action_service_decorate_action",
+        "services_reservation_action_service_dedupe_candidates",
+        "services_reservation_action_service_fmt_date",
+        "services_reservation_action_service_guest_display_name",
+        "services_reservation_action_service_row_could_generate_action",
+        "services_reservation_action_service_get_latest_ota_link",
+        "services_reservation_action_service_get_latest_room_move",
+        "services_reservation_action_service_get_operations_related_data",
+        "services_reservation_action_service_get_related_adjustments",
+        "services_reservation_action_service_get_reservation_or_error",
+        "services_reservation_action_service_serialize_adjustment",
+        "services_reservation_action_service_serialize_ota_link",
+        "services_reservation_action_service_serialize_room_move"
+      ],
+      "depth": 2,
+      "nodeCount": 23,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_action_service.py"
       ],
       "criticality": 0.17,
       "warnings": []

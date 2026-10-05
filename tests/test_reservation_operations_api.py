@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -17,6 +17,7 @@ from app.models.ota_core import OTAProvider, OTAReservationLink, OTAReservationL
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services.payment_service import PaymentError
+from app.services.timezones import hotel_today
 
 
 def _override_auth(hotel_id: int, role: str = "owner"):
@@ -164,7 +165,14 @@ def test_pending_actions_endpoint_is_hotel_scoped():
     client, db, engine = _build_client()
     try:
         reservation_h1 = _seed_operational_state(db, 1, "H1")
-        _seed_operational_state(db, 2, "H2")
+        reservation_h2 = _seed_operational_state(db, 2, "H2")
+        # The candidate query intentionally omits old, clean active stays.
+        # Keep this security assertion independent of the date the suite runs.
+        for hotel_id, reservation in ((1, reservation_h1), (2, reservation_h2)):
+            local_today = hotel_today(db, hotel_id)
+            reservation.check_in_date = local_today + timedelta(days=1)
+            reservation.check_out_date = local_today + timedelta(days=3)
+        db.flush()
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
 
         resp = client.get("/api/reservations/actions/pending")

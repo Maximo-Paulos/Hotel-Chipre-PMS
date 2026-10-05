@@ -1278,8 +1278,20 @@ def build_home_payload(
         "comparison": window.comparison,
         "data": {
             "cards": cards,
-            "top_channels": build_channels_breakdown(db, hotel_id=hotel_id, date_from=window.date_from, date_to=window.date_to),
-            "segments": build_segments_breakdown(db, hotel_id=hotel_id, date_from=window.date_from, date_to=window.date_to),
+            "top_channels": build_channels_breakdown(
+                db,
+                hotel_id=hotel_id,
+                date_from=window.date_from,
+                date_to=window.date_to,
+                facts=facts,
+            ),
+            "segments": build_segments_breakdown(
+                db,
+                hotel_id=hotel_id,
+                date_from=window.date_from,
+                date_to=window.date_to,
+                facts=facts,
+            ),
         },
         "generated_at": _now(),
         "data_as_of": _facts_data_as_of(facts, room_rows),
@@ -1496,8 +1508,16 @@ def build_category_detail_payload(
     }
 
 
-def build_segments_breakdown(db: Session, *, hotel_id: int, date_from: date, date_to: date) -> list[dict[str, Any]]:
-    facts = _load_reservation_facts(db, hotel_id, date_from, date_to)
+def build_segments_breakdown(
+    db: Session,
+    *,
+    hotel_id: int,
+    date_from: date,
+    date_to: date,
+    facts: list[FactReservationDaily] | None = None,
+) -> list[dict[str, Any]]:
+    if facts is None:
+        facts = _load_reservation_facts(db, hotel_id, date_from, date_to)
     grouped = _group_rows(facts, "guest_segment")
     result = []
     for segment, rows in grouped.items():
@@ -1514,8 +1534,16 @@ def build_segments_breakdown(db: Session, *, hotel_id: int, date_from: date, dat
     return sorted(result, key=lambda item: item["guest_segment"])
 
 
-def build_channels_breakdown(db: Session, *, hotel_id: int, date_from: date, date_to: date) -> list[dict[str, Any]]:
-    facts = _load_reservation_facts(db, hotel_id, date_from, date_to)
+def build_channels_breakdown(
+    db: Session,
+    *,
+    hotel_id: int,
+    date_from: date,
+    date_to: date,
+    facts: list[FactReservationDaily] | None = None,
+) -> list[dict[str, Any]]:
+    if facts is None:
+        facts = _load_reservation_facts(db, hotel_id, date_from, date_to)
     grouped = _group_rows(facts, "channel_code")
     result = []
     for channel, rows in grouped.items():

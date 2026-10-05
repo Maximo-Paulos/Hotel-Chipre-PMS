@@ -1,19 +1,26 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.orm import Session, aliased, joinedload, lazyload, load_only
 
 from app.models.operations import BillingAdjustment, ReservationAdjustment, ReservationAdjustmentStatusEnum, RoomMoveEvent
 from app.models.ota_core import OTAReservationLink, OTAReservationLifecycleEnum
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
-from app.services.payment_service import get_reservation_financial_summary
-from app.services.financial_ledger import reconciled_paid_amounts_by_reservation
-from app.services.reservation_service import active_reservations, active_reservations_select
+from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
+from app.models.guest import Guest
+from app.services.payment_service import _recommended_financial_action, get_reservation_financial_summary
+from app.services.financial_ledger import external_paid_balance_credit, reconciled_paid_amounts_by_reservation
+from app.services.reservation_service import (
+    active_reservations,
+    active_reservations_select,
+    deferred_company_reservation_ids,
+)
 from app.services.timezones import hotel_today
 
 
@@ -64,9 +71,11 @@ def get_reservation_operations_summary(db: Session, *, hotel_id: int, reservatio
     ):
         # ReservationsPage also renders this field as a suggested next action.
         financial_summary["recommended_next_action"] = None
-    ota_link = _get_latest_ota_link(db, hotel_id=hotel_id, reservation_id=reservation.id)
-    related_adjustments = _get_related_adjustments(db, hotel_id=hotel_id, reservation_id=reservation.id)
-    latest_room_move = _get_latest_room_move(db, hotel_id=hotel_id, reservation_id=reservation.id)
+    ota_link, related_adjustments, latest_room_move = _get_operations_related_data(
+        db,
+        hotel_id=hotel_id,
+        reservation_id=reservation.id,
+    )
     pending_actions = _build_pending_actions(
         reservation=reservation,
         ota_link=ota_link,
@@ -93,6 +102,80 @@ def get_reservation_operations_summary(db: Session, *, hotel_id: int, reservatio
     }
 
 
+def _get_operations_related_data(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation_id: int,
+) -> tuple[OTAReservationLink | None, list[ReservationAdjustment], RoomMoveEvent | None]:
+    """Fetch the three detail-only histories in one tenant-scoped round trip.
+
+    The latest OTA link and room move use the same timestamp/id tie-breakers as
+    their standalone readers. Adjustments remain unbounded and newest-first,
+    including rows where this reservation is the resulting reservation.
+    Relationship eager loading is disabled because the serializers read only
+    the columns on these three records.
+    """
+    latest_ota_link_id = (
+        select(OTAReservationLink.id)
+        .where(
+            OTAReservationLink.hotel_id == hotel_id,
+            OTAReservationLink.reservation_id == reservation_id,
+        )
+        .order_by(OTAReservationLink.updated_at.desc(), OTAReservationLink.id.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    latest_room_move_id = (
+        select(RoomMoveEvent.id)
+        .where(
+            RoomMoveEvent.hotel_id == hotel_id,
+            RoomMoveEvent.reservation_id == reservation_id,
+        )
+        .order_by(RoomMoveEvent.occurred_at.desc(), RoomMoveEvent.id.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+
+    ota_link = aliased(OTAReservationLink)
+    adjustment = aliased(ReservationAdjustment)
+    room_move = aliased(RoomMoveEvent)
+    rows = (
+        db.query(ota_link, adjustment, room_move)
+        .select_from(Reservation)
+        .outerjoin(ota_link, ota_link.id == latest_ota_link_id)
+        .outerjoin(
+            adjustment,
+            and_(
+                adjustment.hotel_id == hotel_id,
+                or_(
+                    adjustment.reservation_id == reservation_id,
+                    adjustment.resulting_reservation_id == reservation_id,
+                ),
+            ),
+        )
+        .outerjoin(room_move, room_move.id == latest_room_move_id)
+        .filter(Reservation.id == reservation_id, Reservation.hotel_id == hotel_id)
+        .options(lazyload("*"))
+        .order_by(adjustment.requested_at.desc(), adjustment.id.desc())
+        .all()
+    )
+
+    if not rows:
+        return None, [], None
+
+    latest_ota_link = next((row[0] for row in rows if row[0] is not None), None)
+    latest_room_move = next((row[2] for row in rows if row[2] is not None), None)
+    related_adjustments: list[ReservationAdjustment] = []
+    seen_adjustment_ids: set[int] = set()
+    for _, row_adjustment, _ in rows:
+        if row_adjustment is not None and row_adjustment.id not in seen_adjustment_ids:
+            seen_adjustment_ids.add(row_adjustment.id)
+            related_adjustments.append(row_adjustment)
+
+    return latest_ota_link, related_adjustments, latest_room_move
+
+
 
 def list_pending_reservation_actions(
     db: Session,
@@ -103,11 +186,45 @@ def list_pending_reservation_actions(
     candidate_ids = _candidate_reservation_ids(db, hotel_id=hotel_id)
     cap = max(_MIN_CANDIDATE_CAP, limit * _CANDIDATE_CAP_MULTIPLIER)
     candidate_ids = candidate_ids[:cap]
+    if not candidate_ids:
+        return []
+
+    reservations_by_id = _load_pending_action_reservations(
+        db,
+        hotel_id=hotel_id,
+        reservation_ids=candidate_ids,
+    )
+    latest_ota_links = _latest_ota_links_by_reservation(
+        db,
+        hotel_id=hotel_id,
+        reservation_ids=candidate_ids,
+    )
+    related_adjustments = _related_adjustments_by_reservation(
+        db,
+        hotel_id=hotel_id,
+        reservation_ids=candidate_ids,
+    )
+    financial_inputs = _pending_action_financial_inputs(
+        db,
+        hotel_id=hotel_id,
+        reservations_by_id=reservations_by_id,
+    )
 
     actions: list[dict[str, Any]] = []
     for reservation_id in candidate_ids:
-        summary = get_reservation_operations_summary(db, hotel_id=hotel_id, reservation_id=reservation_id)
-        actions.extend(summary["pending_actions"])
+        reservation = reservations_by_id.get(reservation_id)
+        if reservation is None:
+            # Preserve the existing failure if a candidate is concurrently
+            # removed or moved outside this hotel's active reservation set.
+            raise ReservationActionError(f"Reservation {reservation_id} not found")
+        actions.extend(
+            _build_pending_actions(
+                reservation=reservation,
+                ota_link=latest_ota_links.get(reservation_id),
+                related_adjustments=related_adjustments.get(reservation_id, []),
+                financial_summary=financial_inputs[reservation_id],
+            )
+        )
 
     actions.sort(
         key=lambda item: (
@@ -118,6 +235,241 @@ def list_pending_reservation_actions(
         )
     )
     return actions[:limit]
+
+
+def _load_pending_action_reservations(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation_ids: list[int],
+) -> dict[int, Reservation]:
+    """Load just the fields needed by action construction, including guest names.
+
+    Reservation has several default joined/select-in relationships. The wildcard
+    lazy option keeps this list path from loading transaction history and other
+    detail-only relations while the explicit guest join avoids a name lookup per
+    candidate.
+    """
+    rows = (
+        active_reservations(db, hotel_id)
+        .options(
+            lazyload("*"),
+            joinedload(Reservation.guest).load_only(
+                Guest.id,
+                Guest.first_name,
+                Guest.last_name,
+            ),
+            load_only(
+                Reservation.id,
+                Reservation.hotel_id,
+                Reservation.confirmation_code,
+                Reservation.guest_id,
+                Reservation.room_id,
+                Reservation.check_in_date,
+                Reservation.check_out_date,
+                Reservation.total_amount,
+                Reservation.amount_paid,
+                Reservation.currency_code,
+                Reservation.external_id,
+                Reservation.source_provider_code,
+                Reservation.external_paid_amount,
+                Reservation.external_paid_currency,
+                Reservation.external_paid_confirmed,
+                Reservation.status,
+                Reservation.source,
+                Reservation.allocation_status,
+                Reservation.requires_manual_review,
+                Reservation.payment_collection_model,
+                Reservation.settlement_status,
+                Reservation.company_id,
+            ),
+        )
+        .filter(Reservation.id.in_(reservation_ids))
+        .all()
+    )
+    return {reservation.id: reservation for reservation in rows}
+
+
+def _latest_ota_links_by_reservation(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation_ids: list[int],
+) -> dict[int, OTAReservationLink]:
+    if not reservation_ids:
+        return {}
+
+    ranked_link_ids = (
+        select(
+            OTAReservationLink.id.label("link_id"),
+            OTAReservationLink.reservation_id.label("reservation_id"),
+            func.row_number()
+            .over(
+                partition_by=OTAReservationLink.reservation_id,
+                order_by=(OTAReservationLink.updated_at.desc(), OTAReservationLink.id.desc()),
+            )
+            .label("latest_rank"),
+        )
+        .where(
+            OTAReservationLink.hotel_id == hotel_id,
+            OTAReservationLink.reservation_id.in_(reservation_ids),
+        )
+        .subquery("ranked_ota_links")
+    )
+    rows = (
+        db.query(OTAReservationLink)
+        .join(ranked_link_ids, OTAReservationLink.id == ranked_link_ids.c.link_id)
+        .filter(
+            OTAReservationLink.hotel_id == hotel_id,
+            ranked_link_ids.c.latest_rank == 1,
+        )
+        .options(lazyload("*"))
+        .all()
+    )
+    return {row.reservation_id: row for row in rows}
+
+
+def _related_adjustments_by_reservation(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation_ids: list[int],
+) -> dict[int, list[ReservationAdjustment]]:
+    candidate_ids = set(reservation_ids)
+    grouped: dict[int, list[ReservationAdjustment]] = defaultdict(list)
+    rows = (
+        db.query(ReservationAdjustment)
+        .filter(
+            ReservationAdjustment.hotel_id == hotel_id,
+            or_(
+                ReservationAdjustment.reservation_id.in_(reservation_ids),
+                ReservationAdjustment.resulting_reservation_id.in_(reservation_ids),
+            ),
+        )
+        .order_by(ReservationAdjustment.requested_at.desc(), ReservationAdjustment.id.desc())
+        .all()
+    )
+    for adjustment in rows:
+        if adjustment.reservation_id in candidate_ids:
+            grouped[adjustment.reservation_id].append(adjustment)
+        if (
+            adjustment.resulting_reservation_id in candidate_ids
+            and adjustment.resulting_reservation_id != adjustment.reservation_id
+        ):
+            grouped[adjustment.resulting_reservation_id].append(adjustment)
+    return grouped
+
+
+def _pending_action_financial_inputs(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservations_by_id: dict[int, Reservation],
+) -> dict[int, dict[str, Any]]:
+    """Batch only the two financial facts consumed by pending-action rules.
+
+    This mirrors the detail summary's legacy paid fallback, confirmed OTA
+    credit, billing-adjustment balance, company deferral, recommendation
+    precedence, and reconciliation threshold without materializing each full
+    transaction/adjustment summary per reservation.
+    """
+    reservation_ids = list(reservations_by_id)
+    if not reservation_ids:
+        return {}
+
+    transaction_rows = db.execute(
+        select(
+            Transaction.reservation_id,
+            Transaction.status,
+            Transaction.transaction_type,
+            Transaction.amount,
+        ).where(
+            Transaction.hotel_id == hotel_id,
+            Transaction.reservation_id.in_(reservation_ids),
+        )
+    ).all()
+    reservations_with_transactions: set[int] = set()
+    completed_paid_by_reservation: dict[int, Decimal] = defaultdict(lambda: Decimal("0.00"))
+    for row in transaction_rows:
+        reservations_with_transactions.add(row.reservation_id)
+        if row.status != TransactionStatusEnum.COMPLETED:
+            continue
+        amount = Decimal(str(row.amount or 0))
+        if row.transaction_type == TransactionTypeEnum.REFUND:
+            amount = -amount
+        completed_paid_by_reservation[row.reservation_id] += amount
+
+    completed_paid_by_reservation = {
+        reservation_id: amount.quantize(Decimal("0.01"))
+        for reservation_id, amount in completed_paid_by_reservation.items()
+    }
+
+    adjustments_by_reservation: dict[int, list[Decimal]] = defaultdict(list)
+    for row in db.execute(
+        select(BillingAdjustment.reservation_id, BillingAdjustment.total_amount)
+        .where(
+            BillingAdjustment.hotel_id == hotel_id,
+            BillingAdjustment.reservation_id.in_(reservation_ids),
+        )
+        .order_by(BillingAdjustment.effective_at, BillingAdjustment.id)
+    ):
+        adjustments_by_reservation[row.reservation_id].append(row.total_amount)
+
+    deferred_ids = deferred_company_reservation_ids(
+        db,
+        hotel_id=hotel_id,
+        reservations=tuple(reservations_by_id.values()),
+    )
+
+    summaries: dict[int, dict[str, Any]] = {}
+    for reservation_id, reservation in reservations_by_id.items():
+        ledger_paid = completed_paid_by_reservation.get(reservation_id, Decimal("0.00"))
+        is_ota_reservation = bool(reservation.source_provider_code or reservation.external_id)
+        if is_ota_reservation:
+            external_paid = external_paid_balance_credit(reservation)
+            paid = (ledger_paid + external_paid).quantize(Decimal("0.01"))
+        elif reservation_id in reservations_with_transactions:
+            paid = ledger_paid
+        else:
+            paid = Decimal(str(reservation.amount_paid or 0)).quantize(Decimal("0.01"))
+
+        # This is the source used by reconciled_paid_amounts_by_reservation:
+        # completed local ledger plus only explicitly confirmed, currency-safe
+        # OTA credit, with no legacy amount_paid fallback.
+        evidenced_paid = ledger_paid
+        if is_ota_reservation:
+            evidenced_paid = (evidenced_paid + external_paid_balance_credit(reservation)).quantize(
+                Decimal("0.01")
+            )
+
+        is_deferred = reservation_id in deferred_ids
+        if is_deferred:
+            recommended_next_action = None
+            has_reconciliation_gap = False
+        else:
+            adjustment_total = Decimal(
+                str(round(sum(adjustments_by_reservation.get(reservation_id, [])), 2))
+            )
+            operational_total = Decimal(str(reservation.total_amount or 0)) + adjustment_total
+            operational_balance_due = max(Decimal("0"), operational_total - paid)
+            recommended_next_action = _recommended_financial_action(
+                reservation=reservation,
+                operational_balance_due=operational_balance_due,
+            )
+            if (
+                reservation.status == ReservationStatusEnum.CANCELLED
+                and recommended_next_action == "collect_from_guest"
+            ):
+                # Preserve the detail-summary compatibility override exactly.
+                recommended_next_action = None
+            materialized_paid = Decimal(str(reservation.amount_paid or 0))
+            has_reconciliation_gap = abs(materialized_paid - evidenced_paid) > Decimal("0.01")
+
+        summaries[reservation_id] = {
+            "recommended_next_action": recommended_next_action,
+            "has_financial_reconciliation_gap": has_reconciliation_gap,
+        }
+    return summaries
 
 
 def _candidate_reservation_ids(db: Session, *, hotel_id: int) -> list[int]:

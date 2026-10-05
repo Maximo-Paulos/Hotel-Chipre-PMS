@@ -50,7 +50,7 @@ export function NotificationsPanel({ open, onClose }: Props) {
   const isOnline = useOnlineStatus();
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [limit, setLimit] = useState(20);
-  const inboxQuery = useNotificationsInbox(showUnreadOnly, limit, 0);
+  const inboxQuery = useNotificationsInbox(showUnreadOnly, limit, 0, open);
   const { markReadMutation, markAllReadMutation } = useNotificationMutations();
   const { hasAnyPermission } = useEffectivePermissions();
   const { openReservation } = useReservationDrawer();

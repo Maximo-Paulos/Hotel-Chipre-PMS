@@ -37,6 +37,14 @@ def _redis_failure_cooldown_seconds() -> float:
         return 30.0
 
 
+def _redis_timeout_seconds(settings: Any, setting_name: str) -> float:
+    """Use the shared Redis client's bounded timeout defaults for cache I/O."""
+    try:
+        return max(float(getattr(settings, setting_name, 1.0)), 0.1)
+    except (TypeError, ValueError):
+        return 1.0
+
+
 def _mark_redis_unavailable(exc: Exception | None = None) -> None:
     global _redis_unavailable_until, _redis_was_unavailable
 
@@ -87,7 +95,12 @@ def _get_redis_client() -> redis.Redis | None:
         if _redis_client is not None:
             return _redis_client
         try:
-            _redis_client = redis.Redis.from_url(redis_url, decode_responses=True)
+            _redis_client = redis.Redis.from_url(
+                redis_url,
+                decode_responses=True,
+                socket_connect_timeout=_redis_timeout_seconds(settings, "REDIS_CONNECT_TIMEOUT_SECONDS"),
+                socket_timeout=_redis_timeout_seconds(settings, "REDIS_SOCKET_TIMEOUT_SECONDS"),
+            )
         except Exception as exc:  # pragma: no cover - defensive runtime fallback
             _mark_redis_unavailable(exc)
             return None

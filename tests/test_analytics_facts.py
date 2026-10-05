@@ -981,6 +981,136 @@ def test_move_reservation_room_moves_occupancy_fact_rows_immediately(db, hotel_c
     ).count() == 2
 
 
+@pytest.mark.parametrize("change_path", ["edit", "room_move"])
+def test_room_change_repairs_missing_prior_room_facts_without_rebuilding_other_rooms(
+    change_path,
+    db,
+    hotel_config,
+    sample_guest,
+    sample_categories,
+    sample_rooms,
+    monkeypatch,
+):
+    from app.services import analytics_facts
+    from app.services.reservation_operations_service import move_reservation_room
+
+    data = ReservationCreate(
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[0].id,
+        check_in_date=date(2026, 6, 1),
+        check_out_date=date(2026, 6, 3),
+    )
+    reservation = create_reservation(db, data, hotel_id=hotel_config.id)
+    old_room_id = sample_rooms[0].id
+    new_room_id = sample_rooms[1].id
+    unaffected_room_id = sample_rooms[2].id
+    date_from, date_to = reservation.check_in_date, reservation.check_out_date
+
+    # Seed complete room facts, then simulate a missing prior-room partition
+    # while preserving a known-unaffected room for a no-rebuild assertion.
+    refresh_fact_room_occupancy_daily(
+        db,
+        hotel_id=hotel_config.id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    unaffected_before = [
+        (row.stay_date, row.status_at_night, row.is_occupied, row.reservation_id)
+        for row in (
+            db.query(FactRoomOccupancyDaily)
+            .filter(
+                FactRoomOccupancyDaily.hotel_id == hotel_config.id,
+                FactRoomOccupancyDaily.room_id == unaffected_room_id,
+            )
+            .order_by(FactRoomOccupancyDaily.stay_date)
+            .all()
+        )
+    ]
+    assert len(unaffected_before) == 3
+
+    db.query(FactRoomOccupancyDaily).filter(
+        FactRoomOccupancyDaily.hotel_id == hotel_config.id,
+        FactRoomOccupancyDaily.room_id == old_room_id,
+        FactRoomOccupancyDaily.stay_date >= date_from,
+        FactRoomOccupancyDaily.stay_date <= date_to,
+    ).delete(synchronize_session=False)
+    db.flush()
+
+    original_room_refresh = analytics_facts.refresh_fact_room_occupancy_daily
+    observed_refreshes = []
+
+    def record_room_refresh(*args, **kwargs):
+        result = original_room_refresh(*args, **kwargs)
+        observed_refreshes.append((kwargs.get("room_ids"), result.inserted))
+        return result
+
+    monkeypatch.setattr(analytics_facts, "refresh_fact_room_occupancy_daily", record_room_refresh)
+    if change_path == "edit":
+        update_reservation_fields(
+            db,
+            reservation,
+            ReservationUpdate(room_id=new_room_id),
+            hotel_id=hotel_config.id,
+            client_version=reservation.version,
+        )
+    else:
+        move_reservation_room(
+            db,
+            reservation=reservation,
+            to_room_id=new_room_id,
+            hotel_id=hotel_config.id,
+            client_version=reservation.version,
+            actor_role="owner",
+            reason_code="guest_request",
+            price_action="keep",
+        )
+
+    assert observed_refreshes == [({old_room_id, new_room_id}, 6)]
+
+    old_room_rows = (
+        db.query(FactRoomOccupancyDaily)
+        .filter(
+            FactRoomOccupancyDaily.hotel_id == hotel_config.id,
+            FactRoomOccupancyDaily.room_id == old_room_id,
+            FactRoomOccupancyDaily.stay_date >= date_from,
+            FactRoomOccupancyDaily.stay_date <= date_to,
+        )
+        .order_by(FactRoomOccupancyDaily.stay_date)
+        .all()
+    )
+    assert len(old_room_rows) == 3
+    assert all(not row.is_occupied and row.reservation_id is None for row in old_room_rows)
+    assert all(row.status_at_night.value == "available" for row in old_room_rows)
+
+    new_room_occupied_rows = (
+        db.query(FactRoomOccupancyDaily)
+        .filter(
+            FactRoomOccupancyDaily.hotel_id == hotel_config.id,
+            FactRoomOccupancyDaily.room_id == new_room_id,
+            FactRoomOccupancyDaily.is_occupied.is_(True),
+        )
+        .order_by(FactRoomOccupancyDaily.stay_date)
+        .all()
+    )
+    assert len(new_room_occupied_rows) == 2
+    assert all(row.reservation_id == reservation.id for row in new_room_occupied_rows)
+
+    unaffected_after = [
+        (row.stay_date, row.status_at_night, row.is_occupied, row.reservation_id)
+        for row in (
+            db.query(FactRoomOccupancyDaily)
+            .filter(
+                FactRoomOccupancyDaily.hotel_id == hotel_config.id,
+                FactRoomOccupancyDaily.room_id == unaffected_room_id,
+            )
+            .order_by(FactRoomOccupancyDaily.stay_date)
+            .all()
+        )
+    ]
+    assert unaffected_after == unaffected_before
+
+
 def _make_fact_refresh_reservation(
     db,
     *,
@@ -1517,6 +1647,7 @@ def test_targeted_reservation_fact_touch_isolated_by_hotel(
         date_from=date_from,
         date_to=date_to,
         reservation_id=other_hotel_reservation.id,
+        previous_room_id=sample_rooms_hotel2[0].id,
     )
 
     assert other_hotel_before == (

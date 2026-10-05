@@ -217,6 +217,7 @@ def _touch_facts(
     date_to: date,
     *,
     reservation_id: int | None = None,
+    previous_room_id: int | None = None,
 ) -> None:
     """Same convention as _invalidate_availability_cache: these orchestration
     functions mutate reservation dates/room/total_amount directly instead of
@@ -229,6 +230,7 @@ def _touch_facts(
         date_from=date_from,
         date_to=date_to,
         reservation_id=reservation_id,
+        previous_room_id=previous_room_id,
     )
 
 
@@ -1311,6 +1313,7 @@ def move_reservation_room(
         reservation.check_in_date,
         reservation.check_out_date,
         reservation_id=reservation.id,
+        previous_room_id=previous_room_id,
     )
     record_manual_override_feedback(
         db,

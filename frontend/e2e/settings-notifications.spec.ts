@@ -91,4 +91,30 @@ test.describe("Notification center", () => {
       });
     }
   });
+
+  test("loads the full inbox only when open while keeping the bell count active", async ({ page }) => {
+    const notificationRequests: URL[] = [];
+    await page.route("**/api/notifications?*", async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname === "/api/notifications" && route.request().method() === "GET") {
+        notificationRequests.push(url);
+      }
+      await route.continue();
+    });
+
+    await login(page, ownerCredentials);
+
+    await expect.poll(() => notificationRequests.filter((url) => url.searchParams.get("limit") === "1").length)
+      .toBeGreaterThan(0);
+    expect(notificationRequests.some((url) => url.searchParams.get("limit") === "20")).toBe(false);
+
+    const inboxResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/notifications" && url.searchParams.get("limit") === "20";
+    });
+    await page.getByRole("button", { name: /Ver alertas/ }).click();
+    await expect(page.getByRole("dialog", { name: "Alertas" })).toBeVisible();
+    expect((await inboxResponse).ok()).toBe(true);
+    expect(notificationRequests.filter((url) => url.searchParams.get("limit") === "20")).toHaveLength(1);
+  });
 });

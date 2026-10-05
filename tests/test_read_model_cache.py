@@ -149,6 +149,35 @@ def test_cache_disabled_returns_computed_value_without_constructing_redis(monkey
     ) == {"data": {"status": "computed"}}
 
 
+def test_redis_client_uses_configured_bounded_timeouts(monkeypatch):
+    _reset_cache_client_state(monkeypatch)
+    settings = _cache_settings(
+        REDIS_CONNECT_TIMEOUT_SECONDS=0.4,
+        REDIS_SOCKET_TIMEOUT_SECONDS=0.7,
+    )
+    monkeypatch.setattr(read_model_cache, "_settings", lambda: settings)
+    fake_redis = FakeRedis()
+    constructor_calls = []
+
+    def build_client(*args, **kwargs):
+        constructor_calls.append((args, kwargs))
+        return fake_redis
+
+    monkeypatch.setattr(read_model_cache.redis.Redis, "from_url", build_client)
+
+    assert read_model_cache._get_redis_client() is fake_redis
+    assert constructor_calls == [
+        (
+            (settings.REDIS_URL,),
+            {
+                "decode_responses": True,
+                "socket_connect_timeout": 0.4,
+                "socket_timeout": 0.7,
+            },
+        )
+    ]
+
+
 def test_unreachable_redis_opens_circuit_and_retries_only_after_cooldown(monkeypatch, caplog):
     _reset_cache_client_state(monkeypatch)
     monkeypatch.setattr(read_model_cache, "_settings", lambda: _cache_settings())
@@ -193,6 +222,8 @@ def test_unreachable_redis_opens_circuit_and_retries_only_after_cooldown(monkeyp
     assert first == {"value": 1}
     assert second == {"value": 2}
     assert len(constructor_calls) == 1
+    assert constructor_calls[0][1]["socket_connect_timeout"] == 1.0
+    assert constructor_calls[0][1]["socket_timeout"] == 1.0
     assert get_calls[0] == 1
     assert [record.message for record in caplog.records].count("read_model_cache.redis_unavailable") == 1
 

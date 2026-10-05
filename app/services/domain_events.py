@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable, Mapping, TYPE_CHECKING
 
 import redis
-from sqlalchemy import func
+from sqlalchemy import func, inspect
 
 from app.config import get_settings
 from app.infrastructure.redis_backend import get_sync_redis_client, namespaced_key
@@ -160,10 +160,13 @@ class QueuedDomainChange:
     event_type: str
     payload: dict[str, Any]
     transaction_id: int | None = None
-    # The durable outbox row inserted in the same (still-open) transaction as
-    # the business change. Set by ``queue_domain_change``; the after-commit
-    # fast path reads its id to record its own publish attempt.
+    # Keep the fields needed by the after-commit publisher as scalars. The ORM
+    # session may expire outbox attributes before a commit listener can read
+    # them (for example, after a bounded analytics repair calls expire_all()).
     outbox: DomainEventOutbox | None = None
+    outbox_event_id: str | None = None
+    outbox_cursor: int | None = None
+    outbox_schema_version: int | None = None
 
 
 # A single ORM transaction can update several read models. Mapping the
@@ -549,14 +552,20 @@ def queue_domain_change(
         return
 
     outbox_row = None
+    outbox_event_id = None
+    outbox_cursor = None
+    outbox_schema_version = None
     if durable:
+        outbox_event_id = str(uuid.uuid4())
+        outbox_schema_version = 1
         outbox_row = DomainEventOutbox(
             hotel_id=hotel_id,
-            event_id=str(uuid.uuid4()),
+            event_id=outbox_event_id,
             domain=domain.strip().lower(),
             event_type=event_type.strip(),
             payload=normalized_payload,
-            schema_version=1,
+            schema_version=outbox_schema_version,
+            stream_cursor=outbox_cursor,
             deduplication_key=f"{hotel_id}:{domain.strip().lower()}:{event_type.strip()}:{uuid.uuid4()}",
             status="pending",
         )
@@ -568,6 +577,9 @@ def queue_domain_change(
         payload=normalized_payload,
         transaction_id=_session_transaction_id(session),
         outbox=outbox_row,
+        outbox_event_id=outbox_event_id,
+        outbox_cursor=outbox_cursor,
+        outbox_schema_version=outbox_schema_version,
     )
 
 
@@ -575,12 +587,10 @@ def publish_queued_domain_changes(session: "Session") -> None:
     """Publish committed signals without allowing Redis to break the request.
 
     This runs from ``Session`` ``after_commit`` (see ``app.database``), where
-    ``session`` itself cannot safely issue new SQL -- so each queued change's
-    durable outbox row (already committed as part of the transaction that
-    just ended) is instead recorded through a short-lived, separate
-    ``Session`` bound to the same engine. Already-loaded attributes on
-    ``session``'s own objects (like ``outbox.id``) are still safe to read
-    here: SQLAlchemy expires them only after ``after_commit`` listeners run.
+    ``session`` itself cannot safely issue new SQL. The event identifier is
+    copied into ``QueuedDomainChange`` before commit, and the inserted row's
+    primary-key identity is read through SQLAlchemy inspection, which does not
+    trigger a lazy load on an expired ORM object.
     """
 
     pending = session.info.pop(PENDING_EVENTS_KEY, {})
@@ -594,7 +604,8 @@ def publish_queued_domain_changes(session: "Session") -> None:
     try:
         for change in pending.values():
             outbox = change.outbox
-            outbox_id = outbox.id if outbox is not None else None
+            outbox_identity = inspect(outbox).identity if outbox is not None else None
+            outbox_id = outbox_identity[0] if outbox_identity else None
             try:
                 publish_kwargs = {
                     "hotel_id": change.hotel_id,
@@ -602,11 +613,11 @@ def publish_queued_domain_changes(session: "Session") -> None:
                     "event_type": change.event_type,
                     "payload": change.payload,
                 }
-                if outbox is not None:
+                if change.outbox_event_id is not None:
                     publish_kwargs.update(
-                        event_id=outbox.event_id,
-                        cursor=outbox.stream_cursor or outbox.id,
-                        schema_version=outbox.schema_version or 1,
+                        event_id=change.outbox_event_id,
+                        cursor=change.outbox_cursor or outbox_id,
+                        schema_version=change.outbox_schema_version or 1,
                     )
                 event = publish_domain_event(**publish_kwargs)
                 if event is None:

@@ -26,10 +26,10 @@ const dailyReportScheduleKey = (hotelId: number | null) => ["notifications", "da
 // Notifications still poll while open, but mutations use the same tenant-safe
 // invalidation path as the rest of the PMS so a read/unread change is visible
 // in the bell and the open inbox before the mutation reports success.
-export function useNotificationsInbox(unreadOnly = false, limit = 50, offset = 0) {
+export function useNotificationsInbox(unreadOnly = false, limit = 50, offset = 0, active = true) {
   const { session } = useSession();
   const isOnline = useOnlineStatus();
-  const enabled = hasValidSession(session) && isOnline;
+  const enabled = active && hasValidSession(session) && isOnline;
 
   return useQuery<NotificationListResponse>({
     queryKey: [...inboxKey(session.hotelId, unreadOnly), limit, offset],

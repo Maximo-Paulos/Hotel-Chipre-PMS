@@ -404,9 +404,25 @@ def calculate_pickup_30d_count(
     hotel_timezone: str | None = None,
 ) -> int:
     timezone_name = hotel_timezone or _hotel_timezone(db, hotel_id)
-    reservations = active_reservations(db, hotel_id).all()
+    anchor_date = date_to
+    pickup_window_end = anchor_date + timedelta(days=29)
+    projected_rows = (
+        SimpleNamespace(
+            created_at=created_at,
+            check_in_date=check_in_date,
+            outcome=outcome,
+        )
+        for created_at, check_in_date, outcome in (
+            active_reservations(db, hotel_id)
+            .with_entities(Reservation.created_at, Reservation.check_in_date, Reservation.outcome)
+            .filter(
+                Reservation.check_in_date >= anchor_date,
+                Reservation.check_in_date <= pickup_window_end,
+            )
+        )
+    )
     return calculate_pickup_30d_count_from_rows(
-        reservations,
+        projected_rows,
         date_from=date_from,
         date_to=date_to,
         hotel_timezone=timezone_name,

@@ -921,6 +921,7 @@
       "tests/test_analytics_facts.py",
       "tests/test_analytics_fixtures.py",
       "tests/test_analytics_freshness.py",
+      "tests/test_analytics_home_fact_reuse.py",
       "tests/test_analytics_repair_script.py",
       "tests/test_analytics_task_schedule.py",
       "tests/test_analytics_warehouse.py",
@@ -1493,10 +1494,10 @@
     ],
     "video": []
   },
-  "total_files": 1484,
-  "total_words": 2085795,
+  "total_files": 1485,
+  "total_words": 2089727,
   "needs_graph": true,
-  "warning": "Large corpus: 1484 files · ~2,085,795 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1485 files · ~2,089,727 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1517,7 +1518,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "e36f1d90daf415858fb4a44cdcacdca17d4a750c",
+    "source_hash": "72573a3408c6c7823ca900c50c34588bf998a9f7",
     "branches": [
       "codex/day2-feedback",
       "codex/postmerge-day2-fixes",
@@ -1543,9 +1544,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "e36f1d90daf415858fb4a44cdcacdca17d4a750c",
+    "head": "72573a3408c6c7823ca900c50c34588bf998a9f7",
     "candidate_count": null,
-    "included_count": 1484,
+    "included_count": 1485,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 15,

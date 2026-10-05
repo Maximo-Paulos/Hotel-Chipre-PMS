@@ -300,6 +300,7 @@ def _touch_facts(
     date_to: date | None,
     *,
     reservation_id: int | None = None,
+    previous_room_id: int | None = None,
 ) -> None:
     """Keep FactReservationDaily/FactRoomOccupancyDaily in sync with a
     reservation write, called at the same sites as _invalidate_availability_cache.
@@ -314,6 +315,7 @@ def _touch_facts(
         date_from=date_from,
         date_to=date_to,
         reservation_id=reservation_id,
+        previous_room_id=previous_room_id,
     )
 
 
@@ -2177,6 +2179,7 @@ def update_reservation_fields(
     update_data = data.model_dump(exclude_unset=True)
     original_check_in = reservation.check_in_date
     original_check_out = reservation.check_out_date
+    original_room_id = reservation.room_id
 
     new_ci = update_data.get("check_in_date", reservation.check_in_date)
     new_co = update_data.get("check_out_date", reservation.check_out_date)
@@ -2451,6 +2454,7 @@ def update_reservation_fields(
             min(original_check_in, reservation.check_in_date),
             max(original_check_out, reservation.check_out_date),
             reservation_id=reservation.id,
+            previous_room_id=(original_room_id if original_room_id != reservation.room_id else None),
         )
     _notify_reservation_event(
         db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.updated",

@@ -459,6 +459,7 @@ def touch_reservation_fact_window(
     date_from: date,
     date_to: date,
     reservation_id: int | None = None,
+    previous_room_id: int | None = None,
 ) -> None:
     """Write-time hook: re-derive both fact tables for a narrow window right
     when the source data that feeds them changes (reservation created/moved/
@@ -471,8 +472,12 @@ def touch_reservation_fact_window(
     Reuses the existing idempotent refresh_fact_* functions (delete+rebuild
     only inside [date_from, date_to]). When a reservation id is provided, it
     refreshes only that reservation's daily facts and the room/date rows for
-    its previous and current rooms. Omitting the id preserves the full-window
-    behavior used by analytics recovery and maintenance paths.
+    its previous and current rooms. Callers changing rooms should supply the
+    previous room id so a missing/corrupt occupancy fact cannot hide that room
+    from the refresh. Omitting it preserves discovery from existing facts for
+    callers that do not have the prior source state. Omitting the reservation
+    id preserves the full-window behavior used by analytics recovery and
+    maintenance paths.
 
     Runs inside a SAVEPOINT so a lost race against another write touching an
     overlapping window (rare for a small single-property hotel) rolls back
@@ -510,7 +515,9 @@ def touch_reservation_fact_window(
                 )
                 .scalar()
             )
-            affected_room_ids = previous_room_ids
+            affected_room_ids = set(previous_room_ids)
+            if previous_room_id is not None:
+                affected_room_ids.add(previous_room_id)
             if current_room_id is not None:
                 affected_room_ids.add(current_room_id)
 

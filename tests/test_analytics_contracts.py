@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import event
 
 from app.models.analytics import FactReservationRowKindEnum, FactRoomOccupancyStatusAtNightEnum
 from app.models.company import Company
+from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import (
+    Reservation,
     ReservationChannelCodeEnum,
     ReservationGuestSegmentEnum,
     ReservationGuestSegmentSourceEnum,
@@ -32,6 +35,7 @@ from app.services.analytics_contracts import (
     build_reservation_nightly_facts,
     build_room_occupancy_nightly_fact,
     calculate_physical_room_nights,
+    calculate_pickup_30d_count,
     calculate_pickup_30d_count_from_rows,
     infer_guest_segment_from_company,
     normalize_channel_code,
@@ -298,6 +302,78 @@ def test_pickup_30d_count_from_rows():
         date_to=date(2026, 4, 30),
         hotel_timezone="America/Argentina/Buenos_Aires",
     ) == 1
+
+
+def test_pickup_30d_count_query_matches_local_dst_edges_without_loading_reservations(
+    db,
+    sample_guest,
+    sample_categories,
+    sample_rooms,
+):
+    hotel = db.get(HotelConfiguration, 1)
+    hotel.hotel_timezone = "America/New_York"
+    date_from = date(2026, 3, 7)
+    date_to = date(2026, 3, 8)
+    pickup_end = date_to + timedelta(days=29)
+    cases = [
+        # Local date begins at 05:00 UTC on March 7, then at 05:00 UTC on
+        # March 8; after the DST transition, March 9 begins at 04:00 UTC.
+        (datetime(2026, 3, 7, 4, 59, 59, tzinfo=timezone.utc), date_to, ReservationOutcomeEnum.PENDING, False),
+        (datetime(2026, 3, 7, 5, 0, tzinfo=timezone.utc), date_to, ReservationOutcomeEnum.PENDING, False),
+        (datetime(2026, 3, 8, 5, 0, tzinfo=timezone.utc), pickup_end, ReservationOutcomeEnum.PENDING, False),
+        (datetime(2026, 3, 9, 3, 59, 59, tzinfo=timezone.utc), date_to + timedelta(days=1), ReservationOutcomeEnum.PENDING, False),
+        (datetime(2026, 3, 9, 4, 0, tzinfo=timezone.utc), pickup_end, ReservationOutcomeEnum.PENDING, False),
+        (datetime(2026, 3, 8, 16, 0, tzinfo=timezone.utc), pickup_end + timedelta(days=1), ReservationOutcomeEnum.PENDING, False),
+        (datetime(2026, 3, 8, 16, 0, tzinfo=timezone.utc), date_to, ReservationOutcomeEnum.CANCELLED, False),
+        (datetime(2026, 3, 8, 16, 0, tzinfo=timezone.utc), date_to, ReservationOutcomeEnum.PENDING, True),
+    ]
+    reservations = []
+    for index, (created_at, check_in_date, outcome, deleted) in enumerate(cases):
+        reservation = Reservation(
+            hotel_id=1,
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            room_id=sample_rooms[0].id,
+            confirmation_code=f"PICKUP-DST-{index}",
+            check_in_date=check_in_date,
+            check_out_date=check_in_date + timedelta(days=1),
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("0.00"),
+            status=ReservationStatusEnum.PENDING,
+            outcome=outcome,
+            num_adults=1,
+            created_at=created_at,
+            deleted_at=datetime(2026, 3, 10, tzinfo=timezone.utc) if deleted else None,
+        )
+        db.add(reservation)
+        reservations.append(reservation)
+    db.flush()
+
+    expected = calculate_pickup_30d_count_from_rows(
+        (reservation for reservation in reservations if reservation.deleted_at is None),
+        date_from=date_from,
+        date_to=date_to,
+        hotel_timezone=hotel.hotel_timezone,
+    )
+    loaded_entities = []
+
+    def record_reservation_load(instance, context):
+        loaded_entities.append(instance.id)
+
+    event.listen(Reservation, "load", record_reservation_load)
+    try:
+        actual = calculate_pickup_30d_count(
+            db,
+            hotel_id=1,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    finally:
+        event.remove(Reservation, "load", record_reservation_load)
+
+    assert expected == 3
+    assert actual == expected
+    assert loaded_entities == []
 
 
 def test_comparison_contracts_and_schemas():
