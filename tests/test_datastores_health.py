@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
 
 import app.database as db_module
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.database import Base
 from app.db.cassandra import cassandra_healthcheck, get_cassandra_session
 from app.db.mongo import get_mongo_db, mongo_healthcheck
@@ -126,6 +126,16 @@ def test_live_healthcheck_has_no_datastore_dependency():
     import app.api.health as health_module
 
     assert health_module.live_healthcheck() == {"status": "ok"}
+
+
+def test_read_model_cache_is_disabled_by_default(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("READ_MODEL_CACHE_ENABLED", raising=False)
+
+    assert Settings(_env_file=None).READ_MODEL_CACHE_ENABLED is False
+
+
+def test_read_model_cache_can_be_enabled_explicitly():
+    assert Settings(_env_file=None, READ_MODEL_CACHE_ENABLED=True).READ_MODEL_CACHE_ENABLED is True
 
 
 def test_ready_healthcheck_reports_postgres_and_advisory_lock_fallback(monkeypatch: pytest.MonkeyPatch):

@@ -44,7 +44,9 @@ class Settings(BaseSettings):
     REDIS_SOCKET_TIMEOUT_SECONDS: float = 1.0
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
-    READ_MODEL_CACHE_ENABLED: bool = True
+    # Redis is optional in the current Free deployment. Keep read caching off
+    # unless the service explicitly enables it after Redis is available.
+    READ_MODEL_CACHE_ENABLED: bool = False
     READ_MODEL_CACHE_FAILURE_COOLDOWN_SECONDS: float = 30.0
     READ_MODEL_AVAILABILITY_TTL_SECONDS: int = 15
     READ_MODEL_ANALYTICS_TTL_SECONDS: int = 60
