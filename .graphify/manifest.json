@@ -3236,8 +3236,8 @@
     "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1791235789575.3274,
-    "hash": "c1e0376971030bdcf38e7e3c3d5b8a55"
+    "mtime": 1791236248531.6475,
+    "hash": "1053ff5c553cbe75fdaea72aa2ad7afd"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1791227728164.7644,
@@ -6538,5 +6538,9 @@
   "frontend/collaboration-ticket-backoff.test.mjs": {
     "mtime": 1791227728069.2148,
     "hash": "6269ffda144c8e9d9b4a80546980c06b"
+  },
+  "alembic/versions/20261005_outbox_recovery_cursor_index.py": {
+    "mtime": 1791235877023.9333,
+    "hash": "9dd5e3aa3f97c7af0a774c9eb5dd4782"
   }
 }
