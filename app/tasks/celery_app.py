@@ -1,6 +1,8 @@
 """
 Celery application configuration and async tasks for OTA synchronization.
 """
+from urllib.parse import urlsplit
+
 from celery import Celery
 from celery.schedules import crontab
 from app.config import Settings, get_settings, validate_runtime_security
@@ -42,19 +44,71 @@ celery_app.conf.update(
     },
 )
 
+
+def _redis_endpoint(url: str) -> tuple[str, str, int | None] | None:
+    """Return a Redis endpoint identity without exposing URL credentials."""
+
+    try:
+        parsed = urlsplit(url.strip())
+        port = parsed.port
+    except (AttributeError, ValueError):
+        return None
+    if parsed.scheme not in {"redis", "rediss"} or not parsed.hostname:
+        return None
+    return parsed.scheme, parsed.hostname.casefold(), port
+
+
+def _sandbox_domain_event_replay_enabled(runtime_settings: Settings) -> bool:
+    """Allow only internal outbox recovery in a closed sandbox with Redis wired.
+
+    The application Redis, Celery broker, and Celery result backend URLs must
+    be explicitly supplied and resolve to the same endpoint. Beat uses the
+    broker to enqueue the task, the task publishes through the application's
+    Redis connection, and Celery may store the task result in its backend.
+    Default localhost values alone are not evidence that the deployed broker
+    exists.
+    """
+
+    if (
+        runtime_settings.EXTERNAL_EFFECTS_ENABLED is not False
+        or runtime_settings.CONNECTIONS_ENABLED is not False
+        or runtime_settings.REALTIME_EVENTS_ENABLED is not True
+    ):
+        return False
+    redis_fields = {"CELERY_BROKER_URL", "CELERY_RESULT_BACKEND", "REDIS_URL"}
+    if not redis_fields.issubset(runtime_settings.model_fields_set):
+        return False
+
+    configured_endpoints = (
+        _redis_endpoint(runtime_settings.CELERY_BROKER_URL),
+        _redis_endpoint(runtime_settings.CELERY_RESULT_BACKEND),
+        _redis_endpoint(runtime_settings.REDIS_URL),
+    )
+    broker_endpoint = configured_endpoints[0]
+    return broker_endpoint is not None and all(
+        endpoint == broker_endpoint for endpoint in configured_endpoints[1:]
+    )
+
+
 def build_beat_schedule(runtime_settings: Settings) -> dict:
-    """Return no scheduled provider/network work for a closed sandbox.
+    """Return provider work or only safe internal replay for a closed sandbox.
 
     `notifications.process_outbox` also creates in-app Notification rows
     (no network egress), but it is kept under the same closed-sandbox gate
-    as everything else here -- this function's tested contract is "closed
-    sandbox means an empty beat_schedule", not "empty unless the task claims
-    to be network-free". Callers that need in-app delivery inside a closed
-    sandbox call `app.services.notification_service.process_pending_outbox`
-    directly instead of relying on beat.
+    as provider work. The one exception is durable domain-event replay, and
+    only when the closed sandbox explicitly configures the same Redis endpoint
+    for the application, Celery broker, and Celery result backend. That task
+    touches PostgreSQL and the app's Redis only; it does not invoke providers.
     """
 
     if not external_connections_enabled(runtime_settings):
+        if _sandbox_domain_event_replay_enabled(runtime_settings):
+            return {
+                "domain-events-publish-outbox": {
+                    "task": "domain_events.publish_outbox",
+                    "schedule": 30.0,
+                }
+            }
         return {}
     return {
         # Derived analytics is replayable from PostgreSQL. ClickPipes CDC remains

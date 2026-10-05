@@ -54,18 +54,38 @@ def publish_outbox(database_url: Optional[str] = None) -> dict:
                 type(exc).__name__,
             )
         for hotel_id in _active_hotel_ids(db):
+            result = None
             try:
                 set_tenant_hotel_context(db, hotel_id)
-                result = publish_pending_domain_events(db, hotel_id=hotel_id)
+                # A healthy backend can drain the normal batch. On Redis
+                # unavailability, stop at the first failed publish so the
+                # whole scheduled sweep incurs at most one failed call.
+                result = publish_pending_domain_events(
+                    db,
+                    hotel_id=hotel_id,
+                    batch_size=100,
+                    stop_on_failure=True,
+                )
                 db.commit()
                 for key in ("selected", "published", "failed"):
                     totals[key] += result.get(key, 0)
+                if result.get("backend_unavailable", False):
+                    totals["backend_unavailable"] = True
+                    return totals
             except Exception as exc:
                 db.rollback()
                 logger.warning(
                     "domain_event_tasks.publish_outbox_hotel_failed hotel_id=%s error_type=%s",
                     hotel_id, type(exc).__name__,
                 )
+                if result and result.get("backend_unavailable", False):
+                    # Redis is already known to be unavailable. Even if this
+                    # hotel's metadata commit also failed, do not repeat the
+                    # Redis timeout for every remaining tenant.
+                    for key in ("selected", "published", "failed"):
+                        totals[key] += result.get(key, 0)
+                    totals["backend_unavailable"] = True
+                    return totals
         return totals
     finally:
         db.close()

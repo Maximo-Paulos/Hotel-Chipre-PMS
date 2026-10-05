@@ -4,7 +4,7 @@ FastAPI routes for Room management + Housekeeping.
 from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, raiseload
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import Optional
@@ -30,7 +30,7 @@ from app.schemas.room import (
     RoomStatusUpdateResponse,
 )
 from app.services.reservation_service import ReservationError, find_available_rooms
-from app.services.pricing_service import resolve_rate_calendar
+from app.services.pricing_service import resolve_current_rates_for_categories, resolve_rate_calendar
 from app.services.timezones import local_today
 from app.dependencies.auth import AuthContext, require_permission
 from app.services.allocation_runtime_service import run_persisted_allocation
@@ -167,11 +167,26 @@ def list_categories(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_ROOM_READ)),
 ):
-    categories = db.query(RoomCategory).filter(RoomCategory.hotel_id == context.hotel_id).all()
+    categories = (
+        db.query(RoomCategory)
+        .options(raiseload("*"))
+        .filter(RoomCategory.hotel_id == context.hotel_id)
+        .all()
+    )
     if context.operational_role == "housekeeping":
         return [RoomCategoryOperationalRead.model_validate(category) for category in categories]
+    hotel_config = db.get(HotelConfiguration, context.hotel_id)
+    today = local_today(hotel_config.hotel_timezone if hotel_config else None)
+    rates_by_category = resolve_current_rates_for_categories(
+        db,
+        hotel_id=context.hotel_id,
+        categories=categories,
+        target_date=today,
+    )
     for category in categories:
-        _attach_current_rate(db, context.hotel_id, category)
+        rate = rates_by_category.get(category.id, {"price": 0.0, "source": "none"})
+        category.current_rate = rate["price"]
+        category.current_rate_source = rate["source"]
     return categories
 
 
@@ -183,6 +198,7 @@ def get_category(
 ):
     category = (
         db.query(RoomCategory)
+        .options(raiseload("*"))
         .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == context.hotel_id)
         .first()
     )
@@ -226,7 +242,12 @@ def list_rooms(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_ROOM_READ)),
 ):
-    rooms = db.query(Room).filter(Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).all()
+    rooms = (
+        db.query(Room)
+        .options(raiseload("*"), joinedload(Room.category).raiseload("*"))
+        .filter(Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None))
+        .all()
+    )
     if context.operational_role == "housekeeping":
         return [_housekeeping_room(room) for room in rooms]
     return rooms

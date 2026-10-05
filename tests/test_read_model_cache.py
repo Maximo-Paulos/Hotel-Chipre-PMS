@@ -2,6 +2,7 @@ from datetime import date
 import json
 from types import SimpleNamespace
 
+from app.config import Settings
 from app.services import read_model_cache
 
 
@@ -147,6 +148,28 @@ def test_cache_disabled_returns_computed_value_without_constructing_redis(monkey
         compare_yoy=False,
         producer=lambda: {"data": {"status": "computed"}},
     ) == {"data": {"status": "computed"}}
+
+
+def test_default_setting_skips_redis_for_read_and_invalidation(monkeypatch):
+    _reset_cache_client_state(monkeypatch)
+    monkeypatch.delenv("READ_MODEL_CACHE_ENABLED", raising=False)
+    monkeypatch.setattr(read_model_cache, "_settings", lambda: Settings(_env_file=None))
+
+    def fail_if_constructed(*_args, **_kwargs):
+        raise AssertionError("Redis must stay unused while read caching is disabled")
+
+    monkeypatch.setattr(read_model_cache.redis.Redis, "from_url", fail_if_constructed)
+    assert read_model_cache.get_cached_home_payload(
+        hotel_id=1,
+        date_from=None,
+        date_to=None,
+        currency_display="ARS",
+        compare_previous=False,
+        compare_yoy=False,
+        producer=lambda: {"data": {"status": "computed"}},
+    ) == {"data": {"status": "computed"}}
+
+    read_model_cache.invalidate_hotel_operational_caches(1)
 
 
 def test_redis_client_uses_configured_bounded_timeouts(monkeypatch):

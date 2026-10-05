@@ -57,6 +57,18 @@ from sqlalchemy.orm import sessionmaker, Session
 from app.database import Base
 
 
+@pytest.fixture(autouse=True)
+def _reset_durable_realtime_publish_cooldown(monkeypatch):
+    """Keep the process-local delivery circuit independent between tests."""
+    from app.services import domain_events
+
+    monkeypatch.setattr(
+        domain_events,
+        "_outbox_publish_cooldown",
+        domain_events._OutboxPublishCooldown(),
+    )
+
+
 # ── PostgreSQL fixtures (available when DATABASE_URL_TEST resolves to PG) ──
 
 _PG_DSN = os.environ.get("DATABASE_URL_TEST", "")

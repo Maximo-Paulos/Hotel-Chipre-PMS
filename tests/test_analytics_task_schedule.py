@@ -41,6 +41,55 @@ def test_sandbox_has_no_scheduled_network_tasks():
     ) == {}
 
 
+def test_closed_sandbox_with_internal_redis_schedules_only_domain_event_replay():
+    schedule = build_beat_schedule(
+        Settings(
+            EXTERNAL_EFFECTS_ENABLED=False,
+            CONNECTIONS_ENABLED=False,
+            REALTIME_EVENTS_ENABLED=True,
+            REDIS_URL="redis://redis:6379/0",
+            CELERY_BROKER_URL="redis://redis:6379/0",
+            CELERY_RESULT_BACKEND="redis://redis:6379/0",
+        )
+    )
+
+    assert set(schedule) == {"domain-events-publish-outbox"}
+    assert schedule["domain-events-publish-outbox"] == {
+        "task": "domain_events.publish_outbox",
+        "schedule": 30.0,
+    }
+
+
+def test_closed_sandbox_keeps_beat_empty_without_explicit_matching_redis():
+    settings_without_redis = Settings(
+        EXTERNAL_EFFECTS_ENABLED=False,
+        CONNECTIONS_ENABLED=False,
+        REALTIME_EVENTS_ENABLED=True,
+        CELERY_BROKER_URL="redis://redis:6379/0",
+        CELERY_RESULT_BACKEND="redis://redis:6379/0",
+    )
+    settings_with_mismatched_redis = Settings(
+        EXTERNAL_EFFECTS_ENABLED=False,
+        CONNECTIONS_ENABLED=False,
+        REALTIME_EVENTS_ENABLED=True,
+        REDIS_URL="redis://redis:6379/0",
+        CELERY_BROKER_URL="redis://redis:6379/0",
+        CELERY_RESULT_BACKEND="redis://results:6379/0",
+    )
+    settings_with_realtime_disabled = Settings(
+        EXTERNAL_EFFECTS_ENABLED=False,
+        CONNECTIONS_ENABLED=False,
+        REALTIME_EVENTS_ENABLED=False,
+        REDIS_URL="redis://redis:6379/0",
+        CELERY_BROKER_URL="redis://redis:6379/0",
+        CELERY_RESULT_BACKEND="redis://redis:6379/0",
+    )
+
+    assert build_beat_schedule(settings_without_redis) == {}
+    assert build_beat_schedule(settings_with_mismatched_redis) == {}
+    assert build_beat_schedule(settings_with_realtime_disabled) == {}
+
+
 def _safe_worker_env() -> dict[str, str]:
     return {
         **os.environ,
@@ -64,6 +113,9 @@ def _safe_worker_env() -> dict[str, str]:
         "DISTRIBUTED_LOCK_REQUIRED": "true",
         "CLICKHOUSE_ENABLED": "false",
         "CLICKHOUSE_REQUIRED": "false",
+        "REDIS_URL": "redis://redis:6379/0",
+        "CELERY_BROKER_URL": "redis://redis:6379/0",
+        "CELERY_RESULT_BACKEND": "redis://redis:6379/0",
     }
 
 
@@ -73,7 +125,10 @@ def test_celery_process_accepts_explicit_closed_production_profile():
             sys.executable,
             "-c",
             f"{_ISOLATED_WORKER_IMPORT}; "
-            "assert app.tasks.celery_app.celery_app.conf.beat_schedule == {}",
+            "schedule=app.tasks.celery_app.celery_app.conf.beat_schedule; "
+            "assert set(schedule) == {'domain-events-publish-outbox'}; "
+            "assert schedule['domain-events-publish-outbox']['task'] == 'domain_events.publish_outbox'; "
+            "assert schedule['domain-events-publish-outbox']['schedule'] == 30.0",
         ],
         env=_safe_worker_env(),
         capture_output=True,

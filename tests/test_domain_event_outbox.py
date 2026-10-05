@@ -200,6 +200,147 @@ def test_worker_records_bounded_failure_and_backoff_without_error_message(db, mo
     assert "DSN" not in row.last_error
 
 
+def test_worker_can_stop_batch_at_first_publish_failure(db, monkeypatch):
+    _seed_hotels(db, 1)
+    db.add_all([_outbox_row(hotel_id=1), _outbox_row(hotel_id=1)])
+    db.commit()
+    attempted_ids = []
+
+    def fail_publish(**kwargs):
+        attempted_ids.append(kwargs["event_id"])
+        raise domain_events.RealtimeEventsUnavailable("transport unavailable")
+
+    monkeypatch.setattr(domain_events, "publish_domain_event", fail_publish)
+    result = domain_events.publish_pending_domain_events(
+        db,
+        hotel_id=1,
+        batch_size=100,
+        stop_on_failure=True,
+    )
+    db.commit()
+
+    rows = db.query(DomainEventOutbox).filter(DomainEventOutbox.hotel_id == 1).order_by(DomainEventOutbox.id).all()
+    assert len(attempted_ids) == 1
+    assert result["selected"] == 2
+    assert result["failed"] == 1
+    assert result["backend_unavailable"] is True
+    assert [row.attempts for row in rows] == [1, 0]
+
+
+def test_worker_continues_after_non_backend_publish_failure(db, monkeypatch):
+    _seed_hotels(db, 1)
+    db.add_all([_outbox_row(hotel_id=1), _outbox_row(hotel_id=1)])
+    db.commit()
+    attempted_ids = []
+
+    def publish(**kwargs):
+        attempted_ids.append(kwargs["event_id"])
+        if len(attempted_ids) == 1:
+            raise ValueError("invalid event payload")
+        return _successful_event(**kwargs)
+
+    monkeypatch.setattr(domain_events, "publish_domain_event", publish)
+    result = domain_events.publish_pending_domain_events(
+        db,
+        hotel_id=1,
+        batch_size=100,
+        stop_on_failure=True,
+    )
+    db.commit()
+
+    assert len(attempted_ids) == 2
+    assert result["failed"] == 1
+    assert result["published"] == 1
+    assert result.get("backend_unavailable", False) is False
+
+
+def test_celery_replay_stops_after_first_redis_failure(tmp_path, monkeypatch):
+    database_url = f"sqlite:///{tmp_path / 'celery-outbox-stop.db'}"
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    engine = create_engine(database_url)
+    HotelConfiguration.__table__.create(engine)
+    DomainEventOutbox.__table__.create(engine)
+    db = Session(engine)
+    try:
+        _seed_hotels(db, 1, 2)
+        db.add_all(
+            [
+                _outbox_row(hotel_id=1),
+                _outbox_row(hotel_id=1),
+                _outbox_row(hotel_id=2),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+        engine.dispose()
+
+    attempted_hotels = []
+
+    def publish_until_redis_fails(**kwargs):
+        attempted_hotels.append(kwargs["hotel_id"])
+        if len(attempted_hotels) == 1:
+            return _successful_event(**kwargs)
+        raise domain_events.RealtimeEventsUnavailable("transport unavailable")
+
+    monkeypatch.setattr(domain_events, "publish_domain_event", publish_until_redis_fails)
+    result = celery_app.tasks["domain_events.publish_outbox"].run(database_url=database_url)
+
+    verify_engine = create_engine(database_url)
+    verify_db = Session(verify_engine)
+    try:
+        rows = verify_db.query(DomainEventOutbox).order_by(DomainEventOutbox.hotel_id, DomainEventOutbox.id).all()
+        assert result["failed"] == 1
+        assert result["selected"] == 2
+        assert result["published"] == 1
+        assert result["backend_unavailable"] is True
+        assert attempted_hotels == [1, 1]
+        assert [row.attempts for row in rows] == [1, 1, 0]
+        assert rows[0].published_at is not None
+        assert rows[2].published_at is None
+    finally:
+        verify_db.close()
+        verify_engine.dispose()
+
+
+def test_celery_replay_stops_even_if_commit_after_redis_failure_fails(monkeypatch):
+    from app.tasks import domain_event_tasks
+
+    class CommitFailsAfterRedisProbe:
+        def __init__(self):
+            self.commit_count = 0
+
+        def commit(self):
+            self.commit_count += 1
+            if self.commit_count == 2:
+                raise RuntimeError("metadata commit failed")
+
+        def rollback(self):
+            return None
+
+        def close(self):
+            return None
+
+    db = CommitFailsAfterRedisProbe()
+    attempted_hotels = []
+    monkeypatch.setattr(domain_event_tasks, "_session", lambda _url=None: db)
+    monkeypatch.setattr(domain_event_tasks, "record_heartbeat", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(domain_event_tasks, "_active_hotel_ids", lambda _db: [1, 2])
+    monkeypatch.setattr(domain_event_tasks, "set_tenant_hotel_context", lambda *_args: None)
+
+    def unavailable(_db, *, hotel_id, **_kwargs):
+        attempted_hotels.append(hotel_id)
+        return {"selected": 1, "published": 0, "failed": 1, "backend_unavailable": True}
+
+    monkeypatch.setattr(domain_events, "publish_pending_domain_events", unavailable)
+    result = domain_event_tasks.publish_outbox.run()
+
+    assert attempted_hotels == [1]
+    assert result["backend_unavailable"] is True
+
+
 def test_old_pending_row_emits_stale_metric_alert(db, caplog):
     _seed_hotels(db, 1)
     now = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)

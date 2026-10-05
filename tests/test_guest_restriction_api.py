@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -18,6 +19,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.services import domain_events
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 
@@ -128,11 +130,18 @@ def _client():
 
 def test_restriction_api_permissions_tenant_isolation_and_event(monkeypatch):
     client, db, engine, guest_a, guest_b, _, _, reservation = _client()
+    # `_client()` commits fixture rows before the test installs its publisher;
+    # isolate the event assertion from a Redis failure during that setup.
+    monkeypatch.setattr(
+        domain_events,
+        "_outbox_publish_cooldown",
+        domain_events._OutboxPublishCooldown(),
+    )
     published: list[dict] = []
 
     def capture_event(**kwargs):
         published.append(kwargs)
-        return None
+        return SimpleNamespace(revision=len(published))
 
     monkeypatch.setattr("app.services.domain_events.publish_domain_event", capture_event)
     try:
