@@ -1495,9 +1495,9 @@
     "video": []
   },
   "total_files": 1485,
-  "total_words": 2089727,
+  "total_words": 2090185,
   "needs_graph": true,
-  "warning": "Large corpus: 1485 files · ~2,089,727 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1485 files · ~2,090,185 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1518,7 +1518,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "72573a3408c6c7823ca900c50c34588bf998a9f7",
+    "source_hash": "c8a02ef62a6bbe38886801cb7a2d6cb022783252",
     "branches": [
       "codex/day2-feedback",
       "codex/postmerge-day2-fixes",
@@ -1544,7 +1544,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "72573a3408c6c7823ca900c50c34588bf998a9f7",
+    "head": "c8a02ef62a6bbe38886801cb7a2d6cb022783252",
     "candidate_count": null,
     "included_count": 1485,
     "excluded_untracked_count": 0,

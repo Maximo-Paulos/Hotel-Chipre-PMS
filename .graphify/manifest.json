@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1791167661248.8582,
-    "hash": "2e0accba5f16bbd942c3332f36f24057"
+    "mtime": 1791177253370.9297,
+    "hash": "7cf85d443747a68178e4a11a5899563e"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1791167661249.0273,
-    "hash": "9d50421e643eddd5c9997c05f351b082"
+    "mtime": 1791177252692.124,
+    "hash": "37c4749928a24d55ff82599294ef8255"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1791167661249.414,
-    "hash": "1b7cf835bbf8bf245ebe84d894174a13"
+    "mtime": 1791177253343.328,
+    "hash": "53964ef0209e40b3c0ec809cdddc4065"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1791167661249.5742,
-    "hash": "6736d95c1780f8ab028f20921aeb2be8"
+    "mtime": 1791177252704.2432,
+    "hash": "7cb6cc23ac77e406380a330245a2c8db"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1791167661249.721,
-    "hash": "5e5857ebbd93874a54eeb5cb47156c1a"
+    "mtime": 1791177253317.6282,
+    "hash": "5f3f2808bc7474b35ab71681450a6225"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1791167661249.8423,
-    "hash": "b60d6374fa75e204e64a8b9cdfed0646"
+    "mtime": 1791177252882.2383,
+    "hash": "7fd5ef285f3be2924f5cf693304a82b2"
   },
   "qa/evidence/README.md": {
     "mtime": 1791167661251.5322,
@@ -3236,8 +3236,8 @@
     "hash": "8e2277e0fc399686b86f61f02ef68f93"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1791172985398.2473,
-    "hash": "7608cd9dd00f3e19437bd3cb4351a29a"
+    "mtime": 1791177893735.0935,
+    "hash": "518f8ff1c07307a0641b4b76c69a6944"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1791167661258.7695,
@@ -6508,8 +6508,8 @@
     "hash": "0869c5560b9769baaf3774b80038df02"
   },
   "qa/operational/runs/pr117-postmerge-20261005-3c91a3e8/report.md": {
-    "mtime": 1791172695223.6042,
-    "hash": "d734da5fa9df6174a08bd9f606bc73f5"
+    "mtime": 1791177808942.1804,
+    "hash": "69c30aae0d7e19af337f1556d18cfa13"
   },
   "tests/test_analytics_home_fact_reuse.py": {
     "mtime": 1791172649259.165,
