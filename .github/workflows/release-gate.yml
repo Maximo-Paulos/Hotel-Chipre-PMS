@@ -2,13 +2,14 @@ name: Release gate
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
 
 permissions:
   contents: read
 
 jobs:
   operating-system:
+    if: contains(github.event.pull_request.labels.*.name, 'require-provider-qa')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

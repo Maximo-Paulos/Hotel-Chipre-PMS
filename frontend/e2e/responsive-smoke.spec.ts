@@ -11,6 +11,11 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
 }
 
+const mobileNavigation = (page: Page) =>
+  page.getByRole("navigation", { name: /^(?:Navegación móvil|Mobile navigation)$/i });
+const mobileNavigationDialog = (page: Page) =>
+  page.getByRole("dialog", { name: /^(?:Menú de navegación|Navigation menu)$/i });
+
 // B7: mobile nav collapsed from two competing mechanisms (horizontal-scroll
 // pill row + a separate native <details> disclosure) into one menu button
 // that opens a slide-over panel. The panel unmounts when closed (same
@@ -18,7 +23,7 @@ async function login(page: Page) {
 // menu opened first.
 async function openMobileMenu(page: Page) {
   await page.getByTestId("mobile-menu-button").click();
-  await expect(page.getByRole("dialog", { name: "Menú de navegación" })).toBeVisible();
+  await expect(mobileNavigationDialog(page)).toBeVisible();
 }
 
 test.describe("Responsive mobile smoke", () => {
@@ -33,7 +38,7 @@ test.describe("Responsive mobile smoke", () => {
     await expect(page.getByTestId("mobile-menu-button")).toBeVisible();
 
     await openMobileMenu(page);
-    await expect(page.locator('nav[aria-label="Navegación móvil"] a[href="/reservas"]')).toBeVisible();
+    await expect(mobileNavigation(page).locator('a[href="/reservas"]')).toBeVisible();
     // The long hotel name has to render inside the menu for the overflow check
     // below to mean anything. A single-hotel account has no selector (a
     // one-option picker is not a choice); the panel header names the hotel.
@@ -61,13 +66,13 @@ test.describe("Responsive mobile smoke", () => {
     await login(page);
 
     await openMobileMenu(page);
-    const reservationsLink = page.locator('nav[aria-label="Navegación móvil"] a[href="/reservas"]');
+    const reservationsLink = mobileNavigation(page).locator('a[href="/reservas"]');
     await reservationsLink.click();
     await expect(page).toHaveURL(/\/reservas$/);
-    await expect(page.locator("main").getByRole("heading", { name: "Reservas", exact: true })).toBeVisible();
+    await expect(page.locator("main").getByRole("heading", { name: /^(?:Reservas|Reservations)$/i })).toBeVisible();
     // Navigating closes the panel automatically (route change effect) --
     // confirm it's gone instead of stacking on top of the next page.
-    await expect(page.getByRole("dialog", { name: "Menú de navegación" })).toBeHidden();
+    await expect(mobileNavigationDialog(page)).toBeHidden();
   });
 
   test("mobile menu replaces the old two-mechanism nav and reaches sections in every group", async ({ page }) => {
@@ -75,22 +80,22 @@ test.describe("Responsive mobile smoke", () => {
     await page.setViewportSize({ width: 375, height: 812 });
 
     // The old "Mas opciones" native <details> text link is gone.
-    await expect(page.getByText("Más opciones", { exact: true })).toHaveCount(0);
+    await expect(page.getByText(/^(?:Más opciones|More options)$/i)).toHaveCount(0);
 
     // Tap 1: a daily-nav item (flat, always visible).
     await openMobileMenu(page);
-    await page.locator('nav[aria-label="Navegación móvil"] a[href="/huespedes"]').click();
+    await mobileNavigation(page).locator('a[href="/huespedes"]').click();
     await expect(page).toHaveURL(/\/huespedes$/);
 
     // Tap 2: an item from the "Analítica" group.
     await openMobileMenu(page);
-    await page.locator('nav[aria-label="Analítica"] a[href="/analytics"]').click();
+    await page.getByRole("navigation", { name: /^(?:Analítica|Analytics)$/i }).locator('a[href="/analytics"]').click();
     await expect(page).toHaveURL(/\/analytics$/);
 
     // Tap 3: an item from the "Configuración" group.
     await openMobileMenu(page);
     const mobileMenuScrollRegion = page.getByTestId("mobile-menu-scroll-region");
-    const hotelSettingsLink = page.locator('nav[aria-label="Configuración"] a[href="/settings/hotel"]');
+    const hotelSettingsLink = page.getByRole("navigation", { name: /^(?:Configuración|Settings)$/i }).locator('a[href="/settings/hotel"]');
     await mobileMenuScrollRegion.evaluate((element) => element.scrollTo({ top: element.scrollHeight, behavior: "instant" }));
     await expect.poll(() => mobileMenuScrollRegion.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
     await expect(hotelSettingsLink).toBeInViewport({ ratio: 1 });
@@ -114,10 +119,10 @@ test.describe("Responsive mobile smoke", () => {
     // just the 5 that used to fit the horizontal-scroll bar.
     await openMobileMenu(page);
     for (const href of ["/operacion/planilla", "/reservas", "/huespedes", "/habitaciones", "/caja"]) {
-      await expect(page.locator(`nav[aria-label="Navegación móvil"] a[href="${href}"]`)).toBeVisible();
+      await expect(mobileNavigation(page).locator(`a[href="${href}"]`)).toBeVisible();
     }
-    for (const group of ["Analítica", "Más operación", "Configuración"]) {
-      await expect(page.locator(`nav[aria-label="${group}"]`)).toBeVisible();
+    for (const group of [/^(?:Analítica|Analytics)$/i, /^(?:Más operación|More operations)$/i, /^(?:Configuración|Settings)$/i]) {
+      await expect(page.getByRole("navigation", { name: group })).toBeVisible();
     }
 
     const layout = await page.evaluate(() => ({
@@ -143,7 +148,7 @@ test.describe("Responsive mobile smoke", () => {
     expect(menuButtonBox?.height).toBeGreaterThanOrEqual(44);
 
     await openMobileMenu(page);
-    const mobileNavigationTargets = await page.locator('nav[aria-label="Navegación móvil"] a').evaluateAll((nodes) =>
+    const mobileNavigationTargets = await mobileNavigation(page).locator("a").evaluateAll((nodes) =>
       nodes
         .map((node) => {
           const element = node as HTMLElement;
@@ -199,8 +204,10 @@ test.describe("Responsive mobile smoke", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/caja");
 
-    const openCashButton = page.getByRole("button", { name: "Abrir caja", exact: true });
-    const existingOpenCashButton = page.getByRole("button", { name: "Ya hay una caja abierta", exact: true });
+    const openCashButton = page.getByRole("button", { name: /^(?:Abrir caja|Open cash register)$/i });
+    const existingOpenCashButton = page.getByRole("button", {
+      name: /^(?:Ya hay una caja abierta|.*open cash register.*)$/i
+    });
     // The 3 webkit-iphone-* projects share one backend/database, so whichever
     // project's run reaches this test first "wins" opening the cash session.
     // A single isVisible()+click() snapshot can catch the brief window before
@@ -209,13 +216,13 @@ test.describe("Responsive mobile smoke", () => {
     await expect(async () => {
       if (await openCashButton.isEnabled({ timeout: 500 }).catch(() => false)) {
         await openCashButton.click({ timeout: 2_000 });
-        await expect(page.getByText("Caja abierta.", { exact: true })).toBeVisible({ timeout: 2_000 });
+        await expect(page.getByText(/^(?:Caja abierta\.|Cash register (?:opened|is open)\.?)$/i)).toBeVisible({ timeout: 2_000 });
       } else {
         await expect(existingOpenCashButton).toBeVisible({ timeout: 2_000 });
       }
     }).toPass({ timeout: 20_000 });
 
-    const approvalCheckbox = page.locator("form").filter({ hasText: "Cerrar caja" }).locator('input[type="checkbox"]');
+    const approvalCheckbox = page.locator("form").filter({ hasText: /Cerrar caja|Close cash register/i }).locator('input[type="checkbox"]');
     await expect(approvalCheckbox).toBeVisible();
     const box = await approvalCheckbox.boundingBox();
 

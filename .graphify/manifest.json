@@ -316,8 +316,8 @@
     "hash": "bfd1c86da0ba53a3553b477d409cee11"
   },
   "app/api/payments.py": {
-    "mtime": 1791210526463.4375,
-    "hash": "b71d5f8f49144b9ebdc7a1737298bc20"
+    "mtime": 1791216398694.471,
+    "hash": "5b590357364ce6664143d91c00dd967a"
   },
   "app/api/permissions.py": {
     "mtime": 1791167661038.325,
@@ -2208,8 +2208,8 @@
     "hash": "c5cf55fd0b730c5179d460b18d33654e"
   },
   ".github/workflows/pr-validation.yml": {
-    "mtime": 1791167661009.4412,
-    "hash": "22c514b2bf78025e36197ae4bb7ec716"
+    "mtime": 1791217543789.7834,
+    "hash": "8ef15b917f405749653a0359837b2835"
   },
   "AGENTS.md": {
     "mtime": 1791167661015.734,
@@ -3232,12 +3232,12 @@
     "hash": "a5db00a785715735373e036c50a4cfa7"
   },
   ".github/workflows/release-gate.yml": {
-    "mtime": 1791167661009.6682,
-    "hash": "8e2277e0fc399686b86f61f02ef68f93"
+    "mtime": 1791211502604.1128,
+    "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1791210730410.1543,
-    "hash": "f9e187b342dd248d0d31996b05e7a4ee"
+    "mtime": 1791216331661.7893,
+    "hash": "cef7e6c5f34d0b2f4e7b8fdc114e65df"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1791167661258.7695,
@@ -3328,8 +3328,8 @@
     "hash": "b1ac0f496d5b641508e8584291be0b88"
   },
   "frontend/e2e/responsive-smoke.spec.ts": {
-    "mtime": 1791167661152.3257,
-    "hash": "acc6988cecdbea22c73f815b2f08dd57"
+    "mtime": 1791217465294.9016,
+    "hash": "88edeb2b4a1777419ff112a40591a0d9"
   },
   "docs/qa/2026-07-24-pms-e2e-status.md": {
     "mtime": 1791167661089.4194,
@@ -3388,8 +3388,8 @@
     "hash": "3f19a2e230b5e82f46a7c990a069dad2"
   },
   ".github/workflows/trusted-release-gate.yml": {
-    "mtime": 1791167661009.829,
-    "hash": "e05e848e0618baef802cb955c280b538"
+    "mtime": 1791211502604.597,
+    "hash": "638aed49f9d59e3157be921f6fc62a28"
   },
   ".github/workflows/verify-preview-providers.yml": {
     "mtime": 1791167661009.932,
@@ -3568,8 +3568,8 @@
     "hash": "c82c14f42c56facd82379aeba473e3fe"
   },
   "frontend/e2e/housekeeping-laundry-journey.spec.ts": {
-    "mtime": 1791167661148.4417,
-    "hash": "696ebb549910e39931e687fc082ad20a"
+    "mtime": 1791217298210.5513,
+    "hash": "bc5b26740ca3dcef2404d5e21c8f06f6"
   },
   "frontend/e2e/manager-reports-journey.spec.ts": {
     "mtime": 1791167661148.9558,
@@ -3604,8 +3604,8 @@
     "hash": "e2d0560e6f954b5f3f2b69bb1edd7bf6"
   },
   "frontend/e2e/payment-journey-full-matrix.spec.ts": {
-    "mtime": 1791167661149.854,
-    "hash": "da44c699141a7bfc45b571faeed8c97f"
+    "mtime": 1791217692523.3103,
+    "hash": "95105f0d147d2e507b7a4ed64d336b7c"
   },
   "tests/test_mercadopago_webhook_endpoint.py": {
     "mtime": 1791167661289.864,
@@ -6000,8 +6000,8 @@
     "hash": "b342981e54a2755cea3a98aa693ff059"
   },
   "frontend/e2e/prior-cash-receipt-journey.spec.ts": {
-    "mtime": 1791167661150.3657,
-    "hash": "91abed6e2b36b16bfa48ef929c993077"
+    "mtime": 1791217465294.4949,
+    "hash": "38fe854a6e7d4039059f4fad63e27b56"
   },
   "frontend/e2e/cash-close-approval-journey.spec.ts": {
     "mtime": 1791167661144.6682,
@@ -6522,5 +6522,9 @@
   "qa/operational/runs/performance-cloud-retest-20261005/report.md": {
     "mtime": 1791206351915.7034,
     "hash": "e3b162d89c7eb42c476b3110948e16b0"
+  },
+  "qa/operational/runs/postmerge-performance-cloud-20261005-790d7a/report.md": {
+    "mtime": 1791210931191.9263,
+    "hash": "3c000c6d3b82f4fbb8c0d812efb19ab4"
   }
 }

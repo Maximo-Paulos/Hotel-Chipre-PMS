@@ -12,6 +12,7 @@ from app.services.payment_service import (
     process_payment,
     get_reservation_financial_summary,
     get_payment_receipt_data,
+    validate_payment_method_enabled,
     PaymentError,
     PaymentNotFoundError,
 )
@@ -48,6 +49,7 @@ def make_payment(
                     detail="The prior receipt date cannot be in the future.",
                 )
         if not is_refund and data.payment_method in EXTERNAL_GATEWAY_METHODS:
+            validate_payment_method_enabled(db, data.payment_method, context.hotel_id)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
