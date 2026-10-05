@@ -21,6 +21,7 @@ from app.models.operations import (
 )
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
+from app.services.financial_ledger import completed_paid_amounts_by_reservation
 from app.services.reservation_action_service import (
     _candidate_reservation_ids,
     clear_reservation_manual_review,
@@ -359,6 +360,203 @@ def _mk_reservation(db, *, code, guest_id, category_id, hotel_id=1, room_id=None
     reservation = Reservation(**fields)
     db.add(reservation)
     return reservation
+
+
+def test_completed_paid_amounts_group_net_completed_transactions_and_scope_hotel(
+    db, hotel_config, sample_categories, sample_categories_hotel2, sample_guest,
+):
+    reservation = _mk_reservation(
+        db,
+        code="LEDGER-GROUPED-1",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        hotel_id=hotel_config.id,
+    )
+    another_reservation = _mk_reservation(
+        db,
+        code="LEDGER-GROUPED-2",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        hotel_id=hotel_config.id,
+    )
+    foreign_guest = Guest(
+        first_name="Other",
+        last_name="Hotel",
+        email="other-hotel-ledger@example.test",
+        terms_accepted=False,
+        hotel_id=2,
+    )
+    db.add(foreign_guest)
+    db.flush()
+    foreign_reservation = _mk_reservation(
+        db,
+        code="LEDGER-GROUPED-FOREIGN",
+        guest_id=foreign_guest.id,
+        category_id=sample_categories_hotel2[0].id,
+        hotel_id=2,
+    )
+    db.flush()
+    db.add_all(
+        [
+            Transaction(
+                hotel_id=hotel_config.id,
+                reservation_id=reservation.id,
+                amount=Decimal("100.00"),
+                currency="ARS",
+                transaction_type=TransactionTypeEnum.FULL_PAYMENT,
+                payment_method=PaymentMethodEnum.CASH,
+                status=TransactionStatusEnum.COMPLETED,
+            ),
+            Transaction(
+                hotel_id=hotel_config.id,
+                reservation_id=reservation.id,
+                amount=Decimal("12.34"),
+                currency="ARS",
+                transaction_type=TransactionTypeEnum.REFUND,
+                payment_method=PaymentMethodEnum.CASH,
+                status=TransactionStatusEnum.COMPLETED,
+            ),
+            Transaction(
+                hotel_id=hotel_config.id,
+                reservation_id=reservation.id,
+                amount=Decimal("7.00"),
+                currency="ARS",
+                transaction_type=TransactionTypeEnum.DEPOSIT,
+                payment_method=PaymentMethodEnum.CASH,
+                status=TransactionStatusEnum.PENDING,
+            ),
+            Transaction(
+                hotel_id=hotel_config.id,
+                reservation_id=another_reservation.id,
+                amount=Decimal("50.00"),
+                currency="ARS",
+                transaction_type=TransactionTypeEnum.DEPOSIT,
+                payment_method=PaymentMethodEnum.CASH,
+                status=TransactionStatusEnum.COMPLETED,
+            ),
+            Transaction(
+                hotel_id=2,
+                reservation_id=foreign_reservation.id,
+                amount=Decimal("900.00"),
+                currency="ARS",
+                transaction_type=TransactionTypeEnum.FULL_PAYMENT,
+                payment_method=PaymentMethodEnum.CASH,
+                status=TransactionStatusEnum.COMPLETED,
+            ),
+        ]
+    )
+    db.flush()
+
+    captured_sql: list[str] = []
+
+    def _capture_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if "from transactions" in statement.lower():
+            captured_sql.append(statement.lower())
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", _capture_sql)
+    try:
+        totals = completed_paid_amounts_by_reservation(
+            db,
+            hotel_config.id,
+            [reservation.id, another_reservation.id, foreign_reservation.id],
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", _capture_sql)
+
+    assert totals == {
+        reservation.id: Decimal("87.66"),
+        another_reservation.id: Decimal("50.00"),
+    }
+    assert len(captured_sql) == 1
+    assert "sum(" in captured_sql[0]
+    assert "group by transactions.reservation_id" in captured_sql[0]
+
+
+def test_pending_action_adjustment_batch_omits_rows_that_cannot_create_actions(
+    db, hotel_config, sample_categories, sample_categories_hotel2, sample_guest,
+):
+    candidate = _mk_reservation(
+        db,
+        code="ADJUSTMENT-CANDIDATE",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        hotel_id=hotel_config.id,
+    )
+    source = _mk_reservation(
+        db,
+        code="ADJUSTMENT-SOURCE",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        hotel_id=hotel_config.id,
+    )
+    db.flush()
+    actionable = [
+        ReservationAdjustment(
+            hotel_id=hotel_config.id,
+            reservation_id=candidate.id,
+            kind=ReservationAdjustmentKindEnum.OTHER,
+            status=ReservationAdjustmentStatusEnum.DRAFT,
+        ),
+        ReservationAdjustment(
+            hotel_id=hotel_config.id,
+            reservation_id=candidate.id,
+            kind=ReservationAdjustmentKindEnum.OTHER,
+            status=ReservationAdjustmentStatusEnum.PENDING,
+        ),
+        ReservationAdjustment(
+            hotel_id=hotel_config.id,
+            reservation_id=source.id,
+            resulting_reservation_id=candidate.id,
+            kind=ReservationAdjustmentKindEnum.OTHER,
+            status=ReservationAdjustmentStatusEnum.APPLIED,
+            external_resolution_status="manual_resolution_required",
+        ),
+        ReservationAdjustment(
+            hotel_id=hotel_config.id,
+            reservation_id=candidate.id,
+            kind=ReservationAdjustmentKindEnum.OTHER,
+            status=ReservationAdjustmentStatusEnum.FAILED,
+            external_resolution_status="pending_hotel_action",
+        ),
+    ]
+    inactive = [
+        ReservationAdjustment(
+            hotel_id=hotel_config.id,
+            reservation_id=candidate.id,
+            kind=ReservationAdjustmentKindEnum.OTHER,
+            status=ReservationAdjustmentStatusEnum.APPLIED,
+            external_resolution_status="resolved",
+        ),
+        ReservationAdjustment(
+            hotel_id=hotel_config.id,
+            reservation_id=candidate.id,
+            kind=ReservationAdjustmentKindEnum.OTHER,
+            status=ReservationAdjustmentStatusEnum.CANCELLED,
+            external_resolution_status="review_cancellation",
+        ),
+        ReservationAdjustment(
+            hotel_id=2,
+            reservation_id=candidate.id,
+            kind=ReservationAdjustmentKindEnum.OTHER,
+            status=ReservationAdjustmentStatusEnum.PENDING,
+        ),
+    ]
+    db.add_all(actionable + inactive)
+    db.flush()
+
+    grouped = reservation_action_service._related_adjustments_by_reservation(
+        db,
+        hotel_id=hotel_config.id,
+        reservation_ids=[candidate.id],
+    )
+
+    assert {row.id for row in grouped[candidate.id]} == {row.id for row in actionable}
+    assert not reservation_action_service._related_adjustments_by_reservation(
+        db,
+        hotel_id=hotel_config.id,
+        reservation_ids=[],
+    )
 
 
 def test_cancelled_reservation_never_offers_collection_action(

@@ -92,9 +92,11 @@ def _close_report_read(db: Session, report) -> dict | None:
     return data
 
 
-def _cash_expense_read(db: Session, expense) -> dict:
-    actor_ids = (expense.recorded_by_user_id, expense.approved_by_user_id, expense.rejected_by_user_id)
-    labels = resolve_hotel_actor_labels(db, hotel_id=expense.hotel_id, user_ids=actor_ids)
+def _cash_expense_read(db: Session, expense, *, actor_labels: dict[int, str] | None = None) -> dict:
+    labels = actor_labels
+    if labels is None:
+        actor_ids = (expense.recorded_by_user_id, expense.approved_by_user_id, expense.rejected_by_user_id)
+        labels = resolve_hotel_actor_labels(db, hotel_id=expense.hotel_id, user_ids=actor_ids)
     return CashExpenseRead(
         id=expense.id,
         hotel_id=expense.hotel_id,
@@ -676,10 +678,19 @@ def read_cash_expenses(
     context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
     try:
-        return [
-            _cash_expense_read(db, expense)
-            for expense in list_cash_expenses(db, hotel_id=context.hotel_id, status=expense_status)
-        ]
+        expenses = list_cash_expenses(db, hotel_id=context.hotel_id, status=expense_status)
+        actor_ids = {
+            user_id
+            for expense in expenses
+            for user_id in (
+                expense.recorded_by_user_id,
+                expense.approved_by_user_id,
+                expense.rejected_by_user_id,
+            )
+            if user_id is not None
+        }
+        actor_labels = resolve_hotel_actor_labels(db, hotel_id=context.hotel_id, user_ids=actor_ids)
+        return [_cash_expense_read(db, expense, actor_labels=actor_labels) for expense in expenses]
     except CashExpenseError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 

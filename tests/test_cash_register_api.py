@@ -125,6 +125,72 @@ def test_cash_register_api_open_add_close_and_list(client_with_db):
     assert db.get(CashSession, session_id).status == CashSessionStatusEnum.CLOSED
 
 
+def test_cash_expenses_batches_actor_label_resolution(client_with_db, monkeypatch):
+    client, db, _ctx = client_with_db
+    opened = client.post("/api/cash-register/sessions", json={"opening_balance": "100.00"})
+    assert opened.status_code == 201, opened.text
+    session_id = opened.json()["id"]
+
+    db.add_all(
+        [
+            User(
+                id=51,
+                email="manager@test.com",
+                password_hash="test-hash",
+                is_active=True,
+                is_verified=True,
+            ),
+            User(
+                id=52,
+                email="other-hotel@test.com",
+                password_hash="test-hash",
+                is_active=True,
+                is_verified=True,
+            ),
+            HotelMembership(hotel_id=1, user_id=51, role="manager", status="active", alias="Gerencia QA"),
+            HotelMembership(hotel_id=2, user_id=52, role="manager", status="active", alias="Otro hotel"),
+        ]
+    )
+    db.flush()
+    for index, user_id in enumerate((50, 51, 52), start=1):
+        db.add(
+            CashExpense(
+                hotel_id=1,
+                session_id=session_id,
+                amount=Decimal("10.00"),
+                currency_code="ARS",
+                category="Insumos",
+                vendor=f"Proveedor {index}",
+                receipt_reference=f"FACT-{index}",
+                status="pending",
+                recorded_by_user_id=user_id,
+            )
+        )
+    db.commit()
+
+    import app.api.cash_register as cash_register_api
+
+    original_resolver = cash_register_api.resolve_hotel_actor_labels
+    resolver_calls = []
+
+    def tracked_resolver(db, *, hotel_id, user_ids):
+        ids = tuple(user_ids)
+        resolver_calls.append((hotel_id, ids))
+        return original_resolver(db, hotel_id=hotel_id, user_ids=ids)
+
+    monkeypatch.setattr(cash_register_api, "resolve_hotel_actor_labels", tracked_resolver)
+
+    response = client.get("/api/cash-register/expenses")
+
+    assert response.status_code == 200, response.text
+    rows = response.json()
+    assert len(rows) == 3
+    assert {row["recorded_by_name"] for row in rows} == {"Recepción QA", "Gerencia QA", None}
+    assert len(resolver_calls) == 1
+    assert resolver_calls[0][0] == 1
+    assert set(resolver_calls[0][1]) == {50, 51, 52}
+
+
 def test_cash_expense_requires_permission_and_approval_mfa_before_affecting_drawer(client_with_db):
     client, db, ctx = client_with_db
     opened = client.post("/api/cash-register/sessions", json={"opening_balance": "100.00"})

@@ -837,6 +837,51 @@ def test_twenty_seven_prior_receipts_do_not_inflate_the_open_cash_session(db):
     assert closed.difference == Decimal("0.00")
 
 
+def test_daily_cash_summary_batches_close_reports_across_sessions(db):
+    from sqlalchemy import event
+
+    from app.services.cash_daily_summary_service import get_daily_summary
+    from app.services.timezones import hotel_today
+
+    _hotel(db, 1)
+    _user(db, 10)
+    first = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("25.00"))
+    first_close = close_session(
+        db,
+        hotel_id=1,
+        session_id=first.id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("25.00"),
+    )
+    second_close = close_session(
+        db,
+        hotel_id=1,
+        session_id=first_close.successor_session_id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("0.00"),
+    )
+
+    close_report_selects: list[str] = []
+
+    def capture_close_report_select(_conn, _cursor, statement, _parameters, _context, _many):
+        if "cash_close_reports" in statement.lower():
+            close_report_selects.append(statement)
+
+    event.listen(db.get_bind(), "before_cursor_execute", capture_close_report_select)
+    try:
+        summary = get_daily_summary(
+            db,
+            hotel_id=1,
+            report_date=hotel_today(db, 1),
+            currency_code="ARS",
+        )
+    finally:
+        event.remove(db.get_bind(), "before_cursor_execute", capture_close_report_select)
+
+    assert len(summary["sessions"]) == 3
+    assert len(close_report_selects) == 1
+
+
 def test_daily_cash_summary_uses_declared_successor_float_without_recounting_full_handoff(db):
     from app.services.cash_daily_summary_service import get_daily_summary, _db_utc_bounds
     from app.services.timezones import hotel_today

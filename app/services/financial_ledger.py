@@ -9,6 +9,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Iterable
 
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.models.operations import BillingAdjustment
@@ -30,7 +31,14 @@ def completed_paid_amounts_by_reservation(
     reservation_ids: Iterable[int] | None = None,
 ) -> dict[int, Decimal]:
     """Aggregate confirmed payments once, optionally for a bounded reservation set."""
-    query = db.query(Transaction).filter(
+    signed_amount = case(
+        (Transaction.transaction_type == TransactionTypeEnum.REFUND, -Transaction.amount),
+        else_=Transaction.amount,
+    )
+    query = db.query(
+        Transaction.reservation_id,
+        func.sum(signed_amount),
+    ).filter(
         Transaction.hotel_id == hotel_id,
         Transaction.status == TransactionStatusEnum.COMPLETED,
     )
@@ -40,13 +48,11 @@ def completed_paid_amounts_by_reservation(
             return {}
         query = query.filter(Transaction.reservation_id.in_(ids))
 
-    totals: dict[int, Decimal] = {}
-    for transaction in query.all():
-        totals[transaction.reservation_id] = (
-            totals.get(transaction.reservation_id, Decimal("0.00"))
-            + signed_transaction_amount(transaction)
-        )
-    return {reservation_id: amount.quantize(Decimal("0.01")) for reservation_id, amount in totals.items()}
+    rows = query.group_by(Transaction.reservation_id).all()
+    return {
+        reservation_id: Decimal(str(amount or 0)).quantize(Decimal("0.01"))
+        for reservation_id, amount in rows
+    }
 
 
 def completed_paid_amount(db: Session, hotel_id: int, reservation_id: int) -> Decimal:
