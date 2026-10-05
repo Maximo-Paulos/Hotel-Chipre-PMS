@@ -1068,8 +1068,8 @@
     "hash": "4652f82c2127ef3f68876889d2c3509a"
   },
   "app/tasks/celery_app.py": {
-    "mtime": 1791167661075.7273,
-    "hash": "449f87128b1bd5ffd6f6ab81ed14e98e"
+    "mtime": 1791186733909.5593,
+    "hash": "cad1485e7ddf41ede28ef1d138889ce0"
   },
   "app/tasks/ota_tasks.py": {
     "mtime": 1791167661075.966,
@@ -1564,8 +1564,8 @@
     "hash": "8d771d95e254e5e632c1dcfdef3bd38a"
   },
   "tests/conftest.py": {
-    "mtime": 1791167661261.5942,
-    "hash": "d05477efd68c39981daa60ea883190a8"
+    "mtime": 1791188269224.6438,
+    "hash": "10df5cad695cb2a2f10d0183447196c0"
   },
   "tests/perf/__init__.py": {
     "mtime": 1791167661262.1816,
@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1791181772928.1284,
-    "hash": "27378e35cfd4fa88a2aadfaf55d08201"
+    "mtime": 1791182010227.149,
+    "hash": "a1d2aa6a02524d6c6862e3309607c06d"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1791181772344.648,
-    "hash": "8cf11800b083c7cca1bf594ad9047da6"
+    "mtime": 1791182009679.7717,
+    "hash": "c4b1dd4f71c6a1760c00be35dfb506a9"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1791181772916.4397,
-    "hash": "2946dcb470c58e98a2d93539c873bed8"
+    "mtime": 1791182010216.305,
+    "hash": "8d11c7c98f467af3fbfe47e1053e53c6"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1791181772356.2908,
-    "hash": "2fca0336554429eb7a7a050f8b29afad"
+    "mtime": 1791182009691.4395,
+    "hash": "58e4a30b20269c053599cf603f3a95c0"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1791181772904.8162,
-    "hash": "dbf1af6f69aa2cbf2b74bd433a68302d"
+    "mtime": 1791182010205.106,
+    "hash": "df18b18424750a5957ecf2ad8c08cf56"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1791181772535.2024,
-    "hash": "33b05c0db06e7c81179688ab83e237f7"
+    "mtime": 1791182009839.6936,
+    "hash": "4c76e2efddb505eefef92a0fc09f4b5f"
   },
   "qa/evidence/README.md": {
     "mtime": 1791167661251.5322,
@@ -3424,8 +3424,8 @@
     "hash": "d9f12c2885b9c47a52c270b28a879cef"
   },
   "app/services/domain_events.py": {
-    "mtime": 1791180020766.1868,
-    "hash": "632f9066bed353914928e7b950f1441e"
+    "mtime": 1791187526094.0615,
+    "hash": "494f7ebe753736ae187e9290548ce4c4"
   },
   "frontend/src/sync/crossTabSync.ts": {
     "mtime": 1791167661233.485,
@@ -3436,8 +3436,8 @@
     "hash": "19550e60edc87c80aacef450d27345a8"
   },
   "tests/test_domain_events.py": {
-    "mtime": 1791180494975.5913,
-    "hash": "a12aa649fe180fafe42096476caa4671"
+    "mtime": 1791188269225.4216,
+    "hash": "5fce8b3f3798af01945d9548e793dde9"
   },
   "scripts/scale/staged_http_load.py": {
     "mtime": 1791167661260.9773,
@@ -3448,8 +3448,8 @@
     "hash": "e8436ba5b2fcd4349c33d6db08028242"
   },
   "tests/test_analytics_task_schedule.py": {
-    "mtime": 1791167661265.7173,
-    "hash": "58c7c0a22df95e65824c376de0e30052"
+    "mtime": 1791186746855.933,
+    "hash": "4c9647493ddcc306afe18a18e8495b55"
   },
   "alembic/versions/20260724_core_tenant_composite_fks.py": {
     "mtime": 1791167661021.4365,
@@ -4244,8 +4244,8 @@
     "hash": "592bcc7f8da980ecebf43b9ab3832f58"
   },
   "tests/test_guest_restriction_api.py": {
-    "mtime": 1791181174610.4136,
-    "hash": "129a5c84504257ca1308549d7359456c"
+    "mtime": 1791188415541.3528,
+    "hash": "a27b2dc863830c76e3e3b6e05c53ff6e"
   },
   "tests/test_guest_restriction_migration.py": {
     "mtime": 1791167661285.5723,
@@ -5076,8 +5076,8 @@
     "hash": "ba78c4e47a3ed340e078904b9bf33213"
   },
   "app/tasks/domain_event_tasks.py": {
-    "mtime": 1791167661075.8306,
-    "hash": "536c48029bb49d2c3e0d1c62c54b4776"
+    "mtime": 1791187702785.1338,
+    "hash": "a91d6c3bef29efa202e788d48eccf3b6"
   },
   "frontend/i18n-auth-literals.test.mjs": {
     "mtime": 1791167661154.5215,
@@ -5124,8 +5124,8 @@
     "hash": "aeaa639fc995c0513d5fb819d2c8ed5c"
   },
   "tests/test_domain_event_outbox.py": {
-    "mtime": 1791167661283.7092,
-    "hash": "ee7433b32a53cda84d0a2989c7556aa1"
+    "mtime": 1791188269225.952,
+    "hash": "f41e603ae22e77ddce66ca735f16d475"
   },
   "tests/test_domain_event_outbox_migration.py": {
     "mtime": 1791167661283.7656,
@@ -6518,5 +6518,9 @@
   "qa/operational/runs/postmerge-readonly-20261005-0174f497/report.md": {
     "mtime": 1791181668877.1565,
     "hash": "4db901587d1d81df04fcb2a755fac6f9"
+  },
+  "qa/operational/runs/performance-cloud-retest-20261005/report.md": {
+    "mtime": 1791187837442.4568,
+    "hash": "8f9d365c9190c11488ee775b3bac8e7e"
   }
 }

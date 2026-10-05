@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-05T06:33:15.744Z",
+  "generatedAt": "2026-10-05T08:21:46.591Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -10591,50 +10591,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_domain_events_publish_queued_domain_changes",
-      "name": "publish_queued_domain_changes",
-      "entryPoint": "services_domain_events_publish_queued_domain_changes",
-      "entryPointId": "services_domain_events_publish_queued_domain_changes",
-      "path": [
-        "services_domain_events_publish_queued_domain_changes",
-        "services_domain_events_publish_domain_event",
-        "services_domain_events_realtimeeventsunavailable",
-        "services_domain_events_record_outbox_attempt",
-        "services_domain_events_domainevent",
-        "services_domain_events_domainevent_as_payload",
-        "services_domain_events_get_redis_client",
-        "services_domain_events_revision_key_for_hotel",
-        "services_domain_events_settings",
-        "services_domain_events_unavailable",
-        "services_domain_events_validate_event_input",
-        "services_domain_events_validate_hotel_id",
-        "services_domain_events_required"
-      ],
-      "qualifiedPath": [
-        "services_domain_events_publish_queued_domain_changes",
-        "services_domain_events_publish_domain_event",
-        "services_domain_events_realtimeeventsunavailable",
-        "services_domain_events_record_outbox_attempt",
-        "services_domain_events_domainevent",
-        "services_domain_events_domainevent_as_payload",
-        "services_domain_events_get_redis_client",
-        "services_domain_events_revision_key_for_hotel",
-        "services_domain_events_settings",
-        "services_domain_events_unavailable",
-        "services_domain_events_validate_event_input",
-        "services_domain_events_validate_hotel_id",
-        "services_domain_events_required"
-      ],
-      "depth": 3,
-      "nodeCount": 13,
-      "fileCount": 1,
-      "files": [
-        "app/services/domain_events.py"
-      ],
-      "criticality": 0.2185,
-      "warnings": []
-    },
-    {
       "id": "flow:services_collaboration_apply_resource_changes",
       "name": "apply_resource_changes",
       "entryPoint": "services_collaboration_apply_resource_changes",
@@ -11504,6 +11460,60 @@
         "app/services/analytics_exports.py"
       ],
       "criticality": 0.2092,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_domain_events_publish_queued_domain_changes",
+      "name": "publish_queued_domain_changes",
+      "entryPoint": "services_domain_events_publish_queued_domain_changes",
+      "entryPointId": "services_domain_events_publish_queued_domain_changes",
+      "path": [
+        "services_domain_events_publish_queued_domain_changes",
+        "services_domain_events_outboxpublishattempt",
+        "services_domain_events_outboxpublishcooldown_record_failure",
+        "services_domain_events_outboxpublishcooldown_record_success",
+        "services_domain_events_outboxpublishcooldown_try_acquire",
+        "services_domain_events_publish_domain_event",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_record_outbox_attempt",
+        "services_domain_events_outboxpublishpermit",
+        "services_domain_events_domainevent",
+        "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_revision_key_for_hotel",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_required"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_publish_queued_domain_changes",
+        "services_domain_events_outboxpublishattempt",
+        "services_domain_events_outboxpublishcooldown_record_failure",
+        "services_domain_events_outboxpublishcooldown_record_success",
+        "services_domain_events_outboxpublishcooldown_try_acquire",
+        "services_domain_events_publish_domain_event",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_record_outbox_attempt",
+        "services_domain_events_outboxpublishpermit",
+        "services_domain_events_domainevent",
+        "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_revision_key_for_hotel",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_required"
+      ],
+      "depth": 3,
+      "nodeCount": 18,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.2078,
       "warnings": []
     },
     {
@@ -14930,6 +14940,30 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_link_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:tasks_celery_app_build_beat_schedule",
+      "name": "build_beat_schedule",
+      "entryPoint": "tasks_celery_app_build_beat_schedule",
+      "entryPointId": "tasks_celery_app_build_beat_schedule",
+      "path": [
+        "tasks_celery_app_build_beat_schedule",
+        "tasks_celery_app_sandbox_domain_event_replay_enabled",
+        "tasks_celery_app_redis_endpoint"
+      ],
+      "qualifiedPath": [
+        "tasks_celery_app_build_beat_schedule",
+        "tasks_celery_app_sandbox_domain_event_replay_enabled",
+        "tasks_celery_app_redis_endpoint"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/tasks/celery_app.py"
       ],
       "criticality": 0.17,
       "warnings": []

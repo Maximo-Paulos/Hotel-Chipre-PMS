@@ -1393,6 +1393,7 @@
       "qa/history/observations/shared-production-20260724.md",
       "qa/operational/README.md",
       "qa/operational/runs/day2-live-role-retest-20261004-0ddeb59c/report.md",
+      "qa/operational/runs/performance-cloud-retest-20261005/report.md",
       "qa/operational/runs/postmerge-readonly-20261005-0174f497/report.md",
       "qa/operational/runs/pr117-postmerge-20261005-3c91a3e8/report.md",
       "qa/operational/runs/prod-day-sim-20261001-6361f7a1/report.md",
@@ -1495,10 +1496,10 @@
     ],
     "video": []
   },
-  "total_files": 1486,
-  "total_words": 2091872,
+  "total_files": 1487,
+  "total_words": 2094550,
   "needs_graph": true,
-  "warning": "Large corpus: 1486 files · ~2,091,872 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1487 files · ~2,094,550 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1519,7 +1520,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "d441145ef579dd17f47cc0b65e3e15b7e0e525b3",
+    "source_hash": "483cba6319b1d1a7621d13011a2af0f008bf398f",
     "branches": [
       "codex/day2-feedback",
       "codex/postmerge-day2-fixes",
@@ -1546,9 +1547,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "d441145ef579dd17f47cc0b65e3e15b7e0e525b3",
+    "head": "483cba6319b1d1a7621d13011a2af0f008bf398f",
     "candidate_count": null,
-    "included_count": 1486,
+    "included_count": 1487,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 15,

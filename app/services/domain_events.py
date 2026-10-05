@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -46,6 +47,10 @@ POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS = 2.0
 # Even a direct caller that bypasses Settings must leave room for the client
 # refetch and network latency inside the ten-second freshness budget.
 POSTGRES_FALLBACK_MAX_POLL_SECONDS = 5.0
+# Redis can spend up to a second per connection attempt while the durable
+# outbox already has a PostgreSQL recovery path. Bound repeated request-path
+# waits while keeping probes frequent enough to recover realtime delivery.
+OUTBOX_PUBLISH_FAILURE_COOLDOWN_SECONDS = 30.0
 SUPPORTED_DOMAINS = frozenset(
     {
         "analytics",
@@ -167,6 +172,83 @@ class QueuedDomainChange:
     outbox_event_id: str | None = None
     outbox_cursor: int | None = None
     outbox_schema_version: int | None = None
+
+
+@dataclass(frozen=True)
+class _OutboxPublishAttempt:
+    """Redis outcome to persist after every publish in the batch has finished."""
+
+    hotel_id: int
+    outbox_id: int
+    published: bool
+    revision: int | None = None
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class _OutboxPublishPermit:
+    """A durable Redis attempt, optionally owning the single recovery probe."""
+
+    probe_generation: int | None = None
+
+
+class _OutboxPublishCooldown:
+    """Process-local gate for durable after-commit Redis publishes only."""
+
+    def __init__(
+        self,
+        *,
+        cooldown_seconds: float = OUTBOX_PUBLISH_FAILURE_COOLDOWN_SECONDS,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._cooldown_seconds = cooldown_seconds
+        self._monotonic = monotonic
+        self._lock = threading.Lock()
+        self._cooldown_until: float | None = None
+        self._generation = 0
+        self._probe_generation: int | None = None
+
+    def try_acquire(self) -> _OutboxPublishPermit | None:
+        """Return a permit, or skip while cooling down / another probe runs."""
+
+        with self._lock:
+            if self._cooldown_until is None:
+                return _OutboxPublishPermit()
+
+            if self._monotonic() < self._cooldown_until:
+                return None
+
+            if self._probe_generation is not None:
+                return None
+
+            self._probe_generation = self._generation
+            return _OutboxPublishPermit(probe_generation=self._generation)
+
+    def record_success(self, permit: _OutboxPublishPermit) -> None:
+        """A successful recovery probe closes only the cooldown it owns."""
+
+        if permit.probe_generation is None:
+            return
+        with self._lock:
+            if (
+                self._generation == permit.probe_generation
+                and self._probe_generation == permit.probe_generation
+            ):
+                self._cooldown_until = None
+                self._probe_generation = None
+                # Invalidate any stale completion that might still be running.
+                self._generation += 1
+
+    def record_failure(self) -> None:
+        """Open or extend the cooldown after an actual durable publish fails."""
+
+        with self._lock:
+            self._generation += 1
+            self._cooldown_until = self._monotonic() + self._cooldown_seconds
+            self._probe_generation = None
+
+
+_outbox_publish_cooldown = _OutboxPublishCooldown()
 
 
 # A single ORM transaction can update several read models. Mapping the
@@ -590,70 +672,151 @@ def publish_queued_domain_changes(session: "Session") -> None:
     ``session`` itself cannot safely issue new SQL. The event identifier is
     copied into ``QueuedDomainChange`` before commit, and the inserted row's
     primary-key identity is read through SQLAlchemy inspection, which does not
-    trigger a lazy load on an expired ORM object.
+    trigger a lazy load on an expired ORM object. Delivery outcomes are persisted
+    only after the Redis loop finishes, so a slow publish cannot hold a database
+    connection and every FORCE-RLS row read has an explicit hotel context.
     """
 
     pending = session.info.pop(PENDING_EVENTS_KEY, {})
     if not pending:
         return
 
-    from sqlalchemy.orm import Session as _Session
-
-    bind = session.get_bind()
-    outbox_session = _Session(bind=bind) if bind is not None else None
     durable_publish_failed = False
-    try:
-        for change in pending.values():
-            if durable_publish_failed and change.outbox_event_id is not None:
-                # The committed outbox row remains pending for PostgreSQL SSE
-                # fallback and later recovery; avoid repeated Redis timeouts.
+    attempts_by_hotel: dict[int, list[_OutboxPublishAttempt]] = {}
+    for change in pending.values():
+        if durable_publish_failed and change.outbox_event_id is not None:
+            # The committed outbox row remains pending for PostgreSQL SSE
+            # fallback and later recovery; avoid repeated Redis timeouts.
+            continue
+
+        publish_permit = None
+        if change.outbox_event_id is not None:
+            # Best-effort events have no outbox recovery path and must continue
+            # attempting Redis even while durable request-path publishes cool
+            # down. Direct permission invalidations do not pass through here.
+            publish_permit = _outbox_publish_cooldown.try_acquire()
+            if publish_permit is None:
                 continue
 
-            outbox = change.outbox
-            outbox_identity = inspect(outbox).identity if outbox is not None else None
-            outbox_id = outbox_identity[0] if outbox_identity else None
-            try:
-                publish_kwargs = {
+        outbox = change.outbox
+        outbox_identity = inspect(outbox).identity if outbox is not None else None
+        outbox_id = outbox_identity[0] if outbox_identity else None
+        publish_kwargs = {
+            "hotel_id": change.hotel_id,
+            "domain": change.domain,
+            "event_type": change.event_type,
+            "payload": change.payload,
+        }
+        if change.outbox_event_id is not None:
+            publish_kwargs.update(
+                event_id=change.outbox_event_id,
+                cursor=change.outbox_cursor or outbox_id,
+                schema_version=change.outbox_schema_version or 1,
+            )
+
+        try:
+            event = publish_domain_event(**publish_kwargs)
+            if event is None:
+                raise RealtimeEventsUnavailable("publish_domain_event returned no event")
+        except Exception as exc:  # post-commit work must not turn 200 into 500
+            if change.outbox_event_id is not None:
+                durable_publish_failed = True
+                _outbox_publish_cooldown.record_failure()
+                if outbox_id is not None:
+                    attempts_by_hotel.setdefault(change.hotel_id, []).append(
+                        _OutboxPublishAttempt(
+                            hotel_id=change.hotel_id,
+                            outbox_id=outbox_id,
+                            published=False,
+                            error=type(exc).__name__,
+                        )
+                    )
+            logger.warning(
+                "realtime_events.post_commit_publish_failed",
+                extra={
                     "hotel_id": change.hotel_id,
                     "domain": change.domain,
                     "event_type": change.event_type,
-                    "payload": change.payload,
-                }
-                if change.outbox_event_id is not None:
-                    publish_kwargs.update(
-                        event_id=change.outbox_event_id,
-                        cursor=change.outbox_cursor or outbox_id,
-                        schema_version=change.outbox_schema_version or 1,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            continue
+
+        if change.outbox_event_id is not None and publish_permit is not None:
+            _outbox_publish_cooldown.record_success(publish_permit)
+
+        if change.outbox_event_id is not None and outbox_id is not None:
+            attempts_by_hotel.setdefault(change.hotel_id, []).append(
+                _OutboxPublishAttempt(
+                    hotel_id=change.hotel_id,
+                    outbox_id=outbox_id,
+                    published=True,
+                    revision=event.revision,
+                )
+            )
+
+    # Do not check out a DB connection while Redis may still block on the
+    # remaining events. Once publishing is complete, bind the fresh session to
+    # each server-derived tenant before it reads that hotel's FORCE-RLS rows.
+    if not attempts_by_hotel:
+        return
+
+    from sqlalchemy.orm import Session as _Session
+
+    try:
+        bind = session.get_bind()
+    except Exception as exc:
+        logger.warning(
+            "realtime_events.post_commit_outbox_bind_failed",
+            extra={"error_type": type(exc).__name__},
+        )
+        return
+    if bind is None:
+        return
+    try:
+        outbox_session = _Session(bind=bind)
+    except Exception as exc:
+        logger.warning(
+            "realtime_events.post_commit_outbox_session_failed",
+            extra={"error_type": type(exc).__name__},
+        )
+        return
+    try:
+        for hotel_id, attempts in attempts_by_hotel.items():
+            try:
+                set_tenant_hotel_context(outbox_session, hotel_id)
+                for attempt in attempts:
+                    _record_outbox_attempt(
+                        outbox_session,
+                        attempt.outbox_id,
+                        revision=attempt.revision,
+                        published=attempt.published,
+                        error=attempt.error,
                     )
+                outbox_session.commit()
+            except Exception as exc:
+                # The business transaction is already committed. A failure to
+                # update delivery metadata must leave the outbox recoverable
+                # and must not make that committed request appear unsuccessful.
                 try:
-                    event = publish_domain_event(**publish_kwargs)
-                    if event is None:
-                        raise RealtimeEventsUnavailable("publish_domain_event returned no event")
-                except Exception:
-                    if change.outbox_event_id is not None:
-                        durable_publish_failed = True
-                    raise
-                _record_outbox_attempt(
-                    outbox_session, outbox_id, revision=event.revision, published=True
-                )
-            except Exception as exc:  # post-commit work must not turn 200 into 500
+                    outbox_session.rollback()
+                except Exception as rollback_exc:
+                    logger.warning(
+                        "realtime_events.post_commit_outbox_rollback_failed",
+                        extra={"hotel_id": hotel_id, "error_type": type(rollback_exc).__name__},
+                    )
                 logger.warning(
-                    "realtime_events.post_commit_publish_failed",
-                    extra={
-                        "hotel_id": change.hotel_id,
-                        "domain": change.domain,
-                        "event_type": change.event_type,
-                        "error_type": type(exc).__name__,
-                    },
+                    "realtime_events.post_commit_outbox_record_failed",
+                    extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
                 )
-                _record_outbox_attempt(
-                    outbox_session, outbox_id, error=type(exc).__name__, published=False
-                )
-        if outbox_session is not None:
-            outbox_session.commit()
     finally:
-        if outbox_session is not None:
+        try:
             outbox_session.close()
+        except Exception as exc:
+            logger.warning(
+                "realtime_events.post_commit_outbox_close_failed",
+                extra={"error_type": type(exc).__name__},
+            )
 
 
 def _record_outbox_attempt(
@@ -860,6 +1023,7 @@ def publish_pending_domain_events(
     *,
     hotel_id: int,
     batch_size: int = 100,
+    stop_on_failure: bool = False,
 ) -> dict[str, Any]:
     """Drain durable outbox rows for one tenant onto Redis/Valkey.
 
@@ -870,7 +1034,9 @@ def publish_pending_domain_events(
     ``FOR UPDATE SKIP LOCKED`` so concurrent workers never double-publish the
     same row. Does not commit -- the caller controls the transaction
     boundary (matching this codebase's other outbox worker, ``app.services.
-    notification_service.process_pending_outbox``).
+    notification_service.process_pending_outbox``). The scheduled task can
+    stop at its first transport failure to avoid retrying the whole batch while
+    Redis is unavailable.
     """
 
     _validate_hotel_id(hotel_id)
@@ -894,6 +1060,7 @@ def publish_pending_domain_events(
     published = 0
     failed = 0
     retry_after_seconds: int | None = None
+    backend_unavailable = False
 
     for row in rows:
         try:
@@ -936,13 +1103,19 @@ def publish_pending_domain_events(
             failed += 1
             backoff = _outbox_backoff_seconds(row.attempts)
             retry_after_seconds = backoff if retry_after_seconds is None else min(retry_after_seconds, backoff)
+            if stop_on_failure and isinstance(exc, RealtimeEventsUnavailable):
+                backend_unavailable = True
+                break
 
-    return {
+    result = {
         "selected": len(rows),
         "published": published,
         "failed": failed,
         "retry_after_seconds": retry_after_seconds,
     }
+    if backend_unavailable:
+        result["backend_unavailable"] = True
+    return result
 
 
 def get_domain_event_outbox_metrics(
