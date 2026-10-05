@@ -3236,8 +3236,8 @@
     "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1791216331661.7893,
-    "hash": "cef7e6c5f34d0b2f4e7b8fdc114e65df"
+    "mtime": 1791218622835.5598,
+    "hash": "73d3a0340a5a26b29be2a682592e32ae"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1791167661258.7695,
@@ -6526,5 +6526,13 @@
   "qa/operational/runs/postmerge-performance-cloud-20261005-790d7a/report.md": {
     "mtime": 1791210931191.9263,
     "hash": "3c000c6d3b82f4fbb8c0d812efb19ab4"
+  },
+  "tests/test_release_gate_workflow_policy.py": {
+    "mtime": 1791218672153.66,
+    "hash": "8439a5d0b66bc497ac5accf00d6e6696"
+  },
+  "docs/runbooks/provider-qa-opt-in.md": {
+    "mtime": 1791217584623.867,
+    "hash": "e7c8995c02b18f6f319ba73494842383"
   }
 }
