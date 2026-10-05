@@ -54,6 +54,14 @@ def _settings(**overrides) -> Settings:
     return Settings(**values)
 
 
+def _successful_publisher(published: list[dict]):
+    def publish(**kwargs):
+        published.append(kwargs)
+        return SimpleNamespace(revision=len(published))
+
+    return publish
+
+
 def test_realtime_fallback_poll_budget_is_below_ten_seconds():
     assert _settings().REALTIME_EVENTS_FALLBACK_POLL_SECONDS == 2.0
     with pytest.raises(ValueError):
@@ -179,7 +187,7 @@ def test_required_backend_raises_when_unavailable(monkeypatch: pytest.MonkeyPatc
 
 def test_queued_domain_change_publishes_once_after_commit(monkeypatch: pytest.MonkeyPatch):
     published: list[dict] = []
-    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    monkeypatch.setattr(domain_events, "publish_domain_event", _successful_publisher(published))
     session = Session(_event_engine())
     try:
         session.execute(text("SELECT 1"))
@@ -213,9 +221,162 @@ def test_queued_domain_change_publishes_once_after_commit(monkeypatch: pytest.Mo
     assert published[0]["schema_version"] == 1
 
 
+@pytest.mark.parametrize("first_failure", ["exception", "none"])
+def test_failed_durable_publish_leaves_later_durable_rows_pending_but_attempts_ephemeral_events(
+    monkeypatch: pytest.MonkeyPatch,
+    first_failure: str,
+):
+    attempted: list[dict] = []
+
+    def publish(**kwargs):
+        attempted.append(kwargs)
+        if kwargs["event_type"] == "rooms.first":
+            if first_failure == "exception":
+                raise ConnectionError("redis unavailable")
+            return None
+        return SimpleNamespace(revision=len(attempted))
+
+    monkeypatch.setattr(domain_events, "publish_domain_event", publish)
+    engine = _event_engine()
+    session = Session(engine)
+    try:
+        session.execute(text("SELECT 1"))
+        domain_events.queue_domain_change(
+            session,
+            hotel_id=42,
+            domain="rooms",
+            event_type="rooms.first",
+            payload={"room_id": 1},
+        )
+        domain_events.queue_domain_change(
+            session,
+            hotel_id=42,
+            domain="reservations",
+            event_type="reservations.later",
+            payload={"reservation_id": 2},
+        )
+        domain_events.queue_domain_change(
+            session,
+            hotel_id=42,
+            domain="settings",
+            event_type="settings.ephemeral",
+            payload={"family": "hotel"},
+            durable=False,
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    assert [event["event_type"] for event in attempted] == [
+        "rooms.first",
+        "settings.ephemeral",
+    ]
+    assert "event_id" in attempted[0]
+    assert "event_id" not in attempted[1]
+
+    with Session(engine) as verification_session:
+        rows = verification_session.query(DomainEventOutbox).order_by(DomainEventOutbox.event_type).all()
+        state_by_type = {
+            row.event_type: (row.status, row.attempts, row.last_error)
+            for row in rows
+        }
+        event_ids_by_type = {row.event_type: row.event_id for row in rows}
+
+    expected_error = "ConnectionError" if first_failure == "exception" else "RealtimeEventsUnavailable"
+    assert state_by_type == {
+        "reservations.later": ("pending", 0, None),
+        "rooms.first": ("pending", 1, expected_error),
+    }
+
+    recovered: list[dict] = []
+    monkeypatch.setattr(domain_events, "publish_domain_event", _successful_publisher(recovered))
+    with Session(engine) as recovery_session:
+        replay_result = domain_events.publish_pending_domain_events(recovery_session, hotel_id=42)
+        recovery_session.commit()
+
+    assert replay_result == {
+        "selected": 2,
+        "published": 2,
+        "failed": 0,
+        "retry_after_seconds": None,
+    }
+    assert [event["event_type"] for event in recovered] == ["rooms.first", "reservations.later"]
+    assert {event["event_type"]: event["event_id"] for event in recovered} == event_ids_by_type
+
+    with Session(engine) as verification_session:
+        replayed_rows = verification_session.query(DomainEventOutbox).order_by(DomainEventOutbox.event_type).all()
+        replayed_state_by_type = {
+            row.event_type: (row.status, row.attempts, row.last_error)
+            for row in replayed_rows
+        }
+
+    assert replayed_state_by_type == {
+        "reservations.later": ("published", 1, None),
+        "rooms.first": ("published", 2, None),
+    }
+    engine.dispose()
+
+
+def test_successful_batch_publishes_each_durable_and_ephemeral_event(monkeypatch: pytest.MonkeyPatch):
+    attempted: list[dict] = []
+
+    def publish(**kwargs):
+        attempted.append(kwargs)
+        return SimpleNamespace(revision=len(attempted))
+
+    monkeypatch.setattr(domain_events, "publish_domain_event", publish)
+    engine = _event_engine()
+    session = Session(engine)
+    try:
+        session.execute(text("SELECT 1"))
+        domain_events.queue_domain_change(
+            session,
+            hotel_id=42,
+            domain="rooms",
+            event_type="rooms.first",
+            payload={"room_id": 1},
+        )
+        domain_events.queue_domain_change(
+            session,
+            hotel_id=42,
+            domain="reservations",
+            event_type="reservations.second",
+            payload={"reservation_id": 2},
+        )
+        domain_events.queue_domain_change(
+            session,
+            hotel_id=42,
+            domain="settings",
+            event_type="settings.ephemeral",
+            payload={"family": "hotel"},
+            durable=False,
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    assert [event["event_type"] for event in attempted] == [
+        "rooms.first",
+        "reservations.second",
+        "settings.ephemeral",
+    ]
+    with Session(engine) as verification_session:
+        rows = verification_session.query(DomainEventOutbox).order_by(DomainEventOutbox.event_type).all()
+        state_by_type = {
+            row.event_type: (row.status, row.attempts, row.revision)
+            for row in rows
+        }
+
+    assert state_by_type == {
+        "reservations.second": ("published", 1, 2),
+        "rooms.first": ("published", 1, 1),
+    }
+    engine.dispose()
+
+
 def test_queued_domain_change_is_discarded_on_rollback(monkeypatch: pytest.MonkeyPatch):
     published: list[dict] = []
-    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    monkeypatch.setattr(domain_events, "publish_domain_event", _successful_publisher(published))
     session = Session(_event_engine())
     try:
         session.execute(text("SELECT 1"))
@@ -241,7 +402,7 @@ def test_model_change_collector_fans_out_payment_dependencies_without_sensitive_
     monkeypatch: pytest.MonkeyPatch,
 ):
     published: list[dict] = []
-    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    monkeypatch.setattr(domain_events, "publish_domain_event", _successful_publisher(published))
     transaction = SimpleNamespace(
         __tablename__="transactions",
         hotel_id=42,
@@ -271,7 +432,7 @@ def test_model_change_collector_fans_out_payment_dependencies_without_sensitive_
 
 def test_derived_analytics_changes_are_coalesced_by_family(monkeypatch: pytest.MonkeyPatch):
     published: list[dict] = []
-    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    monkeypatch.setattr(domain_events, "publish_domain_event", _successful_publisher(published))
     session = SimpleNamespace(
         info={},
         new=[
@@ -297,7 +458,7 @@ def test_derived_analytics_changes_are_coalesced_by_family(monkeypatch: pytest.M
 
 def test_session_hooks_publish_model_changes_only_after_commit(monkeypatch: pytest.MonkeyPatch):
     published: list[dict] = []
-    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    monkeypatch.setattr(domain_events, "publish_domain_event", _successful_publisher(published))
     engine = _event_engine()
     HotelConfiguration.__table__.create(engine)
     session = Session(engine)
@@ -321,7 +482,7 @@ def test_session_hooks_publish_model_changes_only_after_commit(monkeypatch: pyte
 
 def test_nested_rollback_prunes_only_nested_realtime_signals(monkeypatch: pytest.MonkeyPatch):
     published: list[dict] = []
-    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    monkeypatch.setattr(domain_events, "publish_domain_event", _successful_publisher(published))
     engine = _event_engine()
     HotelConfiguration.__table__.create(engine)
     session = Session(engine)
@@ -346,7 +507,7 @@ def test_nested_rollback_prunes_only_nested_realtime_signals(monkeypatch: pytest
 
 def test_nested_commit_publishes_only_after_root_commit(monkeypatch: pytest.MonkeyPatch):
     published: list[dict] = []
-    monkeypatch.setattr(domain_events, "publish_domain_event", lambda **kwargs: published.append(kwargs))
+    monkeypatch.setattr(domain_events, "publish_domain_event", _successful_publisher(published))
     engine = _event_engine()
     HotelConfiguration.__table__.create(engine)
     session = Session(engine)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -132,7 +133,7 @@ def test_restriction_api_permissions_tenant_isolation_and_event(monkeypatch):
 
     def capture_event(**kwargs):
         published.append(kwargs)
-        return None
+        return SimpleNamespace(revision=len(published))
 
     monkeypatch.setattr("app.services.domain_events.publish_domain_event", capture_event)
     try:

@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1791177253370.9297,
-    "hash": "7cf85d443747a68178e4a11a5899563e"
+    "mtime": 1791180639001.0068,
+    "hash": "a5bf850416d5f5306dc8a17b0999712d"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1791177252692.124,
-    "hash": "37c4749928a24d55ff82599294ef8255"
+    "mtime": 1791180638411.1973,
+    "hash": "1680eaf7e91d92993b478805a0f12cb8"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1791177253343.328,
-    "hash": "53964ef0209e40b3c0ec809cdddc4065"
+    "mtime": 1791180638989.7878,
+    "hash": "be995cf2cabb8f38212e6f5b3d34ab1d"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1791177252704.2432,
-    "hash": "7cb6cc23ac77e406380a330245a2c8db"
+    "mtime": 1791180638423.1282,
+    "hash": "e486e75e83e5b999b90f8a65611cdd98"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1791177253317.6282,
-    "hash": "5f3f2808bc7474b35ab71681450a6225"
+    "mtime": 1791180638977.3489,
+    "hash": "0d1bfda16328a4fc9d6aef07af3ab6a7"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1791177252882.2383,
-    "hash": "7fd5ef285f3be2924f5cf693304a82b2"
+    "mtime": 1791180638604.0317,
+    "hash": "ee632922745b9664bdb045c6d6873659"
   },
   "qa/evidence/README.md": {
     "mtime": 1791167661251.5322,
@@ -3424,8 +3424,8 @@
     "hash": "d9f12c2885b9c47a52c270b28a879cef"
   },
   "app/services/domain_events.py": {
-    "mtime": 1791175427052.2178,
-    "hash": "a813c32706bb9297c0e6b1998760c150"
+    "mtime": 1791180020766.1868,
+    "hash": "632f9066bed353914928e7b950f1441e"
   },
   "frontend/src/sync/crossTabSync.ts": {
     "mtime": 1791167661233.485,
@@ -3436,8 +3436,8 @@
     "hash": "19550e60edc87c80aacef450d27345a8"
   },
   "tests/test_domain_events.py": {
-    "mtime": 1791167661283.8225,
-    "hash": "2ba94ae0237c3e70ba3a5fbbc06bddc4"
+    "mtime": 1791180494975.5913,
+    "hash": "a12aa649fe180fafe42096476caa4671"
   },
   "scripts/scale/staged_http_load.py": {
     "mtime": 1791167661260.9773,
@@ -4244,8 +4244,8 @@
     "hash": "592bcc7f8da980ecebf43b9ab3832f58"
   },
   "tests/test_guest_restriction_api.py": {
-    "mtime": 1791167661285.5032,
-    "hash": "596db04b152f371918911b1c420ad797"
+    "mtime": 1791181174610.4136,
+    "hash": "129a5c84504257ca1308549d7359456c"
   },
   "tests/test_guest_restriction_migration.py": {
     "mtime": 1791167661285.5723,
@@ -6508,11 +6508,15 @@
     "hash": "0869c5560b9769baaf3774b80038df02"
   },
   "qa/operational/runs/pr117-postmerge-20261005-3c91a3e8/report.md": {
-    "mtime": 1791177808942.1804,
-    "hash": "69c30aae0d7e19af337f1556d18cfa13"
+    "mtime": 1791178541294.0947,
+    "hash": "4111c1beed7afbb18a2af33c441b9eff"
   },
   "tests/test_analytics_home_fact_reuse.py": {
     "mtime": 1791172649259.165,
     "hash": "3f8d7309cbe7af08c717d0db4fd9f581"
+  },
+  "qa/operational/runs/postmerge-readonly-20261005-0174f497/report.md": {
+    "mtime": 1791181668877.1565,
+    "hash": "4db901587d1d81df04fcb2a755fac6f9"
   }
 }

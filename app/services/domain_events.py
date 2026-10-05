@@ -601,8 +601,14 @@ def publish_queued_domain_changes(session: "Session") -> None:
 
     bind = session.get_bind()
     outbox_session = _Session(bind=bind) if bind is not None else None
+    durable_publish_failed = False
     try:
         for change in pending.values():
+            if durable_publish_failed and change.outbox_event_id is not None:
+                # The committed outbox row remains pending for PostgreSQL SSE
+                # fallback and later recovery; avoid repeated Redis timeouts.
+                continue
+
             outbox = change.outbox
             outbox_identity = inspect(outbox).identity if outbox is not None else None
             outbox_id = outbox_identity[0] if outbox_identity else None
@@ -619,9 +625,14 @@ def publish_queued_domain_changes(session: "Session") -> None:
                         cursor=change.outbox_cursor or outbox_id,
                         schema_version=change.outbox_schema_version or 1,
                     )
-                event = publish_domain_event(**publish_kwargs)
-                if event is None:
-                    raise RealtimeEventsUnavailable("publish_domain_event returned no event")
+                try:
+                    event = publish_domain_event(**publish_kwargs)
+                    if event is None:
+                        raise RealtimeEventsUnavailable("publish_domain_event returned no event")
+                except Exception:
+                    if change.outbox_event_id is not None:
+                        durable_publish_failed = True
+                    raise
                 _record_outbox_attempt(
                     outbox_session, outbox_id, revision=event.revision, published=True
                 )
