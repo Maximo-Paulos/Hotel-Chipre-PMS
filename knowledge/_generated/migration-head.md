@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-10-06T03:19:30.455790+00:00
-Commit: `bf76e8c22174fb0f1904b57fe72b340fa9e1b278`
+Generado: 2026-10-06T04:24:24.766102+00:00
+Commit: `73398218f9ac118df53ccfd5780322be688519a6`
 
 ```text
-20261005_outbox_recovery_cursor (head)
+UNAVAILABLE (exit 1): /Users/maximopaulos/.local/share/uv/python/cpython-3.12-macos-aarch64-none/bin/python3.12: No module named alembic.__main__; 'alembic' is a package and cannot be directly executed
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

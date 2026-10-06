@@ -5,12 +5,10 @@ import {
   getBookedValueReport,
   getTodayArrivalCount,
   getOccupancyReport,
-  getOperationalAlerts,
   getRevenueReport,
   type DailyOperationalReport,
   type ArrivalCount,
   type BookedValueReport,
-  type NightlyOperationalSummary,
   type OccupancyReport,
   type RevenueReport
 } from "../api/reports";
@@ -20,10 +18,6 @@ import { useSession } from "../state/session";
 
 const dailyReportKey = (hotelId: number | null, reportDate: string) => [
   ...queryKeys.reports(hotelId, "operational-daily"),
-  reportDate
-];
-const alertsKey = (hotelId: number | null, reportDate: string) => [
-  ...queryKeys.reports(hotelId, "operational-alerts"),
   reportDate
 ];
 const occupancyKey = (hotelId: number | null, startDate: string, endDate: string) => [
@@ -59,17 +53,6 @@ export function useTodayArrivalCount() {
     queryKey: [...queryKeys.reports(session.hotelId, "today-arrival-count")],
     queryFn: ({ signal }) => getTodayArrivalCount(session, signal),
     enabled: hasValidSession(session),
-    staleTime: 30 * 1000,
-    retry: false
-  });
-}
-
-export function useOperationalAlerts(reportDate: string) {
-  const { session } = useSession();
-  return useQuery<NightlyOperationalSummary>({
-    queryKey: alertsKey(session.hotelId, reportDate),
-    queryFn: ({ signal }) => getOperationalAlerts(reportDate, session, signal),
-    enabled: Boolean(reportDate) && hasValidSession(session),
     staleTime: 30 * 1000,
     retry: false
   });

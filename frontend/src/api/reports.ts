@@ -84,19 +84,6 @@ export type DailyOperationalReport = {
   alerts: OperationalAlert[];
 };
 
-export type NightlyOperationalSummary = {
-  hotel_id: number;
-  report_date: string;
-  generated_at: string;
-  alert_count: number;
-  pending_payment_count: number;
-  late_arrival_count: number;
-  available_with_review_count: number;
-  active_room_block_count: number;
-  cash_session_status: string;
-  alerts: OperationalAlert[];
-};
-
 export type OccupancyReport = {
   start_date: string;
   end_date: string;
@@ -210,12 +197,6 @@ export const getDailyOperationalReport = (reportDate: string, session?: SessionL
 
 export const getTodayArrivalCount = (session?: SessionLike, signal?: AbortSignal) =>
   apiFetch<ArrivalCount>("/api/reports/operational/arrivals/count", { session, signal });
-
-export const getOperationalAlerts = (reportDate: string, session?: SessionLike, signal?: AbortSignal) =>
-  apiFetch<NightlyOperationalSummary>(
-    `/api/reports/operational/alerts?report_date=${encodeURIComponent(reportDate)}`,
-    { session, signal }
-  );
 
 export const getOccupancyReport = (startDate: string, endDate: string, session?: SessionLike, signal?: AbortSignal) =>
   apiFetch<OccupancyReport>(
