@@ -4,6 +4,7 @@ Supports both PostgreSQL (production) and SQLite (testing).
 """
 import logging
 import time
+from contextvars import ContextVar, Token
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
@@ -13,6 +14,30 @@ from app.config import get_settings, is_preview_qa_mode, is_production_mode
 
 LOGGER = logging.getLogger(__name__)
 _SLOW_QUERY_START_KEY = "_slow_query_start_times"
+_REQUEST_DB_METRICS: ContextVar[dict[str, float | int] | None] = ContextVar(
+    "request_db_metrics",
+    default=None,
+)
+
+
+def start_request_db_metrics() -> Token:
+    """Begin request-scoped SQL timing without retaining SQL or bound values."""
+    metrics: dict[str, float | int] = {"query_count": 0, "duration_ms": 0.0}
+    return _REQUEST_DB_METRICS.set(metrics)
+
+
+def finish_request_db_metrics(token: Token) -> dict[str, float | int]:
+    """Return the current request's SQL timing and restore the prior context."""
+    metrics = _REQUEST_DB_METRICS.get() or {"query_count": 0, "duration_ms": 0.0}
+    _REQUEST_DB_METRICS.reset(token)
+    return dict(metrics)
+
+
+def _record_request_query(duration_ms: float) -> None:
+    metrics = _REQUEST_DB_METRICS.get()
+    if metrics is not None:
+        metrics["query_count"] = int(metrics["query_count"]) + 1
+        metrics["duration_ms"] = float(metrics["duration_ms"]) + duration_ms
 
 
 def _slow_query_threshold_ms() -> float:
@@ -35,10 +60,11 @@ def _install_slow_query_listener(engine) -> None:
         started = starts.pop() if starts else None
         if started is None:
             return
+        duration_ms = (time.perf_counter() - started) * 1000.0
+        _record_request_query(duration_ms)
         threshold_ms = _slow_query_threshold_ms()
         if threshold_ms <= 0:
             return
-        duration_ms = (time.perf_counter() - started) * 1000.0
         if duration_ms >= threshold_ms:
             # Deliberately omit ``parameters``: SQL values can contain guest PII.
             LOGGER.warning(
@@ -53,7 +79,8 @@ def _install_slow_query_listener(engine) -> None:
         # carrying an old start time into the next statement on this connection.
         starts = exception_context.connection.info.get(_SLOW_QUERY_START_KEY)
         if starts:
-            starts.pop()
+            started = starts.pop()
+            _record_request_query((time.perf_counter() - started) * 1000.0)
 
 
 class Base(DeclarativeBase):

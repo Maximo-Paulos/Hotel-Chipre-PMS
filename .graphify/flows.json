@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-05T22:34:06.519Z",
+  "generatedAt": "2026-10-06T01:03:47.558Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -7012,6 +7012,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_domain_events_aiter_postgres_event_stream",
+      "name": "aiter_postgres_event_stream",
+      "entryPoint": "services_domain_events_aiter_postgres_event_stream",
+      "entryPointId": "services_domain_events_aiter_postgres_event_stream",
+      "path": [
+        "services_domain_events_aiter_postgres_event_stream",
+        "services_domain_events_format_sse",
+        "services_domain_events_outbox_sse_payload",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_validate_event_input"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_aiter_postgres_event_stream",
+        "services_domain_events_format_sse",
+        "services_domain_events_outbox_sse_payload",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_validate_event_input"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.27,
+      "warnings": []
+    },
+    {
       "id": "flow:services_cash_register_service_close_session",
       "name": "close_session",
       "entryPoint": "services_cash_register_service_close_session",
@@ -10601,6 +10629,36 @@
       "warnings": []
     },
     {
+      "id": "flow:services_financial_report_service_build_booked_value_report",
+      "name": "build_booked_value_report",
+      "entryPoint": "services_financial_report_service_build_booked_value_report",
+      "entryPointId": "services_financial_report_service_build_booked_value_report",
+      "path": [
+        "services_financial_report_service_build_booked_value_report",
+        "services_financial_report_service_build_booked_value_projection",
+        "services_financial_report_service_validate_report_window",
+        "services_financial_report_service_booked_amount_in_window",
+        "services_financial_report_service_booked_nights_in_window",
+        "services_financial_report_service_money"
+      ],
+      "qualifiedPath": [
+        "services_financial_report_service_build_booked_value_report",
+        "services_financial_report_service_build_booked_value_projection",
+        "services_financial_report_service_validate_report_window",
+        "services_financial_report_service_booked_amount_in_window",
+        "services_financial_report_service_booked_nights_in_window",
+        "services_financial_report_service_money"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_report_service.py"
+      ],
+      "criticality": 0.2117,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_insights_build_home_insight",
       "name": "build_home_insight",
       "entryPoint": "services_analytics_insights_build_home_insight",
@@ -12018,6 +12076,42 @@
         "app/services/read_model_cache.py"
       ],
       "criticality": 0.1992,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_financial_report_service_build_financial_report",
+      "name": "build_financial_report",
+      "entryPoint": "services_financial_report_service_build_financial_report",
+      "entryPointId": "services_financial_report_service_build_financial_report",
+      "path": [
+        "services_financial_report_service_build_financial_report",
+        "services_financial_report_service_aggregate_rows",
+        "services_financial_report_service_build_booked_value_projection",
+        "services_financial_report_service_hotel_bounds",
+        "services_financial_report_service_local_day",
+        "services_financial_report_service_money",
+        "services_financial_report_service_validate_report_window",
+        "services_financial_report_service_booked_amount_in_window",
+        "services_financial_report_service_booked_nights_in_window"
+      ],
+      "qualifiedPath": [
+        "services_financial_report_service_build_financial_report",
+        "services_financial_report_service_aggregate_rows",
+        "services_financial_report_service_build_booked_value_projection",
+        "services_financial_report_service_hotel_bounds",
+        "services_financial_report_service_local_day",
+        "services_financial_report_service_money",
+        "services_financial_report_service_validate_report_window",
+        "services_financial_report_service_booked_amount_in_window",
+        "services_financial_report_service_booked_nights_in_window"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_report_service.py"
+      ],
+      "criticality": 0.1978,
       "warnings": []
     },
     {
@@ -20509,38 +20603,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_financial_report_service_build_financial_report",
-      "name": "build_financial_report",
-      "entryPoint": "services_financial_report_service_build_financial_report",
-      "entryPointId": "services_financial_report_service_build_financial_report",
-      "path": [
-        "services_financial_report_service_build_financial_report",
-        "services_financial_report_service_aggregate_rows",
-        "services_financial_report_service_booked_amount_in_window",
-        "services_financial_report_service_booked_nights_in_window",
-        "services_financial_report_service_hotel_bounds",
-        "services_financial_report_service_local_day",
-        "services_financial_report_service_money"
-      ],
-      "qualifiedPath": [
-        "services_financial_report_service_build_financial_report",
-        "services_financial_report_service_aggregate_rows",
-        "services_financial_report_service_booked_amount_in_window",
-        "services_financial_report_service_booked_nights_in_window",
-        "services_financial_report_service_hotel_bounds",
-        "services_financial_report_service_local_day",
-        "services_financial_report_service_money"
-      ],
-      "depth": 1,
-      "nodeCount": 7,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_report_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_gemma_context_service_build_gemma_hotel_context",
       "name": "build_gemma_hotel_context",
       "entryPoint": "services_gemma_context_service_build_gemma_hotel_context",
@@ -28580,6 +28642,28 @@
       "fileCount": 1,
       "files": [
         "app/services/room_catalog_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:hooks_usereports_usebookedvaluereport",
+      "name": "useBookedValueReport",
+      "entryPoint": "hooks_usereports_usebookedvaluereport",
+      "entryPointId": "hooks_usereports_usebookedvaluereport",
+      "path": [
+        "hooks_usereports_usebookedvaluereport",
+        "hooks_usereports_bookedvaluekey"
+      ],
+      "qualifiedPath": [
+        "hooks_usereports_usebookedvaluereport",
+        "hooks_usereports_bookedvaluekey"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useReports.ts"
       ],
       "criticality": 0.16,
       "warnings": []

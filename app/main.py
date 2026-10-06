@@ -28,7 +28,12 @@ class _DecimalAwareEncoder(json.JSONEncoder):
             return float(obj)
         return super().default(obj)
 
-from app.database import init_db, get_db
+from app.database import (
+    finish_request_db_metrics,
+    get_db,
+    init_db,
+    start_request_db_metrics,
+)
 from app.config import get_settings, is_demo_mode, is_production_mode, validate_runtime_security
 from app.api import (
     rooms,
@@ -275,10 +280,14 @@ async def security_headers(request: Request, call_next):
 async def request_telemetry(request: Request, call_next):
     """Emit bounded HTTP timing fields and make correlation IDs observable."""
     started = time.perf_counter()
+    db_metrics_token = start_request_db_metrics()
     request_id = request.headers.get("X-Request-Id", "")[:128]
     if not request_id or not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", request_id):
         request_id = str(uuid.uuid4())
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    finally:
+        db_metrics = finish_request_db_metrics(db_metrics_token)
     duration_ms = (time.perf_counter() - started) * 1000.0
     LOGGER.info(
         "http.request route=%s method=%s status=%s duration_ms=%.2f request_id=%s",
@@ -292,6 +301,13 @@ async def request_telemetry(request: Request, call_next):
     # Append instead of assigning so any Server-Timing metrics supplied by an
     # upstream proxy remain available alongside the application duration.
     response.headers.append("Server-Timing", f"app;dur={duration_ms:.2f}")
+    query_count = int(db_metrics["query_count"])
+    if query_count:
+        db_duration_ms = float(db_metrics["duration_ms"])
+        response.headers.append(
+            "Server-Timing",
+            f'db;dur={db_duration_ms:.2f}, dbq;desc="{query_count} queries"',
+        )
     return response
 
 # CORS: local dev origins and Vercel previews are development/QA conveniences.

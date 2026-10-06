@@ -2,7 +2,9 @@ import re
 
 from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
+from app.database import get_engine
 from app.main import app, request_telemetry
 
 
@@ -40,3 +42,25 @@ def test_request_timing_preserves_existing_server_timing_metrics():
     timing_metrics = response.headers.get_list("Server-Timing")
     assert "proxy;dur=4.25" in timing_metrics
     assert any(re.fullmatch(r"app;dur=\d+(?:\.\d+)?", value) for value in timing_metrics)
+
+
+def test_request_timing_includes_sql_duration_and_query_count():
+    telemetry_app = FastAPI()
+    telemetry_app.middleware("http")(request_telemetry)
+    engine = get_engine("sqlite:///:memory:")
+
+    @telemetry_app.get("/database-query")
+    def database_query():
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return {"ok": True}
+
+    try:
+        response = TestClient(telemetry_app).get("/database-query")
+    finally:
+        engine.dispose()
+
+    assert response.status_code == 200
+    timing_metrics = ",".join(response.headers.get_list("Server-Timing"))
+    assert re.search(r"(?:^|,\s*)db;dur=\d+(?:\.\d+)?(?:,|$)", timing_metrics)
+    assert 'dbq;desc="1 queries"' in timing_metrics
