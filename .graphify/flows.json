@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-06T15:35:59.208Z",
+  "generatedAt": "2026-10-06T21:33:13.347Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -6373,6 +6373,28 @@
       "warnings": []
     },
     {
+      "id": "flow:app_database_record_request_query",
+      "name": "record_request_query",
+      "entryPoint": "app_database_record_request_query",
+      "entryPointId": "app_database_record_request_query",
+      "path": [
+        "app_database_record_request_query",
+        "app_database_estimate_parameter_bytes"
+      ],
+      "qualifiedPath": [
+        "app_database_record_request_query",
+        "app_database_estimate_parameter_bytes"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/database.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:services_waitlist_service_request_payment_link_for_waitlist",
       "name": "request_payment_link_for_waitlist",
       "entryPoint": "services_waitlist_service_request_payment_link_for_waitlist",
@@ -7490,6 +7512,46 @@
       "warnings": []
     },
     {
+      "id": "flow:app_database_get_db",
+      "name": "get_db",
+      "entryPoint": "app_database_get_db",
+      "entryPointId": "app_database_get_db",
+      "path": [
+        "app_database_get_db",
+        "app_database_get_session_factory",
+        "app_database_init_db",
+        "app_database_backfill_not_null_nulls",
+        "app_database_get_engine",
+        "app_database_requesttelemetryqueuepool_connect",
+        "app_database_sync_missing_columns",
+        "app_database_column_fill_value",
+        "app_database_install_slow_query_listener",
+        "app_database_record_pool_checkout",
+        "app_database_render_server_default"
+      ],
+      "qualifiedPath": [
+        "app_database_get_db",
+        "app_database_get_session_factory",
+        "app_database_init_db",
+        "app_database_backfill_not_null_nulls",
+        "app_database_get_engine",
+        "app_database_requesttelemetryqueuepool_connect",
+        "app_database_sync_missing_columns",
+        "app_database_column_fill_value",
+        "app_database_install_slow_query_listener",
+        "app_database_record_pool_checkout",
+        "app_database_render_server_default"
+      ],
+      "depth": 4,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/database.py"
+      ],
+      "criticality": 0.2582,
+      "warnings": []
+    },
+    {
       "id": "flow:adapters_booking_bookingadapter_push_inventory",
       "name": ".push_inventory",
       "entryPoint": "adapters_booking_bookingadapter_push_inventory",
@@ -8279,42 +8341,6 @@
       "fileCount": 1,
       "files": [
         "app/services/ota/adapters/booking.py"
-      ],
-      "criticality": 0.2456,
-      "warnings": []
-    },
-    {
-      "id": "flow:app_database_get_db",
-      "name": "get_db",
-      "entryPoint": "app_database_get_db",
-      "entryPointId": "app_database_get_db",
-      "path": [
-        "app_database_get_db",
-        "app_database_get_session_factory",
-        "app_database_init_db",
-        "app_database_backfill_not_null_nulls",
-        "app_database_get_engine",
-        "app_database_sync_missing_columns",
-        "app_database_column_fill_value",
-        "app_database_install_slow_query_listener",
-        "app_database_render_server_default"
-      ],
-      "qualifiedPath": [
-        "app_database_get_db",
-        "app_database_get_session_factory",
-        "app_database_init_db",
-        "app_database_backfill_not_null_nulls",
-        "app_database_get_engine",
-        "app_database_sync_missing_columns",
-        "app_database_column_fill_value",
-        "app_database_install_slow_query_listener",
-        "app_database_render_server_default"
-      ],
-      "depth": 4,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/database.py"
       ],
       "criticality": 0.2456,
       "warnings": []

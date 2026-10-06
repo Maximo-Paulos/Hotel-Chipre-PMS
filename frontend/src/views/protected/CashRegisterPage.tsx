@@ -870,6 +870,33 @@ export function CashRegisterPage() {
         <Metric label="Esperado" value={money(expectedBalance, currency)} />
       </div>
 
+      {summary?.by_collector.length ? (
+        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Cierre de caja</p>
+            <h2 className="text-lg font-semibold text-slate-900">Detalle por usuario</h2>
+            <p className="text-sm text-slate-600">Movimientos de esta sesión atribuidos a quien los registró.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {summary.by_collector.map((collector) => (
+              <article
+                key={`${collector.collector_user_id ?? "system"}-${collector.collector_name}`}
+                className="rounded-lg bg-slate-50 p-3"
+              >
+                <p className="truncate text-sm font-semibold text-slate-800">{collector.collector_name}</p>
+                <p className="mt-1 text-xs text-slate-500">{collector.movement_count} movimiento(s)</p>
+                <dl className="mt-2 space-y-1 text-xs text-slate-600">
+                  <div className="flex justify-between gap-2"><dt>Ingresos</dt><dd>{money(collector.income_total, currency)}</dd></div>
+                  <div className="flex justify-between gap-2"><dt>Egresos</dt><dd>{money(collector.expense_total, currency)}</dd></div>
+                  <div className="flex justify-between gap-2"><dt>Ajustes</dt><dd>{money(collector.adjustment_total, currency)}</dd></div>
+                  <div className="flex justify-between gap-2 border-t border-slate-200 pt-1 font-semibold text-slate-900"><dt>Neto</dt><dd>{money(collector.net_total, currency)}</dd></div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         <section className="space-y-4">
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

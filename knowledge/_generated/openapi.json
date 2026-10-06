@@ -45721,6 +45721,55 @@
         ],
         "title": "CashSessionClose"
       },
+      "CashSessionCollectorSummaryRead": {
+        "properties": {
+          "collector_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector User Id"
+          },
+          "collector_name": {
+            "type": "string",
+            "title": "Collector Name"
+          },
+          "income_total": {
+            "type": "string",
+            "title": "Income Total"
+          },
+          "expense_total": {
+            "type": "string",
+            "title": "Expense Total"
+          },
+          "adjustment_total": {
+            "type": "string",
+            "title": "Adjustment Total"
+          },
+          "net_total": {
+            "type": "string",
+            "title": "Net Total"
+          },
+          "movement_count": {
+            "type": "integer",
+            "title": "Movement Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "collector_name",
+          "income_total",
+          "expense_total",
+          "adjustment_total",
+          "net_total",
+          "movement_count"
+        ],
+        "title": "CashSessionCollectorSummaryRead"
+      },
       "CashSessionOpen": {
         "properties": {
           "opening_balance": {
@@ -45950,6 +45999,13 @@
           "movements_count": {
             "type": "integer",
             "title": "Movements Count"
+          },
+          "by_collector": {
+            "items": {
+              "$ref": "#/components/schemas/CashSessionCollectorSummaryRead"
+            },
+            "type": "array",
+            "title": "By Collector"
           }
         },
         "type": "object",

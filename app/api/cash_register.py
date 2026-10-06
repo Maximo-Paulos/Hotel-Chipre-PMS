@@ -601,7 +601,22 @@ def cash_session_summary(
     context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
     try:
-        return get_session_summary(db, hotel_id=context.hotel_id, session_id=session_id)
+        summary = get_session_summary(db, hotel_id=context.hotel_id, session_id=session_id)
+        collector_rows = summary["by_collector"]
+        actor_labels = resolve_hotel_actor_labels(
+            db,
+            hotel_id=context.hotel_id,
+            user_ids=(row["collector_user_id"] for row in collector_rows),
+        )
+        summary["by_collector"] = [
+            {
+                **row,
+                "collector_name": actor_labels.get(row["collector_user_id"])
+                or "Usuario no disponible",
+            }
+            for row in collector_rows
+        ]
+        return summary
     except CashRegisterError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 

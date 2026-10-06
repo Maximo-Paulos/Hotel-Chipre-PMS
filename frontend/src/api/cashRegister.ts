@@ -80,6 +80,15 @@ export type CashSessionSummary = {
   confirmed_cash_total: number;
   expected_balance: number;
   movements_count: number;
+  by_collector: Array<{
+    collector_user_id: number | null;
+    collector_name: string;
+    income_total: number;
+    expense_total: number;
+    adjustment_total: number;
+    net_total: number;
+    movement_count: number;
+  }>;
 };
 
 export type CashDailyPaymentMethod = {

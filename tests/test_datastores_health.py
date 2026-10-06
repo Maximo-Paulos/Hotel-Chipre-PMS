@@ -43,6 +43,33 @@ def test_disabled_clients_return_none_and_healthchecks_are_disabled():
         assert payload["error"] is None
 
 
+def test_clickhouse_health_does_not_connect_when_provider_traffic_is_disabled(monkeypatch: pytest.MonkeyPatch):
+    import app.api.health as health_module
+
+    settings = Settings(
+        CLICKHOUSE_ENABLED=True,
+        CLICKHOUSE_REQUIRED=True,
+        CLICKHOUSE_URL="https://clickhouse.example.test",
+        EXTERNAL_EFFECTS_ENABLED=False,
+        CONNECTIONS_ENABLED=False,
+    )
+    monkeypatch.setattr(health_module, "get_settings", lambda: settings)
+
+    def unexpected_connection():
+        pytest.fail("ClickHouse health check must honor the closed provider-traffic policy")
+
+    monkeypatch.setattr(health_module, "get_clickhouse_client", unexpected_connection)
+
+    payload = health_module._clickhouse_healthcheck()
+
+    assert payload == {
+        "status": "blocked",
+        "enabled": True,
+        "connected": False,
+        "error": "Provider connections are disabled by policy",
+    }
+
+
 def test_datastores_health_endpoint_reports_postgres_and_disabled_nosql(monkeypatch: pytest.MonkeyPatch):
     import app.main as main_module
 

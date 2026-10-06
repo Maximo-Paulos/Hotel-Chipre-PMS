@@ -13,10 +13,11 @@ The solver uses a Constraint Programming (CP-SAT) model where:
 - Objective function penalizes fragmentation gaps
 """
 from datetime import date, timedelta
+from bisect import bisect_right
 from typing import Optional
 from dataclasses import dataclass, field
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, lazyload, load_only, selectinload
 
 from app.models.room import Room, RoomStatusEnum
 from app.services.room_service import active_rooms
@@ -686,6 +687,26 @@ def build_slots_from_db(
         active_reservations(db, hotel_id)
         if has_hotel_context
         else _active_reservations_without_hotel(db)
+    ).options(
+        lazyload("*"),
+        load_only(
+            Reservation.id,
+            Reservation.hotel_id,
+            Reservation.status,
+            Reservation.company_id,
+            Reservation.category_id,
+            Reservation.check_in_date,
+            Reservation.check_out_date,
+            Reservation.room_id,
+            Reservation.guest_id,
+            Reservation.num_adults,
+            Reservation.num_children,
+            Reservation.mobility_restriction,
+            Reservation.sellable_product_id,
+            Reservation.actual_check_in,
+            Reservation.pre_check_in_at,
+            Reservation.allocation_locked,
+        ),
     ).filter(
         Reservation.status.notin_([
             ReservationStatusEnum.CANCELLED,
@@ -699,15 +720,15 @@ def build_slots_from_db(
     reservation_ids = [reservation.id for reservation in reservation_rows]
     active_lock_ids: set[int] = set()
     if reservation_ids:
-        active_lock_ids = {
-            row.reservation_id
-            for row in db.query(ReservationAllocationLock.reservation_id)
-            .filter(
-                ReservationAllocationLock.reservation_id.in_(reservation_ids),
-                ReservationAllocationLock.is_active == True,
+        active_lock_query = db.query(ReservationAllocationLock.reservation_id).filter(
+            ReservationAllocationLock.reservation_id.in_(reservation_ids),
+            ReservationAllocationLock.is_active.is_(True),
+        )
+        if has_hotel_context:
+            active_lock_query = active_lock_query.filter(
+                ReservationAllocationLock.hotel_id == hotel_id
             )
-            .all()
-        }
+        active_lock_ids = {row.reservation_id for row in active_lock_query.all()}
     company_ids = {
         company_id
         for company_id in {getattr(reservation, "company_id", None) for reservation in reservation_rows}
@@ -715,24 +736,27 @@ def build_slots_from_db(
     }
     protected_company_ids: set[int] = set()
     if company_ids:
-        company_query = db.query(Company).filter(Company.id.in_(company_ids))
+        company_query = db.query(Company.id).filter(
+            Company.id.in_(company_ids),
+            Company.requires_signature.is_(True) | Company.payment_deferred.is_(True),
+        )
         if has_hotel_context:
             company_query = company_query.filter(Company.hotel_id == hotel_id)
-        protected_company_ids = {
-            company.id
-            for company in company_query.all()
-            if bool(company.requires_signature or company.payment_deferred)
-        }
+        protected_company_ids = {company_id for (company_id,) in company_query.all()}
 
     # Discover allowed categories intelligently
-    from app.models.room import RoomCategory
     from app.models.commercial import ProductRoomCompatibility, SellableProduct
-    all_cat_query = db.query(RoomCategory)
-    if has_hotel_context:
-        all_cat_query = all_cat_query.filter(RoomCategory.hotel_id == hotel_id)
-    all_cat = all_cat_query.all()
-    cat_map = {c.id: c for c in all_cat}
-    compat_query = db.query(ProductRoomCompatibility).filter(ProductRoomCompatibility.allows_auto_assignment == True)
+    from app.models.room import RoomCategory
+
+    compat_query = db.query(ProductRoomCompatibility).options(
+        lazyload("*"),
+        load_only(
+            ProductRoomCompatibility.sellable_product_id,
+            ProductRoomCompatibility.room_category_id,
+            ProductRoomCompatibility.priority,
+            ProductRoomCompatibility.compatibility_kind,
+        ),
+    ).filter(ProductRoomCompatibility.allows_auto_assignment.is_(True))
     if has_hotel_context:
         compat_query = compat_query.filter(ProductRoomCompatibility.hotel_id == hotel_id)
     compatibility_rows = compat_query.order_by(ProductRoomCompatibility.priority.asc()).all()
@@ -748,12 +772,18 @@ def build_slots_from_db(
         }
         if product_id is not None
     }
-    product_map: dict[int, SellableProduct] = {}
+    product_map: dict[int, int | None] = {}
     if product_ids:
-        product_query = db.query(SellableProduct).filter(SellableProduct.id.in_(product_ids))
+        product_query = db.query(
+            SellableProduct.id,
+            SellableProduct.primary_room_category_id,
+        ).filter(SellableProduct.id.in_(product_ids))
         if has_hotel_context:
             product_query = product_query.filter(SellableProduct.hotel_id == hotel_id)
-        product_map = {product.id: product for product in product_query.all()}
+        product_map = {
+            product_id: primary_category_id
+            for product_id, primary_category_id in product_query.all()
+        }
 
     # A single UNION ALL query batches both guest-room data sources for every
     # guest represented in the horizon. The slot loop below only reads these
@@ -762,6 +792,7 @@ def build_slots_from_db(
     guest_ids = {reservation.guest_id for reservation in reservation_rows if reservation.guest_id is not None}
     avoided_room_ids_by_guest: dict[int, set[int]] = {}
     completed_stays_by_guest: dict[int, list[tuple[date, int, int, int]]] = {}
+    completed_stay_keys_by_guest: dict[int, list[tuple[date, int]]] = {}
     if guest_ids:
         from sqlalchemy import Date, Integer, and_, literal
 
@@ -793,6 +824,7 @@ def build_slots_from_db(
             Reservation.guest_id.in_(guest_ids),
             Reservation.room_id.isnot(None),
             Reservation.status == ReservationStatusEnum.CHECKED_OUT,
+            Reservation.check_out_date < end_date,
         )
         if has_hotel_context:
             historical_stay_signal_query = historical_stay_signal_query.filter(Reservation.hotel_id == hotel_id)
@@ -806,15 +838,19 @@ def build_slots_from_db(
                 completed_stays_by_guest.setdefault(guest_id, []).append(
                     (check_out_date, completed_reservation_id, room_id, room_category_id)
                 )
+        for guest_id, stays in completed_stays_by_guest.items():
+            stays.sort(key=lambda stay: (stay[0], stay[1]))
+            completed_stay_keys_by_guest[guest_id] = [
+                (stay[0], stay[1]) for stay in stays
+            ]
 
     reservation_slots = []
     for res in reservation_rows:
-        req_cat = cat_map.get(res.category_id)
         allowed = [res.category_id]
         priority_by_category: dict[int, int] = {res.category_id: 0}
 
         sellable_product_id = getattr(res, "sellable_product_id", None)
-        product = product_map.get(sellable_product_id)
+        primary_room_category_id = product_map.get(sellable_product_id)
         compat_rows = compatibility_by_product.get(sellable_product_id, [])
         if compat_rows:
             for row in compat_rows:
@@ -826,19 +862,20 @@ def build_slots_from_db(
                     priority_by_category.get(row.room_category_id, row.priority),
                     row.priority,
                 )
-        elif product and product.primary_room_category_id and product.primary_room_category_id not in allowed:
+        elif primary_room_category_id and primary_room_category_id not in allowed:
             # Keep the fallback model explicit: if no compatibility rows were configured
             # we only trust the product's declared primary category, never code heuristics.
-            allowed.append(product.primary_room_category_id)
-            priority_by_category[product.primary_room_category_id] = 0
+            allowed.append(primary_room_category_id)
+            priority_by_category[primary_room_category_id] = 0
 
         avoided_room_ids = avoided_room_ids_by_guest.get(res.guest_id, set())
-        prior_stays = [
-            stay
-            for stay in completed_stays_by_guest.get(res.guest_id, [])
-            if stay[0] <= res.check_in_date
-        ]
-        last_stay = max(prior_stays, default=None, key=lambda stay: (stay[0], stay[1]))
+        guest_stays = completed_stays_by_guest.get(res.guest_id, [])
+        guest_stay_keys = completed_stay_keys_by_guest.get(res.guest_id, [])
+        prior_stay_index = bisect_right(
+            guest_stay_keys,
+            (res.check_in_date, float("inf")),
+        ) - 1
+        last_stay = guest_stays[prior_stay_index] if prior_stay_index >= 0 else None
         prior_stay_room_id = (
             last_stay[2]
             if last_stay is not None
@@ -869,7 +906,21 @@ def build_slots_from_db(
         reservation_slots.append(slot)
 
     # Load all active rooms — EXCLUDE maintenance, blocked, but include CLEANING as it's a temporary state
-    rooms_query = active_rooms(db, hotel_id).filter(
+    rooms_query = active_rooms(db, hotel_id).options(
+        lazyload("*"),
+        load_only(
+            Room.id,
+            Room.room_number,
+            Room.category_id,
+            Room.floor,
+            Room.score,
+            Room.is_accessible,
+        ),
+        selectinload(Room.category).load_only(
+            RoomCategory.id,
+            RoomCategory.max_occupancy,
+        ),
+    ).filter(
         Room.is_active == True,
         Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
     )

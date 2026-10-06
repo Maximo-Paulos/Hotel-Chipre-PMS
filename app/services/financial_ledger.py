@@ -224,19 +224,21 @@ def billing_adjustment_totals_by_reservation(
     reservation_ids: Iterable[int] | None = None,
 ) -> dict[int, Decimal]:
     """Aggregate billing adjustments (consumption/extra charges) once per reservation."""
-    query = db.query(BillingAdjustment).filter(BillingAdjustment.hotel_id == hotel_id)
+    query = db.query(
+        BillingAdjustment.reservation_id,
+        func.sum(BillingAdjustment.total_amount),
+    ).filter(BillingAdjustment.hotel_id == hotel_id)
     if reservation_ids is not None:
         ids = tuple(reservation_ids)
         if not ids:
             return {}
         query = query.filter(BillingAdjustment.reservation_id.in_(ids))
 
-    totals: dict[int, Decimal] = {}
-    for row in query.all():
-        totals[row.reservation_id] = totals.get(row.reservation_id, Decimal("0.00")) + Decimal(
-            str(row.total_amount or 0)
-        )
-    return {reservation_id: amount.quantize(Decimal("0.01")) for reservation_id, amount in totals.items()}
+    rows = query.group_by(BillingAdjustment.reservation_id).all()
+    return {
+        reservation_id: Decimal(str(total or 0)).quantize(Decimal("0.01"))
+        for reservation_id, total in rows
+    }
 
 
 def operational_balance_due(

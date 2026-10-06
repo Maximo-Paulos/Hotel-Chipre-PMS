@@ -4,26 +4,53 @@ import { createBrowserRouter, Navigate, useLocation } from "react-router-dom";
 import { isAppHostname, resolveAppLocation, resolveSiteLocation } from "./config/publicUrls";
 import { useOnboardingStatus } from "./hooks/useOnboardingStatus";
 import { useSession } from "./state/session";
-import { AppShell } from "./ui/AppShell";
 import { PermissionGate } from "./components/PermissionGate";
-import { ContactPage } from "./views/public/ContactPage";
-import { FaqPage } from "./views/public/FaqPage";
-import { FunctionsPage } from "./views/public/FunctionsPage";
-import { MarketingHomePage } from "./views/public/MarketingHomePage";
-import { MarketingNotFoundPage } from "./views/public/MarketingNotFoundPage";
-import { PmsHoteleroPage } from "./views/public/PmsHoteleroPage";
-import { PricingPage as PricingPageView } from "./views/public/PricingPage";
-import { PrivacyPage } from "./views/public/PrivacyPage";
-import { SoftwareParaHotelesPage } from "./views/public/SoftwareParaHotelesPage";
-import { TermsPage } from "./views/public/TermsPage";
-import { ThankYouPage } from "./views/public/ThankYouPage";
-import {
-  MasterAdminProtectedShell,
-  MasterAdminRoot
-} from "./master_admin/layout";
 
-// Marketing pages stay eager: they render on hotels-pms.com for SEO/first paint,
-// and are excluded from the app-host bundle path entirely (see appRoutes below).
+const AppShell = lazy(() =>
+  import("./ui/AppShell").then((module) => ({ default: module.AppShell }))
+);
+const ContactPage = lazy(() =>
+  import("./views/public/ContactPage").then((module) => ({ default: module.ContactPage }))
+);
+const FaqPage = lazy(() =>
+  import("./views/public/FaqPage").then((module) => ({ default: module.FaqPage }))
+);
+const FunctionsPage = lazy(() =>
+  import("./views/public/FunctionsPage").then((module) => ({ default: module.FunctionsPage }))
+);
+const MarketingHomePage = lazy(() =>
+  import("./views/public/MarketingHomePage").then((module) => ({ default: module.MarketingHomePage }))
+);
+const MarketingNotFoundPage = lazy(() =>
+  import("./views/public/MarketingNotFoundPage").then((module) => ({ default: module.MarketingNotFoundPage }))
+);
+const PmsHoteleroPage = lazy(() =>
+  import("./views/public/PmsHoteleroPage").then((module) => ({ default: module.PmsHoteleroPage }))
+);
+const PricingPageView = lazy(() =>
+  import("./views/public/PricingPage").then((module) => ({ default: module.PricingPage }))
+);
+const PrivacyPage = lazy(() =>
+  import("./views/public/PrivacyPage").then((module) => ({ default: module.PrivacyPage }))
+);
+const SoftwareParaHotelesPage = lazy(() =>
+  import("./views/public/SoftwareParaHotelesPage").then((module) => ({ default: module.SoftwareParaHotelesPage }))
+);
+const TermsPage = lazy(() =>
+  import("./views/public/TermsPage").then((module) => ({ default: module.TermsPage }))
+);
+const ThankYouPage = lazy(() =>
+  import("./views/public/ThankYouPage").then((module) => ({ default: module.ThankYouPage }))
+);
+const MasterAdminProtectedShell = lazy(() =>
+  import("./master_admin/layout").then((module) => ({ default: module.MasterAdminProtectedShell }))
+);
+const MasterAdminRoot = lazy(() =>
+  import("./master_admin/layout").then((module) => ({ default: module.MasterAdminRoot }))
+);
+
+// Marketing pages load on demand; the build plugin still emits route metadata
+// into each marketing HTML document.
 
 // Auth/public app-host pages: no SEO need, safe to lazy-load.
 const LoginPage = lazy(() => import("./views/public/LoginPage").then((m) => ({ default: m.LoginPage })));

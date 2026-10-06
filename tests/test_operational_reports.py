@@ -19,6 +19,7 @@ from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.user import User
+from app.services.operational_report_service import daily_report
 
 
 @pytest.fixture
@@ -505,3 +506,44 @@ def test_daily_report_pending_payments_reflect_consumption_charges(reports_clien
         alert["reservation_id"] for alert in payload["alerts"] if alert["code"] == "pending_payment"
     }
     assert reservation.id in alert_reservation_ids
+
+
+def test_daily_report_materializes_only_future_reservations_with_pending_balance(reports_client):
+    _client, db, _ctx = reports_client
+    report_date = date(2026, 6, 13)
+    category, _rooms = _make_room_set(db, 1, "FUTURE")
+    guest = _make_guest(db, 1, "future")
+    reservations = [
+        _make_reservation(
+            db,
+            hotel_id=1,
+            guest=guest,
+            category=category,
+            room=None,
+            code=f"RPT-FUTURE-{idx}",
+            check_in=date(2026, 7, idx + 1),
+            check_out=date(2026, 7, idx + 3),
+            total="200.00",
+            paid="200.00" if idx < 19 else "0.00",
+            status=ReservationStatusEnum.FULLY_PAID if idx < 19 else ReservationStatusEnum.PENDING,
+        )
+        for idx in range(20)
+    ]
+    db.commit()
+    pending_id = reservations[-1].id
+    db.expunge_all()
+
+    loaded_reservation_ids = []
+
+    def record_loaded_reservation(session, instance):
+        if isinstance(instance, Reservation):
+            loaded_reservation_ids.append(instance.id)
+
+    event.listen(db, "loaded_as_persistent", record_loaded_reservation)
+    try:
+        report = daily_report(db, hotel_id=1, report_date=report_date)
+    finally:
+        event.remove(db, "loaded_as_persistent", record_loaded_reservation)
+
+    assert [item.reservation_id for item in report.pending_payments.reservations] == [pending_id]
+    assert loaded_reservation_ids == [pending_id]

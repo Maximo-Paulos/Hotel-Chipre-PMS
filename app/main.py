@@ -310,26 +310,51 @@ async def request_telemetry(request: Request, call_next):
     finally:
         db_metrics = finish_request_db_metrics(db_metrics_token)
     duration_ms = (time.perf_counter() - started) * 1000.0
+    query_count = int(db_metrics["query_count"])
+    db_duration_ms = float(db_metrics["duration_ms"])
+    db_request_bytes = int(db_metrics["request_bytes_estimate"])
+    db_destination_host = str(db_metrics["destination_host"])
+    pool_checkout_count = int(db_metrics["pool_checkout_count"])
+    pool_checkout_duration_ms = float(db_metrics["pool_checkout_duration_ms"])
+    max_pool_checkout_ms = float(db_metrics["max_pool_checkout_ms"])
+    response_bytes = response.headers.get("content-length", "unknown")
+    matched_route = request.scope.get("route")
+    route_label = getattr(matched_route, "path", None) or _safe_request_path_for_logging(
+        request.url.path
+    )
     LOGGER.info(
-        "http.request route=%s method=%s status=%s duration_ms=%.2f request_id=%s",
-        _safe_request_path_for_logging(request.url.path),
+        "http.request route=%s method=%s status=%s duration_ms=%.2f db_query_count=%s db_duration_ms=%.2f db_request_bytes_estimate=%s db_destination_host=%s db_pool_checkout_count=%s db_pool_checkout_duration_ms=%.2f db_pool_checkout_max_ms=%.2f content_length_bytes=%s request_id=%s",
+        route_label,
         request.method,
         response.status_code,
         duration_ms,
+        query_count,
+        db_duration_ms,
+        db_request_bytes,
+        db_destination_host,
+        pool_checkout_count,
+        pool_checkout_duration_ms,
+        max_pool_checkout_ms,
+        response_bytes,
         request_id,
     )
     response.headers["X-Request-Id"] = request_id
     # Append instead of assigning so any Server-Timing metrics supplied by an
     # upstream proxy remain available alongside the application duration.
     response.headers.append("Server-Timing", f"app;dur={duration_ms:.2f}")
-    query_count = int(db_metrics["query_count"])
     if query_count:
-        db_duration_ms = float(db_metrics["duration_ms"])
         response.headers.append(
             "Server-Timing",
             f'db;dur={db_duration_ms:.2f}, '
             f'dbmax;dur={float(db_metrics["max_duration_ms"]):.2f}, '
             f'dbq;desc="{query_count} queries"',
+        )
+    if pool_checkout_count:
+        response.headers.append(
+            "Server-Timing",
+            f"dbpool;dur={pool_checkout_duration_ms:.2f}, "
+            f'dbpoolmax;dur={max_pool_checkout_ms:.2f}, '
+            f'dbpoolc;desc="{pool_checkout_count} checkouts"',
         )
     return response
 

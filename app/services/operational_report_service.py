@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Iterable
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, lazyload
 
 import logging
 
@@ -477,7 +477,14 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         .all()
     )
     balance_candidates = (
-        reservation_scope.filter(
+        reservation_scope.with_entities(
+            Reservation.id,
+            Reservation.hotel_id,
+            Reservation.company_id,
+            Reservation.settlement_status,
+            Reservation.total_amount,
+        )
+        .filter(
             Reservation.status.in_(ACTIVE_RESERVATION_STATUSES),
             Reservation.check_out_date > report_date,
         )
@@ -517,19 +524,35 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
     # elsewhere; omitting them understated/hid pending payments once a guest
     # had unpaid consumption on an otherwise fully-paid stay.
     adjustments_by_reservation = billing_adjustment_totals_by_reservation(db, hotel_id, candidate_ids)
-    pending_payments = [
-        reservation
-        for reservation in balance_candidates
+    pending_reservation_ids = [
+        candidate.id
+        for candidate in balance_candidates
         if (
-            extra_due_by_reservation.get(reservation.id, Decimal("0.00")) > 0
-            if reservation.id in deferred_ids
+            extra_due_by_reservation.get(candidate.id, Decimal("0.00")) > 0
+            if candidate.id in deferred_ids
             else (
-                Decimal(reservation.total_amount or 0)
-                + adjustments_by_reservation.get(reservation.id, Decimal("0"))
-                - paid_by_reservation.get(reservation.id, Decimal("0"))
+                Decimal(candidate.total_amount or 0)
+                + adjustments_by_reservation.get(candidate.id, Decimal("0"))
+                - paid_by_reservation.get(candidate.id, Decimal("0"))
             ) > 0
         )
     ]
+    pending_payments = (
+        db.query(Reservation)
+        .options(
+            lazyload("*"),
+            joinedload(Reservation.guest),
+            joinedload(Reservation.room),
+        )
+        .filter(
+            Reservation.hotel_id == hotel_id,
+            Reservation.id.in_(pending_reservation_ids),
+        )
+        .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
+        .all()
+        if pending_reservation_ids
+        else []
+    )
 
     pending_group = _group(
         pending_payments,

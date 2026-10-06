@@ -136,14 +136,26 @@ test("owner is told when the browser blocks the reservation voucher window", asy
   const reservationTable = page.locator("table").filter({ hasText: "Código" });
   const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
   await expect(reservationRow).toHaveCount(1);
+
+  let releaseOperationsSummary!: () => void;
+  const pendingOperationsSummary = new Promise<void>((resolve) => {
+    releaseOperationsSummary = resolve;
+  });
+  await page.route("**/api/reservations/*/operations-summary", async (route) => {
+    await pendingOperationsSummary;
+    await route.continue();
+  });
   await reservationRow.getByRole("button", { name: "Ficha", exact: true }).click();
 
   const details = page.locator("div.fixed").filter({ has: page.getByRole("button", { name: "Exportar voucher PDF", exact: true }) });
   await expect(details).toBeVisible();
-  await expect(details.getByText("Saldo", { exact: true })).toBeVisible({ timeout: 20_000 });
+  const exportVoucherButton = details.getByRole("button", { name: "Exportar voucher PDF", exact: true });
+  await expect(exportVoucherButton).toBeDisabled();
+  releaseOperationsSummary();
+  await expect(exportVoucherButton).toBeEnabled({ timeout: 20_000 });
   await page.evaluate(() => Object.defineProperty(window, "open", { configurable: true, value: () => null }));
 
-  await details.getByRole("button", { name: "Exportar voucher PDF", exact: true }).click();
+  await exportVoucherButton.click();
   await expect(page.getByText(/El navegador bloqueó la ventana del comprobante/)).toBeVisible();
 
   await details.getByTestId("reservation-details-action-error").getByRole("button", { name: "Cerrar", exact: true }).click();

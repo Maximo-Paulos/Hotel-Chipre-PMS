@@ -10,7 +10,7 @@ import random
 from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import date, datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol
 from zoneinfo import ZoneInfo
 from pydantic import ValidationError
 
@@ -1054,11 +1054,18 @@ def _resolve_reservation_company(db: Session, *, hotel_id: int, company_id: int 
     return company
 
 
+class _DeferredCompanyReservation(Protocol):
+    id: int
+    hotel_id: int
+    company_id: int | None
+    settlement_status: Any
+
+
 def deferred_company_reservation_ids(
     db: Session,
     *,
     hotel_id: int,
-    reservations: list[Reservation] | tuple[Reservation, ...],
+    reservations: list[_DeferredCompanyReservation] | tuple[_DeferredCompanyReservation, ...],
 ) -> set[int]:
     """Return reservations whose lodging is billed outside this PMS.
 

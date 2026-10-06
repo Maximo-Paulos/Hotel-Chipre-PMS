@@ -446,6 +446,41 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
     adjustment = sum((_money(m.amount) for m in movements if m.movement_type == CashMovementTypeEnum.ADJUSTMENT), Decimal("0.00"))
     confirmed_total = _confirmed_cash_movements_total(db, session, as_of)
     expected_balance = _money(session.opening_balance) + confirmed_total
+    collector_totals: dict[int | None, dict[str, Decimal | int]] = {}
+    total_key_by_movement_type = {
+        CashMovementTypeEnum.INCOME: "income_total",
+        CashMovementTypeEnum.EXPENSE: "expense_total",
+        CashMovementTypeEnum.ADJUSTMENT: "adjustment_total",
+    }
+    for movement in movements:
+        totals = collector_totals.setdefault(
+            movement.recorded_by_user_id,
+            {
+                "income_total": Decimal("0.00"),
+                "expense_total": Decimal("0.00"),
+                "adjustment_total": Decimal("0.00"),
+                "movement_count": 0,
+            },
+        )
+        total_key = total_key_by_movement_type[movement.movement_type]
+        totals[total_key] = _money(Decimal(str(totals[total_key])) + _money(movement.amount))
+        totals["movement_count"] = int(totals["movement_count"]) + 1
+
+    by_collector = [
+        {
+            "collector_user_id": user_id,
+            **totals,
+            "net_total": _money(
+                Decimal(str(totals["income_total"]))
+                - Decimal(str(totals["expense_total"]))
+                + Decimal(str(totals["adjustment_total"]))
+            ),
+        }
+        for user_id, totals in sorted(
+            collector_totals.items(),
+            key=lambda item: (item[0] is None, item[0] or 0),
+        )
+    ]
 
     return {
         "session_id": session.id,
@@ -458,6 +493,7 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
         "confirmed_cash_total": confirmed_total,
         "expected_balance": expected_balance,
         "movements_count": len(movements),
+        "by_collector": by_collector,
     }
 
 

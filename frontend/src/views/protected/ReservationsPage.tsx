@@ -1784,6 +1784,10 @@ export function ReservationsPage() {
   const detailsOperations = detailsOperationsQuery.data;
   const detailsDeferredCompanyBilling = isDeferredCompanyReservation(detailsReservation);
   const detailsFinancialsLoading = detailsSummaryQuery.isLoading;
+  const voucherFinancialSummaryLoading = Boolean(
+    !detailsDeferredCompanyBilling &&
+      (detailsFinancialsLoading || detailsOperationsQuery.isLoading)
+  );
   const detailsGuest = useGuest(detailsReservation?.guest_id || undefined).data;
   React.useEffect(() => {
     setCommunicationRecipient(detailsGuest?.email ?? "");
@@ -2357,7 +2361,7 @@ export function ReservationsPage() {
 
   const exportVoucher = () => {
     if (!detailsReservation) return;
-    if (detailsFinancialsLoading || detailsOperationsQuery.isLoading) {
+    if (voucherFinancialSummaryLoading) {
       showToast("info", t("page.messages.waitForFinancialSummary"));
       return;
     }
@@ -5035,7 +5039,9 @@ export function ReservationsPage() {
                 <button
                   type="button"
                   onClick={exportVoucher}
-                  className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100"
+                  disabled={voucherFinancialSummaryLoading}
+                  aria-busy={voucherFinancialSummaryLoading}
+                  className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {t("page.details.exportVoucher")}
                 </button>

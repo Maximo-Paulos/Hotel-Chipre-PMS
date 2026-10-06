@@ -113,12 +113,62 @@ def test_cash_register_api_open_add_close_and_list(client_with_db):
     assert listed.status_code == 200
     assert [row["id"] for row in listed.json()] == [session_id]
 
+
+def test_cash_session_summary_shows_movements_by_hotel_user(client_with_db):
+    client, db, ctx = client_with_db
+    second_user_id = 60
+    db.add(
+        User(
+            id=second_user_id,
+            email="manager@test.com",
+            password_hash="test-hash",
+            is_active=True,
+            is_verified=True,
+        )
+    )
+    db.add(
+        HotelMembership(
+            hotel_id=1,
+            user_id=second_user_id,
+            role="manager",
+            status="active",
+            alias="Gerencia QA",
+        )
+    )
+    db.flush()
+
+    opened = client.post("/api/cash-register/sessions", json={"opening_balance": "10.00"})
+    assert opened.status_code == 201, opened.text
+    session_id = opened.json()["id"]
+    first = client.post(
+        f"/api/cash-register/sessions/{session_id}/movements",
+        json={"movement_type": "income", "amount": "20.00"},
+    )
+    assert first.status_code == 201, first.text
+
+    ctx["user_id"] = second_user_id
+    ctx["role"] = "manager"
+    second = client.post(
+        f"/api/cash-register/sessions/{session_id}/movements",
+        json={"movement_type": "income", "amount": "30.00"},
+    )
+    assert second.status_code == 201, second.text
+
+    response = client.get(f"/api/cash-register/sessions/{session_id}/summary")
+
+    assert response.status_code == 200, response.text
+    by_collector = response.json()["by_collector"]
+    assert [row["collector_name"] for row in by_collector] == ["Recepción QA", "Gerencia QA"]
+    assert [row["income_total"] for row in by_collector] == ["20.00", "30.00"]
+    assert [row["net_total"] for row in by_collector] == ["20.00", "30.00"]
+    assert [row["movement_count"] for row in by_collector] == [1, 1]
+
     close = client.post(
         f"/api/cash-register/sessions/{session_id}/close",
-        json={"counted_balance": "125.00"},
+        json={"counted_balance": "60.00"},
     )
     assert close.status_code == 200, close.text
-    assert close.json()["expected_balance"] == "125.00"
+    assert close.json()["expected_balance"] == "60.00"
     assert close.json()["difference"] == "0.00"
 
     db.refresh(db.get(CashSession, session_id))

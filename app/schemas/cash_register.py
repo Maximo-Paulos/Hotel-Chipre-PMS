@@ -79,6 +79,16 @@ class CashCustodyReceipt(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class CashSessionCollectorSummaryRead(BaseModel):
+    collector_user_id: Optional[int] = None
+    collector_name: str
+    income_total: Decimal
+    expense_total: Decimal
+    adjustment_total: Decimal
+    net_total: Decimal
+    movement_count: int
+
+
 class CashSessionSummaryRead(BaseModel):
     session_id: int
     status: str
@@ -90,6 +100,7 @@ class CashSessionSummaryRead(BaseModel):
     confirmed_cash_total: Decimal
     expected_balance: Decimal
     movements_count: int
+    by_collector: list[CashSessionCollectorSummaryRead] = Field(default_factory=list)
 
 
 class CashDailyPaymentMethodRead(BaseModel):

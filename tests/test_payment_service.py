@@ -11,7 +11,7 @@ import pytest
 from datetime import date
 from decimal import Decimal
 
-from app.models.cash_register import CashSession
+from app.models.cash_register import CashMovement, CashMovementTypeEnum, CashSession
 from app.models.hotel_config import HotelConfiguration
 from app.models.guest import Guest
 from app.models.operations import BillingAdjustment, BillingAdjustmentTypeEnum
@@ -478,6 +478,17 @@ class TestPaymentEdgeCases:
         db.flush()
 
         assert tx.status == TransactionStatusEnum.COMPLETED
+        refund_movement = (
+            db.query(CashMovement)
+            .filter(
+                CashMovement.hotel_id == DEFAULT_HOTEL_ID,
+                CashMovement.transaction_id == tx.id,
+            )
+            .one()
+        )
+        assert refund_movement.movement_type == CashMovementTypeEnum.EXPENSE
+        assert refund_movement.amount == Decimal("200.00")
+        assert refund_movement.reservation_id == res.id
         db.refresh(res)
         assert res.amount_paid == 300.0
         assert res.status == ReservationStatusEnum.DEPOSIT_PAID

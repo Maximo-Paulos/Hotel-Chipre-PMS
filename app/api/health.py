@@ -13,6 +13,7 @@ from app.db.cassandra import cassandra_healthcheck
 from app.db.mongo import mongo_healthcheck
 from app.db.neo4j import neo4j_healthcheck
 from app.services.analytics_warehouse import AnalyticsWarehouseUnavailable, get_clickhouse_client
+from app.services.external_effects_policy import external_connections_enabled
 from app.infrastructure.redis_backend import get_sync_redis_client
 
 
@@ -130,6 +131,13 @@ def _clickhouse_healthcheck() -> dict[str, Any]:
     settings = get_settings()
     if not settings.CLICKHOUSE_ENABLED:
         return {"status": "disabled", "enabled": False, "connected": False, "error": None}
+    if not external_connections_enabled(settings):
+        return {
+            "status": "blocked",
+            "enabled": True,
+            "connected": False,
+            "error": "Provider connections are disabled by policy",
+        }
     try:
         client = get_clickhouse_client()
         if client is None:
