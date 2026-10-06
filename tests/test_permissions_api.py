@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
+from app.api import permissions as permissions_api
 from app.api import subscription as subscription_api
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
@@ -31,6 +32,7 @@ from app.services.action_step_up_service import (
     is_permission_admin_read_action,
 )
 from app.services.mfa_service import encrypt_totp_secret
+from app.services import permission_service as permission_service_module
 from app.services.permission_service import (
     _CANONICAL_DEFINITIONS,
     LEGACY_PERMISSION_ALIASES,
@@ -401,9 +403,19 @@ def test_permission_catalog_exposes_administrator_and_owner_only_metadata_and_he
         engine.dispose()
 
 
-def test_permission_administration_reads_require_mfa_and_share_a_read_only_ticket():
+def test_permission_administration_reads_require_mfa_and_share_a_read_only_ticket(monkeypatch):
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+    original_details_reader = permission_service_module.get_effective_permission_details
+    details_reads = 0
+
+    def count_details_reads(*args, **kwargs):
+        nonlocal details_reads
+        details_reads += 1
+        return original_details_reader(*args, **kwargs)
+
+    monkeypatch.setattr(permission_service_module, "get_effective_permission_details", count_details_reads)
+    monkeypatch.setattr(permissions_api, "get_effective_permission_details", count_details_reads)
     db.add(User(id=20, email="employee@test.com", password_hash="synthetic", is_verified=True))
     db.flush()
     db.add(HotelMembership(hotel_id=1, user_id=20, role="receptionist", status="active"))
@@ -420,8 +432,13 @@ def test_permission_administration_reads_require_mfa_and_share_a_read_only_ticke
         assert client.get(paths[0]).status_code == 428
         headers = _step_up_headers("/api/permissions/catalog", method="GET")
         for path in paths:
+            reads_before = details_reads
             response = client.get(path, headers=headers)
             assert response.status_code == 200, f"{path}: {response.text}"
+            if path == paths[-1]:
+                # One read authorizes the admin; the second builds the preview.
+                # The old route performed a third, duplicate details read.
+                assert details_reads - reads_before == 2
 
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
         denied = client.get("/api/permissions/catalog", headers=headers)
@@ -440,15 +457,32 @@ def test_permission_administration_reads_require_mfa_and_share_a_read_only_ticke
         engine.dispose()
 
 
-def test_effective_permissions_returns_only_current_role_capabilities():
+def test_effective_permissions_returns_only_current_role_capabilities_and_reads_once(monkeypatch):
     client, db, engine = _client_with_db()
     fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist")
+    original_details_reader = permissions_api.get_effective_permission_details
+    details_reads = 0
+
+    def count_details_reads(*args, **kwargs):
+        nonlocal details_reads
+        details_reads += 1
+        return original_details_reader(*args, **kwargs)
+
+    monkeypatch.setattr(permission_service_module, "get_effective_permission_details", count_details_reads)
+    monkeypatch.setattr(permissions_api, "get_effective_permission_details", count_details_reads)
     try:
         response = client.get("/api/permissions/effective")
 
         assert response.status_code == 200
         assert response.json()["hotel_id"] == 1
         assert response.json()["role"] == "receptionist"
+        details = response.json()["details"]
+        expected_permissions = {code for code, detail in details.items() if detail["allowed"]}
+        expected_permissions.update(
+            alias for alias, canonical in LEGACY_PERMISSION_ALIASES.items() if canonical in expected_permissions
+        )
+        assert response.json()["permissions"] == sorted(expected_permissions)
+        assert details_reads == 1
         assert PERMISSION_GUEST_CREATE in response.json()["permissions"]
         assert PERMISSION_GUEST_EDIT in response.json()["permissions"]
         assert PERMISSION_STOCK_ADJUST not in response.json()["permissions"]

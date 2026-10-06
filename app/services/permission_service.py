@@ -2152,11 +2152,16 @@ def _active_role_codes(db: Session, hotel_id: int) -> tuple[str, ...]:
     return (*ROLE_CODES, *(row.code for row in custom_codes))
 
 
-def get_effective_permissions(db: Session, hotel_id: int, role: str | None, user_id: int | None = None) -> list[str]:
-    details = get_effective_permission_details(db, hotel_id, role, user_id=user_id)
+def permission_codes_from_details(details: dict[str, dict[str, object]]) -> list[str]:
+    """Project allowed canonical capabilities and their legacy aliases."""
     allowed = {code for code, detail in details.items() if detail["allowed"]}
     allowed.update(alias for alias, target in LEGACY_PERMISSION_ALIASES.items() if target in allowed)
     return sorted(allowed)
+
+
+def get_effective_permissions(db: Session, hotel_id: int, role: str | None, user_id: int | None = None) -> list[str]:
+    details = get_effective_permission_details(db, hotel_id, role, user_id=user_id)
+    return permission_codes_from_details(details)
 
 
 def audit_permission_denied(
