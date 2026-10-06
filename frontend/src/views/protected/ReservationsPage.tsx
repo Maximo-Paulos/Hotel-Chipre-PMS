@@ -1075,7 +1075,6 @@ export function ReservationsPage() {
     setPaidTotalAmountInput("");
     setPaidTotalChangeReasonInput("");
     setConfirmLargeTotalAdjustment(false);
-    setPaidTotalChangeReasonInput("");
     setLastCreatedReservation(null);
     setPaymentAmountInput("");
     setPaymentReferenceInput("");
