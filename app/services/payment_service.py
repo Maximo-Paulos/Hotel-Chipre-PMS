@@ -117,7 +117,7 @@ def get_hotel_config(db: Session, hotel_id: int) -> HotelConfiguration:
     No global/singleton fallback â€” requires explicit hotel_id.
     """
     if hotel_id is None:
-        raise PaymentError("hotel_id is required for finance operations")
+        raise PaymentError("Se requiere el hotel para operar con pagos.")
 
     config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
     if not config:
@@ -148,7 +148,7 @@ def validate_payment_method_enabled(db: Session, method: PaymentMethodEnum, hote
     """Check that the requested payment method is enabled in hotel config."""
     config = get_hotel_config(db, hotel_id)
     if not config.is_payment_method_enabled(method.value):
-        raise PaymentError(f"Payment method '{method.value}' is currently disabled")
+        raise PaymentError(f"El medio de pago '{method.value}' está deshabilitado.")
 
 
 def _resolve_reservation_hotel(
@@ -163,21 +163,21 @@ def _resolve_reservation_hotel(
 
     if reservation_hotel_id is not None and hotel_id is not None and reservation_hotel_id != hotel_id:
         raise PaymentError(
-            f"Reservation {reservation.id} does not belong to hotel {hotel_id} (belongs to {reservation_hotel_id})"
+            "La reserva no pertenece al hotel seleccionado."
         )
 
     if reservation_hotel_id is not None and existing_tx_hotel_id is not None and reservation_hotel_id != existing_tx_hotel_id:
         raise PaymentError(
-            f"Reservation {reservation.id} already has payments for hotel {existing_tx_hotel_id}"
+            "La reserva ya tiene pagos asociados a otro hotel."
         )
 
     if existing_tx_hotel_id is not None and hotel_id is not None and hotel_id != existing_tx_hotel_id:
-        raise PaymentError(f"Reservation {reservation.id} already has payments for hotel {existing_tx_hotel_id}")
+        raise PaymentError("La reserva ya tiene pagos asociados a otro hotel.")
 
     resolved = reservation_hotel_id or hotel_id or existing_tx_hotel_id
 
     if resolved is None:
-        raise PaymentError("hotel_id is required for finance operations")
+        raise PaymentError("Se requiere el hotel para operar con pagos.")
 
     return resolved
 
@@ -378,7 +378,7 @@ def process_payment(
     )
 
     if not reservation:
-        raise PaymentNotFoundError("Reservation not found")
+        raise PaymentNotFoundError("No se encontró la reserva.")
 
     existing_tx_query = db.query(Transaction.hotel_id).filter(Transaction.reservation_id == request.reservation_id)
     if hotel_id is not None:
@@ -392,7 +392,7 @@ def process_payment(
         existing_tx_hotel_id=existing_tx_hotel_id,
     )
     if reservation.hotel_id and reservation.hotel_id != resolved_hotel_id:
-        raise PaymentError("Reservation does not belong to selected hotel")
+        raise PaymentError("La reserva no pertenece al hotel seleccionado.")
 
     is_refund = request.transaction_type == TransactionTypeEnum.REFUND
     transaction_currency = _resolve_payment_currency(reservation, request.currency)
@@ -419,19 +419,19 @@ def process_payment(
                 transaction_currency,
                 resolved_hotel_id,
             ):
-                raise PaymentError("Idempotency key was already used for a different payment request")
+                raise PaymentError("La clave de idempotencia ya se usó para una solicitud de pago diferente.")
             return existing_by_key
 
     if request.manual_reference and (is_refund or request.payment_method not in MANUAL_REFERENCE_METHODS):
-        raise PaymentError("Manual references are only valid for in-person card, debit, or bank-transfer payments")
+        raise PaymentError("Las referencias manuales solo se admiten para pagos presenciales con tarjeta o débito, y para transferencias bancarias.")
     if not is_refund and (request.refund_of_transaction_id is not None or request.refund_reason is not None):
-        raise PaymentError("Refund source and reason are only valid for refund transactions")
+        raise PaymentError("El pago original y el motivo solo se admiten al registrar una devolución.")
     refund_source = None
     if is_refund:
         if request.payment_method != PaymentMethodEnum.CASH:
-            raise PaymentError("Manual reservation refunds must be returned through cash")
+            raise PaymentError("Las devoluciones manuales de reservas deben registrarse en efectivo.")
         if request.refund_of_transaction_id is None or not request.refund_reason:
-            raise PaymentError("A refund must identify the original payment and include a reason")
+            raise PaymentError("La devolución debe identificar el pago original e incluir un motivo.")
         refund_source = (
             db.query(Transaction)
             .filter(
@@ -445,9 +445,9 @@ def process_payment(
             .first()
         )
         if refund_source is None:
-            raise PaymentError("The original payment was not found as a completed payment for this reservation")
+            raise PaymentError("No se encontró el pago original como un cobro completado de esta reserva.")
         if (refund_source.tender_currency or refund_source.currency) != transaction_currency:
-            raise PaymentError("A refund must use the original payment currency")
+            raise PaymentError("La devolución debe usar la misma moneda del pago original.")
         already_refunded_tender = (
             db.query(func.coalesce(func.sum(func.coalesce(Transaction.tender_amount, Transaction.amount)), 0))
             .filter(
@@ -464,9 +464,9 @@ def process_payment(
         refundable_remaining = original_tender_amount - Decimal(str(already_refunded_tender or 0))
         if tender_amount > refundable_remaining:
             raise PaymentError(
-                f"Refund amount {tender_amount:.2f} exceeds the remaining refundable amount "
-                f"{max(refundable_remaining, Decimal('0.00')):.2f} {transaction_currency} "
-                "for the original payment"
+                f"El importe de la devolución ({tender_amount:.2f} {transaction_currency}) supera "
+                f"el saldo reembolsable restante ({max(refundable_remaining, Decimal('0.00')):.2f} "
+                f"{transaction_currency}) del pago original."
             )
 
     if request.collected_before and transaction_currency != (reservation.currency_code or "ARS").strip().upper():
@@ -555,7 +555,7 @@ def process_payment(
             .first()
         )
         if duplicate_reference is not None:
-            raise PaymentError("This manual payment reference is already recorded for the reservation")
+            raise PaymentError("Esta referencia de pago manual ya está registrada para esta reserva.")
 
     verified_late_settlement = (
         allow_verified_cancelled_settlement
@@ -569,7 +569,7 @@ def process_payment(
         ReservationStatusEnum.CANCELLED,
     ) and not verified_late_settlement:
         raise PaymentError(
-            f"Cannot process payment for reservation in status '{reservation.status.value}'"
+            f"No se puede registrar un pago para una reserva en estado «{reservation.status.value}»."
         )
 
     # 2. Validate payment method
@@ -593,7 +593,7 @@ def process_payment(
     if is_refund:
         if applied_amount > ledger_paid:
             raise PaymentError(
-                f"Refund amount applied ${applied_amount:.2f} exceeds paid amount ${ledger_paid:.2f}"
+                f"El importe de la devolución (${applied_amount:.2f}) supera el total pagado (${ledger_paid:.2f})."
             )
     else:
         balance = operational_balance_due(
@@ -604,7 +604,7 @@ def process_payment(
         )
         if applied_amount > Decimal(str(balance)) + _TOLERANCE:
             raise PaymentError(
-                f"Payment amount applied ${applied_amount:.2f} exceeds balance due ${balance:.2f}"
+                f"El importe del pago (${applied_amount:.2f}) supera el saldo pendiente (${balance:.2f})."
             )
 
     if request.payment_method == PaymentMethodEnum.CASH and not request.collected_before:
@@ -703,7 +703,7 @@ def process_payment(
                     resolved_hotel_id,
                 ):
                     return existing
-                raise PaymentError("Idempotency key was already used for a different payment request")
+                raise PaymentError("La clave de idempotencia ya se usó para una solicitud de pago diferente.")
             if manual_confirmation and request.manual_reference:
                 duplicate_reference = (
                     db.query(Transaction.id)
@@ -715,7 +715,7 @@ def process_payment(
                     .first()
                 )
                 if duplicate_reference is not None:
-                    raise PaymentError("This manual payment reference is already recorded for the reservation")
+                    raise PaymentError("Esta referencia de pago manual ya está registrada para esta reserva.")
             raise
     else:
         db.add(transaction)
@@ -787,15 +787,15 @@ def get_payment_link_with_surcharge(
     """
     reservation = db.query(Reservation).filter(Reservation.id == reservation_id).first()
     if not reservation:
-        raise PaymentError(f"Reservation {reservation_id} not found")
+        raise PaymentError(f"No se encontró la reserva {reservation_id}.")
     if reservation.hotel_id and reservation.hotel_id != hotel_id:
-        raise PaymentError(f"Reservation {reservation_id} does not belong to hotel {hotel_id}")
+        raise PaymentError(f"La reserva {reservation_id} no pertenece al hotel {hotel_id}.")
 
     if amount is None:
         amount = operational_balance_due(db, hotel_id=hotel_id, reservation=reservation)
     base_amount = Decimal(str(amount)).quantize(Decimal("0.01"))
     if base_amount <= 0:
-        raise PaymentError("Payment amount must be greater than zero")
+        raise PaymentError("El importe del pago debe ser mayor que cero.")
 
     surcharge_info = calculate_payment_surcharge(
         db,
@@ -995,7 +995,7 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
         reservation_query = reservation_query.filter(Reservation.hotel_id == hotel_id)
     reservation = reservation_query.first()
     if not reservation:
-        raise PaymentNotFoundError("Reservation not found")
+        raise PaymentNotFoundError("No se encontró la reserva.")
 
     existing_tx_query = db.query(Transaction.hotel_id).filter(Transaction.reservation_id == reservation_id)
     if hotel_id is not None:
@@ -1009,7 +1009,7 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
         existing_tx_hotel_id=existing_tx_hotel_id,
     )
     if reservation.hotel_id and reservation.hotel_id != resolved_hotel_id:
-        raise PaymentError(f"Reservation {reservation_id} does not belong to hotel {resolved_hotel_id}")
+        raise PaymentError(f"La reserva {reservation_id} no pertenece al hotel {resolved_hotel_id}.")
 
     transactions = (
         db.query(Transaction)
@@ -1252,7 +1252,7 @@ def get_reservation_financial_summary(db: Session, hotel_id: Optional[int], rese
 def get_payment_receipt_data(db: Session, hotel_id: Optional[int], transaction_id: int) -> dict:
     """Return only confirmed, tenant-scoped transaction data for receipt rendering."""
     if hotel_id is None:
-        raise PaymentNotFoundError("Payment not found")
+        raise PaymentNotFoundError("No se encontró el pago.")
 
     transaction = (
         db.query(Transaction)
@@ -1263,7 +1263,7 @@ def get_payment_receipt_data(db: Session, hotel_id: Optional[int], transaction_i
         TransactionStatusEnum.COMPLETED,
         TransactionStatusEnum.REFUNDED,
     }:
-        raise PaymentNotFoundError("Confirmed payment not found")
+        raise PaymentNotFoundError("No se encontró el pago confirmado.")
 
     reservation_row = (
         db.query(Reservation.confirmation_code, Reservation.currency_code)
@@ -1274,7 +1274,7 @@ def get_payment_receipt_data(db: Session, hotel_id: Optional[int], transaction_i
         .first()
     )
     if reservation_row is None:
-        raise PaymentNotFoundError("Confirmed payment not found")
+        raise PaymentNotFoundError("No se encontró el pago confirmado.")
     reservation_code, reservation_currency = reservation_row
 
     hotel = db.get(HotelConfiguration, hotel_id)

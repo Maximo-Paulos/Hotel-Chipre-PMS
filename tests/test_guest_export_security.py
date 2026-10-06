@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from datetime import date
 from decimal import Decimal
 from io import StringIO
@@ -19,8 +20,10 @@ from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.services.permission_service import resolve, set_override
+from app.services.action_step_up_service import create_action_step_up_ticket
 
 
 def _seed_hotel(db, hotel_id: int) -> None:
@@ -70,6 +73,19 @@ def _seed_reservation(db, hotel_id: int, *, suffix: str) -> None:
         )
     )
     db.commit()
+
+
+def _step_up_headers(auth_state, path: str) -> dict[str, str]:
+    return {
+        "X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+            user_id=auth_state["user_id"],
+            hotel_id=auth_state["hotel_id"],
+            token_version=0,
+            permission_code="guest:export",
+            method="GET",
+            path=path,
+        )
+    }
 
 
 @pytest.fixture
@@ -127,7 +143,7 @@ def test_guest_export_permission_can_be_granted_to_receptionist_by_owner(db):
 
 
 def test_guest_export_denies_unpermitted_role_without_csv_pii(guest_export_client):
-    client, db, _ = guest_export_client
+    client, db, _auth_state = guest_export_client
     _seed_hotel(db, 1)
     _seed_reservation(db, 1, suffix="denied")
 
@@ -152,11 +168,98 @@ def test_guest_export_allows_owner_and_excludes_other_hotels(guest_export_client
     response = client.get(
         "/api/guests/ledger/export",
         params={"from_date": "2026-04-01", "to_date": "2026-04-30"},
+        headers=_step_up_headers(auth_state, "/api/guests/ledger/export"),
     )
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "private, no-store"
     assert "Guest included" in response.text
     assert "Guest excluded" not in response.text
+    export_event = db.query(SecurityAuditLog).filter_by(
+        hotel_id=1,
+        action="guest.ledger_csv_exported",
+    ).one()
+    assert json.loads(export_event.details or "{}") == {
+        "from_date": "2026-04-01",
+        "to_date": "2026-04-30",
+        "row_count": 1,
+    }
+    assert export_event.user_id == auth_state["user_id"]
+    assert export_event.resource_id is None
+    assert "Guest included" not in export_event.details
+    assert "DOC-1-included" not in export_event.details
+
+
+def test_guest_export_rejects_invalid_and_overlong_date_ranges(guest_export_client):
+    client, db, auth_state = guest_export_client
+    _seed_hotel(db, 1)
+    auth_state["role"] = "owner"
+
+    missing_dates = client.get(
+        "/api/guests/ledger/export",
+        headers=_step_up_headers(auth_state, "/api/guests/ledger/export"),
+    )
+    assert missing_dates.status_code == 422
+
+    invalid_range = client.get(
+        "/api/guests/ledger/export",
+        params={"from_date": "2026-04-10", "to_date": "2026-04-10"},
+        headers=_step_up_headers(auth_state, "/api/guests/ledger/export"),
+    )
+    assert invalid_range.status_code == 422
+
+    overlong_range = client.get(
+        "/api/guests/ledger/export",
+        params={"from_date": "2026-01-01", "to_date": "2027-01-04"},
+        headers=_step_up_headers(auth_state, "/api/guests/ledger/export"),
+    )
+    assert overlong_range.status_code == 422
+    assert db.query(SecurityAuditLog).filter_by(action="guest.ledger_csv_exported").count() == 0
+
+
+def test_guest_export_excludes_soft_deleted_guest_identity(guest_export_client):
+    from datetime import datetime, timezone
+
+    client, db, auth_state = guest_export_client
+    _seed_hotel(db, 1)
+    _seed_reservation(db, 1, suffix="deleted")
+    guest = db.query(Guest).filter_by(hotel_id=1).one()
+    guest.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+    auth_state["role"] = "owner"
+
+    response = client.get(
+        "/api/guests/ledger/export",
+        params={"from_date": "2026-04-01", "to_date": "2026-04-30"},
+        headers=_step_up_headers(auth_state, "/api/guests/ledger/export"),
+    )
+
+    assert response.status_code == 200
+    assert "Guest deleted" not in response.text
+    assert "DOC-1-deleted" not in response.text
+    event = db.query(SecurityAuditLog).filter_by(action="guest.ledger_csv_exported").one()
+    assert json.loads(event.details or "{}")["row_count"] == 0
+
+
+def test_guest_export_rejects_results_over_cap_without_truncating(guest_export_client, monkeypatch):
+    client, db, auth_state = guest_export_client
+    _seed_hotel(db, 1)
+    _seed_reservation(db, 1, suffix="cap-1")
+    _seed_reservation(db, 1, suffix="cap-2")
+    auth_state["role"] = "owner"
+    monkeypatch.setattr("app.api.guests._GUEST_LEDGER_MAX_ROWS", 1)
+
+    response = client.get(
+        "/api/guests/ledger/export",
+        params={"from_date": "2026-04-01", "to_date": "2026-04-30"},
+        headers=_step_up_headers(auth_state, "/api/guests/ledger/export"),
+    )
+
+    assert response.status_code == 413
+    assert "máximo de huéspedes exportables" in response.json()["detail"]
+    assert "Guest cap-1" not in response.text
+    assert "Guest cap-2" not in response.text
+    assert db.query(SecurityAuditLog).filter_by(action="guest.ledger_csv_exported").count() == 0
 
 
 def test_guest_export_neutralizes_formula_like_guest_fields(guest_export_client):
@@ -174,6 +277,7 @@ def test_guest_export_neutralizes_formula_like_guest_fields(guest_export_client)
     response = client.get(
         "/api/guests/ledger/export",
         params={"from_date": "2026-04-01", "to_date": "2026-04-30"},
+        headers=_step_up_headers(auth_state, "/api/guests/ledger/export"),
     )
 
     assert response.status_code == 200

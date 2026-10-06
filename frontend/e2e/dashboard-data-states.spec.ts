@@ -46,6 +46,10 @@ test("dashboard separates loading, error, and empty states for reservations and 
   await expect(page.getByTestId("dashboard-upcoming-loading")).toBeVisible();
   await expect(page.getByTestId("dashboard-activity-loading")).toBeVisible();
   await expect(page.getByTestId("dashboard-pending-actions-loading")).toBeVisible();
+  const pendingActionsCard = page.getByTestId("dashboard-pending-actions-card");
+  await expect(pendingActionsCard.locator(".numeric")).toHaveText("…");
+  await expect(pendingActionsCard).toContainText("Consultando acciones pendientes...");
+  await expect(pendingActionsCard).not.toContainText("Sin críticas");
   expect([...stalledKeys].sort()).toEqual(["activity", "pending", "upcoming"]);
   releaseRequests();
 

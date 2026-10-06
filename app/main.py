@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 LOGGER = logging.getLogger(__name__)
 _GIT_SHA_RE = re.compile(r"[0-9a-fA-F]{40}")
@@ -250,6 +251,14 @@ def _safe_request_path_for_logging(path: str) -> str:
     return path
 
 
+def _is_database_pool_timeout(error: BaseException) -> bool:
+    if isinstance(error, SQLAlchemyTimeoutError):
+        return True
+    if isinstance(error, BaseExceptionGroup):
+        return any(_is_database_pool_timeout(nested) for nested in error.exceptions)
+    return False
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     # The try/except also turns an unhandled exception into a real 500 response
@@ -258,9 +267,21 @@ async def security_headers(request: Request, call_next):
     # the server error as an opaque "Failed to fetch" instead of its real status.
     try:
         response = await call_next(request)
-    except Exception:
-        LOGGER.exception("Unhandled error on %s %s", request.method, _safe_request_path_for_logging(request.url.path))
-        response = JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
+    except Exception as exc:
+        if _is_database_pool_timeout(exc):
+            LOGGER.warning(
+                "database.pool_exhausted method=%s path=%s",
+                request.method,
+                _safe_request_path_for_logging(request.url.path),
+            )
+            response = JSONResponse(
+                status_code=503,
+                content={"detail": "Servidor ocupado. Reintentá en unos segundos."},
+                headers={"Retry-After": "5"},
+            )
+        else:
+            LOGGER.exception("Unhandled error on %s %s", request.method, _safe_request_path_for_logging(request.url.path))
+            response = JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"

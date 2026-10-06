@@ -712,6 +712,7 @@ function StarterLandingScreen() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">Qué incluye Pro y Ultra</h2>
           <ul className="mt-3 space-y-2 text-sm text-slate-700">
+            <li>• Desglose de ingresos por canal y segmento disponible en Starter.</li>
             <li>• Analytics completo con comparadores y drill-down.</li>
             <li>• Exportes PNG/CSV en Pro.</li>
             <li>• Exportes XLSX, IA Gemma, alertas y snooze en Ultra.</li>
@@ -794,11 +795,7 @@ export function AnalyticsCategoryDetailPage() {
 }
 
 export function AnalyticsSegmentsPage() {
-  return (
-    <PlanGuard>
-      <ReportScreen title="Segmentos" subtitle="Lectura por segmento de huésped." path="/api/analytics/segments" routeName="segments" />
-    </PlanGuard>
-  );
+  return <ReportScreen title="Segmentos" subtitle="Lectura por segmento de huésped." path="/api/analytics/segments" routeName="segments" />;
 }
 
 export function AnalyticsCompanyDetailPage() {
@@ -816,11 +813,7 @@ export function AnalyticsCompanyDetailPage() {
 }
 
 export function AnalyticsChannelsPage() {
-  return (
-    <PlanGuard>
-      <ReportScreen title="Canales" subtitle="Mix de canales y performance por origen." path="/api/analytics/channels" routeName="channels" />
-    </PlanGuard>
-  );
+  return <ReportScreen title="Canales" subtitle="Mix de canales y performance por origen." path="/api/analytics/channels" routeName="channels" />;
 }
 
 export function AnalyticsOperationsPage() {

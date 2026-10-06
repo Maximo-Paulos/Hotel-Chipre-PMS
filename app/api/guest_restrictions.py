@@ -29,12 +29,19 @@ from app.services.permission_service import (
 router = APIRouter(prefix="/api/guests", tags=["Guest Restrictions"])
 
 
+def _restriction_error_detail(exc: Exception) -> str:
+    return {
+        "Guest restriction not found": "No se encontró la restricción de alojamiento.",
+        "Guest restriction already resolved": "La restricción de alojamiento ya está resuelta.",
+    }.get(str(exc), "No se pudo completar la operación de restricción.")
+
+
 def _get_tenant_guest(db: Session, hotel_id: int, guest_id: int) -> Guest:
     """Tenant-scoped lookup. Cross-hotel access must 404, never 403 --
     existence of a guest in another hotel is not disclosed."""
     guest = db.query(Guest).filter(Guest.id == guest_id, Guest.hotel_id == hotel_id).one_or_none()
     if guest is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guest not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se encontró el huésped.")
     return guest
 
 
@@ -54,7 +61,7 @@ def list_active_restriction_guest_ids(
     if not guest_ids or len(guest_ids) > 50 or any(guest_id <= 0 for guest_id in guest_ids):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="guest_ids must contain between 1 and 50 positive IDs",
+            detail="Ingresá entre 1 y 50 identificadores de huésped válidos.",
         )
     return get_active_guest_restriction_guest_ids(
         db,
@@ -128,9 +135,15 @@ def resolve_restriction(
             resolution_note=data.resolution_note,
         )
     except GuestRestrictionNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_restriction_error_detail(exc),
+        ) from exc
     except GuestRestrictionConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_restriction_error_detail(exc),
+        ) from exc
     db.commit()
     db.refresh(restriction)
     return restriction

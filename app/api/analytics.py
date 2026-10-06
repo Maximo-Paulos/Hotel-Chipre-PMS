@@ -255,7 +255,6 @@ def analytics_segments(
         require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_ANALYTICS_ADVANCED_VIEW)
     ),
 ):
-    require_analytics_plan(db, context.hotel_id, "pro")
     return annotate_analytics_payload(
         build_segments_payload(
             db,
@@ -327,7 +326,6 @@ def analytics_channels(
         require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_ANALYTICS_ADVANCED_VIEW)
     ),
 ):
-    require_analytics_plan(db, context.hotel_id, "pro")
     return annotate_analytics_payload(
         build_channels_payload(
             db,

@@ -1,5 +1,5 @@
 import csv
-from datetime import date as date_type, datetime, timedelta, timezone
+from datetime import date as date_type, datetime, time, timedelta, timezone
 from io import StringIO
 from zoneinfo import ZoneInfo
 
@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_permission
 from app.models.cash_register import CashMovementTypeEnum
-from app.models.cash_expense import CashExpenseStatusEnum
+from app.models.cash_expense import CashExpense, CashExpenseStatusEnum
+from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum
 from app.schemas.cash_register import (
@@ -68,6 +69,7 @@ from app.services.cash_expense_service import (
     recover_failed_cash_expense_commit,
     reject_cash_expense,
 )
+from app.services.timezones import normalize_timezone
 
 
 router = APIRouter(tags=["Cash Register"])
@@ -693,6 +695,88 @@ def read_cash_expenses(
         return [_cash_expense_read(db, expense, actor_labels=actor_labels) for expense in expenses]
     except CashExpenseError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.get("/api/cash-register/expenses/export.csv")
+@router.get("/cash-register/expenses/export.csv")
+def export_cash_expenses_csv(
+    from_date: date_type = Query(..., alias="from"),
+    to_date: date_type = Query(..., alias="to"),
+    expense_status: CashExpenseStatusEnum | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
+):
+    if to_date < from_date or (to_date - from_date).days > 366:
+        raise HTTPException(status_code=422, detail="Elegí un período válido de hasta 367 días.")
+
+    hotel = db.get(HotelConfiguration, context.hotel_id)
+    if hotel is None:
+        raise HTTPException(status_code=404, detail="Hotel no encontrado")
+    timezone_name = normalize_timezone(hotel.hotel_timezone or "UTC")
+    zone = ZoneInfo(timezone_name)
+    start_utc = datetime.combine(from_date, time.min, tzinfo=zone).astimezone(timezone.utc)
+    end_utc = datetime.combine(to_date + timedelta(days=1), time.min, tzinfo=zone).astimezone(timezone.utc)
+
+    query = db.query(CashExpense).filter(
+        CashExpense.hotel_id == context.hotel_id,
+        CashExpense.created_at >= start_utc,
+        CashExpense.created_at < end_utc,
+    )
+    if expense_status is not None:
+        query = query.filter(CashExpense.status == expense_status.value)
+    rows = query.order_by(CashExpense.created_at.asc(), CashExpense.id.asc()).limit(5001).all()
+    if len(rows) > 5000:
+        raise HTTPException(status_code=413, detail="El período excede el máximo de gastos exportables; acotá las fechas.")
+
+    actor_ids = {
+        user_id
+        for expense in rows
+        for user_id in (expense.recorded_by_user_id, expense.approved_by_user_id, expense.rejected_by_user_id)
+        if user_id is not None
+    }
+    actor_labels = resolve_hotel_actor_labels(db, hotel_id=context.hotel_id, user_ids=actor_ids)
+    columns = [
+        "fecha_local", "fecha_hora_local", "hotel_id", "gasto_id", "sesion_id", "moneda", "estado",
+        "categoria", "proveedor", "descripcion", "referencia_comprobante", "importe", "movimiento_id",
+        "registrado_por", "aprobado_por", "fecha_aprobacion_local", "rechazado_por",
+        "fecha_rechazo_local", "motivo_rechazo",
+    ]
+    status_labels = {"pending": "pendiente", "approved": "aprobado", "rejected": "rechazado"}
+    output = StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=columns, delimiter=";", lineterminator="\r\n")
+    writer.writeheader()
+    for expense in rows:
+        created_at = expense.created_at.replace(tzinfo=timezone.utc) if expense.created_at.tzinfo is None else expense.created_at
+        local_date = created_at.astimezone(zone).date()
+        row = spreadsheet_safe_row({
+            "fecha_local": _csv_local_date(local_date),
+            "fecha_hora_local": _csv_local_datetime(expense.created_at, timezone_name),
+            "hotel_id": context.hotel_id,
+            "gasto_id": expense.id,
+            "sesion_id": expense.session_id,
+            "moneda": expense.currency_code,
+            "estado": status_labels.get(expense.status, expense.status),
+            "categoria": expense.category,
+            "proveedor": expense.vendor,
+            "descripcion": expense.description or "",
+            "referencia_comprobante": expense.receipt_reference or "",
+            "importe": _csv_decimal(expense.amount),
+            "movimiento_id": expense.cash_movement_id or "",
+            "registrado_por": actor_labels.get(expense.recorded_by_user_id, "") if expense.recorded_by_user_id else "",
+            "aprobado_por": actor_labels.get(expense.approved_by_user_id, "") if expense.approved_by_user_id else "",
+            "fecha_aprobacion_local": _csv_local_datetime(expense.approved_at, timezone_name),
+            "rechazado_por": actor_labels.get(expense.rejected_by_user_id, "") if expense.rejected_by_user_id else "",
+            "fecha_rechazo_local": _csv_local_datetime(expense.rejected_at, timezone_name),
+            "motivo_rechazo": expense.rejection_reason or "",
+        })
+        writer.writerow(row)
+
+    filename = f"gastos-caja-{from_date.isoformat()}-{to_date.isoformat()}.csv"
+    return Response(
+        content="\ufeff" + output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post(

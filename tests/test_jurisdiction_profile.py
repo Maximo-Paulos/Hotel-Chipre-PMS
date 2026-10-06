@@ -1,6 +1,6 @@
 from app.models.guest import Guest
 from app.services.checkin_service import validate_guest_for_checkin
-from app.services.jurisdiction_profile import get_profile
+from app.services.jurisdiction_profile import compute_missing_guest_fields, get_profile
 
 
 def test_ar_profile_is_launch_active_and_default():
@@ -44,4 +44,36 @@ def test_missing_field_computation_uses_profile(db, hotel_config):
 
     hotel_config.jurisdiction_code = "UY"
     db.flush()
-    assert "Nationality is required" in validate_guest_for_checkin(db, guest, hotel_config)
+    assert "La nacionalidad es obligatoria" in validate_guest_for_checkin(db, guest, hotel_config)
+
+
+def test_required_guest_field_and_terms_messages_are_in_spanish():
+    guest = Guest(
+        first_name="",
+        last_name="",
+        document_type="",
+        document_number="",
+        nationality="",
+        country="",
+        birth_place="",
+        birth_country="",
+        marital_status="",
+        occupation="",
+        terms_accepted=False,
+    )
+
+    missing = compute_missing_guest_fields(guest, jurisdiction_code="CL")
+
+    assert missing == [
+        "El nombre es obligatorio",
+        "El apellido es obligatorio",
+        "El lugar de nacimiento es obligatorio",
+        "El país de nacimiento es obligatorio",
+        "El estado civil es obligatorio",
+        "La ocupación es obligatoria",
+        "El tipo de documento (DNI/pasaporte) es obligatorio",
+        "El número de documento es obligatorio",
+        "La nacionalidad es obligatoria",
+        "El país es obligatorio",
+        "El huésped debe aceptar los términos y condiciones",
+    ]

@@ -181,11 +181,28 @@ class LaundryRemitoLine(Base):
     remito_id = Column(Integer, nullable=False)
     linen_item_id = Column(Integer, nullable=False)
     quantity = Column(Numeric(12, 2), nullable=False)
+    # On inbound slips this records linen that did not come back and is being
+    # written off against the vendor's location in the movement ledger.
+    missing_quantity = Column(Numeric(12, 2), nullable=False, server_default="0")
     # Copied from LaundryVendorPrice at creation time so historical cost does
     # not change if the vendor's price is updated later. Null when no price
     # was configured for this (vendor, item) yet -- the API surfaces a
     # warning for that case instead of blocking remito creation.
     unit_price_snapshot = Column(Numeric(12, 2), nullable=True)
+    # Neutral operational follow-up for an explicitly declared missing return.
+    # These fields do not value the linen or affect vendor spend/cash.
+    follow_up_status = Column(String(24), nullable=True)
+    follow_up_note = Column(Text, nullable=True)
+    supplier_reference = Column(String(120), nullable=True)
+    supplier_contacted_on = Column(Date, nullable=True)
+    supplier_contact_note = Column(Text, nullable=True)
+    supplier_response_on = Column(Date, nullable=True)
+    supplier_response_note = Column(Text, nullable=True)
+    follow_up_updated_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL", name="fk_laundry_remito_lines_follow_up_updated_by"),
+        nullable=True,
+    )
+    follow_up_updated_at = Column(DateTime, nullable=True)
 
     remito = relationship("LaundryRemito", back_populates="lines")
     linen_item = relationship(
@@ -196,7 +213,16 @@ class LaundryRemitoLine(Base):
     )
 
     __table_args__ = (
-        CheckConstraint("quantity > 0", name="ck_laundry_remito_lines_quantity_positive"),
+        CheckConstraint(
+            "quantity >= 0 AND missing_quantity >= 0 AND (quantity > 0 OR missing_quantity > 0)",
+            name="ck_laundry_remito_lines_quantities_valid",
+        ),
+        CheckConstraint(
+            "(missing_quantity = 0 AND follow_up_status IS NULL) OR "
+            "(missing_quantity > 0 AND follow_up_status IS NOT NULL AND follow_up_status IN "
+            "('open', 'contacted', 'response_recorded', 'closed'))",
+            name="ck_laundry_remito_lines_follow_up_status",
+        ),
         ForeignKeyConstraint(
             ["hotel_id", "remito_id"],
             ["laundry_remitos.hotel_id", "laundry_remitos.id"],

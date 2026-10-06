@@ -1,4 +1,4 @@
-import { apiFetch, buildAuthHeaders, buildUrl, type SessionLike } from "./client";
+import { apiFetch, type SessionLike } from "./client";
 import type { RestrictionOverride } from "./guestRestrictions";
 
 export type Guest = {
@@ -202,11 +202,28 @@ export const addGuestCompanions = (guestId: number, companions: GuestCompanionPa
     session
   });
 
-export const exportGuestLedger = (fromDate: string, toDate: string, session?: SessionLike) =>
-  fetch(buildUrl(`/api/guests/ledger/export?from_date=${encodeURIComponent(fromDate)}&to_date=${encodeURIComponent(toDate)}`), {
-    headers: buildAuthHeaders(session),
-    credentials: "include"
-  });
+export class GuestLedgerExportError extends Error {
+  constructor(readonly status: number) {
+    super("Guest ledger export failed");
+    this.name = "GuestLedgerExportError";
+  }
+}
+
+export const exportGuestLedger = async (fromDate: string, toDateExclusive: string, session?: SessionLike): Promise<Blob> => {
+  const query = new URLSearchParams({ from_date: fromDate, to_date: toDateExclusive });
+  try {
+    return await apiFetch<Blob>(`/api/guests/ledger/export?${query.toString()}`, {
+      session,
+      headers: { "Cache-Control": "no-store" },
+      responseType: "blob"
+    });
+  } catch (error) {
+    if (error && typeof error === "object" && "status" in error) {
+      throw new GuestLedgerExportError(Number(error.status));
+    }
+    throw error;
+  }
+};
 
 export type GuestCheckinValidation = {
   guest_id: number;

@@ -18,6 +18,7 @@ from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.user import User
 from app.services import checkin_service
+from app.services.action_step_up_service import create_action_step_up_ticket
 
 
 @pytest.fixture
@@ -435,7 +436,7 @@ def test_checkin_api_blocks_missing_primary_guest_fields(api_client, monkeypatch
 
     resp = client.post(f"/api/checkin/{reservation_id}")
     assert resp.status_code == 400, resp.text
-    assert "missing" in resp.json()["detail"].lower() or "required" in resp.json()["detail"].lower()
+    assert "faltan datos obligatorios" in resp.json()["detail"].lower()
 
 
 def _seed_ota_no_guarantee_reservation(SessionLocal) -> int:
@@ -858,6 +859,16 @@ def test_guest_ledger_export_returns_csv_for_date_range(api_client):
     resp = client.get(
         "/api/guests/ledger/export",
         params={"from_date": "2026-04-01", "to_date": "2026-04-30"},
+        headers={
+            "X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+                user_id=1,
+                hotel_id=1,
+                token_version=0,
+                permission_code="guest:export",
+                method="GET",
+                path="/api/guests/ledger/export",
+            )
+        },
     )
     assert resp.status_code == 200, resp.text
     assert resp.headers["content-type"].startswith("text/csv")
@@ -877,3 +888,89 @@ def test_guest_ledger_export_returns_csv_for_date_range(api_client):
     assert row["arrival_date"] == "2026-04-10"
     assert row["departure_date"] == "2026-04-12"
     assert row["terms_accepted"] == "true"
+
+
+def test_n06_guest_not_found_responses_are_localized(api_client):
+    client, _ = api_client
+
+    for path in (
+        "/api/guests/999999",
+        "/api/guests/999999/quick-profile",
+        "/api/guests/999999/tags",
+        "/api/checkin/validate/999999",
+        "/api/guests/999999/restrictions",
+    ):
+        response = client.get(path)
+        assert response.status_code == 404, (path, response.text)
+        assert response.json()["detail"] == "No se encontró el huésped.", path
+
+
+def test_n06_pending_action_failure_hides_internal_exception(api_client, monkeypatch):
+    client, _ = api_client
+    from app.api import reservations as reservations_api
+
+    def fail_pending_actions(*args, **kwargs):
+        raise reservations_api.PaymentError("sensitive internal provider detail")
+
+    monkeypatch.setattr(
+        reservations_api,
+        "list_pending_reservation_actions",
+        fail_pending_actions,
+    )
+
+    response = client.get("/api/reservations/actions/pending")
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "No se pudieron calcular las acciones pendientes. Intentá de nuevo."
+    assert "sensitive internal provider detail" not in response.text
+
+
+def test_n06_cancel_errors_match_between_reservation_and_booking_routes(api_client):
+    client, SessionLocal = api_client
+    reservation_id = _seed_ota_no_guarantee_reservation(SessionLocal)
+    with SessionLocal() as db:
+        reservation = db.get(Reservation, reservation_id)
+        reservation.status = ReservationStatusEnum.CHECKED_IN
+        db.commit()
+
+    expected = "No se puede cancelar una reserva que ya tiene check-in o check-out."
+    for path in (
+        f"/api/reservations/{reservation_id}/cancel",
+        f"/api/bookings/{reservation_id}/cancel",
+    ):
+        response = client.post(path)
+        assert response.status_code == 400, (path, response.text)
+        assert response.json()["detail"] == expected
+
+
+def test_n06_terminal_edit_and_stale_version_errors_are_localized_on_both_routes(api_client):
+    client, SessionLocal = api_client
+    reservation_id = _seed_ota_no_guarantee_reservation(SessionLocal)
+    with SessionLocal() as db:
+        reservation = db.get(Reservation, reservation_id)
+        reservation.status = ReservationStatusEnum.CHECKED_OUT
+        db.commit()
+
+    expected_terminal = "No se puede modificar una reserva en estado «finalizada»."
+    update_body = {"check_out_date": "2026-08-04", "client_version": 999}
+    for path in (
+        f"/api/reservations/{reservation_id}",
+        f"/api/bookings/{reservation_id}",
+    ):
+        terminal = client.patch(path, json=update_body)
+        assert terminal.status_code == 400, (path, terminal.text)
+        assert terminal.json()["detail"] == expected_terminal
+
+    with SessionLocal() as db:
+        reservation = db.get(Reservation, reservation_id)
+        reservation.status = ReservationStatusEnum.PENDING
+        db.commit()
+
+    expected_conflict = "La reserva fue modificada por otra persona. Recargá e intentá de nuevo."
+    for path in (
+        f"/api/reservations/{reservation_id}",
+        f"/api/bookings/{reservation_id}",
+    ):
+        conflict = client.patch(path, json=update_body)
+        assert conflict.status_code == 409, (path, conflict.text)
+        assert conflict.json()["detail"] == expected_conflict

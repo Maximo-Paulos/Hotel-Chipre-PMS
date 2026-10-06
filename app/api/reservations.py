@@ -2,18 +2,25 @@
 FastAPI routes for Reservations.
 Complete CRUD + cancel, modify, no-show, extend stay.
 """
+import csv
+import json
 import logging
 from datetime import date
+from decimal import Decimal
+from io import StringIO
 from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request, status
-from sqlalchemy import func
+from fastapi.responses import Response
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.services.row_locks import lock_query
 from app.database import get_db
 from app.models.audit_log import AuditActionEnum
 from app.models.company import Company
-from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.guest import Guest
+from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.room import Room, RoomCategory
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.reservation import (
@@ -22,6 +29,7 @@ from app.schemas.reservation import (
     ReservationDateChangeResponse,
     CompanyExtensionRequestUpdate,
     ReservationExtensionRequest,
+    ReservationExtensionPreviewResponse,
     ReservationExtensionResponse,
     ReservationNoShowRequest,
     ReservationRead,
@@ -57,17 +65,20 @@ from app.services.reservation_service import (
     ReservationVersionConflict,
     mark_reservation_no_show,
     update_reservation_fields,
+    validate_direct_individual_manual_rate_target,
     register_company_settlement,
     deferred_company_reservation_ids,
     reservation_has_deferred_company_billing,
 )
 from app.services.read_model_cache import get_cached_occupancy_grid_payload
+from app.services.csv_export_safety import spreadsheet_safe_row
 from app.services.guest_restriction_service import GuestProhibitedError, RestrictionOverridePermissionError
 from app.services.reservation_operations_service import (
     ReservationOperationsError,
     RoomMovePermissionError,
     change_reservation_dates,
     extend_reservation_stay,
+    preview_reservation_stay_extension,
     set_company_extension_request,
     add_reservation_charge,
     move_reservation_room,
@@ -107,6 +118,7 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_CHARGE,
     PERMISSION_RESERVATION_CREATE,
     PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
+    PERMISSION_RESERVATION_EXPORT,
     PERMISSION_RESERVATION_MANUAL_RATE,
     PERMISSION_RESERVATION_RATE_ADJUST,
     PERMISSION_RESERVATION_MOVE,
@@ -135,6 +147,17 @@ from app.services.graph_projection import (
 
 router = APIRouter(prefix="/api/reservations", tags=["Reservations"])
 logger = logging.getLogger(__name__)
+_RESERVATION_CSV_MAX_RANGE_DAYS = 367
+_RESERVATION_CSV_MAX_ROWS = 10_000
+
+
+def _reservation_status_label_es(status: ReservationStatusEnum) -> str:
+    return {
+        ReservationStatusEnum.CHECKED_IN: "en curso",
+        ReservationStatusEnum.CHECKED_OUT: "finalizada",
+        ReservationStatusEnum.CANCELLED: "cancelada",
+        ReservationStatusEnum.NO_SHOW: "no presentada",
+    }.get(status, "en un estado que no admite cambios")
 
 
 def _to_read(
@@ -560,6 +583,154 @@ def list_reservations(
         raise HTTPException(status_code=500, detail="No se pudieron serializar las reservas") from exc
 
 
+@router.get(
+    "/export.csv",
+    response_class=Response,
+    responses={200: {"content": {"text/csv": {}}}},
+)
+def export_reservations_csv(
+    start_date: date = Query(..., description="Inclusive first stay date (YYYY-MM-DD)"),
+    end_date: date = Query(..., description="Inclusive last stay date (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_RESERVATION_READ, PERMISSION_RESERVATION_EXPORT)
+    ),
+):
+    """Export a bounded, tenant-scoped reservation CSV without guest documents or contacts."""
+    if end_date < start_date:
+        raise HTTPException(status_code=422, detail="El período de exportación es inválido.")
+    inclusive_days = (end_date - start_date).days + 1
+    if inclusive_days > _RESERVATION_CSV_MAX_RANGE_DAYS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"El período máximo de exportación es de {_RESERVATION_CSV_MAX_RANGE_DAYS} días.",
+        )
+
+    # Use scalar columns and tenant-constrained joins so guest documents and
+    # contact fields are never selected for this export.
+    query = (
+        db.query(
+            Reservation.confirmation_code.label("confirmation_code"),
+            Guest.first_name.label("guest_first_name"),
+            Guest.last_name.label("guest_last_name"),
+            Reservation.status.label("reservation_status"),
+            Reservation.check_in_date.label("check_in_date"),
+            Reservation.check_out_date.label("check_out_date"),
+            Reservation.num_adults.label("num_adults"),
+            Reservation.num_children.label("num_children"),
+            Reservation.total_amount.label("total_amount"),
+            Reservation.currency_code.label("currency_code"),
+            Reservation.source.label("source"),
+            Room.room_number.label("room_number"),
+            RoomCategory.name.label("category_name"),
+        )
+        .outerjoin(
+            Guest,
+            and_(Guest.id == Reservation.guest_id, Guest.hotel_id == context.hotel_id),
+        )
+        .outerjoin(
+            Room,
+            and_(Room.id == Reservation.room_id, Room.hotel_id == context.hotel_id),
+        )
+        .outerjoin(
+            RoomCategory,
+            and_(RoomCategory.id == Reservation.category_id, RoomCategory.hotel_id == context.hotel_id),
+        )
+        .filter(
+            Reservation.hotel_id == context.hotel_id,
+            Reservation.deleted_at.is_(None),
+            Reservation.check_in_date <= end_date,
+            Reservation.check_out_date > start_date,
+        )
+        .order_by(Reservation.check_in_date.asc(), Reservation.check_out_date.asc(), Reservation.id.asc())
+        .limit(_RESERVATION_CSV_MAX_ROWS + 1)
+    )
+    reservations = query.all()
+    if len(reservations) > _RESERVATION_CSV_MAX_ROWS:
+        raise HTTPException(
+            status_code=413,
+            detail="El resultado supera el máximo de reservas exportables; acotá el período.",
+        )
+
+    fieldnames = [
+        "codigo_reserva",
+        "huesped",
+        "estado",
+        "check_in",
+        "check_out",
+        "noches",
+        "habitacion",
+        "categoria",
+        "adultos",
+        "menores",
+        "total",
+        "moneda",
+        "origen",
+    ]
+    output = StringIO(newline="")
+    writer = csv.DictWriter(
+        output,
+        fieldnames=fieldnames,
+        delimiter=";",
+        lineterminator="\r\n",
+        extrasaction="ignore",
+    )
+    writer.writeheader()
+    for row in reservations:
+        status_value = getattr(row.reservation_status, "value", row.reservation_status) or ""
+        source_value = getattr(row.source, "value", row.source) or ""
+        total_amount = Decimal(str(row.total_amount or 0)).quantize(Decimal("0.01"))
+        safe_row = spreadsheet_safe_row(
+            {
+                "codigo_reserva": row.confirmation_code or "",
+                "huesped": f"{row.guest_first_name or ''} {row.guest_last_name or ''}".strip(),
+                "estado": str(status_value),
+                "check_in": row.check_in_date.isoformat(),
+                "check_out": row.check_out_date.isoformat(),
+                "noches": (row.check_out_date - row.check_in_date).days,
+                "habitacion": row.room_number or "",
+                "categoria": row.category_name or "",
+                "adultos": row.num_adults,
+                "menores": row.num_children,
+                "total": format(total_amount, ".2f"),
+                "moneda": row.currency_code or "",
+                "origen": str(source_value),
+            }
+        )
+        writer.writerow(safe_row)
+
+    db.add(
+        SecurityAuditLog(
+            hotel_id=context.hotel_id,
+            user_id=context.user_id,
+            action="reservation.csv_exported",
+            resource_type="reservation_export",
+            resource_id=None,
+            details=json.dumps(
+                {
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "row_count": len(reservations),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
+    )
+    db.commit()
+
+    return Response(
+        content="\ufeff" + output.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Cache-Control": "private, no-store",
+            "Content-Disposition": (
+                f'attachment; filename="reservas-{start_date.isoformat()}-{end_date.isoformat()}.csv"'
+            )
+        },
+    )
+
+
 @router.get("/actions/pending", response_model=list[ReservationPendingActionRead])
 def list_pending_actions(
     limit: int = 100,
@@ -573,7 +744,7 @@ def list_pending_actions(
         logger.error("Pending actions failed for hotel_id=%s error_type=%s", context.hotel_id, type(exc).__name__)
         raise HTTPException(
             status_code=500,
-            detail=f"No se pudieron calcular las acciones pendientes: {exc}",
+            detail="No se pudieron calcular las acciones pendientes. Intentá de nuevo.",
         ) from exc
 
 
@@ -586,9 +757,9 @@ def occupancy_grid(
 ):
     """B2: planilla de ocupación — rooms x days grid data for one hotel."""
     if date_to <= date_from:
-        raise HTTPException(status_code=422, detail="date_to must be greater than date_from")
+        raise HTTPException(status_code=422, detail="La fecha de salida debe ser posterior a la fecha de llegada.")
     if (date_to - date_from).days > 92:
-        raise HTTPException(status_code=422, detail="Date range cannot exceed 92 days")
+        raise HTTPException(status_code=422, detail="El período no puede superar los 92 días.")
     grid = get_cached_occupancy_grid_payload(
         hotel_id=context.hotel_id,
         date_from=date_from,
@@ -694,7 +865,7 @@ def register_settlement(
     """Register the deferred corporate collection (v72 §3.5): settled."""
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not reservation:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     try:
         register_company_settlement(
             db,
@@ -718,7 +889,7 @@ def get_reservation(
 ):
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     return _to_read(reservation, db=db)
 
 
@@ -736,7 +907,7 @@ def add_reservation_guests(
 ):
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
 
     category = _reservation_room_capacity_category(
         db,
@@ -744,7 +915,7 @@ def add_reservation_guests(
         reservation=reservation,
     )
     if not category:
-        raise HTTPException(status_code=400, detail="Room category not found for reservation")
+        raise HTTPException(status_code=400, detail="No se encontró la categoría de habitación para la reserva.")
 
     linked_guest_ids = {reservation.guest_id}
     linked_guest_ids.update(g.id for g in reservation.additional_guests)
@@ -892,7 +1063,7 @@ def cancel_reservation(
     if not r:
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
 
     _authorize_company_reservation_management(request, db, context, r)
 
@@ -901,13 +1072,13 @@ def cancel_reservation(
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(
             status_code=400,
-            detail="Cannot cancel a reservation that is already checked-in or checked-out",
+            detail="No se puede cancelar una reserva que ya tiene check-in o check-out.",
         )
 
     if r.status == ReservationStatusEnum.CANCELLED:
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
-        raise HTTPException(status_code=400, detail="Reservation is already cancelled")
+        raise HTTPException(status_code=400, detail="La reserva ya está cancelada.")
 
     requires_paid_cancel_approval = has_payment_history_for_cancellation(db, context.hotel_id, r)
     if requires_paid_cancel_approval:
@@ -926,13 +1097,16 @@ def cancel_reservation(
         )
         r = lock_query(reservation_query, Reservation).first()
         if not r:
-            raise HTTPException(status_code=404, detail="Reservation not found")
+            raise HTTPException(status_code=404, detail="No se encontró la reserva.")
         if r.status in (
             ReservationStatusEnum.CHECKED_IN,
             ReservationStatusEnum.CHECKED_OUT,
             ReservationStatusEnum.CANCELLED,
         ):
-            raise HTTPException(status_code=409, detail="Reservation changed while approval was being verified")
+            raise HTTPException(
+                status_code=409,
+                detail="La reserva cambió mientras se verificaba la autorización. Recargá e intentá de nuevo.",
+            )
 
     if not permission_allowed:
         try:
@@ -1013,7 +1187,7 @@ def create_reservation_charge(
     """Record a human-readable consumption or extra charge for an active stay."""
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     _authorize_company_reservation_management(request, db, context, reservation)
     try:
         charge = add_reservation_charge(
@@ -1057,11 +1231,11 @@ def release_no_guarantee_reservation(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
     r = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not r:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     if reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=r):
         raise HTTPException(
             status_code=409,
-            detail="An OTA reservation with payment history cannot be released as no-guarantee",
+            detail="Una reserva de OTA con pagos registrados no se puede liberar como sin garantía.",
         )
     before = audit_log_service.model_snapshot(r)
     try:
@@ -1099,7 +1273,7 @@ def mark_no_show(
     """Mark a reservation as no-show without automatic charge."""
     r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not r:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     _authorize_company_reservation_management(request, db, context, r)
     before = audit_log_service.model_snapshot(r)
     try:
@@ -1158,7 +1332,7 @@ def change_dates(
         )
     r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not r:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     _authorize_company_reservation_management(request, db, context, r)
     before = audit_log_service.model_snapshot(r)
     try:
@@ -1217,7 +1391,13 @@ def modify_reservation(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
-    """Modify a reservation, including arrival metadata in any non-deleted state."""
+    """Modify reservation details with optimistic concurrency protection.
+
+    A direct individual reservation without payment history may receive a
+    manual total correction under its bounded or unbounded manual-rate scope.
+    Corrections to reservations with payment history retain the stricter
+    ``reservation:paid_total_adjust`` policy and never rewrite transactions.
+    """
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
         raise HTTPException(
@@ -1226,17 +1406,24 @@ def modify_reservation(
         )
     r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not r:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     submitted_data = data.model_dump(exclude_unset=True)
     effective_data = {
         field: value
         for field, value in submitted_data.items()
-        if field not in {"client_version", "restriction_override", "paid_total_change_reason"}
+        if field not in {
+            "client_version",
+            "restriction_override",
+            "paid_total_change_reason",
+            "confirm_large_total_adjustment",
+        }
         and not (field == "room_id" and value is None)
         and getattr(r, field, None) != value
     }
     if r.company_id is not None and effective_data:
         _authorize_company_reservation_management(request, db, context, r)
+    total_adjustment_kind: Literal["manual", "paid"] | None = None
+    manual_rate_scope: Literal["bounded", "unbounded"] | None = None
     if "total_amount" in effective_data:
         if reservation_has_deferred_company_billing(
             db,
@@ -1247,12 +1434,30 @@ def modify_reservation(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="El alojamiento de esta empresa se factura fuera del PMS y no admite correcciones de importe aquí.",
             )
-        if not reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=r):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="La corrección de total desde este flujo está habilitada para reservas que ya recibieron pagos.",
-            )
-        authorize_permission(request, db, context, PERMISSION_RESERVATION_PAID_TOTAL_ADJUST)
+        has_payment_or_deposit = reservation_has_payment_or_deposit(
+            db,
+            hotel_id=context.hotel_id,
+            reservation=r,
+        )
+        if has_payment_or_deposit:
+            # Existing paid-total corrections retain their stricter financial
+            # permission. This never rewrites the original transaction ledger.
+            total_adjustment_kind = "paid"
+            authorize_permission(request, db, context, PERMISSION_RESERVATION_PAID_TOTAL_ADJUST)
+        else:
+            # Manual-rate policy is separate from complimentary/upgrade
+            # adjustments. Reuse the direct-rate scope: owners with manual_rate
+            # retain the unbounded path; limited actors need configured bounds
+            # and a current quote in the reservation service.
+            try:
+                validate_direct_individual_manual_rate_target(r, hotel_id=context.hotel_id)
+            except ManualRatePolicyError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=str(exc),
+                ) from exc
+            total_adjustment_kind = "manual"
+            manual_rate_scope = authorize_manual_rate_scope(db, context)
     if "room_id" in effective_data and effective_data["room_id"] is not None:
         # update_reservation_fields rejects cross-category rooms, so this
         # legacy edit path can only make a same-category (tier 1) move.
@@ -1287,9 +1492,15 @@ def modify_reservation(
         ReservationStatusEnum.CANCELLED,
         ReservationStatusEnum.NO_SHOW,
     ) and terminal_mutation_fields:
-        raise HTTPException(status_code=400, detail=("Cannot modify: reservation is " + r.status.value))
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede modificar una reserva en estado «{_reservation_status_label_es(r.status)}».",
+        )
     if data.client_version is not None and r.version != data.client_version:
-        raise HTTPException(status_code=409, detail="Reservation was modified concurrently. Reload and retry.")
+        raise HTTPException(
+            status_code=409,
+            detail="La reserva fue modificada por otra persona. Recargá e intentá de nuevo.",
+        )
     if not effective_data:
         return _to_read(r, db=db)
     if data.client_version is None:
@@ -1303,6 +1514,10 @@ def modify_reservation(
         update_payload["restriction_override"] = submitted_data["restriction_override"]
     if "paid_total_change_reason" in submitted_data:
         update_payload["paid_total_change_reason"] = submitted_data["paid_total_change_reason"]
+    if "confirm_large_total_adjustment" in submitted_data:
+        update_payload["confirm_large_total_adjustment"] = submitted_data[
+            "confirm_large_total_adjustment"
+        ]
     update_data = ReservationUpdate.model_validate(update_payload)
     before = audit_log_service.model_snapshot(r)
     mobility_restriction_changed = (
@@ -1320,18 +1535,38 @@ def modify_reservation(
             room_move_notes="Cambio manual desde API de reservas",
             client_version=update_data.client_version,
             preserve_unclassified_price=True,
+            total_adjustment_kind=total_adjustment_kind,
+            manual_rate_scope=manual_rate_scope,
         )
         after = {
             **(audit_log_service.model_snapshot(r) or {}),
             "source": "reservations_api",
         }
         if "total_amount" in effective_data:
-            after["paid_total_adjustment"] = {
-                "previous_total_amount": str(before.get("total_amount")),
-                "updated_total_amount": str(r.total_amount),
+            adjustment_payload = {
+                "previous_total_amount": str(
+                    Decimal(str(before.get("total_amount") or 0)).quantize(Decimal("0.01"))
+                ),
+                "updated_total_amount": str(
+                    Decimal(str(r.total_amount or 0)).quantize(Decimal("0.01"))
+                ),
                 "reason": data.paid_total_change_reason,
                 "actor_user_id": context.user_id,
             }
+            if total_adjustment_kind == "manual":
+                try:
+                    pricing_snapshot = json.loads(r.pricing_snapshot or "{}")
+                except (TypeError, json.JSONDecodeError):
+                    pricing_snapshot = {}
+                history = pricing_snapshot.get("manual_total_adjustments", [])
+                latest_adjustment = history[-1] if isinstance(history, list) and history else {}
+                manual_rate_context = latest_adjustment.get("manual_rate")
+                if isinstance(manual_rate_context, dict):
+                    adjustment_payload["manual_rate"] = manual_rate_context
+            after["total_adjustment"] = adjustment_payload
+            if total_adjustment_kind == "paid":
+                # Retain the established audit key for existing readers.
+                after["paid_total_adjustment"] = adjustment_payload
         audit_log_service.safe_create_audit_log(
             db,
             hotel_id=context.hotel_id,
@@ -1351,6 +1586,9 @@ def modify_reservation(
                 trigger_type="reservation_update",
             )
         return _to_read(r, db=db)
+    except ManualRatePolicyError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
     except ReservationError as e:
         db.rollback()
         if isinstance(e, ReservationVersionConflict):
@@ -1378,7 +1616,7 @@ def extend_stay(
     """Extend a guest's stay to a new checkout date."""
     r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not r:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
 
     if r.company_id is not None:
         require_all_permissions(PERMISSION_COMPANY_MANAGE)(request, db, context)
@@ -1421,7 +1659,7 @@ def extend_stay(
         ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="The prior receipt date cannot be in the future.",
+                detail="La fecha del cobro previo no puede ser futura.",
             )
     before = audit_log_service.model_snapshot(r)
     try:
@@ -1447,7 +1685,13 @@ def extend_stay(
         )
         if not result.success:
             db.rollback()
-            raise HTTPException(status_code=409, detail={"message": "Extension conflict could not be resolved", "conflicts": result.conflicts or []})
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "No se pudo resolver el conflicto de extensión de estadía.",
+                    "conflicts": result.conflicts or [],
+                },
+            )
         audit_log_service.safe_create_audit_log(
             db,
             hotel_id=context.hotel_id,
@@ -1480,6 +1724,44 @@ def extend_stay(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/{reservation_id}/extend-preview", response_model=ReservationExtensionPreviewResponse)
+def preview_stay_extension(
+    reservation_id: int,
+    request: Request,
+    new_checkout_date: date = Query(...),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
+):
+    """Return a server-priced, read-only extension quote for direct stays."""
+    require_all_permissions(PERMISSION_RESERVATION_CHARGE, PERMISSION_CASH_OPERATE)(request, db, context)
+    reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    if reservation is None:
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
+    config = db.get(HotelConfiguration, context.hotel_id)
+    if config and not config.subscription_active:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Suscripción inactiva. Reactivá el plan para gestionar reservas.",
+        )
+    try:
+        amount = preview_reservation_stay_extension(
+            db,
+            reservation=reservation,
+            hotel_id=context.hotel_id,
+            new_checkout_date=new_checkout_date,
+        )
+    except ReservationOperationsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return ReservationExtensionPreviewResponse(
+        reservation_id=reservation.id,
+        current_checkout_date=reservation.check_out_date,
+        new_checkout_date=new_checkout_date,
+        client_version=reservation.version or 0,
+        extension_amount=amount,
+        currency_code=reservation.currency_code,
+    )
+
+
 @router.put("/{reservation_id}/extension-request", response_model=ReservationRead)
 def update_company_extension_request(
     reservation_id: int,
@@ -1496,7 +1778,7 @@ def update_company_extension_request(
         )
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if reservation is None:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     before = audit_log_service.model_snapshot(reservation)
     try:
         set_company_extension_request(
@@ -1559,7 +1841,7 @@ def room_move(
         ) from exc
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not reservation:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     before = audit_log_service.model_snapshot(reservation)
     try:
         result = move_reservation_room(
@@ -1642,7 +1924,7 @@ def rebook_ota_to_direct(
         _ensure_manual_rate_permission(db, context)
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     if reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=reservation):
         raise HTTPException(
             status_code=409,
@@ -1698,7 +1980,7 @@ def preview_ota_rebook_to_direct(
         _ensure_manual_rate_permission(db, context)
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     try:
         preview = preview_ota_rebook_as_direct(
             db,

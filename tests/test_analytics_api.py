@@ -296,6 +296,24 @@ def test_starter_summary_and_plan_gate(api_client):
     assert len(starter_payload["data"]["cards"]) == 3
     assert_freshness_metadata(starter_payload)
 
+    channels = client.get(
+        "/api/analytics/channels",
+        params={"date_from": "2026-04-01", "date_to": "2026-04-05"},
+        headers=headers,
+    )
+    assert channels.status_code == 200, channels.text
+    assert "channels" in channels.json()["data"]
+    assert_freshness_metadata(channels.json())
+
+    segments = client.get(
+        "/api/analytics/segments",
+        params={"date_from": "2026-04-01", "date_to": "2026-04-05"},
+        headers=headers,
+    )
+    assert segments.status_code == 200, segments.text
+    assert "segments" in segments.json()["data"]
+    assert_freshness_metadata(segments.json())
+
     blocked = client.get("/api/analytics/home", params={"date_from": "2026-04-01", "date_to": "2026-04-05"}, headers=headers)
     assert blocked.status_code == 402, blocked.text
 

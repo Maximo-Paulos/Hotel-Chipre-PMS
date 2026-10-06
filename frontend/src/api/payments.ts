@@ -93,11 +93,39 @@ export type PaymentReceiptData = {
   created_at: string;
 };
 
+export type PaymentReceiptEmailRequest = {
+  recipient_email: string;
+};
+
+export type PaymentReceiptEmailResponse = {
+  transaction_id: number;
+  status: "sent";
+  replayed: boolean;
+};
+
 export const getPaymentSummary = (reservationId: number, session?: SessionLike) =>
   apiFetch<PaymentSummary>(`/api/payments/summary/${reservationId}`, { session });
 
 export const getPaymentReceiptData = (transactionId: number, session?: SessionLike) =>
   apiFetch<PaymentReceiptData>(`/api/payments/transactions/${transactionId}/receipt`, { session });
+
+export const newPaymentReceiptEmailIdempotencyKey = (transactionId: number) => {
+  const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `ui-payment-receipt-email-${transactionId}-${requestId}`;
+};
+
+export const emailPaymentReceipt = (
+  transactionId: number,
+  payload: PaymentReceiptEmailRequest,
+  session?: SessionLike,
+  idempotencyKey: string = newPaymentReceiptEmailIdempotencyKey(transactionId)
+) =>
+  apiFetch<PaymentReceiptEmailResponse>(`/api/payments/transactions/${transactionId}/receipt/email`, {
+    method: "POST",
+    data: payload,
+    session,
+    headers: { "Idempotency-Key": idempotencyKey }
+  });
 
 export const newPaymentIdempotencyKey = (reservationId: number) => {
   const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;

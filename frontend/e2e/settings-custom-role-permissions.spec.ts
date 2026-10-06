@@ -227,10 +227,10 @@ async function installMocks(page: Page, options: {
       await json({
         hotel_id: 1,
         permissions: [
-          { code: permissionCode, module: "guests", description: "Consultar huéspedes", help_es: "Permite consultar huéspedes.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
-          { code: assistantActionsPermissionCode, module: "settings", description: "Revisar acciones del asistente", help_es: "Revisar y aplicar acciones sugeridas por el asistente.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
-          { code: rateAdjustPermissionCode, module: "reservations", description: "Ajustar tarifas y aplicar upgrades sin cargo", help_es: "Permite aplicar descuentos de cortesía, cambios de tarifa o mejoras de habitación sin cargo.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
-          { code: "permissions:manage", module: "permissions", description: "Administrar permisos", help_es: "Permiso crítico.", legacy_aliases: [], locked: true, lock_reason: "owner_only", critical: true, step_up_required: true, delegable: false }
+          { code: permissionCode, module: "guests", description: "Read guest profile data", help_es: "Consultar huéspedes", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
+          { code: assistantActionsPermissionCode, module: "settings", description: "Manage assistant actions", help_es: "Revisar y aplicar acciones sugeridas por el asistente.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
+          { code: rateAdjustPermissionCode, module: "reservations", description: "Adjust reservation rates", help_es: "Permite aplicar descuentos de cortesía, cambios de tarifa o mejoras de habitación sin cargo.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
+          { code: "permissions:manage", module: "permissions", description: "Administer permissions", help_es: "Permiso crítico.", legacy_aliases: [], locked: true, lock_reason: "owner_only", critical: true, step_up_required: true, delegable: false }
         ]
       });
       return;
@@ -246,7 +246,7 @@ async function installMocks(page: Page, options: {
     const userOverridesMatch = pathname.match(/\/api\/permissions\/user-overrides\/(\d+)$/);
     if (userOverridesMatch && method === "GET") {
       const userId = Number(userOverridesMatch[1]);
-      const role = userId === 2 ? "co_owner" : "old-auditor";
+      const role = userId === 2 ? "co_owner" : userId === 4 ? "receptionist" : "old-auditor";
       const details = { ...(profilesForRoles[role] ?? {}) };
       if (options.legacyUserDeny && userId === 2) {
         details[assistantActionsPermissionCode] = {
@@ -286,6 +286,7 @@ async function installMocks(page: Page, options: {
     if (pathname.endsWith("/api/users/")) {
       await json([
         { id: 2, email: "co-owner@example.com", role: "co_owner", is_verified: true, is_active: true, password_login_enabled: true },
+        { id: 4, email: "sofia@example.com", role: "receptionist", is_verified: true, is_active: true, password_login_enabled: true },
         { id: 3, email: "archived-user@example.com", role: "old-auditor", is_verified: true, is_active: true, password_login_enabled: true }
       ]);
       return;
@@ -311,6 +312,9 @@ test("shows an active custom role by name and uses its code for permission and v
   const { writes } = await installMocks(page);
   await openPermissions(page);
 
+  const permissionMatrix = page.getByTestId("permissions-matrix");
+  await expect(permissionMatrix.getByText("Huéspedes", { exact: true })).toBeVisible();
+  await expect(permissionMatrix.getByText("Consultar huéspedes", { exact: true })).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Consultar huéspedes para Auditoría nocturna" })).toBeVisible();
   await expect(page.getByTestId(`permission-toggle-${customRoleCode}-${permissionCode}`)).toBeEnabled();
   await expect(page.getByTestId("permission-toggle-old-auditor-guest:read")).toHaveCount(0);
@@ -449,6 +453,39 @@ test("blocks user overrides for protected built-ins and archived custom roles", 
   await userPicker.selectOption("3");
   await expect(page.getByRole("status").filter({ hasText: "archivado" })).toBeVisible();
   await expect(userToggle).toBeDisabled();
+});
+
+test("saves an individual staff permission override through the explicit batch action", async ({ page }) => {
+  const { writes } = await installMocks(page);
+  await openPermissions(page);
+
+  const userPicker = page.getByLabel("Usuario para configurar overrides");
+  await userPicker.selectOption("4");
+  const userToggle = page.getByTestId(`user-permission-toggle-${permissionCode}`);
+  await expect(userToggle).toBeEnabled();
+  await expect(userToggle).toBeChecked();
+
+  await userToggle.click();
+  await expect(page.getByTestId("permission-batch-draft")).toContainText("Cambios pendientes (1)");
+  expect(writes).toHaveLength(0);
+
+  await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+  await expect.poll(() => writes.some((write) =>
+    (write.payload as { changes?: Array<{ scope?: string; user_id?: number }> }).changes?.some((change) =>
+      change.scope === "user" && change.user_id === 4
+    )
+  )).toBe(true);
+  expect(writes.find((write) => write.path.endsWith("/permissions/overrides/batch"))?.payload).toMatchObject({
+    changes: [{
+      scope: "user",
+      operation: "set",
+      user_id: 4,
+      permission_code: permissionCode,
+      allowed: false,
+      expected_version: 0
+    }]
+  });
+  await expect(page.getByRole("alert")).toContainText("1 cambio(s) de permisos guardado(s).");
 });
 
 test("explains when a new capability remains denied by an older user override", async ({ page }) => {

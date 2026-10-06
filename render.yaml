@@ -35,7 +35,7 @@ services:
       - key: DB_MAX_OVERFLOW
         value: "4"
       - key: DB_POOL_TIMEOUT_SECONDS
-        value: "15"
+        value: "5"
       - key: EXTERNAL_EFFECTS_ENABLED
         value: "false"
       - key: INBOUND_PROVIDER_EVENTS_ENABLED

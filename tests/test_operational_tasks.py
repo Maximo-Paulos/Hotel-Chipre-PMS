@@ -194,6 +194,28 @@ def test_housekeeping_can_read_all_general_tasks_but_cannot_operate_them(db, hot
     assert general_read["description"] == "Llega un proveedor a la tarde."
     assert general_read["created_by_name"] == "Gerente de prueba"
 
+    report = create_operational_task(
+        OperationalTaskCreate(
+            task_type=OperationalTaskTypeEnum.GENERAL,
+            title="Reportar un problema operativo",
+            description="Hace falta asistencia en el pasillo.",
+        ),
+        db=db,
+        context=context,
+    )
+    assert report["task_type"] == OperationalTaskTypeEnum.GENERAL.value
+    assert report["title"] == "Reportar un problema operativo"
+    reported_task = db.query(OperationalTask).filter(OperationalTask.id == report["id"]).one()
+    with pytest.raises(HTTPException) as report_update_error:
+        patch_operational_task(
+            reported_task.id,
+            OperationalTaskUpdate(client_version=reported_task.version, status=OperationalTaskStatusEnum.IN_PROGRESS),
+            db=db,
+            context=context,
+        )
+    assert report_update_error.value.status_code == 403
+    assert reported_task.status == OperationalTaskStatusEnum.PENDING
+
     history = get_operational_task_history(general.id, db=db, context=context)
     assert history[0]["actor_name"] == "Gerente de prueba"
     with pytest.raises(HTTPException) as error:

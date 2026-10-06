@@ -288,6 +288,26 @@ def test_extension_requires_payment_or_link_action(db, hotel_config, sample_gues
     assert result.payment_link.reservation_id == reservation.id
 
 
+def test_extension_rejects_checkout_not_after_current_checkout_in_spanish(
+    db, hotel_config, sample_guest, sample_categories, sample_rooms
+):
+    reservation = _create_sample_reservation(db, sample_guest, sample_categories, sample_rooms)
+    reservation.status = ReservationStatusEnum.FULLY_PAID
+    reservation.amount_paid = reservation.total_amount
+    db.flush()
+
+    with pytest.raises(ReservationOperationsError, match="nueva fecha de salida debe ser posterior"):
+        extend_reservation_stay(
+            db,
+            reservation=reservation,
+            hotel_id=hotel_config.id,
+            new_checkout_date=reservation.check_out_date,
+            client_version=reservation.version,
+            pricing_mode="current_rate",
+            payment_action="payment_link",
+        )
+
+
 def test_extension_rejects_refund_as_immediate_payment_without_mutating_reservation(
     db, hotel_config, sample_guest, sample_categories, sample_rooms
 ):
@@ -330,7 +350,7 @@ def test_reservation_lifecycle_optimistic_lock_conflict(
 ):
     reservation = _create_sample_reservation(db, sample_guest, sample_categories, sample_rooms)
 
-    with pytest.raises(ReservationError, match="modified concurrently"):
+    with pytest.raises(ReservationError, match="fue modificada por otra persona"):
         mark_reservation_no_show(
             db,
             reservation,

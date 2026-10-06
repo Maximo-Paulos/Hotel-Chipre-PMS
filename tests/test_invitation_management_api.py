@@ -113,7 +113,6 @@ def test_pending_invitation_list_is_scoped_redacted_and_owner_can_recover_legacy
     try:
         listed = client.get(
             "/api/users/invitations",
-            headers=_step_up_headers(owner, 61, "GET", "/api/users/invitations"),
         )
         assert listed.status_code == 200, listed.text
         assert len(listed.json()) == 1
@@ -124,6 +123,15 @@ def test_pending_invitation_list_is_scoped_redacted_and_owner_can_recover_legacy
         }
         assert "token" not in listed.text.lower()
         assert "token_hash" not in listed.text.lower()
+
+        # Read access uses the ordinary users:view permission. Mutations still
+        # require the one-use manage permission ticket.
+        step_up_required = client.post(
+            "/api/users/invite",
+            json={"email": "must-not-be-invited@example.test", "role": "manager"},
+        )
+        assert step_up_required.status_code == 428, step_up_required.text
+        assert step_up_required.json()["detail"]["code"] == "STEP_UP_REQUIRED"
 
         set_actor(co_owner, "co_owner", 61)
         revoke_path = f"/api/users/invitations/{legacy_invitation.id}"
@@ -175,7 +183,6 @@ def test_pending_invitation_list_is_scoped_redacted_and_owner_can_recover_legacy
         set_actor(foreign_owner, "owner", 62)
         foreign_list = client.get(
             "/api/users/invitations",
-            headers=_step_up_headers(foreign_owner, 62, "GET", "/api/users/invitations"),
         )
         assert foreign_list.status_code == 200, foreign_list.text
         assert [item["email"] for item in foreign_list.json()] == [foreign_staff.email]

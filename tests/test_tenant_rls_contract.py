@@ -98,6 +98,10 @@ ADDITIVE_RLS_TABLE_CONTRACT = (
         ("company_night_charges", "company_night_charge_payment_allocations"),
     ),
     (
+        "20261016_payment_receipt_email_delivery.py",
+        ("payment_receipt_email_deliveries",),
+    ),
+    (
         "20261015_company_nightly_rate_history.py",
         ("company_nightly_surcharge_rates", "company_night_charge_amount_adjustments"),
     ),
@@ -321,6 +325,7 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "shift_handoffs",
         "shift_handoff_tasks",
         "reservation_email_deliveries",
+        "payment_receipt_email_deliveries",
         "whatsapp_channels",
         "whatsapp_contacts",
         "whatsapp_conversations",

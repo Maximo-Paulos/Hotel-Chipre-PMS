@@ -15,6 +15,23 @@
     "prevPage": "← Previous",
     "nextPage": "Next →"
   },
+  "export": {
+    "eyebrow": "Export",
+    "title": "Guest ledger CSV",
+    "description": "Includes non-cancelled stays that overlap at least one night in the selected period.",
+    "from": "From",
+    "through": "Through (inclusive)",
+    "download": "Download CSV",
+    "downloading": "Preparing CSV...",
+    "downloaded": "The CSV download started.",
+    "errors": {
+      "datesRequired": "Enter both dates to export.",
+      "invalidRange": "Through must be the same as or later than From.",
+      "unauthorized": "Your session expired. Sign in again and retry.",
+      "forbidden": "You do not have permission to export the guest ledger.",
+      "failed": "Unable to export the guest ledger. Please try again."
+    }
+  },
   "profile": {
     "eyebrow": "Guest record",
     "updatedAt": "Updated {{date}}",

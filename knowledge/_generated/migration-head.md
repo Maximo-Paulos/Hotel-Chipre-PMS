@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-10-06T04:24:24.766102+00:00
-Commit: `73398218f9ac118df53ccfd5780322be688519a6`
+Generado: 2026-10-06T15:36:02.938741+00:00
+Commit: `4b7d260ebbde2f423f38a976e4d42b00f3393ec5`
 
 ```text
-UNAVAILABLE (exit 1): /Users/maximopaulos/.local/share/uv/python/cpython-3.12-macos-aarch64-none/bin/python3.12: No module named alembic.__main__; 'alembic' is a package and cannot be directly executed
+20261017_laundry_missing_follow_up (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

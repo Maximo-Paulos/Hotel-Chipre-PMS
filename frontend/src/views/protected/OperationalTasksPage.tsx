@@ -44,7 +44,7 @@ const priorityLabels: Record<OperationalTaskPriority, string> = {
 };
 
 const typeLabels: Record<OperationalTaskType, string> = {
-  general: "General",
+  general: "Operaciones",
   reception: "Recepción",
   housekeeping: "Limpieza",
   maintenance: "Mantenimiento"
@@ -127,7 +127,11 @@ export function OperationalTasksPage() {
   const taskTypeOptions = useMemo(() => {
     if (canManage || !session.baseRole) return Object.entries(typeLabels) as [OperationalTaskType, string][];
     if (session.baseRole === "housekeeping") {
-      return [["housekeeping", typeLabels.housekeeping], ["maintenance", typeLabels.maintenance]] as [OperationalTaskType, string][];
+      return [
+        ["general", typeLabels.general],
+        ["housekeeping", typeLabels.housekeeping],
+        ["maintenance", typeLabels.maintenance]
+      ] as [OperationalTaskType, string][];
     }
     if (session.baseRole === "receptionist") {
       return [["general", typeLabels.general], ["reception", typeLabels.reception]] as [OperationalTaskType, string][];
@@ -461,7 +465,7 @@ export function OperationalTasksPage() {
                     <p className="mt-1 text-xs text-slate-500">Creada por {task.created_by_name || "usuario interno"} · {formatDate(task.created_at)}</p>
                     {task.description && <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{task.description}</p>}
                     {session.baseRole === "housekeeping" && task.task_type === "general" && (
-                      <p className="mt-2 text-xs font-medium text-slate-500">Solo lectura para Limpieza.</p>
+                      <p className="mt-2 text-xs font-medium text-slate-500">Aviso de Operaciones · solo lectura para Limpieza.</p>
                     )}
                   </div>
                   <div className="flex shrink-0 flex-wrap justify-end gap-2">

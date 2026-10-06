@@ -28,7 +28,13 @@ from app.models.payment import PaymentLink
 from app.models.audit_log import AuditLog
 from app.models.commercial import SellableProduct
 from app.models.company import Company
-from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
+from app.models.reservation_group import ReservationGroup
+from app.models.reservation import (
+    Reservation,
+    ReservationChannelCodeEnum,
+    ReservationSourceEnum,
+    ReservationStatusEnum,
+)
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.stock import StockItem
 from app.models.transaction import (
@@ -428,6 +434,26 @@ def test_paid_reservation_total_adjustment_is_audited_and_keeps_payment_rows():
         db.add(payment)
         db.commit()
 
+        def payment_ledger_snapshot():
+            return [
+                (
+                    row.id,
+                    row.reservation_id,
+                    row.amount,
+                    row.currency,
+                    row.transaction_type,
+                    row.payment_method,
+                    row.status,
+                    row.processed_at,
+                )
+                for row in db.query(Transaction)
+                .filter_by(hotel_id=1, reservation_id=reservation.id)
+                .order_by(Transaction.id)
+                .all()
+            ]
+
+        payment_ledger_before = payment_ledger_snapshot()
+
         payload = {
             "total_amount": "180.00",
             "paid_total_change_reason": "Tarifa confirmada por gerencia",
@@ -446,8 +472,7 @@ def test_paid_reservation_total_adjustment_is_audited_and_keeps_payment_rows():
         assert reservation.total_amount == Decimal("180.00")
         assert reservation.amount_paid == Decimal("50.00")
         assert reservation.manual_rate_reason == "Tarifa confirmada por gerencia"
-        assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 1
-        assert db.query(Transaction).filter_by(reservation_id=reservation.id).one().amount == Decimal("50.00")
+        assert payment_ledger_snapshot() == payment_ledger_before
 
         import json
 
@@ -482,22 +507,69 @@ def test_paid_reservation_total_adjustment_is_audited_and_keeps_payment_rows():
         assert manager_updated.status_code == 200, manager_updated.text
         db.refresh(reservation)
         assert reservation.total_amount == Decimal("190.00")
-        assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 1
+        assert payment_ledger_snapshot() == payment_ledger_before
     finally:
         _close(db, engine)
 
 
-def test_paid_total_adjustment_requires_payment_history_and_reason():
+def test_large_paid_total_adjustment_requires_confirmation_and_keeps_payment_rows():
     client, db, engine, auth, reservation, _stock_item = _client()
     try:
+        payment = Transaction(
+            hotel_id=1,
+            reservation_id=reservation.id,
+            amount=Decimal("50.00"),
+            currency="ARS",
+            transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            payment_method=PaymentMethodEnum.CASH,
+            status=TransactionStatusEnum.COMPLETED,
+            processed_at=datetime.now(timezone.utc),
+            created_by_user_id=10,
+        )
+        reservation.amount_paid = Decimal("50.00")
+        db.add(payment)
+        db.commit()
         auth.update({"user_id": 10, "role": "owner"})
+
+        payload = {
+            "total_amount": "99.99",
+            "paid_total_change_reason": "Importe corregido con revisión",
+            "client_version": reservation.version,
+        }
+        denied = client.patch(f"/api/reservations/{reservation.id}", json=payload)
+        assert denied.status_code == 422, denied.text
+        assert "confirmá" in denied.json()["detail"].lower()
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("200.00")
+
+        confirmed = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={**payload, "confirm_large_total_adjustment": True},
+        )
+        assert confirmed.status_code == 200, confirmed.text
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("99.99")
+        assert reservation.amount_paid == Decimal("50.00")
+        stored_payment = db.query(Transaction).filter_by(
+            hotel_id=1, reservation_id=reservation.id
+        ).one()
+        assert stored_payment.amount == Decimal("50.00")
+    finally:
+        _close(db, engine)
+
+
+def test_unpaid_direct_total_adjustment_requires_manual_rate_scope_reason_and_bounds():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        auth.update({"user_id": 30, "role": "manager"})
         missing_reason = client.patch(
             f"/api/reservations/{reservation.id}",
             json={"total_amount": "150.00", "client_version": reservation.version},
         )
         assert missing_reason.status_code == 422, missing_reason.text
 
-        unpaid = client.patch(
+        auth.update({"user_id": 20, "role": "receptionist"})
+        denied = client.patch(
             f"/api/reservations/{reservation.id}",
             json={
                 "total_amount": "150.00",
@@ -505,9 +577,355 @@ def test_paid_total_adjustment_requires_payment_history_and_reason():
                 "client_version": reservation.version,
             },
         )
-        assert unpaid.status_code == 409, unpaid.text
+        assert denied.status_code == 403, denied.text
         db.refresh(reservation)
         assert reservation.total_amount == Decimal("200.00")
+
+        auth.update({"user_id": 30, "role": "manager"})
+        config = db.get(HotelConfiguration, 1)
+        config.manual_rate_min_adjustment_pct = Decimal("-25.00")
+        config.manual_rate_max_adjustment_pct = Decimal("10.00")
+        db.commit()
+        adjusted = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": "150.00",
+                "paid_total_change_reason": "Corrección solicitada",
+                "client_version": reservation.version,
+            },
+        )
+        assert adjusted.status_code == 200, adjusted.text
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("150.00")
+        assert reservation.amount_paid == Decimal("0.00")
+        assert reservation.manual_rate_reason == "Corrección solicitada"
+
+        import json
+
+        pricing_snapshot = json.loads(reservation.pricing_snapshot or "{}")
+        history_entry = pricing_snapshot["manual_total_adjustments"][-1]
+        assert history_entry["reason"] == "Corrección solicitada"
+        assert history_entry["manual_rate"] == {
+            "scope": "bounded",
+            "quote_total": "200.00",
+            "minimum_total": "150.00",
+            "maximum_total": "220.00",
+            "currency_code": "ARS",
+            "min_adjustment_pct": "-25.00",
+            "max_adjustment_pct": "10.00",
+        }
+        audit = (
+            db.query(AuditLog)
+            .filter_by(table_name="reservations", record_id=reservation.id, actor_user_id=30)
+            .order_by(AuditLog.id.desc())
+            .first()
+        )
+        assert audit is not None
+        after = json.loads(audit.payload_after or "{}")
+        assert after["total_adjustment"]["previous_total_amount"] == "200.00"
+        assert after["total_adjustment"]["updated_total_amount"] == "150.00"
+        assert after["total_adjustment"]["reason"] == "Corrección solicitada"
+        assert after["total_adjustment"]["manual_rate"] == history_entry["manual_rate"]
+        assert db.query(Transaction).filter_by(hotel_id=1, reservation_id=reservation.id).count() == 0
+    finally:
+        _close(db, engine)
+
+
+@pytest.mark.parametrize("total_amount", ["149.99", "220.01"])
+def test_bounded_unpaid_total_adjustment_rejects_amount_outside_configured_range(total_amount):
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        config = db.get(HotelConfiguration, 1)
+        config.manual_rate_min_adjustment_pct = Decimal("-25.00")
+        config.manual_rate_max_adjustment_pct = Decimal("10.00")
+        db.commit()
+        original = (reservation.total_amount, reservation.version, reservation.manual_rate_reason)
+        auth.update({"user_id": 30, "role": "manager"})
+
+        response = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": total_amount,
+                "paid_total_change_reason": "Corrección fuera de rango",
+                "client_version": reservation.version,
+            },
+        )
+
+        assert response.status_code == 422, response.text
+        db.refresh(reservation)
+        assert (reservation.total_amount, reservation.version, reservation.manual_rate_reason) == original
+        assert db.query(AuditLog).filter_by(table_name="reservations", record_id=reservation.id).count() == 0
+    finally:
+        _close(db, engine)
+
+
+def test_bounded_unpaid_total_adjustment_fails_closed_without_manual_rate_policy():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        auth.update({"user_id": 30, "role": "manager"})
+        original = (reservation.total_amount, reservation.version, reservation.manual_rate_reason)
+
+        response = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": "175.00",
+                "paid_total_change_reason": "Corrección sin política",
+                "client_version": reservation.version,
+            },
+        )
+
+        assert response.status_code == 422, response.text
+        db.refresh(reservation)
+        assert (reservation.total_amount, reservation.version, reservation.manual_rate_reason) == original
+        assert db.query(AuditLog).filter_by(table_name="reservations", record_id=reservation.id).count() == 0
+    finally:
+        _close(db, engine)
+
+
+def test_bounded_unpaid_total_adjustment_fails_closed_without_trusted_quote(monkeypatch):
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        config = db.get(HotelConfiguration, 1)
+        config.manual_rate_min_adjustment_pct = Decimal("-25.00")
+        config.manual_rate_max_adjustment_pct = Decimal("10.00")
+        db.commit()
+        original = (reservation.total_amount, reservation.version, reservation.manual_rate_reason)
+        auth.update({"user_id": 30, "role": "manager"})
+
+        def unavailable_quote(*_args, **_kwargs):
+            raise reservation_service.ReservationError("synthetic unavailable quote")
+
+        monkeypatch.setattr(reservation_service, "calculate_reservation_pricing", unavailable_quote)
+        response = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": "175.00",
+                "paid_total_change_reason": "Corrección sin cotización",
+                "client_version": reservation.version,
+            },
+        )
+
+        assert response.status_code == 422, response.text
+        db.refresh(reservation)
+        assert (reservation.total_amount, reservation.version, reservation.manual_rate_reason) == original
+        assert db.query(AuditLog).filter_by(table_name="reservations", record_id=reservation.id).count() == 0
+    finally:
+        _close(db, engine)
+
+
+def test_bounded_unpaid_total_adjustment_requires_same_currency_as_current_quote():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        config = db.get(HotelConfiguration, 1)
+        config.manual_rate_min_adjustment_pct = Decimal("-25.00")
+        config.manual_rate_max_adjustment_pct = Decimal("10.00")
+        reservation.currency_code = "USD"
+        db.commit()
+        original = (reservation.total_amount, reservation.version, reservation.manual_rate_reason)
+        auth.update({"user_id": 30, "role": "manager"})
+
+        response = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": "175.00",
+                "paid_total_change_reason": "Corrección con moneda distinta",
+                "client_version": reservation.version,
+            },
+        )
+
+        assert response.status_code == 422, response.text
+        db.refresh(reservation)
+        assert (reservation.total_amount, reservation.version, reservation.manual_rate_reason) == original
+    finally:
+        _close(db, engine)
+
+
+def test_unbounded_manual_rate_actor_can_correct_unpaid_total_without_configured_bounds():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        auth.update({"user_id": 10, "role": "owner"})
+
+        response = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": "100.00",
+                "paid_total_change_reason": "Tarifa autorizada por owner",
+                "client_version": reservation.version,
+                "confirm_large_total_adjustment": True,
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("100.00")
+        assert reservation.manual_rate_reason == "Tarifa autorizada por owner"
+        assert reservation.manual_rate_scope == "unbounded"
+        import json
+
+        history_entry = json.loads(reservation.pricing_snapshot or "{}")["manual_total_adjustments"][-1]
+        assert history_entry["manual_rate"] == {"scope": "unbounded"}
+    finally:
+        _close(db, engine)
+
+
+@pytest.mark.parametrize("link_field", ["source_provider_code", "external_id"])
+def test_unpaid_manual_total_adjustment_rejects_direct_reservation_with_ota_link(link_field):
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        setattr(reservation, link_field, "synthetic-ota-link")
+        db.commit()
+        auth.update({"user_id": 30, "role": "manager"})
+        original = (reservation.total_amount, reservation.version, reservation.manual_rate_reason)
+
+        response = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": "175.00",
+                "paid_total_change_reason": "Corrección de reserva vinculada",
+                "client_version": reservation.version,
+            },
+        )
+
+        assert response.status_code == 409, response.text
+        db.refresh(reservation)
+        assert (reservation.total_amount, reservation.version, reservation.manual_rate_reason) == original
+    finally:
+        _close(db, engine)
+
+
+def test_unpaid_total_adjustment_rejects_ota_reservations():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        auth.update({"user_id": 30, "role": "manager"})
+        reservation.source = ReservationSourceEnum.BOOKING
+        db.commit()
+
+        response = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": "150.00",
+                "paid_total_change_reason": "Ajuste",
+                "client_version": reservation.version,
+            },
+        )
+        assert response.status_code == 409, response.text
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("200.00")
+    finally:
+        _close(db, engine)
+
+
+def test_unpaid_total_adjustment_rejects_ota_channel_on_direct_source():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        reservation.channel_code = ReservationChannelCodeEnum.BOOKING
+        db.commit()
+        auth.update({"user_id": 30, "role": "manager"})
+
+        response = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": "150.00",
+                "paid_total_change_reason": "Ajuste",
+                "client_version": reservation.version,
+            },
+        )
+
+        assert response.status_code == 409, response.text
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("200.00")
+    finally:
+        _close(db, engine)
+
+
+def test_unpaid_total_adjustment_rejects_grouped_direct_reservations():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        group = ReservationGroup(
+            hotel_id=reservation.hotel_id,
+            guest_id=reservation.guest_id,
+            company_id=None,
+            check_in_date=reservation.check_in_date,
+            check_out_date=reservation.check_out_date,
+        )
+        db.add(group)
+        db.flush()
+        reservation.group_id = group.id
+        db.commit()
+        db.refresh(reservation)
+
+        auth.update({"user_id": 30, "role": "manager"})
+        response = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": "150.00",
+                "paid_total_change_reason": "Ajuste",
+                "client_version": reservation.version,
+            },
+        )
+
+        assert response.status_code == 409, response.text
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("200.00")
+    finally:
+        _close(db, engine)
+
+
+def test_unpaid_total_adjustment_is_tenant_scoped():
+    client, db, engine, auth, _reservation, _stock_item = _client()
+    try:
+        other_hotel = HotelConfiguration(
+            id=2,
+            hotel_name="Other tenant",
+            subscription_active=True,
+        )
+        other_category = RoomCategory(
+            hotel_id=2,
+            name="Other category",
+            code="OTHER",
+            base_price_per_night=Decimal("300.00"),
+            max_occupancy=2,
+        )
+        other_guest = Guest(hotel_id=2, first_name="Guest", last_name="Other")
+        db.add_all([other_hotel, other_category, other_guest])
+        db.flush()
+        other_room = Room(
+            hotel_id=2,
+            category_id=other_category.id,
+            room_number="201",
+            floor=2,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(other_room)
+        db.flush()
+        other_reservation = Reservation(
+            hotel_id=2,
+            guest_id=other_guest.id,
+            category_id=other_category.id,
+            room_id=other_room.id,
+            confirmation_code="OTHER-TENANT-1",
+            check_in_date=date.today(),
+            check_out_date=date.today() + timedelta(days=2),
+            status=ReservationStatusEnum.PENDING,
+            total_amount=Decimal("300.00"),
+            num_adults=1,
+            source=ReservationSourceEnum.DIRECT,
+        )
+        db.add(other_reservation)
+        db.commit()
+
+        auth.update({"user_id": 30, "role": "manager"})
+        response = client.patch(
+            f"/api/reservations/{other_reservation.id}",
+            json={
+                "total_amount": "150.00",
+                "paid_total_change_reason": "Ajuste",
+                "client_version": other_reservation.version,
+            },
+        )
+        assert response.status_code == 404, response.text
+        db.refresh(other_reservation)
+        assert other_reservation.total_amount == Decimal("300.00")
     finally:
         _close(db, engine)
 
@@ -682,6 +1100,30 @@ def test_reservation_extension_requires_update_charge_and_cash_permissions_indep
         assert db.query(AuditLog).filter_by(
             table_name="reservations", record_id=reservation.id
         ).count() >= 1
+    finally:
+        _close(db, engine)
+
+
+def test_extension_preview_checks_financial_permissions_before_reservation_lookup():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        for permission in ("reservation:charge", "cash:operate"):
+            set_user_override(
+                db, 1, 20, "receptionist", permission, False, actor_user_id=10
+            )
+        db.commit()
+        params = {"new_checkout_date": (date.today() + timedelta(days=3)).isoformat()}
+
+        existing = client.get(
+            f"/api/reservations/{reservation.id}/extend-preview", params=params
+        )
+        missing = client.get(
+            f"/api/reservations/{reservation.id + 10000}/extend-preview", params=params
+        )
+
+        assert existing.status_code == 403, existing.text
+        assert missing.status_code == 403, missing.text
+        assert existing.json()["detail"] == missing.json()["detail"]
     finally:
         _close(db, engine)
 

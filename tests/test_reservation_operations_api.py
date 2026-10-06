@@ -199,7 +199,7 @@ def test_pending_actions_endpoint_surfaces_payment_errors_as_http_500(monkeypatc
         resp = client.get("/api/reservations/actions/pending")
         assert resp.status_code == 500, resp.text
         assert "acciones pendientes" in resp.json()["detail"]
-        assert "hotel 2" in resp.json()["detail"]
+        assert "hotel 2" not in resp.json()["detail"]
     finally:
         _cleanup_client(db, engine)
 

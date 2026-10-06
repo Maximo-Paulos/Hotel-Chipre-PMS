@@ -117,7 +117,7 @@ class TestPaymentGateDepositPaid:
         _pay_deposit(db, res)
         assert res.status == ReservationStatusEnum.DEPOSIT_PAID
 
-        with pytest.raises(CheckInError, match="full reservation amount"):
+        with pytest.raises(CheckInError, match="importe total de la reserva"):
             perform_checkin(db, res.id)
 
         remaining = res.total_amount - res.amount_paid
@@ -143,7 +143,7 @@ class TestPaymentGateDepositPaid:
         res = _make_reservation(db, sample_guest, sample_categories, check_in=date(2027, 2, 1), check_out=date(2027, 2, 3))
         _pay_deposit(db, res)
 
-        with pytest.raises(CheckInError, match="full reservation amount"):
+        with pytest.raises(CheckInError, match="importe total de la reserva"):
             perform_checkin(db, res.id)
 
         remaining = res.total_amount - res.amount_paid
@@ -185,7 +185,7 @@ class TestPaymentGateDepositPaid:
         res.amount_paid = 0
         db.flush()
 
-        with pytest.raises(CheckInError, match="OTA prepayment needs a manager's confirmation"):
+        with pytest.raises(CheckInError, match="un gerente debe confirmar el pago anticipado"):
             perform_checkin(db, res.id)
 
     def test_checkin_before_arrival_date_is_rejected(
@@ -200,7 +200,7 @@ class TestPaymentGateDepositPaid:
         res.check_out_date = today + timedelta(days=3)
         db.flush()
 
-        with pytest.raises(CheckInError, match="before the reservation arrival date"):
+        with pytest.raises(CheckInError, match="antes de la fecha de llegada"):
             perform_checkin(db, res.id)
 
     def test_checkin_after_departure_date_is_rejected(self, db, sample_guest, sample_rooms, sample_categories, monkeypatch):
@@ -211,7 +211,7 @@ class TestPaymentGateDepositPaid:
         res.check_out_date = today
         db.flush()
 
-        with pytest.raises(CheckInError, match="after the reservation departure date"):
+        with pytest.raises(CheckInError, match="después de la fecha de salida"):
             perform_checkin(db, res.id)
 
     def test_checkin_succeeds_after_balance_paid_following_deposit(
@@ -254,7 +254,7 @@ class TestPaymentGatePending:
         res = _make_reservation(db, sample_guest, sample_categories, check_in=date(2027, 5, 1), check_out=date(2027, 5, 3))
         assert res.status == ReservationStatusEnum.PENDING
 
-        with pytest.raises(CheckInError, match="full reservation amount"):
+        with pytest.raises(CheckInError, match="importe total de la reserva"):
             perform_checkin(db, res.id)
 
     def test_checkin_blocked_cancelled_reservation(
@@ -290,7 +290,7 @@ class TestConfigFlag:
 
         res = _make_reservation(db, sample_guest, sample_categories, check_in=date(2027, 7, 1), check_out=date(2027, 7, 3))
         # Reservation is PENDING — default policy requires the full amount.
-        with pytest.raises(CheckInError, match="full reservation amount"):
+        with pytest.raises(CheckInError, match="importe total de la reserva"):
             perform_checkin(db, res.id)
 
     def test_payment_gate_not_bypassable_via_config(
@@ -303,7 +303,7 @@ class TestConfigFlag:
 
         res = _make_reservation(db, sample_guest, sample_categories, check_in=date(2027, 8, 1), check_out=date(2027, 8, 3))
         # Disabling guest-document checks cannot bypass the separate payment gate.
-        with pytest.raises(CheckInError, match="full reservation amount"):
+        with pytest.raises(CheckInError, match="importe total de la reserva"):
             perform_checkin(db, res.id)
 
 
@@ -354,7 +354,7 @@ class TestGuestValidationGates:
 
         errors = validate_guest_for_checkin(db, guest, hotel_config)
         assert len(errors) > 0
-        assert any("number" in e.lower() or "Number" in e for e in errors)
+        assert any("número de documento" in e.lower() for e in errors)
 
     def test_guest_without_terms_accepted_is_blocked(self, db, hotel_config):
         """Guest who has NOT accepted terms is blocked (terms_accepted=False)."""
@@ -375,7 +375,7 @@ class TestGuestValidationGates:
 
         errors = validate_guest_for_checkin(db, guest, hotel_config)
         assert len(errors) > 0
-        assert any("terms" in e.lower() for e in errors)
+        assert any("términos y condiciones" in e.lower() for e in errors)
 
     def test_document_check_disabled_allows_guest_without_document(self, db, hotel_config):
         """When require_document_for_checkin=False, missing document is not an error."""

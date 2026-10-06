@@ -1,7 +1,8 @@
 import { apiFetch, type SessionLike } from "./client";
 import type { GuestUpdatePayload } from "./guests";
 import type { RestrictionOverride } from "./guestRestrictions";
-import type { PaymentMethod } from "./payments";
+import type { PaymentMethod, PaymentRequest } from "./payments";
+import type { PaymentLink, PaymentLinkCreatePayload } from "./paymentLinks";
 
 export type ReservationStatus =
   | "pending"
@@ -282,6 +283,7 @@ export type ReservationPayload = {
   // also has a rate_plan + OTACurrencyRate configured (fx_rate_snapshot
   // stays null otherwise -- show it only when present).
   total_amount?: number | null;
+  confirm_large_total_adjustment?: boolean;
   target_currency?: string | null;
   manual_rate_reason?: string | null;
   paid_total_change_reason?: string | null;
@@ -654,15 +656,26 @@ export type ReservationExtensionPayload = {
   new_checkout_date: string;
   client_version: number;
   pricing_mode: "current_rate";
-  payment_action: "company_account";
+  payment_action: "immediate_payment" | "payment_link" | "company_account";
+  immediate_payment?: PaymentRequest;
+  payment_link?: PaymentLinkCreatePayload;
   notes?: string;
+};
+
+export type ReservationExtensionPreview = {
+  reservation_id: number;
+  current_checkout_date: string;
+  new_checkout_date: string;
+  client_version: number;
+  extension_amount: number | string;
+  currency_code: string;
 };
 
 export type ReservationExtensionResponse = {
   reservation: Reservation;
   extension_amount: number | string;
-  transaction: null;
-  payment_link: null;
+  transaction: ReservationTransactionSummary | null;
+  payment_link: PaymentLink | null;
 };
 
 export const updateCompanyExtensionRequest = (
@@ -684,6 +697,16 @@ export const extendReservationStay = (
   data: payload,
   session
 });
+
+export const previewReservationStayExtension = (
+  id: number,
+  newCheckoutDate: string,
+  session?: SessionLike,
+  signal?: AbortSignal
+) => apiFetch<ReservationExtensionPreview>(
+  `/api/reservations/${id}/extend-preview?new_checkout_date=${encodeURIComponent(newCheckoutDate)}`,
+  { session, signal }
+);
 
 // ── B2: occupancy grid (planilla de ocupación) ──────────────────────────────
 

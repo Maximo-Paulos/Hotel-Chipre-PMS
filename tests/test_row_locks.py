@@ -1,13 +1,16 @@
 from datetime import date
+from decimal import Decimal
 
+import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.models.hotel_membership import HotelMembership
+from app.models.operations import BillingAdjustment
 from app.main import app as fastapi_app
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
@@ -25,6 +28,7 @@ from app.services.collaboration import editable_resource_values, resource_revisi
 from app.services.operational_task_service import create_task
 from app.services.permission_service import seed_default_permissions
 from app.services.row_locks import lock_query
+from app.services import company_night_charge_service
 
 
 def test_lock_query_targets_reservations_in_postgresql_sql():
@@ -36,6 +40,91 @@ def test_lock_query_targets_reservations_in_postgresql_sql():
 
         assert "LEFT OUTER JOIN" in sql
         assert "FOR UPDATE OF reservations" in sql
+    finally:
+        engine.dispose()
+
+
+def test_company_night_charge_reservation_lock_targets_only_reservation():
+    """Reservation has nullable joined relations, so payment locks must name the row."""
+    engine = create_engine("sqlite://")
+    try:
+        with Session(engine) as session:
+            query = lock_query(
+                session.query(Reservation).filter(
+                    Reservation.id == 1,
+                    Reservation.hotel_id == 1,
+                    Reservation.deleted_at.is_(None),
+                ),
+                Reservation,
+            )
+            sql = str(query.statement.compile(dialect=postgresql.dialect()))
+
+        assert "LEFT OUTER JOIN" in sql
+        assert "FOR UPDATE OF reservations" in sql
+    finally:
+        engine.dispose()
+
+
+def test_company_night_charge_billing_adjustment_lock_targets_only_adjustment():
+    """BillingAdjustment also eager-loads optional relations used by night-charge corrections."""
+    engine = create_engine("sqlite://")
+    try:
+        with Session(engine) as session:
+            query = lock_query(
+                session.query(BillingAdjustment).filter(
+                    BillingAdjustment.id == 1,
+                    BillingAdjustment.hotel_id == 1,
+                ),
+                BillingAdjustment,
+            )
+            sql = str(query.statement.compile(dialect=postgresql.dialect()))
+
+        assert "LEFT OUTER JOIN" in sql
+        assert "FOR UPDATE OF billing_adjustments" in sql
+    finally:
+        engine.dispose()
+
+
+def test_company_night_charge_payment_path_uses_reservation_lock_target(monkeypatch):
+    """The payment helper must lock the reservation despite joined optional relations."""
+    engine = create_engine("sqlite://")
+    captured: dict[str, str] = {}
+    original_lock_query = company_night_charge_service.lock_query
+
+    def capture_lock_target(query, model):
+        locked_query = original_lock_query(query, model)
+        captured[model.__tablename__] = str(
+            locked_query.statement.compile(dialect=postgresql.dialect())
+        )
+        return locked_query
+
+    monkeypatch.setattr(company_night_charge_service, "lock_query", capture_lock_target)
+
+    try:
+        with Session(engine) as session:
+            class StopBeforeDatabaseExecution(Exception):
+                pass
+
+            def capture_orm_statement(state):
+                captured["executed"] = str(state.statement.compile(dialect=postgresql.dialect()))
+                raise StopBeforeDatabaseExecution
+
+            event.listen(session, "do_orm_execute", capture_orm_statement)
+            with pytest.raises(StopBeforeDatabaseExecution):
+                company_night_charge_service.prepare_company_night_charge_payment(
+                    session,
+                    hotel_id=1,
+                    reservation_id=1,
+                    amount=Decimal("1.00"),
+                    charge_ids=[],
+                    idempotency_key=None,
+                )
+
+        sql = captured["reservations"]
+        assert "LEFT OUTER JOIN" in sql
+        assert "FOR UPDATE OF reservations" in sql
+        assert "LEFT OUTER JOIN" in captured["executed"]
+        assert "FOR UPDATE OF reservations" in captured["executed"]
     finally:
         engine.dispose()
 

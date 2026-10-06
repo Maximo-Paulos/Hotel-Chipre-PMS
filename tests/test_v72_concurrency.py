@@ -182,7 +182,7 @@ def test_no_double_booking_same_room_same_dates(two_sessions):
     reservation_a = _make_reservation(session_a, guest=guest_a, category=category, room=room)
     session_a.commit()
 
-    with pytest.raises(ReservationError, match="not available"):
+    with pytest.raises(ReservationError, match="no está disponible"):
         _make_reservation(
             session_b,
             guest=session_b.get(Guest, guest_b.id),
@@ -217,7 +217,7 @@ def test_auto_assign_no_double_booking(two_sessions):
     assert reservation_a.room_id == room.id
     session_a.commit()
 
-    with pytest.raises(ReservationError, match="No rooms available"):
+    with pytest.raises(ReservationError, match="No hay habitaciones disponibles"):
         _make_reservation(
             session_b,
             guest=session_b.get(Guest, guest_b.id),
@@ -253,7 +253,7 @@ def test_allocation_respects_existing_reservations(db):
             is False
         )
 
-    with pytest.raises(ReservationError, match="No rooms available"):
+    with pytest.raises(ReservationError, match="No hay habitaciones disponibles"):
         _make_reservation(db, guest=guests[3], category=category)
 
     total = (
@@ -279,7 +279,7 @@ def test_allocation_overflow_can_be_waitlisted(db):
     _make_reservation(db, guest=guest_a, category=category, room=room)
     db.flush()
 
-    with pytest.raises(ReservationError, match="No rooms available"):
+    with pytest.raises(ReservationError, match="No hay habitaciones disponibles"):
         _make_reservation(db, guest=guest_b, category=category)
 
     waitlisted = Reservation(
@@ -334,7 +334,7 @@ def test_payment_idempotency_on_duplicate_submission(two_sessions):
     session_a.commit()
     assert tx_a.status == TransactionStatusEnum.COMPLETED
 
-    with pytest.raises(PaymentError, match="exceeds balance due"):
+    with pytest.raises(PaymentError, match="supera el saldo pendiente"):
         process_payment(
             session_b,
             PaymentRequest(

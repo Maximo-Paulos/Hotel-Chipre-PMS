@@ -855,6 +855,7 @@ def test_reservation_update_fact_field_classification_is_exhaustive():
 
     metadata_or_control_fields = {
         "paid_total_change_reason",
+        "confirm_large_total_adjustment",
         "num_adults",
         "num_children",
         "notes",

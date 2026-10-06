@@ -2,9 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 // D2 (Via D lavanderia): full outsourced-laundry cycle -- vendor + price
 // catalog, an outbound remito (dirty linen leaves the hotel), the vendor
-// balance reflecting it, a partial inbound remito (some of it comes back
-// clean) dropping the vendor balance and raising the house's own stock back
-// up, and the insufficient-stock guard on an oversized outbound remito
+// balance reflecting it, an inbound remito that documents returned and
+// missing linen, neutral supplier follow-up, and the insufficient-stock guard
+// on an oversized outbound remito
 // surfacing the backend's real message instead of a generic failure. See
 // app/services/laundry_vendor_service.py::create_remito for the two
 // StockMovements-per-line transfer this exercises end to end.
@@ -27,7 +27,7 @@ function nextIsoDay(value: string) {
   return nextDay.toISOString().slice(0, 10);
 }
 
-test("owner runs the full vendor/remito cycle: pricing, outbound, partial inbound, and an insufficient-stock rejection", async ({
+test("owner runs the vendor/remito cycle and records neutral follow-up for a missing return", async ({
   page
 }) => {
   const suffix = Date.now().toString();
@@ -114,14 +114,15 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
   await expect(vendorBalance).toContainText(towelsName);
   await expect(vendorBalance).toContainText("4");
 
-  // --- Remito de entrada parcial: vuelven 3 de las 6 sabanas ---
+  // --- Remito de entrada: vuelven 3 de las 6 sabanas y se declaran 3 faltantes ---
   await remitoForm.getByLabel("N° de remito (papel)").fill(`R-IN-${suffix}`);
   await remitoForm.getByLabel(`Entrego ${sheetsName}`, { exact: true }).fill("3");
+  await remitoForm.getByLabel(`Faltante ${sheetsName}`, { exact: true }).fill("3");
   await remitoForm.getByRole("button", { name: "Guardar remito", exact: true }).click();
-  await expect(page.getByText(`Remito R-IN-${suffix} guardado.`, { exact: true })).toBeVisible();
+  await expect(page.getByText(new RegExp(`Remito R-IN-${suffix} guardado`))).toBeVisible();
 
-  // Balance del lavadero: sabanas bajan de 6 a 3, toallas siguen en 4.
-  await expect(vendorBalance).toContainText("3");
+  // Balance del lavadero: retornadas + faltantes explican las 6 sabanas; las toallas siguen en 4.
+  await expect(vendorBalance).toContainText("0");
   await expect(vendorBalance).toContainText(towelsName);
   await expect(vendorBalance).toContainText("4");
 
@@ -131,11 +132,27 @@ test("owner runs the full vendor/remito cycle: pricing, outbound, partial inboun
   const sheetsRow = houseStockPanel.locator("li").filter({ hasText: sheetsName });
   await expect(sheetsRow).toContainText("7");
 
+  const followUpCard = page.locator("form").filter({ hasText: `Remito R-IN-${suffix}` });
+  await expect(followUpCard).toContainText(`${sheetsName} · 3 faltantes`);
+  await expect(followUpCard.getByLabel("Estado del seguimiento")).toHaveValue("open");
+  await followUpCard.getByLabel("Estado del seguimiento").selectOption("contacted");
+  await followUpCard.getByLabel("Fecha de contacto").fill(new Date().toISOString().slice(0, 10));
+  await followUpCard.getByLabel("Detalle del contacto").fill("Mensaje enviado por el hotel");
+  await followUpCard.getByLabel("Referencia del proveedor (opcional)").fill(`REF-${suffix}`);
+  await followUpCard.getByRole("button", { name: "Guardar seguimiento", exact: true }).click();
+  await expect(followUpCard.getByLabel("Estado del seguimiento")).toHaveValue("contacted");
+  await followUpCard.getByLabel("Estado del seguimiento").selectOption("response_recorded");
+  await followUpCard.getByLabel("Fecha de respuesta").fill(new Date().toISOString().slice(0, 10));
+  await followUpCard.getByLabel("Respuesta recibida").fill("El proveedor respondió; queda pendiente revisar internamente.");
+  await followUpCard.getByRole("button", { name: "Guardar seguimiento", exact: true }).click();
+  await expect(followUpCard.getByLabel("Estado del seguimiento")).toHaveValue("response_recorded");
+  await expect(followUpCard.getByLabel("Referencia del proveedor (opcional)")).toHaveValue(`REF-${suffix}`);
+
   // --- Intento de remito de salida mayor al disponible: rechazo con mensaje claro ---
   await remitoForm.getByLabel("N° de remito (papel)").fill(`R-FAIL-${suffix}`);
   await remitoForm.getByLabel(`Retiro ${towelsName}`, { exact: true }).fill("999");
   await remitoForm.getByRole("button", { name: "Guardar remito", exact: true }).click();
-  await expect(remitoForm.getByRole("alert")).toContainText("Not enough");
+  await expect(remitoForm.getByRole("alert")).toContainText("No hay suficiente");
   await expect(remitoForm.getByRole("alert")).toContainText(towelsName);
   // No exitoso: el remito invalido no queda en el historial.
   await expect(page.getByText(`Remito R-FAIL-${suffix} guardado.`, { exact: true })).toHaveCount(0);

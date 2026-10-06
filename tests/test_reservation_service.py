@@ -47,9 +47,9 @@ class TestAvailability:
     def test_rejects_non_positive_stay_window(
         self, db, sample_rooms, sample_categories, hotel_config, check_in, check_out
     ):
-        with pytest.raises(ReservationError, match="Check-out date must be after check-in date"):
+        with pytest.raises(ReservationError, match="La fecha de salida debe ser posterior"):
             check_room_availability(db, sample_rooms[0].id, check_in, check_out)
-        with pytest.raises(ReservationError, match="Check-out date must be after check-in date"):
+        with pytest.raises(ReservationError, match="La fecha de salida debe ser posterior"):
             find_available_rooms(db, sample_categories[0].id, check_in, check_out)
 
     def test_empty_room_is_available(self, db, sample_rooms, sample_categories, hotel_config):
@@ -250,7 +250,7 @@ class TestReservationCreation:
             check_in_date=date(2026, 4, 1),
             check_out_date=date(2026, 4, 5),
         )
-        with pytest.raises(ReservationError, match="Guest.*not found"):
+        with pytest.raises(ReservationError, match="No se encontró el huésped"):
             create_reservation(db, data)
 
     def test_create_reservation_invalid_dates(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -261,7 +261,7 @@ class TestReservationCreation:
             check_in_date=date(2026, 4, 5),
             check_out_date=date(2026, 4, 1),  # Before check-in!
         )
-        with pytest.raises(ReservationError, match="Check-out date must be after"):
+        with pytest.raises(ReservationError, match="La fecha de salida debe ser posterior"):
             create_reservation(db, data)
 
     def test_create_reservation_wrong_category_room(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -275,7 +275,7 @@ class TestReservationCreation:
             check_in_date=date(2026, 4, 1),
             check_out_date=date(2026, 4, 5),
         )
-        with pytest.raises(ReservationError, match="belongs to category"):
+        with pytest.raises(ReservationError, match="pertenece a la categoría"):
             create_reservation(db, data)
 
     def test_double_booking_prevented(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -298,7 +298,7 @@ class TestReservationCreation:
             check_in_date=date(2026, 4, 3),
             check_out_date=date(2026, 4, 7),
         )
-        with pytest.raises(ReservationError, match="not available"):
+        with pytest.raises(ReservationError, match="no está disponible"):
             create_reservation(db, data2)
 
     @pytest.mark.parametrize(
@@ -551,7 +551,7 @@ class TestStateTransitions:
         )
         res = create_reservation(db, data)
         transition_reservation_status(db, res, ReservationStatusEnum.CANCELLED)
-        with pytest.raises(ReservationError, match="Cannot transition"):
+        with pytest.raises(ReservationError, match="No se puede cambiar la reserva"):
             transition_reservation_status(db, res, ReservationStatusEnum.PENDING)
 
     def test_cancel_not_allowed_after_checkin(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -568,7 +568,7 @@ class TestStateTransitions:
         transition_reservation_status(db, res, ReservationStatusEnum.CHECKED_IN)
         original_room = res.room_id
 
-        with pytest.raises(ReservationError, match="Cannot transition"):
+        with pytest.raises(ReservationError, match="No se puede cambiar la reserva"):
             transition_reservation_status(db, res, ReservationStatusEnum.CANCELLED)
 
         assert res.status == ReservationStatusEnum.CHECKED_IN
@@ -576,5 +576,5 @@ class TestStateTransitions:
 
         # Once checked-out, cancellation is still blocked
         transition_reservation_status(db, res, ReservationStatusEnum.CHECKED_OUT)
-        with pytest.raises(ReservationError, match="Cannot transition"):
+        with pytest.raises(ReservationError, match="No se puede cambiar la reserva"):
             transition_reservation_status(db, res, ReservationStatusEnum.CANCELLED)

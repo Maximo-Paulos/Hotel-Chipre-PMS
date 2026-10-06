@@ -8,17 +8,21 @@ import {
   getLaundryVendorBalance,
   getLaundryVendorSettlements,
   getLaundryVendorSpend,
+  listLaundryMissingFollowUps,
   listLaundryRemitos,
   listLaundryVendorPrices,
   listLaundryVendors,
   markLaundryVendorSettlementPaid,
   setLaundryVendorPrice,
   updateLaundryVendor,
+  updateLaundryMissingFollowUp,
   type LaundryRemitoCreate,
   type LaundryRemitoCreateResponse,
   type LaundryRemitoLineCreate,
   type LaundryVendor,
   type LaundryVendorSettlementQuarter,
+  type LaundryMissingFollowUp,
+  type LaundryMissingFollowUpUpdate,
   type RemitoDirection
 } from "../../api/laundryVendor";
 import {
@@ -67,6 +71,8 @@ type LaundryMobileTab = "available" | "remito" | "vendors" | "history";
 // startOfCurrentMonthIso, shared with the D5 stock consumption report).
 const dayStartIso = (day: string) => new Date(`${day}T00:00:00`).toISOString();
 const dayEndIso = (day: string) => new Date(`${day}T23:59:59.999`).toISOString();
+const formatLaundryQuantity = (value: string | number) =>
+  new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(Number(value));
 
 const emptyVendorForm = { name: "", contact_phone: "", contact_email: "" };
 const emptyPriceForm = { linen_item_id: "", unit_price: "", effective_from: todayIso() };
@@ -79,7 +85,7 @@ const emptyLinenTransferForm = { linen_item_id: "", source_location_id: "", dest
 // at once (mirrors the vendor's paper remito, which has a RETIRO and an
 // ENTREGO column side by side for the same visit -- see task brief). Empty
 // or "0" means "nothing for this item in this direction", not an error.
-type RemitoQuantities = Record<number, { retiro: string; entrego: string }>;
+type RemitoQuantities = Record<number, { retiro: string; entrego: string; faltante: string }>;
 
 const emptyRemitoForm = () => ({
   vendor_id: "",
@@ -92,6 +98,7 @@ const emptyRemitoForm = () => ({
 });
 
 export function LaundryPage() {
+  const { t, i18n } = useTranslation("common");
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
   const queryClient = useQueryClient();
@@ -177,6 +184,12 @@ export function LaundryPage() {
     queryKey: ["laundry-remitos", session.hotelId],
     queryFn: () => listLaundryRemitos({}, session),
     enabled,
+    staleTime: 15 * 1000
+  });
+  const missingFollowUpsQuery = useQuery({
+    queryKey: ["laundry-missing-follow-ups", session.hotelId],
+    queryFn: () => listLaundryMissingFollowUps(session),
+    enabled: enabled && manageVendors,
     staleTime: 15 * 1000
   });
 
@@ -299,8 +312,8 @@ export function LaundryPage() {
   }, [remitoHouseStockQuery.data]);
 
   // Combined entry, mirrors the paper remito's two columns: every item with
-  // a "Retiro" qty > 0 becomes one outbound remito line, every item with an
-  // "Entrego" qty > 0 becomes one inbound remito line -- see createRemitoMutation.
+  // a "Retiro" qty > 0 becomes one outbound remito line. An "Entrego" or
+  // declared "Faltante" becomes one inbound remito line.
   const outboundLines = useMemo<LaundryRemitoLineCreate[]>(
     () =>
       items
@@ -311,8 +324,12 @@ export function LaundryPage() {
   const inboundLines = useMemo<LaundryRemitoLineCreate[]>(
     () =>
       items
-        .map((item) => ({ linen_item_id: item.id, quantity: remitoQuantities[item.id]?.entrego ?? "" }))
-        .filter((line) => Number(line.quantity) > 0),
+        .map((item) => ({
+          linen_item_id: item.id,
+          quantity: remitoQuantities[item.id]?.entrego || "0",
+          missing_quantity: remitoQuantities[item.id]?.faltante || "0"
+        }))
+        .filter((line) => Number(line.quantity) > 0 || Number(line.missing_quantity) > 0),
     [items, remitoQuantities]
   );
 
@@ -342,6 +359,12 @@ export function LaundryPage() {
     () => spendQueries.reduce((sum, query) => sum + Number(query.data?.total ?? 0), 0),
     [spendQueries]
   );
+  const spendUnpricedQuantity = useMemo(
+    () => spendQueries.reduce((sum, query) => sum + Number(query.data?.unpriced_quantity ?? 0), 0),
+    [spendQueries]
+  );
+  const formatUnpricedQuantity = (quantity: number | string) =>
+    new Intl.NumberFormat(i18n.language === "en" ? "en-US" : "es-AR", { maximumFractionDigits: 2 }).format(Number(quantity));
   const spendFetching = spendQueries.some((query) => query.isFetching);
   const spendLoading = vendorsQuery.isLoading || spendQueries.some((query) => query.isLoading);
   const spendError = vendorsQuery.isError || spendQueries.some((query) => query.isError);
@@ -509,6 +532,22 @@ export function LaundryPage() {
     }
   });
 
+  const missingFollowUpMutation = useGuardedMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: LaundryMissingFollowUpUpdate }) =>
+      updateLaundryMissingFollowUp(id, payload, session),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["laundry-missing-follow-ups", session.hotelId] });
+    }
+  });
+
+  const saveMissingFollowUp = (id: number, payload: LaundryMissingFollowUpUpdate) => {
+    const key = `missing-follow-up-${id}`;
+    clearMutationError(key);
+    void missingFollowUpMutation.mutateAsync({ id, payload }).catch((error: unknown) => {
+      showMutationError(key, error, "No se pudo guardar el seguimiento.");
+    });
+  };
+
   // One visit to the vendor's paper remito produces up to two rows in
   // laundry_remitos (outbound + inbound), sharing the same remito_number and
   // remito_date -- create_remito is single-direction and atomic per call
@@ -557,7 +596,10 @@ export function LaundryPage() {
       return { outbound, inbound, inboundError };
     },
     onSuccess: async (result) => {
-      await invalidateAfterRemito();
+      await Promise.all([
+        invalidateAfterRemito(),
+        queryClient.invalidateQueries({ queryKey: ["laundry-missing-follow-ups", session.hotelId] })
+      ]);
       if (result.inboundError) {
         setMessage(
           `Salida registrada (remito ${result.outbound?.remito.remito_number}), pero el retorno falló: ${result.inboundError}`
@@ -567,7 +609,13 @@ export function LaundryPage() {
         setRemitoQuantities((current) => {
           const next: RemitoQuantities = {};
           Object.entries(current).forEach(([itemId, quantity]) => {
-            if (Number(quantity.entrego) > 0) next[Number(itemId)] = { retiro: "", entrego: quantity.entrego };
+            if (Number(quantity.entrego) > 0 || Number(quantity.faltante) > 0) {
+              next[Number(itemId)] = {
+                retiro: "",
+                entrego: quantity.entrego,
+                faltante: quantity.faltante
+              };
+            }
           });
           return next;
         });
@@ -779,10 +827,15 @@ export function LaundryPage() {
   }, [outboundLines, remitoVendorPriceByItem]);
   const remitoCurrency = remitoVendorPricesQuery.data?.[0]?.currency_code;
 
-  const setRemitoQuantity = (itemId: number, direction: "retiro" | "entrego", value: string) =>
+  const setRemitoQuantity = (itemId: number, direction: "retiro" | "entrego" | "faltante", value: string) =>
     setRemitoQuantities((current) => ({
       ...current,
-      [itemId]: { retiro: current[itemId]?.retiro ?? "", entrego: current[itemId]?.entrego ?? "", [direction]: value }
+      [itemId]: {
+        retiro: current[itemId]?.retiro ?? "",
+        entrego: current[itemId]?.entrego ?? "",
+        faltante: current[itemId]?.faltante ?? "",
+        [direction]: value
+      }
     }));
 
   const handleCreateRemito = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -1002,6 +1055,43 @@ export function LaundryPage() {
                 <p className="text-xs text-slate-500">Elegí un lavadero para editar sus precios.</p>
               )}
             </div>
+          </div>
+        </section>
+      )}
+
+      {manageVendors && (
+        <section className={showSection("vendors") ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Seguimiento operativo</p>
+            <h2 className="text-lg font-semibold text-slate-900">Faltantes de lavandería</h2>
+            <p className="text-sm text-slate-600">
+              El faltante abre una revisión interna. Registrá contacto, referencia y respuesta solo cuando ocurran; esto no prueba responsabilidad ni registra reposiciones o movimientos de dinero.
+            </p>
+          </div>
+          {missingFollowUpsQuery.isLoading && <p role="status" className="text-sm text-slate-600">Cargando faltantes...</p>}
+          {missingFollowUpsQuery.isError && (
+            <p role="alert" className="text-sm text-rose-700">
+              No se pudieron cargar los faltantes. {(missingFollowUpsQuery.error as Error).message} {" "}
+              <button type="button" onClick={() => void missingFollowUpsQuery.refetch()} className="font-semibold underline">Reintentar</button>
+            </p>
+          )}
+          {!missingFollowUpsQuery.isLoading && !missingFollowUpsQuery.isError && (missingFollowUpsQuery.data ?? []).length === 0 && (
+            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              No hay faltantes declarados en los remitos.
+            </p>
+          )}
+          <div className="grid gap-3 lg:grid-cols-2">
+            {(missingFollowUpsQuery.data ?? []).map((followUp) => (
+              <MissingFollowUpCard
+                key={followUp.id}
+                followUp={followUp}
+                saving={missingFollowUpMutation.isPending}
+                error={mutationErrors[`missing-follow-up-${followUp.id}`]}
+                onCloseError={() => clearMutationError(`missing-follow-up-${followUp.id}`)}
+                onSave={saveMissingFollowUp}
+                online={isOnline}
+              />
+            ))}
           </div>
         </section>
       )}
@@ -1419,9 +1509,14 @@ export function LaundryPage() {
           </div>
 
           <p className="text-2xl font-semibold text-slate-900">
-            Total del período: {spendError ? "no disponible" : spendLoading ? "calculando..." : formatMoney(spendTotal)}
+            {t("laundryCost.knownTotal")}: {spendError ? "no disponible" : spendLoading ? "calculando..." : formatMoney(spendTotal)}
             {spendFetching && !spendLoading && <span className="ml-2 text-xs font-normal text-slate-500">Actualizando...</span>}
           </p>
+          {!spendError && !spendLoading && spendUnpricedQuantity > 0 ? (
+            <p className="mt-1 text-sm text-amber-800" role="status" data-testid="laundry-spend-unpriced-warning">
+              {t("laundryCost.unpricedWarning", { quantity: formatUnpricedQuantity(spendUnpricedQuantity) })}
+            </p>
+          ) : null}
           {spendError && <p role="alert" className="text-sm text-rose-700">No se pudo cargar el gasto de uno o más lavaderos. <button type="button" onClick={() => { if (vendorsQuery.isError) void vendorsQuery.refetch(); spendQueries.forEach((query) => { if (query.isError) void query.refetch(); }); }} className="font-semibold underline">Reintentar</button></p>}
           {spendLoading && <p role="status" className="text-sm text-slate-600">Cargando gastos por lavadero...</p>}
 
@@ -1442,10 +1537,17 @@ export function LaundryPage() {
                     <ul className="mt-2 space-y-1 text-xs text-slate-700">
                       {byItem.map((line) => (
                         <li key={line.linen_item_id} className="flex justify-between gap-2">
-                          <span>
-                            {line.linen_item_name} × {line.quantity}
+                          <span className="min-w-0">
+                            <span className="block">{line.linen_item_name} × {line.quantity}</span>
+                            {Number(line.unpriced_quantity ?? 0) > 0 ? (
+                              <span className="block text-amber-800">
+                                {t("laundryCost.unpricedByItem", { quantity: formatUnpricedQuantity(line.unpriced_quantity ?? 0) })}
+                              </span>
+                            ) : null}
                           </span>
-                          <span className="font-semibold">{formatMoney(line.subtotal)}</span>
+                          <span className="shrink-0 text-right font-semibold">
+                            {t("laundryCost.subtotalWithPrice", { amount: formatMoney(line.subtotal) })}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -1504,6 +1606,7 @@ export function LaundryPage() {
                       {remito.lines.map((line) => (
                         <li key={line.id} className="text-xs text-slate-600">
                           {itemById.get(line.linen_item_id)?.name ?? `Ítem #${line.linen_item_id}`}: {line.quantity}
+                          {Number(line.missing_quantity ?? 0) > 0 ? ` · Faltante: ${line.missing_quantity}` : ""}
                         </li>
                       ))}
                     </ul>
@@ -1558,8 +1661,8 @@ export function LaundryPage() {
                 <p className="text-xs uppercase tracking-wide text-slate-500">Remito</p>
                 <h2 className="text-lg font-semibold text-slate-900">Nuevo remito</h2>
                 <p className="text-sm text-slate-600">
-                  Retiro: lo que se lleva sucio. Entrego: lo que trae limpio. Cargá cada ítem como en el remito de
-                  papel del lavadero.
+                  Retiro: lo que se lleva sucio. Entrego: lo que trae limpio. Faltante: lo que debía volver y no llegó.
+                  Cargá cada ítem como en el remito de papel del lavadero.
                 </p>
               </div>
 
@@ -1655,6 +1758,14 @@ export function LaundryPage() {
                             ariaLabel={`Entrego ${item.name}`}
                             value={remitoQuantities[item.id]?.entrego ?? ""}
                             onChange={(value) => setRemitoQuantity(item.id, "entrego", value)}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-16 shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-500">Faltante</span>
+                          <QuantityStepper
+                            ariaLabel={`Faltante ${item.name}`}
+                            value={remitoQuantities[item.id]?.faltante ?? ""}
+                            onChange={(value) => setRemitoQuantity(item.id, "faltante", value)}
                           />
                         </div>
                       </div>
@@ -1851,6 +1962,146 @@ function quarterLabel(periodStart: string) {
 // unit_price_snapshot, nunca el precio vigente) -- ver
 // vendor_settlements en app/services/laundry_vendor_service.py. El estado
 // pagado/no pagado es solo una alerta visual: nunca bloquea nada.
+function MissingFollowUpCard({
+  followUp,
+  saving,
+  error,
+  onCloseError,
+  onSave,
+  online
+}: {
+  followUp: LaundryMissingFollowUp;
+  saving: boolean;
+  error?: string;
+  onCloseError: () => void;
+  onSave: (id: number, payload: LaundryMissingFollowUpUpdate) => void;
+  online: boolean;
+}) {
+  const [draft, setDraft] = useState(() => ({
+    status: followUp.follow_up_status,
+    note: followUp.follow_up_note ?? "",
+    reference: followUp.supplier_reference ?? "",
+    contactedOn: followUp.supplier_contacted_on ?? "",
+    contactNote: followUp.supplier_contact_note ?? "",
+    responseOn: followUp.supplier_response_on ?? "",
+    responseNote: followUp.supplier_response_note ?? ""
+  }));
+  const needsContactDate = draft.status === "contacted" || draft.status === "response_recorded";
+  const needsResponseDetails = draft.status === "response_recorded";
+
+  return (
+    <form
+      className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave(followUp.id, {
+          follow_up_status: draft.status,
+          follow_up_note: draft.note,
+          supplier_reference: draft.reference,
+          supplier_contacted_on: draft.contactedOn || null,
+          supplier_contact_note: draft.contactNote,
+          supplier_response_on: draft.responseOn || null,
+          supplier_response_note: draft.responseNote
+        });
+      }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="font-semibold text-slate-900">{followUp.linen_item_name} · {formatLaundryQuantity(followUp.missing_quantity)} faltantes</h3>
+          <p className="text-xs text-slate-600">{followUp.vendor_name} · Remito {followUp.remito_number} · {followUp.remito_date.slice(0, 10)}</p>
+        </div>
+        <span className="rounded-full border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700">{formatLaundryQuantity(followUp.quantity)} devueltos</span>
+      </div>
+      {error && <LaundryMutationError error={error} onClose={onCloseError} />}
+      <label className="block space-y-1 text-sm">
+        <span className="text-slate-600">Estado del seguimiento</span>
+        <select
+          value={draft.status}
+          onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as typeof current.status }))}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+        >
+          <option value="open">Abierto · revisión interna</option>
+          <option value="contacted">Contactado</option>
+          <option value="response_recorded">Respuesta registrada</option>
+          <option value="closed">Cerrado internamente</option>
+        </select>
+      </label>
+      <label className="block space-y-1 text-sm">
+        <span className="text-slate-600">Nota interna</span>
+        <textarea
+          value={draft.note}
+          onChange={(event) => setDraft((current) => ({ ...current, note: event.target.value }))}
+          maxLength={5000}
+          rows={2}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+        />
+      </label>
+      <label className="block space-y-1 text-sm">
+        <span className="text-slate-600">Referencia del proveedor (opcional)</span>
+        <input
+          value={draft.reference}
+          onChange={(event) => setDraft((current) => ({ ...current, reference: event.target.value }))}
+          maxLength={120}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+        />
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1 text-sm">
+          <span className="text-slate-600">Fecha de contacto</span>
+          <input
+            type="date"
+            value={draft.contactedOn}
+            onChange={(event) => setDraft((current) => ({ ...current, contactedOn: event.target.value }))}
+            required={needsContactDate}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+          />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="text-slate-600">Detalle del contacto</span>
+          <input
+            value={draft.contactNote}
+            onChange={(event) => setDraft((current) => ({ ...current, contactNote: event.target.value }))}
+            maxLength={2000}
+            placeholder="Canal o breve detalle"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+          />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="text-slate-600">Fecha de respuesta</span>
+          <input
+            type="date"
+            value={draft.responseOn}
+            onChange={(event) => setDraft((current) => ({ ...current, responseOn: event.target.value }))}
+            required={needsResponseDetails}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+          />
+        </label>
+        <label className="space-y-1 text-sm sm:col-span-2">
+          <span className="text-slate-600">Respuesta recibida</span>
+          <textarea
+            value={draft.responseNote}
+            onChange={(event) => setDraft((current) => ({ ...current, responseNote: event.target.value }))}
+            required={needsResponseDetails}
+            maxLength={5000}
+            rows={2}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+          />
+        </label>
+      </div>
+      {followUp.follow_up_updated_at && (
+        <p className="text-xs text-slate-500">Última actualización: {new Date(followUp.follow_up_updated_at).toLocaleString("es-AR")}</p>
+      )}
+      <button
+        type="submit"
+        disabled={saving || !online}
+        className="min-h-11 rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+      >
+        {saving ? "Guardando..." : "Guardar seguimiento"}
+      </button>
+    </form>
+  );
+}
+
 function SettlementSection({
   selectedVendor,
   year,
@@ -1935,6 +2186,7 @@ function SettlementQuarterRow({
   onMark: (periodStart: string, paid: boolean, notes?: string | null) => Promise<unknown>;
   marking: boolean;
 }) {
+  const { t, i18n } = useTranslation("common");
   const [notesDraft, setNotesDraft] = useState(quarter.notes ?? "");
   const [mutationError, setMutationError] = useState<string | null>(null);
   const mark = async (paid: boolean, notes?: string | null) => {
@@ -1953,7 +2205,7 @@ function SettlementQuarterRow({
           <p className="text-sm font-semibold text-slate-900">
             {quarterLabel(quarter.period_start)} · {quarter.period_start} a {quarter.period_end}
           </p>
-          <p className="text-sm text-slate-700">Total anotado: {formatMoney(quarter.total_amount)}</p>
+          <p className="text-sm text-slate-700">{t("laundryCost.knownTotal")}: {formatMoney(quarter.total_amount)}</p>
         </div>
         <button
           type="button"
@@ -1967,14 +2219,29 @@ function SettlementQuarterRow({
         </button>
       </div>
 
+      {Number(quarter.unpriced_quantity ?? 0) > 0 ? (
+        <p className="mt-2 text-xs text-amber-800" role="status" data-testid="laundry-settlement-unpriced-warning">
+          {t("laundryCost.unpricedWarning", {
+            quantity: new Intl.NumberFormat(i18n.language === "en" ? "en-US" : "es-AR", { maximumFractionDigits: 2 }).format(Number(quarter.unpriced_quantity))
+          })}
+        </p>
+      ) : null}
+
       {quarter.by_item.length > 0 && (
         <ul className="mt-2 space-y-1 text-xs text-slate-700">
           {quarter.by_item.map((line) => (
             <li key={line.linen_item_id} className="flex justify-between gap-2">
               <span>
                 {line.linen_item_name} × {line.quantity}
+                {Number(line.unpriced_quantity ?? 0) > 0 ? (
+                  <span className="block text-amber-800">
+                    {t("laundryCost.unpricedByItem", {
+                      quantity: new Intl.NumberFormat(i18n.language === "en" ? "en-US" : "es-AR", { maximumFractionDigits: 2 }).format(Number(line.unpriced_quantity))
+                    })}
+                  </span>
+                ) : null}
               </span>
-              <span className="font-semibold">{formatMoney(line.subtotal)}</span>
+              <span className="font-semibold">{t("laundryCost.subtotalWithPrice", { amount: formatMoney(line.subtotal) })}</span>
             </li>
           ))}
         </ul>

@@ -102,6 +102,14 @@ test("owner creates a lodging restriction, it blocks booking, override unblocks 
   // still enforces the restriction and surfaces the override modal.
   await reservationForm.locator("label").filter({ hasText: "Monto total manual" }).locator("input").fill("15000");
   await reservationForm.getByPlaceholder("Explicá brevemente el acuerdo comercial").fill("Tarifa manual autorizada para QA");
+  const largeAdjustmentWarning = reservationForm.getByTestId("manual-rate-adjustment-warning");
+  await expect(largeAdjustmentWarning).toContainText("La cotización automática está bloqueada para este huésped.");
+  await expect(largeAdjustmentWarning).toContainText("Confirmo que revisé el nuevo total y el motivo.");
+  await reservationForm.getByRole("button", { name: "Crear", exact: true }).click();
+  await expect(reservationForm.getByTestId("reservation-submit-error")).toContainText(
+    "Confirmá la revisión del cambio de importe antes de guardar."
+  );
+  await largeAdjustmentWarning.getByTestId("manual-rate-adjustment-confirm").check();
   await expect(reservationForm.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
   await reservationForm.getByRole("button", { name: "Crear", exact: true }).click();
 
@@ -142,7 +150,7 @@ test("receptionist without guest:prohibition_manage never sees the create/resolv
 
   await page.goto("/huespedes");
   const guestsSection = page.locator("section").filter({ hasText: "Huéspedes del hotel" });
-  const firstGuestButton = guestsSection.locator("button").first();
+  const firstGuestButton = guestsSection.getByRole("button", { name: /#\d+$/ }).first();
   await expect(firstGuestButton).toBeVisible();
   await firstGuestButton.click();
   await expect(page.getByTestId("guest-restrictions-panel")).toHaveCount(0);

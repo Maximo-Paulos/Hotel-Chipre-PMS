@@ -89,7 +89,6 @@ def test_alias_roster_is_minimal_hotel_scoped_and_includes_active_and_invited_me
     try:
         response = client.get(
             "/api/users/aliases",
-            headers=_step_up_headers(owner, 31, "GET", "/api/users/aliases"),
         )
         assert response.status_code == 200, response.text
         body = response.json()
@@ -97,6 +96,15 @@ def test_alias_roster_is_minimal_hotel_scoped_and_includes_active_and_invited_me
         assert {item["user_id"] for item in body["items"]} == {owner.id, active.id, invited.id}
         assert all(set(item) == {"user_id", "email", "role", "status", "alias"} for item in body["items"])
         assert next(item for item in body["items"] if item["user_id"] == active.id)["alias"] == "Turno día"
+
+        # Listing roster details is read-only. Editing a member alias remains
+        # protected by a one-use settings:users:manage ticket.
+        denied_edit = client.patch(
+            f"/api/users/{active.id}/alias",
+            json={"alias": "Nuevo alias"},
+        )
+        assert denied_edit.status_code == 428, denied_edit.text
+        assert denied_edit.json()["detail"]["code"] == "STEP_UP_REQUIRED"
     finally:
         app.dependency_overrides.clear()
         db.close()
@@ -280,7 +288,7 @@ def test_user_management_mutations_require_effective_manage_permission():
             client.delete(f"/api/users/{staff.id}"),
             client.patch(f"/api/users/{staff.id}/role", json={"role": "receptionist"}),
         ]
-        assert [response.status_code for response in responses] == [403] * len(responses)
+        assert [response.status_code for response in responses] == [200, *([403] * (len(responses) - 1))]
     finally:
         app.dependency_overrides.clear()
         db.close()

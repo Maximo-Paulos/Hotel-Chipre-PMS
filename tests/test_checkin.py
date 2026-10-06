@@ -46,12 +46,12 @@ class TestGuestValidation:
 
     def test_missing_document_fails(self, db, sample_guest_incomplete, hotel_config):
         errors = validate_guest_for_checkin(db, sample_guest_incomplete, hotel_config)
-        assert any("Document type" in e for e in errors)
-        assert any("Document number" in e for e in errors)
+        assert any("tipo de documento" in e.lower() for e in errors)
+        assert any("número de documento" in e.lower() for e in errors)
 
     def test_missing_terms_fails(self, db, sample_guest_incomplete, hotel_config):
         errors = validate_guest_for_checkin(db, sample_guest_incomplete, hotel_config)
-        assert any("terms" in e.lower() for e in errors)
+        assert any("términos y condiciones" in e.lower() for e in errors)
 
     def test_validation_respects_config(self, db, sample_guest_incomplete, hotel_config):
         hotel_config.require_document_for_checkin = False
@@ -99,7 +99,7 @@ class TestCheckIn:
         )
         res = create_reservation(db, data)
         db.flush()
-        with pytest.raises(CheckInError, match="full reservation amount"):
+        with pytest.raises(CheckInError, match="importe total de la reserva"):
             perform_checkin(db, res.id)
 
     def test_checkin_blocked_missing_documents(self, db, sample_guest_incomplete, sample_rooms, sample_categories, hotel_config):
@@ -117,7 +117,7 @@ class TestCheckIn:
         process_payment(db, payment, hotel_id=hotel_config.id)
         db.flush()
         db.refresh(res)
-        with pytest.raises(CheckInError, match="missing required guest data"):
+        with pytest.raises(CheckInError, match="faltan datos obligatorios del huésped"):
             perform_checkin(db, res.id)
 
     def test_company_checkin_requires_private_voucher_and_signed_document(
@@ -147,7 +147,7 @@ class TestCheckIn:
         )
         db.flush()
 
-        with pytest.raises(CheckInError, match="requires an uploaded reservation voucher"):
+        with pytest.raises(CheckInError, match="requiere que se cargue el comprobante"):
             perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
 
         stored_object = StoredObject(
@@ -174,7 +174,7 @@ class TestCheckIn:
             requires_signature=True,
         )
 
-        with pytest.raises(CheckInError, match="requires a signed reservation document"):
+        with pytest.raises(CheckInError, match="requiere un documento firmado"):
             perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
 
         set_signature_status(

@@ -828,7 +828,9 @@ def test_stream_endpoint_sets_no_cache_headers_and_tenant_stream(monkeypatch: py
             self.closed = True
 
     db = ClosableDb()
+    request = SimpleNamespace(is_disconnected=lambda: _not_disconnected())
     response = events.stream_domain_events(
+        request,
         AuthContext(hotel_id=42, user_id=9, user_role="owner", is_verified=True),
         db,
     )
@@ -837,6 +839,9 @@ def test_stream_endpoint_sets_no_cache_headers_and_tenant_stream(monkeypatch: py
     assert db.closed is True
     async def read_first_frame():
         return await response.body_iterator.__anext__()
+
+    async def _not_disconnected():
+        return False
 
     first_frame = asyncio.run(read_first_frame())
     assert '"hotel_id": 42' in first_frame
@@ -871,6 +876,43 @@ def test_stream_closes_with_control_event_when_membership_is_revoked(monkeypatch
     assert "authorization_lost" in control
 
 
+def test_redis_stream_uses_one_second_internal_ticks_and_sends_only_real_heartbeats(monkeypatch):
+    class FakeClock:
+        now = 0.0
+
+        def monotonic(self):
+            return self.now
+
+    clock = FakeClock()
+
+    class FakePubSub:
+        timeouts = []
+
+        def subscribe(self, _channel):
+            pass
+
+        def get_message(self, timeout):
+            self.timeouts.append(timeout)
+            clock.now += timeout
+            return None
+
+        def close(self):
+            pass
+
+    fake = FakeRedis()
+    pubsub = FakePubSub()
+    fake.pubsub = lambda **kwargs: pubsub
+    monkeypatch.setattr(domain_events.time, "monotonic", clock.monotonic)
+
+    stream = domain_events.iter_event_stream(42, fake, heartbeat_seconds=5)
+    assert "event: ready" in next(stream)
+    assert next(stream) == ""
+    assert [next(stream) for _ in range(3)] == ["", "", ""]
+    assert next(stream) == ": heartbeat\n\n"
+    assert pubsub.timeouts == [1.0] * 5
+    stream.close()
+
+
 def test_stream_endpoint_uses_postgres_transport_when_redis_is_unavailable(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(events, "get_realtime_client", lambda: None)
     monkeypatch.setattr(
@@ -883,6 +925,9 @@ def test_stream_endpoint_uses_postgres_transport_when_redis_is_unavailable(monke
 
     monkeypatch.setattr(events, "aiter_postgres_event_stream", fake_async_stream)
 
+    async def always_connected():
+        return False
+
     class ClosableDb:
         closed = False
 
@@ -891,12 +936,73 @@ def test_stream_endpoint_uses_postgres_transport_when_redis_is_unavailable(monke
 
     db = ClosableDb()
     response = events.stream_domain_events(
+        SimpleNamespace(is_disconnected=always_connected),
         AuthContext(hotel_id=42, user_id=9, user_role="owner", is_verified=True),
         db,
     )
     assert response.headers["x-realtime-transport"] == "postgres-outbox"
     assert db.closed is True
-    assert asyncio.run(response.body_iterator.__anext__()).startswith("event: ready")
+
+    async def read_one_chunk():
+        iterator = response.body_iterator
+        chunk = await iterator.__anext__()
+        await iterator.aclose()
+        return chunk
+
+    assert asyncio.run(read_one_chunk()).startswith("event: ready")
+
+
+def test_stream_adapter_closes_sync_iterator_when_client_disconnects():
+    closed = False
+
+    def sync_stream():
+        nonlocal closed
+        try:
+            yield "event: ready\ndata: {}\n\n"
+            while True:
+                yield ""
+        finally:
+            closed = True
+
+    class DisconnectAfterTwoReads:
+        reads = 0
+
+        async def is_disconnected(self):
+            self.reads += 1
+            return self.reads > 2
+
+    async def collect():
+        return [chunk async for chunk in events._until_disconnect(DisconnectAfterTwoReads(), sync_stream())]
+
+    chunks = asyncio.run(collect())
+    assert chunks == ["event: ready\ndata: {}\n\n"]
+    assert closed is True
+
+
+def test_stream_adapter_closes_async_iterator_when_client_disconnects():
+    closed = False
+
+    async def async_stream():
+        nonlocal closed
+        try:
+            yield "event: ready\ndata: {}\n\n"
+            yield "event: later\ndata: {}\n\n"
+        finally:
+            closed = True
+
+    class DisconnectAfterOneRead:
+        reads = 0
+
+        async def is_disconnected(self):
+            self.reads += 1
+            return self.reads > 1
+
+    async def collect():
+        return [chunk async for chunk in events._until_disconnect(DisconnectAfterOneRead(), async_stream())]
+
+    chunks = asyncio.run(collect())
+    assert chunks == ["event: ready\ndata: {}\n\n"]
+    assert closed is True
 
 
 def test_postgres_fallback_stream_reads_committed_outbox_without_payload():

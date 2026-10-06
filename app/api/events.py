@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import time
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -28,6 +29,39 @@ from app.services.tenant_context import set_tenant_user_context
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/events", tags=["Realtime events"])
 _AUTHORIZATION_DB_FAILURE_GRACE_SECONDS = 60.0
+_STREAM_END = object()
+
+
+async def _until_disconnect(request: Request, stream):
+    """Adapt sync and async streams to ASGI disconnects and always close them."""
+    if hasattr(stream, "__aiter__"):
+        iterator = stream.__aiter__()
+        try:
+            while not await request.is_disconnected():
+                try:
+                    chunk = await iterator.__anext__()
+                except StopAsyncIteration:
+                    break
+                if chunk:
+                    yield chunk
+        finally:
+            close = getattr(iterator, "aclose", None)
+            if callable(close):
+                await close()
+        return
+
+    iterator = iter(stream)
+    try:
+        while not await request.is_disconnected():
+            chunk = await run_in_threadpool(next, iterator, _STREAM_END)
+            if chunk is _STREAM_END:
+                break
+            if chunk:
+                yield chunk
+    finally:
+        close = getattr(iterator, "close", None)
+        if callable(close):
+            await run_in_threadpool(close)
 
 
 def _build_authorization_check(hotel_id: int, user_id: int | None):
@@ -98,6 +132,7 @@ def recover_domain_events(
 
 @router.get("/stream")
 def stream_domain_events(
+    request: Request,
     context: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
     after_cursor: int | None = Query(
@@ -158,7 +193,7 @@ def stream_domain_events(
         )
     )
     return StreamingResponse(
-        stream,
+        _until_disconnect(request, stream),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-store",

@@ -10,8 +10,14 @@ import {
   correctCompanyNightChargeAmounts,
   type CompanyNightChargeCorrection
 } from "../api/companyNightCharges";
-import { refreshPaymentState } from "../api/queryInvalidation";
-import { isDeferredCompanyReservation } from "../api/reservations";
+import { refreshPaymentState, refreshReservationRecordState } from "../api/queryInvalidation";
+import {
+  extendReservationStay,
+  isDeferredCompanyReservation,
+  previewReservationStayExtension,
+  type ReservationExtensionPayload,
+  type ReservationExtensionPreview
+} from "../api/reservations";
 import { type GuestUpdatePayload } from "../api/guests";
 import { type RestrictionOverride } from "../api/guestRestrictions";
 import { type PaymentMethod } from "../api/payments";
@@ -78,7 +84,18 @@ const checkinValidationErrorKeys: Record<string, string> = {
   "Birth country is required": "drawer.checkinCapture.requiredFields.birthCountry",
   "Marital status is required": "drawer.checkinCapture.requiredFields.maritalStatus",
   "Occupation is required": "drawer.checkinCapture.requiredFields.occupation",
-  "Guest must accept terms and conditions": "drawer.checkinCapture.requiredFields.termsAccepted"
+  "Guest must accept terms and conditions": "drawer.checkinCapture.requiredFields.termsAccepted",
+  "El nombre es obligatorio": "drawer.checkinCapture.requiredFields.firstName",
+  "El apellido es obligatorio": "drawer.checkinCapture.requiredFields.lastName",
+  "El tipo de documento (DNI/pasaporte) es obligatorio": "drawer.checkinCapture.requiredFields.documentType",
+  "El número de documento es obligatorio": "drawer.checkinCapture.requiredFields.documentNumber",
+  "La nacionalidad es obligatoria": "drawer.checkinCapture.requiredFields.nationality",
+  "El país es obligatorio": "drawer.checkinCapture.requiredFields.country",
+  "El lugar de nacimiento es obligatorio": "drawer.checkinCapture.requiredFields.birthPlace",
+  "El país de nacimiento es obligatorio": "drawer.checkinCapture.requiredFields.birthCountry",
+  "El estado civil es obligatorio": "drawer.checkinCapture.requiredFields.maritalStatus",
+  "La ocupación es obligatoria": "drawer.checkinCapture.requiredFields.occupation",
+  "El huésped debe aceptar los términos y condiciones": "drawer.checkinCapture.requiredFields.termsAccepted"
 };
 
 const checkinFieldKeysByName: Record<string, string> = {
@@ -132,16 +149,18 @@ const getCheckinActionErrorMessage = (
       : "";
   const message = typeof detail === "string" ? detail : structuredMessage;
 
-  // Current API versions return missing fields as an English detail string;
-  // accept a future structured field list too, while keeping the operator UI
-  // localized and independent of that transport shape.
-  if (isStructuredMissingGuestData(detail) || /missing required guest data/i.test(message)) {
+  // Accept current English and localized API detail prefixes plus a structured field list,
+  // while keeping the operator UI localized and independent of transport wording.
+  if (isStructuredMissingGuestData(detail) || /missing required guest data|faltan datos obligatorios del huésped/i.test(message)) {
     return t("drawer.checkinCapture.submitMissingFields");
   }
-  if (/must be paid first/i.test(message)) {
+  if (/must be paid first|debe abonarse/i.test(message)) {
     return t("drawer.errors.checkInPaymentRequired", {
       balance: formatMoney(Math.max(0, balanceDue), currencyCode)
     });
+  }
+  if (/after the reservation departure date|después de la fecha de salida/i.test(message)) {
+    return t("drawer.errors.checkInDepartureDatePassed");
   }
   return t("drawer.errors.checkInFailed");
 };
@@ -158,6 +177,8 @@ const paymentMethodValues: PaymentMethod[] = [
   "debit_card"
 ];
 const manualPaymentMethods: PaymentMethod[] = ["credit_card", "debit_card", "bank_transfer"];
+type ExtensionManualPaymentMethod = Extract<PaymentMethod, "cash" | "credit_card" | "debit_card" | "bank_transfer">;
+type IndividualExtensionPaymentAction = "payment_link" | "immediate_payment";
 
 function guestFullName(
   t: TFunction,
@@ -172,6 +193,10 @@ function addIsoDays(isoDate: string, dayCount: number): string {
   const date = new Date(`${isoDate}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + dayCount);
   return date.toISOString().slice(0, 10);
+}
+
+function isValidPaymentEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 function effectiveCompanyNightlyRate(rates: CompanyNightlyRate[], stayDate: string): CompanyNightlyRate | null {
@@ -199,6 +224,21 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const [companyExtensionNote, setCompanyExtensionNote] = useState("");
   const [companyExtensionCheckoutDate, setCompanyExtensionCheckoutDate] = useState("");
   const [companyExtensionConfirmOpen, setCompanyExtensionConfirmOpen] = useState(false);
+  const [individualExtensionCheckoutDate, setIndividualExtensionCheckoutDate] = useState("");
+  const [individualExtensionPaymentAction, setIndividualExtensionPaymentAction] =
+    useState<IndividualExtensionPaymentAction>("payment_link");
+  const [individualExtensionPaymentMethod, setIndividualExtensionPaymentMethod] =
+    useState<ExtensionManualPaymentMethod>("cash");
+  const [individualExtensionManualReference, setIndividualExtensionManualReference] = useState("");
+  const [individualExtensionRecipientEmail, setIndividualExtensionRecipientEmail] = useState("");
+  const [individualExtensionPreview, setIndividualExtensionPreview] = useState<ReservationExtensionPreview | null>(null);
+  const [individualExtensionPreviewPending, setIndividualExtensionPreviewPending] = useState(false);
+  const [individualExtensionConfirmOpen, setIndividualExtensionConfirmOpen] = useState(false);
+  const [individualExtensionCreatedLink, setIndividualExtensionCreatedLink] = useState<{
+    external_checkout_url?: string | null;
+    execution_mode: "local_only" | "provider";
+    payable: boolean;
+  } | null>(null);
   const [companionForm, setCompanionForm] = useState({ first_name: "", last_name: "", document_number: "" });
   const [companionError, setCompanionError] = useState<string | null>(null);
   const [selectedCompanyChargeIds, setSelectedCompanyChargeIds] = useState<number[]>([]);
@@ -220,6 +260,14 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const operationsQuery = useReservationOperationsSummary(reservationId ?? undefined);
   const summaryQuery = usePaymentSummary(reservationId ?? undefined);
   const paymentMutation = usePaymentMutation(reservationId ?? undefined);
+  const individualExtensionMutation = useGuardedMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: ReservationExtensionPayload }) =>
+      extendReservationStay(id, payload, session),
+    onSuccess: async (_, variables) => Promise.all([
+      refreshPaymentState(queryClient, session.hotelId, variables.id),
+      refreshReservationRecordState(queryClient, session.hotelId, variables.id, { includePaymentLinks: true })
+    ])
+  });
   const companyNightChargesQuery = useCompanyNightCharges(reservationId ?? undefined, Boolean(reservationQuery.data?.company_id));
   const refreshCompanyNightCharges = async () => {
     if (!reservationId) return;
@@ -292,7 +340,9 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     const key = checkinValidationErrorKeys[error];
     return key ? t(key) : t("drawer.checkinCapture.requiredFields.unknown");
   });
-  const pendingActionMessage = paymentMutation.isPending
+  const pendingActionMessage = individualExtensionMutation.isPending
+    ? t("drawer.individualExtension.applying")
+    : paymentMutation.isPending
     ? t("drawer.payment.submitting")
     : partialCheckInMutation.isPending
       ? t("drawer.actions.partialCheckInPending")
@@ -330,6 +380,17 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       reservation?.check_out_date ? addIsoDays(reservation.check_out_date, 1) : ""
     );
     setCompanyExtensionConfirmOpen(false);
+    setIndividualExtensionCheckoutDate(
+      reservation?.check_out_date ? addIsoDays(reservation.check_out_date, 1) : ""
+    );
+    setIndividualExtensionPaymentAction("payment_link");
+    setIndividualExtensionPaymentMethod("cash");
+    setIndividualExtensionManualReference("");
+    setIndividualExtensionRecipientEmail("");
+    setIndividualExtensionPreview(null);
+    setIndividualExtensionPreviewPending(false);
+    setIndividualExtensionConfirmOpen(false);
+    setIndividualExtensionCreatedLink(null);
   }, [reservation?.id, reservation?.check_out_date]);
 
   const buildGuestPatch = (): GuestUpdatePayload => ({
@@ -398,6 +459,21 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     reservation.company_extension_request_pending &&
     reservation.settlement_status === "deferred" &&
     canApplyCompanyExtension
+  );
+  const canExtendIndividualReservation = Boolean(
+    reservation &&
+    !reservation.company_id &&
+    !reservation.group_id &&
+    reservation.source === "direct" &&
+    !reservation.external_id &&
+    !reservation.source_provider_code &&
+    operationsQuery.isSuccess &&
+    !operations?.ota_link &&
+    !deferredCompanyBilling &&
+    (reservation.status === "checked_in" || reservation.status === "fully_paid") &&
+    hasPermission("reservation:update") &&
+    hasPermission("reservation:charge") &&
+    hasPermission("cash:operate")
   );
   const candidateCompanyChargeDates: string[] = [];
   if (reservation?.check_in_date && reservation.check_out_date) {
@@ -573,6 +649,139 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     }
   };
 
+  const handlePreviewIndividualExtension = async () => {
+    if (!reservation || !canExtendIndividualReservation) return;
+    if (individualExtensionCheckoutDate <= reservation.check_out_date) {
+      setActionError(t("drawer.individualExtension.checkoutDateMustBeLater"));
+      setActionMessage(null);
+      return;
+    }
+    if (
+      individualExtensionPaymentAction === "immediate_payment" &&
+      manualPaymentMethods.includes(individualExtensionPaymentMethod) &&
+      !individualExtensionManualReference.trim()
+    ) {
+      setActionError(t("drawer.individualExtension.manualReferenceRequired"));
+      setActionMessage(null);
+      return;
+    }
+    if (
+      individualExtensionPaymentAction === "payment_link" &&
+      !isValidPaymentEmail(individualExtensionRecipientEmail)
+    ) {
+      setActionError(t("drawer.individualExtension.recipientEmailInvalid"));
+      setActionMessage(null);
+      return;
+    }
+
+    setActionError(null);
+    setActionMessage(null);
+    setIndividualExtensionCreatedLink(null);
+    setIndividualExtensionPreviewPending(true);
+    try {
+      const preview = await previewReservationStayExtension(
+        reservation.id,
+        individualExtensionCheckoutDate,
+        session
+      );
+      if (
+        preview.reservation_id !== reservation.id ||
+        preview.new_checkout_date !== individualExtensionCheckoutDate ||
+        preview.current_checkout_date !== reservation.check_out_date ||
+        !Number.isInteger(preview.client_version) ||
+        !Number.isFinite(Number(preview.extension_amount)) ||
+        Number(preview.extension_amount) <= 0
+      ) {
+        throw new Error(t("drawer.individualExtension.previewStale"));
+      }
+      setIndividualExtensionPreview(preview);
+      setIndividualExtensionConfirmOpen(true);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : t("drawer.individualExtension.previewFailed"));
+    } finally {
+      setIndividualExtensionPreviewPending(false);
+    }
+  };
+
+  const handleConfirmIndividualExtension = async () => {
+    if (!reservation || !individualExtensionPreview || individualExtensionMutation.isPending) return;
+    const amount = Number(individualExtensionPreview.extension_amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setActionError(t("drawer.individualExtension.previewFailed"));
+      setIndividualExtensionConfirmOpen(false);
+      setIndividualExtensionPreview(null);
+      return;
+    }
+
+    const payload: ReservationExtensionPayload = {
+      new_checkout_date: individualExtensionPreview.new_checkout_date,
+      client_version: individualExtensionPreview.client_version,
+      pricing_mode: "current_rate",
+      payment_action: individualExtensionPaymentAction
+    };
+    if (individualExtensionPaymentAction === "immediate_payment") {
+      const manualReference = individualExtensionManualReference.trim();
+      if (manualPaymentMethods.includes(individualExtensionPaymentMethod) && !manualReference) {
+        setActionError(t("drawer.individualExtension.manualReferenceRequired"));
+        setIndividualExtensionConfirmOpen(false);
+        setIndividualExtensionPreview(null);
+        return;
+      }
+      payload.immediate_payment = {
+        reservation_id: reservation.id,
+        amount,
+        payment_method: individualExtensionPaymentMethod,
+        transaction_type: "balance_payment",
+        currency: individualExtensionPreview.currency_code,
+        description: t("drawer.individualExtension.paymentDescription", {
+          date: individualExtensionPreview.new_checkout_date
+        }),
+        ...(manualReference ? { manual_reference: manualReference } : {})
+      };
+    } else {
+      const recipientEmail = individualExtensionRecipientEmail.trim();
+      if (!isValidPaymentEmail(recipientEmail)) {
+        setActionError(t("drawer.individualExtension.recipientEmailInvalid"));
+        setIndividualExtensionConfirmOpen(false);
+        setIndividualExtensionPreview(null);
+        return;
+      }
+      payload.payment_link = {
+        reservation_id: reservation.id,
+        requested_amount: amount,
+        currency: individualExtensionPreview.currency_code,
+        recipient_email: recipientEmail,
+        recipient_name: [reservation.guest?.first_name, reservation.guest?.last_name].filter(Boolean).join(" ") || undefined,
+        title: t("drawer.individualExtension.paymentLinkTitle", { code: reservation.confirmation_code }),
+        description: t("drawer.individualExtension.paymentDescription", {
+          date: individualExtensionPreview.new_checkout_date
+        })
+      };
+    }
+
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      const result = await individualExtensionMutation.mutateAsync({ id: reservation.id, payload });
+      setIndividualExtensionConfirmOpen(false);
+      setIndividualExtensionPreview(null);
+      if (individualExtensionPaymentAction === "payment_link") {
+        setIndividualExtensionCreatedLink(result.payment_link ? {
+          external_checkout_url: result.payment_link.external_checkout_url,
+          execution_mode: result.payment_link.execution_mode,
+          payable: result.payment_link.payable
+        } : null);
+        setActionMessage(t("drawer.individualExtension.paymentLinkCreated"));
+      } else {
+        setActionMessage(t("drawer.individualExtension.paymentRegistered"));
+      }
+    } catch (err) {
+      setIndividualExtensionConfirmOpen(false);
+      setIndividualExtensionPreview(null);
+      setActionError(err instanceof ApiError ? err.message : t("drawer.individualExtension.applyFailed"));
+    }
+  };
+
   const runAction = async (label: string, action: () => Promise<unknown>, onSuccess: () => void) => {
     setActionError(null);
     setActionMessage(null);
@@ -608,7 +817,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       return;
     }
     if (isManualPaymentMethod && !manualReference) {
-      setActionError(t("page.errors.manualPaymentReferenceRequired"));
+      setActionError(t("drawer.errors.manualPaymentReferenceRequired"));
       return;
     }
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -642,6 +851,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
 
   const handleClose = () => {
     if (
+      individualExtensionMutation.isPending ||
       paymentMutation.isPending ||
       addGuestsMutation.isPending ||
       partialCheckInMutation.isPending ||
@@ -704,7 +914,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
           <button
             type="button"
             onClick={handleClose}
-            disabled={paymentMutation.isPending}
+            disabled={paymentMutation.isPending || individualExtensionMutation.isPending}
             aria-label={t("drawer.closeAria")}
             className="text-lg leading-none text-slate-500 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -927,6 +1137,131 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       ? t("drawer.companyExtension.applying")
                       : t("drawer.companyExtension.apply")}
                   </button>
+                </section>
+              ) : null}
+
+              {canExtendIndividualReservation && reservation ? (
+                <section className="rounded-lg border border-cyan-200 bg-cyan-50/60 p-3" data-testid="individual-extension">
+                  <p className="text-xs uppercase tracking-wide text-cyan-950">{t("drawer.individualExtension.title")}</p>
+                  <p className="mt-1 text-xs text-cyan-900">{t("drawer.individualExtension.hint")}</p>
+                  <label className="mt-2 block space-y-1 text-xs">
+                    <span className="text-slate-700">{t("drawer.individualExtension.newCheckoutDate")}</span>
+                    <input
+                      type="date"
+                      value={individualExtensionCheckoutDate}
+                      min={addIsoDays(reservation.check_out_date, 1)}
+                      onChange={(event) => {
+                        setIndividualExtensionCheckoutDate(event.target.value);
+                        setIndividualExtensionPreview(null);
+                        setIndividualExtensionConfirmOpen(false);
+                        setIndividualExtensionCreatedLink(null);
+                      }}
+                      aria-label={t("drawer.individualExtension.newCheckoutDate")}
+                      className="w-full rounded-lg border border-cyan-200 bg-white px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="mt-2 block space-y-1 text-xs">
+                    <span className="text-slate-700">{t("drawer.individualExtension.paymentAction")}</span>
+                    <select
+                      value={individualExtensionPaymentAction}
+                      onChange={(event) => {
+                        setIndividualExtensionPaymentAction(event.target.value as IndividualExtensionPaymentAction);
+                        setIndividualExtensionPreview(null);
+                        setIndividualExtensionConfirmOpen(false);
+                        setIndividualExtensionCreatedLink(null);
+                      }}
+                      aria-label={t("drawer.individualExtension.paymentAction")}
+                      className="w-full rounded-lg border border-cyan-200 bg-white px-2 py-1.5 text-sm"
+                    >
+                      <option value="payment_link">{t("drawer.individualExtension.paymentLink")}</option>
+                      <option value="immediate_payment">{t("drawer.individualExtension.immediatePayment")}</option>
+                    </select>
+                  </label>
+                  {individualExtensionPaymentAction === "payment_link" ? (
+                    <label className="mt-2 block space-y-1 text-xs">
+                      <span className="text-slate-700">{t("drawer.individualExtension.recipientEmail")}</span>
+                      <input
+                        type="email"
+                        required
+                        maxLength={320}
+                        value={individualExtensionRecipientEmail}
+                        onChange={(event) => {
+                          setIndividualExtensionRecipientEmail(event.target.value);
+                          setIndividualExtensionPreview(null);
+                          setIndividualExtensionCreatedLink(null);
+                        }}
+                        aria-label={t("drawer.individualExtension.recipientEmail")}
+                        className="w-full rounded-lg border border-cyan-200 bg-white px-2 py-1.5 text-sm"
+                      />
+                    </label>
+                  ) : (
+                    <>
+                      <label className="mt-2 block space-y-1 text-xs">
+                        <span className="text-slate-700">{t("drawer.individualExtension.paymentMethod")}</span>
+                        <select
+                          value={individualExtensionPaymentMethod}
+                          onChange={(event) => {
+                            setIndividualExtensionPaymentMethod(event.target.value as ExtensionManualPaymentMethod);
+                            setIndividualExtensionPreview(null);
+                            setIndividualExtensionCreatedLink(null);
+                          }}
+                          aria-label={t("drawer.individualExtension.paymentMethod")}
+                          className="w-full rounded-lg border border-cyan-200 bg-white px-2 py-1.5 text-sm"
+                        >
+                          <option value="cash">{t("drawer.payment.methods.cash")}</option>
+                          <option value="bank_transfer">{t("drawer.payment.methods.bank_transfer")}</option>
+                          <option value="credit_card">{t("drawer.payment.methods.credit_card")}</option>
+                          <option value="debit_card">{t("drawer.payment.methods.debit_card")}</option>
+                        </select>
+                      </label>
+                      {manualPaymentMethods.includes(individualExtensionPaymentMethod) ? (
+                        <label className="mt-2 block space-y-1 text-xs">
+                          <span className="text-slate-700">{t("drawer.individualExtension.manualReference")}</span>
+                          <input
+                            type="text"
+                            required
+                            maxLength={120}
+                            value={individualExtensionManualReference}
+                            onChange={(event) => {
+                              setIndividualExtensionManualReference(event.target.value);
+                              setIndividualExtensionPreview(null);
+                            }}
+                            aria-label={t("drawer.individualExtension.manualReference")}
+                            className="w-full rounded-lg border border-cyan-200 bg-white px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                      ) : null}
+                      <p className="mt-2 text-xs text-cyan-950">{t("drawer.individualExtension.immediatePaymentHint")}</p>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handlePreviewIndividualExtension()}
+                    disabled={!individualExtensionCheckoutDate || individualExtensionPreviewPending || individualExtensionMutation.isPending}
+                    className="mt-3 min-h-10 rounded-md border border-cyan-300 bg-white px-3 py-2 text-xs font-semibold text-cyan-950 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {individualExtensionPreviewPending
+                      ? t("drawer.individualExtension.previewing")
+                      : t("drawer.individualExtension.preview")}
+                  </button>
+                  {individualExtensionCreatedLink ? (
+                    <div className="mt-3 rounded-md border border-cyan-200 bg-white px-3 py-2 text-xs" role="status" data-testid="individual-extension-payment-link">
+                      {individualExtensionCreatedLink.execution_mode === "provider" &&
+                      individualExtensionCreatedLink.payable &&
+                      individualExtensionCreatedLink.external_checkout_url ? (
+                        <a
+                          href={individualExtensionCreatedLink.external_checkout_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-semibold text-cyan-900 underline underline-offset-2"
+                        >
+                          {t("drawer.individualExtension.openPaymentLink")}
+                        </a>
+                      ) : (
+                        <span>{t("drawer.individualExtension.paymentLinkLocalOnly")}</span>
+                      )}
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
 
@@ -1587,6 +1922,27 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
         danger={false}
         onConfirm={() => void handleApplyCompanyExtension()}
         onCancel={() => setCompanyExtensionConfirmOpen(false)}
+      />
+      <ConfirmDialog
+        open={individualExtensionConfirmOpen && individualExtensionPreview !== null}
+        title={t("drawer.individualExtension.confirmTitle")}
+        message={t("drawer.individualExtension.confirmMessage", {
+          date: individualExtensionPreview?.new_checkout_date ?? individualExtensionCheckoutDate,
+          amount: individualExtensionPreview
+            ? formatMoney(Number(individualExtensionPreview.extension_amount), individualExtensionPreview.currency_code)
+            : ""
+        })}
+        confirmLabel={individualExtensionMutation.isPending
+          ? t("drawer.individualExtension.applying")
+          : t("drawer.individualExtension.confirmApply")}
+        cancelLabel={t("drawer.individualExtension.cancel")}
+        danger={false}
+        onConfirm={() => void handleConfirmIndividualExtension()}
+        onCancel={() => {
+          if (individualExtensionMutation.isPending) return;
+          setIndividualExtensionConfirmOpen(false);
+          setIndividualExtensionPreview(null);
+        }}
       />
     </div>
   );

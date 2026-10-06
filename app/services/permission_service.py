@@ -81,6 +81,7 @@ PERMISSION_GUEST_PROHIBITION_MANAGE = "guest:prohibition_manage"
 PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE = "guest:room_avoidance_resolve"
 PERMISSION_GUEST_EXPORT = "guest:export"
 PERMISSION_RESERVATION_READ = "reservation:read"
+PERMISSION_RESERVATION_EXPORT = "reservation:export"
 PERMISSION_RESERVATION_CREATE = "reservation:create"
 PERMISSION_RESERVATION_UPDATE = "reservation:update"
 PERMISSION_RESERVATION_PAID_TOTAL_ADJUST = "reservation:paid_total_adjust"
@@ -145,6 +146,7 @@ PERMISSION_PAYMENT_PROOF_VIEW = "payment:proof:view"
 PERMISSION_PAYMENT_PROOF_REVIEW = "payment:proof:review"
 PERMISSION_PAYMENT_REFUND = "payment:refund"
 PERMISSION_OTA_PAYMENT_CONFIRM = "payment:ota_confirm"
+PERMISSION_PAYMENT_RECEIPT_EMAIL = "payment:receipt_email"
 PERMISSION_APIKEY_MANAGE = "apikey:manage"
 
 # Section visibility and management permissions used by the next frontend
@@ -276,11 +278,15 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_GUEST_EXPORT: (
         "guests", "Export guest ledger data",
-        "Permite exportar el libro de huéspedes dentro del alcance del hotel. No permite editar perfiles ni modificar el historial exportado.",
+        "Permite exportar el libro de huéspedes dentro del alcance del hotel. Requiere MFA reciente porque incluye datos personales. No permite editar perfiles ni modificar el historial exportado.",
     ),
     PERMISSION_RESERVATION_READ: (
         "reservations", "Read reservations",
         "Permite abrir y consultar reservas. No permite crearlas, editarlas, cancelarlas ni moverlas.",
+    ),
+    PERMISSION_RESERVATION_EXPORT: (
+        "reservations", "Export reservation data",
+        "Permite descargar un CSV acotado al hotel con reservas y nombres de huéspedes, sin documentos ni datos de contacto. Requiere MFA reciente.",
     ),
     PERMISSION_RESERVATION_CREATE: (
         "reservations", "Create reservations",
@@ -489,6 +495,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     PERMISSION_OTA_PAYMENT_CONFIRM: (
         "payments", "Confirm an external OTA prepayment",
         "Permite confirmar un importe pagado en una OTA con referencia verificable. Requiere MFA reciente y no registra dinero recibido en la caja del hotel.",
+    ),
+    PERMISSION_PAYMENT_RECEIPT_EMAIL: (
+        "payments", "Send a payment receipt by email",
+        "Permite enviar el comprobante de un pago confirmado al email registrado del huésped. Requiere MFA reciente y confirmación explícita del operador.",
     ),
     PERMISSION_CASH_APPROVE_DIFFERENCE: (
         "cash", "Approve cash close differences",
@@ -769,6 +779,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_GUEST_TAGS_MANAGE, PERMISSION_GUEST_PROHIBITION_READ,
         PERMISSION_GUEST_PROHIBITION_MANAGE, PERMISSION_GUEST_ROOM_AVOIDANCE_RESOLVE,
         PERMISSION_GUEST_EXPORT,
+        PERMISSION_RESERVATION_EXPORT,
         PERMISSION_RESERVATION_READ, PERMISSION_RESERVATION_CREATE,
         PERMISSION_RESERVATION_UPDATE, PERMISSION_RESERVATION_OTA_RECORD,
         PERMISSION_RESERVATION_MANUAL_RATE_LIMITED,
@@ -798,6 +809,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_CASH_RECORD_PRIOR_RECEIPT,
         PERMISSION_PAYMENT_REFUND,
         PERMISSION_OTA_PAYMENT_CONFIRM,
+        PERMISSION_PAYMENT_RECEIPT_EMAIL,
         PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
         PERMISSION_WAITLIST_VIEW, PERMISSION_WAITLIST_MANAGE,
         PERMISSION_CASH_VIEW,
@@ -819,6 +831,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_RESERVATION_CHARGE, PERMISSION_RESERVATION_MOVE, PERMISSION_ROOM_READ,
         PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_CHECKIN_PERFORM,
         PERMISSION_CHECKOUT_PERFORM, PERMISSION_CASH_OPERATE,
+        PERMISSION_PAYMENT_RECEIPT_EMAIL,
         PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
         PERMISSION_WAITLIST_VIEW, PERMISSION_WAITLIST_MANAGE,
         PERMISSION_CASH_VIEW, PERMISSION_OPERATIONAL_TASK_READ,
@@ -858,6 +871,9 @@ _STEP_UP_REQUIRED = _CRITICAL_PERMISSION_CODES | frozenset(
         PERMISSION_CASH_EXPENSE_APPROVE,
         PERMISSION_PAYMENT_REFUND,
         PERMISSION_OTA_PAYMENT_CONFIRM,
+        PERMISSION_GUEST_EXPORT,
+        PERMISSION_RESERVATION_EXPORT,
+        PERMISSION_PAYMENT_RECEIPT_EMAIL,
         PERMISSION_RESERVATION_CANCEL_PAID,
         PERMISSION_SETTINGS_USERS_MANAGE,
         PERMISSION_SETTINGS_SUBSCRIPTION_MANAGE,

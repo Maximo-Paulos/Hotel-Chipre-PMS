@@ -50,6 +50,7 @@ export type LaundryRemitoLine = {
   id: number;
   linen_item_id: number;
   quantity: DecimalValue;
+  missing_quantity?: DecimalValue;
   unit_price_snapshot?: DecimalValue | null;
 };
 
@@ -71,6 +72,7 @@ export type LaundryRemito = {
 export type LaundryRemitoLineCreate = {
   linen_item_id: number;
   quantity: DecimalValue;
+  missing_quantity?: DecimalValue;
 };
 
 export type LaundryRemitoCreate = {
@@ -88,6 +90,42 @@ export type LaundryRemitoCreateResponse = {
   warnings: string[];
 };
 
+export type LaundryMissingFollowUpStatus = "open" | "contacted" | "response_recorded" | "closed";
+
+export type LaundryMissingFollowUp = {
+  id: number;
+  remito_id: number;
+  remito_number: string;
+  remito_date: string;
+  vendor_id: number;
+  vendor_name: string;
+  linen_item_id: number;
+  linen_item_name: string;
+  quantity: DecimalValue;
+  missing_quantity: DecimalValue;
+  follow_up_status: LaundryMissingFollowUpStatus;
+  follow_up_note?: string | null;
+  supplier_reference?: string | null;
+  supplier_contacted_on?: string | null;
+  supplier_contact_note?: string | null;
+  supplier_response_on?: string | null;
+  supplier_response_note?: string | null;
+  follow_up_updated_at?: string | null;
+};
+
+export type LaundryMissingFollowUpUpdate = Partial<
+  Pick<
+    LaundryMissingFollowUp,
+    | "follow_up_status"
+    | "follow_up_note"
+    | "supplier_reference"
+    | "supplier_contacted_on"
+    | "supplier_contact_note"
+    | "supplier_response_on"
+    | "supplier_response_note"
+  >
+>;
+
 export type LaundryVendorBalanceLine = {
   linen_item_id: number;
   linen_item_name: string;
@@ -99,10 +137,12 @@ export type LaundryVendorSpendLine = {
   linen_item_name: string;
   quantity: DecimalValue;
   subtotal: DecimalValue;
+  unpriced_quantity?: DecimalValue;
 };
 
 export type LaundryVendorSpend = {
   total: DecimalValue;
+  unpriced_quantity?: DecimalValue;
   by_item: LaundryVendorSpendLine[];
 };
 
@@ -131,6 +171,20 @@ export const setLaundryVendorPrice = (
 
 export const createLaundryRemito = (payload: LaundryRemitoCreate, session?: SessionLike) =>
   apiFetch<LaundryRemitoCreateResponse>("/api/laundry/remitos", { method: "POST", data: payload, session });
+
+export const listLaundryMissingFollowUps = (session?: SessionLike) =>
+  apiFetch<LaundryMissingFollowUp[]>("/api/laundry/missing-follow-ups", { session });
+
+export const updateLaundryMissingFollowUp = (
+  remitoLineId: number,
+  payload: LaundryMissingFollowUpUpdate,
+  session?: SessionLike
+) =>
+  apiFetch<LaundryMissingFollowUp>(`/api/laundry/missing-follow-ups/${remitoLineId}`, {
+    method: "PATCH",
+    data: payload,
+    session
+  });
 
 export const listLaundryRemitos = (
   filters: { vendorId?: number; dateFrom?: string; dateTo?: string } = {},
@@ -170,6 +224,7 @@ export type LaundryVendorSettlementQuarter = {
   period_start: string;
   period_end: string;
   total_amount: DecimalValue;
+  unpriced_quantity?: DecimalValue;
   by_item: LaundryVendorSpendLine[];
   paid: boolean;
   paid_at?: string | null;

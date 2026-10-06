@@ -29,7 +29,7 @@ def test_payment_overpay_is_blocked_smoke(client, engine):
             headers={**headers, "Idempotency-Key": "smoke-overpay-001"},
     )
     assert response.status_code == 400, response.text
-    assert "exceeds balance due" in response.json()["detail"]
+    assert "supera el saldo pendiente" in response.json()["detail"]
 
 
 def test_payment_disabled_method_is_blocked_smoke(client, engine):
@@ -60,4 +60,4 @@ def test_payment_disabled_method_is_blocked_smoke(client, engine):
             headers={**headers, "Idempotency-Key": "smoke-disabled-001"},
     )
     assert response.status_code == 400, response.text
-    assert "currently disabled" in response.json()["detail"]
+    assert "está deshabilitado" in response.json()["detail"]
