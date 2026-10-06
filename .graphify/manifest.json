@@ -3236,8 +3236,8 @@
     "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1791301244545.943,
-    "hash": "953cd21e203726e3524365cc727130d5"
+    "mtime": 1791301430810.2722,
+    "hash": "de4389af247b41fcea17fd005ef24856"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1791222002239.498,
@@ -5680,8 +5680,8 @@
     "hash": "ee14a18d672ebfc95bc953f065989fc2"
   },
   "frontend/e2e/settings-custom-role-permissions.spec.ts": {
-    "mtime": 1791254329634.3708,
-    "hash": "9630a4bd265f44d3941ad292345b5f81"
+    "mtime": 1791302864891.7476,
+    "hash": "1832d8a276bcb9f4c5d664740681441f"
   },
   "frontend/src/api/roles.ts": {
     "mtime": 1791222002212.1614,
