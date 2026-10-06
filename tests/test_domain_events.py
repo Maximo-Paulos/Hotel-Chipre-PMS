@@ -153,6 +153,11 @@ def test_permission_invalidation_publishes_without_error_logging(monkeypatch, ca
     domain_events._outbox_publish_cooldown.record_failure()
     monkeypatch.setattr(domain_events, "_settings", lambda: _settings(DISTRIBUTED_LOCK_REQUIRED=True))
     monkeypatch.setattr(domain_events, "_get_redis_client", lambda: fake)
+    monkeypatch.setattr(
+        domain_events,
+        "_get_realtime_fast_fail_client",
+        lambda: pytest.fail("direct permission invalidation must keep its existing client path"),
+    )
 
     with caplog.at_level("WARNING", logger="app.services.permission_service"):
         permission_service.publish_permission_invalidation(42)
@@ -378,6 +383,7 @@ def test_queued_domain_change_publishes_once_after_commit(monkeypatch: pytest.Mo
     assert published[0]["event_id"]
     assert published[0]["cursor"] == 1
     assert published[0]["schema_version"] == 1
+    assert published[0]["client_capability"] == "realtime_fast_fail"
 
 
 @pytest.mark.parametrize("first_failure", ["exception", "none"])
@@ -432,6 +438,8 @@ def test_failed_durable_publish_leaves_later_durable_rows_pending_but_attempts_e
     ]
     assert "event_id" in attempted[0]
     assert "event_id" not in attempted[1]
+    assert attempted[0]["client_capability"] == "realtime_fast_fail"
+    assert "client_capability" not in attempted[1]
 
     with Session(engine) as verification_session:
         rows = verification_session.query(DomainEventOutbox).order_by(DomainEventOutbox.event_type).all()

@@ -850,6 +850,26 @@ from app.services.reservation_service import (
 )
 
 
+def test_reservation_update_fact_field_classification_is_exhaustive():
+    from app.services.reservation_service import _ANALYTICS_FACT_AFFECTING_RESERVATION_UPDATE_FIELDS
+
+    metadata_or_control_fields = {
+        "paid_total_change_reason",
+        "num_adults",
+        "num_children",
+        "notes",
+        "arrival_time_hint",
+        "reservation_comment",
+        "mobility_restriction",
+        "client_version",
+        "restriction_override",
+    }
+
+    assert set(ReservationUpdate.model_fields) == (
+        _ANALYTICS_FACT_AFFECTING_RESERVATION_UPDATE_FIELDS | metadata_or_control_fields
+    )
+
+
 def test_create_reservation_materializes_fact_rows_immediately(db, hotel_config, sample_guest, sample_categories, sample_rooms):
     assert db.query(FactReservationDaily).count() == 0
 
@@ -924,6 +944,90 @@ def test_update_reservation_fields_date_move_touches_old_and_new_windows(db, hot
         row.stay_date
         for row in db.query(FactReservationDaily).filter(FactReservationDaily.reservation_id == reservation.id).all()
     } == {date(2026, 7, 10), date(2026, 7, 11)}
+
+
+@pytest.mark.parametrize(
+    "update_fields",
+    [
+        {"notes": "Updated operator note"},
+        {"arrival_time_hint": "18:30"},
+        {"reservation_comment": "Guest requested a quiet room"},
+        {"mobility_restriction": True},
+        {"num_adults": 2},
+        {"num_children": 1},
+    ],
+)
+def test_metadata_only_reservation_update_skips_analytical_fact_refresh(
+    db, hotel_config, sample_guest, sample_categories, sample_rooms, monkeypatch, update_fields
+):
+    reservation = create_reservation(
+        db,
+        ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            room_id=sample_rooms[0].id,
+            check_in_date=date(2026, 6, 1),
+            check_out_date=date(2026, 6, 3),
+        ),
+        hotel_id=hotel_config.id,
+    )
+    version_before_update = reservation.version
+    facts_before_update = db.query(FactReservationDaily).filter(
+        FactReservationDaily.reservation_id == reservation.id
+    ).count()
+
+    def fail_if_refreshed(*_args, **_kwargs):
+        pytest.fail("metadata-only reservation update must not rebuild analytical facts")
+
+    monkeypatch.setattr("app.services.reservation_service._touch_facts", fail_if_refreshed)
+
+    update_reservation_fields(
+        db,
+        reservation,
+        ReservationUpdate(**update_fields),
+        hotel_id=hotel_config.id,
+        client_version=version_before_update,
+    )
+
+    assert reservation.version == version_before_update + 1
+    assert db.query(FactReservationDaily).filter(
+        FactReservationDaily.reservation_id == reservation.id
+    ).count() == facts_before_update == 2
+
+
+def test_update_reservation_total_refreshes_analytical_revenue_immediately(
+    db, hotel_config, sample_guest, sample_categories, sample_rooms
+):
+    reservation = create_reservation(
+        db,
+        ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            room_id=sample_rooms[0].id,
+            check_in_date=date(2026, 6, 1),
+            check_out_date=date(2026, 6, 3),
+        ),
+        hotel_id=hotel_config.id,
+    )
+    corrected_total = Decimal(str(reservation.total_amount)).quantize(Decimal("0.01")) + Decimal("50.00")
+
+    update_reservation_fields(
+        db,
+        reservation,
+        ReservationUpdate(
+            total_amount=corrected_total,
+            paid_total_change_reason="Corrected negotiated reservation total",
+        ),
+        hotel_id=hotel_config.id,
+        client_version=reservation.version,
+    )
+
+    facts = db.query(FactReservationDaily).filter(
+        FactReservationDaily.reservation_id == reservation.id
+    ).all()
+    recognized_total = sum((Decimal(str(row.revenue_gross_ars)) for row in facts), Decimal("0"))
+    assert len(facts) == 2
+    assert recognized_total == corrected_total
 
 
 def test_mark_reservation_no_show_flips_fact_row_kind_immediately(db, hotel_config, sample_guest, sample_categories, sample_rooms):

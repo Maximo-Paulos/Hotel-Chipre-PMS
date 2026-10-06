@@ -48,16 +48,23 @@ class StepUpTicketAction:
     path: str
 
 
-def permission_requires_step_up(db: Session, permission_code: str) -> bool:
-    """Read the canonical permission's seeded step-up policy from the catalog."""
+def permissions_requiring_step_up(db: Session, permission_codes: tuple[str, ...]) -> frozenset[str]:
+    """Load step-up policy for a permission group in one fresh catalog read."""
+    canonical_codes = {canonical_permission_code(code) for code in permission_codes}
+    if not canonical_codes:
+        return frozenset()
     ensure_permission_matrix_seeded(db)
+    rows = db.query(Permission.code).filter(
+        Permission.code.in_(canonical_codes),
+        Permission.step_up_required.is_(True),
+    ).all()
+    return frozenset(row[0] for row in rows)
+
+
+def permission_requires_step_up(db: Session, permission_code: str) -> bool:
+    """Read one canonical permission's seeded step-up policy from the catalog."""
     canonical = canonical_permission_code(permission_code)
-    required = (
-        db.query(Permission.step_up_required)
-        .filter(Permission.code == canonical)
-        .scalar()
-    )
-    return bool(required)
+    return canonical in permissions_requiring_step_up(db, (canonical,))
 
 
 def create_action_step_up_ticket(

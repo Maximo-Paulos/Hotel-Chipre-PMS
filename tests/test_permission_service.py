@@ -1,24 +1,31 @@
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
+from starlette.requests import Request
 
-from app.models.security_audit_log import SecurityAuditLog
+from app.dependencies.auth import AuthContext, require_all_permissions
 from app.models.hotel_config import HotelConfiguration
-from app.models.permission import HotelPermissionOverride, Permission, RolePermissionDefault
+from app.models.hotel_membership import HotelMembership
+from app.models.hotel_role import HotelRole
+from app.models.permission import (
+    HotelPermissionOverride,
+    Permission,
+    RolePermissionDefault,
+    UserPermissionOverride,
+)
+from app.models.security_audit_log import SecurityAuditLog
+from app.models.user import User
 from app.services.permission_service import (
     DEFAULT_MATRIX,
+    PERMISSION_APIKEY_MANAGE,
     PERMISSION_CASH_APPROVE_DIFFERENCE,
     PERMISSION_CASH_OPERATE,
-    PERMISSION_COMPANY_NIGHT_RATE_MANAGE,
-    PERMISSION_HOTEL_PROPERTY_MANAGE,
-    PERMISSION_HOTEL_SECURITY_MANAGE,
-    PERMISSION_APIKEY_MANAGE,
-    PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
-    PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
-    PERMISSION_PAYMENT_REFUND,
     PERMISSION_CHECKIN_PERFORM,
+    PERMISSION_COMPANY_NIGHT_RATE_MANAGE,
+    PERMISSION_DEFINITIONS,
     PERMISSION_GUEST_CREATE,
     PERMISSION_GUEST_EDIT,
     PERMISSION_GUEST_READ,
@@ -26,26 +33,34 @@ from app.services.permission_service import (
     PERMISSION_GUEST_TAGS,
     PERMISSION_GUEST_UPDATE,
     PERMISSION_GUEST_VIEW,
-    PERMISSION_DEFINITIONS,
+    PERMISSION_HOTEL_PROPERTY_MANAGE,
+    PERMISSION_HOTEL_SECURITY_MANAGE,
     PERMISSION_OCCUPANCY_VIEW,
-    PERMISSION_RESERVATION_CREATE,
+    PERMISSION_PAYMENT_REFUND,
+    PERMISSION_REPORTS_FINANCIAL_VIEW,
+    PERMISSION_REPORTS_OPERATIONAL_VIEW,
     PERMISSION_RESERVATION_CANCEL_PAID,
     PERMISSION_RESERVATION_CHARGE,
+    PERMISSION_RESERVATION_CREATE,
     PERMISSION_RESERVATION_MANUAL_RATE,
+    PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_RESERVATION_MOVE_CAPACITY,
     PERMISSION_RESERVATION_MOVE_CATEGORY,
     PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
-    PERMISSION_WHATSAPP_INBOX_VIEW,
-    PERMISSION_WHATSAPP_NOTE_MANAGE,
-    PERMISSION_REPORTS_FINANCIAL_VIEW,
-    PERMISSION_REPORTS_OPERATIONAL_VIEW,
+    PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
     PERMISSION_ROOM_CLEANING_STATUS,
+    PERMISSION_SETTINGS_DAILY_REPORT_VIEW,
+    PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
     PERMISSION_STOCK_ADJUST,
     PERMISSION_STOCK_OPERATE,
+    PERMISSION_WHATSAPP_INBOX_VIEW,
+    PERMISSION_WHATSAPP_NOTE_MANAGE,
     can_role_hold_permission,
+    ensure_permission_matrix_seeded,
     get_matrix,
     resolve,
+    resolve_many,
     seed_default_permissions,
     set_override,
 )
@@ -204,6 +219,233 @@ def test_override_in_hotel_a_does_not_affect_hotel_b(db):
 
     assert resolve(db, 1, "receptionist", PERMISSION_GUEST_EDIT) is False
     assert resolve(db, 2, "receptionist", PERMISSION_GUEST_EDIT) is True
+
+
+def test_resolve_many_preserves_user_role_and_hotel_override_precedence(db):
+    _seed_hotel(db, 1)
+    _seed_hotel(db, 2)
+    seed_default_permissions(db)
+    user = User(id=210, email="batch-permission@example.test", password_hash="synthetic")
+    db.add(user)
+    db.flush()
+    db.add_all(
+        [
+            HotelMembership(hotel_id=1, user_id=user.id, role="receptionist", status="active"),
+            HotelMembership(hotel_id=2, user_id=user.id, role="receptionist", status="active"),
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="receptionist",
+                permission_code=PERMISSION_GUEST_READ,
+                allowed=False,
+            ),
+            UserPermissionOverride(
+                hotel_id=1,
+                user_id=user.id,
+                permission_code=PERMISSION_GUEST_READ,
+                allowed=True,
+            ),
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="receptionist",
+                permission_code=PERMISSION_GUEST_CREATE,
+                allowed=False,
+            ),
+        ]
+    )
+    db.flush()
+
+    hotel_one = resolve_many(
+        db,
+        1,
+        "receptionist",
+        (PERMISSION_GUEST_READ, PERMISSION_GUEST_CREATE, PERMISSION_STOCK_ADJUST, "unknown:capability"),
+        user_id=user.id,
+    )
+    hotel_two = resolve_many(
+        db,
+        2,
+        "receptionist",
+        (PERMISSION_GUEST_READ, PERMISSION_GUEST_CREATE),
+        user_id=user.id,
+    )
+
+    assert hotel_one == {
+        PERMISSION_GUEST_READ: True,  # User grant takes precedence over hotel-role denial.
+        PERMISSION_GUEST_CREATE: False,  # Hotel-role denial takes precedence over the default.
+        PERMISSION_STOCK_ADJUST: False,  # Default deny is retained.
+        "unknown:capability": False,
+    }
+    assert hotel_two == {
+        PERMISSION_GUEST_READ: True,  # No override from hotel 1 leaks into hotel 2.
+        PERMISSION_GUEST_CREATE: True,
+    }
+
+
+def test_resolve_many_preserves_legacy_deny_fallback_and_invariants(db):
+    _seed_hotel(db, 1)
+    seed_default_permissions(db)
+    user = User(id=211, email="legacy-permission@example.test", password_hash="synthetic")
+    db.add(user)
+    db.flush()
+    db.add_all(
+        [
+            HotelMembership(hotel_id=1, user_id=user.id, role="co_owner", status="active"),
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="co_owner",
+                permission_code=PERMISSION_SETTINGS_NOTIFICATIONS_VIEW,
+                allowed=False,
+            ),
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="co_owner",
+                permission_code=PERMISSION_HOTEL_PROPERTY_MANAGE,
+                allowed=True,
+            ),
+        ]
+    )
+    db.flush()
+
+    decisions = resolve_many(
+        db,
+        1,
+        "co_owner",
+        (PERMISSION_SETTINGS_DAILY_REPORT_VIEW, PERMISSION_HOTEL_PROPERTY_MANAGE),
+        user_id=user.id,
+    )
+    assert decisions[PERMISSION_SETTINGS_DAILY_REPORT_VIEW] is False
+    # Owner-only invariant remains authoritative over a stored grant.
+    assert decisions[PERMISSION_HOTEL_PROPERTY_MANAGE] is False
+
+    db.add(
+        UserPermissionOverride(
+            hotel_id=1,
+            user_id=user.id,
+            permission_code=PERMISSION_SETTINGS_DAILY_REPORT_VIEW,
+            allowed=True,
+        )
+    )
+    db.flush()
+    assert resolve_many(
+        db,
+        1,
+        "co_owner",
+        (PERMISSION_SETTINGS_DAILY_REPORT_VIEW,),
+        user_id=user.id,
+    )[PERMISSION_SETTINGS_DAILY_REPORT_VIEW] is True
+
+
+def test_resolve_many_custom_role_is_hotel_scoped_and_reads_fresh_revocation(db):
+    _seed_hotel(db, 1)
+    _seed_hotel(db, 2)
+    seed_default_permissions(db)
+    role_code = "cr_batched"
+    db.add_all(
+        [
+            HotelRole(
+                hotel_id=1,
+                code=role_code,
+                name="Custom reception",
+                name_key="custom reception",
+                base_role="receptionist",
+                is_active=True,
+            ),
+            HotelRole(
+                hotel_id=2,
+                code=role_code,
+                name="Custom housekeeping",
+                name_key="custom housekeeping",
+                base_role="housekeeping",
+                is_active=True,
+            ),
+            HotelPermissionOverride(
+                hotel_id=1,
+                role=role_code,
+                permission_code=PERMISSION_GUEST_READ,
+                allowed=True,
+            ),
+        ]
+    )
+    db.flush()
+
+    assert resolve_many(db, 1, role_code, (PERMISSION_GUEST_READ,))[PERMISSION_GUEST_READ] is True
+    assert resolve_many(db, 2, role_code, (PERMISSION_GUEST_READ,))[PERMISSION_GUEST_READ] is False
+
+    # No process cache is involved: a committed revocation affects the next read.
+    override = db.query(HotelPermissionOverride).filter_by(
+        hotel_id=1,
+        role=role_code,
+        permission_code=PERMISSION_GUEST_READ,
+    ).one()
+    override.allowed = False
+    db.commit()
+    assert resolve_many(db, 1, role_code, (PERMISSION_GUEST_READ,))[PERMISSION_GUEST_READ] is False
+
+
+def test_require_all_permissions_batches_effective_and_step_up_policy_reads(db):
+    _seed_hotel(db, 1)
+    seed_default_permissions(db)
+    ensure_permission_matrix_seeded(db)
+    context = AuthContext(
+        hotel_id=1,
+        user_id=212,
+        user_role="receptionist",
+        is_verified=True,
+        permissions=set(),
+    )
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "scheme": "http",
+            "server": ("testserver", 80),
+            "client": ("testclient", 1234),
+            "root_path": "",
+            "path": "/api/test/require-all",
+            "query_string": b"",
+            "headers": [],
+        }
+    )
+    query_count = 0
+
+    def count_query(*_args, **_kwargs):
+        nonlocal query_count
+        query_count += 1
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", count_query)
+    try:
+        authorized = require_all_permissions(PERMISSION_GUEST_READ, PERMISSION_GUEST_CREATE)(
+            request,
+            db,
+            context,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", count_query)
+
+    assert authorized is context
+    assert context.permissions == {PERMISSION_GUEST_READ, PERMISSION_GUEST_CREATE}
+    # One joined read for defaults and both override layers, plus one batched
+    # step-up catalog read, independent of the number of requested permissions.
+    assert query_count == 2
+
+    denied_context = AuthContext(
+        hotel_id=1,
+        user_id=None,
+        user_role="receptionist",
+        is_verified=True,
+        permissions=set(),
+    )
+    with pytest.raises(HTTPException) as denied:
+        require_all_permissions(PERMISSION_GUEST_READ, PERMISSION_STOCK_ADJUST)(
+            request,
+            db,
+            denied_context,
+        )
+    assert denied.value.status_code == 403
+    audit = db.query(SecurityAuditLog).filter_by(action="permission.denied").one()
+    assert audit.hotel_id == 1
+    assert audit.resource_id == PERMISSION_STOCK_ADJUST
 
 
 def test_get_matrix_includes_hotel_overrides(db):

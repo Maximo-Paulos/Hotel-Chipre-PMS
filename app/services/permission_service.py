@@ -9,7 +9,7 @@ import unicodedata
 from uuid import uuid4
 from weakref import WeakSet
 
-from sqlalchemy import func
+from sqlalchemy import and_, func
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
@@ -1232,6 +1232,95 @@ def resolve(
 ) -> bool:
     canonical = canonical_permission_code(permission_code)
     return bool(get_effective_permission_details(db, hotel_id, role, user_id=user_id).get(canonical, {}).get("allowed"))
+
+
+def resolve_many(
+    db: Session,
+    hotel_id: int,
+    role: str | None,
+    permission_codes: tuple[str, ...],
+    user_id: int | None = None,
+) -> dict[str, bool]:
+    """Resolve a permission set with fresh, tenant-scoped reads.
+
+    The decision precedence matches ``get_effective_permission_details`` but
+    limits each database lookup to the requested capabilities and their
+    legacy-denial fallbacks. This deliberately has no process or request
+    cache: a committed override or revocation is visible on the next call.
+    Returned keys are canonical permission codes; unknown permissions deny.
+    """
+    canonical_codes = tuple(dict.fromkeys(canonical_permission_code(code) for code in permission_codes))
+    if not canonical_codes:
+        return {}
+
+    custom_role = None
+    if role not in ROLE_CODES:
+        custom_role = get_custom_role(db, hotel_id, role)
+        if custom_role is None:
+            return {code: False for code in canonical_codes}
+        default_role = custom_role.base_role
+    else:
+        default_role = role
+
+    ensure_permission_matrix_seeded(db)
+    lookup_codes = set(canonical_codes)
+    for code in canonical_codes:
+        lookup_codes.update(LEGACY_PERMISSION_DENY_FALLBACKS.get(code, ()))
+
+    rows = db.query(
+        Permission.code,
+        RolePermissionDefault.allowed,
+        HotelPermissionOverride.allowed,
+        UserPermissionOverride.allowed,
+    ).select_from(Permission).outerjoin(
+        RolePermissionDefault,
+        and_(
+            RolePermissionDefault.permission_code == Permission.code,
+            RolePermissionDefault.role == default_role,
+        ),
+    ).outerjoin(
+        HotelPermissionOverride,
+        and_(
+            HotelPermissionOverride.permission_code == Permission.code,
+            HotelPermissionOverride.hotel_id == hotel_id,
+            HotelPermissionOverride.role == role,
+        ),
+    ).outerjoin(
+        UserPermissionOverride,
+        and_(
+            UserPermissionOverride.permission_code == Permission.code,
+            UserPermissionOverride.hotel_id == hotel_id,
+            UserPermissionOverride.user_id == user_id,
+        ),
+    ).filter(Permission.code.in_(lookup_codes)).all()
+
+    defaults: dict[str, bool] = {}
+    role_overrides: dict[str, bool] = {}
+    user_overrides: dict[str, bool] = {}
+    for code, default_allowed, role_allowed, user_allowed in rows:
+        if default_allowed is not None:
+            defaults[code] = bool(default_allowed)
+        if role_allowed is not None:
+            role_overrides[code] = bool(role_allowed)
+        if user_allowed is not None:
+            user_overrides[code] = bool(user_allowed)
+
+    result: dict[str, bool] = {}
+    for code in canonical_codes:
+        invariant = immutable_permission_decision(role, code)
+        if invariant is not None:
+            result[code] = invariant[0]
+        elif code in user_overrides:
+            result[code] = user_overrides[code]
+        elif _legacy_permission_deny(code, user_overrides) is not None:
+            result[code] = False
+        elif code in role_overrides:
+            result[code] = role_overrides[code]
+        elif _legacy_permission_deny(code, role_overrides) is not None:
+            result[code] = False
+        else:
+            result[code] = defaults.get(code, False)
+    return result
 
 
 def _audit(db: Session, *, hotel_id: int, actor_user_id: int | None, action: str, resource_type: str,

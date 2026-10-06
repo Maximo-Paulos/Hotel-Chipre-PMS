@@ -19,8 +19,15 @@ logger = logging.getLogger(__name__)
 _lock = RLock()
 _sync_client: redis.Redis | None = None
 _sync_signature: tuple[str, float, float, int] | None = None
+_sync_realtime_fast_fail_client: redis.Redis | None = None
+_sync_realtime_fast_fail_signature: tuple[str, float, float, int] | None = None
 _async_client: redis_async.Redis | None = None
 _async_signature: tuple[str, float, float, int] | None = None
+
+# A committed PostgreSQL outbox row is durable and recoverable without Redis.
+# Keep its optional request-path notification from waiting on the general
+# Redis client's longer network timeout when realtime is unavailable.
+REALTIME_FAST_FAIL_TIMEOUT_SECONDS = 0.25
 
 
 def redis_namespace() -> str:
@@ -40,11 +47,14 @@ def namespaced_key(key: str) -> str:
     return f"{namespace}:{key}" if namespace else key
 
 
-def _client_signature() -> tuple[str, float, float, int]:
+def _client_signature(*, capability: str = "general") -> tuple[str, float, float, int]:
     settings = get_settings()
     url = str(settings.REDIS_URL or "").strip()
     connect_timeout = max(float(getattr(settings, "REDIS_CONNECT_TIMEOUT_SECONDS", 1.0)), 0.1)
     socket_timeout = max(float(getattr(settings, "REDIS_SOCKET_TIMEOUT_SECONDS", 1.0)), 0.1)
+    if capability == "realtime_fast_fail":
+        connect_timeout = min(connect_timeout, REALTIME_FAST_FAIL_TIMEOUT_SECONDS)
+        socket_timeout = min(socket_timeout, REALTIME_FAST_FAIL_TIMEOUT_SECONDS)
     # Keep test doubles and hot-reloaded workers from retaining a client built
     # by a previous constructor while preserving one client per process for
     # the normal production factory.
@@ -52,12 +62,39 @@ def _client_signature() -> tuple[str, float, float, int]:
 
 
 def get_sync_redis_client(*, capability: str = "general") -> redis.Redis | None:
-    """Return one sync client per process, or None for empty configuration."""
-    del capability  # retained for caller diagnostics without multiplying pools
+    """Return a process-local sync client, or None for empty configuration.
+
+    The optional after-commit realtime publisher uses a separate fast-fail
+    client. All other capabilities continue to share the general client and
+    its configured timeout profile.
+    """
     global _sync_client, _sync_signature
-    signature = _client_signature()
+    global _sync_realtime_fast_fail_client, _sync_realtime_fast_fail_signature
+    signature = _client_signature(capability=capability)
     if not signature[0]:
         return None
+
+    if capability == "realtime_fast_fail":
+        with _lock:
+            if _sync_realtime_fast_fail_signature != signature:
+                _sync_realtime_fast_fail_client = None
+                _sync_realtime_fast_fail_signature = signature
+            if _sync_realtime_fast_fail_client is None:
+                try:
+                    _sync_realtime_fast_fail_client = redis.Redis.from_url(
+                        signature[0],
+                        decode_responses=True,
+                        socket_connect_timeout=signature[1],
+                        socket_timeout=signature[2],
+                    )
+                except Exception as exc:  # pragma: no cover - defensive config path
+                    logger.warning(
+                        "redis_backend.fast_fail_client_creation_failed",
+                        extra={"error_type": type(exc).__name__},
+                    )
+                    return None
+            return _sync_realtime_fast_fail_client
+
     with _lock:
         if _sync_signature != signature:
             _sync_client = None
@@ -103,9 +140,13 @@ def get_async_redis_client(*, capability: str = "general") -> redis_async.Redis 
 
 def reset_clients() -> None:
     """Clear process clients for tests and orderly shutdown."""
-    global _sync_client, _sync_signature, _async_client, _async_signature
+    global _sync_client, _sync_signature
+    global _sync_realtime_fast_fail_client, _sync_realtime_fast_fail_signature
+    global _async_client, _async_signature
     with _lock:
         _sync_client = None
         _sync_signature = None
+        _sync_realtime_fast_fail_client = None
+        _sync_realtime_fast_fail_signature = None
         _async_client = None
         _async_signature = None
