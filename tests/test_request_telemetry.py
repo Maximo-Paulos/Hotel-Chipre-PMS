@@ -63,4 +63,5 @@ def test_request_timing_includes_sql_duration_and_query_count():
     assert response.status_code == 200
     timing_metrics = ",".join(response.headers.get_list("Server-Timing"))
     assert re.search(r"(?:^|,\s*)db;dur=\d+(?:\.\d+)?(?:,|$)", timing_metrics)
+    assert re.search(r"(?:^|,\s*)dbmax;dur=\d+(?:\.\d+)?(?:,|$)", timing_metrics)
     assert 'dbq;desc="1 queries"' in timing_metrics

@@ -306,7 +306,9 @@ async def request_telemetry(request: Request, call_next):
         db_duration_ms = float(db_metrics["duration_ms"])
         response.headers.append(
             "Server-Timing",
-            f'db;dur={db_duration_ms:.2f}, dbq;desc="{query_count} queries"',
+            f'db;dur={db_duration_ms:.2f}, '
+            f'dbmax;dur={float(db_metrics["max_duration_ms"]):.2f}, '
+            f'dbq;desc="{query_count} queries"',
         )
     return response
 

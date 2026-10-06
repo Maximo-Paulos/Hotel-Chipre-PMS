@@ -22,13 +22,21 @@ _REQUEST_DB_METRICS: ContextVar[dict[str, float | int] | None] = ContextVar(
 
 def start_request_db_metrics() -> Token:
     """Begin request-scoped SQL timing without retaining SQL or bound values."""
-    metrics: dict[str, float | int] = {"query_count": 0, "duration_ms": 0.0}
+    metrics: dict[str, float | int] = {
+        "query_count": 0,
+        "duration_ms": 0.0,
+        "max_duration_ms": 0.0,
+    }
     return _REQUEST_DB_METRICS.set(metrics)
 
 
 def finish_request_db_metrics(token: Token) -> dict[str, float | int]:
     """Return the current request's SQL timing and restore the prior context."""
-    metrics = _REQUEST_DB_METRICS.get() or {"query_count": 0, "duration_ms": 0.0}
+    metrics = _REQUEST_DB_METRICS.get() or {
+        "query_count": 0,
+        "duration_ms": 0.0,
+        "max_duration_ms": 0.0,
+    }
     _REQUEST_DB_METRICS.reset(token)
     return dict(metrics)
 
@@ -38,6 +46,7 @@ def _record_request_query(duration_ms: float) -> None:
     if metrics is not None:
         metrics["query_count"] = int(metrics["query_count"]) + 1
         metrics["duration_ms"] = float(metrics["duration_ms"]) + duration_ms
+        metrics["max_duration_ms"] = max(float(metrics["max_duration_ms"]), duration_ms)
 
 
 def _slow_query_threshold_ms() -> float:

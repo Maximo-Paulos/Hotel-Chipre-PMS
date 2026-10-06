@@ -384,8 +384,8 @@
     "hash": "5c96bf80343c5343279f134aaec76385"
   },
   "app/database.py": {
-    "mtime": 1791248364297.659,
-    "hash": "53875ac8403ba778141bf54937650fdc"
+    "mtime": 1791249288098.4778,
+    "hash": "f45c25ee95dd1bbef961855cfe981bda"
   },
   "app/db/__init__.py": {
     "mtime": 1791244764081.4917,
@@ -424,8 +424,8 @@
     "hash": "3718b0d09174a4a9a18bb5a4f4bd31a7"
   },
   "app/main.py": {
-    "mtime": 1791248364298.1763,
-    "hash": "e86bdf54306ba6ee9f2165f151d28ae2"
+    "mtime": 1791249288098.8083,
+    "hash": "fc6686c5a62077dd691979f7d4b08dd4"
   },
   "app/master_admin/__init__.py": {
     "mtime": 1791244764082.2122,
@@ -6548,8 +6548,8 @@
     "hash": "1783d8415c51647ae9700ee4298c12ce"
   },
   "tests/test_request_telemetry.py": {
-    "mtime": 1791248364300.2473,
-    "hash": "11b98f65f21b31359e851c0ec96b37ce"
+    "mtime": 1791249288099.048,
+    "hash": "59db02efb8b653775a1dd5704147d022"
   },
   "qa/operational/runs/production-latency-20261005-df079bd4/report.md": {
     "mtime": 1791245262048.737,
