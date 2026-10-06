@@ -15,10 +15,12 @@ from app.api import reports as reports_api
 from app.models.cash_register import CashSession, CashSessionStatusEnum
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.operations import BillingAdjustment, BillingAdjustmentTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.user import User
+from app.services.financial_ledger import billing_adjustment_totals_by_reservation
 
 
 @pytest.fixture
@@ -441,6 +443,301 @@ def test_available_with_review_surfaces_in_report(reports_client):
             "allocation_status": "manual_review",
         }
     ]
+
+
+def test_daily_report_derives_late_and_review_lists_from_unbounded_candidates(reports_client):
+    client, db, ctx = reports_client
+    ctx["role"] = "owner"
+    report_date = date(2026, 6, 13)
+    category, rooms = _make_room_set(db, 1, "SUBSET")
+
+    # Create the later stay first so the expected order proves the report sorts
+    # by check-in date, then id, rather than relying on insertion order.
+    late_later = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "late-later"),
+        category=category,
+        room=rooms[0],
+        code="SUBSET-LATE-LATER",
+        check_in=date(2026, 6, 12),
+        check_out=date(2026, 6, 15),
+        paid="200.00",
+        requires_manual_review=True,
+        allocation_status="manual_review",
+    )
+    late_same_date = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "late-same-date"),
+        category=category,
+        room=None,
+        code="SUBSET-LATE-SAME-DATE",
+        check_in=date(2026, 6, 12),
+        check_out=date(2026, 6, 15),
+        paid="200.00",
+    )
+    late_earlier = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "late-earlier"),
+        category=category,
+        room=rooms[1],
+        code="SUBSET-LATE-EARLIER",
+        check_in=date(2026, 6, 10),
+        check_out=date(2026, 6, 14),
+        paid="200.00",
+        requires_manual_review=True,
+        allocation_status="manual_review",
+    )
+    review_upcoming = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "review-upcoming"),
+        category=category,
+        room=rooms[2],
+        code="SUBSET-REVIEW-UPCOMING",
+        check_in=date(2026, 6, 14),
+        check_out=date(2026, 6, 16),
+        paid="200.00",
+        requires_manual_review=True,
+        allocation_status="manual_review",
+    )
+    far_future = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "far-future"),
+        category=category,
+        room=None,
+        code="SUBSET-FAR-FUTURE",
+        check_in=date(2027, 6, 10),
+        check_out=date(2027, 6, 12),
+        total="250.00",
+    )
+    # A terminal status and a checkout on the boundary must remain outside the
+    # derived subsets, exactly as in the original standalone queries.
+    _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "checked-in"),
+        category=category,
+        room=None,
+        code="SUBSET-CHECKED-IN",
+        check_in=date(2026, 6, 12),
+        check_out=date(2026, 6, 15),
+        paid="200.00",
+        status=ReservationStatusEnum.CHECKED_IN,
+    )
+    _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "checkout-boundary"),
+        category=category,
+        room=None,
+        code="SUBSET-CHECKOUT-BOUNDARY",
+        check_in=date(2026, 6, 12),
+        check_out=report_date,
+        requires_manual_review=True,
+    )
+
+    reservation_selects: list[str] = []
+
+    def capture_reservation_select(_connection, _cursor, statement, _parameters, _context, _executemany):
+        normalized = " ".join(statement.lower().split())
+        if (
+            normalized.lstrip().startswith("select")
+            and " from reservations " in normalized
+            and "where reservations.hotel_id = ? and reservations.deleted_at is null" in normalized
+        ):
+            reservation_selects.append(normalized)
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", capture_reservation_select)
+    try:
+        response = client.get(
+            "/api/reports/operational/daily",
+            params={"report_date": report_date.isoformat()},
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_reservation_select)
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert [item["reservation_id"] for item in payload["late_arrivals"]] == [
+        late_earlier.id,
+        late_later.id,
+        late_same_date.id,
+    ]
+    assert [item["reservation_id"] for item in payload["available_with_review"]] == [
+        late_earlier.id,
+        late_later.id,
+        review_upcoming.id,
+    ]
+    assert [item["reservation_id"] for item in payload["pending_payments"]["reservations"]] == [
+        far_future.id,
+    ]
+    # Arrivals, no-shows, departures, and the unbounded balance candidate set
+    # remain their own query groups; late/review are projections of the latter.
+    assert len(reservation_selects) == 4, (
+        "expected four hotel-scoped report reservation reads, "
+        f"got {len(reservation_selects)}"
+    )
+
+
+def test_billing_adjustment_aggregation_is_tenant_scoped_projection(reports_client):
+    _client, db, _ctx = reports_client
+    category_1, rooms_1 = _make_room_set(db, 1, "LEDGER1")
+    category_2, rooms_2 = _make_room_set(db, 2, "LEDGER2")
+    reservation_1 = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "ledger-1"),
+        category=category_1,
+        room=rooms_1[0],
+        code="LEDGER-1",
+        check_in=date(2026, 6, 13),
+        check_out=date(2026, 6, 14),
+    )
+    reservation_2 = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=_make_guest(db, 1, "ledger-2"),
+        category=category_1,
+        room=rooms_1[1],
+        code="LEDGER-2",
+        check_in=date(2026, 6, 13),
+        check_out=date(2026, 6, 14),
+    )
+    foreign_reservation = _make_reservation(
+        db,
+        hotel_id=2,
+        guest=_make_guest(db, 2, "ledger-foreign"),
+        category=category_2,
+        room=rooms_2[0],
+        code="LEDGER-FOREIGN",
+        check_in=date(2026, 6, 13),
+        check_out=date(2026, 6, 14),
+    )
+
+    def add_adjustment(hotel_id: int, reservation_id: int, amount: str) -> None:
+        db.add(
+            BillingAdjustment(
+                hotel_id=hotel_id,
+                reservation_id=reservation_id,
+                adjustment_type=BillingAdjustmentTypeEnum.CHARGE,
+                amount=Decimal(amount),
+                currency_code="ARS",
+                total_amount=Decimal(amount),
+            )
+        )
+
+    add_adjustment(1, reservation_1.id, "10.10")
+    add_adjustment(1, reservation_1.id, "1.20")
+    add_adjustment(1, reservation_2.id, "4.56")
+    add_adjustment(2, foreign_reservation.id, "999.99")
+    db.flush()
+
+    statements: list[str] = []
+
+    def capture_select(_connection, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(" ".join(statement.lower().split()))
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", capture_select)
+    try:
+        totals = billing_adjustment_totals_by_reservation(
+            db,
+            1,
+            [reservation_1.id, reservation_2.id, foreign_reservation.id],
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_select)
+
+    assert totals == {
+        reservation_1.id: Decimal("11.30"),
+        reservation_2.id: Decimal("4.56"),
+    }
+    assert len(statements) == 1, statements
+    assert "sum(billing_adjustments.total_amount)" in statements[0]
+    assert "group by billing_adjustments.reservation_id" in statements[0]
+    assert "billing_adjustments.hotel_id" in statements[0]
+    assert " join " not in statements[0]
+
+
+def test_billing_adjustment_aggregation_executes_on_postgres(pg_session):
+    """Exercise Numeric SUM and tenant scoping on the real PostgreSQL dialect."""
+    hotel_id = 9301
+    foreign_hotel_id = 9302
+    pg_session.add_all(
+        [
+            HotelConfiguration(id=hotel_id, hotel_name="Synthetic PG Ledger"),
+            HotelConfiguration(id=foreign_hotel_id, hotel_name="Synthetic PG Foreign Ledger"),
+        ]
+    )
+    pg_session.flush()
+
+    category, _rooms = _make_room_set(pg_session, hotel_id, "PGL")
+    foreign_category, _foreign_rooms = _make_room_set(pg_session, foreign_hotel_id, "PGF")
+    guest = _make_guest(pg_session, hotel_id, "pg-ledger")
+    foreign_guest = _make_guest(pg_session, foreign_hotel_id, "pg-ledger-foreign")
+    reservation = _make_reservation(
+        pg_session,
+        hotel_id=hotel_id,
+        guest=guest,
+        category=category,
+        room=None,
+        code="PG-LEDGER-AGGREGATE-001",
+        check_in=date(2026, 10, 6),
+        check_out=date(2026, 10, 7),
+    )
+    foreign_reservation = _make_reservation(
+        pg_session,
+        hotel_id=foreign_hotel_id,
+        guest=foreign_guest,
+        category=foreign_category,
+        room=None,
+        code="PG-LEDGER-AGGREGATE-FOREIGN",
+        check_in=date(2026, 10, 6),
+        check_out=date(2026, 10, 7),
+    )
+    pg_session.add_all(
+        [
+            BillingAdjustment(
+                hotel_id=hotel_id,
+                reservation_id=reservation.id,
+                adjustment_type=BillingAdjustmentTypeEnum.CHARGE,
+                amount=Decimal("10.10"),
+                currency_code="ARS",
+                total_amount=Decimal("10.10"),
+            ),
+            BillingAdjustment(
+                hotel_id=hotel_id,
+                reservation_id=reservation.id,
+                adjustment_type=BillingAdjustmentTypeEnum.CHARGE,
+                amount=Decimal("1.20"),
+                currency_code="ARS",
+                total_amount=Decimal("1.20"),
+            ),
+            BillingAdjustment(
+                hotel_id=foreign_hotel_id,
+                reservation_id=foreign_reservation.id,
+                adjustment_type=BillingAdjustmentTypeEnum.CHARGE,
+                amount=Decimal("999.99"),
+                currency_code="ARS",
+                total_amount=Decimal("999.99"),
+            ),
+        ]
+    )
+    pg_session.flush()
+
+    totals = billing_adjustment_totals_by_reservation(
+        pg_session,
+        hotel_id,
+        [reservation.id, foreign_reservation.id],
+    )
+
+    assert totals == {reservation.id: Decimal("11.30")}
 
 
 def test_reports_permission_denied_for_housekeeping(reports_client):

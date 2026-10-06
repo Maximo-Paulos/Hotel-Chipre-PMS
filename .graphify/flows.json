@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-06T04:23:12.978Z",
+  "generatedAt": "2026-10-06T16:44:09.259Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -29200,28 +29200,6 @@
       "fileCount": 1,
       "files": [
         "frontend/src/hooks/useOnboardingStatus.ts"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:hooks_usereports_useoperationalalerts",
-      "name": "useOperationalAlerts",
-      "entryPoint": "hooks_usereports_useoperationalalerts",
-      "entryPointId": "hooks_usereports_useoperationalalerts",
-      "path": [
-        "hooks_usereports_useoperationalalerts",
-        "hooks_usereports_alertskey"
-      ],
-      "qualifiedPath": [
-        "hooks_usereports_useoperationalalerts",
-        "hooks_usereports_alertskey"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/hooks/useReports.ts"
       ],
       "criticality": 0.16,
       "warnings": []

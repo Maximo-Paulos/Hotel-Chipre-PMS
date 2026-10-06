@@ -327,18 +327,16 @@ def _active_room_blocks(db: Session, hotel_id: int, report_date: date) -> list[A
     ]
 
 
-def _available_with_review(db: Session, hotel_id: int, report_date: date) -> list[AvailableWithReviewItem]:
-    reservations = (
-        active_reservations(db, hotel_id)
-        .outerjoin(Room, Reservation.room_id == Room.id)
-        .filter(
-            Reservation.requires_manual_review.is_(True),
-            Reservation.status.in_(ACTIVE_RESERVATION_STATUSES),
-            Reservation.check_out_date > report_date,
-        )
-        .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
-        .all()
-    )
+def _available_with_review(
+    reservations: Iterable[Reservation], report_date: date
+) -> list[AvailableWithReviewItem]:
+    """Project review reservations from the already-loaded active balance candidates.
+
+    ``balance_candidates`` already has the same hotel/deleted-row scope,
+    ACTIVE_RESERVATION_STATUSES, and ``check_out_date > report_date`` predicate
+    as the former query here. Filtering that ordered list therefore preserves
+    tenant scope, membership, and output order without another reservations read.
+    """
     return [
         AvailableWithReviewItem(
             reservation_id=reservation.id,
@@ -350,6 +348,9 @@ def _available_with_review(db: Session, hotel_id: int, report_date: date) -> lis
             allocation_status=reservation.allocation_status,
         )
         for reservation in reservations
+        if reservation.requires_manual_review
+        and reservation.status in ACTIVE_RESERVATION_STATUSES
+        and reservation.check_out_date > report_date
     ]
 
 
@@ -484,23 +485,23 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
         .all()
     )
-    late_arrivals = (
-        reservation_scope.filter(
-            Reservation.check_in_date < report_date,
-            Reservation.check_out_date > report_date,
-            Reservation.status.in_(ARRIVAL_PENDING_STATUSES),
-        )
-        .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
-        .all()
-    )
+    # Late arrivals are an exact subset of balance_candidates: the latter
+    # includes every ARRIVAL_PENDING status and uses the same future checkout
+    # boundary, and its order matches the former late-arrival query.
+    late_arrivals = [
+        reservation
+        for reservation in balance_candidates
+        if reservation.check_in_date < report_date
+        and reservation.status in ARRIVAL_PENDING_STATUSES
+    ]
     candidate_ids = {
         reservation.id
-        for reservation in (*arrivals, *no_shows, *departures, *balance_candidates, *late_arrivals)
+        for reservation in (*arrivals, *no_shows, *departures, *balance_candidates)
     }
     deferred_ids = deferred_company_reservation_ids(
         db,
         hotel_id=hotel_id,
-        reservations=[*arrivals, *no_shows, *departures, *balance_candidates, *late_arrivals],
+        reservations=[*arrivals, *no_shows, *departures, *balance_candidates],
     )
     _extra_totals, extra_due_by_reservation = company_night_extra_balances_by_reservation(
         db,
@@ -548,7 +549,7 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         )
         for reservation in late_arrivals
     ]
-    review_items = _available_with_review(db, hotel_id, report_date)
+    review_items = _available_with_review(balance_candidates, report_date)
     block_items = _active_room_blocks(db, hotel_id, report_date)
     cash_session = _cash_session(db, hotel_id)
 

@@ -164,7 +164,12 @@ export function useCashRegisterMutations(sessionId?: number) {
 
   const addMovementMutation = useGuardedMutation({
     mutationFn: (payload: CashMovementPayload) => addCashMovement(sessionId!, payload, session),
-    onSuccess: async () => invalidateMovements()
+    onSuccess: () => {
+      // The write has already committed. Reconcile active cash views in the
+      // background so a slow report/list refresh does not keep the form in a
+      // saving state or delay its success feedback.
+      void invalidateMovements().catch(() => undefined);
+    }
   });
 
   const closeSessionMutation = useGuardedMutation<CashCloseReport, unknown, CashSessionClosePayload>({
