@@ -1,32 +1,32 @@
 # Resumen Graphify
 
-Generado: 2026-10-06T15:36:03.369528+00:00
-Commit: `4b7d260ebbde2f423f38a976e4d42b00f3393ec5`
+Generado: 2026-10-06T16:44:24.711228+00:00
+Commit: `e172ceb84dba26180f34ef2adad30df5d65ae21c`
 
 `graphify summary .graphify/graph.json`:
 ```text
 Graphify First-Hop Summary
-Graph: 13800 nodes, 45300 edges, 692 communities, density 0.0005, average degree 6.5652, undirected
+Graph: 13072 nodes, 41318 edges, 679 communities, density 0.0005, average degree 6.3216, undirected
 
 Top hubs:
-  1. Reservation (degree 468, community 6 Community 6, app/models/reservation.py)
-  2. HotelConfiguration (degree 434, community 9 Community 9, app/models/hotel_config.py)
-  3. Base (degree 408, community 3 Community 3, app/database.py)
-  4. ReservationStatusEnum (degree 378, community 9 Community 9, app/models/reservation.py)
-  5. Room (degree 339, community 8 Community 8, app/models/room.py)
+  1. Base (degree 403, community 3 Community 3, app/database.py)
+  2. Reservation (degree 352, community 6 Community 6, app/models/reservation.py)
+  3. HotelConfiguration (degree 333, community 10 Community 10, app/models/hotel_config.py)
+  4. ReservationStatusEnum (degree 280, community 34 Community 34, app/models/reservation.py)
+  5. Room (degree 254, community 12 Community 12, app/models/room.py)
 
 Key communities:
-  1. Community 0 - Community 0: 510 nodes, 805 internal edges, density 0.0062; top nodes: d908400 Merge pull request #107 from Maximo-Paulos/fix/hotel-sim-day0-day1, bf4a21f Fix day 0 and day 1 hotel simulation findings, 6871292 Fix day 0 and day 1 simulation findings (#113)
-  2. Community 1 - Community 1: 496 nodes, 7204 internal edges, density 0.0587; top nodes: codex/fix-ronda-2-week-simulation, fix/pms-save-read-latency, fix/pending-actions-bounded
-  3. Community 2 - Community 2: 330 nodes, 576 internal edges, density 0.0106; top nodes: ReservationsPage.tsx, reservations.ts, ReservationDetailDrawer.tsx
-  4. Community 3 - Community 3: 250 nodes, 587 internal edges, density 0.0189; top nodes: Base, Base, str
-  5. Community 4 - Community 4: 243 nodes, 352 internal edges, density 0.012; top nodes: database.py, ca694f7 feat(rbac,config,perf): permission-driven visibility, dedup sweep and infra readiness, 0ddeb59 Fix day 2 hotel simulation findings (#114)
+  1. Community 0 - Community 0: 480 nodes, 7128 internal edges, density 0.062; top nodes: codex/fix-ronda-2-week-simulation, codex/day2-feedback, codex/postmerge-day2-fixes
+  2. Community 1 - Community 1: 339 nodes, 509 internal edges, density 0.0089; top nodes: database.py, config.py, 958fce2 Merge pull request #31 from Maximo-Paulos/feature/mobile-first-operations
+  3. Community 2 - Community 2: 295 nodes, 400 internal edges, density 0.0092; top nodes: d908400 Merge pull request #107 from Maximo-Paulos/fix/hotel-sim-day0-day1, bf4a21f Fix day 0 and day 1 hotel simulation findings, LocalizedDateField.tsx
+  4. Community 3 - Community 3: 280 nodes, 665 internal edges, density 0.017; top nodes: Base, Base, OTAIntegrationService
+  5. Community 4 - Community 4: 219 nodes, 329 internal edges, density 0.0138; top nodes: 6871292 Fix day 0 and day 1 simulation findings (#113), 5d43450 Merge pull request #112 from Maximo-Paulos/fix/day0-day1-simulation-feedback, 712d6ee Fix simulation day 0 and day 1 findings
 
-Next best action: Start with get_neighbors on "Reservation", then use query_graph for the user's specific question.
+Next best action: Start with get_neighbors on "Base", then use query_graph for the user's specific question.
 ```
 `graphify check-update .`:
 ```text
-[graphify check-update] Pending semantic updates in /Users/maximopaulos/.codex/worktrees/ronda2-week-simulation/Hotel-Chipre-PMS.
+[graphify check-update] Pending semantic updates in /Users/maximopaulos/.codex/worktrees/pms-latency-retest.
 [graphify check-update] graph was rebuilt by the fast git hook without descriptions/labels (.graphify_describe_pending)
 [graphify check-update] Fill the batch-*.json / communities.json files and re-run `graphify update` to ingest.
 ```

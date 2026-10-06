@@ -47,7 +47,17 @@ test("reports exposes an actionable error instead of an empty report", async ({ 
 });
 
 test("reports renders embedded operational alerts without a duplicate alerts request", async ({ page }) => {
+  let dailyResponses = 0;
   let alertAttempts = 0;
+  // The Vite E2E app runs under React.StrictMode. Its development-only
+  // mount/unmount check can abort an in-flight query before it reaches the
+  // page, so count responses delivered to the UI rather than intercepted
+  // request attempts.
+  page.on("response", (response) => {
+    if (new URL(response.url()).pathname === "/api/reports/operational/daily") {
+      dailyResponses += 1;
+    }
+  });
   await page.route("**/api/reports/operational/daily**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -96,8 +106,6 @@ test("reports renders embedded operational alerts without a duplicate alerts req
 
   await expect(page.getByText("WARNING - test_latency", { exact: true })).toBeVisible();
   await expect(page.getByText("Alerta sintética de prueba", { exact: true })).toBeVisible();
-  // React.StrictMode in the Vite E2E app may cancel and restart the daily
-  // report query; this journey verifies the rendered embedded alert and that
-  // the dedicated alerts endpoint is not called.
+  expect(dailyResponses).toBe(1);
   expect(alertAttempts).toBe(0);
 });
