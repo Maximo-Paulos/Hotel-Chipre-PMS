@@ -136,11 +136,12 @@ def get_operational_tasks(
         hotel_id=context.hotel_id,
         user_ids={task.created_by_user_id for task in visible_tasks},
     )
+    include_reservation_context = bool(visible_tasks) and _can_read_reservation_context(db, context)
     return [
         serialize_task(
             task,
             author_name=author_names.get(task.created_by_user_id),
-            include_reservation_context=_can_read_reservation_context(db, context),
+            include_reservation_context=include_reservation_context,
         )
         for task in visible_tasks
     ]

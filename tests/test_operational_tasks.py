@@ -2,6 +2,7 @@ from datetime import date, timedelta
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import event
 
 from app.api.operational_tasks import (
     create_operational_task,
@@ -688,3 +689,76 @@ def test_list_tasks_orders_priority_and_due_date(db, hotel_config):
         created_by_user_id=manager.id,
     )
     assert [row.id for row in list_tasks(db, hotel_id=1)] == [early.id, late.id]
+
+
+def test_task_list_resolves_reservation_context_permission_once_for_multiple_tasks(monkeypatch, db, hotel_config):
+    manager = _user(db, "task-list-permission-check@example.test", role=ROLE_MANAGER)
+    for index in range(4):
+        create_task(
+            db,
+            hotel_id=hotel_config.id,
+            task_type=OperationalTaskTypeEnum.GENERAL,
+            priority=OperationalTaskPriorityEnum.MEDIUM,
+            title=f"Tarea {index}",
+            created_by_user_id=manager.id,
+        )
+    context = AuthContext(
+        hotel_id=hotel_config.id,
+        user_id=manager.id,
+        user_email=manager.email,
+        user_role=ROLE_MANAGER,
+        is_verified=True,
+    )
+    original_check = operational_tasks_api._can_read_reservation_context
+    permission_checks = 0
+
+    def count_permission_checks(*args, **kwargs):
+        nonlocal permission_checks
+        permission_checks += 1
+        return original_check(*args, **kwargs)
+
+    monkeypatch.setattr(operational_tasks_api, "_can_read_reservation_context", count_permission_checks)
+    visible = get_operational_tasks(
+        status_filter=None,
+        task_type=None,
+        room_id=None,
+        limit=100,
+        db=db,
+        context=context,
+    )
+
+    assert len(visible) == 4
+    assert permission_checks == 1
+
+
+def test_list_tasks_does_not_query_unreturned_relationships(db, hotel_config):
+    hotel_id = hotel_config.id
+    manager = _user(db, "task-list-loader-check@example.test", role=ROLE_MANAGER)
+    create_task(
+        db,
+        hotel_id=hotel_id,
+        task_type=OperationalTaskTypeEnum.GENERAL,
+        priority=OperationalTaskPriorityEnum.MEDIUM,
+        title="Tarea con historial interno",
+        created_by_user_id=manager.id,
+    )
+    db.commit()
+    db.expunge_all()
+    statements = []
+    engine = db.get_bind()
+
+    def capture_statement(_connection, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement.lower())
+
+    event.listen(engine, "before_cursor_execute", capture_statement)
+    try:
+        tasks = list_tasks(db, hotel_id=hotel_id)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_statement)
+
+    select_statements = [statement for statement in statements if statement.lstrip().startswith("select")]
+    assert len(tasks) == 1
+    assert len(select_statements) == 1
+    assert "operational_task_events" not in select_statements[0]
+    assert "shift_handoff_tasks" not in select_statements[0]
+    assert "users" not in select_statements[0]

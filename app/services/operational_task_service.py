@@ -9,7 +9,7 @@ import secrets
 from datetime import datetime, timezone
 
 from sqlalchemy import and_, case, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, noload
 
 from app.services.row_locks import lock_query
 from app.models.cash_register import CashCloseReport
@@ -343,7 +343,17 @@ def list_tasks(
     assigned_to_user_ids: set[int | None] | None = None,
     limit: int = 100,
 ) -> list[OperationalTask]:
-    query = db.query(OperationalTask).filter(OperationalTask.hotel_id == hotel_id)
+    query = (
+        db.query(OperationalTask)
+        .options(
+            noload(OperationalTask.assigned_to),
+            noload(OperationalTask.created_by),
+            noload(OperationalTask.resolved_by),
+            noload(OperationalTask.events),
+            noload(OperationalTask.handoffs),
+        )
+        .filter(OperationalTask.hotel_id == hotel_id)
+    )
     if status is not None:
         query = query.filter(OperationalTask.status == status)
     if task_type is not None:

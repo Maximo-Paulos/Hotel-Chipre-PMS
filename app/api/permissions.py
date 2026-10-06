@@ -30,7 +30,7 @@ from app.services.permission_service import (
     ROLE_CODES,
     canonical_permission_code,
     get_effective_permission_details,
-    get_effective_permissions,
+    permission_codes_from_details,
     get_visibility_window,
     get_matrix,
     get_permission_catalog,
@@ -208,12 +208,7 @@ def read_effective_permissions(
         "hotel_id": context.hotel_id,
         "user_id": context.user_id,
         "role": context.user_role,
-        "permissions": get_effective_permissions(
-            db,
-            context.hotel_id,
-            context.user_role,
-            user_id=context.user_id,
-        ),
+        "permissions": permission_codes_from_details(details),
         "details": details,
     }
 
@@ -708,12 +703,7 @@ def preview_effective_permissions(
         "hotel_id": context.hotel_id,
         "user_id": user_id,
         "role": membership.role,
-        "permissions": get_effective_permissions(
-            db,
-            context.hotel_id,
-            membership.role,
-            user_id=user_id,
-        ),
+        "permissions": permission_codes_from_details(details),
         "details": details,
     }
 
