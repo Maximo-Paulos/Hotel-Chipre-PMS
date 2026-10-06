@@ -8,9 +8,9 @@ Este documento consolida los hallazgos y estados compartidos hasta la fecha. Sep
 
 ## Estado actual
 
-- La remediación funcional está en el [PR #125](https://github.com/Maximo-Paulos/Hotel-Chipre-PMS/pull/125), rama `codex/fix-ronda-2-week-simulation`, abierto como borrador. El head remoto observado es `c76452d6`; la base es `main`.
+- La remediación funcional está en el [PR #125](https://github.com/Maximo-Paulos/Hotel-Chipre-PMS/pull/125), rama `codex/fix-ronda-2-week-simulation`, abierto como borrador. El head remoto actual es `2b17bfc3`; la base es `main`.
 - El CI de ese head informa backend y frontend exitosos, contract exitoso y E2E fallido. El test que falla es `reservation-lifecycle.spec.ts`, en la prueba de voucher cuando el navegador bloquea una ventana. Los gates de release y la evidencia confiable fueron omitidos por tratarse de un draft.
-- Hay una corrección local sin push en el worktree del PR: el botón de voucher queda deshabilitado mientras cargan los resúmenes financiero u operativo; la regresión retiene deliberadamente la respuesta de resumen operativo y comprueba el estado deshabilitado antes de verificar el aviso de popup bloqueado. La prueba focalizada pasó después de este cambio. El CI todavía no ha evaluado la corrección.
+- El commit `2b17bfc3` ya incorpora la corrección del voucher: el botón queda deshabilitado mientras cargan los resúmenes financiero u operativo; la regresión retiene deliberadamente la respuesta operativa, comprueba el estado deshabilitado y luego verifica el aviso de popup bloqueado. La prueba focalizada pasó cinco veces consecutivas. Todavía no hay ejecución de `PR Validation` para este SHA; la corrida previa evaluó `c76452d6` y falló en este flujo.
 - También se portó localmente a este worktree la división lazy de rutas públicas/marketing, `AppShell` y master-admin. El build bajó el entry inicial de 773,83 kB (228,54 kB gzip) a 566,91 kB (177,66 kB gzip), aproximadamente 26,7% menos bytes sin comprimir; Vite aún advierte que supera 500 kB.
 - Se agregaron localmente el detalle de arqueo por usuario y cobertura para verificarlo en la API. También se fortaleció la regresión del reembolso: una devolución en efectivo debe producir exactamente un egreso de caja ligado a la transacción y reserva. La suite focalizada que cubre esos cambios pasó con 71 pruebas.
 - `/health/datastores` ahora informa `blocked` sin conectar a ClickHouse cuando `EXTERNAL_EFFECTS_ENABLED` o `CONNECTIONS_ENABLED` cierra el tráfico de proveedores. Añadí una regresión que falla si el health check intenta crear el cliente en esa configuración.
@@ -38,20 +38,20 @@ El PR #125 reúne aproximadamente 191 archivos de remediación para las áreas r
 
 También se añadió una regresión de Playwright para guardar overrides individuales de permisos en `frontend/e2e/settings-custom-role-permissions.spec.ts` (cerca de la línea 458), además de cambios asociados y artefactos de Graphify.
 
-Las categorías anteriores describen trabajo implementado en el PR; no acreditan QA en producción. El CI más reciente sí deja un E2E fallido, detallado arriba, y debe volver a ejecutarse después de incorporar la corrección local.
+Las categorías anteriores describen trabajo implementado en el PR; no acreditan QA en producción. El CI de `c76452d6` dejó un E2E fallido, detallado arriba. La corrección fue incorporada en `2b17bfc3`; falta una ejecución de `PR Validation` sobre ese SHA.
 
 ## Validación conocida
 
 ### PR #125 y validación local posterior
 
 - En el SHA `ffa8d580`, el reporte previo registró frontend, backend, E2E Chromium y contratos exitosos: backend 2.987 aprobadas, 34 omitidas y 12 `xfail`; 10 pruebas locales de permisos y una prueba backend focalizada también pasaron.
-- Para el head `c76452d6`, el estado consultado de GitHub muestra backend y frontend exitosos, contrato exitoso y E2E fallido en el flujo del voucher. Los gates de release aparecen omitidos por ser draft.
+- Para `c76452d6`, GitHub mostró backend y frontend exitosos, contrato exitoso y E2E fallido en el flujo del voucher. En `2b17bfc3`, la consulta posterior mostró el gate confiable omitido por ser draft y el despliegue de preview pendiente; no apareció un run de `PR Validation`, por lo que el cambio del voucher aún carece de CI remoto.
 - Matriz E2E local sobre el árbol actual: **207 aprobadas, 6 omitidas y 0 fallidas** (213 casos, 11,8 minutos; código 0). Incluyó Chromium, sitio público, Chromium móvil y routing de preview; pasaron voucher, overrides de permisos, pagos y caja. Las omisiones dependen de realtime, credenciales o infraestructura de carga no disponible en este entorno.
 - Backend local completo, repetido tras portar la optimización de asignación y el health check con la política de egreso: **2.990 aprobadas, 34 omitidas y 12 `xfail`**, 59 warnings, en 370,84 segundos; el proceso terminó con código 0.
 - Frontend local después de la división lazy: 108 tests Node aprobados; typecheck, lint y build correctos. El entry inicial es 566,91 kB sin comprimir (177,66 kB gzip); Vite aún advierte que excede 500 kB, así que conviene perfilar el resto antes de otra división.
 - `tests/test_docs_baseline.py`: 2 aprobadas. Las regresiones focalizadas del reporte diario, pagos, caja y finanzas terminaron con 71 aprobadas; las regresiones de health check con ClickHouse cerrado, con 11 aprobadas. Frontend: 108 tests Node aprobados, typecheck y lint limpios, build exitoso. La matriz E2E del árbol actual terminó con 207 aprobadas y 6 omitidas.
 - Graphify AST-only quedó regenerado con 13.894 nodos, 46.318 relaciones y 1.101 flujos; portable-check verificó 352 artefactos después de normalizar 22 rutas y un path de flujo. `graphify check-update` aún señala metadatos semánticos de descripciones/etiquetas pendientes, y el parser local no reconoce tres fuentes Swift; no se completaron con LLM.
-- Estas validaciones son locales sobre `c76452d6` más los cambios sin push descritos arriba. El nuevo resultado CI aún falta.
+- Las validaciones locales incluyen el cambio del voucher que ahora está en `2b17bfc3`; las suites completas se ejecutaron antes de empaquetar ese commit y la regresión focalizada pasó cinco repeticiones. Falta el resultado remoto de `PR Validation` en el SHA actual.
 
 ### Interpretación de los 12 `xfail` backend
 
@@ -85,8 +85,8 @@ El entorno fue PostgreSQL 16 efímero con datos sintéticos, sin producción ni 
 
 ### Prioridad inmediata
 
-1. Incorporar los cambios locales del voucher y las optimizaciones verificadas a la actualización del PR, y comprobar que el CI nuevo pase, incluido E2E Chromium. Revisar también que la limpieza de la reserva de prueba no deje fixtures ocupados.
-2. Revisar el CI actual de `c76452d6` junto con cualquier ejecución nueva antes de afirmar estado verde. No usar el resultado del SHA anterior como resultado del código actual; en particular, la corrección del voucher y la división lazy son cambios locales sin CI remoto.
+1. Conseguir y revisar una ejecución de `PR Validation` para `2b17bfc3`, incluido E2E Chromium; revisar también que la limpieza de la reserva de prueba no deje fixtures ocupados.
+2. No usar el resultado CI de `c76452d6` como resultado del código actual. `2b17bfc3` ya incluye la corrección del voucher y la división lazy, pero ambos esperan validación remota.
 3. Resolver con el responsable la disponibilidad y el costo de reactivar Render. No cambiar plan ni facturación sin instrucción expresa.
 4. Cuando el servicio responda, verificar `/health` y `/build-meta.json`, registrar el SHA servido y luego repetir QA de los flujos/roles autorizados. El login `200` no basta.
 5. Completar preview aislado, matriz de personas, evidencia y release gate. No retirar controles por estar el PR en draft.
@@ -138,7 +138,7 @@ La auditoría de datos fue originalmente de solo lectura sobre `b5cc58c0`, coinc
 
 ## Próximos pasos ordenados
 
-1. Validar las últimas modificaciones locales con pruebas focalizadas y suite completa; incorporar la corrección de voucher sólo tras confirmar CI en el SHA actualizado.
+1. Revisar por qué GitHub no inició `PR Validation` al actualizar el draft y obtener validación para `2b17bfc3` sin retirar el estado draft ni omitir controles.
 2. Antes de reactivar Render, cerrar en entorno aislado la medición y el plan de reducción/estabilización del egreso de ClickHouse y demostrar que el refresco analítico conserva integridad y frescura.
 3. Resolver las cuatro decisiones de producto/operación pendientes y confirmar el cron de no-show.
 4. Resolver disponibilidad/costo de Render con el responsable; una vez activo, verificar SHA y correr QA autorizado.
@@ -148,7 +148,7 @@ La auditoría de datos fue originalmente de solo lectura sobre `b5cc58c0`, coinc
 ## Seguridad, límites y riesgos
 
 - No se verificó el funcionamiento de los arreglos en producción. No se activó Render, no se modificó facturación y no se enviaron pagos, correos ni webhooks.
-- Los cambios locales del voucher y rendimiento no son CI ni release evidence hasta que se integren, validen y publiquen con el flujo aprobado.
+- Los cambios del voucher y rendimiento están en el head del PR, pero no tienen aún CI remoto en `2b17bfc3` ni constituyen evidencia de release o QA de producción.
 - La suite backend terminó con warnings de SQLAlchemy por relaciones tenant solapadas, deprecaciones del framework y advertencias Pydantic al serializar `Decimal` como `float` en pruebas de OTA. No fallan la suite, pero requieren triage separado antes de afirmar que no hay advertencias de ejecución.
 - El build frontend pasa, aunque avisa que el entry chunk excede 500 kB. El gzip es 228,54 kB; no se cambió el chunking sin perfil que identifique el costo real.
 - La auditoría de aislamiento cubre rutas específicas; no acredita aislamiento completo del PMS ni configuración RLS activa.
