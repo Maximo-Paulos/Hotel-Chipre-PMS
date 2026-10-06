@@ -227,10 +227,10 @@ async function installMocks(page: Page, options: {
       await json({
         hotel_id: 1,
         permissions: [
-          { code: permissionCode, module: "guests", description: "Consultar huéspedes", help_es: "Permite consultar huéspedes.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
-          { code: assistantActionsPermissionCode, module: "settings", description: "Revisar acciones del asistente", help_es: "Revisar y aplicar acciones sugeridas por el asistente.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
-          { code: rateAdjustPermissionCode, module: "reservations", description: "Ajustar tarifas y aplicar upgrades sin cargo", help_es: "Permite aplicar descuentos de cortesía, cambios de tarifa o mejoras de habitación sin cargo.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
-          { code: "permissions:manage", module: "permissions", description: "Administrar permisos", help_es: "Permiso crítico.", legacy_aliases: [], locked: true, lock_reason: "owner_only", critical: true, step_up_required: true, delegable: false }
+          { code: permissionCode, module: "guests", description: "Read guest profile data", help_es: "Consultar huéspedes", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
+          { code: assistantActionsPermissionCode, module: "settings", description: "Manage assistant actions", help_es: "Revisar y aplicar acciones sugeridas por el asistente.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
+          { code: rateAdjustPermissionCode, module: "reservations", description: "Adjust reservation rates", help_es: "Permite aplicar descuentos de cortesía, cambios de tarifa o mejoras de habitación sin cargo.", legacy_aliases: [], locked: false, lock_reason: null, critical: false, step_up_required: false, delegable: true },
+          { code: "permissions:manage", module: "permissions", description: "Administer permissions", help_es: "Permiso crítico.", legacy_aliases: [], locked: true, lock_reason: "owner_only", critical: true, step_up_required: true, delegable: false }
         ]
       });
       return;
@@ -311,6 +311,9 @@ test("shows an active custom role by name and uses its code for permission and v
   const { writes } = await installMocks(page);
   await openPermissions(page);
 
+  const permissionMatrix = page.getByTestId("permissions-matrix");
+  await expect(permissionMatrix.getByText("Huéspedes", { exact: true })).toBeVisible();
+  await expect(permissionMatrix.getByText("Consultar huéspedes", { exact: true })).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Consultar huéspedes para Auditoría nocturna" })).toBeVisible();
   await expect(page.getByTestId(`permission-toggle-${customRoleCode}-${permissionCode}`)).toBeEnabled();
   await expect(page.getByTestId("permission-toggle-old-auditor-guest:read")).toHaveCount(0);

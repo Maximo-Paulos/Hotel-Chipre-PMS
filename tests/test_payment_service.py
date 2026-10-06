@@ -305,7 +305,7 @@ class TestHotelIsolation:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         )
-        with pytest.raises(PaymentNotFoundError, match="Reservation not found"):
+        with pytest.raises(PaymentNotFoundError, match="No se encontró la reserva"):
             process_payment(db, payment, hotel_id=2)
 
     def test_payment_methods_are_scoped_by_hotel(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -368,7 +368,7 @@ class TestPaymentEdgeCases:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         )
-        with pytest.raises(PaymentError, match="exceeds balance due"):
+        with pytest.raises(PaymentError, match="supera el saldo pendiente"):
             process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID)
 
     def test_payment_on_cancelled_reservation(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -390,7 +390,7 @@ class TestPaymentEdgeCases:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.DEPOSIT,
         )
-        with pytest.raises(PaymentError, match="Cannot process payment"):
+        with pytest.raises(PaymentError, match="No se puede registrar un pago"):
             process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID)
 
     def test_disabled_payment_method_rejected(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -413,7 +413,7 @@ class TestPaymentEdgeCases:
             payment_method=PaymentMethodEnum.BANK_TRANSFER,  # Disabled!
             transaction_type=TransactionTypeEnum.DEPOSIT,
         )
-        with pytest.raises(PaymentError, match="currently disabled"):
+        with pytest.raises(PaymentError, match="está deshabilitado"):
             process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID)
 
     def test_failed_gateway_payment(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -514,7 +514,7 @@ class TestPaymentEdgeCases:
             refund_of_transaction_id=original_tx.id,
             refund_reason="Wrong reservation regression check",
         )
-        with pytest.raises(PaymentError, match="original payment was not found"):
+        with pytest.raises(PaymentError, match="No se encontró el pago original"):
             process_payment(db, wrong_source_refund, hotel_id=DEFAULT_HOTEL_ID)
 
         non_cash_refund = PaymentRequest(
@@ -525,7 +525,7 @@ class TestPaymentEdgeCases:
             refund_of_transaction_id=original_tx.id,
             refund_reason="Gateway refund is intentionally unsupported",
         )
-        with pytest.raises(PaymentError, match="returned through cash"):
+        with pytest.raises(PaymentError, match="deben registrarse en efectivo"):
             process_payment(db, non_cash_refund, hotel_id=DEFAULT_HOTEL_ID)
 
         over_refund = PaymentRequest(
@@ -536,7 +536,7 @@ class TestPaymentEdgeCases:
             refund_of_transaction_id=original_tx.id,
             refund_reason="Approved guest cancellation",
         )
-        with pytest.raises(PaymentError, match="remaining refundable amount"):
+        with pytest.raises(PaymentError, match="saldo reembolsable restante"):
             process_payment(db, over_refund, hotel_id=DEFAULT_HOTEL_ID)
 
         db.refresh(res)
@@ -833,7 +833,7 @@ class TestPaymentEdgeCases:
         assert refund.fx_quote_details["refund_uses_original_quote"] is True
         assert reservation.amount_paid == 100
 
-        with pytest.raises(PaymentError, match="remaining refundable amount"):
+        with pytest.raises(PaymentError, match="saldo reembolsable restante"):
             process_payment(
                 db,
                 PaymentRequest(
@@ -861,7 +861,7 @@ class TestPaymentEdgeCases:
         reservation.currency_code = "USD"
         db.flush()
 
-        with pytest.raises(PaymentError, match="Cash session currency"):
+        with pytest.raises(PaymentError, match="No hay una caja abierta en la moneda"):
             process_payment(
                 db,
                 PaymentRequest(

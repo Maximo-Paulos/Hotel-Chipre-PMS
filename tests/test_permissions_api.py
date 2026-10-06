@@ -48,6 +48,7 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
     PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
     PERMISSION_PERMISSION_MANAGE,
+    PERMISSION_PAYMENT_RECEIPT_EMAIL,
     PERMISSION_ROOM_STATUS_UPDATE,
     PERMISSION_SETTINGS_INTEGRATIONS_VIEW,
     PERMISSION_SETTINGS_FX_MANAGE,
@@ -171,14 +172,16 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         legacy_codes = set(LEGACY_PERMISSION_ALIASES)
 
         # New role-only business actions are named capabilities in the catalog.
-        assert len(canonical_codes) == 112
+        assert len(canonical_codes) == 114
         assert {"payment:proof:view", "payment:proof:review"} <= canonical_codes
         assert {"payment:refund", "reservation:cancel_paid"} <= canonical_codes
         assert {"reservation:manual_rate_limited", "reservation:manual_rate_policy_manage"} <= canonical_codes
         assert "reservation:rate_adjust" in canonical_codes
+        assert "reservation:export" in canonical_codes
         assert "cash:expense" in canonical_codes
         assert "cash:expense_approve" in canonical_codes
         assert "payment:ota_confirm" in canonical_codes
+        assert PERMISSION_PAYMENT_RECEIPT_EMAIL in canonical_codes
         assert "reservation:ota_record" in canonical_codes
         assert "company:night_rate_manage" in canonical_codes
         assert {code for code in canonical_codes if code.startswith("whatsapp:")} == {
@@ -196,6 +199,10 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
                 assert cell["help_es"] == _CANONICAL_DEFINITIONS[code][2]
         for role in ("owner", "co_owner", "manager"):
             assert matrix[role]["payment:proof:review"]["allowed"] is True
+            assert matrix[role]["reservation:export"]["allowed"] is True
+        assert matrix["receptionist"]["reservation:export"]["allowed"] is False
+        assert matrix["manager"][PERMISSION_PAYMENT_RECEIPT_EMAIL]["allowed"] is True
+        assert matrix["receptionist"][PERMISSION_PAYMENT_RECEIPT_EMAIL]["allowed"] is True
         assert matrix["owner"][PERMISSION_SETTINGS_FX_MANAGE]["allowed"] is True
         assert matrix["co_owner"][PERMISSION_SETTINGS_FX_MANAGE]["allowed"] is True
         assert matrix["co_owner"][PERMISSION_SETTINGS_FX_MANAGE]["source"] == "invariant"
@@ -271,6 +278,8 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         ("company:view", "/api/companies", None),
         ("company:view", "/api/company-documents/company/1", None),
         ("settings:users:view", "/api/users/", None),
+        ("settings:users:view", "/api/users/invitations", None),
+        ("settings:users:view", "/api/users/aliases", None),
         ("settings:integrations:view", "/api/integrations", None),
         ("settings:subscription:view", "/api/subscription/status", None),
         ("settings:security:view", "/api/settings/security/overview", None),
@@ -368,6 +377,8 @@ def test_permission_catalog_exposes_administrator_and_owner_only_metadata_and_he
         assert catalog["cash:expense"]["step_up_required"] is False
         assert catalog["cash:expense_approve"]["step_up_required"] is True
         assert catalog["payment:ota_confirm"]["step_up_required"] is True
+        for code in ("guest:export", "reservation:export", PERMISSION_PAYMENT_RECEIPT_EMAIL):
+            assert catalog[code]["step_up_required"] is True
 
         for code in (PERMISSION_GUEST_CREATE, PERMISSION_RESERVATION_CREATE, PERMISSION_ROOM_STATUS_UPDATE):
             assert catalog[code]["critical"] is False

@@ -19,6 +19,7 @@ import { roomStatusLabel, useRooms } from "../../hooks/useRooms";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useSession } from "../../state/session";
 import { todayIso } from "../../utils/date";
+import { isRoomBlockCurrentOrUpcoming } from "../../utils/roomBlockVisibility.mjs";
 import { addDaysIso } from "../../hooks/useRateCalendar";
 import { useOccupancyGrid } from "../../hooks/useReservations";
 
@@ -94,7 +95,10 @@ export function RoomsPage() {
     [housekeepingBoardQuery.data?.rooms]
   );
   const categories = useMemo(() => categoriesQuery.data || [], [categoriesQuery.data]);
-  const activeBlocks = useMemo(() => blocksQuery.data || [], [blocksQuery.data]);
+  const activeBlocks = useMemo(
+    () => (blocksQuery.data || []).filter((block) => isRoomBlockCurrentOrUpcoming(block, today)),
+    [blocksQuery.data, today]
+  );
   const [pendingRoom, setPendingRoom] = useState<number | null>(null);
   const [roomStatusError, setRoomStatusError] = useState<{ roomId: number; message: string } | null>(null);
   const [pendingBlockId, setPendingBlockId] = useState<number | null>(null);
@@ -387,7 +391,7 @@ export function RoomsPage() {
               <div key={room.id} data-testid="room-card" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">{t("inventory.roomLabel", { number: room.room_number || t("inventory.roomFallback") })}</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t("inventory.roomLabel", { number: room.room_number || t("blocks.roomFallback") })}</p>
                     <h2 className="text-lg font-semibold text-slate-900">{category?.name || room.category?.name || t("inventory.categoryFallback")}</h2>
                     <p className="text-xs text-slate-500">
                       {t("inventory.floorAndCode", { floor: room.floor, code: category?.code || room.category?.code || t("inventory.noCode") })}
@@ -442,7 +446,7 @@ export function RoomsPage() {
                       id={`room-status-${room.id}`}
                       aria-label={isHousekeeping
                         ? `${t("housekeepingStatus.label")} · ${room.room_number}`
-                        : t("inventory.statusAriaLabel", { number: room.room_number || t("inventory.roomFallback") })}
+                        : t("inventory.statusAriaLabel", { number: room.room_number || t("blocks.roomFallback") })}
                       value={selectedStatus}
                       onChange={(e) => isHousekeeping
                         ? void handleHousekeepingStatusUpdate(room.id, e.target.value as HousekeepingStatus)

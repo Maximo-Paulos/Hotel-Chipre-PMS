@@ -13,14 +13,20 @@ const loadCrossTabSync = async (context) => {
   let compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
   }).outputText;
+  const refreshDescriptor = Object.getOwnPropertyDescriptor(globalThis, "__testRefreshDomains");
+  context.after(() => {
+    if (refreshDescriptor) Object.defineProperty(globalThis, "__testRefreshDomains", refreshDescriptor);
+    else delete globalThis.__testRefreshDomains;
+  });
+  globalThis.__testRefreshDomains ??= () => {};
   const stubs = [
-    ['import { useEffect, useSyncExternalStore } from "react";', "const useEffect = () => {}; const useSyncExternalStore = () => {};"],
+    ['import { useEffect, useMemo, useSyncExternalStore } from "react";', "const useEffect = () => {}; const useMemo = () => {}; const useSyncExternalStore = () => {};"],
     ['import { useQueryClient } from "@tanstack/react-query";', "const useQueryClient = () => ({});"],
     ['import { buildAuthHeaders, buildUrl } from "../api/client";', "const buildAuthHeaders = () => ({}); const buildUrl = (path) => path;"],
-    ['import { recoveryDomainsForCursor, refreshDomains } from "../api/queryInvalidation";', "const recoveryDomainsForCursor = () => []; const refreshDomains = () => Promise.resolve();"],
+    ['import { recoveryDomainsForCursor, refreshDomains } from "../api/queryInvalidation";', "const recoveryDomainsForCursor = () => []; const refreshDomains = (...args) => { globalThis.__testRefreshDomains(...args); return Promise.resolve(); };"],
     [
-      'import { HOTEL_ID_INDEX_BY_QUERY_PREFIX, QUERY_PREFIXES_BY_DOMAIN, hotelIdForQueryKey } from "../api/queryKeys";',
-      'const HOTEL_ID_INDEX_BY_QUERY_PREFIX = {}; const QUERY_PREFIXES_BY_DOMAIN = { analytics: [], cash: [], guests: [], onboarding: [], payments: [], reservations: [], rooms: [], security: [], settings: [], stock: [], users: [] }; const hotelIdForQueryKey = () => null;'
+      'import { QUERY_PREFIXES_BY_DOMAIN } from "../api/queryKeys";',
+      'const QUERY_PREFIXES_BY_DOMAIN = { analytics: [], cash: [], guests: [], onboarding: [], payments: [], reservations: [], rooms: [], security: [], settings: [], stock: [], users: [] };'
     ],
     ['import { useSession } from "../state/session";', "const useSession = () => ({ session: {} });"]
   ];
@@ -42,7 +48,11 @@ const withBrowserGlobals = async (context, { broadcastChannel, localStorage }) =
     if (previousBroadcastChannel) Object.defineProperty(globalThis, "BroadcastChannel", previousBroadcastChannel);
     else delete globalThis.BroadcastChannel;
   });
-  globalThis.window = { localStorage };
+  globalThis.window = {
+    localStorage,
+    setTimeout: globalThis.setTimeout,
+    clearTimeout: globalThis.clearTimeout
+  };
   if (broadcastChannel === undefined) delete globalThis.BroadcastChannel;
   else globalThis.BroadcastChannel = broadcastChannel;
 };
@@ -98,4 +108,43 @@ test("domain broadcasts fall back to localStorage when BroadcastChannel is unava
     );
     assert.equal(postedMessages.length, mode === "throws" ? 3 : 0);
   }
+});
+
+test("domain refreshes coalesce events and wait until a hidden tab becomes visible", async (context) => {
+  const refreshes = [];
+  globalThis.__testRefreshDomains = (...args) => refreshes.push(args);
+  await withBrowserGlobals(context, {
+    broadcastChannel: undefined,
+    localStorage: { setItem() {} }
+  });
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const listeners = new Set();
+  globalThis.document = {
+    visibilityState: "hidden",
+    addEventListener: (event, listener) => event === "visibilitychange" && listeners.add(listener),
+    removeEventListener: (event, listener) => event === "visibilitychange" && listeners.delete(listener)
+  };
+  context.after(() => {
+    if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
+    else delete globalThis.document;
+  });
+
+  const { createDomainRefreshScheduler } = await loadCrossTabSync(context);
+  const queryClient = {};
+  const scheduler = createDomainRefreshScheduler(queryClient, 41, 5);
+  scheduler.schedule("reservations");
+  scheduler.schedule("reservations");
+  scheduler.schedule("rooms");
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(refreshes.length, 0, "hidden tabs must retain changes without refetching");
+
+  document.visibilityState = "visible";
+  listeners.forEach((listener) => listener());
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.equal(refreshes.length, 1, "domain events from broadcasts and SSE must share one refresh window");
+  assert.equal(refreshes[0][0], queryClient);
+  assert.equal(refreshes[0][1], 41);
+  assert.deepEqual(refreshes[0][2], ["reservations", "rooms"]);
+  scheduler.close();
 });

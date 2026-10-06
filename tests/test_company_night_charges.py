@@ -536,7 +536,7 @@ def test_payment_service_enforces_and_persists_company_night_allocations(
     different_night_retry = selected_night_payment.model_copy(
         update={"company_night_charge_ids": [summary.charges[1].id]}
     )
-    with pytest.raises(PaymentError, match="Idempotency key was already used"):
+    with pytest.raises(PaymentError, match="clave de idempotencia"):
         process_payment(
             db,
             different_night_retry,
@@ -667,7 +667,7 @@ def test_company_night_refund_reduces_only_the_selected_night(
             ]
         }
     )
-    with pytest.raises(PaymentError, match="Idempotency key was already used"):
+    with pytest.raises(PaymentError, match="clave de idempotencia"):
         process_payment(
             db,
             changed_night_retry,

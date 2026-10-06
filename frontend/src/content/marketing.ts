@@ -221,7 +221,7 @@ export const faqItems = [
   {
     question: "¿Cuánto sale?",
     answer:
-      "Es una suscripción mensual por hotel, con tres planes según cuántas habitaciones y cuántas personas del equipo lo usan. Estamos cerrando los precios definitivos y los publicamos acá apenas estén."
+      "La suscripción es mensual por hotel: Starter cuesta USD 20, Pro USD 100 y Ultra USD 200. Podés probarlo 14 días sin tarjeta; el cobro en línea todavía no está habilitado."
   },
   {
     question: "¿Puedo probarlo antes de pagar?",

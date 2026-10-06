@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-10-05T06:33:29.826938+00:00
-Commit: `d441145ef579dd17f47cc0b65e3e15b7e0e525b3`
+Generado: 2026-10-06T03:21:45.334573+00:00
+Commit: `a2011b5157c5a8a4321b5373259cd273d66e4c9f`
 
 ```text
-d2a7e93f4c2b (head)
+20261017_laundry_missing_follow_up (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

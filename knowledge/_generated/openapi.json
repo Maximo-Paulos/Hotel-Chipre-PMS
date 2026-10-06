@@ -3981,6 +3981,92 @@
         }
       }
     },
+    "/api/reservations/export.csv": {
+      "get": {
+        "tags": [
+          "Reservations"
+        ],
+        "summary": "Export Reservations Csv",
+        "description": "Export a bounded, tenant-scoped reservation CSV without guest documents or contacts.",
+        "operationId": "export_reservations_csv_api_reservations_export_csv_get",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Inclusive first stay date (YYYY-MM-DD)",
+              "title": "Start Date"
+            },
+            "description": "Inclusive first stay date (YYYY-MM-DD)"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Inclusive last stay date (YYYY-MM-DD)",
+              "title": "End Date"
+            },
+            "description": "Inclusive last stay date (YYYY-MM-DD)"
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/csv": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/reservations/actions/pending": {
       "get": {
         "tags": [
@@ -4551,7 +4637,7 @@
           "Reservations"
         ],
         "summary": "Modify Reservation",
-        "description": "Modify a reservation, including arrival metadata in any non-deleted state.",
+        "description": "Modify reservation details with optimistic concurrency protection.\n\nA direct individual reservation without payment history may receive a\nmanual total correction under its bounded or unbounded manual-rate scope.\nCorrections to reservations with payment history retain the stricter\n``reservation:paid_total_adjust`` policy and never rewrite transactions.",
         "operationId": "modify_reservation_api_reservations__reservation_id__patch",
         "parameters": [
           {
@@ -5238,6 +5324,91 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReservationExtensionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reservations/{reservation_id}/extend-preview": {
+      "get": {
+        "tags": [
+          "Reservations"
+        ],
+        "summary": "Preview Stay Extension",
+        "description": "Return a server-priced, read-only extension quote for direct stays.",
+        "operationId": "preview_stay_extension_api_reservations__reservation_id__extend_preview_get",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "new_checkout_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "New Checkout Date"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationExtensionPreviewResponse"
                 }
               }
             }
@@ -7723,6 +7894,102 @@
         }
       }
     },
+    "/api/payments/transactions/{transaction_id}/receipt/email": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Email Payment Receipt",
+        "description": "Send a persisted receipt only to the reservation guest's confirmed email.",
+        "operationId": "email_payment_receipt_api_payments_transactions__transaction_id__receipt_email_post",
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Transaction Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 100,
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentReceiptEmailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentReceiptEmailRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/checkin/{reservation_id}": {
       "post": {
         "tags": [
@@ -9062,6 +9329,92 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RevenueReportRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reports/booked-value": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Booked Value Report",
+        "description": "Return the lightweight booked-value KPI without building the full finance report.",
+        "operationId": "booked_value_report_api_reports_booked_value_get",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Start Date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "End Date"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookedValueRead"
                 }
               }
             }
@@ -19516,6 +19869,159 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LaundryBatchRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/laundry/missing-follow-ups": {
+      "get": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Get Laundry Missing Follow Ups",
+        "operationId": "get_laundry_missing_follow_ups_api_laundry_missing_follow_ups_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MissingFollowUpRead"
+                  },
+                  "title": "Response Get Laundry Missing Follow Ups Api Laundry Missing Follow Ups Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/laundry/missing-follow-ups/{remito_line_id}": {
+      "patch": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Patch Laundry Missing Follow Up",
+        "operationId": "patch_laundry_missing_follow_up_api_laundry_missing_follow_ups__remito_line_id__patch",
+        "parameters": [
+          {
+            "name": "remito_line_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Remito Line Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MissingFollowUpUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissingFollowUpRead"
                 }
               }
             }
@@ -34695,6 +35201,204 @@
         }
       }
     },
+    "/cash-register/expenses/export.csv": {
+      "get": {
+        "tags": [
+          "Cash Register"
+        ],
+        "summary": "Export Cash Expenses Csv",
+        "operationId": "export_cash_expenses_csv_cash_register_expenses_export_csv_get",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "To"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CashExpenseStatusEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cash-register/expenses/export.csv": {
+      "get": {
+        "tags": [
+          "Cash Register"
+        ],
+        "summary": "Export Cash Expenses Csv",
+        "operationId": "export_cash_expenses_csv_api_cash_register_expenses_export_csv_get",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "To"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CashExpenseStatusEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/cash-register/expenses/{expense_id}/approve": {
       "post": {
         "tags": [
@@ -44786,6 +45490,15 @@
         ],
         "title": "CashExpenseReject"
       },
+      "CashExpenseStatusEnum": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected"
+        ],
+        "title": "CashExpenseStatusEnum"
+      },
       "CashMovementCreate": {
         "properties": {
           "movement_type": {
@@ -54054,6 +54767,252 @@
         ],
         "title": "MfaStatusResponse"
       },
+      "MissingFollowUpRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "remito_id": {
+            "type": "integer",
+            "title": "Remito Id"
+          },
+          "remito_number": {
+            "type": "string",
+            "title": "Remito Number"
+          },
+          "remito_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Remito Date"
+          },
+          "vendor_id": {
+            "type": "integer",
+            "title": "Vendor Id"
+          },
+          "vendor_name": {
+            "type": "string",
+            "title": "Vendor Name"
+          },
+          "linen_item_id": {
+            "type": "integer",
+            "title": "Linen Item Id"
+          },
+          "linen_item_name": {
+            "type": "string",
+            "title": "Linen Item Name"
+          },
+          "quantity": {
+            "type": "string",
+            "title": "Quantity"
+          },
+          "missing_quantity": {
+            "type": "string",
+            "title": "Missing Quantity"
+          },
+          "follow_up_status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "contacted",
+              "response_recorded",
+              "closed"
+            ],
+            "title": "Follow Up Status"
+          },
+          "follow_up_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up Note"
+          },
+          "supplier_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Reference"
+          },
+          "supplier_contacted_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Contacted On"
+          },
+          "supplier_contact_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Contact Note"
+          },
+          "supplier_response_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Response On"
+          },
+          "supplier_response_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Response Note"
+          },
+          "follow_up_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "remito_id",
+          "remito_number",
+          "remito_date",
+          "vendor_id",
+          "vendor_name",
+          "linen_item_id",
+          "linen_item_name",
+          "quantity",
+          "missing_quantity",
+          "follow_up_status"
+        ],
+        "title": "MissingFollowUpRead"
+      },
+      "MissingFollowUpUpdate": {
+        "properties": {
+          "follow_up_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "contacted",
+                  "response_recorded",
+                  "closed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up Status"
+          },
+          "follow_up_note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up Note"
+          },
+          "supplier_reference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Reference"
+          },
+          "supplier_contacted_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Contacted On"
+          },
+          "supplier_contact_note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Contact Note"
+          },
+          "supplier_response_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Response On"
+          },
+          "supplier_response_note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Response Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MissingFollowUpUpdate"
+      },
       "MovementEventRead": {
         "properties": {
           "id": {
@@ -57401,6 +58360,49 @@
           "rejected"
         ],
         "title": "PaymentProofStatusEnum"
+      },
+      "PaymentReceiptEmailRead": {
+        "properties": {
+          "transaction_id": {
+            "type": "integer",
+            "title": "Transaction Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "sent"
+            ],
+            "const": "sent",
+            "title": "Status"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "transaction_id",
+          "status",
+          "replayed"
+        ],
+        "title": "PaymentReceiptEmailRead"
+      },
+      "PaymentReceiptEmailRequest": {
+        "properties": {
+          "recipient_email": {
+            "type": "string",
+            "maxLength": 200,
+            "format": "email",
+            "title": "Recipient Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipient_email"
+        ],
+        "title": "PaymentReceiptEmailRequest",
+        "description": "The operator must confirm the registered guest email before sending."
       },
       "PaymentReceiptRead": {
         "properties": {
@@ -61889,6 +62891,19 @@
               }
             ],
             "title": "Quantity"
+          },
+          "missing_quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Missing Quantity",
+            "default": "0"
           }
         },
         "type": "object",
@@ -61911,6 +62926,11 @@
           "quantity": {
             "type": "string",
             "title": "Quantity"
+          },
+          "missing_quantity": {
+            "type": "string",
+            "title": "Missing Quantity",
+            "default": "0"
           },
           "unit_price_snapshot": {
             "anyOf": [
@@ -62543,6 +63563,11 @@
             ],
             "title": "Manual Rate Reason"
           },
+          "confirm_large_total_adjustment": {
+            "type": "boolean",
+            "title": "Confirm Large Total Adjustment",
+            "default": false
+          },
           "deposit_amount": {
             "anyOf": [
               {
@@ -62858,6 +63883,48 @@
           "unknown"
         ],
         "title": "ReservationEmailStatus"
+      },
+      "ReservationExtensionPreviewResponse": {
+        "properties": {
+          "reservation_id": {
+            "type": "integer",
+            "title": "Reservation Id"
+          },
+          "current_checkout_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Current Checkout Date"
+          },
+          "new_checkout_date": {
+            "type": "string",
+            "format": "date",
+            "title": "New Checkout Date"
+          },
+          "client_version": {
+            "type": "integer",
+            "title": "Client Version"
+          },
+          "extension_amount": {
+            "type": "string",
+            "title": "Extension Amount"
+          },
+          "currency_code": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reservation_id",
+          "current_checkout_date",
+          "new_checkout_date",
+          "client_version",
+          "extension_amount",
+          "currency_code"
+        ],
+        "title": "ReservationExtensionPreviewResponse"
       },
       "ReservationExtensionRequest": {
         "properties": {
@@ -64872,7 +65939,13 @@
                 "type": "null"
               }
             ],
-            "title": "Paid Total Change Reason"
+            "title": "Paid Total Change Reason",
+            "description": "Required, non-blank reason when correcting total_amount; legacy field name retained for API compatibility."
+          },
+          "confirm_large_total_adjustment": {
+            "type": "boolean",
+            "title": "Confirm Large Total Adjustment",
+            "default": false
           },
           "num_adults": {
             "anyOf": [
@@ -67852,6 +68925,11 @@
             "type": "string",
             "title": "Total Amount"
           },
+          "unpriced_quantity": {
+            "type": "string",
+            "title": "Unpriced Quantity",
+            "default": "0.00"
+          },
           "by_item": {
             "items": {
               "$ref": "#/components/schemas/VendorSpendLine"
@@ -70187,6 +71265,11 @@
           "subtotal": {
             "type": "string",
             "title": "Subtotal"
+          },
+          "unpriced_quantity": {
+            "type": "string",
+            "title": "Unpriced Quantity",
+            "default": "0.00"
           }
         },
         "type": "object",
@@ -70203,6 +71286,11 @@
           "total": {
             "type": "string",
             "title": "Total"
+          },
+          "unpriced_quantity": {
+            "type": "string",
+            "title": "Unpriced Quantity",
+            "default": "0.00"
           },
           "by_item": {
             "items": {

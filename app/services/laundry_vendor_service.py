@@ -15,7 +15,7 @@ import json
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
 
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -122,7 +122,7 @@ def set_vendor_price(
     """Create or revise the price for one vendor, item and effective date."""
 
     if unit_price < 0:
-        raise LaundryVendorError("Unit price cannot be negative")
+        raise LaundryVendorError("El precio unitario no puede ser negativo.")
     effective_from = effective_from or date.today()
     _get_vendor(db, hotel_id=hotel_id, vendor_id=vendor_id)
     linen_service.get_linen_item(db, hotel_id=hotel_id, item_id=linen_item_id)
@@ -202,22 +202,23 @@ def create_remito(
     lines: list[dict],
     notes: str | None = None,
     actor_user_id: int | None = None,
+    reconciliation_warnings: list[str] | None = None,
 ) -> LaundryRemito:
-    """Record a remito as a pair of LinenMovements per line.
+    """Record a remito as LinenMovements, including any declared loss.
 
     outbound: house_location -> vendor_location (dirty linen leaves the hotel)
-    inbound:  vendor_location -> house_location (clean linen comes back)
+    inbound:  vendor_location -> house_location (clean linen comes back), with
+              any declared missing quantity written off at the vendor location
 
-    The hotel-wide total per item never changes -- this is a transfer, not a
-    consumption event. Any failure (bad direction, no lines, insufficient
-    stock at the source location) rolls back the whole remito: no partial
+    The hotel-wide total per item only decreases by explicitly declared
+    missing_quantity. Any failure rolls back the whole remito: no partial
     remito or dangling movements are left behind.
     """
 
     if direction not in DIRECTIONS:
-        raise LaundryVendorError("direction must be 'outbound' or 'inbound'")
+        raise LaundryVendorError("La operación debe ser un retiro o una entrega del lavadero.")
     if not lines:
-        raise LaundryVendorError("A remito needs at least one line")
+        raise LaundryVendorError("El remito debe incluir al menos un artículo.")
     remito_number = remito_number.strip()
     if not remito_number:
         raise LaundryVendorError("El número de remito es obligatorio")
@@ -261,39 +262,93 @@ def create_remito(
         for line in lines:
             linen_item_id = line["linen_item_id"]
             quantity = line["quantity"]
-            if quantity <= 0:
-                raise LaundryVendorError("Remito line quantity must be positive")
+            missing_quantity = line.get("missing_quantity", Decimal("0"))
+            if quantity < 0 or missing_quantity < 0 or (quantity == 0 and missing_quantity == 0):
+                raise LaundryVendorError("La cantidad devuelta o faltante debe ser positiva")
+            if direction == "outbound" and missing_quantity > 0:
+                raise LaundryVendorError("El faltante solo se puede informar en una entrega del lavadero")
 
             item = linen_service.get_linen_item(db, hotel_id=hotel_id, item_id=linen_item_id)
             available = linen_service.current_stock(
                 db, hotel_id=hotel_id, item_id=linen_item_id, location_id=source_location_id
             )
-            if quantity > available:
+            source_quantity = quantity + missing_quantity if direction == "inbound" else quantity
+            if direction == "inbound":
+                if missing_quantity > available:
+                    source_quantity = missing_quantity
+                else:
+                    available_for_return = available - missing_quantity
+                    if quantity > available_for_return:
+                        reconciliation_quantity = quantity - available_for_return
+                        linen_service.register_movement(
+                            db,
+                            hotel_id=hotel_id,
+                            item_id=linen_item_id,
+                            location_id=source_location_id,
+                            movement_type="adjustment",
+                            quantity=reconciliation_quantity,
+                            reason=(
+                                f"Conciliación de entrega mayor al saldo registrado "
+                                f"(remito {remito_number}, id {remito.id})"
+                            ),
+                            created_by_user_id=actor_user_id,
+                        )
+                        available += reconciliation_quantity
+                        if reconciliation_warnings is not None:
+                            reconciliation_warnings.append(
+                                "Entrega mayor a lo registrado: "
+                                f"se ajustó +{reconciliation_quantity} de «{item.name}» en el lavadero."
+                            )
+            if source_quantity > available:
+                location = linen_service.get_location(db, hotel_id=hotel_id, location_id=source_location_id)
+                diagnosis = (
+                    "Verificá que el remito de retiro previo de este mismo lavadero esté registrado "
+                    "y que el conteo inicial sea correcto."
+                    if direction == "inbound"
+                    else "Verificá el conteo inicial de la ubicación."
+                )
                 raise LaundryVendorError(
-                    f"Not enough '{item.name}' at the source location: have {available}, need {quantity}"
+                    f"No hay suficiente «{item.name}» en la ubicación de origen «{location.name}»: "
+                    f"hay {available}, se necesitan {source_quantity}. {diagnosis}"
                 )
 
-            movement_reason = f"Laundry remito {remito_number} ({direction})"
-            linen_service.register_movement(
-                db,
-                hotel_id=hotel_id,
-                item_id=linen_item_id,
-                location_id=source_location_id,
-                movement_type="out",
-                quantity=quantity,
-                reason=movement_reason,
-                created_by_user_id=actor_user_id,
-            )
-            linen_service.register_movement(
-                db,
-                hotel_id=hotel_id,
-                item_id=linen_item_id,
-                location_id=dest_location_id,
-                movement_type="in",
-                quantity=quantity,
-                reason=movement_reason,
-                created_by_user_id=actor_user_id,
-            )
+            if quantity > 0:
+                movement_reason = f"Laundry remito {remito_number} ({direction})"
+                linen_service.register_movement(
+                    db,
+                    hotel_id=hotel_id,
+                    item_id=linen_item_id,
+                    location_id=source_location_id,
+                    movement_type="out",
+                    quantity=quantity,
+                    reason=movement_reason,
+                    created_by_user_id=actor_user_id,
+                )
+                linen_service.register_movement(
+                    db,
+                    hotel_id=hotel_id,
+                    item_id=linen_item_id,
+                    location_id=dest_location_id,
+                    movement_type="in",
+                    quantity=quantity,
+                    reason=movement_reason,
+                    created_by_user_id=actor_user_id,
+                )
+
+            if missing_quantity > 0:
+                linen_service.register_movement(
+                    db,
+                    hotel_id=hotel_id,
+                    item_id=linen_item_id,
+                    location_id=source_location_id,
+                    movement_type="adjustment_out",
+                    quantity=missing_quantity,
+                    reason=(
+                        f"Faltante declarado en remito interno {remito.id} "
+                        f"(número de proveedor {remito_number})"
+                    ),
+                    created_by_user_id=actor_user_id,
+                )
 
             price = (
                 db.query(LaundryVendorPrice)
@@ -306,16 +361,35 @@ def create_remito(
                 .order_by(LaundryVendorPrice.effective_from.desc(), LaundryVendorPrice.id.desc())
                 .first()
             )
-            db.add(
-                LaundryRemitoLine(
-                    hotel_id=hotel_id,
-                    remito_id=remito.id,
-                    linen_item_id=linen_item_id,
-                    quantity=quantity,
-                    unit_price_snapshot=price.unit_price if price is not None else None,
-                )
+            line_record = LaundryRemitoLine(
+                hotel_id=hotel_id,
+                remito_id=remito.id,
+                linen_item_id=linen_item_id,
+                quantity=quantity,
+                missing_quantity=missing_quantity,
+                unit_price_snapshot=price.unit_price if price is not None else None,
+                follow_up_status="open" if missing_quantity > 0 else None,
             )
+            db.add(line_record)
             db.flush()
+            if missing_quantity > 0:
+                db.add(
+                    SecurityAuditLog(
+                        hotel_id=hotel_id,
+                        user_id=actor_user_id,
+                        action="laundry.missing_follow_up.opened",
+                        resource_type="laundry_remito_line",
+                        resource_id=str(line_record.id),
+                        details=json.dumps(
+                            {
+                                "remito_id": remito.id,
+                                "missing_quantity": str(missing_quantity),
+                                "status": "open",
+                            },
+                            sort_keys=True,
+                        ),
+                    )
+                )
     except IntegrityError as exc:
         db.rollback()
         if is_duplicate_remito_integrity_error(exc):
@@ -408,8 +482,25 @@ def vendor_spend(
     query = (
         db.query(
             LaundryRemitoLine.linen_item_id,
-            func.coalesce(func.sum(LaundryRemitoLine.quantity * LaundryRemitoLine.unit_price_snapshot), 0),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (LaundryRemitoLine.unit_price_snapshot.is_not(None), LaundryRemitoLine.quantity * LaundryRemitoLine.unit_price_snapshot),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
             func.coalesce(func.sum(LaundryRemitoLine.quantity), 0),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (LaundryRemitoLine.unit_price_snapshot.is_(None), LaundryRemitoLine.quantity),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
         )
         .join(LaundryRemito, LaundryRemito.id == LaundryRemitoLine.remito_id)
         .filter(
@@ -425,19 +516,23 @@ def vendor_spend(
 
     by_item = []
     total = Decimal("0.00")
-    for linen_item_id, subtotal, quantity in query.group_by(LaundryRemitoLine.linen_item_id).all():
+    unpriced_quantity_total = Decimal("0.00")
+    for linen_item_id, subtotal, quantity, unpriced_quantity in query.group_by(LaundryRemitoLine.linen_item_id).all():
         item = linen_service.get_linen_item(db, hotel_id=hotel_id, item_id=linen_item_id)
         subtotal = Decimal(subtotal).quantize(Decimal("0.01"))
+        unpriced_quantity = Decimal(unpriced_quantity).quantize(Decimal("0.01"))
         total += subtotal
+        unpriced_quantity_total += unpriced_quantity
         by_item.append(
             {
                 "linen_item_id": item.id,
                 "linen_item_name": item.name,
                 "quantity": Decimal(quantity).quantize(Decimal("0.01")),
                 "subtotal": subtotal,
+                "unpriced_quantity": unpriced_quantity,
             }
         )
-    return {"total": total, "by_item": by_item}
+    return {"total": total, "unpriced_quantity": unpriced_quantity_total, "by_item": by_item}
 
 
 def _quarter_bounds(year: int, quarter: int) -> tuple[date, date]:
@@ -479,6 +574,7 @@ def vendor_settlements(db: Session, *, hotel_id: int, vendor_id: int, year: int)
                 "period_start": period_start,
                 "period_end": period_end,
                 "total_amount": spend["total"],
+                "unpriced_quantity": spend["unpriced_quantity"],
                 "by_item": spend["by_item"],
                 "paid": settlement.paid if settlement is not None else False,
                 "paid_at": settlement.paid_at if settlement is not None else None,
@@ -504,7 +600,7 @@ def mark_vendor_settlement_paid(
     quarter = (period_start.month - 1) // 3 + 1
     expected_start, period_end = _quarter_bounds(period_start.year, quarter)
     if period_start != expected_start:
-        raise LaundryVendorError("period_start must be the first day of a calendar quarter")
+        raise LaundryVendorError("El período debe comenzar el primer día de un trimestre calendario.")
 
     settlement = (
         db.query(LaundryVendorSettlement)
@@ -537,7 +633,7 @@ def _get_vendor(db: Session, *, hotel_id: int, vendor_id: int) -> LaundryVendor:
         .one_or_none()
     )
     if vendor is None:
-        raise LaundryVendorError("Laundry vendor not found")
+        raise LaundryVendorError("No se encontró el proveedor de lavandería.")
     return vendor
 
 

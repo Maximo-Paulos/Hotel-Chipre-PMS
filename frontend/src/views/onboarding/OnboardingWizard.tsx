@@ -1319,7 +1319,7 @@ function SubscriptionStep({
   onSave: () => Promise<void>;
   loading: boolean;
   status?: StepStatus;
-  plans: Array<{ code: string; name: string; room_limit: number; staff_limit?: number; price_month?: number | null }>;
+  plans: Array<{ code: string; name: string; room_limit: number; staff_limit?: number; price_month?: number | null; price_currency?: string }>;
   currentSubscription?: OnboardingSubscription | null;
   stripeEnabled: boolean;
 }) {
@@ -1382,7 +1382,7 @@ function SubscriptionStep({
               {plan.room_limit} habitaciones · {plan.staff_limit ?? "-"} staff
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              {plan.price_month != null ? `$${plan.price_month} / mes` : "Precio a definir"}
+              {plan.price_month != null ? `${plan.price_currency ?? "USD"} $${plan.price_month} / mes` : "Precio a definir"}
             </p>
             <p className="mt-2 text-xs text-slate-500">
               {plan.code === "pro" && trialAvailable

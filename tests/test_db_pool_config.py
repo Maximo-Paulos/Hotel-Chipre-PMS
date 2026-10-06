@@ -9,7 +9,7 @@ from app.config import Settings
 def test_settings_default_to_bounded_api_pool_capacity():
     assert Settings.model_fields["DB_POOL_SIZE"].default == 8
     assert Settings.model_fields["DB_MAX_OVERFLOW"].default == 4
-    assert Settings.model_fields["DB_POOL_TIMEOUT_SECONDS"].default == 15.0
+    assert Settings.model_fields["DB_POOL_TIMEOUT_SECONDS"].default == 5.0
 
 
 def test_postgres_engine_uses_configured_bounded_pool(monkeypatch):
@@ -54,7 +54,7 @@ def test_render_pool_budgets_keep_worker_and_beat_reservations():
     assert {
         key: _env_value(services["hotel-chipre-pms-api"], key)
         for key in ("DB_POOL_SIZE", "DB_MAX_OVERFLOW", "DB_POOL_TIMEOUT_SECONDS")
-    } == {"DB_POOL_SIZE": "8", "DB_MAX_OVERFLOW": "4", "DB_POOL_TIMEOUT_SECONDS": "15"}
+    } == {"DB_POOL_SIZE": "8", "DB_MAX_OVERFLOW": "4", "DB_POOL_TIMEOUT_SECONDS": "5"}
     worker_pool = {
         key: _env_value(services["hotel-chipre-pms-worker"], key)
         for key in ("DB_POOL_SIZE", "DB_MAX_OVERFLOW", "DB_POOL_TIMEOUT_SECONDS")

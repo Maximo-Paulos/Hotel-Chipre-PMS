@@ -309,6 +309,7 @@ def list_operational_audit(
 
     security_query = db.query(SecurityAuditLog).filter(
         SecurityAuditLog.hotel_id == hotel_id,
+        ~SecurityAuditLog.action.like("%.login.success"),
         *_date_filter(SecurityAuditLog, start, end, "created_at"),
     )
     for event in security_query.order_by(SecurityAuditLog.created_at.desc(), SecurityAuditLog.id.desc()).limit(_MAX_CANDIDATES).all():

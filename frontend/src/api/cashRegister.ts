@@ -308,6 +308,29 @@ export const downloadCashLedgerCsv = async (
   return response.blob();
 };
 
+export const downloadCashExpensesCsv = async (
+  fromDate: string,
+  toDate: string,
+  session?: SessionLike
+): Promise<Blob> => {
+  const query = new URLSearchParams({ from: fromDate, to: toDate });
+  const response = await fetch(buildUrl(`/api/cash-register/expenses/export.csv?${query.toString()}`), {
+    headers: buildAuthHeaders(session),
+    credentials: "include"
+  });
+  if (!response.ok) {
+    let message = response.statusText || "No se pudo exportar gastos";
+    try {
+      const payload = await response.json() as { detail?: string };
+      message = payload.detail || message;
+    } catch {
+      // Keep the safe HTTP status message when the response is not JSON.
+    }
+    throw new Error(message);
+  }
+  return response.blob();
+};
+
 export const listCashExpenses = (session?: SessionLike, expenseStatus?: CashExpenseStatus) => {
   const query = expenseStatus ? `?status=${encodeURIComponent(expenseStatus)}` : "";
   return apiFetch<CashExpense[]>(`/api/cash-register/expenses${query}`, { session });

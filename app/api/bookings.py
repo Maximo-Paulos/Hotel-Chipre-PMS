@@ -77,13 +77,22 @@ router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
 logger = logging.getLogger(__name__)
 
 
+def _booking_status_label_es(status_value: ReservationStatusEnum) -> str:
+    return {
+        ReservationStatusEnum.CHECKED_IN: "en curso",
+        ReservationStatusEnum.CHECKED_OUT: "finalizada",
+        ReservationStatusEnum.CANCELLED: "cancelada",
+        ReservationStatusEnum.NO_SHOW: "no presentada",
+    }.get(status_value, "en un estado que no admite cambios")
+
+
 def _require_demo_mode():
     if not is_demo_environment_allowed():
         raise HTTPException(status_code=404)
     if not is_demo_mode():
         raise HTTPException(
             status_code=403,
-            detail="Demo mode is disabled. Set DEMO_MODE=true to use this endpoint.",
+            detail="El modo demo está desactivado. Configurá DEMO_MODE=true para usar esta función.",
         )
 
 
@@ -116,7 +125,7 @@ def _ensure_permission_tier(
     )
     raise HTTPException(
         status_code=403,
-        detail="No tenes permisos para cambiar la categoría de la reserva",
+        detail="No tenés permisos para cambiar la categoría de la reserva.",
     )
 
 
@@ -350,7 +359,7 @@ def get_booking(
         .first()
     )
     if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     return _booking_to_read(booking)
 
 
@@ -407,17 +416,20 @@ def cancel_booking(
     if not booking:
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
-        raise HTTPException(status_code=404, detail="Booking not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     if booking.company_id is not None:
         authorize_permission(request, db, context, PERMISSION_COMPANY_MANAGE)
     if booking.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
-        raise HTTPException(status_code=400, detail="Cannot cancel a booking that is already checked-in or checked-out")
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede cancelar una reserva que ya tiene check-in o check-out.",
+        )
     if booking.status == ReservationStatusEnum.CANCELLED:
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
-        raise HTTPException(status_code=400, detail="Booking is already cancelled")
+        raise HTTPException(status_code=400, detail="La reserva ya está cancelada.")
 
     requires_paid_cancel_approval = has_payment_history_for_cancellation(db, context.hotel_id, booking)
     if requires_paid_cancel_approval:
@@ -437,13 +449,16 @@ def cancel_booking(
         )
         booking = lock_query(booking_query, Reservation).first()
         if not booking:
-            raise HTTPException(status_code=404, detail="Booking not found")
+            raise HTTPException(status_code=404, detail="No se encontró la reserva.")
         if booking.status in (
             ReservationStatusEnum.CHECKED_IN,
             ReservationStatusEnum.CHECKED_OUT,
             ReservationStatusEnum.CANCELLED,
         ):
-            raise HTTPException(status_code=409, detail="Booking changed while approval was being verified")
+            raise HTTPException(
+                status_code=409,
+                detail="La reserva cambió mientras se verificaba la autorización. Recargá e intentá de nuevo.",
+            )
 
     grant_consumed = False
     if not permission_allowed and temporary_grant_token:
@@ -558,7 +573,7 @@ def update_booking(
     )
     booking = lock_query(booking_query, Reservation).first()
     if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
 
     data = payload.model_dump(exclude_unset=True)
     effective_data = {
@@ -578,10 +593,16 @@ def update_booking(
         ReservationStatusEnum.CANCELLED,
         ReservationStatusEnum.NO_SHOW,
     } and terminal_mutation_fields:
-        raise HTTPException(status_code=400, detail=("Cannot modify: reservation is " + booking.status.value))
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede modificar una reserva en estado «{_booking_status_label_es(booking.status)}».",
+        )
 
     if payload.client_version is not None and booking.version != payload.client_version:
-        raise HTTPException(status_code=409, detail="Reservation was modified concurrently. Reload and retry.")
+        raise HTTPException(
+            status_code=409,
+            detail="La reserva fue modificada por otra persona. Recargá e intentá de nuevo.",
+        )
     if not effective_data:
         return _booking_to_read(booking)
     if payload.client_version is None:
@@ -656,7 +677,7 @@ def update_booking(
     # Validate category existence
     category = db.query(RoomCategory).filter(RoomCategory.id == new_category_id, RoomCategory.hotel_id == context.hotel_id).first()
     if not category:
-        raise HTTPException(status_code=400, detail="Category not found")
+        raise HTTPException(status_code=400, detail="No se encontró la categoría de habitación.")
     if category_changed:
         current_category = (
             db.query(RoomCategory)
@@ -667,7 +688,7 @@ def update_booking(
             .first()
         )
         if current_category is None:
-            raise HTTPException(status_code=400, detail="Current category not found")
+            raise HTTPException(status_code=400, detail="No se encontró la categoría actual de la reserva.")
         _ensure_permission_tier(
             db,
             context,
@@ -685,7 +706,7 @@ def update_booking(
 
     # Validate dates
     if new_co <= new_ci:
-        raise HTTPException(status_code=400, detail="check_out_date must be after check_in_date")
+        raise HTTPException(status_code=400, detail="La fecha de salida debe ser posterior a la fecha de llegada.")
 
     # Validate existing room still matches category
     if booking.room_id is not None and booking.category_id != new_category_id:
@@ -695,7 +716,10 @@ def update_booking(
             .first()
         )
         if room and room.category_id != new_category_id:
-            raise HTTPException(status_code=400, detail="Existing room does not belong to the new category; change room first")
+            raise HTTPException(
+                status_code=400,
+                detail="La habitación asignada no pertenece a la nueva categoría. Cambiá la habitación primero.",
+            )
 
     room_id_changed = (
         "room_id" in data
@@ -713,9 +737,9 @@ def update_booking(
             .first()
         )
         if not room:
-            raise HTTPException(status_code=400, detail="Room not found")
+            raise HTTPException(status_code=400, detail="No se encontró la habitación seleccionada.")
         if room.category_id != new_category_id:
-            raise HTTPException(status_code=400, detail="Room does not belong to the booking category")
+            raise HTTPException(status_code=400, detail="La habitación no pertenece a la categoría de la reserva.")
         try:
             enforce_room_move_permission(
                 db,
@@ -893,14 +917,14 @@ def delete_booking(
     )
     booking = lock_query(booking_query, Reservation).first()
     if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     # Avoid deleting checked-in/checked-out bookings to preserve history
     if booking.status in {ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT}:
-        raise HTTPException(status_code=400, detail="Cannot delete an active/finished booking")
+        raise HTTPException(status_code=400, detail="No se puede eliminar una reserva en curso o finalizada.")
     if reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=booking):
         raise HTTPException(
             status_code=409,
-            detail="A booking with payment history cannot be deleted; use the cancellation workflow instead",
+            detail="No se puede eliminar una reserva con pagos registrados; usá el flujo de cancelación.",
         )
     before = audit_log_service.model_snapshot(booking)
     booking.deleted_at = datetime.now(timezone.utc)

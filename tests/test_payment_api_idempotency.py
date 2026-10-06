@@ -27,7 +27,7 @@ def test_cash_charge_without_open_cash_session_is_blocked_not_a_crash(client_wit
     response = client.post("/api/payments/", json=payload, headers=headers)
 
     assert response.status_code == 400, response.text
-    assert "cash session" in response.json()["detail"].lower()
+    assert "caja" in response.json()["detail"].lower()
 
 
 @pytest.mark.parametrize("method", ["mercado_pago", "paypal"])
@@ -175,5 +175,5 @@ def test_manual_payment_cannot_write_for_another_hotel(client_with_db):
     )
 
     assert response.status_code == 404, response.text
-    assert response.json()["detail"] == "Reservation not found"
+    assert response.json()["detail"] == "No se encontró la reserva."
     assert db.query(Transaction).filter(Transaction.reservation_id == reservation.id).count() == 0

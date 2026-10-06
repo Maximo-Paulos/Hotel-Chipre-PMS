@@ -57,7 +57,9 @@ const EMPTY_SESSION: SessionState = {
 };
 
 const isRetryableSessionRestoreError = (error: unknown) =>
-  error instanceof TypeError || (error instanceof ApiError && error.status >= 500);
+  error instanceof TypeError ||
+  (error instanceof Error && error.name === "AbortError") ||
+  (error instanceof ApiError && (error.status === 408 || error.status >= 500));
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 

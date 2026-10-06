@@ -1,4 +1,5 @@
 import { broadcastDomainChange } from "../sync/crossTabSync";
+import i18n from "../i18n";
 
 export type SessionLike = {
   hotelId?: number | null;
@@ -349,6 +350,7 @@ type RequestOptions = {
   signal?: AbortSignal;
   timeoutMs?: number;
   session?: SessionLike;
+  responseType?: "json" | "blob";
 };
 
 const createRequestDeadline = (callerSignal: AbortSignal | undefined, timeoutMs: number) => {
@@ -478,8 +480,15 @@ const makeApiError = (response: Response, payload: unknown) => {
     typeof payload === "object" && payload !== null && "detail" in (payload as Record<string, unknown>)
       ? (payload as Record<string, unknown>).detail
       : undefined;
-  const message = formatErrorDetail(detail) || response.statusText || "Request failed";
+  const message = formatErrorDetail(detail) || requestFailureFallback();
   return new ApiError(response.status, message, payload);
+};
+
+const requestFailureFallback = () => {
+  if (i18n?.language?.toLowerCase().startsWith("en")) {
+    return "The request could not be completed. Please try again.";
+  }
+  return "No se pudo completar la solicitud. Intentá de nuevo.";
 };
 
 const isAuthResponsePayload = (payload: unknown): payload is AuthResponsePayload => {
@@ -579,7 +588,7 @@ async function requestWithRefresh<T>(
   allowActionStepUp = true,
   actionStepUpTicket?: string
 ): Promise<T> {
-  const { method = "GET", data, headers, signal, session } = options;
+  const { method = "GET", data, headers, signal, session, responseType = "json" } = options;
   const requestSession = mergeSession(session);
   const fetchHeaders = requestHeaders(method, requestSession, headers);
   const readStepUpTicket = getPermissionAdminReadStepUpTicket(method, path, requestSession);
@@ -590,13 +599,28 @@ async function requestWithRefresh<T>(
   );
   if (actionStepUpTicket) fetchHeaders.set("X-Action-Step-Up-Ticket", actionStepUpTicket);
   else if (readStepUpTicketUsed) fetchHeaders.set("X-Action-Step-Up-Ticket", readStepUpTicket as string);
-  const response = await fetch(buildUrl(path), {
-    method,
-    headers: fetchHeaders,
-    body: data !== undefined ? JSON.stringify(data) : undefined,
-    signal,
-    credentials: "include"
-  });
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path), {
+      method,
+      headers: fetchHeaders,
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+      signal,
+      credentials: "include"
+    });
+  } catch (error) {
+    if (error instanceof TypeError && !signal?.aborted) {
+      throw new ApiError(0, requestFailureFallback());
+    }
+    throw error;
+  }
+
+  if (response.ok && responseType === "blob") {
+    if (MUTATING_METHODS.has(method) && requestSession?.hotelId) {
+      broadcastDomainChange(requestSession.hotelId, path);
+    }
+    return (await response.blob()) as T;
+  }
 
   const text = await response.text();
   const payload = text ? safeJson(text) : null;
@@ -743,6 +767,7 @@ const formatErrorDetail = (detail: unknown): string | null => {
   }
   if (detail && typeof detail === "object") {
     const rec = detail as Record<string, unknown>;
+    if (typeof rec.message === "string") return rec.message;
     if (typeof rec.msg === "string") return rec.msg;
   }
   return null;

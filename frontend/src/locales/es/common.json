@@ -1,5 +1,12 @@
 {
   "loading": "Cargando...",
+  "saving": "Guardando...",
+  "laundryCost": {
+    "knownTotal": "Costos con tarifa configurada",
+    "unpricedWarning": "Falta precio para {{quantity}} unidades; los subtotales solo incluyen cantidades con tarifa.",
+    "unpricedByItem": "{{quantity}} unidades sin tarifa",
+    "subtotalWithPrice": "Con tarifa: {{amount}}"
+  },
   "stockAlerts": {
     "linenLowTitle": "Ropa blanca bajo mínimo",
     "linenOutItem": "No hay unidades disponibles de {{item}} en esta ubicación.",
@@ -18,6 +25,31 @@
     "manager": "Gerencia",
     "receptionist": "Recepción",
     "housekeeping": "Limpieza"
+  },
+  "permissionHelpLabel": "Más información sobre el permiso {{code}}",
+  "permissionCount_one": "{{count}} permiso",
+  "permissionCount_other": "{{count}} permisos",
+  "permissionModules": {
+    "analytics": "Analítica",
+    "cash": "Caja",
+    "checkin": "Check-in",
+    "commercial": "Comercial",
+    "companies": "Empresas",
+    "dashboard": "Panel",
+    "guests": "Huéspedes",
+    "hotel_settings": "Configuración del hotel",
+    "laundry": "Lavandería",
+    "operations": "Operaciones",
+    "payments": "Pagos",
+    "promotions": "Promociones",
+    "rates": "Tarifas",
+    "reports": "Reportes",
+    "reservations": "Reservas",
+    "rooms": "Habitaciones",
+    "security": "Seguridad",
+    "settings": "Configuración",
+    "stock": "Inventario",
+    "whatsapp": "WhatsApp"
   },
   "hotelRoles": {
     "title": "Roles de este hotel",

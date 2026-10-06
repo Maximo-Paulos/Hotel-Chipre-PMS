@@ -215,6 +215,88 @@ def test_owner_can_still_set_manual_total_amount():
         _cleanup_client(db, engine)
 
 
+def test_large_manual_creation_rate_requires_server_side_confirmation():
+    client, db, engine = _build_client()
+    try:
+        hotel_id = 517
+        guest_id, category_id = _seed_bookable_state(db, hotel_id)
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "owner")
+        payload = _payload(
+            guest_id,
+            category_id,
+            total_amount=10,
+            target_currency="ARS",
+            manual_rate_reason="Error de tipeo corregido",
+        )
+
+        unconfirmed = client.post("/api/reservations/", json=payload)
+
+        assert unconfirmed.status_code == 422, unconfirmed.text
+        assert "50 %" in unconfirmed.json()["detail"]
+        assert db.query(Reservation).filter_by(hotel_id=hotel_id).count() == 0
+
+        confirmed = client.post(
+            "/api/reservations/",
+            json={**payload, "confirm_large_total_adjustment": True},
+        )
+
+        assert confirmed.status_code == 201, confirmed.text
+        created = db.query(Reservation).filter_by(hotel_id=hotel_id).one()
+        pricing_snapshot = json.loads(created.pricing_snapshot)
+        assert pricing_snapshot["manual_rate"]["large_adjustment_confirmation"] == {
+            "confirmed": True,
+            "reference_total": "200.00",
+            "currency_code": "ARS",
+        }
+    finally:
+        _cleanup_client(db, engine)
+
+
+def test_large_manual_update_requires_confirmation_and_preserves_total_on_rejection():
+    client, db, engine = _build_client()
+    try:
+        hotel_id = 518
+        guest_id, category_id = _seed_bookable_state(db, hotel_id)
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "owner")
+        created = client.post(
+            "/api/reservations/",
+            json=_payload(
+                guest_id,
+                category_id,
+                total_amount=200,
+                target_currency="ARS",
+                manual_rate_reason="Tarifa acordada",
+            ),
+        )
+        assert created.status_code == 201, created.text
+        reservation = db.query(Reservation).filter_by(hotel_id=hotel_id).one()
+        update_payload = {
+            "total_amount": 10,
+            "paid_total_change_reason": "Corrección de error de tipeo",
+            "client_version": reservation.version,
+        }
+
+        unconfirmed = client.patch(f"/api/reservations/{reservation.id}", json=update_payload)
+
+        assert unconfirmed.status_code == 422, unconfirmed.text
+        db.refresh(reservation)
+        assert reservation.total_amount == 200
+
+        confirmed = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={**update_payload, "confirm_large_total_adjustment": True},
+        )
+
+        assert confirmed.status_code == 200, confirmed.text
+        db.refresh(reservation)
+        assert reservation.total_amount == 10
+        snapshot = json.loads(reservation.pricing_snapshot)
+        latest = snapshot["manual_total_adjustments"][-1]
+        assert latest["large_total_adjustment_confirmed"] is True
+    finally:
+        _cleanup_client(db, engine)
+
+
 def test_manager_can_set_a_direct_rate_inside_owner_configured_bounds():
     client, db, engine = _build_client()
     try:

@@ -11,7 +11,7 @@ owner explicitly rejected a shared table split by a ``kind`` flag.
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,8 +37,16 @@ from app.services.laundry_vendor_service import (
     vendor_spend,
     is_duplicate_remito_integrity_error,
 )
+from app.services.laundry_missing_followup_service import (
+    LaundryMissingFollowUpError,
+    LaundryMissingFollowUpNotFound,
+    list_missing_follow_ups,
+    update_missing_follow_up,
+)
 from app.services.linen_service import (
     LinenError,
+    LinenNotFoundError,
+    LinenOpeningCountConflict,
     create_linen_item,
     create_location as create_linen_location,
     current_stock as current_linen_stock,
@@ -111,6 +119,7 @@ class VendorPriceRead(BaseModel):
 class RemitoLineIn(BaseModel):
     linen_item_id: int
     quantity: Decimal
+    missing_quantity: Decimal = Field(default=Decimal("0"), ge=0)
 
 
 class RemitoCreate(BaseModel):
@@ -129,6 +138,7 @@ class RemitoLineRead(BaseModel):
     id: int
     linen_item_id: int
     quantity: Decimal
+    missing_quantity: Decimal = Decimal("0")
     unit_price_snapshot: Optional[Decimal] = None
 
 
@@ -197,10 +207,12 @@ class VendorSpendLine(BaseModel):
     linen_item_name: str
     quantity: Decimal
     subtotal: Decimal
+    unpriced_quantity: Decimal = Decimal("0.00")
 
 
 class VendorSpendRead(BaseModel):
     total: Decimal
+    unpriced_quantity: Decimal = Decimal("0.00")
     by_item: list[VendorSpendLine]
 
 
@@ -208,6 +220,7 @@ class SettlementQuarterRead(BaseModel):
     period_start: date
     period_end: date
     total_amount: Decimal
+    unpriced_quantity: Decimal = Decimal("0.00")
     by_item: list[VendorSpendLine]
     paid: bool
     paid_at: Optional[datetime] = None
@@ -217,6 +230,39 @@ class SettlementQuarterRead(BaseModel):
 class SettlementMarkPaid(BaseModel):
     paid: bool
     notes: Optional[str] = None
+
+
+class MissingFollowUpRead(BaseModel):
+    id: int
+    remito_id: int
+    remito_number: str
+    remito_date: datetime
+    vendor_id: int
+    vendor_name: str
+    linen_item_id: int
+    linen_item_name: str
+    quantity: Decimal
+    missing_quantity: Decimal
+    follow_up_status: Literal["open", "contacted", "response_recorded", "closed"]
+    follow_up_note: Optional[str] = None
+    supplier_reference: Optional[str] = None
+    supplier_contacted_on: Optional[date] = None
+    supplier_contact_note: Optional[str] = None
+    supplier_response_on: Optional[date] = None
+    supplier_response_note: Optional[str] = None
+    follow_up_updated_at: Optional[datetime] = None
+
+
+class MissingFollowUpUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    follow_up_status: Optional[Literal["open", "contacted", "response_recorded", "closed"]] = None
+    follow_up_note: Optional[str] = Field(default=None, max_length=5000)
+    supplier_reference: Optional[str] = Field(default=None, max_length=120)
+    supplier_contacted_on: Optional[date] = None
+    supplier_contact_note: Optional[str] = Field(default=None, max_length=2000)
+    supplier_response_on: Optional[date] = None
+    supplier_response_note: Optional[str] = Field(default=None, max_length=5000)
 
 
 class LinenItemCreate(BaseModel):
@@ -295,6 +341,42 @@ class LinenOpeningCountLineIn(BaseModel):
 class LinenOpeningCountBatchIn(BaseModel):
     counts: list[LinenOpeningCountLineIn] = Field(min_length=1, max_length=300)
     reason: str = Field(min_length=1, max_length=500)
+
+
+@router.get("/missing-follow-ups", response_model=list[MissingFollowUpRead])
+def get_laundry_missing_follow_ups(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+):
+    return list_missing_follow_ups(db=db, hotel_id=context.hotel_id)
+
+
+@router.patch("/missing-follow-ups/{remito_line_id}", response_model=MissingFollowUpRead)
+def patch_laundry_missing_follow_up(
+    remito_line_id: int,
+    data: MissingFollowUpUpdate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+):
+    try:
+        result = update_missing_follow_up(
+            db=db,
+            hotel_id=context.hotel_id,
+            remito_line_id=remito_line_id,
+            changes=data.model_dump(exclude_unset=True),
+            actor_user_id=context.user_id,
+        )
+        db.commit()
+        return result
+    except LaundryMissingFollowUpNotFound as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LaundryMissingFollowUpError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="No se pudo guardar el seguimiento de faltante.") from exc
 
 
 @router.get("/items", response_model=list[LinenItemRead])
@@ -413,8 +495,10 @@ def set_laundry_linen_location_minimum(
             min_quantity=data.min_quantity,
             actor_user_id=context.user_id,
         )
+    except LinenNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     except LinenError as exc:
-        raise HTTPException(status_code=404 if "not found" in str(exc).lower() else 400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc))
     db.commit()
     db.refresh(par_level)
     return par_level
@@ -486,9 +570,12 @@ def create_laundry_linen_opening_counts(
             reason=data.reason,
             created_by_user_id=context.user_id,
         )
+    except LinenOpeningCountConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except LinenNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except LinenError as exc:
-        status_code = 409 if "prior movements" in str(exc).lower() or "only available" in str(exc).lower() else 400
-        raise HTTPException(status_code=status_code, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     db.commit()
     for movement in movements:
         db.refresh(movement)
@@ -630,6 +717,7 @@ def create_laundry_remito(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_OPERATE_REMITOS)),
 ):
+    reconciliation_warnings: list[str] = []
     try:
         remito = create_remito(
             db,
@@ -642,6 +730,7 @@ def create_laundry_remito(
             lines=[line.model_dump() for line in data.lines],
             notes=data.notes,
             actor_user_id=context.user_id,
+            reconciliation_warnings=reconciliation_warnings,
         )
     except DuplicateLaundryRemitoError as exc:
         db.rollback()
@@ -662,11 +751,17 @@ def create_laundry_remito(
             detail="No se pudo confirmar el remito en este momento.",
         ) from exc
     db.refresh(remito)
-    warnings = [
+    warnings = list(reconciliation_warnings)
+    warnings.extend(
         f"No hay precio configurado para el item {line.linen_item_id}"
         for line in remito.lines
         if line.unit_price_snapshot is None
-    ]
+    )
+    warnings.extend(
+        f"Se registró un faltante de {line.missing_quantity} en el remito {remito.remito_number}."
+        for line in remito.lines
+        if line.missing_quantity > 0
+    )
     remito_read = _remito_read(db, hotel_id=context.hotel_id, remito=remito)
     safe_remito = _housekeeping_remito(remito_read) if context.operational_role == "housekeeping" else remito_read
     return {"remito": safe_remito, "warnings": warnings}

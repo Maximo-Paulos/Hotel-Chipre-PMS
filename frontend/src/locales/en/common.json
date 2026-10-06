@@ -1,5 +1,12 @@
 {
   "loading": "Loading...",
+  "saving": "Saving...",
+  "laundryCost": {
+    "knownTotal": "Costs with configured prices",
+    "unpricedWarning": "No price is set for {{quantity}} units; subtotals include only quantities with a price.",
+    "unpricedByItem": "{{quantity}} units without a price",
+    "subtotalWithPrice": "Priced subtotal: {{amount}}"
+  },
   "stockAlerts": {
     "linenLowTitle": "Linen below minimum",
     "linenOutItem": "No units of {{item}} are available at this location.",
@@ -18,6 +25,31 @@
     "manager": "Manager",
     "receptionist": "Reception",
     "housekeeping": "Housekeeping"
+  },
+  "permissionHelpLabel": "More information about permission {{code}}",
+  "permissionCount_one": "{{count}} permission",
+  "permissionCount_other": "{{count}} permissions",
+  "permissionModules": {
+    "analytics": "Analytics",
+    "cash": "Cash",
+    "checkin": "Check-in",
+    "commercial": "Commercial",
+    "companies": "Companies",
+    "dashboard": "Dashboard",
+    "guests": "Guests",
+    "hotel_settings": "Hotel settings",
+    "laundry": "Laundry",
+    "operations": "Operations",
+    "payments": "Payments",
+    "promotions": "Promotions",
+    "rates": "Rates",
+    "reports": "Reports",
+    "reservations": "Reservations",
+    "rooms": "Rooms",
+    "security": "Security",
+    "settings": "Settings",
+    "stock": "Inventory",
+    "whatsapp": "WhatsApp"
   },
   "hotelRoles": {
     "title": "Roles for this hotel",

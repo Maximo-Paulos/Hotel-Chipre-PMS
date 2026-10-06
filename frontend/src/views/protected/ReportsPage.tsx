@@ -28,6 +28,21 @@ const hotelTodayIso = (timeZone?: string | null, serverDate?: string | null) => 
   }
 };
 
+const shiftIsoDate = (isoDate: string, days: number) => {
+  const date = new Date(`${isoDate}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return isoDate;
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+const mondayToSunday = (isoDate: string) => {
+  const date = new Date(`${isoDate}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return { startDate: isoDate, endDate: isoDate };
+  const daysSinceMonday = (date.getUTCDay() + 6) % 7;
+  const startDate = shiftIsoDate(isoDate, -daysSinceMonday);
+  return { startDate, endDate: shiftIsoDate(startDate, 6) };
+};
+
 const paymentMethodLabel = (method?: string | null) => ({
   cash: "Efectivo",
   bank_transfer: "Transferencia",
@@ -62,16 +77,22 @@ export function ReportsPage() {
   const canViewFinancial = hasPermission("reports:financial:view");
   const [selectedReportDate, setSelectedReportDate] = useState("");
   const reportDate = selectedReportDate || hotelTodayIso(hotelConfigQuery.data?.hotel_timezone, arrivalCountQuery.data?.report_date);
+  const weekPeriod = mondayToSunday(reportDate);
   const reportQuery = useDailyOperationalReport(reportDate);
   const alertsQuery = useOperationalAlerts(reportDate);
   const occupancyQuery = useOccupancyReport(reportDate, reportDate);
   const revenueQuery = useRevenueReport(reportDate, reportDate, canViewFinancial);
+  const weeklyRevenueQuery = useRevenueReport(weekPeriod.startDate, weekPeriod.endDate, canViewFinancial);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [exportingWeekly, setExportingWeekly] = useState(false);
+  const [weeklyExportError, setWeeklyExportError] = useState<string | null>(null);
   const report = reportQuery.data;
   const alerts = alertsQuery.data?.alerts ?? report?.alerts ?? [];
   const occupancy = occupancyQuery.data?.daily[0];
   const revenue = revenueQuery.data;
+  const weeklyRevenue = weeklyRevenueQuery.data;
+  const weeklyTimezone = weeklyRevenue?.timezone ?? revenue?.timezone ?? hotelConfigQuery.data?.hotel_timezone ?? null;
 
   const exportCsv = async () => {
     setExporting(true);
@@ -88,6 +109,24 @@ export function ReportsPage() {
       setExportError(error instanceof Error ? error.message : "No se pudo exportar el reporte.");
     } finally {
       setExporting(false);
+    }
+  };
+
+  const exportWeeklyCsv = async () => {
+    setExportingWeekly(true);
+    setWeeklyExportError(null);
+    try {
+      const blob = await downloadRevenueReportCsv(weekPeriod.startDate, weekPeriod.endDate, session);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `reporte-financiero-semanal-${weekPeriod.startDate}-${weekPeriod.endDate}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setWeeklyExportError(error instanceof Error ? error.message : "No se pudo exportar el reporte semanal.");
+    } finally {
+      setExportingWeekly(false);
     }
   };
 
@@ -302,6 +341,100 @@ export function ReportsPage() {
           No hay datos para mostrar.
         </div>
       )}
+
+      {canViewFinancial && (
+        <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm" data-testid="financial-weekly-report">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-emerald-700">Finanzas · acceso owner/co-owner</p>
+              <h2 className="text-lg font-semibold text-slate-900">Resumen financiero de la semana</h2>
+              <p className="text-xs text-slate-600">
+                Período: {weekPeriod.startDate} a {weekPeriod.endDate} · Lunes a domingo
+                {weeklyTimezone ? ` · Zona horaria: ${weeklyTimezone}` : " · Zona horaria del hotel"}.
+              </p>
+              <p className="mt-1 text-xs text-slate-600">Importes agrupados por moneda. El valor reservado no representa un cobro.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void exportWeeklyCsv()}
+              disabled={exportingWeekly || weeklyRevenueQuery.isFetching}
+              className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
+              data-testid="weekly-revenue-export"
+            >
+              {exportingWeekly ? "Exportando…" : "Exportar semana CSV"}
+            </button>
+          </div>
+
+          {weeklyExportError ? <p className="mt-3 text-sm text-rose-700" role="alert">{weeklyExportError}</p> : null}
+          {weeklyRevenueQuery.isLoading ? (
+            <p className="mt-4 rounded-lg border border-emerald-200 bg-white px-4 py-3 text-sm text-slate-600" role="status" data-testid="weekly-revenue-loading">
+              Cargando ingresos de la semana…
+            </p>
+          ) : weeklyRevenueQuery.isError ? (
+            <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert" data-testid="weekly-revenue-error">
+              <p>{financialReportErrorMessage(weeklyRevenueQuery.error)}</p>
+              <button
+                type="button"
+                onClick={() => void weeklyRevenueQuery.refetch()}
+                disabled={weeklyRevenueQuery.isFetching}
+                className="mt-2 rounded-lg border border-rose-300 bg-white px-3 py-2 font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
+              >
+                Reintentar semana
+              </button>
+            </div>
+          ) : weeklyRevenue ? (
+            hasWeeklyRevenueData(weeklyRevenue) ? (
+              <>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <Metric label="Cobrado neto en el PMS" value={currencyAmounts(weeklyRevenue.collected.by_currency, "net_collected")} />
+                  <Metric label="Valor reservado en el período · no es cobro" value={currencyAmounts(weeklyRevenue.booked_value.by_currency, "amount")} />
+                  <Metric label="Cobrado por OTA · fuera de caja" value={currencyAmounts(weeklyRevenue.external_ota_collected.by_currency, "amount")} />
+                </div>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <BreakdownTable
+                    title="Cobros y devoluciones por medio"
+                    rows={weeklyRevenue.collected.by_method_by_currency.map((item) => ({
+                      key: `${item.payment_method}-${item.currency_code}`,
+                      label: paymentMethodLabel(item.payment_method),
+                      currency: item.currency_code,
+                      gross: item.gross_collected,
+                      refunds: item.refunds,
+                      net: item.net_collected
+                    }))}
+                  />
+                  <BreakdownTable
+                    title="Cobros y devoluciones por categoría"
+                    rows={weeklyRevenue.collected.by_category.map((item) => ({
+                      key: `${item.category_id}-${item.currency_code}`,
+                      label: item.category_name ?? "Sin categoría",
+                      currency: item.currency_code,
+                      gross: item.gross_collected,
+                      refunds: item.refunds,
+                      net: item.net_collected
+                    }))}
+                  />
+                  <BreakdownTable
+                    title="Cobros y devoluciones por canal"
+                    rows={weeklyRevenue.collected.by_channel.map((item) => ({
+                      key: `${item.channel_code}-${item.currency_code}`,
+                      label: channelLabel(item.channel_code),
+                      currency: item.currency_code,
+                      gross: item.gross_collected,
+                      refunds: item.refunds,
+                      net: item.net_collected
+                    }))}
+                  />
+                  <WeeklyDailyCollections rows={weeklyRevenue.collected.by_day_by_currency} />
+                </div>
+              </>
+            ) : (
+              <p className="mt-4 rounded-lg border border-dashed border-emerald-200 bg-white px-4 py-3 text-sm text-slate-600" role="status" data-testid="weekly-revenue-empty">
+                No hay cobros, reservas ni cobros externos de OTA para esta semana. El CSV está disponible y contendrá los encabezados sin filas de datos.
+              </p>
+            )
+          ) : null}
+        </section>
+      )}
     </div>
   );
 }
@@ -312,6 +445,20 @@ function reportsErrorMessage(error: unknown): string {
     if (error.status === 403) return "No tenés permisos para consultar este reporte operativo.";
   }
   return "No se pudo cargar el reporte operativo. Revisá la conexión y reintentá.";
+}
+
+function financialReportErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 402) return "Tu plan actual no incluye el reporte financiero.";
+    if (error.status === 403) return "No tenés permisos para consultar el reporte financiero.";
+  }
+  return "No se pudo cargar el reporte financiero semanal. Revisá la conexión y reintentá.";
+}
+
+function hasWeeklyRevenueData(revenue: NonNullable<ReturnType<typeof useRevenueReport>["data"]>) {
+  return revenue.collected.by_currency.length > 0
+    || revenue.booked_value.by_currency.length > 0
+    || revenue.external_ota_collected.by_currency.length > 0;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -398,6 +545,28 @@ function BreakdownTable({
           <tbody className="divide-y divide-slate-100">
             {rows.length === 0 ? <tr><td colSpan={5} className="px-3 py-3 text-slate-500">Sin cobros confirmados.</td></tr> : rows.map((row) => (
               <tr key={row.key}><td className="px-3 py-2 font-medium text-slate-800">{row.label}</td><td className="px-3 py-2">{row.currency}</td><td className="px-3 py-2">{money(row.gross, row.currency)}</td><td className="px-3 py-2">{money(row.refunds, row.currency)}</td><td className="px-3 py-2 font-semibold">{money(row.net, row.currency)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function WeeklyDailyCollections({
+  rows
+}: {
+  rows: Array<{ date: string; currency_code: string; net_collected: CurrencyAmount }>;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border border-emerald-200 bg-white">
+      <div className="border-b border-emerald-100 px-4 py-3"><h3 className="font-semibold text-slate-900">Cobro neto por día y moneda</h3></div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-emerald-50 text-xs text-slate-600"><tr><th className="px-3 py-2">Fecha</th><th className="px-3 py-2">Moneda</th><th className="px-3 py-2">Cobro neto</th></tr></thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.length === 0 ? <tr><td colSpan={3} className="px-3 py-3 text-slate-500">Sin cobros confirmados.</td></tr> : rows.map((row) => (
+              <tr key={`${row.date}-${row.currency_code}`}><td className="px-3 py-2">{row.date}</td><td className="px-3 py-2">{row.currency_code}</td><td className="px-3 py-2 font-semibold">{money(row.net_collected, row.currency_code)}</td></tr>
             ))}
           </tbody>
         </table>

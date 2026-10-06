@@ -26,6 +26,7 @@ from app.schemas.company_night_charge import (
 )
 from app.services.timezones import hotel_today
 from app.services.financial_ledger import paid_amount_with_legacy_fallback
+from app.services.row_locks import lock_query
 
 
 CENT = Decimal("0.01")
@@ -49,7 +50,7 @@ def _reservation(
         Reservation.deleted_at.is_(None),
     )
     if lock:
-        query = query.with_for_update()
+        query = lock_query(query, Reservation)
     reservation = query.one_or_none()
     if reservation is None:
         raise CompanyNightChargeError("La reserva no pertenece a este hotel.")
@@ -640,13 +641,12 @@ def correct_company_night_charge_amounts(
         if delta_amount == 0:
             continue
         billing_adjustment = (
-            db.query(BillingAdjustment)
+            lock_query(db.query(BillingAdjustment), BillingAdjustment)
             .filter(
                 BillingAdjustment.hotel_id == hotel_id,
                 BillingAdjustment.id == charge.billing_adjustment_id,
                 BillingAdjustment.reservation_id == reservation_id,
             )
-            .with_for_update()
             .one_or_none()
         )
         if billing_adjustment is None:

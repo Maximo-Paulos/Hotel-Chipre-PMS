@@ -472,7 +472,7 @@ def resend_invitation(
 @router.get("/invitations", response_model=list[StaffInvitationListItem])
 def list_staff_invitations(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(_MANAGE_STAFF),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_USERS_VIEW)),
 ):
     now = utcnow()
     invitations = (
@@ -769,7 +769,7 @@ def update_role(
 @router.get("/aliases", response_model=StaffAliasRosterResponse)
 def list_staff_aliases(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(_MANAGE_STAFF),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_USERS_VIEW)),
 ):
     """Expose only the current hotel's roster fields needed to edit aliases."""
 

@@ -54,7 +54,7 @@ def _require_open_session(db: Session, hotel_id: int, session_id: int) -> CashSe
         .with_for_update(of=CashSession)
     ).scalar_one_or_none()
     if session is None:
-        raise CashRegisterError("Cash session is not open for this hotel")
+        raise CashRegisterError("La caja no está abierta para este hotel")
     return session
 
 
@@ -81,7 +81,7 @@ def open_session(
         .one_or_none()
     )
     if existing is not None:
-        raise CashRegisterError("Hotel already has an open cash session for this currency")
+        raise CashRegisterError("Ya hay una caja abierta para esta moneda.")
 
     session = CashSession(
         hotel_id=hotel_id,
@@ -94,7 +94,7 @@ def open_session(
     try:
         db.flush()
     except IntegrityError as exc:
-        raise CashRegisterError("Hotel already has an open cash session for this currency") from exc
+        raise CashRegisterError("Ya hay una caja abierta para esta moneda.") from exc
     return session
 
 
@@ -225,16 +225,16 @@ def add_movement(
 
     session = _require_open_session(db, hotel_id, session_id)
     if _money(amount) <= 0:
-        raise CashRegisterError("Cash movement amount must be positive")
+        raise CashRegisterError("El importe del movimiento de caja debe ser mayor que cero")
 
     if not _from_payment_transaction and transaction_id is not None:
-        raise CashRegisterError("Transaction-linked cash movements are created by the payment workflow")
+        raise CashRegisterError("Los movimientos de caja vinculados a una transacción se crean desde el flujo de pagos")
     if (
         not _from_payment_transaction
         and movement_type == CashMovementTypeEnum.EXPENSE
         and reservation_id is not None
     ):
-        raise CashRegisterError("Guest refunds must use the audited payment-refund workflow")
+        raise CashRegisterError("Las devoluciones a huéspedes deben registrarse mediante el flujo auditado de pagos")
 
     if transaction_id is not None:
         transaction = (
@@ -243,21 +243,21 @@ def add_movement(
             .one_or_none()
         )
         if transaction is None:
-            raise CashRegisterError("Transaction does not belong to this hotel")
+            raise CashRegisterError("La transacción no pertenece a este hotel")
         if reservation_id is not None and transaction.reservation_id != reservation_id:
-            raise CashRegisterError("Transaction does not belong to the selected reservation")
+            raise CashRegisterError("La transacción no pertenece a la reserva seleccionada")
         if _from_payment_transaction:
             from app.models.transaction import TransactionTypeEnum
 
             if transaction.status != TransactionStatusEnum.COMPLETED or transaction.payment_method != PaymentMethodEnum.CASH:
-                raise CashRegisterError("Only completed cash transactions can create linked cash movements")
+                raise CashRegisterError("Solo las transacciones completadas en efectivo pueden generar movimientos de caja vinculados")
             expected_movement_type = (
                 CashMovementTypeEnum.EXPENSE
                 if transaction.transaction_type == TransactionTypeEnum.REFUND
                 else CashMovementTypeEnum.INCOME
             )
             if movement_type != expected_movement_type:
-                raise CashRegisterError("Cash movement type does not match the payment transaction")
+                raise CashRegisterError("El tipo de movimiento de caja no coincide con la transacción de pago")
 
     movement = CashMovement(
         hotel_id=hotel_id,
@@ -313,15 +313,16 @@ def require_open_session_for_currency(
         ).first()
         if any_open_session:
             raise CashRegisterError(
-                f"Cash session currency ({str(currency_code or '').strip().upper()}) does not have an open drawer"
+                f"No hay una caja abierta en la moneda ({str(currency_code or '').strip().upper()}); "
+                "hay una caja abierta en otra moneda."
             )
-        raise CashRegisterError("Cash payment requires an open cash session")
+        raise CashRegisterError("Para registrar un pago en efectivo, primero debe abrirse una caja.")
 
     session_currency = (session.currency_code or "").strip().upper()
     payment_currency = (currency_code or "").strip().upper()
     if session_currency != payment_currency:
         raise CashRegisterError(
-            f"Cash session currency ({session_currency}) does not match payment currency ({payment_currency})"
+            f"La moneda de la caja ({session_currency}) no coincide con la moneda del pago ({payment_currency})."
         )
     return session
 
@@ -436,7 +437,7 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
         .one_or_none()
     )
     if session is None:
-        raise CashRegisterError("Cash session not found for this hotel")
+        raise CashRegisterError("No se encontró la caja para este hotel")
 
     as_of = datetime.now(timezone.utc)
     movements = list_movements(db, hotel_id=hotel_id, session_id=session_id)
@@ -485,11 +486,11 @@ def close_session(
     )
     session = db.execute(stmt).scalar_one_or_none()
     if session is None:
-        raise CashRegisterError("Cash session not found for this hotel")
+        raise CashRegisterError("No se encontró la caja para este hotel")
     if session.status != CashSessionStatusEnum.OPEN:
-        raise CashRegisterError("Cash session is not open")
+        raise CashRegisterError("La caja no está abierta")
     if session.close_report is not None:
-        raise CashRegisterError("Cash session already has a close report")
+        raise CashRegisterError("La caja ya tiene un informe de cierre")
     pending_expense = (
         db.query(CashExpense.id)
         .filter(
@@ -574,21 +575,21 @@ def confirm_cash_custody(
         .scalar_one_or_none()
     )
     if report is None or report.custody_handoff is None:
-        raise CashRegisterError("Cash custody handoff not found for this hotel")
+        raise CashRegisterError("No se encontró la entrega de caja para este hotel.")
     handoff = report.custody_handoff
     amount = _money(successor_float_amount)
     maximum_float = min(Decimal("9999999999.99"), _money(handoff.delivered_amount))
     if amount < Decimal("0.00") or amount > maximum_float:
-        raise CashRegisterError("The successor float cannot exceed the cash delivered by the prior shift")
+        raise CashRegisterError("El fondo inicial del turno siguiente no puede superar el efectivo entregado por el turno anterior.")
 
     if handoff.status == CashCustodyStatusEnum.CONFIRMED:
         existing_amount = report.successor_float_declared_amount
         if existing_amount is None:
             if amount != Decimal("0.00"):
-                raise CashRegisterError("Cash custody was already confirmed without a successor float declaration")
+                raise CashRegisterError("La entrega de caja ya fue confirmada sin declarar el fondo inicial del turno siguiente.")
             return report
         if existing_amount != amount:
-            raise CashRegisterError("Cash custody was already confirmed with a different successor float")
+            raise CashRegisterError("La entrega de caja ya fue confirmada con otro fondo inicial para el turno siguiente.")
         return report
 
     successor = (
@@ -603,9 +604,9 @@ def confirm_cash_custody(
         .scalar_one_or_none()
     )
     if successor is None:
-        raise CashRegisterError("Successor cash session not found for this hotel")
+        raise CashRegisterError("No se encontró la caja del turno siguiente para este hotel.")
     if successor.status != CashSessionStatusEnum.OPEN:
-        raise CashRegisterError("Successor cash session is not open")
+        raise CashRegisterError("La caja del turno siguiente no está abierta.")
 
     now = datetime.now(timezone.utc)
     successor.opening_balance = amount
@@ -666,9 +667,9 @@ def approve_close_difference(
         .one_or_none()
     )
     if report is None:
-        raise CashRegisterError("Cash close report not found for this hotel")
+        raise CashRegisterError("No se encontró el informe de cierre de caja para este hotel")
     if report.difference == Decimal("0.00"):
-        raise CashRegisterError("Cash close report has no difference to approve")
+        raise CashRegisterError("El informe de cierre no tiene diferencias para aprobar")
     if report.difference_approved:
         return report
 
@@ -679,7 +680,7 @@ def approve_close_difference(
         .one_or_none()
     )
     if session is None:
-        raise CashRegisterError("Cash session not found for this hotel")
+        raise CashRegisterError("No se encontró la caja para este hotel")
 
     report.difference_approved = True
     report.approved_by_user_id = approved_by_user_id

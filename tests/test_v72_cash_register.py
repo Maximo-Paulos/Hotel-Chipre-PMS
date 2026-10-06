@@ -550,7 +550,7 @@ class TestAutoCashEntry:
         reservation = _make_reservation(db)
         tx = _make_transaction(db, reservation, amount=Decimal("300.00"))
 
-        with pytest.raises(CashRegisterError, match="payment workflow"):
+        with pytest.raises(CashRegisterError, match="flujo de pagos"):
             _add_cash_movement(
                 db,
                 session,
@@ -565,7 +565,7 @@ class TestAutoCashEntry:
         other_reservation = _make_reservation(db)
         tx = _make_transaction(db, reservation, amount=Decimal("100.00"))
 
-        with pytest.raises(CashRegisterError, match="selected reservation"):
+        with pytest.raises(CashRegisterError, match="no pertenece a la reserva seleccionada"):
             add_movement(
                 db,
                 hotel_id=session.hotel_id,

@@ -518,6 +518,42 @@ test("a STEP_UP_REQUIRED response prompts once and retries only that request wit
   assert.equal(requests[1].headers.get("X-CSRF-Token"), session.csrfToken);
 });
 
+test("a CSV blob request completes action step-up and retries with its one-use ticket", async () => {
+  const requests = [];
+  const exportPath = "/api/guests/ledger/export";
+  const client = loadClient(async (url, init) => {
+    requests.push({
+      path: new URL(String(url)).pathname,
+      headers: new Headers(init.headers)
+    });
+    return requests.length === 1
+      ? stepUpRequired(exportPath, "guest:export", "GET")
+      : new Response("first_name,last_name\\nAna,Lopez\\n", {
+          status: 200,
+          headers: { "Content-Type": "text/csv; charset=utf-8" }
+        });
+  }).client;
+  client.setClientSession(session);
+  const challenges = [];
+  client.setActionStepUpHandler(async (challenge) => {
+    challenges.push(challenge);
+    return "guest-export-ticket";
+  });
+
+  const blob = await client.apiFetch(
+    `${exportPath}?from_date=2026-04-01&to_date=2026-05-01`,
+    { responseType: "blob" }
+  );
+
+  assert.equal(await blob.text(), "first_name,last_name\\nAna,Lopez\\n");
+  assert.equal(challenges.length, 1);
+  assert.equal(challenges[0].permissionCode, "guest:export");
+  assert.equal(challenges[0].method, "GET");
+  assert.equal(challenges[0].path, exportPath);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].headers.get("X-Action-Step-Up-Ticket"), "guest-export-ticket");
+});
+
 test("missing or canceled UI surfaces the original 428 without retrying", async (t) => {
   for (const mode of ["unmounted", "canceled"]) {
     await t.test(mode, async () => {

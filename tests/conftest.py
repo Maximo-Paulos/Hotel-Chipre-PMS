@@ -52,9 +52,34 @@ Settings.model_config["env_file"] = None
 import pytest
 from datetime import date, timedelta
 from sqlalchemy import create_engine, event
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import sessionmaker, Session
 
 from app.database import Base
+
+
+@pytest.fixture(autouse=True)
+def _reject_unqualified_postgres_locks_over_outer_joins():
+    """Catch PostgreSQL-invalid ORM locks even when the test DB is SQLite."""
+
+    def _guard(orm_execute_state):
+        statement = orm_execute_state.statement
+        for_update = getattr(statement, "_for_update_arg", None)
+        if for_update is None or for_update.of:
+            return
+
+        sql = str(statement.compile(dialect=postgresql.dialect()))
+        if "LEFT OUTER JOIN" in sql.upper():
+            pytest.fail(
+                "PostgreSQL rejects FOR UPDATE without OF over nullable outer joins; "
+                f"target a concrete model with lock_query(...): {sql}"
+            )
+
+    event.listen(Session, "do_orm_execute", _guard)
+    try:
+        yield
+    finally:
+        event.remove(Session, "do_orm_execute", _guard)
 
 
 @pytest.fixture(autouse=True)

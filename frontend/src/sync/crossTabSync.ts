@@ -1,12 +1,10 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { buildAuthHeaders, buildUrl, type SessionLike } from "../api/client";
 import { recoveryDomainsForCursor, refreshDomains } from "../api/queryInvalidation";
 import {
-  HOTEL_ID_INDEX_BY_QUERY_PREFIX,
   QUERY_PREFIXES_BY_DOMAIN,
-  hotelIdForQueryKey,
   type QueryDomain
 } from "../api/queryKeys";
 import { useSession } from "../state/session";
@@ -42,8 +40,8 @@ const EVENT_ID_LIMIT = 2048;
 // Coalesce a burst of committed table events into one tenant-scoped refetch.
 const REALTIME_EVENT_DEBOUNCE_MS = 1_000;
 // Recovery remains bounded below the ten-second freshness budget when the
-// SSE transport is unavailable. Hidden tabs are included so visibility changes
-// do not leave an employee's session stale for a full minute.
+// SSE transport is unavailable. Hidden tabs pause recovery and catch up when
+// they become visible again.
 const REALTIME_RECOVERY_POLL_MS = 5_000;
 
 export type RealtimeConnectionStatus = "disabled" | "connecting" | "connected" | "reconnecting" | "degraded";
@@ -178,38 +176,28 @@ export const broadcastDomainChange = (hotelId: number | string | null | undefine
   });
 };
 
-const invalidateDomainQueries = (queryClient: QueryClient, hotelId: number, domain: SyncDomain) => {
-  const prefixes = new Set(DOMAIN_QUERY_PREFIXES[domain]);
-  return queryClient.invalidateQueries({
-    predicate: (query) => {
-      const [prefix] = query.queryKey;
-      if (typeof prefix !== "string" || !prefixes.has(prefix)) return false;
-      // A cross-tenant message must never invalidate a query that carries a
-      // different hotel scope. Unknown/unscoped operational keys stay untouched.
-      return hotelIdForQueryKey(query.queryKey) === hotelId && HOTEL_ID_INDEX_BY_QUERY_PREFIX[prefix] !== undefined;
-    },
-    refetchType: "active"
-  });
-};
-
-const notifyIfRelevant = (queryClient: QueryClient, hotelId: number, raw: unknown) => {
+const notifyIfRelevant = (
+  hotelId: number,
+  scheduleRefresh: (domain: SyncDomain) => void,
+  raw: unknown
+) => {
   const message = parseMessage(raw);
   if (!message || message.senderId === getSenderId() || message.hotelId !== hotelId) return;
-  void invalidateDomainQueries(queryClient, hotelId, message.domain);
+  scheduleRefresh(message.domain);
 };
 
-const startCrossTabSubscription = (hotelId: number, queryClient: QueryClient) => {
+const startCrossTabSubscription = (hotelId: number, scheduleRefresh: (domain: SyncDomain) => void) => {
   if (typeof window === "undefined") return () => undefined;
   const onStorage = (event: StorageEvent) => {
     if (event.key !== STORAGE_KEY || !event.newValue) return;
     try {
-      notifyIfRelevant(queryClient, hotelId, JSON.parse(event.newValue));
+      notifyIfRelevant(hotelId, scheduleRefresh, JSON.parse(event.newValue));
     } catch {
       /* ignore malformed cross-tab messages */
     }
   };
   window.addEventListener("storage", onStorage);
-  const onChannelMessage = (event: MessageEvent) => notifyIfRelevant(queryClient, hotelId, event.data);
+  const onChannelMessage = (event: MessageEvent) => notifyIfRelevant(hotelId, scheduleRefresh, event.data);
   try {
     if (typeof BroadcastChannel !== "undefined") {
       channel ??= new BroadcastChannel(CHANNEL_NAME);
@@ -224,6 +212,52 @@ const startCrossTabSubscription = (hotelId: number, queryClient: QueryClient) =>
       channel?.removeEventListener("message", onChannelMessage);
     } catch {
       /* ignore channel cleanup errors */
+    }
+  };
+};
+
+/** Coalesce cross-tab broadcasts and SSE events into one tenant-scoped refresh. */
+export const createDomainRefreshScheduler = (
+  queryClient: QueryClient,
+  hotelId: number,
+  debounceMs = REALTIME_EVENT_DEBOUNCE_MS
+) => {
+  const pendingDomains = new Set<SyncDomain>();
+  let timer: number | null = null;
+  const isHidden = () => typeof document !== "undefined" && document.visibilityState === "hidden";
+  const clearTimer = () => {
+    if (timer !== null && typeof window !== "undefined") window.clearTimeout(timer);
+    timer = null;
+  };
+  const flush = () => {
+    timer = null;
+    if (isHidden() || pendingDomains.size === 0) return;
+    const domains = Array.from(pendingDomains);
+    pendingDomains.clear();
+    void refreshDomains(queryClient, hotelId, domains);
+  };
+  const schedule = (domain: SyncDomain) => {
+    pendingDomains.add(domain);
+    if (timer !== null || isHidden() || typeof window === "undefined") return;
+    timer = window.setTimeout(flush, debounceMs);
+  };
+  const onVisibilityChange = () => {
+    if (isHidden()) {
+      clearTimer();
+      return;
+    }
+    if (pendingDomains.size > 0) {
+      clearTimer();
+      timer = window.setTimeout(flush, 0);
+    }
+  };
+  if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisibilityChange);
+  return {
+    schedule,
+    close: () => {
+      clearTimer();
+      pendingDomains.clear();
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibilityChange);
     }
   };
 };
@@ -249,6 +283,25 @@ const parseSseFrames = (buffer: string, onEvent: (event: ServerEvent) => void) =
 
 const cursorStorageKey = (session: SessionLike, hotelId: number) =>
   `hotel-pms:realtime-cursor:${hotelId}:${session.userId}`;
+
+const waitUntilVisible = (signal: AbortSignal) => {
+  if (typeof document === "undefined" || document.visibilityState !== "hidden" || signal.aborted) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    const finish = () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "hidden") finish();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    signal.addEventListener("abort", finish, { once: true });
+    if (signal.aborted) finish();
+  });
+};
 
 const readCursor = (session: SessionLike, hotelId: number): number => {
   if (typeof window === "undefined") return 0;
@@ -308,6 +361,7 @@ const runEventStream = async (
   session: SessionLike,
   queryClient: QueryClient,
   signal: AbortSignal,
+  scheduleRefresh: (domain: SyncDomain) => void,
 ) => {
   const hotelId = normalizeHotelId(session.hotelId);
   if (!hotelId || !session.accessToken || !session.userId) return;
@@ -318,8 +372,6 @@ const runEventStream = async (
 
   let retryCount = 0;
   const seenEventIds = new Set<string>();
-  const scheduledDomains = new Set<SyncDomain>();
-  let refreshTimer: number | null = null;
   const waitBeforeRetry = async () => {
     retryCount += 1;
     updateRealtimeStatus(hotelId, retryCount >= 3 ? "degraded" : "reconnecting");
@@ -340,30 +392,31 @@ const runEventStream = async (
       if (signal.aborted) finish();
     });
   };
-  const scheduleRefresh = (domain: SyncDomain) => {
-    scheduledDomains.add(domain);
-    if (refreshTimer !== null) return;
-    refreshTimer = window.setTimeout(() => {
-      const domains = Array.from(scheduledDomains);
-      scheduledDomains.clear();
-      refreshTimer = null;
-      void refreshDomains(queryClient, hotelId, domains);
-    }, REALTIME_EVENT_DEBOUNCE_MS);
-  };
-
   updateRealtimeStatus(hotelId, "connecting");
   while (!signal.aborted) {
+    await waitUntilVisible(signal);
+    if (signal.aborted) break;
+    const connectionController = new AbortController();
+    const abortConnection = () => connectionController.abort();
+    const pauseWhenHidden = () => {
+      if (document.visibilityState === "hidden") {
+        updateRealtimeStatus(hotelId, "reconnecting");
+        connectionController.abort();
+      }
+    };
+    signal.addEventListener("abort", abortConnection, { once: true });
+    document.addEventListener("visibilitychange", pauseWhenHidden);
     try {
       // Redis pub/sub is ephemeral. Recover committed domains before every
       // first connection and reconnect so a gap cannot be mistaken for a
       // healthy stream.
-      await recoverRealtime(session, queryClient, hotelId, signal);
+      await recoverRealtime(session, queryClient, hotelId, connectionController.signal);
       const streamCursor = readCursor(session, hotelId);
       const streamQuery = streamCursor > 0 ? `?after_cursor=${streamCursor}` : "";
       const response = await fetch(buildUrl(`/api/events/stream${streamQuery}`), {
         headers: buildAuthHeaders(session),
         credentials: "include",
-        signal
+        signal: connectionController.signal
       });
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
@@ -406,15 +459,18 @@ const runEventStream = async (
         });
       }
       if (signal.aborted) break;
+      if (document.visibilityState === "hidden") continue;
       updateRealtimeStatus(hotelId, "reconnecting");
       await waitBeforeRetry();
     } catch (error) {
       if (signal.aborted) break;
+      if (document.visibilityState === "hidden") continue;
       await waitBeforeRetry();
+    } finally {
+      document.removeEventListener("visibilitychange", pauseWhenHidden);
+      signal.removeEventListener("abort", abortConnection);
     }
   }
-  if (refreshTimer !== null) window.clearTimeout(refreshTimer);
-  scheduledDomains.clear();
 };
 
 export function useCrossTabSync() {
@@ -422,11 +478,17 @@ export function useCrossTabSync() {
   const queryClient = useQueryClient();
   const hotelId = session.hotelId;
   const realtimeStatus = useRealtimeStatus();
+  const refreshScheduler = useMemo(
+    () => createDomainRefreshScheduler(queryClient, hotelId ?? 0),
+    [hotelId, queryClient]
+  );
+
+  useEffect(() => () => refreshScheduler.close(), [refreshScheduler]);
 
   useEffect(() => {
     if (!hotelId) return undefined;
-    return startCrossTabSubscription(hotelId, queryClient);
-  }, [hotelId, queryClient]);
+    return startCrossTabSubscription(hotelId, refreshScheduler.schedule);
+  }, [hotelId, refreshScheduler]);
 
   useEffect(() => {
     if (!hotelId || !session.accessToken || !session.userId) return undefined;
@@ -438,10 +500,11 @@ export function useCrossTabSync() {
         userId: session.userId
       },
       queryClient,
-      controller.signal
+      controller.signal,
+      refreshScheduler.schedule
     );
     return () => controller.abort();
-  }, [hotelId, queryClient, session.accessToken, session.userId]);
+  }, [hotelId, queryClient, refreshScheduler, session.accessToken, session.userId]);
 
   useEffect(() => {
     if (!hotelId || !session.accessToken || !session.userId || realtimeStatus === "connected" || realtimeStatus === "disabled") {
@@ -449,8 +512,11 @@ export function useCrossTabSync() {
     }
     let timer: number | null = null;
     let stopped = false;
-    const schedule = () => {
-      const delay = REALTIME_RECOVERY_POLL_MS;
+    const schedule = (delay = REALTIME_RECOVERY_POLL_MS) => {
+      if (document.visibilityState === "hidden") {
+        timer = null;
+        return;
+      }
       timer = window.setTimeout(async () => {
         if (stopped) return;
         try {
@@ -467,7 +533,8 @@ export function useCrossTabSync() {
     };
     const onVisibilityChange = () => {
       if (timer !== null) window.clearTimeout(timer);
-      schedule();
+      timer = null;
+      if (document.visibilityState !== "hidden") schedule(0);
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     schedule();

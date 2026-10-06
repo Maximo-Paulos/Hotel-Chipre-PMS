@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from time import perf_counter
 
 from sqlalchemy import event
 
@@ -21,6 +22,7 @@ from app.models.operations import (
 )
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
+from app.schemas.reservation_operations import ReservationPendingActionRead
 from app.services.financial_ledger import completed_paid_amounts_by_reservation
 from app.services.reservation_action_service import (
     _candidate_reservation_ids,
@@ -197,6 +199,142 @@ def test_pending_actions_list_is_hotel_scoped_and_sorted_by_priority(
     assert {item["reservation_id"] for item in actions} == {reservation_h1.id}
     assert actions[0]["priority"] == "critical"
     assert actions[0]["code"] in {"manual_review_required", "allocation_follow_up"}
+
+
+def test_overdue_checked_in_stay_is_a_serialized_manual_review_action(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+    sample_categories_hotel2,
+    sample_rooms_hotel2,
+):
+    hotel_date = reservation_action_service.hotel_today(db, hotel_config.id)
+    overdue = _mk_reservation(
+        db,
+        code="CHECKED-IN-OVERDUE",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        hotel_id=hotel_config.id,
+        room_id=sample_rooms[0].id,
+        status=ReservationStatusEnum.CHECKED_IN,
+        check_in_date=hotel_date - timedelta(days=5),
+        check_out_date=hotel_date - timedelta(days=3),
+    )
+    checkout_today = _mk_reservation(
+        db,
+        code="CHECKED-IN-CHECKOUT-TODAY",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        hotel_id=hotel_config.id,
+        room_id=sample_rooms[0].id,
+        status=ReservationStatusEnum.CHECKED_IN,
+        check_in_date=hotel_date - timedelta(days=1),
+        check_out_date=hotel_date,
+    )
+    already_checked_out = _mk_reservation(
+        db,
+        code="ALREADY-CHECKED-OUT",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        hotel_id=hotel_config.id,
+        room_id=sample_rooms[0].id,
+        status=ReservationStatusEnum.CHECKED_OUT,
+        check_in_date=hotel_date - timedelta(days=5),
+        check_out_date=hotel_date - timedelta(days=3),
+    )
+    foreign_guest = Guest(first_name="Ana", last_name="Hotel2", hotel_id=2)
+    db.add(foreign_guest)
+    db.flush()
+    foreign_overdue = _mk_reservation(
+        db,
+        code="FOREIGN-CHECKED-IN-OVERDUE",
+        guest_id=foreign_guest.id,
+        category_id=sample_categories_hotel2[0].id,
+        hotel_id=2,
+        room_id=sample_rooms_hotel2[0].id,
+        status=ReservationStatusEnum.CHECKED_IN,
+        check_in_date=hotel_date - timedelta(days=5),
+        check_out_date=hotel_date - timedelta(days=3),
+    )
+    db.commit()
+    room_status_before = sample_rooms[0].status
+
+    candidate_ids = _candidate_reservation_ids(db, hotel_id=hotel_config.id)
+    actions = list_pending_reservation_actions(db, hotel_id=hotel_config.id, limit=100)
+    overdue_action = next(
+        action
+        for action in actions
+        if action["reservation_id"] == overdue.id and action["code"] == "overdue_stay_review"
+    )
+    detail = get_reservation_operations_summary(
+        db,
+        hotel_id=hotel_config.id,
+        reservation_id=overdue.id,
+    )
+    serialized = ReservationPendingActionRead.model_validate(overdue_action).model_dump(mode="json")
+
+    assert overdue.id in candidate_ids
+    assert checkout_today.id not in candidate_ids
+    assert already_checked_out.id not in candidate_ids
+    assert foreign_overdue.id not in candidate_ids
+    assert all(action["reservation_id"] != foreign_overdue.id for action in actions)
+    assert overdue_action["priority"] == "high"
+    assert overdue_action["title"].startswith("Revisar estadía vencida")
+    assert "Abrí la ficha" in overdue_action["detail"]
+    assert serialized["check_out_date"] == (hotel_date - timedelta(days=3)).isoformat()
+    assert any(
+        action["action_key"] == overdue_action["action_key"]
+        and action["code"] == "overdue_stay_review"
+        for action in detail["pending_actions"]
+    )
+    db.refresh(overdue)
+    assert overdue.status == ReservationStatusEnum.CHECKED_IN
+    assert overdue.check_out_date == hotel_date - timedelta(days=3)
+    assert overdue.room_id == sample_rooms[0].id
+    db.refresh(sample_rooms[0])
+    assert sample_rooms[0].status == room_status_before
+    assert db.query(Transaction).filter_by(hotel_id=hotel_config.id, reservation_id=overdue.id).count() == 0
+
+
+def test_pending_action_candidate_cap_does_not_hide_later_critical_action(
+    db, hotel_config, sample_categories, sample_rooms, sample_guest,
+):
+    for index in range(100):
+        _mk_reservation(
+            db,
+            code=f"ACTION-CAP-MEDIUM-{index:03d}",
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            room_id=sample_rooms[0].id,
+            status=ReservationStatusEnum.PENDING,
+            total_amount=100.0,
+            subtotal_amount=100.0,
+            net_amount=100.0,
+            amount_paid=0.0,
+        )
+
+    critical = _mk_reservation(
+        db,
+        code="ACTION-CAP-CRITICAL-LAST",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        room_id=sample_rooms[0].id,
+        status=ReservationStatusEnum.PENDING,
+        total_amount=100.0,
+        subtotal_amount=100.0,
+        net_amount=100.0,
+        amount_paid=0.0,
+        requires_manual_review=True,
+    )
+    db.commit()
+
+    actions = list_pending_reservation_actions(db, hotel_id=hotel_config.id, limit=1)
+
+    assert len(actions) == 1
+    assert actions[0]["reservation_id"] == critical.id
+    assert actions[0]["code"] == "manual_review_required"
 
 
 def test_resolve_external_channel_follow_up_closes_adjustments_and_ota_link(
@@ -601,6 +739,154 @@ def test_cancelled_reservation_never_offers_collection_action(
     assert cancelled_summary["financial_summary"]["recommended_next_action"] is None
     assert active_summary["financial_summary"]["recommended_next_action"] == "collect_from_guest"
     assert {action["reservation_id"] for action in collection_actions} == {active.id}
+
+
+def test_cancelled_direct_booking_with_net_paid_amount_surfaces_manual_refund_review(
+    db, hotel_config, sample_categories, sample_guest,
+):
+    reservation = _mk_reservation(
+        db,
+        code="CANCELLED-DIRECT-DEPOSIT",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        hotel_id=hotel_config.id,
+        status=ReservationStatusEnum.CANCELLED,
+        source=ReservationSourceEnum.DIRECT,
+        total_amount=Decimal("100.00"),
+        amount_paid=Decimal("40.00"),
+        deposit_amount=Decimal("40.00"),
+    )
+    db.flush()
+    db.add(
+        Transaction(
+            hotel_id=hotel_config.id,
+            reservation_id=reservation.id,
+            amount=Decimal("40.00"),
+            currency="ARS",
+            transaction_type=TransactionTypeEnum.DEPOSIT,
+            payment_method=PaymentMethodEnum.CASH,
+            status=TransactionStatusEnum.COMPLETED,
+        )
+    )
+    db.commit()
+
+    actions = list_pending_reservation_actions(db, hotel_id=hotel_config.id, limit=100)
+    refund_actions = [
+        action for action in actions
+        if action["reservation_id"] == reservation.id and action["code"] == "refund_deposit"
+    ]
+
+    assert len(refund_actions) == 1
+    assert "ARS 40.00" in refund_actions[0]["detail"]
+    assert "manualmente" in refund_actions[0]["detail"]
+    assert "no ejecuta ningún movimiento" in refund_actions[0]["detail"]
+    # Listing the review action is read-only and must not create a refund row.
+    assert db.query(Transaction).filter(Transaction.reservation_id == reservation.id).count() == 1
+
+
+def test_no_show_direct_booking_with_legacy_net_paid_amount_surfaces_manual_refund_review(
+    db, hotel_config, sample_categories, sample_guest,
+):
+    reservation = _mk_reservation(
+        db,
+        code="NO-SHOW-DIRECT-DEPOSIT",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        hotel_id=hotel_config.id,
+        status=ReservationStatusEnum.NO_SHOW,
+        source=ReservationSourceEnum.DIRECT,
+        total_amount=Decimal("100.00"),
+        amount_paid=Decimal("35.00"),
+        deposit_amount=Decimal("35.00"),
+    )
+    db.commit()
+
+    actions = list_pending_reservation_actions(db, hotel_id=hotel_config.id, limit=100)
+    refund_actions = [
+        action for action in actions
+        if action["reservation_id"] == reservation.id and action["code"] == "refund_deposit"
+    ]
+
+    assert len(refund_actions) == 1
+    assert "ARS 35.00" in refund_actions[0]["detail"]
+
+
+def test_direct_cancelled_reservation_with_fully_refunded_ledger_has_no_refund_action(
+    db, hotel_config, sample_categories, sample_guest,
+):
+    reservation = _mk_reservation(
+        db,
+        code="CANCELLED-DIRECT-FULLY-REFUNDED",
+        guest_id=sample_guest.id,
+        category_id=sample_categories[0].id,
+        hotel_id=hotel_config.id,
+        status=ReservationStatusEnum.CANCELLED,
+        source=ReservationSourceEnum.DIRECT,
+        total_amount=Decimal("100.00"),
+        amount_paid=Decimal("0.00"),
+        deposit_amount=Decimal("40.00"),
+    )
+    db.flush()
+    payment = Transaction(
+        hotel_id=hotel_config.id,
+        reservation_id=reservation.id,
+        amount=Decimal("40.00"),
+        currency="ARS",
+        transaction_type=TransactionTypeEnum.DEPOSIT,
+        payment_method=PaymentMethodEnum.CASH,
+        status=TransactionStatusEnum.COMPLETED,
+    )
+    db.add(payment)
+    db.flush()
+    db.add(
+        Transaction(
+            hotel_id=hotel_config.id,
+            reservation_id=reservation.id,
+            amount=Decimal("40.00"),
+            currency="ARS",
+            transaction_type=TransactionTypeEnum.REFUND,
+            payment_method=PaymentMethodEnum.CASH,
+            status=TransactionStatusEnum.COMPLETED,
+        )
+    )
+    db.commit()
+
+    detail = get_reservation_operations_summary(db, hotel_id=hotel_config.id, reservation_id=reservation.id)
+    actions = list_pending_reservation_actions(db, hotel_id=hotel_config.id, limit=100)
+
+    assert all(action["code"] != "refund_deposit" for action in detail["pending_actions"])
+    assert all(
+        not (action["reservation_id"] == reservation.id and action["code"] == "refund_deposit")
+        for action in actions
+    )
+
+
+def test_unpaid_direct_cancelled_or_no_show_reservation_has_no_refund_action(
+    db, hotel_config, sample_categories, sample_guest,
+):
+    reservations = [
+        _mk_reservation(
+            db,
+            code=f"UNPAID-{status.value.upper()}",
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            hotel_id=hotel_config.id,
+            status=status,
+            source=ReservationSourceEnum.DIRECT,
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("0.00"),
+        )
+        for status in (ReservationStatusEnum.CANCELLED, ReservationStatusEnum.NO_SHOW)
+    ]
+    db.commit()
+
+    actions = list_pending_reservation_actions(db, hotel_id=hotel_config.id, limit=100)
+
+    assert not any(
+        action["reservation_id"] in {reservation.id for reservation in reservations}
+        and action["code"] == "refund_deposit"
+        for action in actions
+    )
 
 
 def _count_queries(db, fn):
@@ -1285,7 +1571,21 @@ def test_historical_terminal_candidate_query_returns_only_actionable_rows_and_is
     assert set(candidate_ids) == expected_candidate_ids
     assert len(candidate_ids) == len(expected_candidate_ids)
     assert foreign_reservation.id not in candidate_ids
-    assert _candidate_reservation_ids(db, hotel_id=hotel_id, limit=3) == candidate_ids[:3]
+    limited_candidate_sql = []
+
+    def _capture_limited_candidate_query(_conn, _cursor, statement, _parameters, _context, _executemany):
+        limited_candidate_sql.append(statement)
+
+    bind = db.get_bind()
+    event.listen(bind, "before_cursor_execute", _capture_limited_candidate_query)
+    try:
+        limited_candidate_ids = _candidate_reservation_ids(db, hotel_id=hotel_id, limit=3)
+    finally:
+        event.remove(bind, "before_cursor_execute", _capture_limited_candidate_query)
+
+    assert limited_candidate_ids == candidate_ids[:3]
+    assert len(limited_candidate_sql) == 1
+    assert "limit" in limited_candidate_sql[0].lower()
 
     actions = list_pending_reservation_actions(db, hotel_id=hotel_id, limit=100)
     action_reservation_ids = {action["reservation_id"] for action in actions}
@@ -1310,18 +1610,37 @@ def test_pending_actions_batch_query_count_is_constant_for_five_vs_twenty_five_c
     room_id = sample_rooms[0].id
 
     def _seed(start, count):
+        reservations = []
         for index in range(start, start + count):
-            _mk_reservation(
-                db,
-                code=f"BATCH-{index}",
-                guest_id=sample_guest.id,
-                category_id=category_id,
-                hotel_id=hotel_config.id,
-                room_id=room_id,
-                status=ReservationStatusEnum.PENDING,
-                requires_manual_review=True,
-                allocation_status="assigned",
+            reservations.append(
+                _mk_reservation(
+                    db,
+                    code=f"BATCH-{index}",
+                    guest_id=sample_guest.id,
+                    category_id=category_id,
+                    hotel_id=hotel_config.id,
+                    room_id=room_id,
+                    status=ReservationStatusEnum.CANCELLED,
+                    source=ReservationSourceEnum.DIRECT,
+                    total_amount=Decimal("100.00"),
+                    amount_paid=Decimal("50.00"),
+                    deposit_amount=Decimal("50.00"),
+                    allocation_status="assigned",
+                )
             )
+        db.flush()
+        db.add_all(
+            Transaction(
+                hotel_id=hotel_config.id,
+                reservation_id=reservation.id,
+                amount=Decimal("50.00"),
+                currency="ARS",
+                transaction_type=TransactionTypeEnum.DEPOSIT,
+                payment_method=PaymentMethodEnum.CASH,
+                status=TransactionStatusEnum.COMPLETED,
+            )
+            for reservation in reservations
+        )
         db.commit()
 
     _seed(0, 5)
@@ -1337,9 +1656,89 @@ def test_pending_actions_batch_query_count_is_constant_for_five_vs_twenty_five_c
 
     assert len(five_actions) == 5
     assert len(twenty_five_actions) == 25
+    assert all(action["code"] == "refund_deposit" for action in twenty_five_actions)
     assert twenty_five_count == five_count, (
         f"batch query count grew with candidates: {five_count} -> {twenty_five_count}"
     )
+
+
+def test_pending_actions_with_forty_paid_terminal_reservations_stay_under_twenty_queries(
+    db, hotel_config, sample_categories, sample_guest,
+):
+    reservations = [
+        _mk_reservation(
+            db,
+            code=f"REFUND-LOAD-{index}",
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            hotel_id=hotel_config.id,
+            status=ReservationStatusEnum.CANCELLED,
+            source=ReservationSourceEnum.DIRECT,
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("50.00"),
+            deposit_amount=Decimal("50.00"),
+            allocation_status="assigned",
+        )
+        for index in range(40)
+    ]
+    db.flush()
+    db.add_all(
+        Transaction(
+            hotel_id=hotel_config.id,
+            reservation_id=reservation.id,
+            amount=Decimal("50.00"),
+            currency="ARS",
+            transaction_type=TransactionTypeEnum.DEPOSIT,
+            payment_method=PaymentMethodEnum.CASH,
+            status=TransactionStatusEnum.COMPLETED,
+        )
+        for reservation in reservations
+    )
+    db.commit()
+
+    query_count, actions = _count_queries(
+        db,
+        lambda: list_pending_reservation_actions(db, hotel_id=hotel_config.id, limit=12),
+    )
+
+    assert len(actions) == 12
+    assert all(action["code"] == "refund_deposit" for action in actions)
+    assert query_count <= 20, f"40 candidate reservations caused {query_count} SQL queries"
+
+
+def test_pending_actions_with_forty_unpaid_hotel_collect_reservations_stay_under_300ms_and_twenty_queries(
+    db, hotel_config, sample_categories, sample_rooms, sample_guest,
+):
+    reservations = [
+        _mk_reservation(
+            db,
+            code=f"COLLECT-LOAD-{index}",
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            hotel_id=hotel_config.id,
+            room_id=sample_rooms[0].id,
+            status=ReservationStatusEnum.PENDING,
+            source=ReservationSourceEnum.DIRECT,
+            payment_collection_model="hotel_collect",
+            settlement_status="pending_hotel_collection",
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("0.00"),
+        )
+        for index in range(40)
+    ]
+    db.commit()
+
+    started_at = perf_counter()
+    query_count, actions = _count_queries(
+        db,
+        lambda: list_pending_reservation_actions(db, hotel_id=hotel_config.id, limit=100),
+    )
+    elapsed_seconds = perf_counter() - started_at
+
+    assert len(actions) == len(reservations)
+    assert all(action["code"] == "collect_from_guest" for action in actions)
+    assert query_count <= 20, f"40 unpaid hotel-collect reservations caused {query_count} SQL queries"
+    assert elapsed_seconds < 0.3, f"40 pending hotel-collect actions took {elapsed_seconds:.3f}s"
 
 
 def test_pending_actions_batch_matches_complete_detail_summary_output(
@@ -1347,6 +1746,46 @@ def test_pending_actions_batch_matches_complete_detail_summary_output(
 ):
     category_id = sample_categories[0].id
     room_id = sample_rooms[0].id
+
+    refund_review_reservations = [
+        _mk_reservation(
+            db,
+            code="BATCH-CANCELLED-REFUND-REVIEW",
+            guest_id=sample_guest.id,
+            category_id=category_id,
+            hotel_id=hotel_config.id,
+            room_id=room_id,
+            status=ReservationStatusEnum.CANCELLED,
+            source=ReservationSourceEnum.DIRECT,
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("20.00"),
+        ),
+        _mk_reservation(
+            db,
+            code="BATCH-NO-SHOW-REFUND-REVIEW",
+            guest_id=sample_guest.id,
+            category_id=category_id,
+            hotel_id=hotel_config.id,
+            room_id=room_id,
+            status=ReservationStatusEnum.NO_SHOW,
+            source=ReservationSourceEnum.DIRECT,
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("20.00"),
+        ),
+    ]
+    db.flush()
+    db.add_all(
+        Transaction(
+            hotel_id=hotel_config.id,
+            reservation_id=reservation.id,
+            amount=Decimal("20.00"),
+            currency="ARS",
+            transaction_type=TransactionTypeEnum.DEPOSIT,
+            payment_method=PaymentMethodEnum.CASH,
+            status=TransactionStatusEnum.COMPLETED,
+        )
+        for reservation in refund_review_reservations
+    )
 
     direct_paid_and_refunded = _mk_reservation(
         db,
@@ -1583,6 +2022,11 @@ def test_pending_actions_batch_matches_complete_detail_summary_output(
         and item["reference_id"] == latest_link.id
         for item in actual
     )
+    assert {
+        item["reservation_id"]
+        for item in actual
+        if item["code"] == "refund_deposit"
+    } >= {reservation.id for reservation in refund_review_reservations}
     assert not any(
         item["reservation_id"] == gap_at_threshold.id
         and item["code"] == "financial_reconciliation_gap"

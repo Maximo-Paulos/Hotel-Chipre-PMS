@@ -88,6 +88,39 @@ class RoomMovePermissionError(ReservationOperationsError):
     """A caller lacks the permission tier required by a room move's shape."""
 
 
+def _validate_direct_individual_extension_target(
+    db: Session,
+    *,
+    reservation: Reservation,
+    hotel_id: int,
+) -> None:
+    """Allow the private-stay quote/extension path only for unlinked direct stays."""
+    if reservation.hotel_id != hotel_id:
+        raise ReservationOperationsError("La reserva no pertenece al hotel activo")
+    if (
+        reservation.company_id is not None
+        or reservation.group_id is not None
+        or reservation.source != ReservationSourceEnum.DIRECT
+        or reservation.source_provider_code
+        or reservation.external_id
+    ):
+        raise ReservationOperationsError(
+            "La extensión individual solo está disponible para reservas directas sin empresa, grupo ni vínculo externo"
+        )
+    linked_ota = (
+        db.query(OTAReservationLink.id)
+        .filter(
+            OTAReservationLink.hotel_id == hotel_id,
+            OTAReservationLink.reservation_id == reservation.id,
+        )
+        .first()
+    )
+    if linked_ota is not None:
+        raise ReservationOperationsError(
+            "La extensión individual no está disponible para reservas vinculadas a un canal externo"
+        )
+
+
 _ROOM_MOVE_PERMISSION_DETAILS = {
     PERMISSION_RESERVATION_MOVE: "Para mover dentro de la misma categoría necesitás el permiso 'Mover dentro de categoría'.",
     PERMISSION_RESERVATION_MOVE_CATEGORY: "Para mover a otra categoría necesitás el permiso 'Cambiar de categoría'.",
@@ -660,7 +693,7 @@ def change_reservation_dates(
         client_version=client_version,
     )
     if check_out_date <= check_in_date:
-        raise ReservationOperationsError("Check-out must be after check-in")
+        raise ReservationOperationsError("La fecha de salida debe ser posterior a la fecha de entrada")
     if check_in_date < hotel_today(db, hotel_id):
         raise ReservationOperationsError("No se puede cambiar la fecha de check-in a una fecha en el pasado")
     original_check_in = reservation.check_in_date
@@ -810,7 +843,7 @@ def _extension_amount(
 ) -> Decimal:
     extra_nights = (new_checkout_date - reservation.check_out_date).days
     if extra_nights <= 0:
-        raise ReservationOperationsError("New checkout must be after current checkout")
+        raise ReservationOperationsError("La nueva fecha de salida debe ser posterior a la fecha de salida actual")
     if pricing_mode == "original_average":
         current_nights = max((reservation.check_out_date - reservation.check_in_date).days, 1)
         average = Decimal(str(reservation.total_amount or 0)) / Decimal(current_nights)
@@ -838,6 +871,51 @@ def _extension_amount(
             explicit_total=None,
         )
     return Decimal(str(pricing.total_amount)).quantize(Decimal("0.01"))
+
+
+def preview_reservation_stay_extension(
+    db: Session,
+    *,
+    reservation: Reservation,
+    hotel_id: int,
+    new_checkout_date: date,
+) -> Decimal:
+    """Read-only quote for a direct, individually billed stay extension.
+
+    The committing extension flow rechecks the reservation version, state,
+    availability and current rate while holding the reservation lock.
+    """
+    _validate_direct_individual_extension_target(
+        db,
+        reservation=reservation,
+        hotel_id=hotel_id,
+    )
+    if reservation.settlement_status == "deferred":
+        raise ReservationOperationsError("Las reservas con cuenta diferida no admiten una cotizacion de cobro individual")
+    if reservation.status not in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.FULLY_PAID):
+        raise ReservationOperationsError("Solo se pueden extender reservas en estadía o pagadas por completo")
+    if new_checkout_date <= reservation.check_out_date:
+        raise ReservationOperationsError("La nueva fecha de salida debe ser posterior a la fecha de salida actual")
+    if reservation.room_id and not check_room_availability(
+        db,
+        reservation.room_id,
+        reservation.check_out_date,
+        new_checkout_date,
+        hotel_id=hotel_id,
+        exclude_reservation_id=reservation.id,
+    ):
+        raise ReservationOperationsError("La habitacion no esta disponible para la extension")
+
+    amount = _extension_amount(
+        db,
+        reservation=reservation,
+        hotel_id=hotel_id,
+        new_checkout_date=new_checkout_date,
+        pricing_mode="current_rate",
+    )
+    if amount <= Decimal("0.00"):
+        raise ReservationOperationsError("La extension debe tener importe positivo")
+    return amount
 
 
 def set_company_extension_request(
@@ -925,6 +1003,13 @@ def extend_reservation_stay(
     if reservation.hotel_id != hotel_id:
         raise ReservationOperationsError("La reserva no pertenece al hotel activo")
 
+    if payment_action != "company_account" and reservation.company_id is None:
+        _validate_direct_individual_extension_target(
+            db,
+            reservation=reservation,
+            hotel_id=hotel_id,
+        )
+
     company = None
     if reservation.company_id is not None:
         company = (
@@ -964,9 +1049,9 @@ def extend_reservation_stay(
         client_version=client_version,
     )
     if reservation.status not in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.FULLY_PAID):
-        raise ReservationOperationsError("Solo se pueden extender reservas checked-in o fully-paid")
+        raise ReservationOperationsError("Solo se pueden extender reservas en estadía o pagadas por completo")
     if new_checkout_date <= reservation.check_out_date:
-        raise ReservationOperationsError("New checkout must be after current checkout")
+        raise ReservationOperationsError("La nueva fecha de salida debe ser posterior a la fecha de salida actual")
     conflict_resolution = resolve_extension_conflict(
         db,
         reservation=reservation,

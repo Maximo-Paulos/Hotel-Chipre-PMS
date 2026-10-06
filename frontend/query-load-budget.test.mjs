@@ -140,9 +140,12 @@ test("subscription and hotel configuration queries require their read permission
 test("a transient refresh error only clears the session after an explicit 401", async () => {
   const session = await source("./src/state/session.tsx");
   const refreshCatch = session.match(/catch \(error: unknown\) \{([\s\S]*?)\n        \}/)?.[1];
+  const retryableErrors = session.match(/const isRetryableSessionRestoreError =([\s\S]*?error instanceof ApiError[\s\S]*?);/)?.[1];
 
   assert.ok(refreshCatch, "session restoration must handle refresh failures");
   assert.match(refreshCatch, /error instanceof ApiError && error\.status === 401/);
   assert.equal((refreshCatch.match(/setSession\(EMPTY_SESSION\)/g) ?? []).length, 1);
   assert.match(refreshCatch, /isRetryableSessionRestoreError/);
+  assert.match(retryableErrors ?? "", /error\.name === "AbortError"/);
+  assert.match(retryableErrors ?? "", /error\.status === 408/);
 });

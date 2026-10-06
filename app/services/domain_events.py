@@ -1590,12 +1590,14 @@ def iter_event_stream(
     pubsub = client.pubsub(ignore_subscribe_messages=True)
     pubsub.subscribe(channel_for_hotel(hotel_id))
     last_authorization_check = time.monotonic()
+    last_heartbeat = last_authorization_check
     try:
         yield format_sse({"schema_version": 2, "hotel_id": hotel_id, "status": "ready"}, event_name="ready")
         while True:
-            message = pubsub.get_message(timeout=heartbeat_seconds)
+            message = pubsub.get_message(timeout=1.0)
+            now = time.monotonic()
             if authorization_check and time.monotonic() - last_authorization_check >= max(1, authorization_revalidate_seconds):
-                last_authorization_check = time.monotonic()
+                last_authorization_check = now
                 try:
                     authorized = authorization_check()
                 except Exception as exc:  # pragma: no cover - fail closed on DB/provider errors
@@ -1623,8 +1625,12 @@ def iter_event_stream(
                     continue
                 if isinstance(payload, dict) and payload.get("hotel_id") == hotel_id:
                     yield format_sse(payload)
-            else:
+            elif now - last_heartbeat >= heartbeat_seconds:
+                last_heartbeat = now
                 yield ": heartbeat\n\n"
+            else:
+                # Internal tick lets the ASGI adapter observe disconnects promptly.
+                yield ""
     finally:
         try:
             pubsub.close()

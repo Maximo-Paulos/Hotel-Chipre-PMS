@@ -40,7 +40,7 @@ def test_successor_float_cannot_exceed_cash_delivered_by_previous_shift(db):
         counted_balance=Decimal("100000.00"),
     )
 
-    with pytest.raises(CashRegisterError, match="cannot exceed the cash delivered"):
+    with pytest.raises(CashRegisterError, match="no puede superar el efectivo entregado"):
         confirm_cash_custody(
             db,
             hotel_id=1,

@@ -31,7 +31,7 @@ def test_pricing_foreign_category_is_not_returned_by_query(db, hotel_config, sam
         is None
     )
 
-    with pytest.raises(ReservationError, match=f"Room category with id={foreign_category.id} not found"):
+    with pytest.raises(ReservationError, match="No se encontró la categoría de habitación"):
         calculate_reservation_pricing(
             db,
             category_id=foreign_category.id,
@@ -51,7 +51,7 @@ def test_room_availability_foreign_room_is_not_returned_by_query(db, hotel_confi
         is None
     )
 
-    with pytest.raises(ReservationError, match=f"Room with id={foreign_room.id} not found"):
+    with pytest.raises(ReservationError, match="No se encontró la habitación"):
         check_room_availability(
             db,
             foreign_room.id,
@@ -84,4 +84,4 @@ def test_update_booking_foreign_room_is_not_returned_by_query(isolated_client):
     )
 
     assert response.status_code in {400, 404}, response.text
-    assert response.json()["detail"] in {"Room not found", "Booking not found"}
+    assert response.json()["detail"] == "No se encontró la habitación seleccionada."

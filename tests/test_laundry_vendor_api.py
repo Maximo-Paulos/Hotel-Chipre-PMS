@@ -17,10 +17,13 @@ from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
+from app.models.cash_register import CashMovement
+from app.models.laundry_vendor import LaundryRemitoLine, LaundryVendorSettlement
 from app.models.linen import LinenMovement
 from app.models.permission import HotelPermissionOverride
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
-from app.services.linen_service import create_linen_item, create_location, register_movement
+from app.services.linen_service import create_linen_item, create_location, current_stock, register_movement
 from app.services.permission_service import PERMISSION_LAUNDRY_PRICE_MANAGE
 from app.services.permission_service import ROLE_HOUSEKEEPING, create_custom_role
 
@@ -500,6 +503,189 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
         _teardown(db, engine)
 
 
+def test_missing_follow_up_is_neutral_audited_tenant_scoped_and_financially_inert():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=1)
+        vendor_response = client.post("/api/laundry/vendors", json={"name": "Lavadero seguimiento"})
+        assert vendor_response.status_code == 201, vendor_response.text
+        vendor_id = vendor_response.json()["id"]
+        item = create_linen_item(db, hotel_id=1, name="Sábanas seguimiento", unit="unidad", min_quantity=None, active=True)
+        house = create_location(db, hotel_id=1, name="Depósito seguimiento")
+        register_movement(
+            db,
+            hotel_id=1,
+            item_id=item.id,
+            location_id=house.id,
+            movement_type="in",
+            quantity=Decimal("10.00"),
+            reason="saldo inicial",
+            created_by_user_id=None,
+        )
+        db.commit()
+
+        remito_base = {
+            "vendor_id": vendor_id,
+            "remito_date": "2026-10-03T12:00:00+00:00",
+            "house_location_id": house.id,
+            "lines": [{"linen_item_id": item.id, "quantity": "4.00"}],
+        }
+        outbound = client.post(
+            "/api/laundry/remitos",
+            json={**remito_base, "direction": "outbound", "remito_number": "S-100"},
+        )
+        assert outbound.status_code == 201, outbound.text
+        inbound = client.post(
+            "/api/laundry/remitos",
+            json={
+                **remito_base,
+                "direction": "inbound",
+                "remito_number": "S-101",
+                "lines": [{"linen_item_id": item.id, "quantity": "3.00", "missing_quantity": "1.00"}],
+            },
+        )
+        assert inbound.status_code == 201, inbound.text
+        line_id = inbound.json()["remito"]["lines"][0]["id"]
+
+        owner_list = client.get("/api/laundry/missing-follow-ups")
+        assert owner_list.status_code == 200, owner_list.text
+        assert len(owner_list.json()) == 1
+        follow_up = owner_list.json()[0]
+        assert follow_up["id"] == line_id
+        assert follow_up["follow_up_status"] == "open"
+        assert follow_up["missing_quantity"] == "1.00"
+        assert "unit_price_snapshot" not in follow_up
+        assert "currency_code" not in follow_up
+        assert "compensation_amount" not in follow_up
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager", user_id=3)
+        denied_transition = client.patch(
+            f"/api/laundry/missing-follow-ups/{line_id}",
+            json={"follow_up_status": "response_recorded"},
+        )
+        assert denied_transition.status_code == 400
+        contacted = client.patch(
+            f"/api/laundry/missing-follow-ups/{line_id}",
+            json={
+                "follow_up_status": "contacted",
+                "supplier_contacted_on": "2026-10-04",
+                "supplier_contact_note": "Mensaje enviado por el hotel",
+                "supplier_reference": "REF-42",
+                "follow_up_note": "Se documentó el contacto.",
+            },
+        )
+        assert contacted.status_code == 200, contacted.text
+        assert contacted.json()["follow_up_status"] == "contacted"
+        responded = client.patch(
+            f"/api/laundry/missing-follow-ups/{line_id}",
+            json={
+                "follow_up_status": "response_recorded",
+                "supplier_response_on": "2026-10-05",
+                "supplier_response_note": "El proveedor respondió; queda pendiente revisar internamente.",
+            },
+        )
+        assert responded.status_code == 200, responded.text
+        assert responded.json()["follow_up_status"] == "response_recorded"
+        assert responded.json()["supplier_reference"] == "REF-42"
+        assert responded.json()["supplier_response_on"] == "2026-10-05"
+        closed = client.patch(
+            f"/api/laundry/missing-follow-ups/{line_id}",
+            json={"follow_up_status": "closed"},
+        )
+        assert closed.status_code == 200, closed.text
+        assert closed.json()["follow_up_status"] == "closed"
+
+        money_field = client.patch(
+            f"/api/laundry/missing-follow-ups/{line_id}",
+            json={"compensation_amount": "100.00", "currency_code": "USD"},
+        )
+        assert money_field.status_code == 422
+        shortage_quantity = client.patch(
+            f"/api/laundry/missing-follow-ups/{line_id}",
+            json={"follow_up_status": "open", "missing_quantity": "0.00"},
+        )
+        assert shortage_quantity.status_code == 422
+
+        audit_rows = (
+            db.query(SecurityAuditLog)
+            .filter(SecurityAuditLog.hotel_id == 1, SecurityAuditLog.resource_id == str(line_id))
+            .order_by(SecurityAuditLog.id.asc())
+            .all()
+        )
+        assert [row.action for row in audit_rows] == [
+            "laundry.missing_follow_up.opened",
+            "laundry.missing_follow_up.updated",
+            "laundry.missing_follow_up.updated",
+            "laundry.missing_follow_up.updated",
+        ]
+        assert audit_rows[0].user_id == 1
+        assert all(row.user_id == 3 for row in audit_rows[1:])
+        assert "Se documentó el contacto." not in " ".join(row.details or "" for row in audit_rows)
+        assert db.query(CashMovement).count() == 0
+        assert db.query(LaundryVendorSettlement).count() == 0
+        line_after_follow_up = db.query(LaundryRemitoLine).filter(LaundryRemitoLine.id == line_id).one()
+        assert line_after_follow_up.missing_quantity == Decimal("1.00")
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping", user_id=4)
+        assert client.get("/api/laundry/missing-follow-ups").status_code == 403
+        assert client.patch(
+            f"/api/laundry/missing-follow-ups/{line_id}", json={"follow_up_status": "open"}
+        ).status_code == 403
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist", user_id=5)
+        assert client.get("/api/laundry/missing-follow-ups").status_code == 403
+        assert client.patch(
+            f"/api/laundry/missing-follow-ups/{line_id}", json={"follow_up_status": "open"}
+        ).status_code == 403
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(2, "owner", user_id=6)
+        assert client.get("/api/laundry/missing-follow-ups").json() == []
+        cross_tenant_patch = client.patch(
+            f"/api/laundry/missing-follow-ups/{line_id}", json={"follow_up_status": "open"}
+        )
+        assert cross_tenant_patch.status_code == 404
+    finally:
+        _teardown(db, engine)
+
+
+def test_missing_follow_up_endpoints_ignore_and_reject_lines_without_shortage():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=1)
+        vendor = client.post("/api/laundry/vendors", json={"name": "Lavadero sin faltante"})
+        assert vendor.status_code == 201, vendor.text
+        item = create_linen_item(db, hotel_id=1, name="Toalla sin faltante", unit="unidad", min_quantity=None, active=True)
+        house = create_location(db, hotel_id=1, name="Depósito sin faltante")
+        register_movement(
+            db,
+            hotel_id=1,
+            item_id=item.id,
+            location_id=house.id,
+            movement_type="in",
+            quantity=Decimal("2.00"),
+            reason="saldo inicial",
+            created_by_user_id=None,
+        )
+        db.commit()
+        response = client.post(
+            "/api/laundry/remitos",
+            json={
+                "vendor_id": vendor.json()["id"],
+                "direction": "outbound",
+                "remito_number": "S-200",
+                "remito_date": "2026-10-03T12:00:00+00:00",
+                "house_location_id": house.id,
+                "lines": [{"linen_item_id": item.id, "quantity": "1.00"}],
+            },
+        )
+        assert response.status_code == 201, response.text
+        line_id = response.json()["remito"]["lines"][0]["id"]
+        assert client.get("/api/laundry/missing-follow-ups").json() == []
+        not_found = client.patch(f"/api/laundry/missing-follow-ups/{line_id}", json={"follow_up_status": "open"})
+        assert not_found.status_code == 404
+    finally:
+        _teardown(db, engine)
+
+
 def test_remito_rejects_insufficient_house_stock_via_api():
     client, db, engine = _client_with_db()
     try:
@@ -523,10 +709,108 @@ def test_remito_rejects_insufficient_house_stock_via_api():
             },
         )
         assert response.status_code == 400
-        assert "Not enough" in response.json()["detail"]
+        assert "No hay suficiente" in response.json()["detail"]
+        assert "Deposito casa" in response.json()["detail"]
 
         history = client.get("/api/laundry/remitos")
         assert history.json() == []
+    finally:
+        _teardown(db, engine)
+
+
+def test_inbound_remito_api_persists_missing_quantity_and_returns_warning():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=10)
+        vendor_id = client.post("/api/laundry/vendors", json={"name": "Lavadero faltantes API"}).json()["id"]
+        item = create_linen_item(db, hotel_id=1, name="Sábanas API", unit="unidad", min_quantity=None, active=True)
+        house = create_location(db, hotel_id=1, name="Depósito API")
+        register_movement(
+            db, hotel_id=1, item_id=item.id, location_id=house.id, movement_type="in",
+            quantity=Decimal("10.00"), reason="conteo de apertura", created_by_user_id=None,
+        )
+        db.commit()
+        outbound = client.post(
+            "/api/laundry/remitos",
+            json={
+                "vendor_id": vendor_id,
+                "direction": "outbound",
+                "remito_number": "R-API-OUT",
+                "remito_date": datetime(2026, 7, 1, tzinfo=timezone.utc).isoformat(),
+                "house_location_id": house.id,
+                "lines": [{"linen_item_id": item.id, "quantity": "10.00"}],
+            },
+        )
+        assert outbound.status_code == 201, outbound.text
+
+        inbound = client.post(
+            "/api/laundry/remitos",
+            json={
+                "vendor_id": vendor_id,
+                "direction": "inbound",
+                "remito_number": "R-API-IN",
+                "remito_date": datetime(2026, 7, 3, tzinfo=timezone.utc).isoformat(),
+                "house_location_id": house.id,
+                "lines": [{"linen_item_id": item.id, "quantity": "8.00", "missing_quantity": "2.00"}],
+            },
+        )
+        assert inbound.status_code == 201, inbound.text
+        response_body = inbound.json()
+        assert response_body["remito"]["lines"][0]["missing_quantity"] == "2.00"
+        assert any("faltante de 2.00" in warning for warning in response_body["warnings"])
+
+        history = client.get("/api/laundry/remitos")
+        assert history.status_code == 200
+        assert history.json()[0]["lines"][0]["missing_quantity"] == "2.00"
+        vendor_location_id = client.get("/api/laundry/vendors").json()[0]["linen_location_id"]
+        adjustment = (
+            db.query(LinenMovement)
+            .filter_by(hotel_id=1, item_id=item.id, location_id=vendor_location_id, movement_type="adjustment_out")
+            .one()
+        )
+        assert adjustment.created_by_user_id == 10
+    finally:
+        _teardown(db, engine)
+
+
+def test_inbound_remito_without_vendor_balance_reconciles_and_warns():
+    client, db, engine = _client_with_db()
+    try:
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        vendor_id = client.post("/api/laundry/vendors", json={"name": "Lavadero sin saldo API"}).json()["id"]
+        item = create_linen_item(db, hotel_id=1, name="Sábanas sin saldo API", unit="unidad", min_quantity=None, active=True)
+        house = create_location(db, hotel_id=1, name="Depósito sin saldo API")
+        db.commit()
+
+        response = client.post(
+            "/api/laundry/remitos",
+            json={
+                "vendor_id": vendor_id,
+                "direction": "inbound",
+                "remito_number": "R-API-SIN-SALDO",
+                "remito_date": datetime(2026, 7, 3, tzinfo=timezone.utc).isoformat(),
+                "house_location_id": house.id,
+                "lines": [{"linen_item_id": item.id, "quantity": "2.00"}],
+            },
+        )
+
+        assert response.status_code == 201, response.text
+        response_body = response.json()
+        assert response_body["remito"]["lines"][0]["quantity"] == "2.00"
+        assert any("Entrega mayor a lo registrado" in warning for warning in response_body["warnings"])
+        assert len(client.get("/api/laundry/remitos").json()) == 1
+        vendor_location_id = client.get("/api/laundry/vendors").json()[0]["linen_location_id"]
+        adjustment = db.query(LinenMovement).filter_by(
+            hotel_id=1,
+            item_id=item.id,
+            location_id=vendor_location_id,
+            movement_type="adjustment",
+        ).one()
+        assert adjustment.quantity == Decimal("2.00")
+        assert adjustment.created_by_user_id == 10
+        assert "R-API-SIN-SALDO" in adjustment.reason
+        assert current_stock(db, hotel_id=1, item_id=item.id, location_id=house.id) == Decimal("2.00")
+        assert current_stock(db, hotel_id=1, item_id=item.id, location_id=vendor_location_id) == Decimal("0.00")
     finally:
         _teardown(db, engine)
 
