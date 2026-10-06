@@ -203,6 +203,65 @@ def test_dashboard_is_blocked_until_onboarding_finishes(client: TestClient):
     assert dashboard.status_code == 200
 
 
+def test_onboarding_readiness_counts_use_one_database_round_trip(
+    db, hotel_config, sample_categories, sample_guest
+):
+    from datetime import date, datetime, timezone
+
+    from app.services.onboarding_service import _readiness_counts
+    from app.models.daily_rate import DailyRate, PricePeriod
+    from app.models.reservation import Reservation
+
+    category = sample_categories[0]
+    db.add_all(
+        [
+            DailyRate(hotel_id=hotel_config.id, category_id=category.id, date=date(2030, 1, 10), price=120),
+            PricePeriod(
+                hotel_id=hotel_config.id,
+                category_id=category.id,
+                name="Activa",
+                start_date=date(2030, 1, 10),
+                end_date=date(2030, 1, 12),
+                price_per_night=120,
+            ),
+            PricePeriod(
+                hotel_id=hotel_config.id,
+                category_id=category.id,
+                name="Eliminada",
+                start_date=date(2030, 2, 10),
+                end_date=date(2030, 2, 12),
+                price_per_night=120,
+                deleted_at=datetime.now(timezone.utc),
+            ),
+            Reservation(
+                confirmation_code="ONBOARDING-COUNT-1",
+                hotel_id=hotel_config.id,
+                guest_id=sample_guest.id,
+                category_id=category.id,
+                check_in_date=date(2030, 1, 10),
+                check_out_date=date(2030, 1, 11),
+                total_amount=120,
+            ),
+        ]
+    )
+    db.flush()
+
+    statements = []
+
+    def capture_statement(connection, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", capture_statement)
+    try:
+        counts = _readiness_counts(db, hotel_config.id)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_statement)
+
+    assert counts == (0, 2, 1)
+    assert len(statements) == 1
+
+
 def test_owner_registration_without_outbox_override_does_not_return_503(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

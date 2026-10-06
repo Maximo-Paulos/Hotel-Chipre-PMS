@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-06T01:16:06.387Z",
+  "generatedAt": "2026-10-06T01:36:33.971Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -15077,6 +15077,7 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -15091,12 +15092,13 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -15659,6 +15661,7 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -15673,12 +15676,13 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -16425,6 +16429,7 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -16439,12 +16444,13 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -17628,6 +17634,7 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -17643,12 +17650,13 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 13,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -17672,6 +17680,7 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -17687,12 +17696,13 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 13,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -17716,6 +17726,7 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -17731,12 +17742,13 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 13,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -17814,6 +17826,7 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -17829,12 +17842,13 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 13,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -17968,6 +17982,7 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -17983,12 +17998,13 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 13,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -18383,6 +18399,7 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -18397,12 +18414,13 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -18426,6 +18444,7 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -18441,12 +18460,13 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 13,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -18470,6 +18490,7 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -18485,12 +18506,13 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 13,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
@@ -18513,6 +18535,7 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
@@ -18527,12 +18550,13 @@
         "services_onboarding_service_build_readiness_checklist",
         "services_onboarding_service_current_subscription_context",
         "services_onboarding_service_payment_method_options",
+        "services_onboarding_service_readiness_counts",
         "services_onboarding_service_serialize_categories",
         "services_onboarding_service_serialize_rooms",
         "services_onboarding_service_summarize_provider_payload"
       ],
       "depth": 2,
-      "nodeCount": 12,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"

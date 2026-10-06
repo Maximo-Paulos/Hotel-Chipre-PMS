@@ -1505,9 +1505,9 @@
     "video": []
   },
   "total_files": 1495,
-  "total_words": 2100684,
+  "total_words": 2100859,
   "needs_graph": true,
-  "warning": "Large corpus: 1495 files · ~2,100,684 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1495 files · ~2,100,859 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1528,7 +1528,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "9a9a7ac5aeab8de28bca34f0f4cbbad01c2f7dfc",
+    "source_hash": "63e41bf187f310e6cb5405517136b99abcf5e09c",
     "branches": [
       "codex/day2-feedback",
       "codex/fix-ronda-2-week-simulation",
@@ -1544,6 +1544,7 @@
       "fix/disable-empty-global-search",
       "fix/hotel-sim-day0-day1",
       "fix/master-admin-dashboard-rls-context",
+      "fix/onboarding-readiness-query-roundtrip",
       "fix/operational-read-latency",
       "fix/operational-task-version-cache",
       "fix/outbox-publish-fastpath",
@@ -1567,7 +1568,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "9a9a7ac5aeab8de28bca34f0f4cbbad01c2f7dfc",
+    "head": "63e41bf187f310e6cb5405517136b99abcf5e09c",
     "candidate_count": null,
     "included_count": 1495,
     "excluded_untracked_count": 0,

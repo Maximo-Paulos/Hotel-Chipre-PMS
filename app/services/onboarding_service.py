@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Optional
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.hotel_config import HotelConfiguration
@@ -220,12 +221,12 @@ def _build_finish_gates(status_payload: dict, actor_role: str | None = None) -> 
 
 
 def _build_readiness_checklist(
-    db: Session,
     *,
-    hotel_id: int,
     categories_count: int,
     rooms_count: int,
     staff_count: int,
+    rates_count: int,
+    reservations_count: int,
     policy_done: bool,
     payments_done: bool,
 ) -> list[dict]:
@@ -236,13 +237,6 @@ def _build_readiness_checklist(
     manual operation; the first reservation is a useful proof step rather than
     a synthetic example mixed into the hotel's data.
     """
-    rates_count = (
-        db.query(DailyRate.id).filter(DailyRate.hotel_id == hotel_id).count()
-        + db.query(PricePeriod.id)
-        .filter(PricePeriod.hotel_id == hotel_id, PricePeriod.deleted_at.is_(None))
-        .count()
-    )
-    reservations_count = db.query(Reservation.id).filter(Reservation.hotel_id == hotel_id).count()
     return [
         {"key": "categories", "label": "Categorías de habitación", "done": categories_count > 0, "count": categories_count, "route": "/habitaciones"},
         {"key": "rooms", "label": "Habitaciones activas", "done": rooms_count > 0, "count": rooms_count, "route": "/habitaciones"},
@@ -254,13 +248,41 @@ def _build_readiness_checklist(
     ]
 
 
+def _readiness_counts(db: Session, hotel_id: int) -> tuple[int, int, int]:
+    """Read staff, rate, and reservation counts in one tenant-scoped round trip."""
+    staff_count = (
+        select(func.count(HotelMembership.id))
+        .where(HotelMembership.hotel_id == hotel_id, HotelMembership.status == "active")
+        .scalar_subquery()
+    )
+    daily_rates_count = (
+        select(func.count(DailyRate.id))
+        .where(DailyRate.hotel_id == hotel_id)
+        .scalar_subquery()
+    )
+    price_periods_count = (
+        select(func.count(PricePeriod.id))
+        .where(PricePeriod.hotel_id == hotel_id, PricePeriod.deleted_at.is_(None))
+        .scalar_subquery()
+    )
+    reservations_count = (
+        select(func.count(Reservation.id))
+        .where(Reservation.hotel_id == hotel_id)
+        .scalar_subquery()
+    )
+    row = db.execute(
+        select(
+            staff_count.label("staff_count"),
+            (daily_rates_count + price_periods_count).label("rates_count"),
+            reservations_count.label("reservations_count"),
+        )
+    ).one()
+    return int(row.staff_count or 0), int(row.rates_count or 0), int(row.reservations_count or 0)
+
+
 def _status_from_state(db: Session, state: OnboardingState, actor_role: str | None = None) -> dict:
     staff_list = state.get_staff()
-    active_memberships_count = (
-        db.query(HotelMembership.id)
-        .filter(HotelMembership.hotel_id == state.hotel_id, HotelMembership.status == "active")
-        .count()
-    )
+    active_memberships_count, rates_count, reservations_count = _readiness_counts(db, state.hotel_id)
     categories = _serialize_categories(db, state.hotel_id)
     rooms = _serialize_rooms(db, state.hotel_id)
     current_subscription = _current_subscription_context(db, state.hotel_id)
@@ -333,11 +355,11 @@ def _status_from_state(db: Session, state: OnboardingState, actor_role: str | No
         "staff": staff_list,
     }
     checklist = _build_readiness_checklist(
-        db,
-        hotel_id=state.hotel_id,
         categories_count=len(categories),
         rooms_count=len(rooms),
         staff_count=active_memberships_count,
+        rates_count=rates_count,
+        reservations_count=reservations_count,
         policy_done=policy_done,
         payments_done=payments_done,
     )

@@ -924,8 +924,8 @@
     "hash": "5e03860cbfd8639d8dab6a75f0e1a531"
   },
   "app/services/onboarding_service.py": {
-    "mtime": 1791244764095.2268,
-    "hash": "25bccbcb7a13ce049f497b0810ae1cd4"
+    "mtime": 1791249794606.15,
+    "hash": "d789072598e06b1363a3596e26dfefa9"
   },
   "app/services/operational_report_service.py": {
     "mtime": 1791244764095.3777,
@@ -1848,8 +1848,8 @@
     "hash": "496ecb17657e78702ed15bae5a8a2910"
   },
   "tests/test_onboarding_flow.py": {
-    "mtime": 1791244764224.1443,
-    "hash": "e3e66fbbc2ac78f24376ebb1121d6c7c"
+    "mtime": 1791250500510.0208,
+    "hash": "03bd72a42ab90fc645b50001610cba20"
   },
   "tests/test_onboarding_gates.py": {
     "mtime": 1791244764224.2046,
