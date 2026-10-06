@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-06T01:36:33.971Z",
+  "generatedAt": "2026-10-06T03:19:26.922Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1058,6 +1058,42 @@
       "fileCount": 1,
       "files": [
         "app/dependencies/auth.py"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_permission_service_resolve_many",
+      "name": "resolve_many",
+      "entryPoint": "services_permission_service_resolve_many",
+      "entryPointId": "services_permission_service_resolve_many",
+      "path": [
+        "services_permission_service_resolve_many",
+        "services_permission_service_canonical_permission_code",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_get_custom_role",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_legacy_permission_deny",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_insert_if_missing"
+      ],
+      "qualifiedPath": [
+        "services_permission_service_resolve_many",
+        "services_permission_service_canonical_permission_code",
+        "services_permission_service_ensure_permission_matrix_seeded",
+        "services_permission_service_get_custom_role",
+        "services_permission_service_immutable_permission_decision",
+        "services_permission_service_legacy_permission_deny",
+        "services_permission_service_engine_key",
+        "services_permission_service_seed_default_permissions",
+        "services_permission_service_insert_if_missing"
+      ],
+      "depth": 3,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/permission_service.py"
       ],
       "criticality": 0.43,
       "warnings": []
@@ -3334,6 +3370,28 @@
       "fileCount": 1,
       "files": [
         "app/services/permission_service.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_action_step_up_service_permission_requires_step_up",
+      "name": "permission_requires_step_up",
+      "entryPoint": "services_action_step_up_service_permission_requires_step_up",
+      "entryPointId": "services_action_step_up_service_permission_requires_step_up",
+      "path": [
+        "services_action_step_up_service_permission_requires_step_up",
+        "services_action_step_up_service_permissions_requiring_step_up"
+      ],
+      "qualifiedPath": [
+        "services_action_step_up_service_permission_requires_step_up",
+        "services_action_step_up_service_permissions_requiring_step_up"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/action_step_up_service.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -10461,50 +10519,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_domain_events_publish_pending_domain_events",
-      "name": "publish_pending_domain_events",
-      "entryPoint": "services_domain_events_publish_pending_domain_events",
-      "entryPointId": "services_domain_events_publish_pending_domain_events",
-      "path": [
-        "services_domain_events_publish_pending_domain_events",
-        "services_domain_events_outbox_backoff_seconds",
-        "services_domain_events_publish_domain_event",
-        "services_domain_events_realtimeeventsunavailable",
-        "services_domain_events_validate_hotel_id",
-        "services_domain_events_domainevent",
-        "services_domain_events_domainevent_as_payload",
-        "services_domain_events_get_redis_client",
-        "services_domain_events_revision_key_for_hotel",
-        "services_domain_events_settings",
-        "services_domain_events_unavailable",
-        "services_domain_events_validate_event_input",
-        "services_domain_events_required"
-      ],
-      "qualifiedPath": [
-        "services_domain_events_publish_pending_domain_events",
-        "services_domain_events_outbox_backoff_seconds",
-        "services_domain_events_publish_domain_event",
-        "services_domain_events_realtimeeventsunavailable",
-        "services_domain_events_validate_hotel_id",
-        "services_domain_events_domainevent",
-        "services_domain_events_domainevent_as_payload",
-        "services_domain_events_get_redis_client",
-        "services_domain_events_revision_key_for_hotel",
-        "services_domain_events_settings",
-        "services_domain_events_unavailable",
-        "services_domain_events_validate_event_input",
-        "services_domain_events_required"
-      ],
-      "depth": 3,
-      "nodeCount": 13,
-      "fileCount": 1,
-      "files": [
-        "app/services/domain_events.py"
-      ],
-      "criticality": 0.2185,
-      "warnings": []
-    },
-    {
       "id": "flow:services_collaboration_apply_resource_changes",
       "name": "apply_resource_changes",
       "entryPoint": "services_collaboration_apply_resource_changes",
@@ -10532,6 +10546,52 @@
       "fileCount": 1,
       "files": [
         "app/services/collaboration.py"
+      ],
+      "criticality": 0.2157,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_domain_events_publish_pending_domain_events",
+      "name": "publish_pending_domain_events",
+      "entryPoint": "services_domain_events_publish_pending_domain_events",
+      "entryPointId": "services_domain_events_publish_pending_domain_events",
+      "path": [
+        "services_domain_events_publish_pending_domain_events",
+        "services_domain_events_outbox_backoff_seconds",
+        "services_domain_events_publish_domain_event",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_domainevent",
+        "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_realtime_fast_fail_client",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_revision_key_for_hotel",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_required"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_publish_pending_domain_events",
+        "services_domain_events_outbox_backoff_seconds",
+        "services_domain_events_publish_domain_event",
+        "services_domain_events_realtimeeventsunavailable",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_domainevent",
+        "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_realtime_fast_fail_client",
+        "services_domain_events_get_redis_client",
+        "services_domain_events_revision_key_for_hotel",
+        "services_domain_events_settings",
+        "services_domain_events_unavailable",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_required"
+      ],
+      "depth": 3,
+      "nodeCount": 14,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
       ],
       "criticality": 0.2157,
       "warnings": []
@@ -11423,6 +11483,7 @@
         "services_domain_events_outboxpublishpermit",
         "services_domain_events_domainevent",
         "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_realtime_fast_fail_client",
         "services_domain_events_get_redis_client",
         "services_domain_events_revision_key_for_hotel",
         "services_domain_events_settings",
@@ -11443,6 +11504,7 @@
         "services_domain_events_outboxpublishpermit",
         "services_domain_events_domainevent",
         "services_domain_events_domainevent_as_payload",
+        "services_domain_events_get_realtime_fast_fail_client",
         "services_domain_events_get_redis_client",
         "services_domain_events_revision_key_for_hotel",
         "services_domain_events_settings",
@@ -11452,12 +11514,12 @@
         "services_domain_events_required"
       ],
       "depth": 3,
-      "nodeCount": 18,
+      "nodeCount": 19,
       "fileCount": 1,
       "files": [
         "app/services/domain_events.py"
       ],
-      "criticality": 0.2078,
+      "criticality": 0.2063,
       "warnings": []
     },
     {

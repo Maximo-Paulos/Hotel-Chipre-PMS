@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-10-05T06:33:29.826938+00:00
-Commit: `d441145ef579dd17f47cc0b65e3e15b7e0e525b3`
+Generado: 2026-10-06T03:19:30.455790+00:00
+Commit: `bf76e8c22174fb0f1904b57fe72b340fa9e1b278`
 
 ```text
-d2a7e93f4c2b (head)
+20261005_outbox_recovery_cursor (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.
