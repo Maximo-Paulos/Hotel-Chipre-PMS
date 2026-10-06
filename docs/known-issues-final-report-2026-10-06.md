@@ -8,7 +8,7 @@ Este documento consolida los hallazgos y estados compartidos hasta la fecha. Sep
 
 ## Estado actual
 
-- La remediación funcional está en el [PR #125](https://github.com/Maximo-Paulos/Hotel-Chipre-PMS/pull/125), rama `codex/fix-ronda-2-week-simulation`, abierto como borrador. El head remoto actual es `2b17bfc3`; la base es `main`.
+- La remediación funcional está en el [PR #125](https://github.com/Maximo-Paulos/Hotel-Chipre-PMS/pull/125), rama `codex/fix-ronda-2-week-simulation`, abierto como borrador. El head remoto actual es `c508093c`; la base es `main`. Después de incorporar el código en `2b17bfc3`, los commits `ec0a9400` y `c508093c` actualizaron el estado del reporte y los metadatos de Graphify.
 - El CI de ese head informa backend y frontend exitosos, contract exitoso y E2E fallido. El test que falla es `reservation-lifecycle.spec.ts`, en la prueba de voucher cuando el navegador bloquea una ventana. Los gates de release y la evidencia confiable fueron omitidos por tratarse de un draft.
 - El commit `2b17bfc3` ya incorpora la corrección del voucher: el botón queda deshabilitado mientras cargan los resúmenes financiero u operativo; la regresión retiene deliberadamente la respuesta operativa, comprueba el estado deshabilitado y luego verifica el aviso de popup bloqueado. La prueba focalizada pasó cinco veces consecutivas. Todavía no hay ejecución de `PR Validation` para este SHA; la corrida previa evaluó `c76452d6` y falló en este flujo.
 - También se portó localmente a este worktree la división lazy de rutas públicas/marketing, `AppShell` y master-admin. El build bajó el entry inicial de 773,83 kB (228,54 kB gzip) a 566,91 kB (177,66 kB gzip), aproximadamente 26,7% menos bytes sin comprimir; Vite aún advierte que supera 500 kB.
@@ -45,13 +45,13 @@ Las categorías anteriores describen trabajo implementado en el PR; no acreditan
 ### PR #125 y validación local posterior
 
 - En el SHA `ffa8d580`, el reporte previo registró frontend, backend, E2E Chromium y contratos exitosos: backend 2.987 aprobadas, 34 omitidas y 12 `xfail`; 10 pruebas locales de permisos y una prueba backend focalizada también pasaron.
-- Para `c76452d6`, GitHub mostró backend y frontend exitosos, contrato exitoso y E2E fallido en el flujo del voucher. En `2b17bfc3`, la consulta posterior mostró el gate confiable omitido por ser draft y el despliegue de preview pendiente; no apareció un run de `PR Validation`, por lo que el cambio del voucher aún carece de CI remoto.
+- Para `c76452d6`, GitHub mostró backend y frontend exitosos, contrato exitoso y E2E fallido en el flujo del voucher. En la secuencia posterior hasta `c508093c`, sólo aparecen el gate confiable omitido por ser draft y el preview; no apareció un run de `PR Validation`, por lo que el cambio del voucher aún carece de CI remoto.
 - Matriz E2E local sobre el árbol actual: **207 aprobadas, 6 omitidas y 0 fallidas** (213 casos, 11,8 minutos; código 0). Incluyó Chromium, sitio público, Chromium móvil y routing de preview; pasaron voucher, overrides de permisos, pagos y caja. Las omisiones dependen de realtime, credenciales o infraestructura de carga no disponible en este entorno.
 - Backend local completo, repetido tras portar la optimización de asignación y el health check con la política de egreso: **2.990 aprobadas, 34 omitidas y 12 `xfail`**, 59 warnings, en 370,84 segundos; el proceso terminó con código 0.
 - Frontend local después de la división lazy: 108 tests Node aprobados; typecheck, lint y build correctos. El entry inicial es 566,91 kB sin comprimir (177,66 kB gzip); Vite aún advierte que excede 500 kB, así que conviene perfilar el resto antes de otra división.
 - `tests/test_docs_baseline.py`: 2 aprobadas. Las regresiones focalizadas del reporte diario, pagos, caja y finanzas terminaron con 71 aprobadas; las regresiones de health check con ClickHouse cerrado, con 11 aprobadas. Frontend: 108 tests Node aprobados, typecheck y lint limpios, build exitoso. La matriz E2E del árbol actual terminó con 207 aprobadas y 6 omitidas.
 - Graphify AST-only quedó regenerado con 13.894 nodos, 46.318 relaciones y 1.101 flujos; portable-check verificó 352 artefactos después de normalizar 22 rutas y un path de flujo. `graphify check-update` aún señala metadatos semánticos de descripciones/etiquetas pendientes, y el parser local no reconoce tres fuentes Swift; no se completaron con LLM.
-- Las validaciones locales incluyen el cambio del voucher que ahora está en `2b17bfc3`; las suites completas se ejecutaron antes de empaquetar ese commit y la regresión focalizada pasó cinco repeticiones. Falta el resultado remoto de `PR Validation` en el SHA actual.
+- Las validaciones locales incluyen el cambio de código introducido en `2b17bfc3` y mantenido en `c508093c`; las suites completas se ejecutaron antes de empaquetar ese commit y la regresión focalizada pasó cinco repeticiones. Falta el resultado remoto de `PR Validation` en el SHA actual.
 
 ### Interpretación de los 12 `xfail` backend
 
@@ -86,7 +86,7 @@ El entorno fue PostgreSQL 16 efímero con datos sintéticos, sin producción ni 
 ### Prioridad inmediata
 
 1. Conseguir y revisar una ejecución de `PR Validation` para `2b17bfc3`, incluido E2E Chromium; revisar también que la limpieza de la reserva de prueba no deje fixtures ocupados.
-2. No usar el resultado CI de `c76452d6` como resultado del código actual. `2b17bfc3` ya incluye la corrección del voucher y la división lazy, pero ambos esperan validación remota.
+2. No usar el resultado CI de `c76452d6` como resultado del código actual. `c508093c` contiene la corrección del voucher y la división lazy, pero ambos esperan validación remota.
 3. Resolver con el responsable la disponibilidad y el costo de reactivar Render. No cambiar plan ni facturación sin instrucción expresa.
 4. Cuando el servicio responda, verificar `/health` y `/build-meta.json`, registrar el SHA servido y luego repetir QA de los flujos/roles autorizados. El login `200` no basta.
 5. Completar preview aislado, matriz de personas, evidencia y release gate. No retirar controles por estar el PR en draft.
