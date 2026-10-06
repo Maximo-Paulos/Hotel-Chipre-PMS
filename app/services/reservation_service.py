@@ -2636,7 +2636,7 @@ def update_reservation_fields(
             raise ReservationError("El total de la reserva debe ser igual o mayor que cero")
         reason = str(update_data.get("paid_total_change_reason") or "").strip()
         if not reason:
-            raise ReservationError("Debés indicar un motivo para corregir el total de una reserva pagada")
+            raise ReservationError("Debés indicar un motivo para corregir el total de la reserva.")
         category = (
             db.query(RoomCategory)
             .filter(RoomCategory.id == reservation.category_id, RoomCategory.hotel_id == hotel_id)

@@ -1733,10 +1733,10 @@ def preview_stay_extension(
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
     """Return a server-priced, read-only extension quote for direct stays."""
+    require_all_permissions(PERMISSION_RESERVATION_CHARGE, PERMISSION_CASH_OPERATE)(request, db, context)
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if reservation is None:
         raise HTTPException(status_code=404, detail="No se encontró la reserva.")
-    require_all_permissions(PERMISSION_RESERVATION_CHARGE, PERMISSION_CASH_OPERATE)(request, db, context)
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
         raise HTTPException(

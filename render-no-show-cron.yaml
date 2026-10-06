@@ -1,0 +1,27 @@
+services:
+  - type: cron
+    name: hotel-chipre-pms-no-show-sweep
+    runtime: python
+    plan: 0.5c-512mb
+    region: oregon
+    schedule: "10 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.tasks.run_no_show_sweep
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: hotel-backend
+          envVarKey: DATABASE_URL
+      - key: DB_POOL_SIZE
+        value: "1"
+      - key: DB_MAX_OVERFLOW
+        value: "0"
+      - key: EXTERNAL_EFFECTS_ENABLED
+        value: "false"
+      - key: CONNECTIONS_ENABLED
+        value: "false"
+      - key: REALTIME_EVENTS_ENABLED
+        value: "false"

@@ -60,7 +60,7 @@ def test_sweep_respects_local_cutoff_boundary_and_uses_hotel_timezone(
         captured.append(str(locked_query.statement.compile(dialect=postgresql.dialect())))
         return locked_query
 
-    monkeypatch.setattr("app.tasks.no_show_tasks.lock_query", capture_lock_target)
+    monkeypatch.setattr("app.services.no_show_sweep_service.lock_query", capture_lock_target)
     hotel_config.hotel_timezone = "America/Argentina/Buenos_Aires"
     hotel_config.no_show_cutoff_hours = 24
     row = _reservation(
@@ -260,19 +260,98 @@ def test_sweep_task_visits_every_hotel_including_inactive_subscriptions(monkeypa
         def close(self):
             pass
 
+    class FakeEngine:
+        def __init__(self):
+            self.disposed = False
+
+        def dispose(self):
+            self.disposed = True
+
     class SessionFactory:
         def __call__(self):
             return FakeDb()
 
     visited = []
-    monkeypatch.setattr("app.tasks.no_show_tasks.get_engine", lambda _url: object())
-    monkeypatch.setattr("app.tasks.no_show_tasks.sessionmaker", lambda bind: SessionFactory())
+    engine = FakeEngine()
+    monkeypatch.setattr("app.services.no_show_sweep_service.get_engine", lambda _url: engine)
+    monkeypatch.setattr("app.services.no_show_sweep_service.sessionmaker", lambda bind: SessionFactory())
     monkeypatch.setattr(
-        "app.tasks.no_show_tasks.sweep_no_shows",
+        "app.services.no_show_sweep_service.sweep_no_shows",
         lambda _db, *, hotel_id: visited.append(hotel_id)
         or {"hotels_scanned": 0, "scanned": 0, "marked": 0, "reservation_ids": []},
     )
 
-    sweep_no_shows_task.run()
+    result = sweep_no_shows_task.run()
 
     assert visited == [1, 2]
+    assert result["failed_hotels"] == 0
+    assert engine.disposed is True
+
+
+def test_sweep_task_reports_failed_hotel_without_discarding_other_tenants(monkeypatch):
+    from app.services import no_show_sweep_service
+
+    class Query:
+        def order_by(self, *_args):
+            return self
+
+        def all(self):
+            return [(1,), (2,)]
+
+    class FakeDb:
+        def query(self, *_args):
+            return Query()
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    class FakeEngine:
+        def dispose(self):
+            pass
+
+    class SessionFactory:
+        def __call__(self):
+            return FakeDb()
+
+    def fake_sweep(_db, *, hotel_id):
+        if hotel_id == 2:
+            raise RuntimeError("synthetic failure")
+        return {"hotels_scanned": 1, "scanned": 3, "marked": 2, "reservation_ids": [10, 11]}
+
+    monkeypatch.setattr(no_show_sweep_service, "get_engine", lambda _url: FakeEngine())
+    monkeypatch.setattr(no_show_sweep_service, "sessionmaker", lambda bind: SessionFactory())
+    monkeypatch.setattr(no_show_sweep_service, "sweep_no_shows", fake_sweep)
+
+    result = no_show_sweep_service.run_no_show_sweep()
+
+    assert result == {
+        "hotels_scanned": 1,
+        "scanned": 3,
+        "marked": 2,
+        "failed_hotels": 1,
+        "reservation_ids": [10, 11],
+    }
+
+
+def test_no_show_cron_exits_unsuccessfully_when_any_hotel_fails(monkeypatch):
+    from app.tasks import run_no_show_sweep as cron_runner
+
+    monkeypatch.setattr(
+        cron_runner,
+        "run_no_show_sweep",
+        lambda: {
+            "hotels_scanned": 1,
+            "scanned": 3,
+            "marked": 2,
+            "failed_hotels": 1,
+            "reservation_ids": [10, 11],
+        },
+    )
+
+    assert cron_runner.main() == 1

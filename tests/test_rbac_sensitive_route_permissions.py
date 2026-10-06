@@ -512,6 +512,52 @@ def test_paid_reservation_total_adjustment_is_audited_and_keeps_payment_rows():
         _close(db, engine)
 
 
+def test_large_paid_total_adjustment_requires_confirmation_and_keeps_payment_rows():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        payment = Transaction(
+            hotel_id=1,
+            reservation_id=reservation.id,
+            amount=Decimal("50.00"),
+            currency="ARS",
+            transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            payment_method=PaymentMethodEnum.CASH,
+            status=TransactionStatusEnum.COMPLETED,
+            processed_at=datetime.now(timezone.utc),
+            created_by_user_id=10,
+        )
+        reservation.amount_paid = Decimal("50.00")
+        db.add(payment)
+        db.commit()
+        auth.update({"user_id": 10, "role": "owner"})
+
+        payload = {
+            "total_amount": "99.99",
+            "paid_total_change_reason": "Importe corregido con revisión",
+            "client_version": reservation.version,
+        }
+        denied = client.patch(f"/api/reservations/{reservation.id}", json=payload)
+        assert denied.status_code == 422, denied.text
+        assert "confirmá" in denied.json()["detail"].lower()
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("200.00")
+
+        confirmed = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={**payload, "confirm_large_total_adjustment": True},
+        )
+        assert confirmed.status_code == 200, confirmed.text
+        db.refresh(reservation)
+        assert reservation.total_amount == Decimal("99.99")
+        assert reservation.amount_paid == Decimal("50.00")
+        stored_payment = db.query(Transaction).filter_by(
+            hotel_id=1, reservation_id=reservation.id
+        ).one()
+        assert stored_payment.amount == Decimal("50.00")
+    finally:
+        _close(db, engine)
+
+
 def test_unpaid_direct_total_adjustment_requires_manual_rate_scope_reason_and_bounds():
     client, db, engine, auth, reservation, _stock_item = _client()
     try:
@@ -1054,6 +1100,30 @@ def test_reservation_extension_requires_update_charge_and_cash_permissions_indep
         assert db.query(AuditLog).filter_by(
             table_name="reservations", record_id=reservation.id
         ).count() >= 1
+    finally:
+        _close(db, engine)
+
+
+def test_extension_preview_checks_financial_permissions_before_reservation_lookup():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        for permission in ("reservation:charge", "cash:operate"):
+            set_user_override(
+                db, 1, 20, "receptionist", permission, False, actor_user_id=10
+            )
+        db.commit()
+        params = {"new_checkout_date": (date.today() + timedelta(days=3)).isoformat()}
+
+        existing = client.get(
+            f"/api/reservations/{reservation.id}/extend-preview", params=params
+        )
+        missing = client.get(
+            f"/api/reservations/{reservation.id + 10000}/extend-preview", params=params
+        )
+
+        assert existing.status_code == 403, existing.text
+        assert missing.status_code == 403, missing.text
+        assert existing.json()["detail"] == missing.json()["detail"]
     finally:
         _close(db, engine)
 
