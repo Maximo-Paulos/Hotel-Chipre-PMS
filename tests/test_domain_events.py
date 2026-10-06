@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.schema import CreateIndex
 
 from app.api import events
@@ -24,6 +25,18 @@ def _event_engine():
     """A minimal SQLite engine with just the tables the after_commit hook writes to."""
 
     engine = create_engine("sqlite://")
+    DomainEventOutbox.__table__.create(engine)
+    return engine
+
+
+def _thread_safe_event_engine():
+    """Share the in-memory SQLite connection with async iterator worker threads."""
+
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     DomainEventOutbox.__table__.create(engine)
     return engine
 
@@ -857,11 +870,10 @@ def test_stream_endpoint_uses_postgres_transport_when_redis_is_unavailable(monke
         "get_settings",
         lambda: _settings(REALTIME_EVENTS_FALLBACK_POLL_SECONDS=1),
     )
-    monkeypatch.setattr(
-        events,
-        "iter_postgres_event_stream",
-        lambda *args, **kwargs: iter(["event: ready\ndata: {\"transport\": \"postgres-outbox\"}\n\n"]),
-    )
+    async def fake_async_stream(*args, **kwargs):
+        yield 'event: ready\ndata: {"transport": "postgres-outbox"}\n\n'
+
+    monkeypatch.setattr(events, "aiter_postgres_event_stream", fake_async_stream)
 
     class ClosableDb:
         closed = False
@@ -876,6 +888,7 @@ def test_stream_endpoint_uses_postgres_transport_when_redis_is_unavailable(monke
     )
     assert response.headers["x-realtime-transport"] == "postgres-outbox"
     assert db.closed is True
+    assert asyncio.run(response.body_iterator.__anext__()).startswith("event: ready")
 
 
 def test_postgres_fallback_stream_reads_committed_outbox_without_payload():
@@ -977,3 +990,145 @@ def test_postgres_fallback_stream_caps_poll_interval_at_five_seconds(monkeypatch
     assert sleep_calls == [5.0]
     stream.close()
     engine.dispose()
+
+
+def test_async_postgres_fallback_preserves_cursor_payload_and_tenant_isolation():
+    engine = _thread_safe_event_engine()
+    factory = sessionmaker(bind=engine)
+    session = factory()
+    session.add_all(
+        [
+            DomainEventOutbox(
+                event_id="00000000-0000-0000-0000-000000000044",
+                hotel_id=42,
+                domain="reservations",
+                event_type="reservation.updated",
+                payload={"reservation_id": 44, "guest_name": "must not stream"},
+                schema_version=1,
+                stream_cursor=17,
+                revision=4,
+                occurred_at=datetime.now(timezone.utc),
+                status="pending",
+            ),
+            DomainEventOutbox(
+                event_id="00000000-0000-0000-0000-000000000045",
+                hotel_id=43,
+                domain="reservations",
+                event_type="reservation.updated",
+                payload={"reservation_id": 45},
+                schema_version=1,
+                stream_cursor=99,
+                revision=5,
+                occurred_at=datetime.now(timezone.utc),
+                status="pending",
+            ),
+        ]
+    )
+    session.commit()
+    session.close()
+
+    async def read_frames():
+        latest_stream = domain_events.aiter_postgres_event_stream(
+            42,
+            poll_seconds=1,
+            session_factory=factory,
+        )
+        latest_ready = await latest_stream.__anext__()
+        await latest_stream.aclose()
+
+        replay_stream = domain_events.aiter_postgres_event_stream(
+            42,
+            after_cursor=0,
+            poll_seconds=1,
+            session_factory=factory,
+        )
+        replay_ready = await replay_stream.__anext__()
+        event_frame = await replay_stream.__anext__()
+        await replay_stream.aclose()
+        return latest_ready, replay_ready, event_frame
+
+    try:
+        latest_ready, replay_ready, event_frame = asyncio.run(read_frames())
+    finally:
+        engine.dispose()
+
+    assert '"cursor": 17' in latest_ready
+    assert '"cursor": 0' in replay_ready
+    assert "id: 17\n" in event_frame
+    assert '"cursor": 17' in event_frame
+    assert '"hotel_id": 42' in event_frame
+    assert '"event_type": "reservation.updated"' in event_frame
+    assert '"payload": {}' in event_frame
+    assert "must not stream" not in event_frame
+    assert '"hotel_id": 43' not in event_frame
+    assert "00000000-0000-0000-0000-000000000045" not in event_frame
+
+
+@pytest.mark.asyncio
+async def test_async_postgres_fallback_idle_wait_keeps_loop_responsive_and_cancels():
+    engine = _thread_safe_event_engine()
+    closed_sessions = 0
+
+    class TrackingSession(Session):
+        def close(self):
+            nonlocal closed_sessions
+            closed_sessions += 1
+            super().close()
+
+    factory = sessionmaker(bind=engine, class_=TrackingSession)
+    stream = domain_events.aiter_postgres_event_stream(
+        42,
+        after_cursor=0,
+        poll_seconds=5,
+        session_factory=factory,
+    )
+    try:
+        assert "event: ready" in await stream.__anext__()
+        assert await stream.__anext__() == ": heartbeat\n\n"
+
+        waiting_poll = asyncio.create_task(stream.__anext__())
+        await asyncio.sleep(0)
+        loop = asyncio.get_running_loop()
+        tick_started = loop.time()
+        await asyncio.sleep(0.02)
+        assert loop.time() - tick_started < 0.5
+        assert not waiting_poll.done()
+
+        waiting_poll.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiting_poll
+        await stream.aclose()
+        assert closed_sessions == 1
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_async_postgres_fallback_revalidates_membership_and_emits_control():
+    engine = _thread_safe_event_engine()
+    factory = sessionmaker(bind=engine)
+    checks: list[int] = []
+
+    def revoked_membership() -> bool:
+        checks.append(1)
+        return False
+
+    stream = domain_events.aiter_postgres_event_stream(
+        42,
+        after_cursor=0,
+        poll_seconds=1,
+        authorization_check=revoked_membership,
+        authorization_revalidate_seconds=1,
+        session_factory=factory,
+    )
+    try:
+        assert "event: ready" in await stream.__anext__()
+        assert await stream.__anext__() == ": heartbeat\n\n"
+        control = await asyncio.wait_for(stream.__anext__(), timeout=2.0)
+    finally:
+        await stream.aclose()
+        engine.dispose()
+
+    assert "event: control" in control
+    assert '"event_type": "authorization_lost"' in control
+    assert checks == [1]

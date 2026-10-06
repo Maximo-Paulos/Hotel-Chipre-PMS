@@ -36,6 +36,7 @@ from app.models.transaction import (
     TransactionTypeEnum,
 )
 from app.models.user import User
+from app.services.timezones import hotel_today
 
 
 @pytest.fixture
@@ -159,7 +160,7 @@ def test_daily_report_totals_a_completed_transaction_without_crashing(reports_cl
     client, db, reservation_id = reports_client
     _make_completed_transaction(db, reservation_id=reservation_id, amount="15000.50")
 
-    report_date = datetime.now(timezone.utc).date()
+    report_date = hotel_today(db, 1)
     response = client.get("/api/reports/daily", params={"report_date": report_date.isoformat()})
 
     assert response.status_code == 200
@@ -171,7 +172,7 @@ def test_revenue_report_totals_multiple_completed_transactions_without_crashing(
     _make_completed_transaction(db, reservation_id=reservation_id, amount="10000.00")
     _make_completed_transaction(db, reservation_id=reservation_id, amount="5000.25")
 
-    report_date = datetime.now(timezone.utc).date()
+    report_date = hotel_today(db, 1)
     response = client.get(
         "/api/reports/revenue",
         params={"start_date": report_date.isoformat(), "end_date": report_date.isoformat()},
@@ -440,7 +441,7 @@ def test_revenue_keeps_currencies_separate_and_uses_reportable_channel(reports_c
         payment_method=PaymentMethodEnum.BANK_TRANSFER,
     )
 
-    report_date = datetime.now(timezone.utc).date()
+    report_date = hotel_today(db, 1)
     response = client.get(
         "/api/reports/revenue",
         params={"start_date": report_date.isoformat(), "end_date": report_date.isoformat()},
@@ -470,7 +471,7 @@ def test_confirmed_external_ota_amount_is_not_reported_as_pms_collection(reports
     reservation.external_paid_confirmed = True
     reservation.external_paid_confirmed_at = datetime.now(timezone.utc)
     reservation.currency_code = "USD"
-    report_date = datetime.now(timezone.utc).date()
+    report_date = hotel_today(db, 1)
 
     response = client.get(
         "/api/reports/revenue",
@@ -489,7 +490,7 @@ def test_empty_collections_have_no_currency_or_synthetic_multicurrency_total(rep
     client, db, reservation_id = reports_client
     db.get(Reservation, reservation_id).deleted_at = datetime.now(timezone.utc)
     db.flush()
-    report_date = datetime.now(timezone.utc).date()
+    report_date = hotel_today(db, 1)
 
     response = client.get(
         "/api/reports/revenue",
@@ -560,7 +561,7 @@ def test_revenue_csv_groups_by_method_category_channel_and_currency(reports_clie
         currency="ARS",
         payment_method=PaymentMethodEnum.BANK_TRANSFER,
     )
-    report_date = datetime.now(timezone.utc).date()
+    report_date = hotel_today(db, 1)
 
     response = client.get(
         "/api/reports/revenue/export.csv",

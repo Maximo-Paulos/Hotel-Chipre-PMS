@@ -14,11 +14,11 @@ from app.database import get_session_factory
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.schemas.domain_event import DomainEventRecoveryResponse
 from app.services.domain_events import (
+    aiter_postgres_event_stream,
     RealtimeEventsUnavailable,
     get_domain_event_recovery,
     get_realtime_client,
     iter_event_stream,
-    iter_postgres_event_stream,
 )
 from app.models.hotel_membership import HotelMembership
 from app.models.user import User
@@ -150,7 +150,7 @@ def stream_domain_events(
             authorization_check=authorization_check,
         )
         if client is not None
-        else iter_postgres_event_stream(
+        else aiter_postgres_event_stream(
             context.hotel_id,
             after_cursor=after_cursor,
             poll_seconds=float(getattr(settings, "REALTIME_EVENTS_FALLBACK_POLL_SECONDS", 2.0)),

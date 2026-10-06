@@ -289,6 +289,9 @@ async def request_telemetry(request: Request, call_next):
         request_id,
     )
     response.headers["X-Request-Id"] = request_id
+    # Append instead of assigning so any Server-Timing metrics supplied by an
+    # upstream proxy remain available alongside the application duration.
+    response.headers.append("Server-Timing", f"app;dur={duration_ms:.2f}")
     return response
 
 # CORS: local dev origins and Vercel previews are development/QA conveniences.
@@ -330,6 +333,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Server-Timing", "X-Request-Id"],
 )
 
 # Register all API routers

@@ -6,6 +6,7 @@ signals: consumers must refetch the authoritative API representation.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import threading
@@ -13,8 +14,9 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Iterable, Mapping, TYPE_CHECKING
+from typing import Any, AsyncIterator, Callable, Iterable, Mapping, TYPE_CHECKING
 
+import anyio
 import redis
 from sqlalchemy import func, inspect
 
@@ -1422,6 +1424,146 @@ def iter_postgres_event_stream(
 
         yield ": heartbeat\n\n"
         time.sleep(poll_delay)
+
+
+def _resolve_postgres_event_session_factory(session_factory: Callable[[], Any] | None):
+    if session_factory is not None:
+        return session_factory
+    from app.database import get_session_factory
+
+    return get_session_factory()
+
+
+def _read_latest_postgres_event_cursor(session_factory: Callable[[], Any], hotel_id: int) -> int:
+    cursor_value = func.coalesce(DomainEventOutbox.stream_cursor, DomainEventOutbox.id)
+    initial_db = session_factory()
+    try:
+        set_tenant_hotel_context(initial_db, hotel_id)
+        latest = (
+            initial_db.query(func.max(cursor_value))
+            .filter(DomainEventOutbox.hotel_id == hotel_id)
+            .scalar()
+        )
+        return int(latest or 0)
+    finally:
+        initial_db.close()
+
+
+def _read_postgres_event_batch(
+    session_factory: Callable[[], Any], hotel_id: int, cursor: int
+) -> list[DomainEventOutbox]:
+    cursor_value = func.coalesce(DomainEventOutbox.stream_cursor, DomainEventOutbox.id)
+    poll_db = session_factory()
+    try:
+        set_tenant_hotel_context(poll_db, hotel_id)
+        return (
+            poll_db.query(DomainEventOutbox)
+            .filter(
+                DomainEventOutbox.hotel_id == hotel_id,
+                cursor_value > cursor,
+            )
+            .order_by(cursor_value.asc())
+            .limit(POSTGRES_FALLBACK_BATCH_SIZE)
+            .all()
+        )
+    finally:
+        poll_db.close()
+
+
+async def aiter_postgres_event_stream(
+    hotel_id: int,
+    *,
+    after_cursor: int | None = None,
+    poll_seconds: float = POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS,
+    authorization_check: Callable[[], bool] | None = None,
+    authorization_revalidate_seconds: int = 60,
+    session_factory: Callable[[], Any] | None = None,
+) -> AsyncIterator[str]:
+    """Stream tenant-scoped outbox invalidations without blocking the event loop.
+
+    PostgreSQL access and the synchronous membership check run as short
+    threadpool calls. Poll waits use ``asyncio.sleep`` so an idle SSE stream
+    never occupies a worker thread. Each database helper closes its session
+    before returning, including when the query raises or the stream is
+    cancelled while waiting for that helper to finish.
+    """
+
+    _validate_hotel_id(hotel_id)
+    if after_cursor is not None and after_cursor < 0:
+        raise ValueError("after_cursor must be non-negative")
+
+    resolved_factory = await anyio.to_thread.run_sync(
+        _resolve_postgres_event_session_factory, session_factory
+    )
+    poll_delay = max(1.0, min(float(poll_seconds), POSTGRES_FALLBACK_MAX_POLL_SECONDS))
+    cursor = int(after_cursor or 0)
+    if after_cursor is None:
+        cursor = await anyio.to_thread.run_sync(
+            _read_latest_postgres_event_cursor, resolved_factory, hotel_id
+        )
+
+    last_authorization_check = time.monotonic()
+    yield format_sse(
+        {
+            "schema_version": 2,
+            "hotel_id": hotel_id,
+            "status": "ready",
+            "transport": "postgres-outbox",
+            "cursor": cursor,
+        },
+        event_name="ready",
+    )
+
+    while True:
+        now = time.monotonic()
+        if (
+            authorization_check
+            and now - last_authorization_check >= max(1, authorization_revalidate_seconds)
+        ):
+            last_authorization_check = now
+            try:
+                authorized = await anyio.to_thread.run_sync(authorization_check)
+            except Exception as exc:  # pragma: no cover - fail closed on provider errors
+                logger.warning(
+                    "realtime_events.authorization_check_failed",
+                    extra={"error_type": type(exc).__name__},
+                )
+                authorized = False
+            if not authorized:
+                yield format_sse(
+                    {
+                        "schema_version": 2,
+                        "hotel_id": hotel_id,
+                        "event_type": "authorization_lost",
+                        "status": "reauthenticate",
+                        "transport": "postgres-outbox",
+                    },
+                    event_name="control",
+                )
+                return
+
+        rows: list[DomainEventOutbox] = []
+        try:
+            rows = await anyio.to_thread.run_sync(
+                _read_postgres_event_batch, resolved_factory, hotel_id, cursor
+            )
+        except Exception as exc:  # pragma: no cover - provider/runtime failure
+            logger.warning(
+                "realtime_events.postgres_fallback_poll_failed",
+                extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
+            )
+
+        if rows:
+            for row in rows:
+                row_cursor = int(row.stream_cursor or row.id)
+                cursor = max(cursor, row_cursor)
+                payload = _outbox_sse_payload(row, row_cursor)
+                if payload is not None:
+                    yield format_sse(payload)
+            continue
+
+        yield ": heartbeat\n\n"
+        await asyncio.sleep(poll_delay)
 
 
 def format_sse(payload: Mapping[str, Any], *, event_name: str = EVENT_NAME) -> str:

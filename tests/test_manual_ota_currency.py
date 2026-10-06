@@ -15,6 +15,7 @@ from app.services.financial_ledger import (
 )
 from app.services.financial_report_service import build_financial_report
 from app.services.ota_manual_service import create_or_update_manual_ota_reservation
+from app.services.timezones import hotel_today
 
 
 def _seed_hotel(db):
@@ -101,7 +102,7 @@ def test_foreign_currency_ota_prepayment_is_reported_without_reducing_local_bala
     assert read_payload["external_paid_currency"] == "USD"
     assert read_payload["external_paid_balance_credit_applied"] is False
 
-    report_date = datetime.now(timezone.utc).date()
+    report_date = hotel_today(db, 1)
     report = build_financial_report(
         db,
         hotel_id=1,
