@@ -1,5 +1,6 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy.dialects import postgresql
 
 from app.models.guest import Guest
@@ -20,15 +21,25 @@ from app.services import row_locks
 from app.tasks.no_show_tasks import sweep_no_shows
 
 
-def _reservation(db, *, hotel_id, guest, category, room, status=ReservationStatusEnum.PENDING, code):
+def _reservation(
+    db,
+    *,
+    hotel_id,
+    guest,
+    category,
+    room,
+    status=ReservationStatusEnum.PENDING,
+    code,
+    check_in_date=date(2026, 10, 1),
+):
     row = create_reservation(
         db,
         ReservationCreate(
             guest_id=guest.id,
             category_id=category.id,
             room_id=room.id,
-            check_in_date=date(2026, 10, 1),
-            check_out_date=date(2026, 10, 3),
+            check_in_date=check_in_date,
+            check_out_date=check_in_date + timedelta(days=2),
         ),
         hotel_id=hotel_id,
     )
@@ -73,6 +84,61 @@ def test_sweep_respects_local_cutoff_boundary_and_uses_hotel_timezone(
     # the bounded eligibility query so a repeated sweep can prove idempotency.
     assert len(captured) == 3
     assert all("FOR UPDATE OF reservations" in sql for sql in captured)
+
+
+@pytest.mark.parametrize(
+    ("check_in_date", "cutoff_hours", "before", "exact"),
+    [
+        (
+            date(2026, 3, 8),
+            24,
+            datetime(2026, 3, 9, 4, 59, 59, tzinfo=timezone.utc),
+            datetime(2026, 3, 9, 5, 0, tzinfo=timezone.utc),
+        ),
+        (
+            date(2026, 11, 1),
+            24,
+            datetime(2026, 11, 2, 3, 59, 59, tzinfo=timezone.utc),
+            datetime(2026, 11, 2, 4, 0, tzinfo=timezone.utc),
+        ),
+        (
+            date(2026, 3, 8),
+            0,
+            datetime(2026, 3, 8, 4, 59, 59, tzinfo=timezone.utc),
+            datetime(2026, 3, 8, 5, 0, tzinfo=timezone.utc),
+        ),
+    ],
+    ids=("spring-forward", "fall-back", "zero-cutoff"),
+)
+def test_sweep_sql_cutoff_filter_matches_elapsed_utc_hours_across_dst(
+    db,
+    hotel_config,
+    sample_guest,
+    sample_categories,
+    sample_rooms,
+    check_in_date,
+    cutoff_hours,
+    before,
+    exact,
+):
+    hotel_config.hotel_timezone = "America/New_York"
+    hotel_config.no_show_cutoff_hours = cutoff_hours
+    row = _reservation(
+        db,
+        hotel_id=hotel_config.id,
+        guest=sample_guest,
+        category=sample_categories[0],
+        room=sample_rooms[0],
+        code=f"SWEEP-DST-{check_in_date}-{cutoff_hours}",
+        check_in_date=check_in_date,
+    )
+
+    before_result = sweep_no_shows(db, now_utc=before)
+    exact_result = sweep_no_shows(db, now_utc=exact)
+
+    assert before_result["scanned"] == before_result["marked"] == 0
+    assert exact_result["scanned"] == exact_result["marked"] == 1
+    assert row.status == ReservationStatusEnum.NO_SHOW
 
 
 def test_sweep_marks_pending_and_paid_as_no_show_without_changing_money(
