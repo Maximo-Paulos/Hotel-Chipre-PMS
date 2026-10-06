@@ -1791,6 +1791,16 @@ export function ReservationsPage() {
     normalizeCurrencyCode(quoteQuery.data?.currency_code) === normalizeCurrencyCode(manualRateCurrencyCode) &&
     isLargeTotalAdjustment(reservationQuote.total, proposedManualRateTotalDraft)
   );
+  const restrictedGuestManualRateAdjustmentDraft = Boolean(
+    !editing &&
+    canSetManualRate &&
+    formValues.source === "direct" &&
+    !(Number(formValues.company_id) > 0) &&
+    proposedManualRateTotalDraft !== null &&
+    Number.isFinite(proposedManualRateTotalDraft) &&
+    proposedManualRateTotalDraft >= 0 &&
+    getGuestProhibitedDetail(quoteQuery.error)
+  );
   const largeTotalAdjustmentDraft = Boolean(
     editing &&
     proposedTotalDraft !== null &&
@@ -4095,13 +4105,15 @@ export function ReservationsPage() {
                       )}
                     </>
                   )}
-                  {largeManualRateAdjustmentDraft ? (
+                  {largeManualRateAdjustmentDraft || restrictedGuestManualRateAdjustmentDraft ? (
                     <div className="mt-3 rounded-lg border border-amber-300 bg-white p-3" role="alert" data-testid="manual-rate-adjustment-warning">
                       <p className="text-sm text-amber-950">
-                        {t("page.form.largeManualRateAdjustmentWarning", {
-                          current: formatMoney(reservationQuote?.total ?? 0, manualRateCurrencyCode),
-                          proposed: formatMoney(proposedManualRateTotalDraft ?? 0, manualRateCurrencyCode)
-                        })}
+                        {restrictedGuestManualRateAdjustmentDraft
+                          ? t("page.form.restrictedGuestManualRateAdjustmentWarning")
+                          : t("page.form.largeManualRateAdjustmentWarning", {
+                              current: formatMoney(reservationQuote?.total ?? 0, manualRateCurrencyCode),
+                              proposed: formatMoney(proposedManualRateTotalDraft ?? 0, manualRateCurrencyCode)
+                            })}
                       </p>
                       <label className="mt-2 flex items-start gap-2 text-sm text-slate-800">
                         <input

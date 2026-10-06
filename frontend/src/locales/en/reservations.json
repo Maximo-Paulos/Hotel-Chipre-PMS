@@ -820,6 +820,7 @@
       "paidTotalAdjustmentReasonPlaceholder": "Explain the agreement or error being corrected",
       "largeTotalAdjustmentWarning": "The proposed total changes by at least 50% from the current amount ({current} → {proposed}). Review it before saving.",
       "largeManualRateAdjustmentWarning": "The manual amount differs by at least 50% from the current quote ({{current}} → {{proposed}}). Review it before saving.",
+      "restrictedGuestManualRateAdjustmentWarning": "The automatic quote is blocked for this guest. Confirm that you reviewed the manual total and reason before continuing.",
       "largeTotalAdjustmentConfirm": "I confirm that I reviewed the new total and reason.",
       "loadingSummary": "Loading summary...",
       "paymentMethod": "Payment method",

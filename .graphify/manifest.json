@@ -1444,8 +1444,8 @@
     "hash": "f37c52a31a7cf06685bd5d363ea0672e"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1791260087587.1448,
-    "hash": "f3e4050b6bdf2e0c9ae293e8042e80dd"
+    "mtime": 1791300852985.1643,
+    "hash": "253e69876f4d88e5a278c0fbb4d9531f"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1791251996399.3184,
@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1791260988388.3806,
-    "hash": "82b1e68a68a90674e1f379fca488e272"
+    "mtime": 1791261075066.0264,
+    "hash": "806e0c82e48d81888c787e4a9cd0e3ba"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1791260988388.4717,
-    "hash": "2f54258881ab84f1bada55dbf610bc96"
+    "mtime": 1791261074417.1143,
+    "hash": "424d02aa38d194fda1daa90467375652"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1791260988388.6453,
-    "hash": "643d03eaca3ea8fd8bcfbadecb6d1ec8"
+    "mtime": 1791261075053.7852,
+    "hash": "90825a8d1ee1dcb139ab98b926ef029e"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1791260988388.7441,
-    "hash": "8619586530bbbd74cfebf94da248826b"
+    "mtime": 1791261074430.8125,
+    "hash": "6bc2ea8b47c72b9980f859daf5ef696e"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1791260988388.8643,
-    "hash": "3801ed2ac36e271380b8f540c36d2b36"
+    "mtime": 1791261075040.9395,
+    "hash": "7ec952e13c2f7fdb6a8cf246721268d3"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1791260988388.966,
-    "hash": "e32200b7dedd986bd6056bba482fed60"
+    "mtime": 1791261074620.4043,
+    "hash": "40aac89cf8288dd981361173de23dde8"
   },
   "qa/evidence/README.md": {
     "mtime": 1791222002234.0403,
@@ -3500,8 +3500,8 @@
     "hash": "982e5b5d0bdc87e1155b4c7ec5430f8e"
   },
   "frontend/e2e/reports-error-state.spec.ts": {
-    "mtime": 1791260981772.3123,
-    "hash": "ba84cb7b148b1696cd5f93b277761285"
+    "mtime": 1791283500774.0251,
+    "hash": "0176738e31a6cb2268bc7d08ada0358b"
   },
   "frontend/e2e/reservation-lifecycle.spec.ts": {
     "mtime": 1791222002151.8784,
@@ -3596,8 +3596,8 @@
     "hash": "a97b319cdd1ad26d679fd4ebb5217a0f"
   },
   "frontend/e2e/onboarding-resume-and-hotel-setup-journey.spec.ts": {
-    "mtime": 1791222002150.6565,
-    "hash": "25a3f3734b503b92010ed48d82c2e9dd"
+    "mtime": 1791283500773.755,
+    "hash": "47cf06892e5f3352fbdbae0917afc150"
   },
   "frontend/e2e/support/email-outbox.ts": {
     "mtime": 1791222002153.7952,
@@ -4128,8 +4128,8 @@
     "hash": "789a8232da8e7976c0d616f01e0f54cc"
   },
   "frontend/e2e/guest-restriction-journey.spec.ts": {
-    "mtime": 1791222002148.622,
-    "hash": "86bca2ae34b3b840115f95a9559e75c6"
+    "mtime": 1791300852989.068,
+    "hash": "6260d00749e15325ece5f1b1f7de780a"
   },
   "frontend/e2e/promotions-builder.spec.ts": {
     "mtime": 1791222002151.2974,

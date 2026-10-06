@@ -820,6 +820,7 @@
       "paidTotalAdjustmentReasonPlaceholder": "Explicá el acuerdo o error que se corrige",
       "largeTotalAdjustmentWarning": "El total propuesto cambia al menos un 50 % respecto del actual ({current} → {proposed}). Revisá el importe antes de guardar.",
       "largeManualRateAdjustmentWarning": "El importe manual difiere al menos un 50 % de la cotización vigente ({{current}} → {{proposed}}). Revisalo antes de guardar.",
+      "restrictedGuestManualRateAdjustmentWarning": "La cotización automática está bloqueada para este huésped. Confirmá que revisaste el total manual y el motivo antes de continuar.",
       "largeTotalAdjustmentConfirm": "Confirmo que revisé el nuevo total y el motivo.",
       "loadingSummary": "Cargando resumen...",
       "paymentMethod": "Medio de pago",

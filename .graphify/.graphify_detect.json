@@ -1542,9 +1542,9 @@
     "video": []
   },
   "total_files": 1532,
-  "total_words": 2131914,
+  "total_words": 2132046,
   "needs_graph": true,
-  "warning": "Large corpus: 1532 files · ~2,131,914 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1532 files · ~2,132,046 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1565,7 +1565,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "56072f64781d54576a7a5700f94f98a3702a03d7",
+    "source_hash": "4b7d260ebbde2f423f38a976e4d42b00f3393ec5",
     "branches": [
       "codex/day2-feedback",
       "codex/fix-ronda-2-week-simulation",
@@ -1588,6 +1588,7 @@
       "fix/outbox-recovery-index",
       "fix/pending-actions-bounded",
       "fix/permission-resolution-roundtrips",
+      "fix/pms-latency-retest",
       "fix/pms-performance",
       "fix/pms-save-read-latency",
       "fix/postmerge-day2-reliability",
@@ -1609,7 +1610,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "56072f64781d54576a7a5700f94f98a3702a03d7",
+    "head": "4b7d260ebbde2f423f38a976e4d42b00f3393ec5",
     "candidate_count": null,
     "included_count": 1532,
     "excluded_untracked_count": 0,
