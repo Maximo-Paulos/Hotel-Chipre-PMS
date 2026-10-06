@@ -420,8 +420,8 @@
     "hash": "5ff00d876f7ceb77b2fcf863eb0a6635"
   },
   "app/dependencies/auth.py": {
-    "mtime": 1791222002043.7244,
-    "hash": "3718b0d09174a4a9a18bb5a4f4bd31a7"
+    "mtime": 1791257787045.983,
+    "hash": "9df6b27c09f1e4f912000e0cab3dca36"
   },
   "app/main.py": {
     "mtime": 1791251996385.1594,
@@ -988,8 +988,8 @@
     "hash": "012a171b94d8328c76627a1610fd3867"
   },
   "app/services/permission_service.py": {
-    "mtime": 1791251996389.2014,
-    "hash": "d7092ba35f497df98de42f5e52e6a9af"
+    "mtime": 1791257787047.2144,
+    "hash": "7a63a46b6d17c9bcab658f21e9cd8a61"
   },
   "app/services/pricing_policy_service.py": {
     "mtime": 1791222002061.0525,
@@ -1016,8 +1016,8 @@
     "hash": "3bb826cc66a4d3937dc722b0b020e3eb"
   },
   "app/services/reservation_service.py": {
-    "mtime": 1791251996390.382,
-    "hash": "c014897eb05c3bb63a374bba1636c64a"
+    "mtime": 1791257827101.6262,
+    "hash": "b62fa4afab2bfe41ee128bba5730d2dc"
   },
   "app/services/room_block_service.py": {
     "mtime": 1791222002062.5234,
@@ -1660,8 +1660,8 @@
     "hash": "96d4ab760b0f2947754f13cde9e5e5d2"
   },
   "tests/test_analytics_facts.py": {
-    "mtime": 1791222002244.6072,
-    "hash": "46d06d3401bbf25f3503bc669d4a77cb"
+    "mtime": 1791258281234.2153,
+    "hash": "44e087b56d5b89a1a13780684f136d92"
   },
   "tests/test_analytics_fixtures.py": {
     "mtime": 1791222002244.667,
@@ -1912,8 +1912,8 @@
     "hash": "818d91fc00b5b9d45e9f91953ae70b6a"
   },
   "tests/test_permission_service.py": {
-    "mtime": 1791222002258.2378,
-    "hash": "02d5338f0eb5e5a76bc49a8d432d8aac"
+    "mtime": 1791257787049.2888,
+    "hash": "a78d35fdfd2d7c937d34e3a7ad39fadb"
   },
   "tests/test_permissions_api.py": {
     "mtime": 1791251996408.3826,
@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1791256905855.265,
-    "hash": "f6ab6a5cb39bdeab1324f0e014a73487"
+    "mtime": 1791257834401.272,
+    "hash": "0e2e2406ad5ec751914040466bb6f8ac"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1791256905151.7158,
-    "hash": "31a8abeaa6a45d97cb975c1fb35c965e"
+    "mtime": 1791257834401.3835,
+    "hash": "1692ef8db51dfab782907e86972ebfdb"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1791256905842.9607,
-    "hash": "4fb4da48a6752d80688218d58d8e3bad"
+    "mtime": 1791257834401.5693,
+    "hash": "c63e81faed71b8d4932477871de02c92"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1791256905164.3523,
-    "hash": "979f4bfd1fef1cae379ccf88524c605a"
+    "mtime": 1791257834401.6665,
+    "hash": "f14ee6f0f8837f87ab26365b41fd6271"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1791256905829.8538,
-    "hash": "11174f23cc9626dcc8284027666bba22"
+    "mtime": 1791257834401.7793,
+    "hash": "e1ef9cc4939eb14184411d3fee7edd88"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1791256905351.737,
-    "hash": "cf8cbc4354f4d3cff2fd5cd506a74fb5"
+    "mtime": 1791257834401.888,
+    "hash": "44ae0adbfd998595c4fae2d65a65a7de"
   },
   "qa/evidence/README.md": {
     "mtime": 1791222002234.0403,
@@ -3424,8 +3424,8 @@
     "hash": "d9f12c2885b9c47a52c270b28a879cef"
   },
   "app/services/domain_events.py": {
-    "mtime": 1791251996386.4739,
-    "hash": "90c908e3a9f558199b56460e3d44010c"
+    "mtime": 1791257787046.9248,
+    "hash": "d4ee00bfa9702c1afeb44b838dd2fe03"
   },
   "frontend/src/sync/crossTabSync.ts": {
     "mtime": 1791251996396.5156,
@@ -3436,8 +3436,8 @@
     "hash": "19550e60edc87c80aacef450d27345a8"
   },
   "tests/test_domain_events.py": {
-    "mtime": 1791253878919.3794,
-    "hash": "99dae1f8651cec1fdae72de11180ef6c"
+    "mtime": 1791257787048.7183,
+    "hash": "aca4b6349a04e1679a7e1cc5217077cf"
   },
   "scripts/scale/staged_http_load.py": {
     "mtime": 1791222002241.0857,
@@ -5032,8 +5032,8 @@
     "hash": "17110c518fac3d62daefe76c3f157c43"
   },
   "app/infrastructure/redis_backend.py": {
-    "mtime": 1791222002043.8105,
-    "hash": "fc4d3a92c03d63e28f9c4eb75f31eb8e"
+    "mtime": 1791257787046.3508,
+    "hash": "d830b3f56d8f78cd4b9f4eb1eeb215c3"
   },
   "app/models/domain_event_outbox.py": {
     "mtime": 1791238350456.1274,
@@ -5132,8 +5132,8 @@
     "hash": "279d3b633283a4e1dd0d81c136464746"
   },
   "tests/test_ephemeral_backend.py": {
-    "mtime": 1791222002249.9011,
-    "hash": "292186e82c271d3d9421a6b3522907b0"
+    "mtime": 1791257787049.0066,
+    "hash": "331f6f14b26b879d47c21aa1db88f2fc"
   },
   "tests/test_gcp_readiness.py": {
     "mtime": 1791222002250.3665,
@@ -5672,8 +5672,8 @@
     "hash": "a6aa27458392ac516d04888fb883b9f5"
   },
   "app/services/action_step_up_service.py": {
-    "mtime": 1791222002053.3389,
-    "hash": "3c4bc4b70fcefc99e51d531da0f9ab17"
+    "mtime": 1791257787046.6719,
+    "hash": "ec52916ae3fd73ceb228d5b1d50880cf"
   },
   "frontend/action-step-up-client.test.mjs": {
     "mtime": 1791251996391.1018,

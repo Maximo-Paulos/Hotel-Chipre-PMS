@@ -262,14 +262,18 @@ def _require_all_action_step_ups(
     context: AuthContext,
     permissions: tuple[str, ...],
 ) -> None:
-    from app.services.action_step_up_service import consume_action_step_up_tickets, permission_requires_step_up
+    from app.services.action_step_up_service import (
+        consume_action_step_up_tickets,
+        permissions_requiring_step_up,
+    )
     from app.services.permission_service import canonical_permission_code
 
     actions = []
     used_tickets: set[str] = set()
+    step_up_permissions = permissions_requiring_step_up(db, permissions)
     for permission in permissions:
         canonical = canonical_permission_code(permission)
-        if not permission_requires_step_up(db, canonical):
+        if canonical not in step_up_permissions:
             continue
         ticket = next(
             (
@@ -375,21 +379,26 @@ def require_all_permissions(*permissions: str):
         db: Session = Depends(get_db),
         context: AuthContext = Depends(get_auth_context),
     ) -> AuthContext:
-        from app.services.permission_service import audit_permission_denied, resolve
+        from app.services.permission_service import (
+            audit_permission_denied,
+            canonical_permission_code,
+            resolve_many,
+        )
 
         requested = context.permissions or set()
         requested.update(permissions)
         context.permissions = requested
         if not context.is_verified:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
+        decisions = resolve_many(
+            db,
+            context.hotel_id,
+            context.user_role,
+            permissions,
+            user_id=context.user_id,
+        )
         for permission in permissions:
-            if resolve(
-                db,
-                context.hotel_id,
-                context.user_role,
-                permission,
-                user_id=context.user_id,
-            ):
+            if decisions.get(canonical_permission_code(permission), False):
                 continue
             audit_permission_denied(
                 db,
@@ -421,23 +430,28 @@ def require_any_permission(*permissions: str):
         db: Session = Depends(get_db),
         context: AuthContext = Depends(get_auth_context),
     ) -> AuthContext:
-        from app.services.permission_service import audit_permission_denied, resolve
+        from app.services.permission_service import (
+            audit_permission_denied,
+            canonical_permission_code,
+            resolve_many,
+        )
 
         perms = context.permissions or set()
         perms.update(permissions)
         context.permissions = perms
         if not context.is_verified:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
+        decisions = resolve_many(
+            db,
+            context.hotel_id,
+            context.user_role,
+            permissions,
+            user_id=context.user_id,
+        )
         granted_permissions = [
             permission
             for permission in permissions
-            if resolve(
-                db,
-                context.hotel_id,
-                context.user_role,
-                permission,
-                user_id=context.user_id,
-            )
+            if decisions.get(canonical_permission_code(permission), False)
         ]
         if not granted_permissions:
             audit_permission_denied(
@@ -449,13 +463,14 @@ def require_any_permission(*permissions: str):
             )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
 
-        from app.services.action_step_up_service import permission_requires_step_up
+        from app.services.action_step_up_service import permissions_requiring_step_up
 
-        if any(not permission_requires_step_up(db, permission) for permission in granted_permissions):
+        step_up_permissions = permissions_requiring_step_up(db, tuple(granted_permissions))
+        if any(canonical_permission_code(permission) not in step_up_permissions for permission in granted_permissions):
             return context
         matching = None
         for permission in granted_permissions:
-            if not permission_requires_step_up(db, permission):
+            if canonical_permission_code(permission) not in step_up_permissions:
                 continue
             ticket = _matching_action_step_up_ticket(request, context, permission)
             if ticket is not None:

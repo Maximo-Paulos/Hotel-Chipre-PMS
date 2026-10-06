@@ -329,6 +329,15 @@ _PRICING_PAYMENT_METHODS = {
     "credit_card",
 }
 
+# These ReservationUpdate fields feed FactReservationDaily or
+# FactRoomOccupancyDaily. Keep metadata-only edits (notes, arrival details,
+# guest counts, and mobility notes) off the synchronous delete/rebuild path.
+# Reservation status and other fact inputs are changed through separate domain
+# operations, which retain their own fact-refresh hooks.
+_ANALYTICS_FACT_AFFECTING_RESERVATION_UPDATE_FIELDS = frozenset(
+    {"check_in_date", "check_out_date", "room_id", "total_amount"}
+)
+
 
 @dataclass(slots=True)
 class ReservationPricingResult:
@@ -2426,6 +2435,9 @@ def update_reservation_fields(
             reservation_id=reservation.id,
         )
 
+    refresh_analytics_facts = refresh_facts and bool(
+        _ANALYTICS_FACT_AFFECTING_RESERVATION_UPDATE_FIELDS.intersection(update_data)
+    )
     original_check_in = reservation.check_in_date
     original_check_out = reservation.check_out_date
     original_room_id = reservation.room_id
@@ -2716,7 +2728,7 @@ def update_reservation_fields(
     # Touch the union of old+new stay range: a date/room change can move a
     # reservation out of a window that was already materialized, and the
     # narrow self-heal on read only fires for windows with zero rows.
-    if refresh_facts:
+    if refresh_analytics_facts:
         _touch_facts(
             db,
             hotel_id,

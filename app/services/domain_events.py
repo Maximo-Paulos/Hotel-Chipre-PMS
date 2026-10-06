@@ -14,7 +14,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, AsyncIterator, Callable, Iterable, Mapping, TYPE_CHECKING
+from typing import Any, AsyncIterator, Callable, Iterable, Literal, Mapping, TYPE_CHECKING
 
 import anyio
 import redis
@@ -710,6 +710,11 @@ def publish_queued_domain_changes(session: "Session") -> None:
             "payload": change.payload,
         }
         if change.outbox_event_id is not None:
+            # The durable outbox and PostgreSQL SSE fallback remain
+            # authoritative if this optional request-path notification fails.
+            # Best-effort events without an outbox row keep their existing
+            # timeout because they have no PostgreSQL recovery path.
+            publish_kwargs["client_capability"] = "realtime_fast_fail"
             publish_kwargs.update(
                 event_id=change.outbox_event_id,
                 cursor=change.outbox_cursor or outbox_id,
@@ -949,6 +954,18 @@ def _get_redis_client() -> redis.Redis | None:
         return None
 
 
+def _get_realtime_fast_fail_client() -> redis.Redis | None:
+    """Get the short-timeout Redis client used only by post-commit signals."""
+    settings = _settings()
+    if not bool(getattr(settings, "REALTIME_EVENTS_ENABLED", True)):
+        return None
+    try:
+        return get_sync_redis_client(capability="realtime_fast_fail")
+    except Exception as exc:  # pragma: no cover - defensive config fallback
+        logger.warning("realtime_events.fast_fail_redis_unavailable", extra={"error_type": type(exc).__name__})
+        return None
+
+
 def _required() -> bool:
     return bool(_settings().DISTRIBUTED_LOCK_REQUIRED)
 
@@ -971,6 +988,7 @@ def publish_domain_event(
     event_id: str | None = None,
     cursor: int | None = None,
     schema_version: int = 1,
+    client_capability: Literal["realtime", "realtime_fast_fail"] = "realtime",
 ) -> DomainEvent | None:
     """Publish one event. ``revision``/``occurred_at`` let an outbox replay
     reuse the values already stored on a durable row instead of minting a new
@@ -985,7 +1003,13 @@ def publish_domain_event(
     )
     if not bool(getattr(_settings(), "REALTIME_EVENTS_ENABLED", True)):
         return None
-    redis_client = client or _get_redis_client()
+    redis_client = client
+    if redis_client is None:
+        redis_client = (
+            _get_realtime_fast_fail_client()
+            if client_capability == "realtime_fast_fail"
+            else _get_redis_client()
+        )
     if redis_client is None:
         _unavailable("Redis/Valkey realtime backend is unavailable")
         return None
