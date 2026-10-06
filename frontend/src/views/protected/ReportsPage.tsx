@@ -4,7 +4,7 @@ import { downloadRevenueReportCsv, type CurrencyAmount, type OperationalReservat
 import { ApiError } from "../../api/client";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
-import { useDailyOperationalReport, useOccupancyReport, useOperationalAlerts, useRevenueReport, useTodayArrivalCount } from "../../hooks/useReports";
+import { useDailyOperationalReport, useOccupancyReport, useRevenueReport, useTodayArrivalCount } from "../../hooks/useReports";
 import { formatHotelDateTime, todayIso } from "../../utils/date";
 import { useSession } from "../../state/session";
 
@@ -79,7 +79,6 @@ export function ReportsPage() {
   const reportDate = selectedReportDate || hotelTodayIso(hotelConfigQuery.data?.hotel_timezone, arrivalCountQuery.data?.report_date);
   const weekPeriod = mondayToSunday(reportDate);
   const reportQuery = useDailyOperationalReport(reportDate);
-  const alertsQuery = useOperationalAlerts(reportDate);
   const occupancyQuery = useOccupancyReport(reportDate, reportDate);
   const revenueQuery = useRevenueReport(reportDate, reportDate, canViewFinancial);
   const weeklyRevenueQuery = useRevenueReport(weekPeriod.startDate, weekPeriod.endDate, canViewFinancial);
@@ -88,7 +87,8 @@ export function ReportsPage() {
   const [exportingWeekly, setExportingWeekly] = useState(false);
   const [weeklyExportError, setWeeklyExportError] = useState<string | null>(null);
   const report = reportQuery.data;
-  const alerts = alertsQuery.data?.alerts ?? report?.alerts ?? [];
+  // The daily response already includes role-redacted alerts; avoid rebuilding it through a second endpoint.
+  const alerts = report?.alerts ?? [];
   const occupancy = occupancyQuery.data?.daily[0];
   const revenue = revenueQuery.data;
   const weeklyRevenue = weeklyRevenueQuery.data;
@@ -149,18 +149,17 @@ export function ReportsPage() {
         </label>
       </header>
 
-      {(reportQuery.error || alertsQuery.error || occupancyQuery.error || revenueQuery.error) && (
+      {(reportQuery.error || occupancyQuery.error || revenueQuery.error) && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-800" role="alert">
-          <p>{reportsErrorMessage(reportQuery.error || alertsQuery.error || occupancyQuery.error || revenueQuery.error)}</p>
+          <p>{reportsErrorMessage(reportQuery.error || occupancyQuery.error || revenueQuery.error)}</p>
           <button
             type="button"
             onClick={() => {
               void reportQuery.refetch();
-              void alertsQuery.refetch();
               void occupancyQuery.refetch();
               if (canViewFinancial) void revenueQuery.refetch();
             }}
-            disabled={reportQuery.isFetching || alertsQuery.isFetching || occupancyQuery.isFetching || revenueQuery.isFetching}
+            disabled={reportQuery.isFetching || occupancyQuery.isFetching || revenueQuery.isFetching}
             className="mt-2 rounded-lg border border-rose-300 bg-white px-3 py-2 font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
           >
             Reintentar

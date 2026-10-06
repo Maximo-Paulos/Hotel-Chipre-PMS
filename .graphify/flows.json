@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-06T04:27:37.302Z",
+  "generatedAt": "2026-10-06T04:23:12.978Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -4701,7 +4701,6 @@
         "api_client_parseactionstepupchallenge",
         "api_client_refreshsession",
         "api_client_requestactionstepupticket",
-        "api_client_requestfailurefallback",
         "api_client_requestheaders",
         "api_client_safejson",
         "api_client_setclientsession",
@@ -4734,7 +4733,6 @@
         "api_client_parseactionstepupchallenge",
         "api_client_refreshsession",
         "api_client_requestactionstepupticket",
-        "api_client_requestfailurefallback",
         "api_client_requestheaders",
         "api_client_safejson",
         "api_client_setclientsession",
@@ -4748,12 +4746,12 @@
         "api_client_hasvalidsession"
       ],
       "depth": 4,
-      "nodeCount": 31,
+      "nodeCount": 30,
       "fileCount": 1,
       "files": [
         "frontend/src/api/client.ts"
       ],
-      "criticality": 0.3513,
+      "criticality": 0.3483,
       "warnings": []
     },
     {
@@ -4872,30 +4870,6 @@
       "fileCount": 1,
       "files": [
         "app/services/mfa_service.py"
-      ],
-      "criticality": 0.3267,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_events_stream_domain_events",
-      "name": "stream_domain_events",
-      "entryPoint": "api_events_stream_domain_events",
-      "entryPointId": "api_events_stream_domain_events",
-      "path": [
-        "api_events_stream_domain_events",
-        "api_events_build_authorization_check",
-        "api_events_until_disconnect"
-      ],
-      "qualifiedPath": [
-        "api_events_stream_domain_events",
-        "api_events_build_authorization_check",
-        "api_events_until_disconnect"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/api/events.py"
       ],
       "criticality": 0.3267,
       "warnings": []
@@ -6443,6 +6417,28 @@
       "warnings": []
     },
     {
+      "id": "flow:app_main_security_headers",
+      "name": "security_headers",
+      "entryPoint": "app_main_security_headers",
+      "entryPointId": "app_main_security_headers",
+      "path": [
+        "app_main_security_headers",
+        "app_main_safe_request_path_for_logging"
+      ],
+      "qualifiedPath": [
+        "app_main_security_headers",
+        "app_main_safe_request_path_for_logging"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/main.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:scripts_seed_f003_load_scenario_seed_f003_load_scenario",
       "name": "seed_f003_load_scenario",
       "entryPoint": "scripts_seed_f003_load_scenario_seed_f003_load_scenario",
@@ -6526,6 +6522,28 @@
       "fileCount": 1,
       "files": [
         "app/services/company_document_service.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_events_stream_domain_events",
+      "name": "stream_domain_events",
+      "entryPoint": "api_events_stream_domain_events",
+      "entryPointId": "api_events_stream_domain_events",
+      "path": [
+        "api_events_stream_domain_events",
+        "api_events_build_authorization_check"
+      ],
+      "qualifiedPath": [
+        "api_events_stream_domain_events",
+        "api_events_build_authorization_check"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/events.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -7447,6 +7465,34 @@
       ],
       "qualifiedPath": [
         "api_reservations_change_dates",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_ensure_action_permission",
+        "api_reservations_is_manager_context",
+        "api_reservations_to_read"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
+      ],
+      "criticality": 0.26,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_reservations_modify_reservation",
+      "name": "modify_reservation",
+      "entryPoint": "api_reservations_modify_reservation",
+      "entryPointId": "api_reservations_modify_reservation",
+      "path": [
+        "api_reservations_modify_reservation",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_ensure_action_permission",
+        "api_reservations_is_manager_context",
+        "api_reservations_to_read"
+      ],
+      "qualifiedPath": [
+        "api_reservations_modify_reservation",
         "api_reservations_authorize_company_reservation_management",
         "api_reservations_ensure_action_permission",
         "api_reservations_is_manager_context",
@@ -8731,36 +8777,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_reservations_modify_reservation",
-      "name": "modify_reservation",
-      "entryPoint": "api_reservations_modify_reservation",
-      "entryPointId": "api_reservations_modify_reservation",
-      "path": [
-        "api_reservations_modify_reservation",
-        "api_reservations_authorize_company_reservation_management",
-        "api_reservations_ensure_action_permission",
-        "api_reservations_is_manager_context",
-        "api_reservations_reservation_status_label_es",
-        "api_reservations_to_read"
-      ],
-      "qualifiedPath": [
-        "api_reservations_modify_reservation",
-        "api_reservations_authorize_company_reservation_management",
-        "api_reservations_ensure_action_permission",
-        "api_reservations_is_manager_context",
-        "api_reservations_reservation_status_label_es",
-        "api_reservations_to_read"
-      ],
-      "depth": 1,
-      "nodeCount": 6,
-      "fileCount": 1,
-      "files": [
-        "app/api/reservations.py"
-      ],
-      "criticality": 0.2433,
-      "warnings": []
-    },
-    {
       "id": "flow:services_cash_register_service_open_session",
       "name": "open_session",
       "entryPoint": "services_cash_register_service_open_session",
@@ -8828,30 +8844,6 @@
       "fileCount": 1,
       "files": [
         "app/api/whatsapp_meta_webhook.py"
-      ],
-      "criticality": 0.2433,
-      "warnings": []
-    },
-    {
-      "id": "flow:app_main_security_headers",
-      "name": "security_headers",
-      "entryPoint": "app_main_security_headers",
-      "entryPointId": "app_main_security_headers",
-      "path": [
-        "app_main_security_headers",
-        "app_main_is_database_pool_timeout",
-        "app_main_safe_request_path_for_logging"
-      ],
-      "qualifiedPath": [
-        "app_main_security_headers",
-        "app_main_is_database_pool_timeout",
-        "app_main_safe_request_path_for_logging"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/main.py"
       ],
       "criticality": 0.2433,
       "warnings": []
@@ -9130,50 +9122,6 @@
         "app/services/gemma_service.py"
       ],
       "criticality": 0.2403,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_reservation_operations_service_extend_reservation_stay",
-      "name": "extend_reservation_stay",
-      "entryPoint": "services_reservation_operations_service_extend_reservation_stay",
-      "entryPointId": "services_reservation_operations_service_extend_reservation_stay",
-      "path": [
-        "services_reservation_operations_service_extend_reservation_stay",
-        "services_reservation_operations_service_extension_amount",
-        "services_reservation_operations_service_invalidate_availability_cache",
-        "services_reservation_operations_service_reservationextensionresult",
-        "services_reservation_operations_service_reservationoperationserror",
-        "services_reservation_operations_service_resolve_extension_conflict",
-        "services_reservation_operations_service_touch_facts",
-        "services_reservation_operations_service_validate_direct_individual_extension_target",
-        "services_reservation_operations_service_available_room_for_conflict",
-        "services_reservation_operations_service_extension_conflicts",
-        "services_reservation_operations_service_is_auto_assignable_future_reservation",
-        "services_reservation_operations_service_reservation_has_payment_or_deposit",
-        "services_reservation_operations_service_has_transactions"
-      ],
-      "qualifiedPath": [
-        "services_reservation_operations_service_extend_reservation_stay",
-        "services_reservation_operations_service_extension_amount",
-        "services_reservation_operations_service_invalidate_availability_cache",
-        "services_reservation_operations_service_reservationextensionresult",
-        "services_reservation_operations_service_reservationoperationserror",
-        "services_reservation_operations_service_resolve_extension_conflict",
-        "services_reservation_operations_service_touch_facts",
-        "services_reservation_operations_service_validate_direct_individual_extension_target",
-        "services_reservation_operations_service_available_room_for_conflict",
-        "services_reservation_operations_service_extension_conflicts",
-        "services_reservation_operations_service_is_auto_assignable_future_reservation",
-        "services_reservation_operations_service_reservation_has_payment_or_deposit",
-        "services_reservation_operations_service_has_transactions"
-      ],
-      "depth": 3,
-      "nodeCount": 13,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_operations_service.py"
-      ],
-      "criticality": 0.2377,
       "warnings": []
     },
     {
@@ -9457,58 +9405,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_financial_ledger_paid_amounts_by_reservation",
-      "name": "paid_amounts_by_reservation",
-      "entryPoint": "services_financial_ledger_paid_amounts_by_reservation",
-      "entryPointId": "services_financial_ledger_paid_amounts_by_reservation",
-      "path": [
-        "services_financial_ledger_paid_amounts_by_reservation",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_financial_ledger_paid_amounts_by_reservation",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_ledger.py"
-      ],
-      "criticality": 0.2325,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_financial_ledger_reconciled_paid_amounts_by_reservation",
-      "name": "reconciled_paid_amounts_by_reservation",
-      "entryPoint": "services_financial_ledger_reconciled_paid_amounts_by_reservation",
-      "entryPointId": "services_financial_ledger_reconciled_paid_amounts_by_reservation",
-      "path": [
-        "services_financial_ledger_reconciled_paid_amounts_by_reservation",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_financial_ledger_reconciled_paid_amounts_by_reservation",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_ledger.py"
-      ],
-      "criticality": 0.2325,
-      "warnings": []
-    },
-    {
       "id": "flow:versions_20260724_billing_adjustment_enum_values_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_20260724_billing_adjustment_enum_values_upgrade",
@@ -9608,36 +9504,6 @@
         "app/config.py"
       ],
       "criticality": 0.2325,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_financial_ledger_has_payment_history_for_cancellation",
-      "name": "has_payment_history_for_cancellation",
-      "entryPoint": "services_financial_ledger_has_payment_history_for_cancellation",
-      "entryPointId": "services_financial_ledger_has_payment_history_for_cancellation",
-      "path": [
-        "services_financial_ledger_has_payment_history_for_cancellation",
-        "services_financial_ledger_paid_amount_with_legacy_fallback",
-        "services_financial_ledger_completed_paid_amount",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_financial_ledger_has_payment_history_for_cancellation",
-        "services_financial_ledger_paid_amount_with_legacy_fallback",
-        "services_financial_ledger_completed_paid_amount",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "depth": 4,
-      "nodeCount": 6,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_ledger.py"
-      ],
-      "criticality": 0.2317,
       "warnings": []
     },
     {
@@ -9923,38 +9789,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_financial_ledger_operational_balance_due",
-      "name": "operational_balance_due",
-      "entryPoint": "services_financial_ledger_operational_balance_due",
-      "entryPointId": "services_financial_ledger_operational_balance_due",
-      "path": [
-        "services_financial_ledger_operational_balance_due",
-        "services_financial_ledger_billing_adjustment_totals_by_reservation",
-        "services_financial_ledger_paid_amount_with_legacy_fallback",
-        "services_financial_ledger_completed_paid_amount",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "qualifiedPath": [
-        "services_financial_ledger_operational_balance_due",
-        "services_financial_ledger_billing_adjustment_totals_by_reservation",
-        "services_financial_ledger_paid_amount_with_legacy_fallback",
-        "services_financial_ledger_completed_paid_amount",
-        "services_financial_ledger_external_paid_balance_credit",
-        "services_financial_ledger_completed_paid_amounts_by_reservation",
-        "services_financial_ledger_signed_transaction_amount"
-      ],
-      "depth": 4,
-      "nodeCount": 7,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_ledger.py"
-      ],
-      "criticality": 0.2257,
-      "warnings": []
-    },
-    {
       "id": "flow:services_payment_link_test_service_create_mercadopago_payment_link_test",
       "name": "create_mercadopago_payment_link_test",
       "entryPoint": "services_payment_link_test_service_create_mercadopago_payment_link_test",
@@ -10092,6 +9926,94 @@
         "app/services/gemma_orchestrator.py"
       ],
       "criticality": 0.2235,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_service_create_reservation",
+      "name": "create_reservation",
+      "entryPoint": "services_reservation_service_create_reservation",
+      "entryPointId": "services_reservation_service_create_reservation",
+      "path": [
+        "services_reservation_service_create_reservation",
+        "services_reservation_service_apply_corporate_pricing",
+        "services_reservation_service_apply_custom_deposit_amount",
+        "services_reservation_service_apply_manual_total_override",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_find_available_rooms",
+        "services_reservation_service_generate_confirmation_code",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_manualratepolicyerror",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_notify_reservation_event",
+        "services_reservation_service_pricing_result_for_explicit_total",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_creation_channel_code",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_resolve_reservation_company",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_bounded_manual_rate",
+        "services_reservation_service_validate_manual_telephonic_guest_requirements",
+        "services_reservation_service_validate_quote_token_for_reservation",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_with_pricing_revision",
+        "services_reservation_service_pricing_with_total",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_active_reservations",
+        "services_reservation_service_validate_stay_dates",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult",
+        "services_reservation_service_reservation_channel_indicator",
+        "services_reservation_service_is_manual_or_telephonic_reservation",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_calendar_pricing_source"
+      ],
+      "qualifiedPath": [
+        "services_reservation_service_create_reservation",
+        "services_reservation_service_apply_corporate_pricing",
+        "services_reservation_service_apply_custom_deposit_amount",
+        "services_reservation_service_apply_manual_total_override",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_find_available_rooms",
+        "services_reservation_service_generate_confirmation_code",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_manualratepolicyerror",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_notify_reservation_event",
+        "services_reservation_service_pricing_result_for_explicit_total",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_creation_channel_code",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_resolve_reservation_company",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_bounded_manual_rate",
+        "services_reservation_service_validate_manual_telephonic_guest_requirements",
+        "services_reservation_service_validate_quote_token_for_reservation",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_with_pricing_revision",
+        "services_reservation_service_pricing_with_total",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_active_reservations",
+        "services_reservation_service_validate_stay_dates",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult",
+        "services_reservation_service_reservation_channel_indicator",
+        "services_reservation_service_is_manual_or_telephonic_reservation",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_calendar_pricing_source"
+      ],
+      "depth": 3,
+      "nodeCount": 35,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_service.py"
+      ],
+      "criticality": 0.2229,
       "warnings": []
     },
     {
@@ -10277,32 +10199,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_reservation_operations_service_preview_reservation_stay_extension",
-      "name": "preview_reservation_stay_extension",
-      "entryPoint": "services_reservation_operations_service_preview_reservation_stay_extension",
-      "entryPointId": "services_reservation_operations_service_preview_reservation_stay_extension",
-      "path": [
-        "services_reservation_operations_service_preview_reservation_stay_extension",
-        "services_reservation_operations_service_extension_amount",
-        "services_reservation_operations_service_reservationoperationserror",
-        "services_reservation_operations_service_validate_direct_individual_extension_target"
-      ],
-      "qualifiedPath": [
-        "services_reservation_operations_service_preview_reservation_stay_extension",
-        "services_reservation_operations_service_extension_amount",
-        "services_reservation_operations_service_reservationoperationserror",
-        "services_reservation_operations_service_validate_direct_individual_extension_target"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_operations_service.py"
-      ],
-      "criticality": 0.2225,
-      "warnings": []
-    },
-    {
       "id": "flow:versions_20260830_guest_room_avoidance_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_20260830_guest_room_avoidance_upgrade",
@@ -10326,6 +10222,48 @@
         "alembic/versions/20260830_guest_room_avoidance.py"
       ],
       "criticality": 0.2225,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_reservation_operations_service_extend_reservation_stay",
+      "name": "extend_reservation_stay",
+      "entryPoint": "services_reservation_operations_service_extend_reservation_stay",
+      "entryPointId": "services_reservation_operations_service_extend_reservation_stay",
+      "path": [
+        "services_reservation_operations_service_extend_reservation_stay",
+        "services_reservation_operations_service_extension_amount",
+        "services_reservation_operations_service_invalidate_availability_cache",
+        "services_reservation_operations_service_reservationextensionresult",
+        "services_reservation_operations_service_reservationoperationserror",
+        "services_reservation_operations_service_resolve_extension_conflict",
+        "services_reservation_operations_service_touch_facts",
+        "services_reservation_operations_service_available_room_for_conflict",
+        "services_reservation_operations_service_extension_conflicts",
+        "services_reservation_operations_service_is_auto_assignable_future_reservation",
+        "services_reservation_operations_service_reservation_has_payment_or_deposit",
+        "services_reservation_operations_service_has_transactions"
+      ],
+      "qualifiedPath": [
+        "services_reservation_operations_service_extend_reservation_stay",
+        "services_reservation_operations_service_extension_amount",
+        "services_reservation_operations_service_invalidate_availability_cache",
+        "services_reservation_operations_service_reservationextensionresult",
+        "services_reservation_operations_service_reservationoperationserror",
+        "services_reservation_operations_service_resolve_extension_conflict",
+        "services_reservation_operations_service_touch_facts",
+        "services_reservation_operations_service_available_room_for_conflict",
+        "services_reservation_operations_service_extension_conflicts",
+        "services_reservation_operations_service_is_auto_assignable_future_reservation",
+        "services_reservation_operations_service_reservation_has_payment_or_deposit",
+        "services_reservation_operations_service_has_transactions"
+      ],
+      "depth": 3,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_operations_service.py"
+      ],
+      "criticality": 0.2217,
       "warnings": []
     },
     {
@@ -10356,190 +10294,6 @@
         "scripts/scale/staged_realtime_load.py"
       ],
       "criticality": 0.2217,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_reservation_service_create_reservation",
-      "name": "create_reservation",
-      "entryPoint": "services_reservation_service_create_reservation",
-      "entryPointId": "services_reservation_service_create_reservation",
-      "path": [
-        "services_reservation_service_create_reservation",
-        "services_reservation_service_apply_corporate_pricing",
-        "services_reservation_service_apply_custom_deposit_amount",
-        "services_reservation_service_apply_manual_total_override",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_direct_manual_rate_reference_quote",
-        "services_reservation_service_find_available_rooms",
-        "services_reservation_service_generate_confirmation_code",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_manualratepolicyerror",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_notify_reservation_event",
-        "services_reservation_service_pricing_result_for_explicit_total",
-        "services_reservation_service_requires_large_total_adjustment_confirmation",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_creation_channel_code",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_resolve_reservation_company",
-        "services_reservation_service_touch_facts",
-        "services_reservation_service_validate_bounded_manual_rate",
-        "services_reservation_service_validate_manual_telephonic_guest_requirements",
-        "services_reservation_service_validate_quote_token_for_reservation",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_with_pricing_revision",
-        "services_reservation_service_pricing_with_total",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_active_reservations",
-        "services_reservation_service_validate_stay_dates",
-        "services_reservation_service_reservation_channel_indicator",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult",
-        "services_reservation_service_is_manual_or_telephonic_reservation",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_calendar_pricing_source"
-      ],
-      "qualifiedPath": [
-        "services_reservation_service_create_reservation",
-        "services_reservation_service_apply_corporate_pricing",
-        "services_reservation_service_apply_custom_deposit_amount",
-        "services_reservation_service_apply_manual_total_override",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_direct_manual_rate_reference_quote",
-        "services_reservation_service_find_available_rooms",
-        "services_reservation_service_generate_confirmation_code",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_manualratepolicyerror",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_notify_reservation_event",
-        "services_reservation_service_pricing_result_for_explicit_total",
-        "services_reservation_service_requires_large_total_adjustment_confirmation",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_creation_channel_code",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_resolve_reservation_company",
-        "services_reservation_service_touch_facts",
-        "services_reservation_service_validate_bounded_manual_rate",
-        "services_reservation_service_validate_manual_telephonic_guest_requirements",
-        "services_reservation_service_validate_quote_token_for_reservation",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_with_pricing_revision",
-        "services_reservation_service_pricing_with_total",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_active_reservations",
-        "services_reservation_service_validate_stay_dates",
-        "services_reservation_service_reservation_channel_indicator",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult",
-        "services_reservation_service_is_manual_or_telephonic_reservation",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_calendar_pricing_source"
-      ],
-      "depth": 3,
-      "nodeCount": 37,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_service.py"
-      ],
-      "criticality": 0.2205,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_reservation_service_update_reservation_fields",
-      "name": "update_reservation_fields",
-      "entryPoint": "services_reservation_service_update_reservation_fields",
-      "entryPointId": "services_reservation_service_update_reservation_fields",
-      "path": [
-        "services_reservation_service_update_reservation_fields",
-        "services_reservation_service_apply_corporate_pricing",
-        "services_reservation_service_apply_manual_total_override",
-        "services_reservation_service_apply_pricing_result_to_reservation",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_lock_reservation_version",
-        "services_reservation_service_manual_override_total_for_nights",
-        "services_reservation_service_manualratepolicyerror",
-        "services_reservation_service_notify_reservation_event",
-        "services_reservation_service_pricing_result_for_explicit_total",
-        "services_reservation_service_pricing_snapshot_values",
-        "services_reservation_service_requires_large_total_adjustment_confirmation",
-        "services_reservation_service_reservation_has_deferred_company_billing",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_resolve_reservation_company",
-        "services_reservation_service_touch_facts",
-        "services_reservation_service_validate_bounded_manual_rate_correction",
-        "services_reservation_service_validate_direct_individual_manual_rate_target",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_pricing_with_total",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_active_reservations",
-        "services_reservation_service_validate_stay_dates",
-        "services_reservation_service_reservationversionconflict",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult",
-        "services_reservation_service_deferred_company_reservation_ids",
-        "services_reservation_service_validate_bounded_manual_rate",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_calendar_pricing_source",
-        "services_reservation_service_reservation_channel_indicator"
-      ],
-      "qualifiedPath": [
-        "services_reservation_service_update_reservation_fields",
-        "services_reservation_service_apply_corporate_pricing",
-        "services_reservation_service_apply_manual_total_override",
-        "services_reservation_service_apply_pricing_result_to_reservation",
-        "services_reservation_service_calculate_reservation_pricing",
-        "services_reservation_service_check_room_availability",
-        "services_reservation_service_invalidate_availability_cache",
-        "services_reservation_service_lock_reservation_version",
-        "services_reservation_service_manual_override_total_for_nights",
-        "services_reservation_service_manualratepolicyerror",
-        "services_reservation_service_notify_reservation_event",
-        "services_reservation_service_pricing_result_for_explicit_total",
-        "services_reservation_service_pricing_snapshot_values",
-        "services_reservation_service_requires_large_total_adjustment_confirmation",
-        "services_reservation_service_reservation_has_deferred_company_billing",
-        "services_reservation_service_reservationerror",
-        "services_reservation_service_resolve_hotel_id",
-        "services_reservation_service_resolve_reservation_company",
-        "services_reservation_service_touch_facts",
-        "services_reservation_service_validate_bounded_manual_rate_correction",
-        "services_reservation_service_validate_direct_individual_manual_rate_target",
-        "services_reservation_service_validate_reservation_occupancy",
-        "services_reservation_service_pricing_with_total",
-        "services_reservation_service_daily_rate_pricing_result",
-        "services_reservation_service_normalize_pricing_payment_method",
-        "services_reservation_service_pricing_result_from_quote",
-        "services_reservation_service_resolve_reservation_commercial_context",
-        "services_reservation_service_active_reservations",
-        "services_reservation_service_validate_stay_dates",
-        "services_reservation_service_reservationversionconflict",
-        "services_reservation_service_get_hotel_default_currency",
-        "services_reservation_service_reservationpricingresult",
-        "services_reservation_service_deferred_company_reservation_ids",
-        "services_reservation_service_validate_bounded_manual_rate",
-        "services_reservation_service_compute_deposit_amount",
-        "services_reservation_service_calendar_pricing_source",
-        "services_reservation_service_reservation_channel_indicator"
-      ],
-      "depth": 3,
-      "nodeCount": 37,
-      "fileCount": 1,
-      "files": [
-        "app/services/reservation_service.py"
-      ],
-      "criticality": 0.2205,
       "warnings": []
     },
     {
@@ -11615,6 +11369,34 @@
       "warnings": []
     },
     {
+      "id": "flow:api_bookings_update_booking",
+      "name": "update_booking",
+      "entryPoint": "api_bookings_update_booking",
+      "entryPointId": "api_bookings_update_booking",
+      "path": [
+        "api_bookings_update_booking",
+        "api_bookings_booking_to_read",
+        "api_bookings_ensure_permission_tier",
+        "api_bookings_ensure_subscription_active",
+        "api_bookings_is_manager_context"
+      ],
+      "qualifiedPath": [
+        "api_bookings_update_booking",
+        "api_bookings_booking_to_read",
+        "api_bookings_ensure_permission_tier",
+        "api_bookings_ensure_subscription_active",
+        "api_bookings_is_manager_context"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/api/bookings.py"
+      ],
+      "criticality": 0.21,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_service_update_company",
       "name": "update_company",
       "entryPoint": "services_analytics_service_update_company",
@@ -11807,6 +11589,86 @@
       "warnings": []
     },
     {
+      "id": "flow:services_reservation_service_update_reservation_fields",
+      "name": "update_reservation_fields",
+      "entryPoint": "services_reservation_service_update_reservation_fields",
+      "entryPointId": "services_reservation_service_update_reservation_fields",
+      "path": [
+        "services_reservation_service_update_reservation_fields",
+        "services_reservation_service_apply_corporate_pricing",
+        "services_reservation_service_apply_manual_total_override",
+        "services_reservation_service_apply_pricing_result_to_reservation",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_lock_reservation_version",
+        "services_reservation_service_manual_override_total_for_nights",
+        "services_reservation_service_notify_reservation_event",
+        "services_reservation_service_pricing_result_for_explicit_total",
+        "services_reservation_service_pricing_snapshot_values",
+        "services_reservation_service_reservation_has_deferred_company_billing",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_resolve_reservation_company",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_pricing_with_total",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_active_reservations",
+        "services_reservation_service_validate_stay_dates",
+        "services_reservation_service_reservationversionconflict",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult",
+        "services_reservation_service_deferred_company_reservation_ids",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_calendar_pricing_source"
+      ],
+      "qualifiedPath": [
+        "services_reservation_service_update_reservation_fields",
+        "services_reservation_service_apply_corporate_pricing",
+        "services_reservation_service_apply_manual_total_override",
+        "services_reservation_service_apply_pricing_result_to_reservation",
+        "services_reservation_service_calculate_reservation_pricing",
+        "services_reservation_service_check_room_availability",
+        "services_reservation_service_invalidate_availability_cache",
+        "services_reservation_service_lock_reservation_version",
+        "services_reservation_service_manual_override_total_for_nights",
+        "services_reservation_service_notify_reservation_event",
+        "services_reservation_service_pricing_result_for_explicit_total",
+        "services_reservation_service_pricing_snapshot_values",
+        "services_reservation_service_reservation_has_deferred_company_billing",
+        "services_reservation_service_reservationerror",
+        "services_reservation_service_resolve_hotel_id",
+        "services_reservation_service_resolve_reservation_company",
+        "services_reservation_service_touch_facts",
+        "services_reservation_service_validate_reservation_occupancy",
+        "services_reservation_service_pricing_with_total",
+        "services_reservation_service_daily_rate_pricing_result",
+        "services_reservation_service_normalize_pricing_payment_method",
+        "services_reservation_service_pricing_result_from_quote",
+        "services_reservation_service_resolve_reservation_commercial_context",
+        "services_reservation_service_active_reservations",
+        "services_reservation_service_validate_stay_dates",
+        "services_reservation_service_reservationversionconflict",
+        "services_reservation_service_get_hotel_default_currency",
+        "services_reservation_service_reservationpricingresult",
+        "services_reservation_service_deferred_company_reservation_ids",
+        "services_reservation_service_compute_deposit_amount",
+        "services_reservation_service_calendar_pricing_source"
+      ],
+      "depth": 3,
+      "nodeCount": 31,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_service.py"
+      ],
+      "criticality": 0.2042,
+      "warnings": []
+    },
+    {
       "id": "flow:services_reservation_service_transition_reservation_status",
       "name": "transition_reservation_status",
       "entryPoint": "services_reservation_service_transition_reservation_status",
@@ -11832,36 +11694,6 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_service.py"
-      ],
-      "criticality": 0.2017,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_bookings_update_booking",
-      "name": "update_booking",
-      "entryPoint": "api_bookings_update_booking",
-      "entryPointId": "api_bookings_update_booking",
-      "path": [
-        "api_bookings_update_booking",
-        "api_bookings_booking_status_label_es",
-        "api_bookings_booking_to_read",
-        "api_bookings_ensure_permission_tier",
-        "api_bookings_ensure_subscription_active",
-        "api_bookings_is_manager_context"
-      ],
-      "qualifiedPath": [
-        "api_bookings_update_booking",
-        "api_bookings_booking_status_label_es",
-        "api_bookings_booking_to_read",
-        "api_bookings_ensure_permission_tier",
-        "api_bookings_ensure_subscription_active",
-        "api_bookings_is_manager_context"
-      ],
-      "depth": 1,
-      "nodeCount": 6,
-      "fileCount": 1,
-      "files": [
-        "app/api/bookings.py"
       ],
       "criticality": 0.2017,
       "warnings": []
@@ -12311,6 +12143,42 @@
       "warnings": []
     },
     {
+      "id": "flow:services_financial_report_service_build_financial_report",
+      "name": "build_financial_report",
+      "entryPoint": "services_financial_report_service_build_financial_report",
+      "entryPointId": "services_financial_report_service_build_financial_report",
+      "path": [
+        "services_financial_report_service_build_financial_report",
+        "services_financial_report_service_aggregate_rows",
+        "services_financial_report_service_build_booked_value_projection",
+        "services_financial_report_service_hotel_bounds",
+        "services_financial_report_service_local_day",
+        "services_financial_report_service_money",
+        "services_financial_report_service_validate_report_window",
+        "services_financial_report_service_booked_amount_in_window",
+        "services_financial_report_service_booked_nights_in_window"
+      ],
+      "qualifiedPath": [
+        "services_financial_report_service_build_financial_report",
+        "services_financial_report_service_aggregate_rows",
+        "services_financial_report_service_build_booked_value_projection",
+        "services_financial_report_service_hotel_bounds",
+        "services_financial_report_service_local_day",
+        "services_financial_report_service_money",
+        "services_financial_report_service_validate_report_window",
+        "services_financial_report_service_booked_amount_in_window",
+        "services_financial_report_service_booked_nights_in_window"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_report_service.py"
+      ],
+      "criticality": 0.1978,
+      "warnings": []
+    },
+    {
       "id": "flow:services_rate_change_draft_service_create_rate_change_draft",
       "name": "create_rate_change_draft",
       "entryPoint": "services_rate_change_draft_service_create_rate_change_draft",
@@ -12450,42 +12318,6 @@
       "fileCount": 1,
       "files": [
         "app/services/temporary_action_grant_service.py"
-      ],
-      "criticality": 0.1978,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_payment_receipt_email_service_send_payment_receipt_email",
-      "name": "send_payment_receipt_email",
-      "entryPoint": "services_payment_receipt_email_service_send_payment_receipt_email",
-      "entryPointId": "services_payment_receipt_email_service_send_payment_receipt_email",
-      "path": [
-        "services_payment_receipt_email_service_send_payment_receipt_email",
-        "services_payment_receipt_email_service_existing_delivery",
-        "services_payment_receipt_email_service_key_hash",
-        "services_payment_receipt_email_service_load_receipt_and_registered_email",
-        "services_payment_receipt_email_service_normalize_email",
-        "services_payment_receipt_email_service_paymentreceiptemailerror",
-        "services_payment_receipt_email_service_receipt_email_content",
-        "services_payment_receipt_email_service_recipient_fingerprint",
-        "services_payment_receipt_email_service_format_money"
-      ],
-      "qualifiedPath": [
-        "services_payment_receipt_email_service_send_payment_receipt_email",
-        "services_payment_receipt_email_service_existing_delivery",
-        "services_payment_receipt_email_service_key_hash",
-        "services_payment_receipt_email_service_load_receipt_and_registered_email",
-        "services_payment_receipt_email_service_normalize_email",
-        "services_payment_receipt_email_service_paymentreceiptemailerror",
-        "services_payment_receipt_email_service_receipt_email_content",
-        "services_payment_receipt_email_service_recipient_fingerprint",
-        "services_payment_receipt_email_service_format_money"
-      ],
-      "depth": 2,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_receipt_email_service.py"
       ],
       "criticality": 0.1978,
       "warnings": []
@@ -13278,42 +13110,6 @@
         "scripts/agent_ops/qa_evidence_attestation.py"
       ],
       "criticality": 0.1879,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_financial_report_service_build_financial_report",
-      "name": "build_financial_report",
-      "entryPoint": "services_financial_report_service_build_financial_report",
-      "entryPointId": "services_financial_report_service_build_financial_report",
-      "path": [
-        "services_financial_report_service_build_financial_report",
-        "services_financial_report_service_aggregate_rows",
-        "services_financial_report_service_booked_amount_in_window",
-        "services_financial_report_service_booked_nights_in_window",
-        "services_financial_report_service_build_booked_value_projection",
-        "services_financial_report_service_hotel_bounds",
-        "services_financial_report_service_local_day",
-        "services_financial_report_service_money",
-        "services_financial_report_service_validate_report_window"
-      ],
-      "qualifiedPath": [
-        "services_financial_report_service_build_financial_report",
-        "services_financial_report_service_aggregate_rows",
-        "services_financial_report_service_booked_amount_in_window",
-        "services_financial_report_service_booked_nights_in_window",
-        "services_financial_report_service_build_booked_value_projection",
-        "services_financial_report_service_hotel_bounds",
-        "services_financial_report_service_local_day",
-        "services_financial_report_service_money",
-        "services_financial_report_service_validate_report_window"
-      ],
-      "depth": 1,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/financial_report_service.py"
-      ],
-      "criticality": 0.1878,
       "warnings": []
     },
     {
@@ -14197,6 +13993,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_financial_ledger_has_payment_history_for_cancellation",
+      "name": "has_payment_history_for_cancellation",
+      "entryPoint": "services_financial_ledger_has_payment_history_for_cancellation",
+      "entryPointId": "services_financial_ledger_has_payment_history_for_cancellation",
+      "path": [
+        "services_financial_ledger_has_payment_history_for_cancellation",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_completed_paid_amounts_by_reservation"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_has_payment_history_for_cancellation",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_completed_paid_amounts_by_reservation"
+      ],
+      "depth": 3,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
       "id": "flow:api_movement_groups_list_movement_groups",
       "name": "list_movement_groups",
       "entryPoint": "api_movement_groups_list_movement_groups",
@@ -14362,6 +14186,36 @@
       "fileCount": 1,
       "files": [
         "tests/perf/benchmark_pg.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_financial_ledger_operational_balance_due",
+      "name": "operational_balance_due",
+      "entryPoint": "services_financial_ledger_operational_balance_due",
+      "entryPointId": "services_financial_ledger_operational_balance_due",
+      "path": [
+        "services_financial_ledger_operational_balance_due",
+        "services_financial_ledger_billing_adjustment_totals_by_reservation",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_completed_paid_amounts_by_reservation"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_operational_balance_due",
+        "services_financial_ledger_billing_adjustment_totals_by_reservation",
+        "services_financial_ledger_paid_amount_with_legacy_fallback",
+        "services_financial_ledger_completed_paid_amount",
+        "services_financial_ledger_external_paid_balance_credit",
+        "services_financial_ledger_completed_paid_amounts_by_reservation"
+      ],
+      "depth": 3,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
       ],
       "criticality": 0.18,
       "warnings": []
@@ -14996,42 +14850,6 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/RateCalendarPage.tsx"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:protected_reportspage_reportspage",
-      "name": "ReportsPage",
-      "entryPoint": "protected_reportspage_reportspage",
-      "entryPointId": "protected_reportspage_reportspage",
-      "path": [
-        "protected_reportspage_reportspage",
-        "protected_reportspage_cashstatuslabel",
-        "protected_reportspage_currencyamounts",
-        "protected_reportspage_financialreporterrormessage",
-        "protected_reportspage_hasweeklyrevenuedata",
-        "protected_reportspage_hoteltodayiso",
-        "protected_reportspage_mondaytosunday",
-        "protected_reportspage_reportserrormessage",
-        "protected_reportspage_shiftisodate"
-      ],
-      "qualifiedPath": [
-        "protected_reportspage_reportspage",
-        "protected_reportspage_cashstatuslabel",
-        "protected_reportspage_currencyamounts",
-        "protected_reportspage_financialreporterrormessage",
-        "protected_reportspage_hasweeklyrevenuedata",
-        "protected_reportspage_hoteltodayiso",
-        "protected_reportspage_mondaytosunday",
-        "protected_reportspage_reportserrormessage",
-        "protected_reportspage_shiftisodate"
-      ],
-      "depth": 2,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/ReportsPage.tsx"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -15772,17 +15590,15 @@
       "path": [
         "services_linen_service_delete_linen_item",
         "services_linen_service_get_linen_item",
-        "services_linen_service_linenerror",
-        "services_linen_service_linennotfounderror"
+        "services_linen_service_linenerror"
       ],
       "qualifiedPath": [
         "services_linen_service_delete_linen_item",
         "services_linen_service_get_linen_item",
-        "services_linen_service_linenerror",
-        "services_linen_service_linennotfounderror"
+        "services_linen_service_linenerror"
       ],
       "depth": 2,
-      "nodeCount": 4,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/services/linen_service.py"
@@ -16827,18 +16643,16 @@
         "services_linen_service_linen_summary",
         "services_linen_service_get_location",
         "services_linen_service_list_linen_items",
-        "services_linen_service_linenerror",
-        "services_linen_service_linennotfounderror"
+        "services_linen_service_linenerror"
       ],
       "qualifiedPath": [
         "services_linen_service_linen_summary",
         "services_linen_service_get_location",
         "services_linen_service_list_linen_items",
-        "services_linen_service_linenerror",
-        "services_linen_service_linennotfounderror"
+        "services_linen_service_linenerror"
       ],
       "depth": 2,
-      "nodeCount": 5,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/services/linen_service.py"
@@ -16888,8 +16702,7 @@
         "services_reservation_action_service_decorate_action",
         "services_reservation_action_service_dedupe_candidates",
         "services_reservation_action_service_fmt_date",
-        "services_reservation_action_service_guest_display_name",
-        "services_reservation_action_service_row_could_generate_action"
+        "services_reservation_action_service_guest_display_name"
       ],
       "qualifiedPath": [
         "services_reservation_action_service_list_pending_reservation_actions",
@@ -16904,11 +16717,10 @@
         "services_reservation_action_service_decorate_action",
         "services_reservation_action_service_dedupe_candidates",
         "services_reservation_action_service_fmt_date",
-        "services_reservation_action_service_guest_display_name",
-        "services_reservation_action_service_row_could_generate_action"
+        "services_reservation_action_service_guest_display_name"
       ],
       "depth": 2,
-      "nodeCount": 14,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/reservation_action_service.py"
@@ -17614,7 +17426,6 @@
         "sync_crosstabsync_readcursor",
         "sync_crosstabsync_recoverrealtime",
         "sync_crosstabsync_updaterealtimestatus",
-        "sync_crosstabsync_waituntilvisible",
         "sync_crosstabsync_cursorstoragekey",
         "sync_crosstabsync_writecursor"
       ],
@@ -17625,12 +17436,11 @@
         "sync_crosstabsync_readcursor",
         "sync_crosstabsync_recoverrealtime",
         "sync_crosstabsync_updaterealtimestatus",
-        "sync_crosstabsync_waituntilvisible",
         "sync_crosstabsync_cursorstoragekey",
         "sync_crosstabsync_writecursor"
       ],
       "depth": 2,
-      "nodeCount": 9,
+      "nodeCount": 8,
       "fileCount": 1,
       "files": [
         "frontend/src/sync/crossTabSync.ts"
@@ -17960,34 +17770,6 @@
       "fileCount": 1,
       "files": [
         "app/services/onboarding_service.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_linen_service_set_location_minimum",
-      "name": "set_location_minimum",
-      "entryPoint": "services_linen_service_set_location_minimum",
-      "entryPointId": "services_linen_service_set_location_minimum",
-      "path": [
-        "services_linen_service_set_location_minimum",
-        "services_linen_service_get_linen_item",
-        "services_linen_service_get_location",
-        "services_linen_service_linenerror",
-        "services_linen_service_linennotfounderror"
-      ],
-      "qualifiedPath": [
-        "services_linen_service_set_location_minimum",
-        "services_linen_service_get_linen_item",
-        "services_linen_service_get_location",
-        "services_linen_service_linenerror",
-        "services_linen_service_linennotfounderror"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/linen_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -18377,7 +18159,6 @@
         "services_linen_service_get_location",
         "services_linen_service_linenerror",
         "services_linen_service_linenidempotencyconflict",
-        "services_linen_service_linennotfounderror",
         "services_linen_service_register_movement",
         "services_linen_service_get_linen_item"
       ],
@@ -18387,12 +18168,11 @@
         "services_linen_service_get_location",
         "services_linen_service_linenerror",
         "services_linen_service_linenidempotencyconflict",
-        "services_linen_service_linennotfounderror",
         "services_linen_service_register_movement",
         "services_linen_service_get_linen_item"
       ],
       "depth": 2,
-      "nodeCount": 8,
+      "nodeCount": 7,
       "fileCount": 1,
       "files": [
         "app/services/linen_service.py"
@@ -20009,50 +19789,6 @@
       "warnings": []
     },
     {
-      "id": "flow:protected_guestspage_guestspage",
-      "name": "GuestsPage",
-      "entryPoint": "protected_guestspage_guestspage",
-      "entryPointId": "protected_guestspage_guestspage",
-      "path": [
-        "protected_guestspage_guestspage",
-        "protected_guestspage_hoteltodayiso"
-      ],
-      "qualifiedPath": [
-        "protected_guestspage_guestspage",
-        "protected_guestspage_hoteltodayiso"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/GuestsPage.tsx"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:protected_laundrypage_missingfollowupcard",
-      "name": "MissingFollowUpCard",
-      "entryPoint": "protected_laundrypage_missingfollowupcard",
-      "entryPointId": "protected_laundrypage_missingfollowupcard",
-      "path": [
-        "protected_laundrypage_missingfollowupcard",
-        "protected_laundrypage_formatlaundryquantity"
-      ],
-      "qualifiedPath": [
-        "protected_laundrypage_missingfollowupcard",
-        "protected_laundrypage_formatlaundryquantity"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/LaundryPage.tsx"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:sections_pricingsection_plancolumn",
       "name": "PlanColumn",
       "entryPoint": "sections_pricingsection_plancolumn",
@@ -20160,6 +19896,34 @@
       "fileCount": 1,
       "files": [
         "frontend/src/components/RateEditorGrid.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:protected_reportspage_reportspage",
+      "name": "ReportsPage",
+      "entryPoint": "protected_reportspage_reportspage",
+      "entryPointId": "protected_reportspage_reportspage",
+      "path": [
+        "protected_reportspage_reportspage",
+        "protected_reportspage_cashstatuslabel",
+        "protected_reportspage_currencyamounts",
+        "protected_reportspage_hoteltodayiso",
+        "protected_reportspage_reportserrormessage"
+      ],
+      "qualifiedPath": [
+        "protected_reportspage_reportspage",
+        "protected_reportspage_cashstatuslabel",
+        "protected_reportspage_currencyamounts",
+        "protected_reportspage_hoteltodayiso",
+        "protected_reportspage_reportserrormessage"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/ReportsPage.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -21877,28 +21641,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_guests_create_guest_tag",
-      "name": "create_guest_tag",
-      "entryPoint": "api_guests_create_guest_tag",
-      "entryPointId": "api_guests_create_guest_tag",
-      "path": [
-        "api_guests_create_guest_tag",
-        "api_guests_guest_service_error_detail"
-      ],
-      "qualifiedPath": [
-        "api_guests_create_guest_tag",
-        "api_guests_guest_service_error_detail"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/guests.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_linen_service_create_linen_item",
       "name": "create_linen_item",
       "entryPoint": "services_linen_service_create_linen_item",
@@ -23425,54 +23167,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_guests_exportguestledger",
-      "name": "exportGuestLedger",
-      "entryPoint": "api_guests_exportguestledger",
-      "entryPointId": "api_guests_exportguestledger",
-      "path": [
-        "api_guests_exportguestledger",
-        "api_guests_guestledgerexporterror"
-      ],
-      "qualifiedPath": [
-        "api_guests_exportguestledger",
-        "api_guests_guestledgerexporterror"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/guests.ts"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_cash_register_export_cash_expenses_csv",
-      "name": "export_cash_expenses_csv",
-      "entryPoint": "api_cash_register_export_cash_expenses_csv",
-      "entryPointId": "api_cash_register_export_cash_expenses_csv",
-      "path": [
-        "api_cash_register_export_cash_expenses_csv",
-        "api_cash_register_csv_decimal",
-        "api_cash_register_csv_local_date",
-        "api_cash_register_csv_local_datetime"
-      ],
-      "qualifiedPath": [
-        "api_cash_register_export_cash_expenses_csv",
-        "api_cash_register_csv_decimal",
-        "api_cash_register_csv_local_date",
-        "api_cash_register_csv_local_datetime"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/api/cash_register.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:api_cash_register_export_cash_ledger_csv",
       "name": "export_cash_ledger_csv",
       "entryPoint": "api_cash_register_export_cash_ledger_csv",
@@ -24231,50 +23925,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_guests_get_guest_quick_profile",
-      "name": "get_guest_quick_profile",
-      "entryPoint": "api_guests_get_guest_quick_profile",
-      "entryPointId": "api_guests_get_guest_quick_profile",
-      "path": [
-        "api_guests_get_guest_quick_profile",
-        "api_guests_guest_service_error_detail"
-      ],
-      "qualifiedPath": [
-        "api_guests_get_guest_quick_profile",
-        "api_guests_guest_service_error_detail"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/guests.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_guests_get_guest_tags",
-      "name": "get_guest_tags",
-      "entryPoint": "api_guests_get_guest_tags",
-      "entryPointId": "api_guests_get_guest_tags",
-      "path": [
-        "api_guests_get_guest_tags",
-        "api_guests_guest_service_error_detail"
-      ],
-      "qualifiedPath": [
-        "api_guests_get_guest_tags",
-        "api_guests_guest_service_error_detail"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/guests.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:api_invitations_get_invitation_preview",
       "name": "get_invitation_preview",
       "entryPoint": "api_invitations_get_invitation_preview",
@@ -25013,28 +24663,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_laundry_missing_followup_service_list_missing_follow_ups",
-      "name": "list_missing_follow_ups",
-      "entryPoint": "services_laundry_missing_followup_service_list_missing_follow_ups",
-      "entryPointId": "services_laundry_missing_followup_service_list_missing_follow_ups",
-      "path": [
-        "services_laundry_missing_followup_service_list_missing_follow_ups",
-        "services_laundry_missing_followup_service_serialize_follow_up"
-      ],
-      "qualifiedPath": [
-        "services_laundry_missing_followup_service_list_missing_follow_ups",
-        "services_laundry_missing_followup_service_serialize_follow_up"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/laundry_missing_followup_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_allocation_policy_service_list_policy_versions",
       "name": "list_policy_versions",
       "entryPoint": "services_allocation_policy_service_list_policy_versions",
@@ -25723,6 +25351,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_financial_ledger_paid_amounts_by_reservation",
+      "name": "paid_amounts_by_reservation",
+      "entryPoint": "services_financial_ledger_paid_amounts_by_reservation",
+      "entryPointId": "services_financial_ledger_paid_amounts_by_reservation",
+      "path": [
+        "services_financial_ledger_paid_amounts_by_reservation",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_external_paid_balance_credit"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_paid_amounts_by_reservation",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_external_paid_balance_credit"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:utils_localizeddateinput_parsedateinputvalue",
       "name": "parseDateInputValue",
       "entryPoint": "utils_localizeddateinput_parsedateinputvalue",
@@ -26167,6 +25819,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_financial_ledger_reconciled_paid_amounts_by_reservation",
+      "name": "reconciled_paid_amounts_by_reservation",
+      "entryPoint": "services_financial_ledger_reconciled_paid_amounts_by_reservation",
+      "entryPointId": "services_financial_ledger_reconciled_paid_amounts_by_reservation",
+      "path": [
+        "services_financial_ledger_reconciled_paid_amounts_by_reservation",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_external_paid_balance_credit"
+      ],
+      "qualifiedPath": [
+        "services_financial_ledger_reconciled_paid_amounts_by_reservation",
+        "services_financial_ledger_completed_paid_amounts_by_reservation",
+        "services_financial_ledger_external_paid_balance_credit"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/financial_ledger.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_cash_register_record_cash_expense",
       "name": "record_cash_expense",
       "entryPoint": "api_cash_register_record_cash_expense",
@@ -26401,18 +26077,14 @@
       "entryPointId": "services_linen_service_register_opening_counts",
       "path": [
         "services_linen_service_register_opening_counts",
-        "services_linen_service_linenerror",
-        "services_linen_service_linennotfounderror",
-        "services_linen_service_linenopeningcountconflict"
+        "services_linen_service_linenerror"
       ],
       "qualifiedPath": [
         "services_linen_service_register_opening_counts",
-        "services_linen_service_linenerror",
-        "services_linen_service_linennotfounderror",
-        "services_linen_service_linenopeningcountconflict"
+        "services_linen_service_linenerror"
       ],
       "depth": 1,
-      "nodeCount": 4,
+      "nodeCount": 2,
       "fileCount": 1,
       "files": [
         "app/services/linen_service.py"
@@ -26951,41 +26623,17 @@
       "entryPointId": "api_guest_restrictions_resolve_restriction",
       "path": [
         "api_guest_restrictions_resolve_restriction",
-        "api_guest_restrictions_get_tenant_guest",
-        "api_guest_restrictions_restriction_error_detail"
+        "api_guest_restrictions_get_tenant_guest"
       ],
       "qualifiedPath": [
         "api_guest_restrictions_resolve_restriction",
-        "api_guest_restrictions_get_tenant_guest",
-        "api_guest_restrictions_restriction_error_detail"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/api/guest_restrictions.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_guests_resolve_tag",
-      "name": "resolve_tag",
-      "entryPoint": "api_guests_resolve_tag",
-      "entryPointId": "api_guests_resolve_tag",
-      "path": [
-        "api_guests_resolve_tag",
-        "api_guests_guest_service_error_detail"
-      ],
-      "qualifiedPath": [
-        "api_guests_resolve_tag",
-        "api_guests_guest_service_error_detail"
+        "api_guest_restrictions_get_tenant_guest"
       ],
       "depth": 1,
       "nodeCount": 2,
       "fileCount": 1,
       "files": [
-        "app/api/guests.py"
+        "app/api/guest_restrictions.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -27264,28 +26912,6 @@
       "fileCount": 1,
       "files": [
         "alembic/env.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_no_show_sweep_service_run_no_show_sweep",
-      "name": "run_no_show_sweep",
-      "entryPoint": "services_no_show_sweep_service_run_no_show_sweep",
-      "entryPointId": "services_no_show_sweep_service_run_no_show_sweep",
-      "path": [
-        "services_no_show_sweep_service_run_no_show_sweep",
-        "services_no_show_sweep_service_sweep_no_shows"
-      ],
-      "qualifiedPath": [
-        "services_no_show_sweep_service_run_no_show_sweep",
-        "services_no_show_sweep_service_sweep_no_shows"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/no_show_sweep_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -27601,6 +27227,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_linen_service_set_location_minimum",
+      "name": "set_location_minimum",
+      "entryPoint": "services_linen_service_set_location_minimum",
+      "entryPointId": "services_linen_service_set_location_minimum",
+      "path": [
+        "services_linen_service_set_location_minimum",
+        "services_linen_service_get_linen_item",
+        "services_linen_service_get_location",
+        "services_linen_service_linenerror"
+      ],
+      "qualifiedPath": [
+        "services_linen_service_set_location_minimum",
+        "services_linen_service_get_linen_item",
+        "services_linen_service_get_location",
+        "services_linen_service_linenerror"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/linen_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_hotel_configuration_service_set_ota_channels",
       "name": "set_ota_channels",
       "entryPoint": "services_hotel_configuration_service_set_ota_channels",
@@ -27793,28 +27445,6 @@
       "warnings": []
     },
     {
-      "id": "flow:tasks_no_show_tasks_sweep_no_shows_task",
-      "name": "sweep_no_shows_task",
-      "entryPoint": "tasks_no_show_tasks_sweep_no_shows_task",
-      "entryPointId": "tasks_no_show_tasks_sweep_no_shows_task",
-      "path": [
-        "tasks_no_show_tasks_sweep_no_shows_task",
-        "tasks_no_show_tasks_sweep_no_shows"
-      ],
-      "qualifiedPath": [
-        "tasks_no_show_tasks_sweep_no_shows_task",
-        "tasks_no_show_tasks_sweep_no_shows"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/tasks/no_show_tasks.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_operational_task_service_task_attachment_content",
       "name": "task_attachment_content",
       "entryPoint": "services_operational_task_service_task_attachment_content",
@@ -27952,54 +27582,6 @@
       "fileCount": 1,
       "files": [
         "app/api/notifications.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_guests_update_guest_rating",
-      "name": "update_guest_rating",
-      "entryPoint": "api_guests_update_guest_rating",
-      "entryPointId": "api_guests_update_guest_rating",
-      "path": [
-        "api_guests_update_guest_rating",
-        "api_guests_guest_service_error_detail"
-      ],
-      "qualifiedPath": [
-        "api_guests_update_guest_rating",
-        "api_guests_guest_service_error_detail"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/guests.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_laundry_missing_followup_service_update_missing_follow_up",
-      "name": "update_missing_follow_up",
-      "entryPoint": "services_laundry_missing_followup_service_update_missing_follow_up",
-      "entryPointId": "services_laundry_missing_followup_service_update_missing_follow_up",
-      "path": [
-        "services_laundry_missing_followup_service_update_missing_follow_up",
-        "services_laundry_missing_followup_service_laundrymissingfollowuperror",
-        "services_laundry_missing_followup_service_laundrymissingfollowupnotfound",
-        "services_laundry_missing_followup_service_serialize_follow_up"
-      ],
-      "qualifiedPath": [
-        "services_laundry_missing_followup_service_update_missing_follow_up",
-        "services_laundry_missing_followup_service_laundrymissingfollowuperror",
-        "services_laundry_missing_followup_service_laundrymissingfollowupnotfound",
-        "services_laundry_missing_followup_service_serialize_follow_up"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/laundry_missing_followup_service.py"
       ],
       "criticality": 0.16,
       "warnings": []

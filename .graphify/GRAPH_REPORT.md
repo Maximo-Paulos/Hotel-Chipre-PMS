@@ -1,23 +1,23 @@
 # Graph Report - .  (2026-10-06)
 
 ## Corpus Check
-- Large corpus: 1531 files · ~2,131,587 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
+- Large corpus: 1532 files · ~2,131,914 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
 
 ## Summary
-- 13796 nodes · 45077 edges · 675 communities detected
+- 13798 nodes · 45092 edges · 674 communities detected
 - Extraction: 76% EXTRACTED · 24% INFERRED · 0% AMBIGUOUS · INFERRED: 10934 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
-- Edge kinds: uses: 10934 · contains: 9234 · calls: 6895 · ON_BRANCH: 6630 · MODIFIES: 4166 · rationale_for: 2179 · imports: 1632 · imports_from: 1312 · inherits: 942 · method: 836 · PARENT_OF: 313 · re_exports: 4
+- Edge kinds: uses: 10934 · contains: 9234 · calls: 6895 · ON_BRANCH: 6632 · MODIFIES: 4177 · rationale_for: 2179 · imports: 1632 · imports_from: 1312 · inherits: 942 · method: 836 · PARENT_OF: 315 · re_exports: 4
 
 
 ## Input Scope
 - Requested: all
 - Resolved: all (source: cli)
-- Included files: 1531 · Candidates: recursive
+- Included files: 1532 · Candidates: recursive
 - Excluded: 0 untracked · 0 ignored · 15 sensitive · 0 missing committed
 
 ## Graph Freshness
-- Built from Git commit: `f90885f`
+- Built from Git commit: `56072f6`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `Reservation` - 468 edges
@@ -47,7 +47,7 @@
 
 ### Community 0 - "Community 0"
 Cohesion: 0.01
-Nodes (244): AuthUser, Manage and inspect per-night extras on corporate reservations., authorize_manual_rate_scope(), Payload-conditional authorization for manual reservation rates., Return the strongest manual-rate capability the actor currently has., Read-only integral operations audit endpoint., hotelRolesQueryKey(), _assert_assignable_role() (+236 more)
+Nodes (242): AuthUser, Manage and inspect per-night extras on corporate reservations., authorize_manual_rate_scope(), Payload-conditional authorization for manual reservation rates., Return the strongest manual-rate capability the actor currently has., Read-only integral operations audit endpoint., hotelRolesQueryKey(), _assert_assignable_role() (+234 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.05
@@ -67,7 +67,7 @@ Nodes (192): ApiKeyPurpose, HotelApiKey, HotelApiKeyIssued, issueApiKey(), Issue
 
 ### Community 5 - "Community 5"
 Cohesion: 0.06
-Nodes (194): Apply the separate approval capability only when closing requires it., Apply the separate approval capability only when closing requires it., Export the existing transaction/cash ledger without creating a second balance., Export the existing transaction/cash ledger without creating a second balance., _require_cash_difference_approval_when_requested(), PaymentSurchargeRead, PaymentSurchargeUpdate, Payment surcharges API - v72 section 12.3.  GET    /api/payment-surcharges (+186 more)
+Nodes (197): Apply the separate approval capability only when closing requires it., Apply the separate approval capability only when closing requires it., Export the existing transaction/cash ledger without creating a second balance., Export the existing transaction/cash ledger without creating a second balance., _require_cash_difference_approval_when_requested(), PaymentSurchargeRead, PaymentSurchargeUpdate, Payment surcharges API - v72 section 12.3.  GET    /api/payment-surcharges (+189 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.02
@@ -90,16 +90,16 @@ Cohesion: 0.03
 Nodes (135): FastAPI routes for Hotel Configuration (Admin Panel)., Lightweight status so the frontend can check the active system email provider., Expose only the selected UI language to authenticated hotel members., apply_period_to_daily_rates(), ApplyPeriodOut, _bulk_field_value(), bulk_update_daily_rate_field(), bulk_upsert_daily_rates() (+127 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.02
-Nodes (60): _DecimalAwareEncoder, _InvitationAccessLogFilter, _is_database_pool_timeout(), Hotel PMS — FastAPI Main Application. Serves the API + bundled frontend files., Keep invitation and OTA webhook capabilities out of access logs., Keep invitation and OTA webhook capabilities out of access logs., Keep invitation and OTA webhook capabilities out of access logs., Hide invitation/OTA capabilities from application logs. (+52 more)
-
-### Community 12 - "Community 12"
 Cohesion: 0.03
 Nodes (120): acceptInvitation(), acceptInvitationWithGoogle(), _allow_mfa_attempt(), apple_callback(), _apple_full_name(), apple_login(), _apple_login_config(), apple_start() (+112 more)
 
-### Community 13 - "Community 13"
+### Community 12 - "Community 12"
 Cohesion: 0.03
 Nodes (109): Category, listCategories(), createPaymentSurcharge(), deactivatePaymentSurcharge(), grossWithSurcharge(), listPaymentSurcharges(), PaymentSurcharge, PaymentSurchargeCreatePayload (+101 more)
+
+### Community 13 - "Community 13"
+Cohesion: 0.02
+Nodes (54): _DecimalAwareEncoder, _InvitationAccessLogFilter, _is_database_pool_timeout(), Hotel PMS — FastAPI Main Application. Serves the API + bundled frontend files., Keep invitation and OTA webhook capabilities out of access logs., Keep invitation and OTA webhook capabilities out of access logs., Keep invitation and OTA webhook capabilities out of access logs., Hide invitation/OTA capabilities from application logs. (+46 more)
 
 ### Community 14 - "Community 14"
 Cohesion: 0.03
@@ -118,12 +118,12 @@ Cohesion: 0.20
 Nodes (84): availability(), price_quote(), FastAPI routes for Booking management (thin layer over Reservation). Provides ba, Ensure computed fields land in the response., Ensure computed fields land in the response., Lightweight availability placeholder. When all parameters are provided,     it r, Lightweight availability placeholder. When all parameters are provided,     it r, Calculate pricing for a potential booking without persisting it.     Uses the ca (+76 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.05
-Nodes (96): Database-only no-show reconciliation shared by Celery and Render Cron., Run the reconciliation once, committing each hotel's results separately., Mark eligible, not-arrived reservations after each hotel's local cutoff.      Th, run_no_show_sweep(), sweep_no_shows(), active_reservations(), active_reservations_select(), _active_reservations_without_hotel() (+88 more)
-
-### Community 19 - "Community 19"
 Cohesion: 0.06
 Nodes (92): _Peer, Authenticated field-level collaboration endpoints.  Drafts are ephemeral and saf, Issue a short-lived, one-use ticket for one tenant resource., Persist an optimistic, field-level merge under the current tenant., Process-local peers plus best-effort Redis pub/sub fan-out., Authenticate with a one-use ticket, then exchange safe draft signals., Keep collaboration permissions aligned with the normal resource API., _RoomTransport (+84 more)
+
+### Community 19 - "Community 19"
+Cohesion: 0.05
+Nodes (91): active_reservations(), active_reservations_select(), _active_reservations_without_hotel(), _apply_corporate_pricing(), _apply_custom_deposit_amount(), _apply_manual_total_override(), _apply_pricing_result_to_reservation(), calculate_reservation_pricing() (+83 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.06
@@ -147,43 +147,43 @@ Nodes (53): create_movement(), createStockItem(), createStockLocation(), createS
 
 ### Community 25 - "Community 25"
 Cohesion: 0.04
-Nodes (61): ActiveRoomBlockItem, ArrivalCount, AvailableWithReviewItem, booked_value_report(), BookedValueReport, CashSessionStatusRead, CurrencyAmount, DailyOperationalReport (+53 more)
+Nodes (62): ActiveRoomBlockItem, ArrivalCount, AvailableWithReviewItem, booked_value_report(), BookedValueReport, CashSessionStatusRead, CurrencyAmount, DailyOperationalReport (+54 more)
 
 ### Community 26 - "Community 26"
+Cohesion: 0.07
+Nodes (71): 13debed Refresh Graphify after latest main merge, 56072f6 Add standalone no-show reconciliation runner, f90885f Remove duplicate reservation form reset, run_no_show_sweep(), sweep_no_shows(), CLI entry point for the database-only no-show Render Cron job., _reservation(), test_sweep_excludes_checked_in_and_is_idempotent() (+63 more)
+
+### Community 27 - "Community 27"
 Cohesion: 0.04
 Nodes (38): CategoryPayload, DepositPolicyPayload, finishOnboarding(), getOnboardingStatus(), HotelIdentityPayload, OnboardingProviderSetup, OnboardingStatus, OnboardingSubscription (+30 more)
 
-### Community 27 - "Community 27"
+### Community 28 - "Community 28"
 Cohesion: 0.06
 Nodes (58): _complete_master_login(), _configure_resend(), FakeResponse, A genuine Stripe retry (network timeout, no ack received) redelivers the     SAM, If MASTER_ADMIN_EMAIL happens to collide with a real tenant's login     email (a, C2 regression (SQLite, syntactic only -- RLS is a Postgres-only concern,     see, Wiring proof: every authenticated master-admin call must set the RLS     bypass, _seed_hotel() (+50 more)
 
-### Community 28 - "Community 28"
+### Community 29 - "Community 29"
 Cohesion: 0.06
 Nodes (48): APIKeyPurposeEnum, PaymentLinkRead, PublicReservationRead, HotelAPIKeyIssue, HotelAPIKeyIssued, HotelAPIKeyRead, PublicAvailabilityResponse, PublicCategoryRead (+40 more)
 
-### Community 29 - "Community 29"
+### Community 30 - "Community 30"
 Cohesion: 0.05
 Nodes (52): PublicInquiryPayload, PublicInquiryResponse, submitPublicInquiry(), Seo(), SeoProps, socialImage, StructuredData, APP_URL_HOSTNAME (+44 more)
 
-### Community 30 - "Community 30"
+### Community 31 - "Community 31"
 Cohesion: 0.06
 Nodes (55): Public contact form endpoint for the marketing site., PrivacyRetentionHold, Current legal-retention exception for one public lead or inquiry.      Changes a, _as_utc(), create_retention_hold(), _effective(), _lock_hold_table_for_write(), _mask_email() (+47 more)
 
-### Community 31 - "Community 31"
+### Community 32 - "Community 32"
 Cohesion: 0.06
 Nodes (54): Rate limiter with DB-backed persistence for security-sensitive endpoints.  When, SimpleRateLimiter, MasterAdminAuditEvent, MasterAdminAuthLockout, MasterAdminSession, allow_master_admin_mfa_attempt(), _as_aware(), audit_master_action() (+46 more)
 
-### Community 32 - "Community 32"
+### Community 33 - "Community 33"
 Cohesion: 0.07
 Nodes (45): fetchPublicPricing(), LeadPayload, PublicPricing, PublicPricingPlan, submitLead(), differentiators, faqItems, founder (+37 more)
 
-### Community 33 - "Community 33"
-Cohesion: 0.07
-Nodes (56): 13debed Refresh Graphify after latest main merge, 2ef0dd8 Cover no-show cutoffs across daylight saving changes, 52fbe6d Refresh Graphify and generated knowledge inventories, 5e4d677 Merge latest main into week two fixes, 7339821 Reduce redundant permission and task list reads, 9e36146 Merge remote-tracking branch 'origin/main' into codex/fix-ronda-2-week-simulation, bf76e8c Reduce PMS permission and realtime save latency, f90885f Remove duplicate reservation form reset (+48 more)
-
 ### Community 34 - "Community 34"
-Cohesion: 0.10
-Nodes (59): _client(), _close(), _patch_legacy_booking(), test_bounded_unpaid_total_adjustment_fails_closed_without_manual_rate_policy(), test_bounded_unpaid_total_adjustment_fails_closed_without_trusted_quote(), test_bounded_unpaid_total_adjustment_rejects_amount_outside_configured_range(), test_bounded_unpaid_total_adjustment_requires_same_currency_as_current_quote(), test_category_product_compatibility_is_checked_after_permission() (+51 more)
+Cohesion: 0.08
+Nodes (54): 2ef0dd8 Cover no-show cutoffs across daylight saving changes, 52fbe6d Refresh Graphify and generated knowledge inventories, 5e4d677 Merge latest main into week two fixes, 7339821 Reduce redundant permission and task list reads, 9e36146 Merge remote-tracking branch 'origin/main' into codex/fix-ronda-2-week-simulation, bf76e8c Reduce PMS permission and realtime save latency, test_handoff_is_tenant_scoped_and_acknowledged(), test_housekeeping_can_read_all_general_tasks_but_cannot_operate_them() (+46 more)
 
 ### Community 35 - "Community 35"
 Cohesion: 0.06
@@ -1293,73 +1293,73 @@ Nodes (10): _create_payload(), _reservation(), _seed_guest_inventory(), _seed_ho
 Cohesion: 0.18
 Nodes (3): The rate calendar's "Hoy" must follow the hotel's timezone, not the server's.  R, Run the process in UTC like Render does, so a regression back to     `date.today, utc_server_clock()
 
-### Community 316 - "Community 316"
-Cohesion: 0.27
-Nodes (6): _reservation(), test_sweep_excludes_checked_in_and_is_idempotent(), test_sweep_is_tenant_scoped(), test_sweep_marks_pending_and_paid_as_no_show_without_changing_money(), test_sweep_respects_local_cutoff_boundary_and_uses_hotel_timezone(), test_sweep_sql_cutoff_filter_matches_elapsed_utc_hours_across_dst()
-
-### Community 318 - "Community 318"
+### Community 317 - "Community 317"
 Cohesion: 0.27
 Nodes (9): client(), _complete_minimal_onboarding(), End-to-end onboarding flow exposed through the FastAPI routers., Provide a TestClient backed by an in-memory SQLite database., _register_owner(), test_dashboard_is_blocked_until_onboarding_finishes(), test_finish_requires_all_steps(), test_owner_registration_without_outbox_override_does_not_return_503() (+1 more)
 
-### Community 319 - "Community 319"
+### Community 318 - "Community 318"
 Cohesion: 0.31
 Nodes (9): _complete_onboarding_setup(), API coverage for the expanded onboarding wizard., _register_owner(), test_complete_nine_step_flow_works(), test_each_step_persists(), test_idempotent_step_updates_do_not_duplicate_records(), test_invalid_data_blocks_advancement(), test_new_hotel_starts_with_cash_only() (+1 more)
 
-### Community 320 - "Community 320"
+### Community 319 - "Community 319"
 Cohesion: 0.33
 Nodes (8): _make_hotel(), _make_reservation(), R6b: scheduled report tasks (§15.1) + manual-review routing (§13.3).  No real em, test_one_hotel_failure_does_not_abort_the_rest(), test_review_for_future_does_not_trigger_immediate_alert(), test_review_for_today_triggers_immediate_alert(), test_review_routing_swallows_email_errors(), test_send_morning_reports_iterates_active_hotels()
 
-### Community 321 - "Community 321"
+### Community 320 - "Community 320"
 Cohesion: 0.36
 Nodes (10): _completed_transaction(), _create_sample_reservation(), test_date_change_with_payments_requires_manager_and_preserves_history(), test_date_change_without_payments_cancels_and_recreates(), test_extension_rejects_checkout_not_after_current_checkout_in_spanish(), test_extension_rejects_refund_as_immediate_payment_without_mutating_reservation(), test_extension_requires_payment_or_link_action(), test_no_show_can_be_marked_without_auto_charge() (+2 more)
 
-### Community 323 - "Community 323"
+### Community 322 - "Community 322"
 Cohesion: 0.35
 Nodes (10): opened_cash_register(), _payment(), Immediate cash settlement scenarios require an operator-opened caja., _reservation(), test_extension_card_payment_with_pos_reference_is_completed_and_audited(), test_extension_manual_card_payment_requires_reference_before_mutating_stay(), test_no_future_conflict_extends_normally(), test_paid_future_conflict_reports_conflict_and_extension_does_not_proceed() (+2 more)
 
-### Community 324 - "Community 324"
+### Community 323 - "Community 323"
 Cohesion: 0.24
 Nodes (7): _make_reservation(), Only is_wait_listed=True reservations should appear in the waitlist query., Create one normal and one waitlisted reservation, return (normal, waitlisted)., Only is_wait_listed=True reservations should appear in the waitlist query., Create one normal and one waitlisted reservation, return (normal, waitlisted)., Helper — create a reservation through the service layer., TestWaitlistListing
 
-### Community 325 - "Community 325"
+### Community 324 - "Community 324"
 Cohesion: 0.29
 Nodes (6): _context(), _hotel_today(), Regression tests for tenant-scoped, per-role reservation visibility., _reserve(), test_in_house_guest_remains_visible_when_check_in_predates_window(), test_visibility_window_filters_far_future_and_null_is_unlimited()
 
-### Community 326 - "Community 326"
+### Community 325 - "Community 325"
 Cohesion: 0.24
 Nodes (6): CeleryJobDispatcher, dispatch_once(), JobDispatcher, JobSpec, Portable job-dispatch port with Celery as the first implementation., Create one durable intent per tenant/task/key before dispatching.      A duplica
 
-### Community 327 - "Community 327"
+### Community 326 - "Community 326"
 Cohesion: 0.49
 Nodes (9): changed_paths(), git(), is_release_relevant_path(), main(), Fail closed: only the three generated evidence files are non-runtime.      A rel, ReleaseEvidenceError, resolve_commit(), select_summary() (+1 more)
 
-### Community 328 - "Community 328"
+### Community 327 - "Community 327"
 Cohesion: 0.38
 Nodes (9): _enum_value(), _event_to_read(), _group_to_read(), list_movement_groups(), MovementEventRead, MovementGroupRead, _not_found_or_bad_request(), read_movement_group() (+1 more)
 
-### Community 329 - "Community 329"
+### Community 328 - "Community 328"
 Cohesion: 0.27
 Nodes (4): _derive_payment_status(), public_reservation_status(), public_reservation_status_by_code(), _serialize_reservation_status()
 
-### Community 330 - "Community 330"
+### Community 329 - "Community 329"
 Cohesion: 0.31
 Nodes (9): _cassandra_probe(), _close_clients(), _enable(), Live smoke tests for the optional Mongo, Neo4j, and Cassandra projections.  Each, Avoid reusing a client created by another test or stale .env flags., reset_projection_clients(), test_cassandra_bootstraps_missing_keyspace_and_lands_room_event(), test_mongo_audit_projection_lands_document() (+1 more)
 
-### Community 331 - "Community 331"
+### Community 330 - "Community 330"
 Cohesion: 0.44
 Nodes (9): DocumentTypeEnum, GuestBase, GuestCompanionBase, GuestCompanionCreate, GuestCompanionRead, GuestCreate, GuestRead, GuestUpdate (+1 more)
 
-### Community 332 - "Community 332"
+### Community 331 - "Community 331"
 Cohesion: 0.20
 Nodes (2): HotelConfigUpdate, _normalize_currency()
 
-### Community 333 - "Community 333"
+### Community 332 - "Community 332"
 Cohesion: 0.20
 Nodes (5): Request and read contracts for one group collection with child allocations., ReservationGroupPaymentAllocationRead, ReservationGroupPaymentAllocationRequest, ReservationGroupPaymentCreate, ReservationGroupPaymentRead
 
-### Community 334 - "Community 334"
+### Community 333 - "Community 333"
 Cohesion: 0.24
 Nodes (10): _model_event_payload(), _model_hotel_id(), queue_domain_change(), queue_model_changes(), Collect safe domain signals from ORM writes before a transaction ends., Collect safe domain signals from ORM writes before a transaction ends., Queue one tenant-scoped change for publication after commit.      Services can c, Queue one tenant-scoped change for publication after commit.      Services can c (+2 more)
+
+### Community 334 - "Community 334"
+Cohesion: 0.20
+Nodes (8): InvitationMailer, Notify an existing staff member after their role change is committed., Send a best-effort staff access notice without logging provider data., Notify an invitee after the hotel membership and invitation are committed., send_staff_invitation_email(), _send_staff_notice(), send_staff_role_changed_email(), send_staff_welcome_email()
 
 ### Community 335 - "Community 335"
 Cohesion: 0.20
@@ -2681,67 +2681,63 @@ Nodes (1): Tenant-scoped custom roles layered over a built-in permission profile
 Cohesion: 0.67
 Nodes (1): Persisted staff invitations and their one-time acceptance state.
 
-### Community 683 - "Community 683"
-Cohesion: 0.67
-Nodes (1): CLI entry point for the database-only no-show Render Cron job.
-
-### Community 686 - "Community 686"
+### Community 685 - "Community 685"
 Cohesion: 0.67
 Nodes (1): Regression guard for a real bug B3.1 uncovered: on a SQLite database built from
 
-### Community 688 - "Community 688"
+### Community 687 - "Community 687"
 Cohesion: 0.67
 Nodes (2): Trying to resolve with a non-existent room raises ReservationError., Trying to resolve with a non-existent room raises ReservationError.
 
-### Community 691 - "Community 691"
+### Community 690 - "Community 690"
 Cohesion: 1.00
 Nodes (1): Defensive datastore clients for optional infrastructure.
 
-### Community 692 - "Community 692"
+### Community 691 - "Community 691"
 Cohesion: 1.00
 Nodes (1): Application decorators.
 
-### Community 693 - "Community 693"
+### Community 692 - "Community 692"
 Cohesion: 1.00
 Nodes (1): Dependency injection helpers (auth, etc.).
 
-### Community 696 - "Community 696"
+### Community 694 - "Community 694"
 Cohesion: 1.00
 Nodes (1): Email provider abstraction for platform transactional mail.
 
-### Community 697 - "Community 697"
+### Community 695 - "Community 695"
 Cohesion: 1.00
 Nodes (2): dailySummaryKey(), useCashDailySummary()
 
-### Community 698 - "Community 698"
+### Community 696 - "Community 696"
 Cohesion: 1.00
 Nodes (2): latestCloseReportKey(), useLatestCashCloseReport()
 
-### Community 699 - "Community 699"
+### Community 697 - "Community 697"
 Cohesion: 1.00
 Nodes (2): pendingCashCustodyReportsKey(), usePendingCashCustodyReports()
 
-### Community 700 - "Community 700"
+### Community 698 - "Community 698"
 Cohesion: 1.00
 Nodes (2): pendingCloseReportsKey(), usePendingCashCloseReports()
 
-### Community 701 - "Community 701"
+### Community 699 - "Community 699"
 Cohesion: 1.00
 Nodes (1): Master admin panel backend package.
 
-### Community 706 - "Community 706"
+### Community 704 - "Community 704"
 Cohesion: 1.00
 Nodes (2): MERCADOPAGO_WEBHOOK_SECRET is required only when MP_ACCESS_TOKEN is set., test_validate_runtime_security_rejects_missing_mp_webhook_when_mp_configured()
 
-### Community 707 - "Community 707"
+### Community 705 - "Community 705"
 Cohesion: 1.00
 Nodes (2): Partial integration env vars should not block production startup., test_validate_runtime_security_ignores_incomplete_optional_integrations()
 
-### Community 708 - "Community 708"
+### Community 706 - "Community 706"
 Cohesion: 1.00
 Nodes (2): OAuth redirect URIs are only validated when the corresponding service credential, test_validate_runtime_security_rejects_localhost_redirect_when_service_configured()
 
-### Community 709 - "Community 709"
+### Community 707 - "Community 707"
 Cohesion: 1.00
 Nodes (2): Preview QA already requires a strong MASTER_ADMIN_PASSWORD/EMAIL, but     produc, test_validate_runtime_security_rejects_weak_master_admin_password_in_production()
 
@@ -2758,7 +2754,7 @@ Nodes (2): Preview QA already requires a strong MASTER_ADMIN_PASSWORD/EMAIL, but
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 268`** (2 nodes): `collaboration_client()`, `FakeTicketRedis`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 332`** (2 nodes): `HotelConfigUpdate`, `_normalize_currency()`
+- **Thin community `Community 331`** (2 nodes): `HotelConfigUpdate`, `_normalize_currency()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 363`** (1 nodes): `CollaborationManager`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -2954,47 +2950,45 @@ Nodes (2): Preview QA already requires a strong MASTER_ADMIN_PASSWORD/EMAIL, but
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 682`** (1 nodes): `Persisted staff invitations and their one-time acceptance state.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 683`** (1 nodes): `CLI entry point for the database-only no-show Render Cron job.`
+- **Thin community `Community 685`** (1 nodes): `Regression guard for a real bug B3.1 uncovered: on a SQLite database built from`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 686`** (1 nodes): `Regression guard for a real bug B3.1 uncovered: on a SQLite database built from`
+- **Thin community `Community 687`** (2 nodes): `Trying to resolve with a non-existent room raises ReservationError.`, `Trying to resolve with a non-existent room raises ReservationError.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 688`** (2 nodes): `Trying to resolve with a non-existent room raises ReservationError.`, `Trying to resolve with a non-existent room raises ReservationError.`
+- **Thin community `Community 690`** (1 nodes): `Defensive datastore clients for optional infrastructure.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 691`** (1 nodes): `Defensive datastore clients for optional infrastructure.`
+- **Thin community `Community 691`** (1 nodes): `Application decorators.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 692`** (1 nodes): `Application decorators.`
+- **Thin community `Community 692`** (1 nodes): `Dependency injection helpers (auth, etc.).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 693`** (1 nodes): `Dependency injection helpers (auth, etc.).`
+- **Thin community `Community 694`** (1 nodes): `Email provider abstraction for platform transactional mail.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 696`** (1 nodes): `Email provider abstraction for platform transactional mail.`
+- **Thin community `Community 695`** (2 nodes): `dailySummaryKey()`, `useCashDailySummary()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 697`** (2 nodes): `dailySummaryKey()`, `useCashDailySummary()`
+- **Thin community `Community 696`** (2 nodes): `latestCloseReportKey()`, `useLatestCashCloseReport()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 698`** (2 nodes): `latestCloseReportKey()`, `useLatestCashCloseReport()`
+- **Thin community `Community 697`** (2 nodes): `pendingCashCustodyReportsKey()`, `usePendingCashCustodyReports()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 699`** (2 nodes): `pendingCashCustodyReportsKey()`, `usePendingCashCustodyReports()`
+- **Thin community `Community 698`** (2 nodes): `pendingCloseReportsKey()`, `usePendingCashCloseReports()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 700`** (2 nodes): `pendingCloseReportsKey()`, `usePendingCashCloseReports()`
+- **Thin community `Community 699`** (1 nodes): `Master admin panel backend package.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 701`** (1 nodes): `Master admin panel backend package.`
+- **Thin community `Community 704`** (2 nodes): `MERCADOPAGO_WEBHOOK_SECRET is required only when MP_ACCESS_TOKEN is set.`, `test_validate_runtime_security_rejects_missing_mp_webhook_when_mp_configured()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 706`** (2 nodes): `MERCADOPAGO_WEBHOOK_SECRET is required only when MP_ACCESS_TOKEN is set.`, `test_validate_runtime_security_rejects_missing_mp_webhook_when_mp_configured()`
+- **Thin community `Community 705`** (2 nodes): `Partial integration env vars should not block production startup.`, `test_validate_runtime_security_ignores_incomplete_optional_integrations()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 707`** (2 nodes): `Partial integration env vars should not block production startup.`, `test_validate_runtime_security_ignores_incomplete_optional_integrations()`
+- **Thin community `Community 706`** (2 nodes): `OAuth redirect URIs are only validated when the corresponding service credential`, `test_validate_runtime_security_rejects_localhost_redirect_when_service_configured()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 708`** (2 nodes): `OAuth redirect URIs are only validated when the corresponding service credential`, `test_validate_runtime_security_rejects_localhost_redirect_when_service_configured()`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 709`** (2 nodes): `Preview QA already requires a strong MASTER_ADMIN_PASSWORD/EMAIL, but     produc`, `test_validate_runtime_security_rejects_weak_master_admin_password_in_production()`
+- **Thin community `Community 707`** (2 nodes): `Preview QA already requires a strong MASTER_ADMIN_PASSWORD/EMAIL, but     produc`, `test_validate_runtime_security_rejects_weak_master_admin_password_in_production()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Base` connect `Community 3` to `Community 476`, `Community 201`, `Community 0`, `Community 66`, `Community 31`, `Community 30`, `Community 111`, `Community 60`, `Community 112`, `Community 46`, `Community 15`, `Community 8`, `Community 10`, `Community 5`, `Community 7`, `Community 20`, `Community 238`, `Community 180`, `Community 331`, `Community 578`, `Community 53`, `Community 28`, `Community 108`, `Community 19`, `Community 16`, `Community 681`, `Community 529`, `Community 74`, `Community 682`, `Community 88`, `Community 67`, `Community 181`, `Community 59`, `Community 134`, `Community 51`, `Community 56`, `Community 101`, `Community 162`, `Community 135`, `Community 47`, `Community 40`, `Community 136`, `Community 1`, `Community 370`, `Community 110`?**
+- **Why does `Base` connect `Community 3` to `Community 476`, `Community 201`, `Community 0`, `Community 66`, `Community 32`, `Community 31`, `Community 111`, `Community 60`, `Community 112`, `Community 46`, `Community 15`, `Community 8`, `Community 10`, `Community 5`, `Community 7`, `Community 20`, `Community 238`, `Community 180`, `Community 330`, `Community 578`, `Community 53`, `Community 29`, `Community 108`, `Community 18`, `Community 16`, `Community 681`, `Community 529`, `Community 74`, `Community 682`, `Community 88`, `Community 67`, `Community 181`, `Community 59`, `Community 134`, `Community 51`, `Community 56`, `Community 101`, `Community 162`, `Community 135`, `Community 47`, `Community 40`, `Community 136`, `Community 1`, `Community 370`, `Community 110`?**
   _High betweenness centrality (0.100) - this node is a cross-community bridge._
-- **Why does `HotelConfiguration` connect `Community 10` to `Community 17`, `Community 5`, `Community 144`, `Community 19`, `Community 51`, `Community 108`, `Community 6`, `Community 0`, `Community 3`, `Community 8`, `Community 15`, `Community 20`, `Community 305`, `Community 401`, `Community 135`, `Community 21`, `Community 48`, `Community 18`, `Community 67`, `Community 138`, `Community 484`, `Community 47`, `Community 1`, `Community 336`?**
+- **Why does `HotelConfiguration` connect `Community 10` to `Community 17`, `Community 5`, `Community 144`, `Community 18`, `Community 51`, `Community 108`, `Community 6`, `Community 0`, `Community 3`, `Community 8`, `Community 15`, `Community 20`, `Community 305`, `Community 401`, `Community 135`, `Community 21`, `Community 48`, `Community 67`, `Community 138`, `Community 484`, `Community 19`, `Community 47`, `Community 1`, `Community 336`?**
   _High betweenness centrality (0.022) - this node is a cross-community bridge._
-- **Why does `Reservation` connect `Community 5` to `Community 17`, `Community 20`, `Community 10`, `Community 59`, `Community 0`, `Community 3`, `Community 46`, `Community 112`, `Community 8`, `Community 15`, `Community 305`, `Community 258`, `Community 53`, `Community 18`, `Community 134`, `Community 51`, `Community 65`, `Community 135`, `Community 73`, `Community 40`?**
+- **Why does `Reservation` connect `Community 5` to `Community 17`, `Community 20`, `Community 10`, `Community 59`, `Community 0`, `Community 3`, `Community 46`, `Community 112`, `Community 8`, `Community 15`, `Community 305`, `Community 258`, `Community 53`, `Community 134`, `Community 51`, `Community 65`, `Community 135`, `Community 19`, `Community 73`, `Community 40`?**
   _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **Are the 461 inferred relationships involving `Reservation` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides ba` and `Ensure computed fields land in the response.`) actually correct?**
   _`Reservation` has 461 INFERRED edges - model-reasoned connections that need verification._
