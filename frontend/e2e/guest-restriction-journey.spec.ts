@@ -105,6 +105,10 @@ test("owner creates a lodging restriction, it blocks booking, override unblocks 
   const largeAdjustmentWarning = reservationForm.getByTestId("manual-rate-adjustment-warning");
   await expect(largeAdjustmentWarning).toContainText("La cotización automática está bloqueada para este huésped.");
   await expect(largeAdjustmentWarning).toContainText("Confirmo que revisé el nuevo total y el motivo.");
+  await reservationForm.getByRole("button", { name: "Crear", exact: true }).click();
+  await expect(reservationForm.getByTestId("reservation-submit-error")).toContainText(
+    "Confirmá la revisión del cambio de importe antes de guardar."
+  );
   await largeAdjustmentWarning.getByTestId("manual-rate-adjustment-confirm").check();
   await expect(reservationForm.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
   await reservationForm.getByRole("button", { name: "Crear", exact: true }).click();

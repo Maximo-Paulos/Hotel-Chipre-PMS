@@ -1,13 +1,13 @@
 # Graph Report - .  (2026-10-06)
 
 ## Corpus Check
-- Large corpus: 1532 files · ~2,132,046 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
+- Large corpus: 1532 files · ~2,132,091 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
 
 ## Summary
-- 13800 nodes · 45300 edges · 651 communities detected
+- 13801 nodes · 45306 edges · 651 communities detected
 - Extraction: 76% EXTRACTED · 24% INFERRED · 0% AMBIGUOUS · INFERRED: 10934 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
-- Edge kinds: uses: 10934 · contains: 9234 · calls: 6895 · ON_BRANCH: 6834 · MODIFIES: 4181 · rationale_for: 2179 · imports: 1632 · imports_from: 1312 · inherits: 942 · method: 836 · PARENT_OF: 317 · re_exports: 4
+- Edge kinds: uses: 10934 · contains: 9234 · calls: 6895 · ON_BRANCH: 6835 · MODIFIES: 4185 · rationale_for: 2179 · imports: 1632 · imports_from: 1312 · inherits: 942 · method: 836 · PARENT_OF: 318 · re_exports: 4
 
 
 ## Input Scope
@@ -17,7 +17,7 @@
 - Excluded: 0 untracked · 0 ignored · 15 sensitive · 0 missing committed
 
 ## Graph Freshness
-- Built from Git commit: `4b7d260`
+- Built from Git commit: `d5da108`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `Reservation` - 468 edges
@@ -51,7 +51,7 @@ Nodes (5): get_url(), run_migrations_offline(), _ensure_wide_version_table(), ru
 
 ### Community 0 - "Community 0"
 Cohesion: 0.01
-Nodes (224): hotel check-in checkout times  Revision ID: 015f7e36b9cd Revises: 20260930_house, Separate historical cash receipts from the active drawer and seed access.  Revis, Add a dedicated permission for recording OTA reservations.  Revision ID: 2026092, Add read access for the privacy-safe housekeeping board.  Revision ID: 20260930_, Separate housekeeping state from room availability.  Revision ID: 20260930_house, Version laundry vendor prices by effective date and restrict default edits.  Rev, Link the outgoing and incoming ledger rows for atomic stock transfers., Add per-hotel bounded manual reservation rates and their audit fields. (+216 more)
+Nodes (223): hotel check-in checkout times  Revision ID: 015f7e36b9cd Revises: 20260930_house, Separate historical cash receipts from the active drawer and seed access.  Revis, Add a dedicated permission for recording OTA reservations.  Revision ID: 2026092, Add read access for the privacy-safe housekeeping board.  Revision ID: 20260930_, Separate housekeeping state from room availability.  Revision ID: 20260930_house, Version laundry vendor prices by effective date and restrict default edits.  Rev, Link the outgoing and incoming ledger rows for atomic stock transfers., Add per-hotel bounded manual reservation rates and their audit fields. (+215 more)
 
 ### Community 583 - "Community 583"
 Cohesion: 0.50
@@ -637,7 +637,7 @@ Nodes (163): BaseModel, Replace the public pricing table.      The landing page 
 Cohesion: 0.11
 Nodes (27): _ticket_key(), _require_permission(), _require_resource_lane(), _realtime_client_or_503(), create_collaboration_ticket(), _patch_conflict_response(), patch_collaborative_resource(), _consume_ticket() (+19 more)
 
-### Community 18 - "Community 18"
+### Community 19 - "Community 19"
 Cohesion: 0.06
 Nodes (92): _Peer, _RoomTransport, Authenticated field-level collaboration endpoints.  Drafts are ephemeral and saf, Keep collaboration permissions aligned with the normal resource API., Issue a short-lived, one-use ticket for one tenant resource., Persist an optimistic, field-level merge under the current tenant., Process-local peers plus best-effort Redis pub/sub fan-out., Authenticate with a one-use ticket, then exchange safe draft signals. (+84 more)
 
@@ -741,7 +741,7 @@ Nodes (60): VendorCreate, VendorUpdate, VendorRead, VendorPriceUpsert, VendorPri
 Cohesion: 0.38
 Nodes (9): MovementEventRead, MovementGroupRead, _enum_value(), _event_to_read(), _group_to_read(), _not_found_or_bad_request(), list_movement_groups(), read_movement_group() (+1 more)
 
-### Community 19 - "Community 19"
+### Community 20 - "Community 20"
 Cohesion: 0.04
 Nodes (69): _schedule_to_read(), get_daily_report_schedule(), update_daily_report_schedule(), FastAPI routes for the notification backend: inbox, push subscriptions, preferen, NEVER_CACHE_PREFIXES, NotificationSeverity, NotificationItem, NotificationListResponse (+61 more)
 
@@ -817,9 +817,9 @@ Nodes (34): RateChangeItemIn, RateChangeDraftIn, RateChangeDecisionIn, RateChang
 Cohesion: 0.29
 Nodes (6): ReferenceCountry, list_timezones(), list_countries(), Reference data endpoints used by the frontend., Return the cached IANA timezone catalog., Return the curated country -> primary IANA timezone catalog.
 
-### Community 21 - "Community 21"
+### Community 18 - "Community 18"
 Cohesion: 0.03
-Nodes (57): booked_value_report(), _safe_csv_cell(), export_revenue_report_csv(), credentials, owner, manager, OperationalReservationSummary, OperationalReservationGroup (+49 more)
+Nodes (59): booked_value_report(), _safe_csv_cell(), export_revenue_report_csv(), credentials, credentials, owner, manager, OperationalReservationSummary (+51 more)
 
 ### Community 176 - "Community 176"
 Cohesion: 0.18
@@ -1333,7 +1333,7 @@ Nodes (32): get_reservation_operations_summary(), _get_operations_related_data()
 Cohesion: 0.13
 Nodes (30): _validate_direct_individual_extension_target(), required_room_move_permission(), _room_move_permission_candidates(), _room_move_categories(), enforce_room_move_permission(), _invalidate_availability_cache(), _touch_facts(), _hotel_default_currency() (+22 more)
 
-### Community 20 - "Community 20"
+### Community 21 - "Community 21"
 Cohesion: 0.05
 Nodes (91): ReservationError, requires_large_total_adjustment_confirmation(), _direct_manual_rate_reference_quote(), active_reservations(), _hotel_today_and_timezone(), visible_reservations(), active_reservations_select(), _active_reservations_without_hotel() (+83 more)
 
@@ -2868,11 +2868,11 @@ Nodes (12): _signature(), _post(), _message(), _delivery(), test_rejects_a_deliv
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Base` connect `Community 3` to `Community 470`, `Community 198`, `Community 4`, `Community 72`, `Community 33`, `Community 32`, `Community 116`, `Community 66`, `Community 117`, `Community 52`, `Community 11`, `Community 8`, `Community 9`, `Community 6`, `Community 24`, `Community 0`, `Community 234`, `Community 178`, `Community 325`, `Community 60`, `Community 30`, `Community 113`, `Community 18`, `Community 15`, `Community 653`, `Community 80`, `Community 78`, `Community 654`, `Community 93`, `Community 49`, `Community 179`, `Community 65`, `Community 137`, `Community 249`, `Community 12`, `Community 106`, `Community 164`, `Community 138`, `Community 53`, `Community 45`, `Community 139`, `Community 1`, `Community 363`, `Community 115`?**
+- **Why does `Base` connect `Community 3` to `Community 470`, `Community 198`, `Community 4`, `Community 72`, `Community 33`, `Community 32`, `Community 116`, `Community 66`, `Community 117`, `Community 52`, `Community 11`, `Community 8`, `Community 9`, `Community 6`, `Community 24`, `Community 0`, `Community 234`, `Community 178`, `Community 325`, `Community 60`, `Community 30`, `Community 113`, `Community 19`, `Community 15`, `Community 653`, `Community 80`, `Community 78`, `Community 654`, `Community 93`, `Community 49`, `Community 179`, `Community 65`, `Community 137`, `Community 249`, `Community 12`, `Community 106`, `Community 164`, `Community 138`, `Community 53`, `Community 45`, `Community 139`, `Community 1`, `Community 363`, `Community 115`?**
   _High betweenness centrality (0.100) - this node is a cross-community bridge._
-- **Why does `HotelConfiguration` connect `Community 9` to `Community 16`, `Community 6`, `Community 147`, `Community 18`, `Community 113`, `Community 7`, `Community 0`, `Community 3`, `Community 8`, `Community 11`, `Community 24`, `Community 249`, `Community 395`, `Community 138`, `Community 22`, `Community 54`, `Community 49`, `Community 141`, `Community 20`, `Community 53`, `Community 1`, `Community 330`?**
+- **Why does `HotelConfiguration` connect `Community 9` to `Community 16`, `Community 6`, `Community 147`, `Community 19`, `Community 113`, `Community 7`, `Community 0`, `Community 3`, `Community 8`, `Community 11`, `Community 24`, `Community 249`, `Community 395`, `Community 138`, `Community 22`, `Community 54`, `Community 49`, `Community 141`, `Community 21`, `Community 53`, `Community 1`, `Community 330`?**
   _High betweenness centrality (0.022) - this node is a cross-community bridge._
-- **Why does `Reservation` connect `Community 6` to `Community 16`, `Community 24`, `Community 9`, `Community 65`, `Community 3`, `Community 0`, `Community 52`, `Community 117`, `Community 8`, `Community 11`, `Community 249`, `Community 255`, `Community 60`, `Community 49`, `Community 137`, `Community 71`, `Community 138`, `Community 20`, `Community 77`, `Community 45`?**
+- **Why does `Reservation` connect `Community 6` to `Community 16`, `Community 24`, `Community 9`, `Community 65`, `Community 3`, `Community 0`, `Community 52`, `Community 117`, `Community 8`, `Community 11`, `Community 249`, `Community 255`, `Community 60`, `Community 49`, `Community 137`, `Community 71`, `Community 138`, `Community 21`, `Community 77`, `Community 45`?**
   _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **Are the 461 inferred relationships involving `Reservation` (e.g. with `FastAPI routes for Booking management (thin layer over Reservation). Provides ba` and `Ensure computed fields land in the response.`) actually correct?**
   _`Reservation` has 461 INFERRED edges - model-reasoned connections that need verification._

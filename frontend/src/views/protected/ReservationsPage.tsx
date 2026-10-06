@@ -1232,7 +1232,18 @@ export function ReservationsPage() {
       comparableManualRateQuote &&
       isLargeTotalAdjustment(reservationQuote?.total ?? Number.NaN, manualTotalAmount)
     );
-    if (requiresLargeManualRateConfirmation && !confirmLargeTotalAdjustment) {
+    const requiresRestrictedGuestManualRateReview = Boolean(
+      !editing &&
+      manualTotalAmount !== null &&
+      canUseUnboundedManualRate &&
+      currentFormValues.source === "direct" &&
+      !(Number(currentFormValues.company_id) > 0) &&
+      getGuestProhibitedDetail(quoteQuery.error)
+    );
+    if (
+      (requiresLargeManualRateConfirmation || requiresRestrictedGuestManualRateReview) &&
+      !confirmLargeTotalAdjustment
+    ) {
       setFormError(t("page.errors.largeTotalAdjustmentConfirmationRequired"));
       return;
     }
@@ -1793,7 +1804,7 @@ export function ReservationsPage() {
   );
   const restrictedGuestManualRateAdjustmentDraft = Boolean(
     !editing &&
-    canSetManualRate &&
+    canUseUnboundedManualRate &&
     formValues.source === "direct" &&
     !(Number(formValues.company_id) > 0) &&
     proposedManualRateTotalDraft !== null &&
