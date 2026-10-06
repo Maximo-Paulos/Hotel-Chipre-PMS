@@ -156,13 +156,9 @@ test("owner is told when the browser blocks the reservation voucher window", asy
   await page.evaluate(() => Object.defineProperty(window, "open", { configurable: true, value: () => null }));
 
   await exportVoucherButton.click();
-  await expect(page.getByText(/El navegador bloqueó la ventana del comprobante/)).toBeVisible();
-
-  await details.getByTestId("reservation-details-action-error").getByRole("button", { name: "Cerrar", exact: true }).click();
-  await details.getByRole("button", { name: "Cerrar", exact: true }).click();
-  page.once("dialog", (dialog) => dialog.accept());
-  await reservationRow.getByRole("button", { name: "Cancelar", exact: true }).click();
-  await expect(page.getByText("Reserva cancelada", { exact: true })).toBeVisible();
+  await expect(details.getByTestId("reservation-details-action-error")).toContainText(
+    /El navegador bloqueó la ventana del comprobante/
+  );
 });
 
 test("owner edits, extends, blocks overlapping room selection and cancels a reservation", async ({ page }, testInfo) => {
