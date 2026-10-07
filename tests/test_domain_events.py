@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -19,6 +21,7 @@ from app.dependencies.auth import AuthContext
 from app.models.domain_event_outbox import DomainEventOutbox
 from app.models.hotel_config import HotelConfiguration
 from app.services import domain_events
+from app.services.outbox_poll_cache import CachedOutboxPollFailure, OutboxPollBatchCache
 
 
 def _event_engine():
@@ -79,9 +82,165 @@ def _successful_publisher(published: list[dict]):
 
 
 def test_realtime_fallback_poll_budget_is_below_ten_seconds():
-    assert _settings().REALTIME_EVENTS_FALLBACK_POLL_SECONDS == 2.0
+    assert _settings().REALTIME_EVENTS_FALLBACK_POLL_SECONDS == 5.0
+    assert domain_events.POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS == 5.0
     with pytest.raises(ValueError):
         _settings(REALTIME_EVENTS_FALLBACK_POLL_SECONDS=6)
+
+
+def test_outbox_poll_cache_shares_one_hotel_cursor_result_for_one_poll_window():
+    class FakeClock:
+        now = 10.0
+
+        def monotonic(self) -> float:
+            return self.now
+
+    clock = FakeClock()
+    cache = OutboxPollBatchCache(monotonic=clock.monotonic)
+    calls = 0
+
+    def load_batch():
+        nonlocal calls
+        calls += 1
+        return ["event-42"]
+
+    assert cache.get(("db-a", 42, 7), ttl_seconds=5, loader=load_batch) == ["event-42"]
+    clock.now += 4.9
+    assert cache.get(("db-a", 42, 7), ttl_seconds=5, loader=load_batch) == ["event-42"]
+    assert calls == 1
+
+    # A tenant, cursor, or database change must not reuse another poll's data.
+    assert cache.get(("db-a", 43, 7), ttl_seconds=5, loader=load_batch) == ["event-42"]
+    assert cache.get(("db-a", 42, 8), ttl_seconds=5, loader=load_batch) == ["event-42"]
+    assert cache.get(("db-b", 42, 7), ttl_seconds=5, loader=load_batch) == ["event-42"]
+    assert calls == 4
+
+
+def test_outbox_poll_cache_honors_shorter_requested_freshness_window():
+    class FakeClock:
+        now = 10.0
+
+        def monotonic(self) -> float:
+            return self.now
+
+    clock = FakeClock()
+    cache = OutboxPollBatchCache(monotonic=clock.monotonic)
+    calls = 0
+
+    def load_batch():
+        nonlocal calls
+        calls += 1
+        return [calls]
+
+    assert cache.get(("db", 42, 7), ttl_seconds=5, loader=load_batch) == [1]
+    clock.now += 1.1
+    assert cache.get(("db", 42, 7), ttl_seconds=1, loader=load_batch) == [2]
+    assert calls == 2
+
+
+def test_outbox_poll_cache_coalesces_concurrent_same_cursor_queries():
+    cache = OutboxPollBatchCache()
+    calls = 0
+    calls_lock = threading.Lock()
+
+    def load_batch():
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+        time.sleep(0.02)
+        return ["one-database-poll"]
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        results = list(
+            pool.map(
+                lambda _index: cache.get(("db", 42, 7), ttl_seconds=5, loader=load_batch),
+                range(24),
+            )
+        )
+
+    assert results == [["one-database-poll"]] * 24
+    assert calls == 1
+
+
+def test_outbox_poll_cache_coalesces_database_errors_for_one_retry_window():
+    cache = OutboxPollBatchCache()
+    calls = 0
+
+    def fail_to_load():
+        nonlocal calls
+        calls += 1
+        raise TimeoutError("database unavailable")
+
+    with pytest.raises(TimeoutError):
+        cache.get(("db", 42, 7), ttl_seconds=5, loader=fail_to_load)
+    with pytest.raises(CachedOutboxPollFailure) as cached_error:
+        cache.get(("db", 42, 7), ttl_seconds=5, loader=fail_to_load)
+
+    assert cached_error.value.error_type == "TimeoutError"
+    assert calls == 1
+
+
+def test_outbox_poll_cache_bounds_idle_key_locks_as_cursors_advance():
+    cache = OutboxPollBatchCache(max_entries=2)
+
+    for cursor in range(20):
+        assert cache.get(("db", 42, cursor), ttl_seconds=0, loader=list) == []
+
+    assert len(cache._key_locks) <= 2
+    assert cache._key_lock_users == {}
+
+
+def test_postgres_event_batch_select_omits_unneeded_outbox_payload():
+    engine = _event_engine()
+    factory = sessionmaker(bind=engine)
+    statements: list[str] = []
+
+    def capture_select(_connection, _cursor, statement, _parameters, _context, _executemany):
+        if "from domain_event_outbox" in statement.lower():
+            statements.append(statement.lower())
+
+    from sqlalchemy import event
+
+    event.listen(engine, "before_cursor_execute", capture_select)
+    try:
+        rows = domain_events._read_postgres_event_batch(factory, 42, 0)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_select)
+        engine.dispose()
+
+    assert rows == []
+    assert len(statements) == 1
+    assert "domain_event_outbox.payload" not in statements[0]
+
+
+def test_disabled_realtime_skips_model_outbox_work(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(domain_events, "_settings", lambda: _settings(REALTIME_EVENTS_ENABLED=False))
+    transaction = SimpleNamespace(
+        __tablename__="transactions",
+        hotel_id=42,
+        id=91,
+        reservation_id=17,
+        status="completed",
+    )
+    session = SimpleNamespace(
+        info={domain_events.PENDING_EVENTS_KEY: {"stale": object()}},
+        new=[transaction],
+        dirty=[],
+        deleted=[],
+        add=lambda _row: pytest.fail("disabled realtime must not write outbox rows"),
+    )
+
+    domain_events.queue_model_changes(session)
+    domain_events.queue_domain_change(
+        session,
+        hotel_id=42,
+        domain="reservations",
+        event_type="reservation.created",
+        payload={"reservation_id": 17},
+    )
+    domain_events.publish_queued_domain_changes(session)
+
+    assert domain_events.PENDING_EVENTS_KEY not in session.info
 
 
 def test_outbox_recovery_index_matches_tenant_scoped_effective_cursor_expression():
@@ -142,6 +301,17 @@ def test_security_permission_domain_accepts_effective_permissions_family():
         event_type="permissions.changed",
         payload={"family": "effective_permissions"},
     ) == {"family": "effective_permissions"}
+
+
+def test_assistant_records_use_a_separate_refresh_domain():
+    assert "assistant" in domain_events.SUPPORTED_DOMAINS
+    for table_name in (
+        "ai_assistant_action_runs",
+        "ai_assistant_insights",
+        "ai_assistant_messages",
+        "ai_assistant_sessions",
+    ):
+        assert domain_events.MODEL_DOMAIN_DEPENDENCIES[table_name] == ("assistant",)
 
 
 def test_permission_invalidation_publishes_without_error_logging(monkeypatch, caplog):

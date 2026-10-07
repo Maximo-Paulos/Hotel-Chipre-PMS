@@ -103,7 +103,11 @@ import ReservationStatCard from "../../components/StatCard";
 import { ROOM_MOVE_REASONS, moveBlockedReason } from "../../utils/roomMove";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
-import { refreshReservationState } from "../../api/queryInvalidation";
+import {
+  invalidateQueriesInBackground,
+  refreshReservationCreatedState,
+  refreshReservationState
+} from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useOperationalAudit } from "../../hooks/useOperationalAudit";
 
@@ -520,9 +524,13 @@ export function ReservationsPage() {
   const { createMutation, updateMutation, cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations(filters);
   const createGroupMutation = useGuardedMutation<ReservationGroupSummary, unknown, ReservationPayload[]>({
     mutationFn: (payloads) => createReservationGroup(payloads, session),
-    onSuccess: async () => {
-      await refreshReservationState(queryClient, session.hotelId);
-      await queryClient.invalidateQueries({ queryKey: ["reservation-groups", session.hotelId] });
+    onSuccess: () => {
+      // Group creation should finish on the committed API response. Reconcile
+      // its reservation lists and group summary without blocking confirmation.
+      void Promise.all([
+        refreshReservationCreatedState(queryClient, session.hotelId),
+        queryClient.invalidateQueries({ queryKey: ["reservation-groups", session.hotelId] })
+      ]).catch(() => undefined);
     }
   });
   const groupPaymentMutation = useGuardedMutation<
@@ -543,12 +551,10 @@ export function ReservationsPage() {
       }
       return createReservationGroupPayment(groupId, payload, session, key);
     },
-    onSuccess: async (_result, variables) => {
+    onSuccess: (_result, variables) => {
       groupPaymentAttemptKeysRef.current.delete(JSON.stringify(variables));
-      await Promise.all([
-        refreshReservationState(queryClient, session.hotelId),
-        queryClient.invalidateQueries({ queryKey: ["reservation-groups", session.hotelId] })
-      ]);
+      void refreshReservationState(queryClient, session.hotelId).catch(() => undefined);
+      invalidateQueriesInBackground(queryClient, { queryKey: ["reservation-groups", session.hotelId] });
       setPayingGroup(null);
       setGroupPaymentError(null);
       showToast("success", t("page.groups.paymentSuccess"));

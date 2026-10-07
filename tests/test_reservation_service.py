@@ -17,6 +17,7 @@ from app.services.reservation_service import (
     create_reservation,
     check_room_availability,
     find_available_rooms,
+    calculate_reservation_pricing,
     transition_reservation_status,
     ReservationError,
     generate_confirmation_code,
@@ -116,9 +117,29 @@ class TestAvailability:
         assert len(available) == total_std_rooms - 1
 
     def test_find_available_rooms_uses_bounded_query_count(
-        self, db, sample_rooms, sample_categories, hotel_config
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
     ):
-        """Availability lookup must not issue one reservation query per room."""
+        """Availability checks must not eagerly load room reservation histories."""
+        category_id = sample_categories[0].id
+        occupied_room_id = sample_rooms[0].id
+        checked_room_id = sample_rooms[1].id
+        hotel_id = sample_rooms[0].hotel_id
+        db.add(
+            Reservation(
+                confirmation_code="TEST-AVAILABILITY-EAGER-LOAD",
+                hotel_id=hotel_id,
+                guest_id=sample_guest.id,
+                category_id=category_id,
+                room_id=occupied_room_id,
+                check_in_date=date(2026, 3, 1),
+                check_out_date=date(2026, 3, 4),
+                total_amount=Decimal("300.00"),
+                amount_paid=Decimal("0.00"),
+            )
+        )
+        db.flush()
+        db.expire_all()
+
         statements: list[str] = []
         engine = db.get_bind()
 
@@ -129,15 +150,26 @@ class TestAvailability:
         try:
             available = find_available_rooms(
                 db,
-                sample_categories[0].id,
+                category_id,
                 date(2026, 4, 1),
                 date(2026, 4, 5),
+                hotel_id=hotel_id,
             )
+            assert len(available) == 20
+            assert len(statements) <= 6
+
+            statements.clear()
+            db.expire_all()
+            assert check_room_availability(
+                db,
+                checked_room_id,
+                date(2026, 4, 1),
+                date(2026, 4, 5),
+                hotel_id=hotel_id,
+            ) is True
+            assert len(statements) <= 4
         finally:
             event.remove(engine, "before_cursor_execute", capture_statement)
-
-        assert len(available) == 20
-        assert len(statements) <= 8
 
 
 class TestReservationCreation:
@@ -515,6 +547,59 @@ def test_create_reservation_uses_daily_rates_for_payment_method_and_custom_depos
     assert res.balance_due == 325.0
     assert '"pricing_source": "daily_rates"' in (res.pricing_snapshot or "")
     assert '"payment_method": "transfer"' in (res.pricing_snapshot or "")
+
+
+def test_stay_pricing_query_count_is_bounded_by_night_count(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_guest,
+):
+    category = sample_categories[0]
+    check_in = date(2026, 9, 1)
+    check_out = date(2026, 9, 8)
+    db.add_all(
+        [
+            DailyRate(
+                hotel_id=hotel_config.id,
+                category_id=category.id,
+                date=check_in.fromordinal(check_in.toordinal() + offset),
+                price=100 + offset,
+                price_transfer=150 + offset,
+            )
+            for offset in range(7)
+        ]
+    )
+    db.flush()
+    category_id = category.id
+    hotel_id = hotel_config.id
+    guest_id = sample_guest.id
+    db.expire_all()
+
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        pricing = calculate_reservation_pricing(
+            db,
+            category_id=category_id,
+            check_in=check_in,
+            check_out=check_out,
+            hotel_id=hotel_id,
+            pricing_payment_method="transfer",
+            occupancy=2,
+            guest_id=guest_id,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    assert pricing.nights == 7
+    assert pricing.total_amount == 1_071.0
+    assert len(statements) <= 15
 
 
 class TestStateTransitions:

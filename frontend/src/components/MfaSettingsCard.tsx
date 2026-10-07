@@ -13,6 +13,7 @@ import {
   type MfaEnrollment
 } from "../api/auth";
 import { ApiError, hasValidSession, type SessionLike } from "../api/client";
+import { invalidateQueriesInBackground } from "../api/queryInvalidation";
 import { useAuthProviders } from "../hooks/useAuthProviders";
 
 import { GoogleSignInButton } from "./GoogleSignInButton";
@@ -127,7 +128,7 @@ export function MfaSettingsCard({ session, returnTo, onContinue }: Props) {
       setRecoveryCodes(result.recovery_codes);
       setEnrollment(null);
       setConfirmationCode("");
-      await queryClient.invalidateQueries({ queryKey: mfaStatusQueryKey(session.userId ?? null) });
+      invalidateQueriesInBackground(queryClient, { queryKey: mfaStatusQueryKey(session.userId ?? null) });
     } catch (error) {
       setErrorMessage(safeMfaError(error, "confirm"));
     } finally {
@@ -146,7 +147,7 @@ export function MfaSettingsCard({ session, returnTo, onContinue }: Props) {
       setRecoveryCodes(result.recovery_codes);
       setManagementMode(null);
       setManagementCode("");
-      await queryClient.invalidateQueries({ queryKey: mfaStatusQueryKey(session.userId ?? null) });
+      invalidateQueriesInBackground(queryClient, { queryKey: mfaStatusQueryKey(session.userId ?? null) });
     } catch (error) {
       setErrorMessage(safeMfaError(error, "recovery"));
     } finally {
@@ -174,7 +175,7 @@ export function MfaSettingsCard({ session, returnTo, onContinue }: Props) {
       setManagementCode("");
       setManagementPassword("");
       setErrorMessage("");
-      await queryClient.invalidateQueries({ queryKey: mfaStatusQueryKey(session.userId ?? null) });
+      invalidateQueriesInBackground(queryClient, { queryKey: mfaStatusQueryKey(session.userId ?? null) });
     } catch (error) {
       googleProofRef.current = null;
       setErrorMessage(safeMfaError(error, "disable"));

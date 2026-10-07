@@ -6,10 +6,12 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 from sqlalchemy import inspect
 
+from app.config import Settings
 from app.api.subscription import _serialize_status_payload
 from app.models.analytics import FactRoomOccupancyDaily
 from app.models.room import Room, RoomStatusEnum
 from app.services import domain_events
+from app.services import analytics_service
 from app.services import subscription_service
 from app.services.analytics_facts import calculate_physical_room_nights_for_window, refresh_fact_room_occupancy_daily
 from app.services.analytics_service import build_rooms_overview_payload, build_starter_summary_payload
@@ -168,6 +170,13 @@ def test_inline_fact_repair_commits_with_expired_outbox_objects(
     stale_at = datetime.now(timezone.utc) - timedelta(hours=1)
     for fact in db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id):
         fact.updated_at = stale_at
+    missing_fact = (
+        db.query(FactRoomOccupancyDaily)
+        .filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id)
+        .first()
+    )
+    assert missing_fact is not None
+    db.delete(missing_fact)
     db.flush()
     # Persist the outbox rows queued by after_flush before expiring their ORM
     # state, so the following read repair hits the exact post-commit case.
@@ -207,6 +216,11 @@ def test_inline_fact_repair_commits_with_expired_outbox_objects(
         )
 
     monkeypatch.setattr(domain_events, "publish_domain_event", capture_publish_call)
+    monkeypatch.setattr(
+        analytics_service,
+        "get_settings",
+        lambda: Settings(_env_file=None, SYNC_FACT_REFRESH_ENABLED=True),
+    )
 
     def guarded_publish(session):
         if session is not db:

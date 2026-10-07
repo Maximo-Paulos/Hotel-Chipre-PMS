@@ -17,7 +17,7 @@ from datetime import date, timedelta
 from typing import Optional
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, lazyload
 
 from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.hotel_config import HotelConfiguration
@@ -101,6 +101,7 @@ def get_price_for_date(
     #    the rooms inventory view (never silently returns 0 when a base price exists).
     category: Optional[RoomCategory] = (
         db.query(RoomCategory)
+        .options(lazyload(RoomCategory.rooms))
         .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
         .first()
     )
@@ -156,6 +157,7 @@ def resolve_rate_calendar(
     )
     category: Optional[RoomCategory] = (
         db.query(RoomCategory)
+        .options(lazyload(RoomCategory.rooms))
         .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
         .first()
     )
@@ -415,6 +417,7 @@ def build_pricing_revision(
 
     category = (
         db.query(RoomCategory)
+        .options(lazyload(RoomCategory.rooms))
         .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
         .first()
     )

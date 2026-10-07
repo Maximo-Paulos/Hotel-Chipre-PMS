@@ -23,6 +23,14 @@ acotado de `REALTIME_EVENTS_FALLBACK_POLL_SECONDS`. Redis/Valkey sigue siendo
 recomendado para fan-out de baja latencia entre workers, locks, Celery y la
 coedición WebSocket.
 
+El polling PostgreSQL usa 5 segundos por defecto y no puede superar ese valor.
+Esto reduce un 60% la frecuencia de sondeo frente a 2 segundos (de 30 a 12
+lecturas por minuto por stream inactivo), dejando cinco segundos del presupuesto
+de frescura para la consulta y actualización del cliente. Los clientes sin SSE
+conservan su recuperación HTTP cada 5 segundos mientras el servidor responde;
+ante errores, ese fallback aplica backoff hasta 30 segundos para no intensificar
+una degradación.
+
 En el proceso que atiende el API, cambie `READ_MODEL_CACHE_ENABLED` de `false` a
 `true` y configure `REDIS_URL` con la URL del Redis/Valkey contratado. En el
 Blueprint de Render, `REDIS_URL` se obtiene de
@@ -62,13 +70,12 @@ los proveedores que correspondan. Entonces empiezan a publicarse:
 - procesamiento del outbox de notificaciones cada minuto;
 - generación de reportes diarios cada quince minutos.
 
-En el perfil con worker/beat, `SYNC_FACT_REFRESH_ENABLED` debe ser `false` en
-el worker, beat y también en el servicio web que recibe las peticiones: el
-fallback se ejecuta en el API, no dentro de Celery. El servicio free manual
-actual debe conservarlo omitido o en `true`, porque allí el fallback síncrono
-es la única materialización disponible. `SYNC_FACT_REFRESH_MAX_DAYS` limita el
-fallback a 31 días por defecto y el log
-`analytics.sync_fact_refresh.inline` muestra cuándo todavía se está usando.
+`SYNC_FACT_REFRESH_ENABLED` debe permanecer en `false` en API, worker y beat.
+Las mutaciones normales mantienen sus facts en la misma transacción y los
+backfills históricos/out-of-band se ejecutan como operación explícita y con
+alcance revisado. Si se habilita el fallback de lectura durante una reparación
+controlada, sólo debe cubrir ventanas incompletas y nunca rangos mayores de 31
+días; no se debe activarlo para refrescar ventanas completas por antigüedad.
 
 ## ¿Qué cambio para activar MongoDB, Cassandra o Neo4j?
 

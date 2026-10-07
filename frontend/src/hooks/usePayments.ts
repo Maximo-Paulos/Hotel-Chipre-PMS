@@ -9,7 +9,7 @@ import {
   type PaymentSummary
 } from "../api/payments";
 import { hasValidSession } from "../api/client";
-import { refreshPaymentState } from "../api/queryInvalidation";
+import { invalidateQueriesInBackground, refreshPaymentState } from "../api/queryInvalidation";
 import { queryKeys } from "../api/queryKeys";
 import { useSession } from "../state/session";
 
@@ -50,16 +50,15 @@ export function usePaymentMutation(reservationId?: number) {
       }
       return makePayment(payload, session, idempotencyKey);
     },
-    // The payment endpoint commits before returning. Keep the mutation pending
-    // until all active reservation, operations, payment, cash, occupancy and
-    // analytics views have refetched that committed state.
-    onSuccess: async (_data, payload) => {
-      await Promise.all([
-        refreshPaymentState(queryClient, session.hotelId, reservationId),
-        reservationId
-          ? queryClient.invalidateQueries({ queryKey: ["company-night-charges", session.hotelId, reservationId] })
-          : Promise.resolve()
-      ]);
+    // The payment endpoint has committed before returning. Keep the saved
+    // payment visible and reconcile affected views in the background.
+    onSuccess: (_data, payload) => {
+      void refreshPaymentState(queryClient, session.hotelId, reservationId).catch(() => undefined);
+      if (reservationId) {
+        invalidateQueriesInBackground(queryClient, {
+          queryKey: ["company-night-charges", session.hotelId, reservationId]
+        });
+      }
       intentKeysRef.current.delete(JSON.stringify(payload));
     }
   });

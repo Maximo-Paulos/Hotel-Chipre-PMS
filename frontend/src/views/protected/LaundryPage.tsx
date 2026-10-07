@@ -48,7 +48,7 @@ import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useSession } from "../../state/session";
 import { formatMoney } from "../../utils/currency";
 import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
-import { refreshStockState } from "../../api/queryInvalidation";
+import { invalidateQueriesInBackground, refreshStockState } from "../../api/queryInvalidation";
 
 // Mobile task-based tabs -- desktop keeps showing every section at once
 // regardless of mobileTab. "vendors" (lavaderos/precios/catálogo) is only
@@ -535,9 +535,10 @@ export function LaundryPage() {
   const missingFollowUpMutation = useGuardedMutation({
     mutationFn: ({ id, payload }: { id: number; payload: LaundryMissingFollowUpUpdate }) =>
       updateLaundryMissingFollowUp(id, payload, session),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["laundry-missing-follow-ups", session.hotelId] });
-    }
+    onSuccess: () => invalidateQueriesInBackground(
+      queryClient,
+      { queryKey: ["laundry-missing-follow-ups", session.hotelId] }
+    )
   });
 
   const saveMissingFollowUp = (id: number, payload: LaundryMissingFollowUpUpdate) => {
@@ -595,11 +596,12 @@ export function LaundryPage() {
 
       return { outbound, inbound, inboundError };
     },
-    onSuccess: async (result) => {
-      await Promise.all([
-        invalidateAfterRemito(),
-        queryClient.invalidateQueries({ queryKey: ["laundry-missing-follow-ups", session.hotelId] })
-      ]);
+    onSuccess: (result) => {
+      void invalidateAfterRemito().catch(() => undefined);
+      invalidateQueriesInBackground(
+        queryClient,
+        { queryKey: ["laundry-missing-follow-ups", session.hotelId] }
+      );
       if (result.inboundError) {
         setMessage(
           `Salida registrada (remito ${result.outbound?.remito.remito_number}), pero el retorno falló: ${result.inboundError}`

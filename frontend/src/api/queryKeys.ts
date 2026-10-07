@@ -41,6 +41,7 @@ export const queryKeys = {
 
 export type QueryDomain =
   | "analytics"
+  | "assistant"
   | "cash"
   | "guests"
   | "notifications"
@@ -146,9 +147,9 @@ export const HOTEL_ID_INDEX_BY_QUERY_PREFIX: Readonly<Record<string, number>> = 
 export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly string[]>> = {
   analytics: [
     "analytics",
-    "companies",
-    "reports",
-    "room-state-events",
+    "reports"
+  ],
+  assistant: [
     "gemma-chat",
     "gemma-chat-history",
     "gemma-insights",

@@ -12,17 +12,23 @@ from datetime import date
 from decimal import Decimal
 
 from app.models.cash_register import CashMovement, CashMovementTypeEnum, CashSession
+from app.models.analytics import FactReservationDaily
 from app.models.hotel_config import HotelConfiguration
 from app.models.guest import Guest
 from app.models.operations import BillingAdjustment, BillingAdjustmentTypeEnum
 from app.models.pricing import CategoryPricing
-from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.reservation import (
+    Reservation,
+    ReservationNoShowPolicyAppliedEnum,
+    ReservationOutcomeEnum,
+    ReservationStatusEnum,
+)
 from app.models.room import Room, RoomCategory
 from app.models.transaction import Transaction, PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
 from app.models.user import User
 from app.schemas.reservation import ReservationCreate
 from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
-from app.services.reservation_service import create_reservation
+from app.services.reservation_service import create_reservation, mark_reservation_no_show
 from app.services import payment_service as payment_service_module
 from app.services.payment_service import (
     process_payment,
@@ -115,6 +121,54 @@ class TestDepositPayment:
         assert res.status == ReservationStatusEnum.DEPOSIT_PAID
         assert res.amount_paid == 300.0
         assert res.balance_due == 700.0
+
+    def test_payment_after_no_show_preserves_terminal_status_and_refreshes_partial_charge_facts(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        reservation = create_reservation(
+            db,
+            ReservationCreate(
+                guest_id=sample_guest.id,
+                category_id=sample_categories[0].id,
+                check_in_date=date(2026, 8, 20),
+                check_out_date=date(2026, 8, 22),
+            ),
+            hotel_id=hotel_config.id,
+        )
+        mark_reservation_no_show(
+            db,
+            reservation,
+            hotel_id=hotel_config.id,
+            client_version=reservation.version,
+        )
+        reservation.no_show_policy_applied = ReservationNoShowPolicyAppliedEnum.PARTIAL_CHARGE
+        db.flush()
+
+        process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=reservation.id,
+                amount=100.0,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            ),
+            hotel_id=hotel_config.id,
+        )
+        db.flush()
+
+        assert reservation.status == ReservationStatusEnum.NO_SHOW
+        assert reservation.outcome == ReservationOutcomeEnum.NO_SHOW
+        fact_rows = (
+            db.query(FactReservationDaily)
+            .filter(
+                FactReservationDaily.hotel_id == hotel_config.id,
+                FactReservationDaily.reservation_id == reservation.id,
+            )
+            .all()
+        )
+        assert len(fact_rows) == 2
+        assert all(row.status == ReservationStatusEnum.NO_SHOW for row in fact_rows)
+        assert sum(float(row.revenue_gross_ars) for row in fact_rows) == pytest.approx(100.0)
 
     def test_deposit_below_threshold_stays_pending(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         """

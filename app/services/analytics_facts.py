@@ -6,7 +6,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from sqlalchemy.orm import Session, noload
 
 from app.models.analytics import (
@@ -119,6 +119,14 @@ def detect_no_shows(
                 )
             )
 
+        touch_reservation_fact_window(
+            db,
+            hotel_id=hotel_id,
+            date_from=reservation.check_in_date,
+            date_to=reservation.check_out_date,
+            reservation_id=reservation.id,
+        )
+
     db.flush()
     return NoShowDetectionResult(
         hotel_id=hotel_id,
@@ -146,7 +154,7 @@ def refresh_fact_reservation_daily(
     )
     if reservation_id is not None:
         fact_query = fact_query.filter(FactReservationDaily.reservation_id == reservation_id)
-    deleted = fact_query.delete(synchronize_session=False)
+    deleted = fact_query.delete(synchronize_session="fetch")
 
     reservation_query = (
         active_reservations(db, hotel_id)
@@ -319,7 +327,7 @@ def refresh_fact_room_occupancy_daily(
     )
     if target_room_ids is not None:
         fact_query = fact_query.filter(FactRoomOccupancyDaily.room_id.in_(target_room_ids))
-    deleted = fact_query.delete(synchronize_session=False)
+    deleted = fact_query.delete(synchronize_session="fetch")
 
     reservation_query = (
         active_reservations(db, hotel_id)
@@ -461,13 +469,12 @@ def touch_reservation_fact_window(
     reservation_id: int | None = None,
     previous_room_id: int | None = None,
 ) -> None:
-    """Write-time hook: re-derive both fact tables for a narrow window right
-    when the source data that feeds them changes (reservation created/moved/
-    cancelled/no-show'd), instead of waiting for the next Analytics read to
-    self-heal an empty range (_ensure_facts_materialized in
-    analytics_service.py). That self-heal only fires the FIRST time a window
-    is ever read and is kept as-is -- it's the safety net for rows loaded by
-    scripts/migrations that never call this hook.
+    """Refresh facts for a narrow window in the source write transaction.
+
+    Reservation create/move/cancel/no-show operations use this hook so their
+    analytics facts become current at commit time. Out-of-band imports and
+    legacy gaps use the explicit maintenance repair command; request-time
+    repair is disabled by default.
 
     Reuses the existing idempotent refresh_fact_* functions (delete+rebuild
     only inside [date_from, date_to]). When a reservation id is provided, it
@@ -479,65 +486,111 @@ def touch_reservation_fact_window(
     id preserves the full-window behavior used by analytics recovery and
     maintenance paths.
 
-    Runs inside a SAVEPOINT so a lost race against another write touching an
-    overlapping window (rare for a small single-property hotel) rolls back
-    only this fact refresh, never the reservation/payment write that
-    triggered it -- the next Analytics read self-heals the window anyway.
+    The refresh runs in a SAVEPOINT, but failures propagate to the caller.
+    The outer transaction must roll back the source write as well; otherwise
+    the system could commit current reservation data with stale fact tables.
     """
     if date_to < date_from:
         return
-    try:
-        with db.begin_nested():
-            if reservation_id is None:
-                refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
-                refresh_fact_room_occupancy_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
-                return
+    with db.begin_nested():
+        if reservation_id is None:
+            refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+            refresh_fact_room_occupancy_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+            return
 
-            previous_room_ids = {
-                row.room_id
-                for row in (
-                    db.query(FactRoomOccupancyDaily.room_id)
-                    .filter(
-                        FactRoomOccupancyDaily.hotel_id == hotel_id,
-                        FactRoomOccupancyDaily.reservation_id == reservation_id,
-                        FactRoomOccupancyDaily.stay_date >= date_from,
-                        FactRoomOccupancyDaily.stay_date <= date_to,
-                    )
-                    .distinct()
-                    .all()
-                )
-            }
-            current_room_id = (
-                db.query(Reservation.room_id)
+        previous_room_ids = {
+            row.room_id
+            for row in (
+                db.query(FactRoomOccupancyDaily.room_id)
                 .filter(
-                    Reservation.hotel_id == hotel_id,
-                    Reservation.id == reservation_id,
+                    FactRoomOccupancyDaily.hotel_id == hotel_id,
+                    FactRoomOccupancyDaily.reservation_id == reservation_id,
+                    FactRoomOccupancyDaily.stay_date >= date_from,
+                    FactRoomOccupancyDaily.stay_date <= date_to,
                 )
-                .scalar()
+                .distinct()
+                .all()
             )
-            affected_room_ids = set(previous_room_ids)
-            if previous_room_id is not None:
-                affected_room_ids.add(previous_room_id)
-            if current_room_id is not None:
-                affected_room_ids.add(current_room_id)
+        }
+        current_room_id = (
+            db.query(Reservation.room_id)
+            .filter(
+                Reservation.hotel_id == hotel_id,
+                Reservation.id == reservation_id,
+            )
+            .scalar()
+        )
+        affected_room_ids = set(previous_room_ids)
+        if previous_room_id is not None:
+            affected_room_ids.add(previous_room_id)
+        if current_room_id is not None:
+            affected_room_ids.add(current_room_id)
 
-            refresh_fact_reservation_daily(
+        refresh_fact_reservation_daily(
+            db,
+            hotel_id=hotel_id,
+            date_from=date_from,
+            date_to=date_to,
+            reservation_id=reservation_id,
+        )
+        if affected_room_ids:
+            refresh_fact_room_occupancy_daily(
                 db,
                 hotel_id=hotel_id,
                 date_from=date_from,
                 date_to=date_to,
-                reservation_id=reservation_id,
+                room_ids=affected_room_ids,
             )
-            if affected_room_ids:
-                refresh_fact_room_occupancy_daily(
-                    db,
-                    hotel_id=hotel_id,
-                    date_from=date_from,
-                    date_to=date_to,
-                    room_ids=affected_room_ids,
-                )
-    except IntegrityError:
-        pass
+
+
+def touch_room_state_event_fact_window(
+    db: Session,
+    *,
+    hotel_id: int,
+    room_id: int,
+    event_started_at: datetime,
+) -> None:
+    """Refresh the materialized occupancy horizon for one changed room event.
+
+    Room-state events affect nightly sellability and occupancy facts. Only dates
+    already materialized for this hotel/room need rebuilding; later reads will
+    materialize any missing window from the current source event. Closing an
+    open event also refreshes through the existing horizon so future dates that
+    were previously projected as blocked are restored.
+    """
+    if event_started_at.tzinfo is None:
+        event_started_at = event_started_at.replace(tzinfo=timezone.utc)
+    with db.begin_nested():
+        materialized_from, materialized_to, hotel_timezone = (
+            db.query(
+                func.min(FactRoomOccupancyDaily.stay_date),
+                func.max(FactRoomOccupancyDaily.stay_date),
+                HotelConfiguration.hotel_timezone,
+            )
+            .select_from(FactRoomOccupancyDaily)
+            .outerjoin(HotelConfiguration, HotelConfiguration.id == FactRoomOccupancyDaily.hotel_id)
+            .filter(
+                FactRoomOccupancyDaily.hotel_id == hotel_id,
+                FactRoomOccupancyDaily.room_id == room_id,
+            )
+            .one()
+        )
+        if materialized_from is None or materialized_to is None:
+            return
+
+        hotel_zone = ZoneInfo(normalize_timezone(hotel_timezone or "UTC"))
+        event_start_date = event_started_at.astimezone(hotel_zone).date()
+        date_from = max(event_start_date, materialized_from)
+        if date_from > materialized_to:
+            return
+
+        refresh_fact_room_occupancy_daily(
+            db,
+            hotel_id=hotel_id,
+            date_from=date_from,
+            date_to=materialized_to,
+            room_ids={room_id},
+        )
 
 
 def calculate_pickup_30d(
@@ -812,20 +865,35 @@ def _room_state_events_map(
     from app.models.analytics import RoomStateEvent
 
     event_query = (
-        db.query(RoomStateEvent)
+        db.query(RoomStateEvent, HotelConfiguration.hotel_timezone)
+        .join(HotelConfiguration, HotelConfiguration.id == RoomStateEvent.hotel_id)
         .filter(
             RoomStateEvent.hotel_id == hotel_id,
-            RoomStateEvent.started_at < datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=timezone.utc),
-            (RoomStateEvent.ended_at.is_(None) | (RoomStateEvent.ended_at >= datetime.combine(date_from, time.min, tzinfo=timezone.utc))),
+            # Hotel-local midnights can fall on the prior or following UTC
+            # date. Keep this SQL window broad, then apply exact local-day
+            # overlap below without another configuration query.
+            RoomStateEvent.started_at < datetime.combine(date_to + timedelta(days=2), time.min, tzinfo=timezone.utc),
+            (
+                RoomStateEvent.ended_at.is_(None)
+                | (
+                    RoomStateEvent.ended_at
+                    >= datetime.combine(date_from - timedelta(days=1), time.min, tzinfo=timezone.utc)
+                )
+            ),
         )
     )
     if room_ids is not None:
         event_query = event_query.filter(RoomStateEvent.room_id.in_(room_ids))
     events = event_query.all()
     mapped: dict[tuple[int, date], FactRoomOccupancyStatusAtNightEnum] = {}
-    for event in events:
+    for event, hotel_timezone in events:
         for stay_date in _date_range(date_from, date_to):
-            if not _event_overlaps_date(event.started_at, event.ended_at, stay_date):
+            if not _event_overlaps_date(
+                event.started_at,
+                event.ended_at,
+                stay_date,
+                hotel_timezone=hotel_timezone,
+            ):
                 continue
             status = _room_event_status(event.event_type)
             current = mapped.get((event.room_id, stay_date))
@@ -834,18 +902,25 @@ def _room_state_events_map(
     return mapped
 
 
-def _event_overlaps_date(started_at: datetime, ended_at: datetime | None, stay_date: date) -> bool:
+def _event_overlaps_date(
+    started_at: datetime,
+    ended_at: datetime | None,
+    stay_date: date,
+    *,
+    hotel_timezone: str | None = None,
+) -> bool:
     if started_at.tzinfo is None:
         started_at = started_at.replace(tzinfo=timezone.utc)
     if ended_at is not None and ended_at.tzinfo is None:
         ended_at = ended_at.replace(tzinfo=timezone.utc)
-    day_start = datetime.combine(stay_date, time.min, tzinfo=started_at.tzinfo or timezone.utc)
-    day_end = day_start + timedelta(days=1)
-    if started_at >= day_end:
-        return False
-    if ended_at is not None and ended_at <= day_start:
-        return False
-    return True
+    hotel_zone = ZoneInfo(normalize_timezone(hotel_timezone or "UTC"))
+    local_day_start = datetime.combine(stay_date, time.min, tzinfo=hotel_zone)
+    local_day_end = datetime.combine(stay_date + timedelta(days=1), time.min, tzinfo=hotel_zone)
+    day_start_utc = local_day_start.astimezone(timezone.utc)
+    day_end_utc = local_day_end.astimezone(timezone.utc)
+    started_at_utc = started_at.astimezone(timezone.utc)
+    ended_at_utc = ended_at.astimezone(timezone.utc) if ended_at is not None else None
+    return started_at_utc < day_end_utc and (ended_at_utc is None or ended_at_utc > day_start_utc)
 
 
 def _room_event_status(event_type) -> FactRoomOccupancyStatusAtNightEnum:

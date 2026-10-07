@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
+from app.services.outbound_http_telemetry import observed_http_call
 
 from app.config import Settings, get_settings
 from app.services.allocation_policy_service import (
@@ -326,7 +327,7 @@ class GemmaService:
                 "responseMimeType": "application/json",
             },
         }
-        response = client.post(url, params=params, json=body)
+        response = observed_http_call("gemma.gemini_generate", client.post, url, params=params, json=body)
         response.raise_for_status()
         data = response.json()
         text = self._extract_gemini_text(data)
@@ -357,7 +358,7 @@ class GemmaService:
         if self.settings.GEMMA_STRICT_JSON:
             body["response_format"] = {"type": "json_object"}
 
-        response = client.post(url, headers=headers, json=body)
+        response = observed_http_call("gemma.openai_generate", client.post, url, headers=headers, json=body)
         response.raise_for_status()
         data = response.json()
         text = self._extract_openai_text(data)

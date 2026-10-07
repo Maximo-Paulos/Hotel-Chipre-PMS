@@ -14,6 +14,7 @@ import {
   listCompanyNightlyRates
 } from "../../api/companies";
 import { hasValidSession } from "../../api/client";
+import { invalidateQueriesInBackground } from "../../api/queryInvalidation";
 import {
   companyDocumentStatusLabel,
   companyDocumentTypeLabel,
@@ -297,9 +298,10 @@ export function CompaniesPage() {
   const createNightlyRateMutation = useGuardedMutation({
     mutationFn: ({ companyId, effective_from, amount }: { companyId: number; effective_from: string; amount: number }) =>
       createCompanyNightlyRate(companyId, { effective_from, amount }, session),
-    onSuccess: async (_savedRate, variables) => {
-      await queryClient.invalidateQueries({ queryKey: ["company-nightly-rates", session.hotelId, variables.companyId] });
-    }
+    onSuccess: (_savedRate, variables) => invalidateQueriesInBackground(
+      queryClient,
+      { queryKey: ["company-nightly-rates", session.hotelId, variables.companyId] }
+    )
   });
   const handleNightlyRateSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

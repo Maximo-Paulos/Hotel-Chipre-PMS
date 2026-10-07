@@ -100,19 +100,22 @@ Facts are hotel-scoped and use the canonical contracts established in the core s
 
 Reservation mutations refresh the reservation's daily facts and the occupancy
 rows for its previous/current rooms and affected dates in the same transaction.
-Full-window refreshes remain available to recovery and maintenance paths.
-Analytics reads can repair a missing or aged fact window
-when `SYNC_FACT_REFRESH_ENABLED=true` (default) and the entire requested range
-is no wider than `SYNC_FACT_REFRESH_MAX_DAYS` (default 31, hard-capped at 31).
-An existing window is considered aged after
-`SYNC_FACT_REFRESH_STALE_AFTER_SECONDS` (default 900 seconds). Wider custom
-date ranges are never partially rebuilt on each read; their `data_as_of` and
-`source_lag_seconds` continue to report the oldest materialized row honestly.
-These fields describe fact materialization time, not a separate watermark of
-source-table writes. A targeted write does not make unrelated older rows fresh;
-the first bounded analytics read after the age limit can still perform a full
-synchronous repair. This preserves freshness/FX reconciliation and means the
-targeted write path does not remove that separate read-time cost. ClickHouse
+Full-window refreshes remain explicit recovery and maintenance operations.
+`SYNC_FACT_REFRESH_ENABLED` defaults to `false`: analytics reads do not run
+source coverage scans or rebuild facts in a web request. Supported reservation
+writes refresh affected fact rows in the same transaction. If the flag is
+explicitly enabled for a controlled recovery window, only missing coverage or
+incomplete FX snapshots can trigger a bounded repair; a complete window is
+never rebuilt merely because its materialization timestamp is old. This avoids
+repeating source-row scans and fact reconstruction whenever an operator opens
+or refreshes a dashboard.
+Existing facts continue to report `data_as_of` and `source_lag_seconds`; these
+fields describe fact materialization time, not a separate watermark of
+source-table writes. Historical or out-of-band source changes must be repaired
+with the reviewed maintenance command or a configured background job. Any
+opt-in synchronous recovery is bounded by `SYNC_FACT_REFRESH_MAX_DAYS` (default
+31, hard-capped at 31); wider reads preserve freshness metadata and do not
+partially rebuild facts. ClickHouse
 projection schedules are a distinct pipeline and do not refresh the PostgreSQL
 reservation and occupancy fact tables.
 

@@ -20,13 +20,13 @@ const loadCrossTabSync = async (context) => {
   });
   globalThis.__testRefreshDomains ??= () => {};
   const stubs = [
-    ['import { useEffect, useMemo, useSyncExternalStore } from "react";', "const useEffect = () => {}; const useMemo = () => {}; const useSyncExternalStore = () => {};"],
+    ['import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";', "const useEffect = () => {}; const useMemo = () => {}; const useRef = (value) => ({ current: value }); const useSyncExternalStore = () => {};"],
     ['import { useQueryClient } from "@tanstack/react-query";', "const useQueryClient = () => ({});"],
     ['import { buildAuthHeaders, buildUrl } from "../api/client";', "const buildAuthHeaders = () => ({}); const buildUrl = (path) => path;"],
     ['import { recoveryDomainsForCursor, refreshDomains } from "../api/queryInvalidation";', "const recoveryDomainsForCursor = () => []; const refreshDomains = (...args) => { globalThis.__testRefreshDomains(...args); return Promise.resolve(); };"],
     [
       'import { QUERY_PREFIXES_BY_DOMAIN } from "../api/queryKeys";',
-      'const QUERY_PREFIXES_BY_DOMAIN = { analytics: [], cash: [], guests: [], onboarding: [], payments: [], reservations: [], rooms: [], security: [], settings: [], stock: [], users: [] };'
+      'const QUERY_PREFIXES_BY_DOMAIN = { analytics: [], assistant: [], cash: [], guests: [], onboarding: [], payments: [], reservations: [], rooms: [], security: [], settings: [], stock: [], users: [] };'
     ],
     ['import { useSession } from "../state/session";', "const useSession = () => ({ session: {} });"]
   ];
@@ -38,6 +38,62 @@ const loadCrossTabSync = async (context) => {
   await writeFile(modulePath, compiled);
   return import(`${pathToFileURL(modulePath).href}?test=${Math.random()}`);
 };
+
+test("recovery polling backs off after failures and stays bounded", async (context) => {
+  const { realtimeRecoveryPollDelay } = await loadCrossTabSync(context);
+
+  assert.deepEqual(
+    [0, 1, 2, 3, 20].map(realtimeRecoveryPollDelay),
+    [5_000, 10_000, 20_000, 30_000, 30_000]
+  );
+  assert.equal(realtimeRecoveryPollDelay(-1), 5_000);
+  assert.equal(realtimeRecoveryPollDelay(Number.NaN), 5_000);
+});
+
+test("concurrent recovery callers share one read and never rewind the stored cursor", async (context) => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const previousFetch = Object.getOwnPropertyDescriptor(globalThis, "fetch");
+  const values = new Map();
+  globalThis.window = {
+    sessionStorage: {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value)
+    }
+  };
+  let releaseResponse = () => undefined;
+  const responseGate = new Promise((resolve) => {
+    releaseResponse = resolve;
+  });
+  let fetchCount = 0;
+  globalThis.fetch = async () => {
+    fetchCount += 1;
+    return responseGate;
+  };
+  context.after(() => {
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+    else delete globalThis.window;
+    if (previousFetch) Object.defineProperty(globalThis, "fetch", previousFetch);
+    else delete globalThis.fetch;
+  });
+
+  const { recoverRealtime } = await loadCrossTabSync(context);
+  const session = { hotelId: 41, userId: "owner-1", accessToken: "test-token" };
+  const queryClient = {};
+  const first = recoverRealtime(session, queryClient, 41);
+  const duplicate = recoverRealtime(session, queryClient, 41);
+  const otherHotel = recoverRealtime(session, queryClient, 42);
+  assert.equal(fetchCount, 2, "same user and hotel share a flight, while another hotel stays isolated");
+
+  values.set("hotel-pms:realtime-cursor:41:owner-1", "7");
+  releaseResponse({
+    ok: true,
+    status: 200,
+    json: async () => ({ latest_cursor: 6, domains: [] })
+  });
+  await Promise.all([first, duplicate, otherHotel]);
+
+  assert.equal(values.get("hotel-pms:realtime-cursor:41:owner-1"), "7");
+});
 
 const withBrowserGlobals = async (context, { broadcastChannel, localStorage }) => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -73,11 +129,68 @@ test("domain broadcasts prefer BroadcastChannel and use localStorage only as fal
     localStorage: { setItem: (...args) => storageWrites.push(args) }
   });
   const { broadcastDomainChange } = await loadCrossTabSync(context);
+  const originKey = "123e4567-e89b-42d3-a456-426614174000";
 
-  broadcastDomainChange(41, "/api/reservations");
+  broadcastDomainChange(41, "/api/reservations", originKey);
 
   assert.deepEqual(postedMessages.map((message) => message.domain), ["reservations", "rooms", "analytics"]);
+  assert.deepEqual(postedMessages.map((message) => message.originKey), [originKey, originKey, originKey]);
   assert.equal(storageWrites.length, 0, "successful BroadcastChannel posts must not be duplicated via storage");
+});
+
+test("Gemma writes map to the assistant domain instead of waking analytics queries", async (context) => {
+  const { domainsForPath } = await loadCrossTabSync(context);
+
+  assert.deepEqual(domainsForPath("/api/gemma/chat/message"), ["assistant"]);
+});
+
+test("matching request origins suppress local SSE and cross-tab duplicates only once", async (context) => {
+  const { beginLocalDomainMutation, finishLocalDomainMutation, shouldRefreshForDomainOrigin } =
+    await loadCrossTabSync(context);
+  const originKey = "123e4567-e89b-42d3-a456-426614174001";
+
+  beginLocalDomainMutation(41, "/api/reservations", originKey);
+  assert.equal(
+    shouldRefreshForDomainOrigin(41, "reservations", originKey),
+    false,
+    "the source tab should ignore its own matching SSE event while the write is in flight"
+  );
+  finishLocalDomainMutation(41, originKey, true);
+  assert.equal(
+    shouldRefreshForDomainOrigin(41, "reservations", originKey),
+    false,
+    "a matching event arriving after the successful response should not refetch twice"
+  );
+  assert.equal(
+    shouldRefreshForDomainOrigin(41, "reservations", "123e4567-e89b-42d3-a456-426614174002"),
+    true,
+    "an unrelated request must still refresh"
+  );
+});
+
+test("origin deduplication keeps identical keys isolated by hotel", async (context) => {
+  const { beginLocalDomainMutation, finishLocalDomainMutation, shouldRefreshForDomainOrigin } =
+    await loadCrossTabSync(context);
+  const originKey = "123e4567-e89b-42d3-a456-426614174003";
+
+  beginLocalDomainMutation(41, "/api/reservations", originKey);
+  beginLocalDomainMutation(42, "/api/reservations", originKey);
+  assert.equal(shouldRefreshForDomainOrigin(41, "reservations", originKey), false);
+  assert.equal(
+    shouldRefreshForDomainOrigin(42, "reservations", originKey),
+    false,
+    "the same origin can be pending independently for a different hotel"
+  );
+
+  finishLocalDomainMutation(41, originKey, true);
+  finishLocalDomainMutation(42, originKey, true);
+  assert.equal(shouldRefreshForDomainOrigin(41, "reservations", originKey), false);
+  assert.equal(shouldRefreshForDomainOrigin(42, "reservations", originKey), false);
+  assert.equal(
+    shouldRefreshForDomainOrigin(43, "reservations", originKey),
+    true,
+    "a hotel without this mutation must not inherit another hotel's dedupe state"
+  );
 });
 
 test("domain broadcasts fall back to localStorage when BroadcastChannel is unavailable or throws", async (context) => {

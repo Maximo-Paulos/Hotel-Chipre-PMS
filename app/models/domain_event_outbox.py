@@ -31,6 +31,8 @@ class DomainEventOutbox(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     event_id = Column(_EVENT_ID_TYPE, nullable=False, unique=True, default=lambda: str(uuid.uuid4()))
+    # Opaque request correlation only; not an identity or authorization token.
+    origin_key = Column(String(36), nullable=True)
     hotel_id = Column(
         Integer,
         ForeignKey("hotel_configuration.id", ondelete="CASCADE"),

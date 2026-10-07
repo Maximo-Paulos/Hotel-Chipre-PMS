@@ -1,26 +1,26 @@
 # Resumen Graphify
 
-Generado: 2026-10-06T21:33:17.105098+00:00
-Commit: `c76452d6a940e38e5f2d876a8c4923291292b3da`
+Generado: 2026-10-07T08:27:42.758992+00:00
+Commit: `3cfba65a783f6cbdca1022e952f1d53e72ba4741`
 
 `graphify summary .graphify/graph.json`:
 ```text
 Graphify First-Hop Summary
-Graph: 13894 nodes, 46318 edges, 687 communities, density 0.0005, average degree 6.6673, undirected
+Graph: 14297 nodes, 48667 edges, 711 communities, density 0.0005, average degree 6.808, undirected
 
 Top hubs:
-  1. Reservation (degree 499, community 1 Community 1, app/models/reservation.py)
-  2. HotelConfiguration (degree 450, community 1 Community 1, app/models/hotel_config.py)
-  3. Base (degree 409, community 7 Community 7, app/database.py)
-  4. ReservationStatusEnum (degree 408, community 1 Community 1, app/models/reservation.py)
-  5. Room (degree 369, community 1 Community 1, app/models/room.py)
+  1. Reservation (degree 578, community 1 Community 1, app/models/reservation.py)
+  2. HotelConfiguration (degree 535, community 2 Community 2, app/models/hotel_config.py)
+  3. ReservationStatusEnum (degree 487, community 1 Community 1, app/models/reservation.py)
+  4. Room (degree 440, community 13 Community 13, app/models/room.py)
+  5. Base (degree 410, community 6 Community 6, app/database.py)
 
 Key communities:
-  1. Community 0 - Community 0: 483 nodes, 7619 internal edges, density 0.0655; top nodes: codex/fix-ronda-2-week-simulation, fix/pms-save-read-latency, fix/pending-actions-bounded
-  2. Community 1 - Community 1: 286 nodes, 1133 internal edges, density 0.0278; top nodes: Reservation, HotelConfiguration, ReservationStatusEnum
-  3. Community 2 - Community 2: 264 nodes, 353 internal edges, density 0.0102; top nodes: d908400 Merge pull request #107 from Maximo-Paulos/fix/hotel-sim-day0-day1, bf4a21f Fix day 0 and day 1 hotel simulation findings, usePermissions.ts
-  4. Community 3 - Community 3: 241 nodes, 1087 internal edges, density 0.0376; top nodes: Transaction, TransactionTypeEnum, TransactionStatusEnum
-  5. Community 4 - Community 4: 240 nodes, 400 internal edges, density 0.0139; top nodes: ReservationsPage.tsx, reservations.ts, useReservations.ts
+  1. Community 0 - Community 0: 254 nodes, 456 internal edges, density 0.0142; top nodes: ReservationsPage.tsx, reservations.ts, ReservationDetailDrawer.tsx
+  2. Community 1 - Community 1: 252 nodes, 1527 internal edges, density 0.0483; top nodes: Reservation, ReservationStatusEnum, Transaction
+  3. Community 2 - Community 2: 217 nodes, 2357 internal edges, density 0.1006; top nodes: HotelConfiguration, RoomCategory, Company
+  4. Community 3 - Community 3: 204 nodes, 321 internal edges, density 0.0155; top nodes: bf4a21f Fix day 0 and day 1 hotel simulation findings, 6871292 Fix day 0 and day 1 simulation findings (#113), 5d43450 Merge pull request #112 from Maximo-Paulos/fix/day0-day1-simulation-feedback
+  5. Community 4 - Community 4: 203 nodes, 355 internal edges, density 0.0173; top nodes: BaseModel, auth.py, cash_register.py
 
 Next best action: Start with get_neighbors on "Reservation", then use query_graph for the user's specific question.
 ```

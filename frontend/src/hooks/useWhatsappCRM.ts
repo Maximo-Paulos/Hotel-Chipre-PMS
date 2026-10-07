@@ -8,6 +8,7 @@ import {
   sendWhatsAppMessage,
 } from "../api/whatsapp";
 import { hasValidSession } from "../api/client";
+import { invalidateQueriesInBackground } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
 export function useWhatsAppChannel() {
@@ -28,7 +29,9 @@ export function useWhatsAppCRM() {
     queryKey: ["whatsapp", "conversations", session.hotelId],
     queryFn: () => fetchWhatsAppConversations(session), enabled, refetchInterval: enabled ? 15_000 : false,
   });
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["whatsapp"] });
+  const invalidate = () => invalidateQueriesInBackground(queryClient, {
+    queryKey: ["whatsapp", "conversations", session.hotelId]
+  });
   const send = useMutation({ mutationFn: ({ id, text }: { id: number; text: string }) => sendWhatsAppMessage(id, text, session), onSuccess: invalidate });
   const note = useMutation({ mutationFn: ({ id, body }: { id: number; body: string }) => createWhatsAppNote(id, body, session), onSuccess: invalidate });
   const assign = useMutation({ mutationFn: ({ id, userId }: { id: number; userId: number | null }) => assignWhatsAppConversation(id, userId, session), onSuccess: invalidate });

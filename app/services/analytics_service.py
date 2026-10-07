@@ -45,7 +45,11 @@ from app.schemas.analytics_api import (
 )
 from app.services.analytics_ai_providers import build_analytics_ai_config, get_analytics_ai_provider
 from app.services.analytics_contracts import build_analytics_window, calculate_physical_room_nights_for_hotel, calculate_pickup_30d_count
-from app.services.analytics_facts import refresh_fact_reservation_daily, refresh_fact_room_occupancy_daily
+from app.services.analytics_facts import (
+    refresh_fact_reservation_daily,
+    refresh_fact_room_occupancy_daily,
+    touch_room_state_event_fact_window,
+)
 from app.services.reservation_service import active_reservations
 from app.services.room_service import active_rooms
 from app.services.subscription_entitlements import get_subscription_snapshot
@@ -87,9 +91,10 @@ def _facts_data_as_of(*fact_row_groups: list[Any]) -> datetime | None:
     This is a conservative fact-refresh timestamp, not an independent
     watermark of source-table writes. Reservation write paths update their
     affected fact windows transactionally; bounded read-time recovery also
-    repairs missing or aged windows when enabled. Returning the oldest row
-    keeps mixed-age windows visibly stale instead of letting a newer row mask
-    an older one. An empty window returns None because it has no fact rows.
+    repairs missing or FX-incomplete windows when enabled. Returning the
+    oldest row keeps mixed-age windows visibly stale instead of letting a
+    newer row mask an older one. An empty window returns None because it has
+    no fact rows.
     """
     timestamps = [row.updated_at for group in fact_row_groups for row in group if getattr(row, "updated_at", None)]
     return min(timestamps) if timestamps else None
@@ -826,6 +831,12 @@ def create_room_state_event(
         entity_id=event.id,
         after=_serialize_room_state_event(event),
     )
+    touch_room_state_event_fact_window(
+        db,
+        hotel_id=hotel_id,
+        room_id=event.room_id,
+        event_started_at=event.started_at,
+    )
     return event
 
 
@@ -858,6 +869,12 @@ def close_room_state_event(db: Session, *, hotel_id: int, user_id: int, event_id
         before=before,
         after=_serialize_room_state_event(event),
     )
+    touch_room_state_event_fact_window(
+        db,
+        hotel_id=hotel_id,
+        room_id=event.room_id,
+        event_started_at=event.started_at,
+    )
     return event
 
 
@@ -884,14 +901,14 @@ def _company_lookup_map(db: Session, hotel_id: int) -> dict[int, Company]:
 
 
 def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date_to: date) -> None:
-    """Repair missing, aged, or FX-incomplete facts within a bounded window.
+    """Repair missing or FX-incomplete facts within a bounded window.
 
-    Age-based recovery only runs when the full requested window fits inside
-    the hard 31-day cap. Wider historical requests keep their existing
-    freshness metadata and never trigger a partial refresh on every read.
+    A complete fact window is not rebuilt just because its rows are old:
+    supported source writes update affected facts transactionally, while
+    historical or out-of-band changes use the explicit repair command.
     """
     settings = get_settings()
-    if not bool(getattr(settings, "SYNC_FACT_REFRESH_ENABLED", True)):
+    if not bool(getattr(settings, "SYNC_FACT_REFRESH_ENABLED", False)):
         return
 
     # The setting can narrow this work, but it cannot expand an API request
@@ -912,7 +929,6 @@ def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date
         )
         return
     refresh_date_from = max(date_from, date_to - timedelta(days=max_days - 1))
-    stale_after_seconds = max(int(getattr(settings, "SYNC_FACT_REFRESH_STALE_AFTER_SECONDS", 900)), 0)
     ars_amounts = [getattr(FactReservationDaily, ars) for ars, _usd in _FACT_CURRENCY_PAIRS]
     usd_amounts = [getattr(FactReservationDaily, usd) for _ars, usd in _FACT_CURRENCY_PAIRS]
     has_nonzero_ars = or_(*(column != 0 for column in ars_amounts))
@@ -920,22 +936,22 @@ def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date
     has_any_money = or_(has_nonzero_ars, has_nonzero_usd)
     missing_fx = or_(FactReservationDaily.fx_rate_snapshot.is_(None), FactReservationDaily.fx_rate_snapshot <= 0)
 
-    def fact_refresh_state() -> tuple[bool, bool, bool]:
-        reservation_count, reservation_fact_as_of = (
-            db.query(func.count(FactReservationDaily.id), func.min(FactReservationDaily.updated_at))
+    def fact_refresh_state() -> tuple[bool, bool]:
+        reservation_count = (
+            db.query(func.count(FactReservationDaily.id))
             .filter(
                 FactReservationDaily.hotel_id == hotel_id,
                 FactReservationDaily.stay_date.between(refresh_date_from, date_to),
             )
-            .one()
+            .scalar()
         )
-        room_count, room_fact_as_of = (
-            db.query(func.count(FactRoomOccupancyDaily.id), func.min(FactRoomOccupancyDaily.updated_at))
+        room_count = (
+            db.query(func.count(FactRoomOccupancyDaily.id))
             .filter(
                 FactRoomOccupancyDaily.hotel_id == hotel_id,
                 FactRoomOccupancyDaily.stay_date.between(refresh_date_from, date_to),
             )
-            .one()
+            .scalar()
         )
         reservation_date_ranges = (
             active_reservations(db, hotel_id)
@@ -972,18 +988,6 @@ def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date
             reservation_count == expected_reservation_rows
             and room_count == expected_room_rows
         )
-        materialized_timestamps = [
-            timestamp
-            for timestamp in (reservation_fact_as_of, room_fact_as_of)
-            if timestamp is not None
-        ]
-        stale_facts = False
-        if requested_days <= max_days and stale_after_seconds > 0 and materialized_timestamps:
-            normalized_as_of = _ensure_utc(min(materialized_timestamps))
-            stale_facts = bool(
-                normalized_as_of is not None
-                and (_now() - normalized_as_of).total_seconds() >= stale_after_seconds
-            )
         stale_fx_fact = (
             db.query(FactReservationDaily.id)
             .filter(
@@ -998,10 +1002,10 @@ def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date
             )
             .first()
         )
-        return coverage_complete, bool(stale_fx_fact), stale_facts
+        return coverage_complete, bool(stale_fx_fact)
 
-    coverage_complete, stale_fx_fact, stale_facts = fact_refresh_state()
-    if coverage_complete and not stale_fx_fact and not stale_facts:
+    coverage_complete, stale_fx_fact = fact_refresh_state()
+    if coverage_complete and not stale_fx_fact:
         return
 
     with _analytics_fact_refresh_guard(db, hotel_id) as acquired:
@@ -1019,8 +1023,8 @@ def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date
 
         # Another request may have completed while this request was waiting
         # to enter the guard. Recheck under the lock before deleting rows.
-        coverage_complete, stale_fx_fact, stale_facts = fact_refresh_state()
-        if coverage_complete and not stale_fx_fact and not stale_facts:
+        coverage_complete, stale_fx_fact = fact_refresh_state()
+        if coverage_complete and not stale_fx_fact:
             db.commit()
             return
 
@@ -1036,11 +1040,8 @@ def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date
                 "reason": (
                     "missing_fx_snapshot_on_converted_fact"
                     if stale_fx_fact
-                    else "stale_fact_window"
-                    if stale_facts
-                    else "empty_window"
+                    else "incomplete_fact_window"
                 ),
-                "stale_after_seconds": stale_after_seconds,
                 "requested_days": requested_days,
             },
         )

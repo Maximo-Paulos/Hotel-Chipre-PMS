@@ -4,6 +4,7 @@ import json
 import re
 from urllib.parse import urlencode
 import requests
+from app.services.outbound_http_telemetry import observed_http_call
 
 from cryptography.fernet import InvalidToken
 from sqlalchemy.orm import Session
@@ -267,7 +268,7 @@ def validate_mercadopago_credentials(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not access_token:
         raise ValueError("Ingresa un access_token de Mercado Pago para conectar este hotel.")
 
-    response = requests.get(
+    response = observed_http_call("mercadopago.credentials_validate", requests.get,
         "https://api.mercadopago.com/users/me",
         headers={"Authorization": f"Bearer {access_token}"},
         timeout=20,
@@ -288,7 +289,7 @@ def validate_mercadopago_credentials(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def _google_userinfo(access_token: str) -> Dict[str, Any]:
     require_external_connections("Google account validation")
-    response = requests.get(
+    response = observed_http_call("google.userinfo", requests.get,
         "https://openidconnect.googleapis.com/v1/userinfo",
         headers={"Authorization": f"Bearer {access_token}"},
         timeout=20,
@@ -306,7 +307,7 @@ def refresh_gmail_access_token(payload: Dict[str, Any]) -> Dict[str, Any]:
             "La conexion de Gmail no tiene refresh token. Vuelve a conectar Gmail para completar el acceso offline."
         )
     settings = get_settings()
-    response = requests.post(
+    response = observed_http_call("google.token_refresh", requests.post,
         "https://oauth2.googleapis.com/token",
         data={
             "client_id": settings.GMAIL_CLIENT_ID,
@@ -662,7 +663,7 @@ def exchange_token(provider: str, code: str) -> Dict[str, Any]:
     require_external_connections(f"{provider} OAuth token exchange")
     settings = get_settings()
     if provider == "mercadopago":
-        resp = requests.post(
+        resp = observed_http_call("mercadopago.oauth_exchange", requests.post,
             "https://api.mercadopago.com/oauth/token",
             data={
                 "grant_type": "authorization_code",
@@ -677,7 +678,7 @@ def exchange_token(provider: str, code: str) -> Dict[str, Any]:
         return resp.json()
     if provider == "paypal":
         token_url = "https://api-m.sandbox.paypal.com/v1/oauth2/token" if settings.PAYPAL_MODE == "sandbox" else "https://api-m.paypal.com/v1/oauth2/token"
-        resp = requests.post(
+        resp = observed_http_call("paypal.oauth_exchange", requests.post,
             token_url,
             auth=(settings.PAYPAL_CLIENT_ID, settings.PAYPAL_CLIENT_SECRET),
             data={"grant_type": "authorization_code", "code": code, "redirect_uri": settings.PAYPAL_REDIRECT_URI},
@@ -686,7 +687,7 @@ def exchange_token(provider: str, code: str) -> Dict[str, Any]:
         resp.raise_for_status()
         return resp.json()
     if provider == "gmail":
-        resp = requests.post(
+        resp = observed_http_call("google.oauth_exchange", requests.post,
             "https://oauth2.googleapis.com/token",
             data={
                 "code": code,

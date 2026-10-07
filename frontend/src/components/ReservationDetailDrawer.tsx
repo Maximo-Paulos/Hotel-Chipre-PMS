@@ -10,7 +10,7 @@ import {
   correctCompanyNightChargeAmounts,
   type CompanyNightChargeCorrection
 } from "../api/companyNightCharges";
-import { refreshPaymentState, refreshReservationRecordState } from "../api/queryInvalidation";
+import { invalidateQueriesInBackground, refreshPaymentState, refreshReservationRecordState } from "../api/queryInvalidation";
 import {
   extendReservationStay,
   isDeferredCompanyReservation,
@@ -269,14 +269,12 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     ])
   });
   const companyNightChargesQuery = useCompanyNightCharges(reservationId ?? undefined, Boolean(reservationQuery.data?.company_id));
-  const refreshCompanyNightCharges = async () => {
+  const refreshCompanyNightCharges = () => {
     if (!reservationId) return;
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: ["company-night-charges", session.hotelId, reservationId]
-      }),
-      refreshPaymentState(queryClient, session.hotelId, reservationId)
-    ]);
+    invalidateQueriesInBackground(queryClient, {
+      queryKey: ["company-night-charges", session.hotelId, reservationId]
+    });
+    void refreshPaymentState(queryClient, session.hotelId, reservationId).catch(() => undefined);
   };
   const createCompanyNightChargesMutation = useGuardedMutation({
     mutationFn: ({ stayDates, extraPersonCount }: { stayDates: string[]; extraPersonCount: number }) => {

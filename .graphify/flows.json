@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-06T21:33:13.347Z",
+  "generatedAt": "2026-10-07T08:27:24.963Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -872,6 +872,70 @@
       "fileCount": 1,
       "files": [
         "scripts/scale/staged_http_load.py"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_outbound_http_telemetry_observed_async_http_call",
+      "name": "observed_async_http_call",
+      "entryPoint": "services_outbound_http_telemetry_observed_async_http_call",
+      "entryPointId": "services_outbound_http_telemetry_observed_async_http_call",
+      "path": [
+        "services_outbound_http_telemetry_observed_async_http_call",
+        "services_outbound_http_telemetry_fallback_url",
+        "services_outbound_http_telemetry_request_details",
+        "services_outbound_http_telemetry_response_body_size",
+        "services_outbound_http_telemetry_safe_operation",
+        "services_outbound_http_telemetry_body_size_estimate",
+        "services_outbound_http_telemetry_json_size_estimate"
+      ],
+      "qualifiedPath": [
+        "services_outbound_http_telemetry_observed_async_http_call",
+        "services_outbound_http_telemetry_fallback_url",
+        "services_outbound_http_telemetry_request_details",
+        "services_outbound_http_telemetry_response_body_size",
+        "services_outbound_http_telemetry_safe_operation",
+        "services_outbound_http_telemetry_body_size_estimate",
+        "services_outbound_http_telemetry_json_size_estimate"
+      ],
+      "depth": 3,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/outbound_http_telemetry.py"
+      ],
+      "criticality": 0.43,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_outbound_http_telemetry_observed_http_call",
+      "name": "observed_http_call",
+      "entryPoint": "services_outbound_http_telemetry_observed_http_call",
+      "entryPointId": "services_outbound_http_telemetry_observed_http_call",
+      "path": [
+        "services_outbound_http_telemetry_observed_http_call",
+        "services_outbound_http_telemetry_fallback_url",
+        "services_outbound_http_telemetry_request_details",
+        "services_outbound_http_telemetry_response_body_size",
+        "services_outbound_http_telemetry_safe_operation",
+        "services_outbound_http_telemetry_body_size_estimate",
+        "services_outbound_http_telemetry_json_size_estimate"
+      ],
+      "qualifiedPath": [
+        "services_outbound_http_telemetry_observed_http_call",
+        "services_outbound_http_telemetry_fallback_url",
+        "services_outbound_http_telemetry_request_details",
+        "services_outbound_http_telemetry_response_body_size",
+        "services_outbound_http_telemetry_safe_operation",
+        "services_outbound_http_telemetry_body_size_estimate",
+        "services_outbound_http_telemetry_json_size_estimate"
+      ],
+      "depth": 3,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/outbound_http_telemetry.py"
       ],
       "criticality": 0.43,
       "warnings": []
@@ -4685,6 +4749,7 @@
         "api_client_apifetch",
         "api_client_apierror",
         "api_client_createrequestdeadline",
+        "api_client_mergesession",
         "api_client_requestwithrefresh",
         "api_client_buildurl",
         "api_client_clearpermissionadminreadstepupcache",
@@ -4697,7 +4762,6 @@
         "api_client_isrefreshresponseforsession",
         "api_client_isstepuptotprejection",
         "api_client_makeapierror",
-        "api_client_mergesession",
         "api_client_parseactionstepupchallenge",
         "api_client_refreshsession",
         "api_client_requestactionstepupticket",
@@ -4718,6 +4782,7 @@
         "api_client_apifetch",
         "api_client_apierror",
         "api_client_createrequestdeadline",
+        "api_client_mergesession",
         "api_client_requestwithrefresh",
         "api_client_buildurl",
         "api_client_clearpermissionadminreadstepupcache",
@@ -4730,7 +4795,6 @@
         "api_client_isrefreshresponseforsession",
         "api_client_isstepuptotprejection",
         "api_client_makeapierror",
-        "api_client_mergesession",
         "api_client_parseactionstepupchallenge",
         "api_client_refreshsession",
         "api_client_requestactionstepupticket",
@@ -7132,34 +7196,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_domain_events_iter_postgres_event_stream",
-      "name": "iter_postgres_event_stream",
-      "entryPoint": "services_domain_events_iter_postgres_event_stream",
-      "entryPointId": "services_domain_events_iter_postgres_event_stream",
-      "path": [
-        "services_domain_events_iter_postgres_event_stream",
-        "services_domain_events_format_sse",
-        "services_domain_events_outbox_sse_payload",
-        "services_domain_events_validate_hotel_id",
-        "services_domain_events_validate_event_input"
-      ],
-      "qualifiedPath": [
-        "services_domain_events_iter_postgres_event_stream",
-        "services_domain_events_format_sse",
-        "services_domain_events_outbox_sse_payload",
-        "services_domain_events_validate_hotel_id",
-        "services_domain_events_validate_event_input"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/domain_events.py"
-      ],
-      "criticality": 0.27,
-      "warnings": []
-    },
-    {
       "id": "flow:versions_20260724_allocation_enum_values_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_20260724_allocation_enum_values_upgrade",
@@ -7335,42 +7371,6 @@
       "fileCount": 1,
       "files": [
         "app/services/checkin_service.py"
-      ],
-      "criticality": 0.2633,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_domain_events_queue_model_changes",
-      "name": "queue_model_changes",
-      "entryPoint": "services_domain_events_queue_model_changes",
-      "entryPointId": "services_domain_events_queue_model_changes",
-      "path": [
-        "services_domain_events_queue_model_changes",
-        "services_domain_events_model_event_payload",
-        "services_domain_events_model_hotel_id",
-        "services_domain_events_queue_domain_change",
-        "services_domain_events_scalar_event_value",
-        "services_domain_events_validate_event_input",
-        "services_domain_events_queueddomainchange",
-        "services_domain_events_session_transaction_id",
-        "services_domain_events_validate_hotel_id"
-      ],
-      "qualifiedPath": [
-        "services_domain_events_queue_model_changes",
-        "services_domain_events_model_event_payload",
-        "services_domain_events_model_hotel_id",
-        "services_domain_events_queue_domain_change",
-        "services_domain_events_scalar_event_value",
-        "services_domain_events_validate_event_input",
-        "services_domain_events_queueddomainchange",
-        "services_domain_events_session_transaction_id",
-        "services_domain_events_validate_hotel_id"
-      ],
-      "depth": 3,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/domain_events.py"
       ],
       "criticality": 0.2633,
       "warnings": []
@@ -7681,6 +7681,44 @@
         "app/services/ota/adapters/booking.py"
       ],
       "criticality": 0.2569,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_domain_events_queue_model_changes",
+      "name": "queue_model_changes",
+      "entryPoint": "services_domain_events_queue_model_changes",
+      "entryPointId": "services_domain_events_queue_model_changes",
+      "path": [
+        "services_domain_events_queue_model_changes",
+        "services_domain_events_model_event_payload",
+        "services_domain_events_model_hotel_id",
+        "services_domain_events_queue_domain_change",
+        "services_domain_events_settings",
+        "services_domain_events_scalar_event_value",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_queueddomainchange",
+        "services_domain_events_session_transaction_id",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_queue_model_changes",
+        "services_domain_events_model_event_payload",
+        "services_domain_events_model_hotel_id",
+        "services_domain_events_queue_domain_change",
+        "services_domain_events_settings",
+        "services_domain_events_scalar_event_value",
+        "services_domain_events_validate_event_input",
+        "services_domain_events_queueddomainchange",
+        "services_domain_events_session_transaction_id",
+        "services_domain_events_validate_hotel_id"
+      ],
+      "depth": 3,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.255,
       "warnings": []
     },
     {
@@ -9079,6 +9117,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_domain_events_iter_postgres_event_stream",
+      "name": "iter_postgres_event_stream",
+      "entryPoint": "services_domain_events_iter_postgres_event_stream",
+      "entryPointId": "services_domain_events_iter_postgres_event_stream",
+      "path": [
+        "services_domain_events_iter_postgres_event_stream",
+        "services_domain_events_cached_postgres_event_batch",
+        "services_domain_events_format_sse",
+        "services_domain_events_outbox_sse_payload",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_read_postgres_event_batch",
+        "services_domain_events_validate_event_input"
+      ],
+      "qualifiedPath": [
+        "services_domain_events_iter_postgres_event_stream",
+        "services_domain_events_cached_postgres_event_batch",
+        "services_domain_events_format_sse",
+        "services_domain_events_outbox_sse_payload",
+        "services_domain_events_validate_hotel_id",
+        "services_domain_events_read_postgres_event_batch",
+        "services_domain_events_validate_event_input"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/domain_events.py"
+      ],
+      "criticality": 0.2414,
+      "warnings": []
+    },
+    {
       "id": "flow:services_gemma_service_gemmaservice_suggest_policy_from_feedback",
       "name": ".suggest_policy_from_feedback",
       "entryPoint": "services_gemma_service_gemmaservice_suggest_policy_from_feedback",
@@ -9272,6 +9342,52 @@
         "app/services/read_model_cache.py"
       ],
       "criticality": 0.2356,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_report_service_nightly_summary",
+      "name": "nightly_summary",
+      "entryPoint": "services_operational_report_service_nightly_summary",
+      "entryPointId": "services_operational_report_service_nightly_summary",
+      "path": [
+        "services_operational_report_service_nightly_summary",
+        "services_operational_report_service_daily_report",
+        "services_operational_report_service_active_room_blocks",
+        "services_operational_report_service_alerts",
+        "services_operational_report_service_arrivals_query",
+        "services_operational_report_service_available_with_review",
+        "services_operational_report_service_candidate_summary",
+        "services_operational_report_service_cash_session",
+        "services_operational_report_service_company_night_extra_balances_by_reservation",
+        "services_operational_report_service_daily_report_balance_candidate_query",
+        "services_operational_report_service_dailyreservationcandidate",
+        "services_operational_report_service_group",
+        "services_operational_report_service_reservation_summary",
+        "services_operational_report_service_guest_name"
+      ],
+      "qualifiedPath": [
+        "services_operational_report_service_nightly_summary",
+        "services_operational_report_service_daily_report",
+        "services_operational_report_service_active_room_blocks",
+        "services_operational_report_service_alerts",
+        "services_operational_report_service_arrivals_query",
+        "services_operational_report_service_available_with_review",
+        "services_operational_report_service_candidate_summary",
+        "services_operational_report_service_cash_session",
+        "services_operational_report_service_company_night_extra_balances_by_reservation",
+        "services_operational_report_service_daily_report_balance_candidate_query",
+        "services_operational_report_service_dailyreservationcandidate",
+        "services_operational_report_service_group",
+        "services_operational_report_service_reservation_summary",
+        "services_operational_report_service_guest_name"
+      ],
+      "depth": 3,
+      "nodeCount": 14,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_report_service.py"
+      ],
+      "criticality": 0.2336,
       "warnings": []
     },
     {
@@ -9727,228 +9843,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_ota_service_otaintegrationservice_process_booking_webhook",
-      "name": ".process_booking_webhook",
-      "entryPoint": "services_ota_service_otaintegrationservice_process_booking_webhook",
-      "entryPointId": "services_ota_service_otaintegrationservice_process_booking_webhook",
-      "path": [
-        "services_ota_service_otaintegrationservice_process_booking_webhook",
-        "services_ota_service_otaintegrationservice_process_normalized_webhook",
-        "services_ota_service_otaerror",
-        "services_ota_service_otaintegrationservice_create_legacy_mapping",
-        "services_ota_service_otaintegrationservice_materialize_incoming_reservation",
-        "services_ota_service_otaintegrationservice_normalize_event_type",
-        "services_ota_service_otaintegrationservice_process_existing_incoming_reservation",
-        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
-        "services_ota_service_otaintegrationservice_sync_foundation_reservation_link",
-        "services_ota_service_otaintegrationservice_sync_mapping_payload",
-        "services_ota_service_otaintegrationservice_apply_financial_snapshot",
-        "services_ota_service_otaintegrationservice_reservation_source_for_provider",
-        "services_ota_service_otaintegrationservice_resolve_commercial_context",
-        "services_ota_service_otaintegrationservice_select_room_for_normalized_reservation",
-        "services_ota_service_otaintegrationservice_sync_guest_record",
-        "services_ota_service_otaintegrationservice_cancel_existing_reservation_from_normalized",
-        "services_ota_service_otaintegrationservice_update_existing_reservation_from_normalized",
-        "services_ota_service_otaautherror",
-        "services_ota_service_otaintegrationservice_extract_external_property_id",
-        "services_ota_service_otaintegrationservice_hash_secret",
-        "services_ota_service_otaintegrationservice_ensure_foundation_provider",
-        "services_ota_service_hotel_default_currency",
-        "services_ota_service_otaintegrationservice_normalize_collection_model",
-        "services_ota_service_otaintegrationservice_normalize_settlement_status",
-        "services_ota_service_otaintegrationservice_resolve_paid_amount",
-        "services_ota_service_otaintegrationservice_split_guest_name",
-        "services_ota_service_otaintegrationservice_mark_reservation_manual_review",
-        "services_ota_service_otaintegrationservice_normalize_secret"
-      ],
-      "qualifiedPath": [
-        "services_ota_service_otaintegrationservice_process_booking_webhook",
-        "services_ota_service_otaintegrationservice_process_normalized_webhook",
-        "services_ota_service_otaerror",
-        "services_ota_service_otaintegrationservice_create_legacy_mapping",
-        "services_ota_service_otaintegrationservice_materialize_incoming_reservation",
-        "services_ota_service_otaintegrationservice_normalize_event_type",
-        "services_ota_service_otaintegrationservice_process_existing_incoming_reservation",
-        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
-        "services_ota_service_otaintegrationservice_sync_foundation_reservation_link",
-        "services_ota_service_otaintegrationservice_sync_mapping_payload",
-        "services_ota_service_otaintegrationservice_apply_financial_snapshot",
-        "services_ota_service_otaintegrationservice_reservation_source_for_provider",
-        "services_ota_service_otaintegrationservice_resolve_commercial_context",
-        "services_ota_service_otaintegrationservice_select_room_for_normalized_reservation",
-        "services_ota_service_otaintegrationservice_sync_guest_record",
-        "services_ota_service_otaintegrationservice_cancel_existing_reservation_from_normalized",
-        "services_ota_service_otaintegrationservice_update_existing_reservation_from_normalized",
-        "services_ota_service_otaautherror",
-        "services_ota_service_otaintegrationservice_extract_external_property_id",
-        "services_ota_service_otaintegrationservice_hash_secret",
-        "services_ota_service_otaintegrationservice_ensure_foundation_provider",
-        "services_ota_service_hotel_default_currency",
-        "services_ota_service_otaintegrationservice_normalize_collection_model",
-        "services_ota_service_otaintegrationservice_normalize_settlement_status",
-        "services_ota_service_otaintegrationservice_resolve_paid_amount",
-        "services_ota_service_otaintegrationservice_split_guest_name",
-        "services_ota_service_otaintegrationservice_mark_reservation_manual_review",
-        "services_ota_service_otaintegrationservice_normalize_secret"
-      ],
-      "depth": 4,
-      "nodeCount": 28,
-      "fileCount": 1,
-      "files": [
-        "app/services/ota_service.py"
-      ],
-      "criticality": 0.2257,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_ota_service_otaintegrationservice_process_despegar_webhook",
-      "name": ".process_despegar_webhook",
-      "entryPoint": "services_ota_service_otaintegrationservice_process_despegar_webhook",
-      "entryPointId": "services_ota_service_otaintegrationservice_process_despegar_webhook",
-      "path": [
-        "services_ota_service_otaintegrationservice_process_despegar_webhook",
-        "services_ota_service_otaintegrationservice_process_normalized_webhook",
-        "services_ota_service_otaerror",
-        "services_ota_service_otaintegrationservice_create_legacy_mapping",
-        "services_ota_service_otaintegrationservice_materialize_incoming_reservation",
-        "services_ota_service_otaintegrationservice_normalize_event_type",
-        "services_ota_service_otaintegrationservice_process_existing_incoming_reservation",
-        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
-        "services_ota_service_otaintegrationservice_sync_foundation_reservation_link",
-        "services_ota_service_otaintegrationservice_sync_mapping_payload",
-        "services_ota_service_otaintegrationservice_apply_financial_snapshot",
-        "services_ota_service_otaintegrationservice_reservation_source_for_provider",
-        "services_ota_service_otaintegrationservice_resolve_commercial_context",
-        "services_ota_service_otaintegrationservice_select_room_for_normalized_reservation",
-        "services_ota_service_otaintegrationservice_sync_guest_record",
-        "services_ota_service_otaintegrationservice_cancel_existing_reservation_from_normalized",
-        "services_ota_service_otaintegrationservice_update_existing_reservation_from_normalized",
-        "services_ota_service_otaautherror",
-        "services_ota_service_otaintegrationservice_extract_external_property_id",
-        "services_ota_service_otaintegrationservice_hash_secret",
-        "services_ota_service_otaintegrationservice_ensure_foundation_provider",
-        "services_ota_service_hotel_default_currency",
-        "services_ota_service_otaintegrationservice_normalize_collection_model",
-        "services_ota_service_otaintegrationservice_normalize_settlement_status",
-        "services_ota_service_otaintegrationservice_resolve_paid_amount",
-        "services_ota_service_otaintegrationservice_split_guest_name",
-        "services_ota_service_otaintegrationservice_mark_reservation_manual_review",
-        "services_ota_service_otaintegrationservice_normalize_secret"
-      ],
-      "qualifiedPath": [
-        "services_ota_service_otaintegrationservice_process_despegar_webhook",
-        "services_ota_service_otaintegrationservice_process_normalized_webhook",
-        "services_ota_service_otaerror",
-        "services_ota_service_otaintegrationservice_create_legacy_mapping",
-        "services_ota_service_otaintegrationservice_materialize_incoming_reservation",
-        "services_ota_service_otaintegrationservice_normalize_event_type",
-        "services_ota_service_otaintegrationservice_process_existing_incoming_reservation",
-        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
-        "services_ota_service_otaintegrationservice_sync_foundation_reservation_link",
-        "services_ota_service_otaintegrationservice_sync_mapping_payload",
-        "services_ota_service_otaintegrationservice_apply_financial_snapshot",
-        "services_ota_service_otaintegrationservice_reservation_source_for_provider",
-        "services_ota_service_otaintegrationservice_resolve_commercial_context",
-        "services_ota_service_otaintegrationservice_select_room_for_normalized_reservation",
-        "services_ota_service_otaintegrationservice_sync_guest_record",
-        "services_ota_service_otaintegrationservice_cancel_existing_reservation_from_normalized",
-        "services_ota_service_otaintegrationservice_update_existing_reservation_from_normalized",
-        "services_ota_service_otaautherror",
-        "services_ota_service_otaintegrationservice_extract_external_property_id",
-        "services_ota_service_otaintegrationservice_hash_secret",
-        "services_ota_service_otaintegrationservice_ensure_foundation_provider",
-        "services_ota_service_hotel_default_currency",
-        "services_ota_service_otaintegrationservice_normalize_collection_model",
-        "services_ota_service_otaintegrationservice_normalize_settlement_status",
-        "services_ota_service_otaintegrationservice_resolve_paid_amount",
-        "services_ota_service_otaintegrationservice_split_guest_name",
-        "services_ota_service_otaintegrationservice_mark_reservation_manual_review",
-        "services_ota_service_otaintegrationservice_normalize_secret"
-      ],
-      "depth": 4,
-      "nodeCount": 28,
-      "fileCount": 1,
-      "files": [
-        "app/services/ota_service.py"
-      ],
-      "criticality": 0.2257,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_ota_service_otaintegrationservice_process_expedia_webhook",
-      "name": ".process_expedia_webhook",
-      "entryPoint": "services_ota_service_otaintegrationservice_process_expedia_webhook",
-      "entryPointId": "services_ota_service_otaintegrationservice_process_expedia_webhook",
-      "path": [
-        "services_ota_service_otaintegrationservice_process_expedia_webhook",
-        "services_ota_service_otaintegrationservice_process_normalized_webhook",
-        "services_ota_service_otaerror",
-        "services_ota_service_otaintegrationservice_create_legacy_mapping",
-        "services_ota_service_otaintegrationservice_materialize_incoming_reservation",
-        "services_ota_service_otaintegrationservice_normalize_event_type",
-        "services_ota_service_otaintegrationservice_process_existing_incoming_reservation",
-        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
-        "services_ota_service_otaintegrationservice_sync_foundation_reservation_link",
-        "services_ota_service_otaintegrationservice_sync_mapping_payload",
-        "services_ota_service_otaintegrationservice_apply_financial_snapshot",
-        "services_ota_service_otaintegrationservice_reservation_source_for_provider",
-        "services_ota_service_otaintegrationservice_resolve_commercial_context",
-        "services_ota_service_otaintegrationservice_select_room_for_normalized_reservation",
-        "services_ota_service_otaintegrationservice_sync_guest_record",
-        "services_ota_service_otaintegrationservice_cancel_existing_reservation_from_normalized",
-        "services_ota_service_otaintegrationservice_update_existing_reservation_from_normalized",
-        "services_ota_service_otaautherror",
-        "services_ota_service_otaintegrationservice_extract_external_property_id",
-        "services_ota_service_otaintegrationservice_hash_secret",
-        "services_ota_service_otaintegrationservice_ensure_foundation_provider",
-        "services_ota_service_hotel_default_currency",
-        "services_ota_service_otaintegrationservice_normalize_collection_model",
-        "services_ota_service_otaintegrationservice_normalize_settlement_status",
-        "services_ota_service_otaintegrationservice_resolve_paid_amount",
-        "services_ota_service_otaintegrationservice_split_guest_name",
-        "services_ota_service_otaintegrationservice_mark_reservation_manual_review",
-        "services_ota_service_otaintegrationservice_normalize_secret"
-      ],
-      "qualifiedPath": [
-        "services_ota_service_otaintegrationservice_process_expedia_webhook",
-        "services_ota_service_otaintegrationservice_process_normalized_webhook",
-        "services_ota_service_otaerror",
-        "services_ota_service_otaintegrationservice_create_legacy_mapping",
-        "services_ota_service_otaintegrationservice_materialize_incoming_reservation",
-        "services_ota_service_otaintegrationservice_normalize_event_type",
-        "services_ota_service_otaintegrationservice_process_existing_incoming_reservation",
-        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
-        "services_ota_service_otaintegrationservice_sync_foundation_reservation_link",
-        "services_ota_service_otaintegrationservice_sync_mapping_payload",
-        "services_ota_service_otaintegrationservice_apply_financial_snapshot",
-        "services_ota_service_otaintegrationservice_reservation_source_for_provider",
-        "services_ota_service_otaintegrationservice_resolve_commercial_context",
-        "services_ota_service_otaintegrationservice_select_room_for_normalized_reservation",
-        "services_ota_service_otaintegrationservice_sync_guest_record",
-        "services_ota_service_otaintegrationservice_cancel_existing_reservation_from_normalized",
-        "services_ota_service_otaintegrationservice_update_existing_reservation_from_normalized",
-        "services_ota_service_otaautherror",
-        "services_ota_service_otaintegrationservice_extract_external_property_id",
-        "services_ota_service_otaintegrationservice_hash_secret",
-        "services_ota_service_otaintegrationservice_ensure_foundation_provider",
-        "services_ota_service_hotel_default_currency",
-        "services_ota_service_otaintegrationservice_normalize_collection_model",
-        "services_ota_service_otaintegrationservice_normalize_settlement_status",
-        "services_ota_service_otaintegrationservice_resolve_paid_amount",
-        "services_ota_service_otaintegrationservice_split_guest_name",
-        "services_ota_service_otaintegrationservice_mark_reservation_manual_review",
-        "services_ota_service_otaintegrationservice_normalize_secret"
-      ],
-      "depth": 4,
-      "nodeCount": 28,
-      "fileCount": 1,
-      "files": [
-        "app/services/ota_service.py"
-      ],
-      "criticality": 0.2257,
-      "warnings": []
-    },
-    {
       "id": "flow:services_financial_ledger_operational_balance_due",
       "name": "operational_balance_due",
       "entryPoint": "services_financial_ledger_operational_balance_due",
@@ -10017,46 +9911,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_operational_report_service_nightly_summary",
-      "name": "nightly_summary",
-      "entryPoint": "services_operational_report_service_nightly_summary",
-      "entryPointId": "services_operational_report_service_nightly_summary",
-      "path": [
-        "services_operational_report_service_nightly_summary",
-        "services_operational_report_service_daily_report",
-        "services_operational_report_service_active_room_blocks",
-        "services_operational_report_service_alerts",
-        "services_operational_report_service_arrivals_query",
-        "services_operational_report_service_available_with_review",
-        "services_operational_report_service_cash_session",
-        "services_operational_report_service_company_night_extra_balances_by_reservation",
-        "services_operational_report_service_group",
-        "services_operational_report_service_reservation_summary",
-        "services_operational_report_service_guest_name"
-      ],
-      "qualifiedPath": [
-        "services_operational_report_service_nightly_summary",
-        "services_operational_report_service_daily_report",
-        "services_operational_report_service_active_room_blocks",
-        "services_operational_report_service_alerts",
-        "services_operational_report_service_arrivals_query",
-        "services_operational_report_service_available_with_review",
-        "services_operational_report_service_cash_session",
-        "services_operational_report_service_company_night_extra_balances_by_reservation",
-        "services_operational_report_service_group",
-        "services_operational_report_service_reservation_summary",
-        "services_operational_report_service_guest_name"
-      ],
-      "depth": 3,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/operational_report_service.py"
-      ],
-      "criticality": 0.2255,
-      "warnings": []
-    },
-    {
       "id": "flow:services_gemma_orchestrator_gemmaorchestrator_send_message",
       "name": ".send_message",
       "entryPoint": "services_gemma_orchestrator_gemmaorchestrator_send_message",
@@ -10118,6 +9972,240 @@
         "app/services/gemma_orchestrator.py"
       ],
       "criticality": 0.2235,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_ota_service_otaintegrationservice_process_booking_webhook",
+      "name": ".process_booking_webhook",
+      "entryPoint": "services_ota_service_otaintegrationservice_process_booking_webhook",
+      "entryPointId": "services_ota_service_otaintegrationservice_process_booking_webhook",
+      "path": [
+        "services_ota_service_otaintegrationservice_process_booking_webhook",
+        "services_ota_service_otaintegrationservice_process_normalized_webhook",
+        "services_ota_service_otaerror",
+        "services_ota_service_otaintegrationservice_create_legacy_mapping",
+        "services_ota_service_otaintegrationservice_materialize_incoming_reservation",
+        "services_ota_service_otaintegrationservice_normalize_event_type",
+        "services_ota_service_otaintegrationservice_process_existing_incoming_reservation",
+        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
+        "services_ota_service_otaintegrationservice_sync_foundation_reservation_link",
+        "services_ota_service_otaintegrationservice_sync_mapping_payload",
+        "services_ota_service_otaintegrationservice_apply_financial_snapshot",
+        "services_ota_service_otaintegrationservice_reservation_source_for_provider",
+        "services_ota_service_otaintegrationservice_resolve_commercial_context",
+        "services_ota_service_otaintegrationservice_select_room_for_normalized_reservation",
+        "services_ota_service_otaintegrationservice_sync_guest_record",
+        "services_ota_service_touch_ota_reservation_facts",
+        "services_ota_service_otaintegrationservice_cancel_existing_reservation_from_normalized",
+        "services_ota_service_otaintegrationservice_update_existing_reservation_from_normalized",
+        "services_ota_service_otaautherror",
+        "services_ota_service_otaintegrationservice_extract_external_property_id",
+        "services_ota_service_otaintegrationservice_hash_secret",
+        "services_ota_service_otaintegrationservice_ensure_foundation_provider",
+        "services_ota_service_hotel_default_currency",
+        "services_ota_service_otaintegrationservice_normalize_collection_model",
+        "services_ota_service_otaintegrationservice_normalize_settlement_status",
+        "services_ota_service_otaintegrationservice_resolve_paid_amount",
+        "services_ota_service_otaintegrationservice_split_guest_name",
+        "services_ota_service_otaintegrationservice_mark_reservation_manual_review",
+        "services_ota_service_ota_fact_input_snapshot",
+        "services_ota_service_otaintegrationservice_normalize_secret"
+      ],
+      "qualifiedPath": [
+        "services_ota_service_otaintegrationservice_process_booking_webhook",
+        "services_ota_service_otaintegrationservice_process_normalized_webhook",
+        "services_ota_service_otaerror",
+        "services_ota_service_otaintegrationservice_create_legacy_mapping",
+        "services_ota_service_otaintegrationservice_materialize_incoming_reservation",
+        "services_ota_service_otaintegrationservice_normalize_event_type",
+        "services_ota_service_otaintegrationservice_process_existing_incoming_reservation",
+        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
+        "services_ota_service_otaintegrationservice_sync_foundation_reservation_link",
+        "services_ota_service_otaintegrationservice_sync_mapping_payload",
+        "services_ota_service_otaintegrationservice_apply_financial_snapshot",
+        "services_ota_service_otaintegrationservice_reservation_source_for_provider",
+        "services_ota_service_otaintegrationservice_resolve_commercial_context",
+        "services_ota_service_otaintegrationservice_select_room_for_normalized_reservation",
+        "services_ota_service_otaintegrationservice_sync_guest_record",
+        "services_ota_service_touch_ota_reservation_facts",
+        "services_ota_service_otaintegrationservice_cancel_existing_reservation_from_normalized",
+        "services_ota_service_otaintegrationservice_update_existing_reservation_from_normalized",
+        "services_ota_service_otaautherror",
+        "services_ota_service_otaintegrationservice_extract_external_property_id",
+        "services_ota_service_otaintegrationservice_hash_secret",
+        "services_ota_service_otaintegrationservice_ensure_foundation_provider",
+        "services_ota_service_hotel_default_currency",
+        "services_ota_service_otaintegrationservice_normalize_collection_model",
+        "services_ota_service_otaintegrationservice_normalize_settlement_status",
+        "services_ota_service_otaintegrationservice_resolve_paid_amount",
+        "services_ota_service_otaintegrationservice_split_guest_name",
+        "services_ota_service_otaintegrationservice_mark_reservation_manual_review",
+        "services_ota_service_ota_fact_input_snapshot",
+        "services_ota_service_otaintegrationservice_normalize_secret"
+      ],
+      "depth": 4,
+      "nodeCount": 30,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota_service.py"
+      ],
+      "criticality": 0.2233,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_ota_service_otaintegrationservice_process_despegar_webhook",
+      "name": ".process_despegar_webhook",
+      "entryPoint": "services_ota_service_otaintegrationservice_process_despegar_webhook",
+      "entryPointId": "services_ota_service_otaintegrationservice_process_despegar_webhook",
+      "path": [
+        "services_ota_service_otaintegrationservice_process_despegar_webhook",
+        "services_ota_service_otaintegrationservice_process_normalized_webhook",
+        "services_ota_service_otaerror",
+        "services_ota_service_otaintegrationservice_create_legacy_mapping",
+        "services_ota_service_otaintegrationservice_materialize_incoming_reservation",
+        "services_ota_service_otaintegrationservice_normalize_event_type",
+        "services_ota_service_otaintegrationservice_process_existing_incoming_reservation",
+        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
+        "services_ota_service_otaintegrationservice_sync_foundation_reservation_link",
+        "services_ota_service_otaintegrationservice_sync_mapping_payload",
+        "services_ota_service_otaintegrationservice_apply_financial_snapshot",
+        "services_ota_service_otaintegrationservice_reservation_source_for_provider",
+        "services_ota_service_otaintegrationservice_resolve_commercial_context",
+        "services_ota_service_otaintegrationservice_select_room_for_normalized_reservation",
+        "services_ota_service_otaintegrationservice_sync_guest_record",
+        "services_ota_service_touch_ota_reservation_facts",
+        "services_ota_service_otaintegrationservice_cancel_existing_reservation_from_normalized",
+        "services_ota_service_otaintegrationservice_update_existing_reservation_from_normalized",
+        "services_ota_service_otaautherror",
+        "services_ota_service_otaintegrationservice_extract_external_property_id",
+        "services_ota_service_otaintegrationservice_hash_secret",
+        "services_ota_service_otaintegrationservice_ensure_foundation_provider",
+        "services_ota_service_hotel_default_currency",
+        "services_ota_service_otaintegrationservice_normalize_collection_model",
+        "services_ota_service_otaintegrationservice_normalize_settlement_status",
+        "services_ota_service_otaintegrationservice_resolve_paid_amount",
+        "services_ota_service_otaintegrationservice_split_guest_name",
+        "services_ota_service_otaintegrationservice_mark_reservation_manual_review",
+        "services_ota_service_ota_fact_input_snapshot",
+        "services_ota_service_otaintegrationservice_normalize_secret"
+      ],
+      "qualifiedPath": [
+        "services_ota_service_otaintegrationservice_process_despegar_webhook",
+        "services_ota_service_otaintegrationservice_process_normalized_webhook",
+        "services_ota_service_otaerror",
+        "services_ota_service_otaintegrationservice_create_legacy_mapping",
+        "services_ota_service_otaintegrationservice_materialize_incoming_reservation",
+        "services_ota_service_otaintegrationservice_normalize_event_type",
+        "services_ota_service_otaintegrationservice_process_existing_incoming_reservation",
+        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
+        "services_ota_service_otaintegrationservice_sync_foundation_reservation_link",
+        "services_ota_service_otaintegrationservice_sync_mapping_payload",
+        "services_ota_service_otaintegrationservice_apply_financial_snapshot",
+        "services_ota_service_otaintegrationservice_reservation_source_for_provider",
+        "services_ota_service_otaintegrationservice_resolve_commercial_context",
+        "services_ota_service_otaintegrationservice_select_room_for_normalized_reservation",
+        "services_ota_service_otaintegrationservice_sync_guest_record",
+        "services_ota_service_touch_ota_reservation_facts",
+        "services_ota_service_otaintegrationservice_cancel_existing_reservation_from_normalized",
+        "services_ota_service_otaintegrationservice_update_existing_reservation_from_normalized",
+        "services_ota_service_otaautherror",
+        "services_ota_service_otaintegrationservice_extract_external_property_id",
+        "services_ota_service_otaintegrationservice_hash_secret",
+        "services_ota_service_otaintegrationservice_ensure_foundation_provider",
+        "services_ota_service_hotel_default_currency",
+        "services_ota_service_otaintegrationservice_normalize_collection_model",
+        "services_ota_service_otaintegrationservice_normalize_settlement_status",
+        "services_ota_service_otaintegrationservice_resolve_paid_amount",
+        "services_ota_service_otaintegrationservice_split_guest_name",
+        "services_ota_service_otaintegrationservice_mark_reservation_manual_review",
+        "services_ota_service_ota_fact_input_snapshot",
+        "services_ota_service_otaintegrationservice_normalize_secret"
+      ],
+      "depth": 4,
+      "nodeCount": 30,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota_service.py"
+      ],
+      "criticality": 0.2233,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_ota_service_otaintegrationservice_process_expedia_webhook",
+      "name": ".process_expedia_webhook",
+      "entryPoint": "services_ota_service_otaintegrationservice_process_expedia_webhook",
+      "entryPointId": "services_ota_service_otaintegrationservice_process_expedia_webhook",
+      "path": [
+        "services_ota_service_otaintegrationservice_process_expedia_webhook",
+        "services_ota_service_otaintegrationservice_process_normalized_webhook",
+        "services_ota_service_otaerror",
+        "services_ota_service_otaintegrationservice_create_legacy_mapping",
+        "services_ota_service_otaintegrationservice_materialize_incoming_reservation",
+        "services_ota_service_otaintegrationservice_normalize_event_type",
+        "services_ota_service_otaintegrationservice_process_existing_incoming_reservation",
+        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
+        "services_ota_service_otaintegrationservice_sync_foundation_reservation_link",
+        "services_ota_service_otaintegrationservice_sync_mapping_payload",
+        "services_ota_service_otaintegrationservice_apply_financial_snapshot",
+        "services_ota_service_otaintegrationservice_reservation_source_for_provider",
+        "services_ota_service_otaintegrationservice_resolve_commercial_context",
+        "services_ota_service_otaintegrationservice_select_room_for_normalized_reservation",
+        "services_ota_service_otaintegrationservice_sync_guest_record",
+        "services_ota_service_touch_ota_reservation_facts",
+        "services_ota_service_otaintegrationservice_cancel_existing_reservation_from_normalized",
+        "services_ota_service_otaintegrationservice_update_existing_reservation_from_normalized",
+        "services_ota_service_otaautherror",
+        "services_ota_service_otaintegrationservice_extract_external_property_id",
+        "services_ota_service_otaintegrationservice_hash_secret",
+        "services_ota_service_otaintegrationservice_ensure_foundation_provider",
+        "services_ota_service_hotel_default_currency",
+        "services_ota_service_otaintegrationservice_normalize_collection_model",
+        "services_ota_service_otaintegrationservice_normalize_settlement_status",
+        "services_ota_service_otaintegrationservice_resolve_paid_amount",
+        "services_ota_service_otaintegrationservice_split_guest_name",
+        "services_ota_service_otaintegrationservice_mark_reservation_manual_review",
+        "services_ota_service_ota_fact_input_snapshot",
+        "services_ota_service_otaintegrationservice_normalize_secret"
+      ],
+      "qualifiedPath": [
+        "services_ota_service_otaintegrationservice_process_expedia_webhook",
+        "services_ota_service_otaintegrationservice_process_normalized_webhook",
+        "services_ota_service_otaerror",
+        "services_ota_service_otaintegrationservice_create_legacy_mapping",
+        "services_ota_service_otaintegrationservice_materialize_incoming_reservation",
+        "services_ota_service_otaintegrationservice_normalize_event_type",
+        "services_ota_service_otaintegrationservice_process_existing_incoming_reservation",
+        "services_ota_service_otaintegrationservice_resolve_webhook_credential",
+        "services_ota_service_otaintegrationservice_sync_foundation_reservation_link",
+        "services_ota_service_otaintegrationservice_sync_mapping_payload",
+        "services_ota_service_otaintegrationservice_apply_financial_snapshot",
+        "services_ota_service_otaintegrationservice_reservation_source_for_provider",
+        "services_ota_service_otaintegrationservice_resolve_commercial_context",
+        "services_ota_service_otaintegrationservice_select_room_for_normalized_reservation",
+        "services_ota_service_otaintegrationservice_sync_guest_record",
+        "services_ota_service_touch_ota_reservation_facts",
+        "services_ota_service_otaintegrationservice_cancel_existing_reservation_from_normalized",
+        "services_ota_service_otaintegrationservice_update_existing_reservation_from_normalized",
+        "services_ota_service_otaautherror",
+        "services_ota_service_otaintegrationservice_extract_external_property_id",
+        "services_ota_service_otaintegrationservice_hash_secret",
+        "services_ota_service_otaintegrationservice_ensure_foundation_provider",
+        "services_ota_service_hotel_default_currency",
+        "services_ota_service_otaintegrationservice_normalize_collection_model",
+        "services_ota_service_otaintegrationservice_normalize_settlement_status",
+        "services_ota_service_otaintegrationservice_resolve_paid_amount",
+        "services_ota_service_otaintegrationservice_split_guest_name",
+        "services_ota_service_otaintegrationservice_mark_reservation_manual_review",
+        "services_ota_service_ota_fact_input_snapshot",
+        "services_ota_service_otaintegrationservice_normalize_secret"
+      ],
+      "depth": 4,
+      "nodeCount": 30,
+      "fileCount": 1,
+      "files": [
+        "app/services/ota_service.py"
+      ],
+      "criticality": 0.2233,
       "warnings": []
     },
     {
@@ -10620,34 +10708,6 @@
       "fileCount": 1,
       "files": [
         "app/services/commercial_service.py"
-      ],
-      "criticality": 0.22,
-      "warnings": []
-    },
-    {
-      "id": "flow:sync_crosstabsync_notifyifrelevant",
-      "name": "notifyIfRelevant",
-      "entryPoint": "sync_crosstabsync_notifyifrelevant",
-      "entryPointId": "sync_crosstabsync_notifyifrelevant",
-      "path": [
-        "sync_crosstabsync_notifyifrelevant",
-        "sync_crosstabsync_getsenderid",
-        "sync_crosstabsync_invalidatedomainqueries",
-        "sync_crosstabsync_parsemessage",
-        "sync_crosstabsync_normalizehotelid"
-      ],
-      "qualifiedPath": [
-        "sync_crosstabsync_notifyifrelevant",
-        "sync_crosstabsync_getsenderid",
-        "sync_crosstabsync_invalidatedomainqueries",
-        "sync_crosstabsync_parsemessage",
-        "sync_crosstabsync_normalizehotelid"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/sync/crossTabSync.ts"
       ],
       "criticality": 0.22,
       "warnings": []
@@ -11726,13 +11786,13 @@
         "services_domain_events_publish_domain_event",
         "services_domain_events_realtimeeventsunavailable",
         "services_domain_events_record_outbox_attempt",
+        "services_domain_events_settings",
         "services_domain_events_outboxpublishpermit",
         "services_domain_events_domainevent",
         "services_domain_events_domainevent_as_payload",
         "services_domain_events_get_realtime_fast_fail_client",
         "services_domain_events_get_redis_client",
         "services_domain_events_revision_key_for_hotel",
-        "services_domain_events_settings",
         "services_domain_events_unavailable",
         "services_domain_events_validate_event_input",
         "services_domain_events_validate_hotel_id",
@@ -11747,13 +11807,13 @@
         "services_domain_events_publish_domain_event",
         "services_domain_events_realtimeeventsunavailable",
         "services_domain_events_record_outbox_attempt",
+        "services_domain_events_settings",
         "services_domain_events_outboxpublishpermit",
         "services_domain_events_domainevent",
         "services_domain_events_domainevent_as_payload",
         "services_domain_events_get_realtime_fast_fail_client",
         "services_domain_events_get_redis_client",
         "services_domain_events_revision_key_for_hotel",
-        "services_domain_events_settings",
         "services_domain_events_unavailable",
         "services_domain_events_validate_event_input",
         "services_domain_events_validate_hotel_id",
@@ -11830,6 +11890,58 @@
         "app/services/reservation_service.py"
       ],
       "criticality": 0.2057,
+      "warnings": []
+    },
+    {
+      "id": "flow:perf_benchmark_pg_main",
+      "name": "main",
+      "entryPoint": "perf_benchmark_pg_main",
+      "entryPointId": "perf_benchmark_pg_main",
+      "path": [
+        "perf_benchmark_pg_main",
+        "perf_benchmark_pg_cleanup",
+        "perf_benchmark_pg_derive_test_dsn",
+        "perf_benchmark_pg_print_results",
+        "perf_benchmark_pg_run_alembic_upgrade",
+        "perf_benchmark_pg_run_benchmarks",
+        "perf_benchmark_pg_seed",
+        "perf_benchmark_pg_benchmarkresult",
+        "perf_benchmark_pg_explain",
+        "perf_benchmark_pg_explain_query",
+        "perf_benchmark_pg_index_usage_for_operation",
+        "perf_benchmark_pg_measure",
+        "perf_benchmark_pg_report_explain_plan",
+        "perf_benchmark_pg_percentile",
+        "perf_benchmark_pg_format_plan_nodes",
+        "perf_benchmark_pg_plan_document",
+        "perf_benchmark_pg_walk_plan_nodes"
+      ],
+      "qualifiedPath": [
+        "perf_benchmark_pg_main",
+        "perf_benchmark_pg_cleanup",
+        "perf_benchmark_pg_derive_test_dsn",
+        "perf_benchmark_pg_print_results",
+        "perf_benchmark_pg_run_alembic_upgrade",
+        "perf_benchmark_pg_run_benchmarks",
+        "perf_benchmark_pg_seed",
+        "perf_benchmark_pg_benchmarkresult",
+        "perf_benchmark_pg_explain",
+        "perf_benchmark_pg_explain_query",
+        "perf_benchmark_pg_index_usage_for_operation",
+        "perf_benchmark_pg_measure",
+        "perf_benchmark_pg_report_explain_plan",
+        "perf_benchmark_pg_percentile",
+        "perf_benchmark_pg_format_plan_nodes",
+        "perf_benchmark_pg_plan_document",
+        "perf_benchmark_pg_walk_plan_nodes"
+      ],
+      "depth": 4,
+      "nodeCount": 17,
+      "fileCount": 1,
+      "files": [
+        "tests/perf/benchmark_pg.py"
+      ],
+      "criticality": 0.2047,
       "warnings": []
     },
     {
@@ -12581,6 +12693,44 @@
       "warnings": []
     },
     {
+      "id": "flow:sync_crosstabsync_notifyifrelevant",
+      "name": "notifyIfRelevant",
+      "entryPoint": "sync_crosstabsync_notifyifrelevant",
+      "entryPointId": "sync_crosstabsync_notifyifrelevant",
+      "path": [
+        "sync_crosstabsync_notifyifrelevant",
+        "sync_crosstabsync_getsenderid",
+        "sync_crosstabsync_invalidatedomainqueries",
+        "sync_crosstabsync_parsemessage",
+        "sync_crosstabsync_shouldrefreshfordomainorigin",
+        "sync_crosstabsync_normalizehotelid",
+        "sync_crosstabsync_normalizeoriginkey",
+        "sync_crosstabsync_mutationoriginkey",
+        "sync_crosstabsync_origindomainkey",
+        "sync_crosstabsync_rememberorigindomain"
+      ],
+      "qualifiedPath": [
+        "sync_crosstabsync_notifyifrelevant",
+        "sync_crosstabsync_getsenderid",
+        "sync_crosstabsync_invalidatedomainqueries",
+        "sync_crosstabsync_parsemessage",
+        "sync_crosstabsync_shouldrefreshfordomainorigin",
+        "sync_crosstabsync_normalizehotelid",
+        "sync_crosstabsync_normalizeoriginkey",
+        "sync_crosstabsync_mutationoriginkey",
+        "sync_crosstabsync_origindomainkey",
+        "sync_crosstabsync_rememberorigindomain"
+      ],
+      "depth": 2,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/sync/crossTabSync.ts"
+      ],
+      "criticality": 0.195,
+      "warnings": []
+    },
+    {
       "id": "flow:services_allocation_engine_run_allocation",
       "name": "run_allocation",
       "entryPoint": "services_allocation_engine_run_allocation",
@@ -13069,6 +13219,68 @@
       "warnings": []
     },
     {
+      "id": "flow:services_analytics_facts_detect_no_shows",
+      "name": "detect_no_shows",
+      "entryPoint": "services_analytics_facts_detect_no_shows",
+      "entryPointId": "services_analytics_facts_detect_no_shows",
+      "path": [
+        "services_analytics_facts_detect_no_shows",
+        "services_analytics_facts_noshowdetectionresult",
+        "services_analytics_facts_reservation_audit_snapshot",
+        "services_analytics_facts_resolve_audit_user_id",
+        "services_analytics_facts_touch_reservation_fact_window",
+        "services_analytics_facts_refresh_fact_reservation_daily",
+        "services_analytics_facts_refresh_fact_room_occupancy_daily",
+        "services_analytics_facts_factrefreshresult",
+        "services_analytics_facts_reservation_dates_for_full_stay",
+        "services_analytics_facts_reservation_dates_in_window",
+        "services_analytics_facts_reservation_monetary_totals",
+        "services_analytics_facts_reservation_row_kind",
+        "services_analytics_facts_resolve_no_show_policy",
+        "services_analytics_facts_date_range",
+        "services_analytics_facts_occupied_nightly_fact_map",
+        "services_analytics_facts_room_state_events_map",
+        "services_analytics_facts_currency_pair",
+        "services_analytics_facts_decimal_or_none",
+        "services_analytics_facts_decimal_or_zero",
+        "services_analytics_facts_event_overlaps_date",
+        "services_analytics_facts_room_event_priority",
+        "services_analytics_facts_room_event_status"
+      ],
+      "qualifiedPath": [
+        "services_analytics_facts_detect_no_shows",
+        "services_analytics_facts_noshowdetectionresult",
+        "services_analytics_facts_reservation_audit_snapshot",
+        "services_analytics_facts_resolve_audit_user_id",
+        "services_analytics_facts_touch_reservation_fact_window",
+        "services_analytics_facts_refresh_fact_reservation_daily",
+        "services_analytics_facts_refresh_fact_room_occupancy_daily",
+        "services_analytics_facts_factrefreshresult",
+        "services_analytics_facts_reservation_dates_for_full_stay",
+        "services_analytics_facts_reservation_dates_in_window",
+        "services_analytics_facts_reservation_monetary_totals",
+        "services_analytics_facts_reservation_row_kind",
+        "services_analytics_facts_resolve_no_show_policy",
+        "services_analytics_facts_date_range",
+        "services_analytics_facts_occupied_nightly_fact_map",
+        "services_analytics_facts_room_state_events_map",
+        "services_analytics_facts_currency_pair",
+        "services_analytics_facts_decimal_or_none",
+        "services_analytics_facts_decimal_or_zero",
+        "services_analytics_facts_event_overlaps_date",
+        "services_analytics_facts_room_event_priority",
+        "services_analytics_facts_room_event_status"
+      ],
+      "depth": 4,
+      "nodeCount": 22,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_facts.py"
+      ],
+      "criticality": 0.19,
+      "warnings": []
+    },
+    {
       "id": "flow:services_fx_service_get_all_rates_snapshot",
       "name": "get_all_rates_snapshot",
       "entryPoint": "services_fx_service_get_all_rates_snapshot",
@@ -13212,6 +13424,58 @@
       "fileCount": 1,
       "files": [
         "app/services/subscription_service.py"
+      ],
+      "criticality": 0.19,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_analytics_facts_touch_room_state_event_fact_window",
+      "name": "touch_room_state_event_fact_window",
+      "entryPoint": "services_analytics_facts_touch_room_state_event_fact_window",
+      "entryPointId": "services_analytics_facts_touch_room_state_event_fact_window",
+      "path": [
+        "services_analytics_facts_touch_room_state_event_fact_window",
+        "services_analytics_facts_refresh_fact_room_occupancy_daily",
+        "services_analytics_facts_date_range",
+        "services_analytics_facts_factrefreshresult",
+        "services_analytics_facts_occupied_nightly_fact_map",
+        "services_analytics_facts_room_state_events_map",
+        "services_analytics_facts_reservation_dates_for_full_stay",
+        "services_analytics_facts_reservation_dates_in_window",
+        "services_analytics_facts_reservation_monetary_totals",
+        "services_analytics_facts_reservation_row_kind",
+        "services_analytics_facts_resolve_no_show_policy",
+        "services_analytics_facts_event_overlaps_date",
+        "services_analytics_facts_room_event_priority",
+        "services_analytics_facts_room_event_status",
+        "services_analytics_facts_currency_pair",
+        "services_analytics_facts_decimal_or_none",
+        "services_analytics_facts_decimal_or_zero"
+      ],
+      "qualifiedPath": [
+        "services_analytics_facts_touch_room_state_event_fact_window",
+        "services_analytics_facts_refresh_fact_room_occupancy_daily",
+        "services_analytics_facts_date_range",
+        "services_analytics_facts_factrefreshresult",
+        "services_analytics_facts_occupied_nightly_fact_map",
+        "services_analytics_facts_room_state_events_map",
+        "services_analytics_facts_reservation_dates_for_full_stay",
+        "services_analytics_facts_reservation_dates_in_window",
+        "services_analytics_facts_reservation_monetary_totals",
+        "services_analytics_facts_reservation_row_kind",
+        "services_analytics_facts_resolve_no_show_policy",
+        "services_analytics_facts_event_overlaps_date",
+        "services_analytics_facts_room_event_priority",
+        "services_analytics_facts_room_event_status",
+        "services_analytics_facts_currency_pair",
+        "services_analytics_facts_decimal_or_none",
+        "services_analytics_facts_decimal_or_zero"
+      ],
+      "depth": 4,
+      "nodeCount": 17,
+      "fileCount": 1,
+      "files": [
+        "app/services/analytics_facts.py"
       ],
       "criticality": 0.19,
       "warnings": []
@@ -14353,46 +14617,6 @@
       "warnings": []
     },
     {
-      "id": "flow:perf_benchmark_pg_main",
-      "name": "main",
-      "entryPoint": "perf_benchmark_pg_main",
-      "entryPointId": "perf_benchmark_pg_main",
-      "path": [
-        "perf_benchmark_pg_main",
-        "perf_benchmark_pg_derive_test_dsn",
-        "perf_benchmark_pg_print_results",
-        "perf_benchmark_pg_run_alembic_upgrade",
-        "perf_benchmark_pg_run_benchmarks",
-        "perf_benchmark_pg_seed",
-        "perf_benchmark_pg_benchmarkresult",
-        "perf_benchmark_pg_explain",
-        "perf_benchmark_pg_measure",
-        "perf_benchmark_pg_cleanup",
-        "perf_benchmark_pg_percentile"
-      ],
-      "qualifiedPath": [
-        "perf_benchmark_pg_main",
-        "perf_benchmark_pg_derive_test_dsn",
-        "perf_benchmark_pg_print_results",
-        "perf_benchmark_pg_run_alembic_upgrade",
-        "perf_benchmark_pg_run_benchmarks",
-        "perf_benchmark_pg_seed",
-        "perf_benchmark_pg_benchmarkresult",
-        "perf_benchmark_pg_explain",
-        "perf_benchmark_pg_measure",
-        "perf_benchmark_pg_cleanup",
-        "perf_benchmark_pg_percentile"
-      ],
-      "depth": 3,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "tests/perf/benchmark_pg.py"
-      ],
-      "criticality": 0.18,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_service_patch_ai_config",
       "name": "patch_ai_config",
       "entryPoint": "services_analytics_service_patch_ai_config",
@@ -14739,60 +14963,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_analytics_facts_touch_reservation_fact_window",
-      "name": "touch_reservation_fact_window",
-      "entryPoint": "services_analytics_facts_touch_reservation_fact_window",
-      "entryPointId": "services_analytics_facts_touch_reservation_fact_window",
-      "path": [
-        "services_analytics_facts_touch_reservation_fact_window",
-        "services_analytics_facts_refresh_fact_reservation_daily",
-        "services_analytics_facts_refresh_fact_room_occupancy_daily",
-        "services_analytics_facts_factrefreshresult",
-        "services_analytics_facts_reservation_dates_for_full_stay",
-        "services_analytics_facts_reservation_dates_in_window",
-        "services_analytics_facts_reservation_monetary_totals",
-        "services_analytics_facts_reservation_row_kind",
-        "services_analytics_facts_resolve_no_show_policy",
-        "services_analytics_facts_date_range",
-        "services_analytics_facts_occupied_nightly_fact_map",
-        "services_analytics_facts_room_state_events_map",
-        "services_analytics_facts_currency_pair",
-        "services_analytics_facts_decimal_or_none",
-        "services_analytics_facts_decimal_or_zero",
-        "services_analytics_facts_event_overlaps_date",
-        "services_analytics_facts_room_event_priority",
-        "services_analytics_facts_room_event_status"
-      ],
-      "qualifiedPath": [
-        "services_analytics_facts_touch_reservation_fact_window",
-        "services_analytics_facts_refresh_fact_reservation_daily",
-        "services_analytics_facts_refresh_fact_room_occupancy_daily",
-        "services_analytics_facts_factrefreshresult",
-        "services_analytics_facts_reservation_dates_for_full_stay",
-        "services_analytics_facts_reservation_dates_in_window",
-        "services_analytics_facts_reservation_monetary_totals",
-        "services_analytics_facts_reservation_row_kind",
-        "services_analytics_facts_resolve_no_show_policy",
-        "services_analytics_facts_date_range",
-        "services_analytics_facts_occupied_nightly_fact_map",
-        "services_analytics_facts_room_state_events_map",
-        "services_analytics_facts_currency_pair",
-        "services_analytics_facts_decimal_or_none",
-        "services_analytics_facts_decimal_or_zero",
-        "services_analytics_facts_event_overlaps_date",
-        "services_analytics_facts_room_event_priority",
-        "services_analytics_facts_room_event_status"
-      ],
-      "depth": 3,
-      "nodeCount": 18,
-      "fileCount": 1,
-      "files": [
-        "app/services/analytics_facts.py"
-      ],
-      "criticality": 0.18,
-      "warnings": []
-    },
-    {
       "id": "flow:services_stock_service_transfer_stock",
       "name": "transfer_stock",
       "entryPoint": "services_stock_service_transfer_stock",
@@ -14914,6 +15084,44 @@
       "fileCount": 1,
       "files": [
         "app/services/ota/adapters/booking.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_outbox_poll_cache_outboxpollbatchcache_get",
+      "name": ".get",
+      "entryPoint": "services_outbox_poll_cache_outboxpollbatchcache_get",
+      "entryPointId": "services_outbox_poll_cache_outboxpollbatchcache_get",
+      "path": [
+        "services_outbox_poll_cache_outboxpollbatchcache_get",
+        "services_outbox_poll_cache_outboxpollbatchcache_bounded_ttl",
+        "services_outbox_poll_cache_outboxpollbatchcache_get_locked",
+        "services_outbox_poll_cache_outboxpollbatchcache_lock_for",
+        "services_outbox_poll_cache_outboxpollbatchcache_prune_key_locks",
+        "services_outbox_poll_cache_cachedfailure",
+        "services_outbox_poll_cache_cachedoutboxpollfailure",
+        "services_outbox_poll_cache_outboxpollbatchcache_maybe_log_window",
+        "services_outbox_poll_cache_outboxpollbatchcache_store",
+        "services_outbox_poll_cache_pollentry"
+      ],
+      "qualifiedPath": [
+        "services_outbox_poll_cache_outboxpollbatchcache_get",
+        "services_outbox_poll_cache_outboxpollbatchcache_bounded_ttl",
+        "services_outbox_poll_cache_outboxpollbatchcache_get_locked",
+        "services_outbox_poll_cache_outboxpollbatchcache_lock_for",
+        "services_outbox_poll_cache_outboxpollbatchcache_prune_key_locks",
+        "services_outbox_poll_cache_cachedfailure",
+        "services_outbox_poll_cache_cachedoutboxpollfailure",
+        "services_outbox_poll_cache_outboxpollbatchcache_maybe_log_window",
+        "services_outbox_poll_cache_outboxpollbatchcache_store",
+        "services_outbox_poll_cache_pollentry"
+      ],
+      "depth": 2,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "app/services/outbox_poll_cache.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -15250,6 +15458,36 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_link_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:sync_crosstabsync_broadcastdomainchange",
+      "name": "broadcastDomainChange",
+      "entryPoint": "sync_crosstabsync_broadcastdomainchange",
+      "entryPointId": "sync_crosstabsync_broadcastdomainchange",
+      "path": [
+        "sync_crosstabsync_broadcastdomainchange",
+        "sync_crosstabsync_domainsforpath",
+        "sync_crosstabsync_finishlocaldomainmutation",
+        "sync_crosstabsync_normalizehotelid",
+        "sync_crosstabsync_normalizeoriginkey",
+        "sync_crosstabsync_mutationoriginkey"
+      ],
+      "qualifiedPath": [
+        "sync_crosstabsync_broadcastdomainchange",
+        "sync_crosstabsync_domainsforpath",
+        "sync_crosstabsync_finishlocaldomainmutation",
+        "sync_crosstabsync_normalizehotelid",
+        "sync_crosstabsync_normalizeoriginkey",
+        "sync_crosstabsync_mutationoriginkey"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/sync/crossTabSync.ts"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -15916,6 +16154,34 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260927_ota_credit_backfill.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_promotion_service_find_applicable_promotions",
+      "name": "find_applicable_promotions",
+      "entryPoint": "services_promotion_service_find_applicable_promotions",
+      "entryPointId": "services_promotion_service_find_applicable_promotions",
+      "path": [
+        "services_promotion_service_find_applicable_promotions",
+        "services_promotion_service_find_applicable_promotions_for_nights",
+        "services_promotion_service_guest_tag_types",
+        "services_promotion_service_promotion_matches",
+        "valueerror"
+      ],
+      "qualifiedPath": [
+        "services_promotion_service_find_applicable_promotions",
+        "services_promotion_service_find_applicable_promotions_for_nights",
+        "services_promotion_service_guest_tag_types",
+        "services_promotion_service_promotion_matches",
+        "valueerror"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/promotion_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -17308,6 +17574,7 @@
         "services_reservation_operations_service_reservation_has_payment_or_deposit",
         "services_reservation_operations_service_reservationoperationserror",
         "services_reservation_operations_service_resolve_ota_reservation_link",
+        "services_reservation_operations_service_touch_facts",
         "services_reservation_operations_service_compute_deposit_amount",
         "services_reservation_operations_service_hotel_default_currency",
         "services_reservation_operations_service_otarebookpreview",
@@ -17323,6 +17590,7 @@
         "services_reservation_operations_service_reservation_has_payment_or_deposit",
         "services_reservation_operations_service_reservationoperationserror",
         "services_reservation_operations_service_resolve_ota_reservation_link",
+        "services_reservation_operations_service_touch_facts",
         "services_reservation_operations_service_compute_deposit_amount",
         "services_reservation_operations_service_hotel_default_currency",
         "services_reservation_operations_service_otarebookpreview",
@@ -17332,7 +17600,7 @@
         "services_reservation_operations_service_has_transactions"
       ],
       "depth": 2,
-      "nodeCount": 13,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/reservation_operations_service.py"
@@ -20785,6 +21053,34 @@
       "warnings": []
     },
     {
+      "id": "flow:sync_crosstabsync_beginlocaldomainmutation",
+      "name": "beginLocalDomainMutation",
+      "entryPoint": "sync_crosstabsync_beginlocaldomainmutation",
+      "entryPointId": "sync_crosstabsync_beginlocaldomainmutation",
+      "path": [
+        "sync_crosstabsync_beginlocaldomainmutation",
+        "sync_crosstabsync_domainsforpath",
+        "sync_crosstabsync_mutationoriginkey",
+        "sync_crosstabsync_normalizehotelid",
+        "sync_crosstabsync_normalizeoriginkey"
+      ],
+      "qualifiedPath": [
+        "sync_crosstabsync_beginlocaldomainmutation",
+        "sync_crosstabsync_domainsforpath",
+        "sync_crosstabsync_mutationoriginkey",
+        "sync_crosstabsync_normalizehotelid",
+        "sync_crosstabsync_normalizeoriginkey"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/sync/crossTabSync.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_room_block_service_blocked_room_ids_for_range",
       "name": "blocked_room_ids_for_range",
       "entryPoint": "services_room_block_service_blocked_room_ids_for_range",
@@ -20848,30 +21144,6 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/qa_bootstrap_contract.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:sync_crosstabsync_broadcastdomainchange",
-      "name": "broadcastDomainChange",
-      "entryPoint": "sync_crosstabsync_broadcastdomainchange",
-      "entryPointId": "sync_crosstabsync_broadcastdomainchange",
-      "path": [
-        "sync_crosstabsync_broadcastdomainchange",
-        "sync_crosstabsync_domainsforpath",
-        "sync_crosstabsync_normalizehotelid"
-      ],
-      "qualifiedPath": [
-        "sync_crosstabsync_broadcastdomainchange",
-        "sync_crosstabsync_domainsforpath",
-        "sync_crosstabsync_normalizehotelid"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/sync/crossTabSync.ts"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -22495,32 +22767,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_analytics_facts_detect_no_shows",
-      "name": "detect_no_shows",
-      "entryPoint": "services_analytics_facts_detect_no_shows",
-      "entryPointId": "services_analytics_facts_detect_no_shows",
-      "path": [
-        "services_analytics_facts_detect_no_shows",
-        "services_analytics_facts_noshowdetectionresult",
-        "services_analytics_facts_reservation_audit_snapshot",
-        "services_analytics_facts_resolve_audit_user_id"
-      ],
-      "qualifiedPath": [
-        "services_analytics_facts_detect_no_shows",
-        "services_analytics_facts_noshowdetectionresult",
-        "services_analytics_facts_reservation_audit_snapshot",
-        "services_analytics_facts_resolve_audit_user_id"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/analytics_facts.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:tasks_analytics_tasks_detect_no_shows",
       "name": "detect_no_shows",
       "entryPoint": "tasks_analytics_tasks_detect_no_shows",
@@ -23678,30 +23924,6 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_webhook_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_promotion_service_find_applicable_promotions",
-      "name": "find_applicable_promotions",
-      "entryPoint": "services_promotion_service_find_applicable_promotions",
-      "entryPointId": "services_promotion_service_find_applicable_promotions",
-      "path": [
-        "services_promotion_service_find_applicable_promotions",
-        "services_promotion_service_guest_tag_types",
-        "services_promotion_service_promotion_matches"
-      ],
-      "qualifiedPath": [
-        "services_promotion_service_find_applicable_promotions",
-        "services_promotion_service_guest_tag_types",
-        "services_promotion_service_promotion_matches"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/promotion_service.py"
       ],
       "criticality": 0.16,
       "warnings": []

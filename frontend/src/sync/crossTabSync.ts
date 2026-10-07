@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { buildAuthHeaders, buildUrl, type SessionLike } from "../api/client";
@@ -18,6 +18,7 @@ type SyncMessage = {
   domain: SyncDomain;
   path: string;
   occurredAt: number;
+  originKey?: string;
 };
 
 type ServerEvent = {
@@ -29,6 +30,7 @@ type ServerEvent = {
   event_type?: string;
   revision?: number;
   cursor?: number | string | null;
+  origin_key?: string;
   payload?: Record<string, string | number | boolean | null>;
 };
 
@@ -37,12 +39,19 @@ const STORAGE_KEY = "hotel-pms-domain-event";
 
 const DOMAIN_QUERY_PREFIXES = QUERY_PREFIXES_BY_DOMAIN;
 const EVENT_ID_LIMIT = 2048;
+const ORIGIN_DOMAIN_LIMIT = 2048;
 // Coalesce a burst of committed table events into one tenant-scoped refetch.
 const REALTIME_EVENT_DEBOUNCE_MS = 1_000;
-// Recovery remains bounded below the ten-second freshness budget when the
-// SSE transport is unavailable. Hidden tabs pause recovery and catch up when
-// they become visible again.
+// Keep fallback recovery at five seconds while the API responds; back off
+// during errors so an outage does not become a steady stream of failed reads.
+// Hidden tabs pause recovery and catch up when they become visible again.
 const REALTIME_RECOVERY_POLL_MS = 5_000;
+const REALTIME_RECOVERY_MAX_POLL_MS = 30_000;
+
+export const realtimeRecoveryPollDelay = (consecutiveFailures: number): number => {
+  const failures = Number.isSafeInteger(consecutiveFailures) ? Math.max(0, consecutiveFailures) : 0;
+  return Math.min(REALTIME_RECOVERY_MAX_POLL_MS, REALTIME_RECOVERY_POLL_MS * 2 ** failures);
+};
 
 export type RealtimeConnectionStatus = "disabled" | "connecting" | "connected" | "reconnecting" | "degraded";
 
@@ -74,6 +83,13 @@ export function useRealtimeStatus(): RealtimeConnectionStatus {
 
 let senderId: string | null = null;
 let channel: BroadcastChannel | null = null;
+const handledOriginDomains = new Set<string>();
+const LOCAL_ORIGIN_REFRESH_EVENT = "hotel-pms:domain-event-local-recovery";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const pendingLocalMutationOrigins = new Map<
+  string,
+  { hotelId: number; domains: Set<SyncDomain>; observedDomains: Set<SyncDomain> }
+>();
 
 const getSenderId = () => {
   if (!senderId) {
@@ -82,13 +98,101 @@ const getSenderId = () => {
   return senderId;
 };
 
-const normalizeHotelId = (hotelId?: number | string | null) => {
+const normalizeHotelId = (hotelId?: unknown) => {
   const parsed = typeof hotelId === "string" ? parseInt(hotelId, 10) : hotelId;
-  return Number.isInteger(parsed) && (parsed as number) > 0 ? (parsed as number) : null;
+  return typeof parsed === "number" && Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const normalizeOriginKey = (originKey: unknown): string | null =>
+  typeof originKey === "string" && UUID_PATTERN.test(originKey) ? originKey.toLowerCase() : null;
+
+const mutationOriginKey = (hotelId: number, originKey: string) => `${hotelId}:${originKey}`;
+const originDomainKey = (hotelId: number, originKey: string, domain: SyncDomain) =>
+  `${hotelId}:${originKey}:${domain}`;
+
+const rememberOriginDomain = (hotelId: number, originKey: string, domain: SyncDomain) => {
+  const key = originDomainKey(hotelId, originKey, domain);
+  if (handledOriginDomains.has(key)) handledOriginDomains.delete(key);
+  handledOriginDomains.add(key);
+  while (handledOriginDomains.size > ORIGIN_DOMAIN_LIMIT) {
+    const oldest = handledOriginDomains.values().next().value;
+    if (typeof oldest !== "string") break;
+    handledOriginDomains.delete(oldest);
+  }
+};
+
+/** Return false when this exact request/domain was already handled or is in flight locally. */
+export const shouldRefreshForDomainOrigin = (
+  hotelId: number,
+  domain: SyncDomain,
+  rawOriginKey: unknown
+): boolean => {
+  const normalizedHotelId = normalizeHotelId(hotelId);
+  const originKey = normalizeOriginKey(rawOriginKey);
+  if (!normalizedHotelId || !originKey) return true;
+  const pending = pendingLocalMutationOrigins.get(mutationOriginKey(normalizedHotelId, originKey));
+  if (pending && pending.domains.has(domain)) {
+    pending.observedDomains.add(domain);
+    return false;
+  }
+  const key = originDomainKey(normalizedHotelId, originKey, domain);
+  if (handledOriginDomains.has(key)) return false;
+  rememberOriginDomain(normalizedHotelId, originKey, domain);
+  return true;
+};
+
+export const beginLocalDomainMutation = (
+  hotelId: number | string | null | undefined,
+  path: string,
+  rawOriginKey: unknown
+) => {
+  const normalizedHotelId = normalizeHotelId(hotelId);
+  const originKey = normalizeOriginKey(rawOriginKey);
+  const domains = domainsForPath(path);
+  if (!normalizedHotelId || !originKey || domains.length === 0) return;
+  pendingLocalMutationOrigins.set(mutationOriginKey(normalizedHotelId, originKey), {
+    hotelId: normalizedHotelId,
+    domains: new Set(domains),
+    observedDomains: new Set()
+  });
+};
+
+export const finishLocalDomainMutation = (
+  hotelId: number | string | null | undefined,
+  rawOriginKey: unknown,
+  succeeded: boolean
+) => {
+  const normalizedHotelId = normalizeHotelId(hotelId);
+  const originKey = normalizeOriginKey(rawOriginKey);
+  if (!normalizedHotelId || !originKey) return;
+  const key = mutationOriginKey(normalizedHotelId, originKey);
+  const pending = pendingLocalMutationOrigins.get(key);
+  if (!pending) return;
+  pendingLocalMutationOrigins.delete(key);
+
+  if (succeeded) {
+    pending.domains.forEach((domain) => rememberOriginDomain(pending.hotelId, originKey, domain));
+    return;
+  }
+
+  const observedDomains = Array.from(pending.observedDomains);
+  observedDomains.forEach((domain) => rememberOriginDomain(pending.hotelId, originKey, domain));
+  if (observedDomains.length && typeof window !== "undefined") {
+    try {
+      window.dispatchEvent(
+        new CustomEvent(LOCAL_ORIGIN_REFRESH_EVENT, {
+          detail: { hotelId: pending.hotelId, domains: observedDomains }
+        })
+      );
+    } catch {
+      /* The original stream event remains safe to retry after this tab reloads. */
+    }
+  }
 };
 
 export const domainsForPath = (path: string): SyncDomain[] => {
   const normalized = path.toLowerCase();
+  if (normalized.includes("gemma")) return ["assistant"];
   if (normalized.includes("analytics")) return ["analytics"];
   if (normalized.includes("room-state-events")) return ["rooms", "reservations", "analytics"];
   if (normalized.includes("cash-register") || normalized.includes("cash")) return ["cash", "payments", "analytics"];
@@ -138,15 +242,22 @@ const parseMessage = (raw: unknown): SyncMessage | null => {
   ) {
     return null;
   }
+  if (candidate.originKey !== undefined && !normalizeOriginKey(candidate.originKey)) return null;
   return { ...candidate, hotelId, domain: candidate.domain as SyncDomain } as SyncMessage;
 };
 
-export const broadcastDomainChange = (hotelId: number | string | null | undefined, path: string) => {
+export const broadcastDomainChange = (
+  hotelId: number | string | null | undefined,
+  path: string,
+  rawOriginKey?: string
+) => {
   if (typeof window === "undefined") return;
   const normalizedHotelId = normalizeHotelId(hotelId);
+  const originKey = normalizeOriginKey(rawOriginKey);
   const safePath = path.split("?", 1)[0].slice(0, 200);
   const domains = domainsForPath(safePath);
   if (!normalizedHotelId || domains.length === 0) return;
+  if (originKey) finishLocalDomainMutation(normalizedHotelId, originKey, true);
   domains.forEach((domain) => {
     const message: SyncMessage = {
       version: 1,
@@ -154,7 +265,8 @@ export const broadcastDomainChange = (hotelId: number | string | null | undefine
       hotelId: normalizedHotelId,
       domain,
       path: safePath,
-      occurredAt: Date.now()
+      occurredAt: Date.now(),
+      ...(originKey ? { originKey } : {})
     };
     let postedToBroadcastChannel = false;
     try {
@@ -183,6 +295,7 @@ const notifyIfRelevant = (
 ) => {
   const message = parseMessage(raw);
   if (!message || message.senderId === getSenderId() || message.hotelId !== hotelId) return;
+  if (!shouldRefreshForDomainOrigin(message.hotelId, message.domain, message.originKey)) return;
   scheduleRefresh(message.domain);
 };
 
@@ -197,6 +310,16 @@ const startCrossTabSubscription = (hotelId: number, scheduleRefresh: (domain: Sy
     }
   };
   window.addEventListener("storage", onStorage);
+  const onLocalOriginRecovery = (event: Event) => {
+    const detail = (event as CustomEvent<{ hotelId?: unknown; domains?: unknown }>).detail;
+    if (normalizeHotelId(detail?.hotelId) !== hotelId || !Array.isArray(detail?.domains)) return;
+    detail.domains.forEach((domain) => {
+      if (typeof domain === "string" && Object.prototype.hasOwnProperty.call(DOMAIN_QUERY_PREFIXES, domain)) {
+        scheduleRefresh(domain as SyncDomain);
+      }
+    });
+  };
+  window.addEventListener(LOCAL_ORIGIN_REFRESH_EVENT, onLocalOriginRecovery);
   const onChannelMessage = (event: MessageEvent) => notifyIfRelevant(hotelId, scheduleRefresh, event.data);
   try {
     if (typeof BroadcastChannel !== "undefined") {
@@ -208,6 +331,7 @@ const startCrossTabSubscription = (hotelId: number, scheduleRefresh: (domain: Sy
   }
   return () => {
     window.removeEventListener("storage", onStorage);
+    window.removeEventListener(LOCAL_ORIGIN_REFRESH_EVENT, onLocalOriginRecovery);
     try {
       channel?.removeEventListener("message", onChannelMessage);
     } catch {
@@ -316,45 +440,65 @@ const readCursor = (session: SessionLike, hotelId: number): number => {
 const writeCursor = (session: SessionLike, hotelId: number, cursor: number) => {
   if (typeof window === "undefined" || !Number.isSafeInteger(cursor) || cursor < 0) return;
   try {
+    // Recovery may finish after the live stream has already advanced this
+    // tab. Cursors are monotonic; a stale recovery response must not rewind it.
+    if (cursor < readCursor(session, hotelId)) return;
     window.sessionStorage.setItem(cursorStorageKey(session, hotelId), String(cursor));
   } catch {
     /* sessionStorage can be unavailable in private browsing */
   }
 };
 
-const recoverRealtime = async (
+const recoveryFlights = new Map<string, Promise<void>>();
+
+export const recoverRealtime = (
   session: SessionLike,
   queryClient: QueryClient,
   hotelId: number,
   signal?: AbortSignal
-) => {
+): Promise<void> => {
+  // The stream reconnect path and the bounded recovery poll can overlap while
+  // the API is slow. Share one request per user/hotel so this tab does not
+  // multiply recovery reads during that delay. The key contains no credential.
+  const flightKey = `${hotelId}:${String(session.userId ?? "")}`;
+  const existingFlight = recoveryFlights.get(flightKey);
+  if (existingFlight) return existingFlight;
+
   const currentCursor = readCursor(session, hotelId);
   const query = currentCursor > 0 ? `?after_cursor=${currentCursor}` : "";
-  const response = await fetch(buildUrl(`/api/events/recovery${query}`), {
-    headers: buildAuthHeaders(session),
-    credentials: "include",
-    signal
-  });
-  if (response.status === 401 || response.status === 403) {
-    throw Object.assign(new Error("realtime recovery unauthorized"), { status: response.status });
-  }
-  if (!response.ok) throw new Error(`realtime recovery returned ${response.status}`);
-  const payload = (await response.json()) as {
-    latest_cursor?: number;
-    domains?: string[];
-    reset_required?: boolean;
-    has_more?: boolean;
+  const request = (async () => {
+    const response = await fetch(buildUrl(`/api/events/recovery${query}`), {
+      headers: buildAuthHeaders(session),
+      credentials: "include",
+      signal
+    });
+    if (response.status === 401 || response.status === 403) {
+      throw Object.assign(new Error("realtime recovery unauthorized"), { status: response.status });
+    }
+    if (!response.ok) throw new Error(`realtime recovery returned ${response.status}`);
+    const payload = (await response.json()) as {
+      latest_cursor?: number;
+      domains?: string[];
+      reset_required?: boolean;
+      has_more?: boolean;
+    };
+    // A missing cursor is the expected first connection for a new browser
+    // session. Reconcile only domains returned by recovery; refetchType="active"
+    // limits network work to mounted views and avoids replaying a full reset.
+    const domains = recoveryDomainsForCursor(currentCursor, payload);
+    if (domains.length) {
+      await refreshDomains(queryClient, hotelId, domains);
+    }
+    if (Number.isSafeInteger(payload.latest_cursor) && (payload.latest_cursor as number) >= currentCursor) {
+      writeCursor(session, hotelId, payload.latest_cursor as number);
+    }
+  })();
+  recoveryFlights.set(flightKey, request);
+  const clearFlight = () => {
+    if (recoveryFlights.get(flightKey) === request) recoveryFlights.delete(flightKey);
   };
-  // A missing cursor is the expected first connection for a new browser
-  // session. Reconcile only domains returned by recovery; refetchType="active"
-  // limits network work to mounted views and avoids replaying a full reset.
-  const domains = recoveryDomainsForCursor(currentCursor, payload);
-  if (domains.length) {
-    await refreshDomains(queryClient, hotelId, domains);
-  }
-  if (Number.isSafeInteger(payload.latest_cursor) && (payload.latest_cursor as number) >= currentCursor) {
-    writeCursor(session, hotelId, payload.latest_cursor as number);
-  }
+  void request.then(clearFlight, clearFlight);
+  return request;
 };
 
 const runEventStream = async (
@@ -455,6 +599,7 @@ const runEventStream = async (
           const currentCursor = readCursor(session, hotelId);
           if (Number.isSafeInteger(cursor) && cursor <= currentCursor) return;
           if (Number.isSafeInteger(cursor)) writeCursor(session, hotelId, cursor);
+          if (!shouldRefreshForDomainOrigin(hotelId, event.domain, event.origin_key)) return;
           scheduleRefresh(event.domain);
         });
       }
@@ -478,6 +623,7 @@ export function useCrossTabSync() {
   const queryClient = useQueryClient();
   const hotelId = session.hotelId;
   const realtimeStatus = useRealtimeStatus();
+  const recoveryFailureState = useRef({ hotelId: hotelId ?? null, count: 0 });
   const refreshScheduler = useMemo(
     () => createDomainRefreshScheduler(queryClient, hotelId ?? 0),
     [hotelId, queryClient]
@@ -510,9 +656,13 @@ export function useCrossTabSync() {
     if (!hotelId || !session.accessToken || !session.userId || realtimeStatus === "connected" || realtimeStatus === "disabled") {
       return undefined;
     }
+    if (recoveryFailureState.current.hotelId !== hotelId) {
+      recoveryFailureState.current = { hotelId, count: 0 };
+    }
     let timer: number | null = null;
     let stopped = false;
-    const schedule = (delay = REALTIME_RECOVERY_POLL_MS) => {
+    const schedule = (delay = realtimeRecoveryPollDelay(recoveryFailureState.current.count)) => {
+      if (stopped) return;
       if (document.visibilityState === "hidden") {
         timer = null;
         return;
@@ -525,10 +675,11 @@ export function useCrossTabSync() {
             queryClient,
             hotelId
           );
+          recoveryFailureState.current.count = 0;
         } catch {
-          /* SSE remains the primary path; the next bounded poll retries. */
+          recoveryFailureState.current.count += 1;
         }
-        schedule();
+        schedule(realtimeRecoveryPollDelay(recoveryFailureState.current.count));
       }, delay);
     };
     const onVisibilityChange = () => {

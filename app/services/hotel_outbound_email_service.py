@@ -7,6 +7,7 @@ from email.message import EmailMessage
 from typing import Iterable
 
 import requests
+from app.services.outbound_http_telemetry import observed_http_call
 from sqlalchemy.orm import Session
 
 from app.models.hotel_config import HotelConfiguration
@@ -138,7 +139,7 @@ def send_hotel_email(
         hotel_name=hotel_name,
         reply_to=identity.account_email,
     )
-    response = requests.post(
+    response = observed_http_call("google.gmail_send", requests.post,
         'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
         headers={
             'Authorization': f'Bearer {access_token}',

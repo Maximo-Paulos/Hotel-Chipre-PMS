@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.master_admin.models import MasterStripeSettings
+from app.services.outbound_http_telemetry import observed_http_call
 from app.services.integration_service import decrypt_payload, encrypt_payload
 from app.services.external_effects_policy import (
     ExternalEffectsDisabled,
@@ -43,7 +44,7 @@ def _webhook_secret(payload: dict[str, object]) -> str:
 
 def _validate_stripe_secret(secret_key: str) -> dict[str, object]:
     require_external_connections("Stripe credential validation")
-    response = requests.get(
+    response = observed_http_call("stripe.account_validate", requests.get,
         "https://api.stripe.com/v1/account",
         headers={"Authorization": f"Bearer {secret_key}"},
         timeout=20,

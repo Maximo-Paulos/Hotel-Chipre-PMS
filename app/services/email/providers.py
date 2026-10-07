@@ -8,6 +8,7 @@ from typing import Iterable
 import requests
 
 from app.config import get_settings
+from app.services.outbound_http_telemetry import observed_http_call
 from app.services.external_effects_policy import (
     ExternalEffectsDisabled,
     require_external_connections,
@@ -97,7 +98,7 @@ class ResendEmailProvider(EmailProvider):
         }
 
         try:
-            response = requests.post(
+            response = observed_http_call("resend.email_send", requests.post,
                 "https://api.resend.com/emails",
                 headers={
                     "Authorization": f"Bearer {self.settings.RESEND_API_KEY.strip()}",

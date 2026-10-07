@@ -6,14 +6,18 @@ El PMS conserva PostgreSQL como fuente de verdad. La sincronización en tiempo
 real sólo transporta señales de invalidación: cada cliente vuelve a consultar
 la API autenticada antes de presentar el estado confirmado.
 
-La garantía de interfaz para una mutación es:
+La confirmación de una mutación y la actualización posterior de las vistas son
+pasos separados:
 
-1. el endpoint confirma la escritura;
-2. la mutación usa `mutateAsync`;
-3. `refreshAfterMutation` invalida las consultas activas del hotel y espera su
-   refetch;
-4. recién después se muestra éxito, se cierra el modal o se habilita la
-   siguiente operación crítica.
+1. el endpoint confirma la escritura y su respuesta confirma el guardado;
+2. `refreshAfterMutation` marca stale las consultas afectadas del hotel e inicia
+   los refetch activos en segundo plano, sin retener el éxito del guardado;
+3. se conserva el último dato correcto hasta que llegue la respuesta nueva; las
+   consultas inactivas se reconcilian al volver a abrir su vista.
+
+La recuperación por SSE/recovery también usa `refreshDomains` para volver a
+consultar el estado autoritativo. La respuesta de lectura reconcilia la vista;
+no determina si la escritura se confirmó.
 
 Las claves operativas deben incluir el `hotelId`. El registro centralizado vive
 en `frontend/src/api/queryKeys.ts`; la invalidación tenant-safe vive en
@@ -61,13 +65,18 @@ de PostgreSQL en sondeo acotado y mantiene la misma semántica de invalidación.
 Los fallos del transporte no deshacen una operación ya guardada.
 
 El cliente combina SSE con `BroadcastChannel` y el fallback de `localStorage`
-para pestañas del mismo navegador. Persiste el cursor por usuario/hotel,
-deduplica `event_id`, agrupa eventos cercanos en una invalidación por dominio,
+para pestañas del mismo navegador. Las mutaciones del navegador incluyen un
+UUID opaco de correlación en su evento de dominio; la pestaña que inició la
+escritura omite sólo la repetición del mismo UUID y dominio, mientras las otras
+pestañas siguen reconciliando su estado. Ese UUID no cambia autenticación ni
+autorización. El cliente persiste el cursor por usuario/hotel, deduplica
+`event_id`, agrupa eventos cercanos en una invalidación por dominio,
 ejecuta recovery antes de abrir o reabrir SSE y repara gaps sin retroceder
 cursores. SSE reconecta con backoff exponencial y jitter.
-Si nunca conecta o queda degradado, hace polling cada 5 segundos tanto en
-primer plano como en segundo plano. El shell conserva los datos visibles y
-muestra que pueden estar desactualizados. El backend revalida la
+Si nunca conecta o queda degradado, hace recovery cada 5 segundos en pestañas
+visibles y aplica backoff hasta 30 segundos ante fallos. Las pestañas ocultas
+pausan ese polling y se recuperan al volver a primer plano. El shell conserva
+los datos visibles y muestra que pueden estar desactualizados. El backend revalida la
 membresía cada 60 segundos; al revocarse envía una señal de control, cierra el
 stream y obliga a reautenticarse.
 
@@ -77,7 +86,7 @@ Configuración relevante:
 REDIS_URL=redis://localhost:6379/0
 REALTIME_EVENTS_ENABLED=true
 REALTIME_EVENTS_HEARTBEAT_SECONDS=15
-REALTIME_EVENTS_FALLBACK_POLL_SECONDS=2
+REALTIME_EVENTS_FALLBACK_POLL_SECONDS=5
 DISTRIBUTED_LOCK_ENABLED=true
 DISTRIBUTED_LOCK_REQUIRED=true   # producción
 ```

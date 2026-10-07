@@ -16,6 +16,7 @@ from urllib.parse import urljoin
 from xml.etree import ElementTree as ET
 
 import requests
+from app.services.outbound_http_telemetry import observed_http_call
 
 from app.services.ota.contracts import (
     NormalizedOTAReservation,
@@ -293,7 +294,9 @@ class BookingAdapter(OTAProviderAdapter):
         request_headers = self._auth_headers(context)
         request_headers.update({"Accept": "application/xml, application/json", **(headers or {})})
         try:
-            response = self._requester(
+            response = observed_http_call(
+                "booking.connectivity",
+                self._requester,
                 method,
                 url,
                 headers=request_headers,

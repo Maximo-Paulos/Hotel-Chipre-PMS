@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Iterable
 
-from sqlalchemy import or_
+from sqlalchemy import and_, case, exists, func, or_
 from sqlalchemy.orm import Session, joinedload, lazyload
 
 import logging
 
 from app.models.cash_register import CashSession, CashSessionStatusEnum
+from app.models.company import Company
 from app.models.company_night_charge import CompanyNightCharge, CompanyNightChargePaymentAllocation
+from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.operations import BillingAdjustment
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room
 from app.models.room_block import RoomBlock
@@ -51,6 +55,58 @@ ARRIVAL_PENDING_STATUSES = (
     ReservationStatusEnum.FULLY_PAID,
     ReservationStatusEnum.PRE_CHECK_IN,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _DailyReservationCandidate:
+    """Small, already tenant-scoped projection used by daily-report subsets."""
+
+    id: int
+    hotel_id: int
+    company_id: int | None
+    settlement_status: object | None
+    total_amount: Decimal | None
+    check_in_date: date
+    check_out_date: date
+    status: ReservationStatusEnum
+    requires_manual_review: bool
+    allocation_status: str | None
+    confirmation_code: str
+    room_id: int | None
+    room_number: str | None
+    guest_id: int | None
+    guest_name: str | None
+    currency_code: str | None
+
+
+def _candidate_summary(
+    reservation: _DailyReservationCandidate,
+    paid_amount: Decimal | None = None,
+    adjustment_total: Decimal | None = None,
+    *,
+    company_billing_deferred: bool = False,
+    company_night_extra_due: Decimal | None = None,
+) -> OperationalReservationSummary:
+    paid = paid_amount if paid_amount is not None else Decimal("0")
+    adjustments = adjustment_total if adjustment_total is not None else Decimal("0")
+    total_due = Decimal(reservation.total_amount or 0) + adjustments
+    return OperationalReservationSummary(
+        reservation_id=reservation.id,
+        confirmation_code=reservation.confirmation_code,
+        guest_id=reservation.guest_id,
+        guest_name=reservation.guest_name,
+        room_id=reservation.room_id,
+        room_number=reservation.room_number,
+        status=reservation.status.value,
+        check_in_date=reservation.check_in_date,
+        check_out_date=reservation.check_out_date,
+        total_amount=None if company_billing_deferred else Decimal(reservation.total_amount or 0),
+        amount_paid=None if company_billing_deferred else paid,
+        balance_due=None if company_billing_deferred else max(Decimal("0"), total_due - paid),
+        currency_code=str(reservation.currency_code or "ARS").strip().upper(),
+        company_billing_deferred=company_billing_deferred,
+        company_night_extra_due=company_night_extra_due if company_billing_deferred else None,
+    )
 
 
 def _guest_name(reservation: Reservation) -> str | None:
@@ -327,29 +383,30 @@ def _active_room_blocks(db: Session, hotel_id: int, report_date: date) -> list[A
     ]
 
 
-def _available_with_review(db: Session, hotel_id: int, report_date: date) -> list[AvailableWithReviewItem]:
-    reservations = (
-        active_reservations(db, hotel_id)
-        .outerjoin(Room, Reservation.room_id == Room.id)
-        .filter(
-            Reservation.requires_manual_review.is_(True),
-            Reservation.status.in_(ACTIVE_RESERVATION_STATUSES),
-            Reservation.check_out_date > report_date,
-        )
-        .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
-        .all()
-    )
+def _available_with_review(
+    reservations: Iterable[_DailyReservationCandidate], report_date: date
+) -> list[AvailableWithReviewItem]:
+    """Project review reservations from the already-loaded active balance candidates.
+
+    ``balance_candidates`` already has the same hotel/deleted-row scope,
+    ACTIVE_RESERVATION_STATUSES, and ``check_out_date > report_date`` predicate
+    as the former query here. Filtering that ordered list therefore preserves
+    tenant scope, membership, and output order without another reservations read.
+    """
     return [
         AvailableWithReviewItem(
             reservation_id=reservation.id,
             confirmation_code=reservation.confirmation_code,
             room_id=reservation.room_id,
-            room_number=reservation.room.room_number if reservation.room else None,
+            room_number=reservation.room_number,
             check_in_date=reservation.check_in_date,
             check_out_date=reservation.check_out_date,
             allocation_status=reservation.allocation_status,
         )
         for reservation in reservations
+        if reservation.requires_manual_review
+        and reservation.status in ACTIVE_RESERVATION_STATUSES
+        and reservation.check_out_date > report_date
     ]
 
 
@@ -452,6 +509,191 @@ def today_arrival_count(db: Session, hotel_id: int, report_date: date) -> int:
     return _arrivals_query(db, hotel_id, report_date).count()
 
 
+def _daily_report_balance_candidate_query(db: Session, *, hotel_id: int, report_date: date):
+    """Select only reservations that can appear in a daily-report balance subset.
+
+    Future reservations with no balance, review flag, late-arrival status, or
+    collectible company extra do not need to cross the database connection as
+    projected rows. The payment predicate mirrors ``paid_amounts_by_reservation``
+    (including refunds, confirmed OTA credits, and legacy cache fallback), while
+    company-night charges remain on their dedicated allocation calculation.
+    """
+    candidate_scope = (
+        active_reservations(db, hotel_id)
+        .filter(
+            Reservation.status.in_(ACTIVE_RESERVATION_STATUSES),
+            Reservation.check_out_date > report_date,
+        )
+        .with_entities(
+            Reservation.hotel_id.label("hotel_id"),
+            Reservation.id.label("reservation_id"),
+        )
+        .subquery("daily_report_balance_scope")
+    )
+
+    signed_amount = case(
+        (Transaction.transaction_type == TransactionTypeEnum.REFUND, -Transaction.amount),
+        else_=Transaction.amount,
+    )
+    payment_summary = (
+        db.query(
+            candidate_scope.c.hotel_id,
+            candidate_scope.c.reservation_id,
+            func.sum(
+                case(
+                    (Transaction.status == TransactionStatusEnum.COMPLETED, signed_amount),
+                    else_=0,
+                )
+            ).label("completed_paid"),
+            func.count(Transaction.id).label("transaction_count"),
+        )
+        .select_from(candidate_scope)
+        .outerjoin(
+            Transaction,
+            and_(
+                Transaction.hotel_id == candidate_scope.c.hotel_id,
+                Transaction.reservation_id == candidate_scope.c.reservation_id,
+            ),
+        )
+        .group_by(candidate_scope.c.hotel_id, candidate_scope.c.reservation_id)
+        .subquery("daily_report_payment_summary")
+    )
+    adjustment_summary = (
+        db.query(
+            candidate_scope.c.hotel_id,
+            candidate_scope.c.reservation_id,
+            func.sum(BillingAdjustment.total_amount).label("adjustment_total"),
+        )
+        .select_from(candidate_scope)
+        .outerjoin(
+            BillingAdjustment,
+            and_(
+                BillingAdjustment.hotel_id == candidate_scope.c.hotel_id,
+                BillingAdjustment.reservation_id == candidate_scope.c.reservation_id,
+            ),
+        )
+        .group_by(candidate_scope.c.hotel_id, candidate_scope.c.reservation_id)
+        .subquery("daily_report_adjustment_summary")
+    )
+
+    is_ota_reservation = or_(
+        func.coalesce(Reservation.source_provider_code, "") != "",
+        func.coalesce(Reservation.external_id, "") != "",
+    )
+    reservation_currency = func.upper(func.trim(func.coalesce(Reservation.currency_code, "ARS")))
+    external_currency_value = case(
+        (
+            func.coalesce(Reservation.external_paid_currency, "") != "",
+            Reservation.external_paid_currency,
+        ),
+        else_=Reservation.currency_code,
+    )
+    external_currency = func.upper(
+        func.trim(
+            func.coalesce(
+                external_currency_value,
+                "ARS",
+            )
+        )
+    )
+    external_credit = case(
+        (
+            and_(
+                Reservation.external_paid_confirmed.is_(True),
+                Reservation.external_paid_amount > 0,
+                external_currency == reservation_currency,
+            ),
+            Reservation.external_paid_amount,
+        ),
+        else_=0,
+    )
+    completed_paid = func.coalesce(payment_summary.c.completed_paid, 0)
+    paid_amount = case(
+        (is_ota_reservation, completed_paid + external_credit),
+        (payment_summary.c.transaction_count > 0, completed_paid),
+        else_=func.coalesce(Reservation.amount_paid, 0),
+    )
+    adjustment_total = func.coalesce(adjustment_summary.c.adjustment_total, 0)
+    direct_balance_due = (
+        func.coalesce(Reservation.total_amount, 0) + adjustment_total - paid_amount
+    ) > 0
+
+    deferred_company = or_(
+        func.lower(func.trim(func.coalesce(Reservation.settlement_status, ""))).in_(
+            ("deferred", "settled")
+        ),
+        Company.payment_deferred.is_(True),
+    )
+    has_company_night_charge = exists().where(
+        CompanyNightCharge.hotel_id == hotel_id,
+        CompanyNightCharge.reservation_id == Reservation.id,
+    )
+    late_arrival = and_(
+        Reservation.check_in_date < report_date,
+        Reservation.status.in_(ARRIVAL_PENDING_STATUSES),
+    )
+
+    return (
+        active_reservations(db, hotel_id)
+        .with_entities(
+            Reservation.id,
+            Reservation.hotel_id,
+            Reservation.company_id,
+            Reservation.settlement_status,
+            Reservation.total_amount,
+            Reservation.check_in_date,
+            Reservation.check_out_date,
+            Reservation.status,
+            Reservation.requires_manual_review,
+            Reservation.allocation_status,
+            Reservation.confirmation_code,
+            Reservation.room_id,
+            Reservation.guest_id,
+            Reservation.currency_code,
+            Guest.first_name.label("guest_first_name"),
+            Guest.last_name.label("guest_last_name"),
+            Room.room_number.label("room_number"),
+        )
+        .outerjoin(
+            Guest,
+            (Guest.id == Reservation.guest_id) & (Guest.hotel_id == Reservation.hotel_id),
+        )
+        .outerjoin(
+            Room,
+            (Room.id == Reservation.room_id) & (Room.hotel_id == Reservation.hotel_id),
+        )
+        .outerjoin(
+            Company,
+            (Company.id == Reservation.company_id) & (Company.hotel_id == Reservation.hotel_id),
+        )
+        .outerjoin(
+            payment_summary,
+            and_(
+                payment_summary.c.hotel_id == Reservation.hotel_id,
+                payment_summary.c.reservation_id == Reservation.id,
+            ),
+        )
+        .outerjoin(
+            adjustment_summary,
+            and_(
+                adjustment_summary.c.hotel_id == Reservation.hotel_id,
+                adjustment_summary.c.reservation_id == Reservation.id,
+            ),
+        )
+        .filter(
+            Reservation.status.in_(ACTIVE_RESERVATION_STATUSES),
+            Reservation.check_out_date > report_date,
+            or_(
+                and_(~deferred_company, direct_balance_due),
+                and_(deferred_company, has_company_night_charge),
+                late_arrival,
+                Reservation.requires_manual_review.is_(True),
+            ),
+        )
+        .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
+    )
+
+
 def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperationalReportRead:
     reservation_scope = active_reservations(db, hotel_id)
 
@@ -476,38 +718,53 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         .order_by(Reservation.id.asc())
         .all()
     )
-    balance_candidates = (
-        reservation_scope.with_entities(
-            Reservation.id,
-            Reservation.hotel_id,
-            Reservation.company_id,
-            Reservation.settlement_status,
-            Reservation.total_amount,
+    balance_candidates = _daily_report_balance_candidate_query(
+        db,
+        hotel_id=hotel_id,
+        report_date=report_date,
+    ).all()
+    balance_candidates = [
+        _DailyReservationCandidate(
+            id=row.id,
+            hotel_id=row.hotel_id,
+            company_id=row.company_id,
+            settlement_status=row.settlement_status,
+            total_amount=row.total_amount,
+            check_in_date=row.check_in_date,
+            check_out_date=row.check_out_date,
+            status=row.status,
+            requires_manual_review=row.requires_manual_review,
+            allocation_status=row.allocation_status,
+            confirmation_code=row.confirmation_code,
+            room_id=row.room_id,
+            room_number=row.room_number,
+            guest_id=row.guest_id,
+            guest_name=(
+                f"{row.guest_first_name} {row.guest_last_name}"
+                if row.guest_first_name is not None and row.guest_last_name is not None
+                else None
+            ),
+            currency_code=row.currency_code,
         )
-        .filter(
-            Reservation.status.in_(ACTIVE_RESERVATION_STATUSES),
-            Reservation.check_out_date > report_date,
-        )
-        .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
-        .all()
-    )
-    late_arrivals = (
-        reservation_scope.filter(
-            Reservation.check_in_date < report_date,
-            Reservation.check_out_date > report_date,
-            Reservation.status.in_(ARRIVAL_PENDING_STATUSES),
-        )
-        .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
-        .all()
-    )
+        for row in balance_candidates
+    ]
+    # Late arrivals are an exact subset of balance_candidates: the latter
+    # includes every ARRIVAL_PENDING status and uses the same future checkout
+    # boundary, and its order matches the former late-arrival query.
+    late_arrivals = [
+        reservation
+        for reservation in balance_candidates
+        if reservation.check_in_date < report_date
+        and reservation.status in ARRIVAL_PENDING_STATUSES
+    ]
     candidate_ids = {
         reservation.id
-        for reservation in (*arrivals, *no_shows, *departures, *balance_candidates, *late_arrivals)
+        for reservation in (*arrivals, *no_shows, *departures, *balance_candidates)
     }
     deferred_ids = deferred_company_reservation_ids(
         db,
         hotel_id=hotel_id,
-        reservations=[*arrivals, *no_shows, *departures, *balance_candidates, *late_arrivals],
+        reservations=[*arrivals, *no_shows, *departures, *balance_candidates],
     )
     _extra_totals, extra_due_by_reservation = company_night_extra_balances_by_reservation(
         db,
@@ -562,7 +819,7 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         extra_due_by_reservation,
     )
     late_items = [
-        _reservation_summary(
+        _candidate_summary(
             reservation,
             paid_by_reservation.get(reservation.id),
             adjustments_by_reservation.get(reservation.id),
@@ -571,7 +828,7 @@ def daily_report(db: Session, hotel_id: int, report_date: date) -> DailyOperatio
         )
         for reservation in late_arrivals
     ]
-    review_items = _available_with_review(db, hotel_id, report_date)
+    review_items = _available_with_review(balance_candidates, report_date)
     block_items = _active_room_blocks(db, hotel_id, report_date)
     cash_session = _cash_session(db, hotel_id)
 

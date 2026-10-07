@@ -195,14 +195,21 @@ export function useReservationMutations(filters?: ReservationFilters) {
   // them twice would double-apply their side effects.
   const createMutation = useGuardedMutation({
     mutationFn: (payload: ReservationPayload) => createReservation(payload, session),
-    onSuccess: async () => invalidateCreatedReservation()
+    // The write response is authoritative for the operator. Let active lists,
+    // pending actions and occupancy reconcile in the background so a slow
+    // follow-up read cannot keep the create form open after the booking saved.
+    onSuccess: () => {
+      void invalidateCreatedReservation().catch(() => undefined);
+    }
   });
 
   // B4: "Cargar reserva de OTA" -- upsert by (channel, external_id), see
   // createManualOtaReservation.
   const createManualOtaMutation = useGuardedMutation({
     mutationFn: (payload: ManualOtaReservationPayload) => createManualOtaReservation(payload, session),
-    onSuccess: async () => invalidateCreatedReservation()
+    onSuccess: () => {
+      void invalidateCreatedReservation().catch(() => undefined);
+    }
   });
 
   const updateMutation = useGuardedMutation({

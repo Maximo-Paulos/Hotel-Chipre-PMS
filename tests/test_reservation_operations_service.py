@@ -6,6 +6,7 @@ from datetime import date
 from app.models.allocation import LLMFeedbackEvent, ManualOverrideReason
 from app.models.commercial import FxPolicy, ProductRoomCompatibility, RatePlan, RatePlanPrice, SellableProduct, TaxPolicy, TaxRule
 from app.models.hotel_config import HotelConfiguration
+from app.models.analytics import FactReservationDaily
 from app.models.ota_core import OTACommissionRule, OTACurrencyRate, OTAProvider, OTAReservationLink, OTAReservationLifecycleEnum
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.reservation_group import ReservationGroup
@@ -423,6 +424,18 @@ def test_rebook_ota_reservation_as_direct_persists_commercial_fields(
     assert float(result.new_reservation.deposit_amount) == pytest.approx(98.01)
     assert result.billing_adjustment is not None
     assert float(result.billing_adjustment.total_amount) == pytest.approx(126.7)
+    fact_rows = (
+        db.query(FactReservationDaily)
+        .filter(
+            FactReservationDaily.hotel_id == hotel_config.id,
+            FactReservationDaily.reservation_id == result.new_reservation.id,
+        )
+        .all()
+    )
+    assert len(fact_rows) == 2
+    assert sum(float(row.revenue_gross_ars) for row in fact_rows) == pytest.approx(
+        result.preview.quoted_total_amount
+    )
 
 
 def test_run_persisted_allocation_assigns_rooms_and_persists_run(

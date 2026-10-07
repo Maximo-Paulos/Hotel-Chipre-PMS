@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.services.row_locks import lock_query
 from app.config import get_settings
+from app.services.outbound_http_telemetry import observed_http_call
 from app.models.payment import Payment, PaymentLink
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.schemas.payment_link import PaymentLinkCreate
@@ -102,7 +103,7 @@ def _create_mercadopago_preference(db: Session, hotel_id: int, link: PaymentLink
         (link.idempotency_key or link.external_reference or link.link_code).encode("utf-8")
     ).hexdigest()
 
-    response = requests.post(
+    response = observed_http_call("mercadopago.payment_link", requests.post,
         "https://api.mercadopago.com/checkout/preferences",
         headers={
             "Authorization": f"Bearer {access_token}",

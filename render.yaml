@@ -123,10 +123,14 @@ services:
       # Flip this to true when the paid Redis service is actually available.
       - key: READ_MODEL_CACHE_ENABLED
         value: "false"
-      # Missing or aged fact windows can be repaired synchronously on reads,
-      # but only when the complete requested range is at most 31 days.
+      # Rebuild only missing/FX-incomplete facts in a bounded window. Never
+      # rebuild a complete window based only on age during a user request.
       - key: SYNC_FACT_REFRESH_ENABLED
-        value: "true"
+        value: "false"
+      # Limit idle PostgreSQL outbox polling while preserving the ten-second
+      # cross-session freshness budget for client refetches.
+      - key: REALTIME_EVENTS_FALLBACK_POLL_SECONDS
+        value: "5"
       - key: DISTRIBUTED_LOCK_ENABLED
         value: "true"
       - key: DISTRIBUTED_LOCK_REQUIRED

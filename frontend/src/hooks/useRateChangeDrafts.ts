@@ -8,7 +8,7 @@ import {
   type RateChangeDraftInput
 } from "../api/rateChangeDrafts";
 import { hasValidSession } from "../api/client";
-import { refreshAfterMutation } from "../api/queryInvalidation";
+import { invalidateQueriesInBackground, refreshAfterMutation } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -24,13 +24,12 @@ export function useRateChangeDrafts(categoryId: number | null) {
     staleTime: 10_000
   });
 
-  const invalidate = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["rate-change-drafts", session.hotelId ?? null, categoryId] }),
-      queryClient.invalidateQueries({ queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId] }),
-      queryClient.invalidateQueries({ queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] }),
-      refreshAfterMutation(queryClient, session.hotelId, ["rooms", "settings", "reservations", "analytics"])
-    ]);
+  const invalidate = () => {
+    invalidateQueriesInBackground(queryClient, { queryKey: ["rate-change-drafts", session.hotelId ?? null, categoryId] });
+    invalidateQueriesInBackground(queryClient, { queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId] });
+    invalidateQueriesInBackground(queryClient, { queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });
+    void refreshAfterMutation(queryClient, session.hotelId, ["rooms", "settings", "reservations", "analytics"])
+      .catch(() => undefined);
   };
 
   const create = useGuardedMutation({

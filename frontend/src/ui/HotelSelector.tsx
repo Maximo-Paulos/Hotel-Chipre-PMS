@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { getHotelConfig } from "../api/config";
 import { safeHotelId, useSession } from "../state/session";
@@ -9,7 +9,6 @@ import { useEffectivePermissions } from "../hooks/usePermissions";
 type HotelOption = { id: number; hotel_name?: string };
 
 export function HotelSelector() {
-  const queryClient = useQueryClient();
   const { session, setHotelId } = useSession();
   const { hasPermission } = useEffectivePermissions();
   const [value, setValue] = useState(session.hotelId ? String(session.hotelId) : "");
@@ -49,9 +48,10 @@ export function HotelSelector() {
 
   const apply = () => {
     const next = safeHotelId(value);
-    if (!next) return;
+    if (!next || next === session.hotelId) return;
+    // Active hotel is part of each hotel-specific query key. Changing it
+    // mounts the new hotel's queries without refetching the old tenant's data.
     setHotelId(next);
-    queryClient.invalidateQueries();
   };
 
   if (!hasValidSession(session)) {

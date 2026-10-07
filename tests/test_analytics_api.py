@@ -839,10 +839,10 @@ def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatc
         get_object_storage().get_bytes(object_key)
 
 
-def test_analytics_freshness_reflects_stale_derived_facts(api_client, monkeypatch):
+def test_analytics_read_preserves_stale_metadata_without_rebuilding_complete_facts(api_client, monkeypatch):
     # Fact timestamps are materialization metadata, not a source-write
-    # watermark. A complete in-cap window older than the configured threshold
-    # should be refreshed on this authenticated read and report its new age.
+    # watermark. A complete window is not rescanned just because it is old;
+    # the caller receives honest freshness metadata instead.
     client, SessionLocal, headers, plan_state = api_client
     import app.services.analytics_service as analytics_service_module
 
@@ -853,7 +853,6 @@ def test_analytics_freshness_reflects_stale_derived_facts(api_client, monkeypatc
             _env_file=None,
             SYNC_FACT_REFRESH_ENABLED=True,
             SYNC_FACT_REFRESH_MAX_DAYS=31,
-            SYNC_FACT_REFRESH_STALE_AFTER_SECONDS=900,
         ),
     )
     _seed_analytics_data(SessionLocal)
@@ -872,24 +871,36 @@ def test_analytics_freshness_reflects_stale_derived_facts(api_client, monkeypatc
     )
     assert resp.status_code == 200, resp.text
     payload = resp.json()
-    assert_freshness_metadata(payload)
-    # Recovery rebuilt both fact tables within the bounded window.
-    assert payload["source_lag_seconds"] < 900, payload
+    assert Decimal(payload["source_lag_seconds"]) >= Decimal("7000")
+
+    with SessionLocal() as db:
+        timestamps = [
+            analytics_service_module._ensure_utc(row.updated_at)
+            for row in db.query(FactReservationDaily.updated_at)
+            .filter(FactReservationDaily.hotel_id == 1)
+            .all()
+        ]
+    assert timestamps
+    assert min(timestamps) == stale_since
 
 
-def test_analytics_home_self_heals_when_derived_facts_were_never_materialized(api_client):
-    # Reproduces the real production bug (2026-07-26, hotel_id=4): nothing in
-    # this codebase ever schedules/triggers analytics.refresh_fact_* (no
-    # Celery beat entry, no signal on reservation/payment writes, no manual
-    # call outside tests) -- so on a deployment without that piece wired up,
-    # FactReservationDaily/FactRoomOccupancyDaily stay empty forever and
-    # /api/analytics/home silently reports $0 revenue/occupancy despite real
-    # paid reservations. Unlike _seed_analytics_data, this test deliberately
-    # never calls refresh_fact_* -- exactly the "no worker ever ran" state.
-    # The inline fallback is intentionally bounded, so the requested window
-    # stays within its 31-day limit while still containing the reservation.
+def test_analytics_home_repairs_missing_facts_when_read_recovery_is_enabled(api_client, monkeypatch):
+    # Simulate a legacy/out-of-band reservation inserted without the normal
+    # transactional fact hook. A first bounded read repairs missing coverage
+    # only under the explicit recovery setting; ordinary writes maintain facts.
     client, SessionLocal, headers, plan_state = api_client
     plan_state["plan"] = "pro"
+    import app.services.analytics_service as analytics_service_module
+
+    monkeypatch.setattr(
+        analytics_service_module,
+        "get_settings",
+        lambda: Settings(
+            _env_file=None,
+            SYNC_FACT_REFRESH_ENABLED=True,
+            SYNC_FACT_REFRESH_MAX_DAYS=31,
+        ),
+    )
 
     with SessionLocal() as db:
         from app.models.guest import Guest

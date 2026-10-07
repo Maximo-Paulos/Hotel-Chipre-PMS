@@ -263,7 +263,7 @@ def test_update_mobility_restriction_triggers_reoptimization(reservation_api_cli
     assert response.json()["mobility_restriction"] is False
     db.refresh(reservation)
     assert reservation.mobility_restriction is False
-    assert calls == [{"hotel_id": 1, "trigger_type": "reservation_update"}]
+    assert calls == [{"hotel_id": 1, "trigger_type": "reservation_update", "origin_key": None}]
 
 
 def test_patch_reservation_silently_ignores_unsupported_category_and_status_fields(

@@ -35,6 +35,19 @@ test("reservation mutations avoid refreshing unrelated room and analytics domain
   assert.match(invalidation, /throwOnError: false/);
 });
 
+test("analytics events do not refetch settings, room-event, or assistant queries", async () => {
+  const keys = await source("./src/api/queryKeys.ts");
+  const analyticsPrefixes = keys.match(/analytics:\s*\[([\s\S]*?)\],\s*assistant:/)?.[1] ?? "";
+  const assistantPrefixes = keys.match(/assistant:\s*\[([\s\S]*?)\],\s*cash:/)?.[1] ?? "";
+  const sync = await source("./src/sync/crossTabSync.ts");
+
+  assert.ok(analyticsPrefixes, "analytics domain must remain defined");
+  assert.doesNotMatch(analyticsPrefixes, /companies|room-state-events|gemma/);
+  assert.match(assistantPrefixes, /gemma-chat/);
+  assert.match(assistantPrefixes, /gemma-insights/);
+  assert.match(sync, /normalized\.includes\("gemma"\)\) return \["assistant"\]/);
+});
+
 test("reservation group summaries only fetch the six rows rendered on the page", async () => {
   const [api, page] = await Promise.all([
     source("./src/api/reservations.ts"),
@@ -46,7 +59,7 @@ test("reservation group summaries only fetch the six rows rendered on the page",
   assert.match(page, /data\?\.slice\(0, RESERVATION_GROUP_SUMMARY_LIMIT\)/);
 });
 
-test("reservation creation does not refetch cash sessions when no payment was recorded", async () => {
+test("reservation creation refreshes only related views without waiting for the reads", async () => {
   const invalidation = await source("./src/api/queryInvalidation.ts");
   const reservations = await source("./src/hooks/useReservations.ts");
   const mutations = reservations.match(/export function useReservationMutations[\s\S]*?\n\}/)?.[0];
@@ -60,8 +73,8 @@ test("reservation creation does not refetch cash sessions when no payment was re
   const createMutation = mutations.match(/const createMutation = useGuardedMutation\(\{[\s\S]*?\n  \}\);/)?.[0];
   const createOtaMutation = mutations.match(/const createManualOtaMutation = useGuardedMutation\(\{[\s\S]*?\n  \}\);/)?.[0];
 
-  assert.match(createMutation ?? "", /onSuccess: async \(\) => invalidateCreatedReservation\(\)/);
-  assert.match(createOtaMutation ?? "", /onSuccess: async \(\) => invalidateCreatedReservation\(\)/);
+  assert.match(createMutation ?? "", /onSuccess: \(\) =>\s*\{\s*void invalidateCreatedReservation\(\)\.catch\(\(\) => undefined\);\s*\}/);
+  assert.match(createOtaMutation ?? "", /onSuccess: \(\) =>\s*\{\s*void invalidateCreatedReservation\(\)\.catch\(\(\) => undefined\);\s*\}/);
 });
 
 test("slow-changing reference data uses a five-minute cache window", async () => {
@@ -97,6 +110,18 @@ test("realtime recovery does not invalidate every domain on a first connection",
   assert.match(invalidation, /refetchType: "active"/);
   assert.doesNotMatch(sync, /activeOnly/);
   assert.doesNotMatch(invalidation, /activeOnly/);
+});
+
+test("degraded realtime recovery backs off and cannot reschedule after cleanup", async () => {
+  const sync = await source("./src/sync/crossTabSync.ts");
+  const recoveryPoll = sync.match(/const REALTIME_RECOVERY_POLL_MS = [\s\S]*?export type RealtimeConnectionStatus/)?.[0] ?? "";
+  const recoveryEffect = sync.match(/if \(!hotelId \|\| !session\.accessToken \|\| !session\.userId \|\| realtimeStatus === "connected"[\s\S]*?\}, \[hotelId, queryClient, realtimeStatus, session\.accessToken, session\.userId\]\);/)?.[0] ?? "";
+
+  assert.match(recoveryPoll, /REALTIME_RECOVERY_POLL_MS = 5_000/);
+  assert.match(recoveryPoll, /REALTIME_RECOVERY_MAX_POLL_MS = 30_000/);
+  assert.match(recoveryPoll, /Math\.min\(REALTIME_RECOVERY_MAX_POLL_MS/);
+  assert.match(recoveryEffect, /recoveryFailureState\.current\.count \+= 1/);
+  assert.match(recoveryEffect, /if \(stopped\) return;/);
 });
 
 test("local reservation mutations refresh their selected entity", async () => {
@@ -148,4 +173,23 @@ test("a transient refresh error only clears the session after an explicit 401", 
   assert.match(refreshCatch, /isRetryableSessionRestoreError/);
   assert.match(retryableErrors ?? "", /error\.name === "AbortError"/);
   assert.match(retryableErrors ?? "", /error\.status === 408/);
+});
+
+test("WhatsApp writes refresh only the active hotel's conversations in the background", async () => {
+  const crm = await source("./src/hooks/useWhatsappCRM.ts");
+  const invalidation = crm.match(/const invalidate = \(\) => invalidateQueriesInBackground\(queryClient, \{[\s\S]*?\}\);/)?.[0];
+
+  assert.ok(invalidation, "WhatsApp mutations must use a non-blocking invalidation");
+  assert.match(invalidation, /queryKey: \["whatsapp", "conversations", session\.hotelId\]/);
+  assert.doesNotMatch(invalidation, /queryKey: \["whatsapp"\]/);
+});
+
+test("approving a Gemma suggestion does not refresh unrelated hotel domains", async () => {
+  const gemma = await source("./src/hooks/useGemmaChat.ts");
+  const approveMutation = gemma.match(/const approveActionMutation = useGuardedMutation\(\{[\s\S]*?\n  \}\);/)?.[0];
+
+  assert.ok(approveMutation, "Gemma approval mutation must remain defined");
+  assert.match(approveMutation, /gemmaChatKey\(session\.hotelId, variables\.payload\.session_id\)/);
+  assert.match(approveMutation, /gemmaHistoryKey\(session\.hotelId\)/);
+  assert.doesNotMatch(approveMutation, /refreshAfterMutation|reservations|payments|cash|rooms|guests|stock/);
 });

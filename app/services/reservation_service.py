@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from pydantic import ValidationError
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, lazyload
 
 from app.services.row_locks import lock_query
 from app.models.commercial import RatePlan, SellableProduct, TaxPolicy
@@ -38,7 +38,7 @@ from app.models.operations import ReservationStatusHistory
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.financial_ledger import billing_adjustment_totals_by_reservation, paid_amounts_by_reservation
 from app.services.pricing_policy_service import PricingPolicyError, StayPricingQuote, quote_rate_plan_stay
-from app.services.pricing_service import build_pricing_revision, get_price_for_date
+from app.services.pricing_service import build_pricing_revision, resolve_rate_calendar
 from app.services.quote_token_service import QuoteTokenError, verify_quote_token
 from app.services.read_model_cache import invalidate_hotel_operational_caches
 from app.services.room_block_service import blocked_room_ids_for_range, list_active_blocks, room_has_active_block
@@ -538,7 +538,11 @@ def calculate_reservation_pricing(
     guest_id: int | None = None,
     company_id: int | None = None,
 ) -> ReservationPricingResult:
-    category_query = db.query(RoomCategory).filter(RoomCategory.id == category_id)
+    category_query = (
+        db.query(RoomCategory)
+        .options(lazyload(RoomCategory.rooms))
+        .filter(RoomCategory.id == category_id)
+    )
     if hotel_id is not None:
         category_query = category_query.filter(RoomCategory.hotel_id == hotel_id)
     category = category_query.first()
@@ -923,40 +927,24 @@ def _daily_rate_pricing_result(
     from app.services.promotion_service import (
         PromotionMatchContext,
         apply_promotions_to_night,
-        find_applicable_promotions,
+        find_applicable_promotions_for_nights,
     )
 
     booking_date = datetime.now(timezone.utc).date()
     breakdown = []
     promotions_applied_all: list[dict] = []
-    current = check_in
-    night_index = 0
-    while current < check_out:
-        night_index += 1
-        configured_source = _calendar_pricing_source(
-            db,
+    rate_rows = resolve_rate_calendar(
+        db,
+        hotel_id=hotel_id,
+        category_id=category.id,
+        from_date=check_in,
+        to_date=check_out - timedelta(days=1),
+        payment_method=payment_method,
+    )
+    promotion_contexts = [
+        PromotionMatchContext(
             hotel_id=hotel_id,
-            category_id=category.id,
-            target_date=current,
-        )
-        price = get_price_for_date(
-            db,
-            hotel_id=hotel_id,
-            category_id=category.id,
-            target_date=current,
-            payment_method=payment_method,
-        )
-        source = configured_source or "category_base"
-        if configured_source is None:
-            price = float(category.base_price_per_night or 0.0)
-        price = round(float(price), 2)
-
-        # Step 3 of the canonical pricing order (see
-        # app.services.promotion_pricing_service): promotions eligible for
-        # this specific night, applied per-night, clamped at 0.
-        ctx = PromotionMatchContext(
-            hotel_id=hotel_id,
-            night_date=current,
+            night_date=check_in + timedelta(days=night_index - 1),
             night_index=night_index,
             nights_total=nights,
             booking_date=booking_date,
@@ -967,7 +955,21 @@ def _daily_rate_pricing_result(
             payment_currency=target_currency,
             payment_method=payment_method,
         )
-        matched = find_applicable_promotions(db, ctx)
+        for night_index in range(1, nights + 1)
+    ]
+    promotions_by_night = find_applicable_promotions_for_nights(db, promotion_contexts)
+
+    for rate_row, ctx, matched in zip(rate_rows, promotion_contexts, promotions_by_night):
+        current = ctx.night_date
+        price = round(float(rate_row["price"] or 0.0), 2)
+        source = rate_row["source"]
+        if source not in {"daily_rate", "price_period"}:
+            # Preserve the historic reservation snapshot label when no
+            # explicit nightly rate exists, including the zero-price fallback.
+            source = "category_base"
+
+        # A range read resolves each night with the same precedence as
+        # get_price_for_date, without repeating rate/source SQL per night.
         post_promo, applied = apply_promotions_to_night(Decimal(str(price)), matched)
         promotions_applied_all.extend(applied)
         final_price = float(post_promo)
@@ -979,7 +981,6 @@ def _daily_rate_pricing_result(
             "source": source,
             "promotions_applied": applied,
         })
-        current += timedelta(days=1)
 
     base_currency = _get_hotel_default_currency(db, hotel_id=hotel_id)
     output_currency = str(target_currency or base_currency).strip().upper()
@@ -1140,33 +1141,6 @@ def normalize_pricing_payment_method(value: str | None) -> str | None:
     if normalized not in _PRICING_PAYMENT_METHODS:
         raise ReservationError(f"El medio de pago para calcular la tarifa no es válido: {value}")
     return normalized
-
-
-def _calendar_pricing_source(
-    db: Session,
-    *,
-    hotel_id: int,
-    category_id: int,
-    target_date: date,
-) -> str | None:
-    if db.query(DailyRate.id).filter(
-        DailyRate.hotel_id == hotel_id,
-        DailyRate.category_id == category_id,
-        DailyRate.date == target_date,
-    ).first():
-        return "daily_rate"
-
-    if db.query(PricePeriod.id).filter(
-        PricePeriod.hotel_id == hotel_id,
-        PricePeriod.category_id == category_id,
-        PricePeriod.deleted_at.is_(None),
-        PricePeriod.is_active == True,
-        PricePeriod.start_date <= target_date,
-        PricePeriod.end_date >= target_date,
-    ).first():
-        return "price_period"
-
-    return None
 
 
 def _is_manual_or_telephonic_reservation(data: ReservationCreate) -> bool:
@@ -1359,7 +1333,14 @@ def check_room_availability(
     A room is unavailable if there is ANY overlapping active reservation.
     """
     _validate_stay_dates(check_in, check_out)
-    room_query = db.query(Room).filter(Room.id == room_id)
+    room_query = (
+        db.query(Room)
+        # Availability only needs ownership and status columns. Loading the
+        # room's full reservation history (and nested guest/payment relations)
+        # here adds work unrelated to this overlap check.
+        .options(lazyload(Room.category), lazyload(Room.reservations))
+        .filter(Room.id == room_id)
+    )
     if hotel_id is not None:
         room_query = room_query.filter(Room.hotel_id == hotel_id)
     room = room_query.first()
@@ -1402,7 +1383,13 @@ def find_available_rooms(
     Only considers rooms that are active and not in maintenance/blocked.
     """
     _validate_stay_dates(check_in, check_out)
-    category_query = db.query(RoomCategory).filter(RoomCategory.id == category_id)
+    category_query = (
+        db.query(RoomCategory)
+        # The lookup only validates hotel ownership; loading every room in the
+        # category cascades into each room's reservation collections.
+        .options(lazyload(RoomCategory.rooms))
+        .filter(RoomCategory.id == category_id)
+    )
     if hotel_id is not None:
         category_query = category_query.filter(RoomCategory.hotel_id == hotel_id)
     category = category_query.first()
@@ -1413,12 +1400,19 @@ def find_available_rooms(
     if category.hotel_id != hotel_id:
         raise ReservationError("La categoría de habitación no pertenece al hotel activo")
 
-    candidate_query = db.query(Room).filter(
-        Room.category_id == category_id,
-        Room.hotel_id == hotel_id,
-        Room.deleted_at.is_(None),
-        Room.is_active == True,
-        Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
+    candidate_query = (
+        db.query(Room)
+        # The result is used to choose room IDs. Preserve lazy access for callers
+        # that later need these relations, but avoid loading all reservations
+        # (and nested guests/transactions) for every candidate room here.
+        .options(lazyload(Room.category), lazyload(Room.reservations))
+        .filter(
+            Room.category_id == category_id,
+            Room.hotel_id == hotel_id,
+            Room.deleted_at.is_(None),
+            Room.is_active == True,
+            Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
+        )
     )
     if lock_for_update:
         # The caller is about to persist an assignment in this transaction.
@@ -1480,7 +1474,11 @@ def create_reservation(
 
     Uses SELECT ... FOR UPDATE to prevent race conditions on room assignment.
     """
-    category_query = db.query(RoomCategory).filter(RoomCategory.id == data.category_id)
+    category_query = (
+        db.query(RoomCategory)
+        .options(lazyload(RoomCategory.rooms))
+        .filter(RoomCategory.id == data.category_id)
+    )
     if hotel_id is not None:
         category_query = category_query.filter(RoomCategory.hotel_id == hotel_id)
     category = category_query.first()
@@ -1491,6 +1489,11 @@ def create_reservation(
 
     guest = (
         db.query(Guest)
+        .options(
+            lazyload(Guest.companions),
+            lazyload(Guest.reservations),
+            lazyload(Guest.tags),
+        )
         .filter(Guest.id == data.guest_id, Guest.hotel_id == hotel_id)
         .first()
     )

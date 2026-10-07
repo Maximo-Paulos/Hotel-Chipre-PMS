@@ -536,11 +536,19 @@ def generate_xlsx_export_job(job_id: int, hotel_id: int | None = None) -> None:
         db.close()
 
 
-def list_export_jobs(db: Session, *, hotel_id: int) -> list[AnalyticsExportJobRead]:
+def list_export_jobs(
+    db: Session,
+    *,
+    hotel_id: int,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[AnalyticsExportJobRead]:
     rows = (
         db.query(AnalyticsExportJob)
         .filter(AnalyticsExportJob.hotel_id == hotel_id)
         .order_by(AnalyticsExportJob.created_at.desc(), AnalyticsExportJob.id.desc())
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 100)))
         .all()
     )
     return [AnalyticsExportJobRead.model_validate(row) for row in rows]

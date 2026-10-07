@@ -4,7 +4,10 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.orm import Session
+from starlette.requests import Request
 
+from app import database
 from app.models.domain_event_outbox import DomainEventOutbox
 from app.models.hotel_config import HotelConfiguration
 from app.services import domain_events
@@ -40,6 +43,7 @@ def _successful_event(**kwargs):
         revision=kwargs.get("revision") or 11,
         occurred_at=occurred_at or datetime.now(timezone.utc).isoformat(),
         payload=dict(kwargs.get("payload") or {}),
+        origin_key=kwargs.get("origin_key"),
     )
 
 
@@ -198,6 +202,77 @@ def test_worker_records_bounded_failure_and_backoff_without_error_message(db, mo
     assert row.attempts == 1
     assert row.last_error == "publish_failed:RuntimeError"
     assert "DSN" not in row.last_error
+
+
+def test_request_origin_is_persisted_in_outbox_and_published(db, monkeypatch):
+    _seed_hotels(db, 1)
+    origin_key = "123e4567-e89b-42d3-a456-426614174010"
+    db.info["domain_event_origin_key"] = origin_key
+    published = []
+    monkeypatch.setattr(
+        domain_events,
+        "publish_domain_event",
+        lambda **kwargs: published.append(kwargs) or _successful_event(**kwargs),
+    )
+
+    domain_events.queue_domain_change(
+        db,
+        hotel_id=1,
+        domain="reservations",
+        event_type="reservation.created",
+        payload={"reservation_id": 17},
+    )
+    db.commit()
+
+    row = db.query(DomainEventOutbox).filter(DomainEventOutbox.hotel_id == 1).one()
+    assert row.origin_key == origin_key
+    assert published[0]["origin_key"] == origin_key
+    assert domain_events._outbox_sse_payload(row, row.id)["origin_key"] == origin_key
+
+
+def test_domain_event_only_emits_origin_key_when_present():
+    event = domain_events.DomainEvent(
+        hotel_id=1,
+        domain="reservations",
+        event_type="reservation.created",
+        revision=1,
+        occurred_at=datetime.now(timezone.utc).isoformat(),
+        payload={},
+        origin_key="123e4567-e89b-42d3-a456-426614174011",
+    )
+
+    assert event.as_payload()["origin_key"] == "123e4567-e89b-42d3-a456-426614174011"
+    assert "origin_key" not in _successful_event(
+        hotel_id=1,
+        domain="reservations",
+        event_type="reservation.created",
+    ).as_payload()
+
+
+@pytest.mark.parametrize(
+    ("raw_origin_key", "expected_origin_key"),
+    [
+        ("123e4567-e89b-42d3-a456-426614174012", "123e4567-e89b-42d3-a456-426614174012"),
+        ("not-a-uuid", None),
+    ],
+)
+def test_get_db_accepts_only_uuid_request_origin_headers(
+    db, monkeypatch, raw_origin_key: str, expected_origin_key: str | None
+):
+    engine = db.get_bind()
+    monkeypatch.setattr(database, "get_session_factory", lambda: lambda: Session(bind=engine))
+    request = Request(
+        {
+            "type": "http",
+            "headers": [(b"x-domain-event-origin", raw_origin_key.encode("ascii"))],
+        }
+    )
+    dependency = database.get_db(request)
+    request_db = next(dependency)
+    try:
+        assert request_db.info.get("domain_event_origin_key") == expected_origin_key
+    finally:
+        dependency.close()
 
 
 def test_worker_can_stop_batch_at_first_publish_failure(db, monkeypatch):

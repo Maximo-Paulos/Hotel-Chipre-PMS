@@ -29,7 +29,7 @@ import { InfoTip } from "../../components/InfoTip";
 import { listUsers } from "../../api/users";
 import type { AuthUser } from "../../api/auth";
 import { useSession } from "../../state/session";
-import { refreshAfterMutation } from "../../api/queryInvalidation";
+import { invalidateQueriesInBackground, refreshAfterMutation } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import {
   archiveHotelRole,
@@ -933,7 +933,7 @@ function HotelRoleManagement({ rolesQuery }: { rolesQuery: UseQueryResult<HotelR
   const canEditCustomRole = (code: string) =>
     roleCatalogReady && Boolean(rolesQuery.data?.roles.some((role) => role.code === code && role.kind === "custom" && role.is_active));
 
-  const refreshRoles = () => queryClient.invalidateQueries({ queryKey });
+  const refreshRoles = () => invalidateQueriesInBackground(queryClient, { queryKey });
   const errorText = (error: unknown, fallback: string) => {
     if (error instanceof ApiError && error.status === 409 && /rol fue modificado/i.test(error.message)) {
       return t("hotelRoles.stale");
@@ -952,10 +952,10 @@ function HotelRoleManagement({ rolesQuery }: { rolesQuery: UseQueryResult<HotelR
       if (!roleCatalogReady) throw new Error(t("hotelRoles.roleUnavailable"));
       return createHotelRole(payload, session);
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setNewName("");
       setFeedback({ kind: "status", text: t("hotelRoles.createSuccess") });
-      await refreshRoles();
+      refreshRoles();
     },
     onError: (error) => setFeedback({ kind: "alert", text: errorText(error, t("hotelRoles.createError")) })
   });
@@ -965,11 +965,11 @@ function HotelRoleManagement({ rolesQuery }: { rolesQuery: UseQueryResult<HotelR
       if (!canEditCustomRole(code)) throw new Error(t("hotelRoles.readOnlyRoleError", { role: code }));
       return renameHotelRole(code, payload, session);
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setEditingCode(null);
       setRenameDraft("");
       setFeedback({ kind: "status", text: t("hotelRoles.renameSuccess") });
-      await refreshRoles();
+      refreshRoles();
     },
     onError: (error) => {
       if (error instanceof ApiError && error.status === 409) void refreshRoles();
@@ -985,10 +985,10 @@ function HotelRoleManagement({ rolesQuery }: { rolesQuery: UseQueryResult<HotelR
       }
       return archiveHotelRole(code, expectedVersion, session);
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setArchiveCode(null);
       setFeedback({ kind: "status", text: t("hotelRoles.archiveSuccess") });
-      await refreshRoles();
+      refreshRoles();
     },
     onError: (error) => {
       if (error instanceof ApiError && error.status === 409) void refreshRoles();

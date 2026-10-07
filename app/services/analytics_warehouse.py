@@ -17,6 +17,7 @@ from urllib.parse import urljoin
 import httpx
 
 from app.config import get_settings
+from app.services.outbound_http_telemetry import observed_http_call
 
 
 logger = logging.getLogger(__name__)
@@ -155,7 +156,7 @@ class ClickHouseHTTPClient:
     timeout_seconds: float = 5.0
 
     def execute(self, query: str, params: Mapping[str, Any] | None = None) -> list[list[Any]]:
-        response = httpx.post(
+        response = observed_http_call("analytics.clickhouse.query", httpx.post,
             urljoin(self.base_url.rstrip("/") + "/", ""),
             params={"database": self.database, "query": query, **dict(params or {})},
             auth=(self.user, self.password) if self.user else None,
@@ -183,7 +184,7 @@ class ClickHouseHTTPClient:
             for row in rows
         )
         query = f"INSERT INTO {table} FORMAT JSONEachRow"
-        response = httpx.post(
+        response = observed_http_call("analytics.clickhouse.insert", httpx.post,
             urljoin(self.base_url.rstrip("/") + "/", ""),
             params={"database": self.database, "query": query},
             content=payload.encode("utf-8"),

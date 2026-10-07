@@ -280,7 +280,11 @@ def _ensure_action_permission(
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
-def _trigger_reoptimization_bg(hotel_id: int, trigger_type: str = "new_reservation") -> None:
+def _trigger_reoptimization_bg(
+    hotel_id: int,
+    trigger_type: str = "new_reservation",
+    origin_key: str | None = None,
+) -> None:
     """
     §5.2 — Run allocation engine in background after reservation changes.
     Creates its own DB session; all errors are suppressed to never affect the booking flow.
@@ -293,6 +297,8 @@ def _trigger_reoptimization_bg(hotel_id: int, trigger_type: str = "new_reservati
     try:
         SessionFactory = get_session_factory()
         db = SessionFactory()
+        if origin_key:
+            db.info["domain_event_origin_key"] = origin_key
         set_tenant_hotel_context(db, hotel_id)
         run_persisted_allocation(db, hotel_id=hotel_id, trigger_type=trigger_type)
         db.commit()
@@ -424,7 +430,11 @@ def create_new_reservation(
         db.commit()
         db.refresh(reservation)
         _project_reservation_graph(context.hotel_id, reservation)
-        background_tasks.add_task(_trigger_reoptimization_bg, hotel_id=context.hotel_id)
+        background_tasks.add_task(
+            _trigger_reoptimization_bg,
+            hotel_id=context.hotel_id,
+            origin_key=db.info.get("domain_event_origin_key"),
+        )
         return _to_read(reservation, db=db)
     except ManualRatePolicyError as e:
         db.rollback()
@@ -1366,6 +1376,7 @@ def change_dates(
             _trigger_reoptimization_bg,
             hotel_id=context.hotel_id,
             trigger_type="reservation_date_change",
+            origin_key=db.info.get("domain_event_origin_key"),
         )
         return ReservationDateChangeResponse(
             original_reservation=_to_read(result.original_reservation, db=db),
@@ -1584,6 +1595,7 @@ def modify_reservation(
                 _trigger_reoptimization_bg,
                 hotel_id=context.hotel_id,
                 trigger_type="reservation_update",
+                origin_key=db.info.get("domain_event_origin_key"),
             )
         return _to_read(r, db=db)
     except ManualRatePolicyError as e:
@@ -1714,6 +1726,7 @@ def extend_stay(
             _trigger_reoptimization_bg,
             hotel_id=context.hotel_id,
             trigger_type="reservation_date_change",
+            origin_key=db.info.get("domain_event_origin_key"),
         )
         return response
     except ReservationVersionConflict as e:
@@ -1883,6 +1896,7 @@ def room_move(
             _trigger_reoptimization_bg,
             hotel_id=context.hotel_id,
             trigger_type="reservation_room_move",
+            origin_key=db.info.get("domain_event_origin_key"),
         )
         return RoomMoveResponse(
             reservation=_to_read(reservation, db=db),

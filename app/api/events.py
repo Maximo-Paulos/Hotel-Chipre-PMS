@@ -188,7 +188,7 @@ def stream_domain_events(
         else aiter_postgres_event_stream(
             context.hotel_id,
             after_cursor=after_cursor,
-            poll_seconds=float(getattr(settings, "REALTIME_EVENTS_FALLBACK_POLL_SECONDS", 2.0)),
+            poll_seconds=float(getattr(settings, "REALTIME_EVENTS_FALLBACK_POLL_SECONDS", 5.0)),
             authorization_check=authorization_check,
         )
     )

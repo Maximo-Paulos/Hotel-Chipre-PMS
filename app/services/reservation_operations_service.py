@@ -1709,6 +1709,13 @@ def rebook_ota_reservation_as_direct(
         db.add(billing_adjustment)
 
     db.flush()
+    _touch_facts(
+        db,
+        hotel_id,
+        new_reservation.check_in_date,
+        new_reservation.check_out_date,
+        reservation_id=new_reservation.id,
+    )
     return OTARebookResult(
         adjustment=adjustment,
         original_reservation=reservation,

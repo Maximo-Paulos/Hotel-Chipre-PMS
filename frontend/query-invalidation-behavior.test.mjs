@@ -138,6 +138,71 @@ test("reservation record changes without financial projection changes skip finan
   client.clear();
 });
 
+test("committed mutation invalidation returns while active reads reconcile in the background", async (context) => {
+  const { invalidation } = await loadQueryModules(context);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryKey = ["reservation", 41, 703];
+  client.setQueryData(queryKey, { id: 703, total_amount: 900 });
+  let releaseFetch;
+  let fetchStarted = false;
+  const observer = new QueryObserver(client, {
+    queryKey,
+    queryFn: () => {
+      fetchStarted = true;
+      return new Promise((resolve) => { releaseFetch = resolve; });
+    },
+    staleTime: Infinity,
+    retry: false
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+
+  await invalidation.refreshReservationRecordState(client, 41, 703);
+
+  assert.equal(fetchStarted, true, "the active query should start reconciling immediately");
+  assert.equal(client.getQueryState(queryKey)?.fetchStatus, "fetching");
+  assert.deepEqual(client.getQueryData(queryKey), { id: 703, total_amount: 900 });
+
+  releaseFetch({ id: 703, total_amount: 1200 });
+  await client.getQueryCache().find({ queryKey })?.promise;
+  assert.deepEqual(client.getQueryData(queryKey), { id: 703, total_amount: 1200 });
+
+  unsubscribe();
+  client.clear();
+});
+
+test("direct background invalidation starts an active refetch without returning its network promise", async (context) => {
+  const { invalidation } = await loadQueryModules(context);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryKey = ["housekeeping-board", 41];
+  client.setQueryData(queryKey, { rooms: [{ id: 2, housekeeping_status: "dirty" }] });
+  let releaseFetch;
+  let fetchStarted = false;
+  const observer = new QueryObserver(client, {
+    queryKey,
+    queryFn: () => {
+      fetchStarted = true;
+      return new Promise((resolve) => { releaseFetch = resolve; });
+    },
+    staleTime: Infinity,
+    retry: false
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+
+  const result = invalidation.invalidateQueriesInBackground(client, { queryKey });
+
+  assert.equal(result, undefined, "mutation success should not inherit the active read promise");
+  assert.equal(fetchStarted, true, "the active query should still reconcile immediately");
+  assert.equal(client.getQueryState(queryKey)?.fetchStatus, "fetching");
+  assert.equal(client.getQueryState(queryKey)?.isInvalidated, true);
+
+  releaseFetch({ rooms: [{ id: 2, housekeeping_status: "clean" }] });
+  await client.getQueryCache().find({ queryKey })?.promise;
+  assert.equal(client.getQueryData(queryKey)?.rooms[0].housekeeping_status, "clean");
+
+  unsubscribe();
+  client.clear();
+});
+
 test("a concurrent reservation-domain event still refreshes other clients' active reservation caches", async (context) => {
   const { invalidation } = await loadQueryModules(context);
   const client = new QueryClient();

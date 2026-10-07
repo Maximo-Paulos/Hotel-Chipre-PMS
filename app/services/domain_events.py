@@ -19,10 +19,12 @@ from typing import Any, AsyncIterator, Callable, Iterable, Literal, Mapping, TYP
 import anyio
 import redis
 from sqlalchemy import func, inspect
+from sqlalchemy.orm import load_only
 
 from app.config import get_settings
 from app.infrastructure.redis_backend import get_sync_redis_client, namespaced_key
 from app.models.domain_event_outbox import DomainEventOutbox
+from app.services.outbox_poll_cache import CachedOutboxPollFailure, OutboxPollBatchCache
 from app.services.tenant_context import set_tenant_hotel_context
 
 
@@ -43,12 +45,14 @@ OUTBOX_RETRY_MAX_SECONDS = 15 * 60
 OUTBOX_MAX_ATTEMPTS = 8
 RECOVERY_MAX_ROWS = 500
 POSTGRES_FALLBACK_BATCH_SIZE = 100
-# The normal poll leaves most of the ten-second freshness budget for the
-# network hop and authoritative refetch after an invalidation arrives.
-POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS = 2.0
-# Even a direct caller that bypasses Settings must leave room for the client
-# refetch and network latency inside the ten-second freshness budget.
+# The default reduces idle polls by 60% versus a two-second poll while
+# preserving five seconds for the network hop and authoritative refetch inside
+# the ten-second cross-session freshness budget.
+POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS = 5.0
+# Even a direct caller that bypasses Settings must keep the full poll below
+# the ten-second freshness budget so the client can refetch authoritative data.
 POSTGRES_FALLBACK_MAX_POLL_SECONDS = 5.0
+_POSTGRES_EVENT_BATCH_CACHE = OutboxPollBatchCache[DomainEventOutbox]()
 # Redis can spend up to a second per connection attempt while the durable
 # outbox already has a PostgreSQL recovery path. Bound repeated request-path
 # waits while keeping probes frequent enough to recover realtime delivery.
@@ -56,6 +60,7 @@ OUTBOX_PUBLISH_FAILURE_COOLDOWN_SECONDS = 30.0
 SUPPORTED_DOMAINS = frozenset(
     {
         "analytics",
+        "assistant",
         "cash",
         "guests",
         "notifications",
@@ -134,6 +139,7 @@ class DomainEvent:
     event_id: str | None = None
     schema_version: int = 1
     cursor: int | None = None
+    origin_key: str | None = None
 
     def __post_init__(self) -> None:
         if not self.event_id:
@@ -144,7 +150,7 @@ class DomainEvent:
         return channel_for_hotel(self.hotel_id)
 
     def as_payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "version": 1,
             "schema_version": self.schema_version,
             "event_id": self.event_id,
@@ -156,6 +162,9 @@ class DomainEvent:
             "occurred_at": self.occurred_at,
             "payload": dict(self.payload),
         }
+        if self.origin_key:
+            payload["origin_key"] = self.origin_key
+        return payload
 
 
 @dataclass(frozen=True)
@@ -166,6 +175,7 @@ class QueuedDomainChange:
     domain: str
     event_type: str
     payload: dict[str, Any]
+    origin_key: str | None = None
     transaction_id: int | None = None
     # Keep the fields needed by the after-commit publisher as scalars. The ORM
     # session may expire outbox attributes before a commit listener can read
@@ -342,10 +352,10 @@ MODEL_DOMAIN_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     # Allocation and AI read models. Their prompts, explanations and numeric
     # scores are deliberately not copied into the event payload; the event is
     # only a tenant-scoped cache invalidation signal.
-    "ai_assistant_action_runs": ("analytics",),
-    "ai_assistant_insights": ("analytics",),
-    "ai_assistant_messages": ("analytics",),
-    "ai_assistant_sessions": ("analytics",),
+    "ai_assistant_action_runs": ("assistant",),
+    "ai_assistant_insights": ("assistant",),
+    "ai_assistant_messages": ("assistant",),
+    "ai_assistant_sessions": ("assistant",),
     "allocation_explanations": ("reservations", "rooms", "analytics"),
     "allocation_policy_profiles": ("settings", "rooms", "reservations", "analytics"),
     "allocation_policy_versions": ("settings", "rooms", "reservations", "analytics"),
@@ -553,6 +563,14 @@ def _model_event_payload(model: Any, table_name: str) -> dict[str, Any]:
 def queue_model_changes(session: Any) -> None:
     """Collect safe domain signals from ORM writes before a transaction ends."""
 
+    # When realtime delivery is disabled (notably in isolated local/E2E
+    # environments), there is no stream consumer for these cache invalidation
+    # signals. Avoid adding outbox rows and doing post-commit Redis attempts to
+    # every business write in that mode.
+    if not bool(getattr(_settings(), "REALTIME_EVENTS_ENABLED", True)):
+        session.info.pop(PENDING_EVENTS_KEY, None)
+        return
+
     collections = (
         ("created", getattr(session, "new", ())),
         ("updated", getattr(session, "dirty", ())),
@@ -611,11 +629,15 @@ def queue_domain_change(
     A ``DomainEventOutbox`` row is added to ``session`` in the same breath, so
     it is inserted in the very same (still-open) transaction as the business
     change it describes -- if the process dies between this commit and the
-    Redis publish, the row survives for a worker to replay. Pass
+    Redis publish, the row survives for a worker to replay. When realtime is
+    disabled, this is a no-op because there is no stream consumer. Pass
     ``durable=False`` to skip that row (best-effort live publish only) for the
     rare case where there is no tenant left to durably notify -- see
     ``queue_model_changes``'s hotel_configuration-delete handling.
     """
+
+    if not bool(getattr(_settings(), "REALTIME_EVENTS_ENABLED", True)):
+        return
 
     normalized_payload = validate_event_input(
         hotel_id=hotel_id,
@@ -623,6 +645,11 @@ def queue_domain_change(
         event_type=event_type,
         payload=payload,
     )
+    raw_origin_key = session.info.get("domain_event_origin_key")
+    try:
+        origin_key = str(uuid.UUID(str(raw_origin_key))) if raw_origin_key else None
+    except (AttributeError, TypeError, ValueError):
+        origin_key = None
     pending = session.info.setdefault(PENDING_EVENTS_KEY, {})
     dedupe_key = (
         hotel_id,
@@ -645,6 +672,7 @@ def queue_domain_change(
         outbox_row = DomainEventOutbox(
             hotel_id=hotel_id,
             event_id=outbox_event_id,
+            origin_key=origin_key,
             domain=domain.strip().lower(),
             event_type=event_type.strip(),
             payload=normalized_payload,
@@ -659,6 +687,7 @@ def queue_domain_change(
         domain=domain.strip().lower(),
         event_type=event_type.strip(),
         payload=normalized_payload,
+        origin_key=origin_key,
         transaction_id=_session_transaction_id(session),
         outbox=outbox_row,
         outbox_event_id=outbox_event_id,
@@ -680,6 +709,8 @@ def publish_queued_domain_changes(session: "Session") -> None:
     """
 
     pending = session.info.pop(PENDING_EVENTS_KEY, {})
+    if not bool(getattr(_settings(), "REALTIME_EVENTS_ENABLED", True)):
+        return
     if not pending:
         return
 
@@ -709,6 +740,8 @@ def publish_queued_domain_changes(session: "Session") -> None:
             "event_type": change.event_type,
             "payload": change.payload,
         }
+        if change.origin_key:
+            publish_kwargs["origin_key"] = change.origin_key
         if change.outbox_event_id is not None:
             # The durable outbox and PostgreSQL SSE fallback remain
             # authoritative if this optional request-path notification fails.
@@ -988,6 +1021,7 @@ def publish_domain_event(
     event_id: str | None = None,
     cursor: int | None = None,
     schema_version: int = 1,
+    origin_key: str | None = None,
     client_capability: Literal["realtime", "realtime_fast_fail"] = "realtime",
 ) -> DomainEvent | None:
     """Publish one event. ``revision``/``occurred_at`` let an outbox replay
@@ -1031,6 +1065,7 @@ def publish_domain_event(
             event_id=event_id,
             schema_version=schema_version,
             cursor=cursor,
+            origin_key=origin_key,
         )
         redis_client.publish(event.channel, json.dumps(event.as_payload(), ensure_ascii=True, allow_nan=False))
         return event
@@ -1105,6 +1140,7 @@ def publish_pending_domain_events(
                 event_id=row.event_id,
                 cursor=row.stream_cursor or row.id,
                 schema_version=row.schema_version or 1,
+                origin_key=row.origin_key,
             )
             if event is None:
                 raise RealtimeEventsUnavailable("publish_domain_event returned no event")
@@ -1309,7 +1345,7 @@ def _outbox_sse_payload(row: DomainEventOutbox, cursor: int) -> dict[str, Any] |
             occurred_at_value = occurred_at.isoformat()
         else:
             occurred_at_value = str(occurred_at)
-        return {
+        payload = {
             "version": 1,
             "schema_version": int(row.schema_version or 1),
             "event_id": str(row.event_id),
@@ -1322,6 +1358,9 @@ def _outbox_sse_payload(row: DomainEventOutbox, cursor: int) -> dict[str, Any] |
             "payload": {},
             "transport": "postgres-outbox",
         }
+        if row.origin_key:
+            payload["origin_key"] = str(row.origin_key)
+        return payload
     except (TypeError, ValueError) as exc:
         # A malformed row must not take down every tenant's stream, and the
         # error log must not echo its payload or provider details.
@@ -1414,28 +1453,20 @@ def iter_postgres_event_stream(
                 )
                 return
 
-        rows: list[DomainEventOutbox] = []
         try:
-            poll_db = session_factory()
-            try:
-                set_tenant_hotel_context(poll_db, hotel_id)
-                rows = (
-                    poll_db.query(DomainEventOutbox)
-                    .filter(
-                        DomainEventOutbox.hotel_id == hotel_id,
-                        cursor_value > cursor,
-                    )
-                    .order_by(cursor_value.asc())
-                    .limit(POSTGRES_FALLBACK_BATCH_SIZE)
-                    .all()
-                )
-            finally:
-                poll_db.close()
-        except Exception as exc:  # pragma: no cover - provider/runtime failure
-            logger.warning(
-                "realtime_events.postgres_fallback_poll_failed",
-                extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
+            rows = _cached_postgres_event_batch(
+                session_factory,
+                hotel_id,
+                cursor,
+                poll_delay,
             )
+        except Exception as exc:  # pragma: no cover - provider/runtime failure
+            if not isinstance(exc, CachedOutboxPollFailure):
+                logger.warning(
+                    "realtime_events.postgres_fallback_poll_failed",
+                    extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
+                )
+            rows = []
 
         if rows:
             for row in rows:
@@ -1482,6 +1513,20 @@ def _read_postgres_event_batch(
         set_tenant_hotel_context(poll_db, hotel_id)
         return (
             poll_db.query(DomainEventOutbox)
+            .options(
+                load_only(
+                    DomainEventOutbox.id,
+                    DomainEventOutbox.event_id,
+                    DomainEventOutbox.hotel_id,
+                    DomainEventOutbox.domain,
+                    DomainEventOutbox.event_type,
+                    DomainEventOutbox.schema_version,
+                    DomainEventOutbox.stream_cursor,
+                    DomainEventOutbox.revision,
+                    DomainEventOutbox.occurred_at,
+                    DomainEventOutbox.origin_key,
+                )
+            )
             .filter(
                 DomainEventOutbox.hotel_id == hotel_id,
                 cursor_value > cursor,
@@ -1492,6 +1537,19 @@ def _read_postgres_event_batch(
         )
     finally:
         poll_db.close()
+
+
+def _cached_postgres_event_batch(
+    session_factory: Callable[[], Any],
+    hotel_id: int,
+    cursor: int,
+    poll_seconds: float,
+) -> list[DomainEventOutbox]:
+    return _POSTGRES_EVENT_BATCH_CACHE.get(
+        (session_factory, hotel_id, cursor),
+        ttl_seconds=poll_seconds,
+        loader=lambda: _read_postgres_event_batch(session_factory, hotel_id, cursor),
+    )
 
 
 async def aiter_postgres_event_stream(
@@ -1566,16 +1624,21 @@ async def aiter_postgres_event_stream(
                 )
                 return
 
-        rows: list[DomainEventOutbox] = []
         try:
             rows = await anyio.to_thread.run_sync(
-                _read_postgres_event_batch, resolved_factory, hotel_id, cursor
+                _cached_postgres_event_batch,
+                resolved_factory,
+                hotel_id,
+                cursor,
+                poll_delay,
             )
         except Exception as exc:  # pragma: no cover - provider/runtime failure
-            logger.warning(
-                "realtime_events.postgres_fallback_poll_failed",
-                extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
-            )
+            if not isinstance(exc, CachedOutboxPollFailure):
+                logger.warning(
+                    "realtime_events.postgres_fallback_poll_failed",
+                    extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
+                )
+            rows = []
 
         if rows:
             for row in rows:

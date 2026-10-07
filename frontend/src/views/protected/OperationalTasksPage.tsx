@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { hasValidSession } from "../../api/client";
+import { invalidateQueriesInBackground } from "../../api/queryInvalidation";
 import LocalizedDateField from "../../components/LocalizedDateField";
 import {
   acknowledgeShiftHandoff,
@@ -151,9 +152,11 @@ export function OperationalTasksPage() {
     due_at: form.due_at ? new Date(form.due_at).toISOString() : null
   });
 
-  const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["operational-tasks", session.hotelId] });
-    if (canHandoff) await queryClient.invalidateQueries({ queryKey: ["operational-handoffs", session.hotelId] });
+  const refresh = () => {
+    invalidateQueriesInBackground(queryClient, { queryKey: ["operational-tasks", session.hotelId] });
+    if (canHandoff) {
+      invalidateQueriesInBackground(queryClient, { queryKey: ["operational-handoffs", session.hotelId] });
+    }
   };
   const updateTaskSnapshot = (updatedTask: OperationalTask) => {
     queryClient.setQueryData<OperationalTask[]>(["operational-tasks", session.hotelId], (current) =>
@@ -163,8 +166,8 @@ export function OperationalTasksPage() {
 
   const createMutation = useGuardedMutation({
     mutationFn: () => createOperationalTask(taskPayload(), session),
-    onSuccess: async () => {
-      await refresh();
+    onSuccess: () => {
+      refresh();
       setForm(emptyForm(defaultTaskType));
       setMessage("Tarea agregada al turno.");
     }
@@ -172,26 +175,26 @@ export function OperationalTasksPage() {
   const statusMutation = useGuardedMutation({
     mutationFn: ({ id, version, status }: { id: number; version: number; status: OperationalTaskStatus }) =>
       updateOperationalTask(id, { client_version: version, status }, session),
-    onSuccess: async (updatedTask) => {
+    onSuccess: (updatedTask) => {
       updateTaskSnapshot(updatedTask);
-      await refresh();
+      refresh();
     }
   });
   const commentMutation = useGuardedMutation({
     mutationFn: ({ id, version, comment }: { id: number; version: number; comment: string }) =>
       updateOperationalTask(id, { client_version: version, comment }, session),
-    onSuccess: async (updatedTask, variables) => {
+    onSuccess: (updatedTask, variables) => {
       updateTaskSnapshot(updatedTask);
       setTaskComments((current) => ({ ...current, [variables.id]: "" }));
-      await refresh();
+      refresh();
       setMessage("Comentario agregado al historial.");
     }
   });
   const resolveMutation = useGuardedMutation({
     mutationFn: ({ id, version }: { id: number; version: number }) => resolveOperationalTask(id, version, undefined, session),
-    onSuccess: async (updatedTask) => {
+    onSuccess: (updatedTask) => {
       updateTaskSnapshot(updatedTask);
-      await refresh();
+      refresh();
     }
   });
   const handoffMutation = useGuardedMutation({
@@ -199,8 +202,8 @@ export function OperationalTasksPage() {
       task_ids: selectedIds,
       cash_close_report_id: includeLatestClose ? latestCloseReportQuery.data?.id ?? null : null
     }, session),
-    onSuccess: async () => {
-      await refresh();
+    onSuccess: () => {
+      refresh();
       setSelectedIds([]);
       setIncludeLatestClose(false);
       setMessage("Pase de turno preparado.");
@@ -221,9 +224,10 @@ export function OperationalTasksPage() {
       content_type: contentType,
       content_base64: contentBase64
     }, session),
-    onSuccess: async (_attachment, variables) => {
-      await queryClient.invalidateQueries({ queryKey: ["operational-task-attachments", session.hotelId, variables.taskId] });
-    }
+    onSuccess: (_attachment, variables) => invalidateQueriesInBackground(
+      queryClient,
+      { queryKey: ["operational-task-attachments", session.hotelId, variables.taskId] }
+    )
   });
 
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);

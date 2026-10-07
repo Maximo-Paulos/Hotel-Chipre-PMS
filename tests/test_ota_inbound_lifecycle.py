@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.config import get_settings
+from app.models.analytics import FactReservationDaily
 from app.models.guest import Guest
 from app.models.ota import OTAReservationMapping, OTASyncStatusEnum
 from app.models.ota_core import OTAReservationLifecycleEnum, OTAReservationLink
@@ -56,6 +57,8 @@ def test_booking_modify_updates_existing_reservation_and_guest(db, sample_rooms,
     initial = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, _booking_payload())
     reservation_id = initial.reservation_id
     db.flush()
+    initial_facts = db.query(FactReservationDaily).filter_by(reservation_id=reservation_id).all()
+    assert sum(float(row.revenue_gross_ars) for row in initial_facts) == pytest.approx(320.0)
 
     updated_mapping = OTAIntegrationService.process_booking_webhook(
         db,
@@ -88,6 +91,9 @@ def test_booking_modify_updates_existing_reservation_and_guest(db, sample_rooms,
     assert reservation.guest.phone == "+5491198765432"
     assert updated_mapping.sync_status == OTASyncStatusEnum.SYNCED
     assert link.provider_state == OTAReservationLifecycleEnum.MODIFIED
+    updated_facts = db.query(FactReservationDaily).filter_by(reservation_id=reservation_id).all()
+    assert len(updated_facts) == 3
+    assert sum(float(row.revenue_gross_ars) for row in updated_facts) == pytest.approx(470.0)
 
 
 def test_booking_cancel_cancels_existing_pre_checkin_reservation(db, sample_rooms, sample_categories, hotel_config):

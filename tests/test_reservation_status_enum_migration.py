@@ -11,14 +11,14 @@ import os
 import subprocess
 import sys
 import tempfile
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 
-def test_migrated_sqlite_reservation_status_accepts_pre_check_in():
+def test_migrated_sqlite_reservation_and_analytics_fact_accept_pre_check_in():
     cwd = os.path.dirname(os.path.dirname(__file__))
     with tempfile.TemporaryDirectory() as tmp:
         db_path = f"{tmp}/mig.db"
@@ -37,6 +37,8 @@ def test_migrated_sqlite_reservation_status_accepts_pre_check_in():
         from app.models.hotel_config import HotelConfiguration
         from app.models.reservation import Reservation, ReservationStatusEnum
         from app.models.room import RoomCategory
+        from app.models.analytics import FactReservationDaily
+        from app.services.analytics_facts import refresh_fact_reservation_daily
 
         engine = create_engine(f"sqlite:///{db_path}")
         SessionLocal = sessionmaker(bind=engine)
@@ -64,6 +66,15 @@ def test_migrated_sqlite_reservation_status_accepts_pre_check_in():
 
             db.refresh(reservation)
             assert reservation.status == ReservationStatusEnum.PRE_CHECK_IN
+
+            refresh_fact_reservation_daily(
+                db,
+                hotel_id=1,
+                date_from=reservation.check_in_date,
+                date_to=reservation.check_out_date - timedelta(days=1),
+            )
+            fact = db.query(FactReservationDaily).filter_by(reservation_id=reservation.id).one()
+            assert fact.status == ReservationStatusEnum.PRE_CHECK_IN
         finally:
             db.close()
             engine.dispose()

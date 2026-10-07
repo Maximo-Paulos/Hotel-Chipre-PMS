@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 import json
 
@@ -29,12 +29,14 @@ router = APIRouter(prefix="/api/payment-link-tests", tags=["Payment Link Tests"]
 @router.get("", response_model=list[PaymentLinkTestRead])
 @router.get("/", response_model=list[PaymentLinkTestRead])
 def list_tests(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=100_000),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_TESTS_VIEW)),
 ):
-    tests = list_payment_link_tests(db, context.hotel_id)
-    db.commit()
-    return tests
+    # This read must not expire ORM rows: response serialization should not
+    # issue one reload query per row.
+    return list_payment_link_tests(db, context.hotel_id, limit=limit, offset=offset)
 
 
 @router.post("/mercadopago", response_model=PaymentLinkTestRead, status_code=status.HTTP_201_CREATED)

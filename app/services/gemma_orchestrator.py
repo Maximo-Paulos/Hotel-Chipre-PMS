@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 import httpx
+from app.services.outbound_http_telemetry import observed_http_call
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
@@ -236,7 +237,7 @@ class GemmaOrchestrator:
         timeout_seconds = min(float(self.settings.GEMMA_TIMEOUT_SECONDS or 20.0), 5.0)
         try:
             with httpx.Client(timeout=httpx.Timeout(timeout_seconds)) as client:
-                response = client.get(models_url, headers=headers)
+                response = observed_http_call("gemma.models_probe", client.get, models_url, headers=headers)
                 response.raise_for_status()
             return base_status | {"status": "ready", "reachable": True}
         except httpx.TimeoutException:
@@ -470,7 +471,7 @@ class GemmaOrchestrator:
 
         timeout = httpx.Timeout(float(self.settings.GEMMA_TIMEOUT_SECONDS or 20.0))
         with httpx.Client(timeout=timeout) as client:
-            response = client.post(endpoint, headers=headers, json=body)
+            response = observed_http_call("gemma.orchestrator_generate", client.post, endpoint, headers=headers, json=body)
             response.raise_for_status()
             payload = response.json()
         raw_text = self._extract_openai_text(payload)

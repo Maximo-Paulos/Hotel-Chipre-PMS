@@ -4,12 +4,14 @@ Supports both PostgreSQL (production) and SQLite (testing).
 """
 import logging
 import time
+import uuid
 from collections.abc import Mapping, Sequence
 from contextvars import ContextVar, Token
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 from sqlalchemy.pool import QueuePool
+from starlette.requests import Request
 from typing import Generator
 
 from app.config import get_settings, is_preview_qa_mode, is_production_mode
@@ -556,10 +558,19 @@ def get_session_factory(database_url: str | None = None) -> sessionmaker:
     return _SessionLocal
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db(request: Request) -> Generator[Session, None, None]:
     """FastAPI dependency: yields a database session."""
     factory = get_session_factory()
     db = factory()
+    raw_origin_key = request.headers.get("X-Domain-Event-Origin", "").strip()
+    try:
+        origin_key = str(uuid.UUID(raw_origin_key)) if raw_origin_key else None
+    except (AttributeError, TypeError, ValueError):
+        origin_key = None
+    if origin_key:
+        # This UUID is only a short-lived event correlation key. It never
+        # grants access or changes authorization decisions.
+        db.info["domain_event_origin_key"] = origin_key
     try:
         yield db
     finally:

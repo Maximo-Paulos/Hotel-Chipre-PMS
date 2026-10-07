@@ -23,7 +23,7 @@ import {
   type CompanyNightlyRatesResponse
 } from "../api/companies";
 import { hasValidSession } from "../api/client";
-import { refreshSettingsState } from "../api/queryInvalidation";
+import { invalidateQueriesInBackground, refreshSettingsState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -78,9 +78,9 @@ export function useMarkCompanyDocumentSigned() {
   const { session } = useSession();
   return useGuardedMutation({
     mutationFn: (documentId: number) => markReservationCompanyDocumentSigned(documentId, session),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["reservation-company-documents", session.hotelId] });
-      await queryClient.invalidateQueries({ queryKey: ["company-documents", session.hotelId] });
+    onSuccess: () => {
+      invalidateQueriesInBackground(queryClient, { queryKey: ["reservation-company-documents", session.hotelId] });
+      invalidateQueriesInBackground(queryClient, { queryKey: ["company-documents", session.hotelId] });
     }
   });
 }
@@ -92,7 +92,15 @@ export function useCompanyMutations() {
 
   const createMutation = useGuardedMutation({
     mutationFn: (payload: CompanyPayload) => createCompany(payload, session),
-    onSuccess: async () => invalidateCompanies()
+    onSuccess: async (created) => {
+      // The page selects the newly created company as soon as mutateAsync
+      // resolves. Keep that selection resolvable from the cache while the
+      // hotel-wide settings refresh runs in the background.
+      queryClient.setQueryData<Company[]>(companiesKey(session.hotelId), (current) =>
+        current ? [created, ...current.filter((company) => company.id !== created.id)] : [created]
+      );
+      await invalidateCompanies();
+    }
   });
 
   const updateMutation = useGuardedMutation({
@@ -128,32 +136,29 @@ export function useCompanyDocumentMutations(companyId?: number) {
 
   const uploadDocumentMutation = useGuardedMutation({
     mutationFn: (payload: CompanyDocumentUploadPayload) => uploadCompanyDocument(payload, session),
-    onSuccess: async (_document, payload) => {
-      await Promise.all([
-        invalidateDocuments(),
-        queryClient.invalidateQueries({ queryKey: reservationCompanyDocumentsKey(session.hotelId, payload.reservation_id) })
-      ]);
+    onSuccess: (_document, payload) => {
+      void invalidateDocuments().catch(() => undefined);
+      invalidateQueriesInBackground(
+        queryClient,
+        { queryKey: reservationCompanyDocumentsKey(session.hotelId, payload.reservation_id) }
+      );
     }
   });
 
   const updateStatusMutation = useGuardedMutation({
     mutationFn: ({ documentId, status }: { documentId: number; status: CompanyDocumentStatus }) =>
       updateCompanyDocumentStatus(documentId, status, session),
-    onSuccess: async () => {
-      await Promise.all([
-        invalidateDocuments(),
-        queryClient.invalidateQueries({ queryKey: ["reservation-company-documents", session.hotelId] })
-      ]);
+    onSuccess: () => {
+      void invalidateDocuments().catch(() => undefined);
+      invalidateQueriesInBackground(queryClient, { queryKey: ["reservation-company-documents", session.hotelId] });
     }
   });
 
   const deleteDocumentMutation = useGuardedMutation({
     mutationFn: (documentId: number) => deleteCompanyDocument(documentId, session),
-    onSuccess: async () => {
-      await Promise.all([
-        invalidateDocuments(),
-        queryClient.invalidateQueries({ queryKey: ["reservation-company-documents", session.hotelId] })
-      ]);
+    onSuccess: () => {
+      void invalidateDocuments().catch(() => undefined);
+      invalidateQueriesInBackground(queryClient, { queryKey: ["reservation-company-documents", session.hotelId] });
     }
   });
 

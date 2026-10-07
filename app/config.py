@@ -50,9 +50,10 @@ class Settings(BaseSettings):
     READ_MODEL_CACHE_FAILURE_COOLDOWN_SECONDS: float = 30.0
     READ_MODEL_AVAILABILITY_TTL_SECONDS: int = 15
     READ_MODEL_ANALYTICS_TTL_SECONDS: int = 60
-    SYNC_FACT_REFRESH_ENABLED: bool = True
+    # Keep fact repair out of request paths by default. Reservation writes
+    # maintain narrow fact windows; historical repair is an explicit operation.
+    SYNC_FACT_REFRESH_ENABLED: bool = False
     SYNC_FACT_REFRESH_MAX_DAYS: int = 31
-    SYNC_FACT_REFRESH_STALE_AFTER_SECONDS: int = 900
     # Disabled by default; bound SQL parameters are never included in logs.
     SLOW_QUERY_LOG_MS: float = 0
     DISTRIBUTED_LOCK_ENABLED: bool = True
@@ -60,9 +61,9 @@ class Settings(BaseSettings):
     DISTRIBUTED_LOCK_DEFAULT_TTL_SECONDS: int = 60
     REALTIME_EVENTS_ENABLED: bool = True
     REALTIME_EVENTS_HEARTBEAT_SECONDS: int = 15
-    # Keep the PostgreSQL SSE fallback below the product's ten-second
-    # cross-session freshness budget, including network/refetch headroom.
-    REALTIME_EVENTS_FALLBACK_POLL_SECONDS: float = Field(default=2.0, gt=0, le=5.0)
+    # Bound PostgreSQL outbox reads while leaving half of the ten-second
+    # cross-session freshness budget for network and client refetch work.
+    REALTIME_EVENTS_FALLBACK_POLL_SECONDS: float = Field(default=5.0, gt=0, le=5.0)
     # Collaboration tickets are intentionally short-lived and one-use. Redis
     # / Valkey is required for issuing them so a multi-worker deployment cannot
     # accidentally accept a ticket twice.

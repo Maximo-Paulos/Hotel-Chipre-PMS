@@ -833,8 +833,21 @@ def _update_reservation_financials(
     - If deposit paid (amount >= deposit_amount) and status is PENDING → deposit_paid
     - If fully paid (balance_due == 0) → fully_paid
     """
+    was_no_show = reservation.status == ReservationStatusEnum.NO_SHOW
     reservation.amount_paid = paid_amount_with_legacy_fallback(db, hotel_id, reservation)
     sync_reservation_financial_status(db, reservation, hotel_id=hotel_id, reason_code=tx_type.value)
+    if was_no_show and reservation.status == ReservationStatusEnum.NO_SHOW:
+        # Partial no-show revenue is derived from amount_paid. Keep its fact row
+        # current in the same transaction without reopening the terminal state.
+        from app.services.analytics_facts import touch_reservation_fact_window
+
+        touch_reservation_fact_window(
+            db,
+            hotel_id=hotel_id,
+            date_from=reservation.check_in_date,
+            date_to=reservation.check_out_date,
+            reservation_id=reservation.id,
+        )
     db.flush()
 
 
@@ -847,6 +860,7 @@ def sync_reservation_financial_status(
 ) -> None:
     if reservation.status in (
         ReservationStatusEnum.CANCELLED,
+        ReservationStatusEnum.NO_SHOW,
         ReservationStatusEnum.PRE_CHECK_IN,
         ReservationStatusEnum.CHECKED_IN,
         ReservationStatusEnum.CHECKED_OUT,
