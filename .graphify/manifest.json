@@ -6796,8 +6796,8 @@
     "hash": "6cebaa778241256c2d38d6d5fd542b48"
   },
   "tests/test_deposit_policy_migration.py": {
-    "mtime": 1791713225466.4773,
-    "hash": "251848a6346e95f598c35e19635d6287"
+    "mtime": 1791843592703.591,
+    "hash": "837a0ace27175d0c2cc3181af1682c61"
   },
   "tests/test_http_compression.py": {
     "mtime": 1791562696725.3982,
@@ -6840,8 +6840,8 @@
     "hash": "832c9e9066e450cfd32d546fbf2f395e"
   },
   "docs/audits/reporte-final-remediacion-consumo-y-simulaciones-2026-10-12.md": {
-    "mtime": 1791843446428.7285,
-    "hash": "2a7ce2b7704f057359bd0b0b4adf5481"
+    "mtime": 1791843643685.5818,
+    "hash": "da6e83a8ff0faa8cb434e1606a4877f6"
   },
   "alembic/versions/20261017_analytics_fact_refresh_queue.py": {
     "mtime": 1791779219148.454,
