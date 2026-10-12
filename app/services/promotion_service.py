@@ -270,16 +270,38 @@ def _promotion_matches(promo: Promotion, ctx: PromotionMatchContext, guest_tags:
     return True
 
 
-def find_applicable_promotions(db: Session, ctx: PromotionMatchContext) -> list[Promotion]:
-    """Return active promotions eligible for a single night, matching every
-    typed condition set on the row (NULL = wildcard)."""
+def find_applicable_promotions_for_nights(
+    db: Session,
+    contexts: list[PromotionMatchContext],
+) -> list[list[Promotion]]:
+    """Match nightly contexts after loading tenant rules and guest tags once."""
+    if not contexts:
+        return []
+    first = contexts[0]
+    if any(
+        context.hotel_id != first.hotel_id or context.guest_id != first.guest_id
+        for context in contexts
+    ):
+        raise ValueError("Night promotion contexts must share hotel and guest")
+
     candidates = (
         db.query(Promotion)
-        .filter(Promotion.hotel_id == ctx.hotel_id, Promotion.is_active.is_(True))
+        .filter(Promotion.hotel_id == first.hotel_id, Promotion.is_active.is_(True))
         .all()
     )
-    guest_tags = _guest_tag_types(db, hotel_id=ctx.hotel_id, guest_id=ctx.guest_id)
-    return [promo for promo in candidates if _promotion_matches(promo, ctx, guest_tags)]
+    if not candidates:
+        return [[] for _ in contexts]
+
+    guest_tags = _guest_tag_types(db, hotel_id=first.hotel_id, guest_id=first.guest_id)
+    return [
+        [promo for promo in candidates if _promotion_matches(promo, context, guest_tags)]
+        for context in contexts
+    ]
+
+
+def find_applicable_promotions(db: Session, ctx: PromotionMatchContext) -> list[Promotion]:
+    """Return active promotions eligible for one night, matching every typed condition."""
+    return find_applicable_promotions_for_nights(db, [ctx])[0]
 
 
 def select_promotions_to_apply(promotions: list[Promotion]) -> list[Promotion]:

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
+from app.services.outbound_http_telemetry import observed_async_http_call, observed_http_call
 
 from app.services.external_effects_policy import (
     dolarapi_rates_enabled,
@@ -225,7 +226,7 @@ async def _get_async(url: str) -> Optional[dict | list]:
     require_dolarapi_rates("DolarAPI FX-rate lookup")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url)
+            response = await observed_async_http_call("dolarapi.rates_async", client.get, url)
             response.raise_for_status()
             return response.json()
     except Exception as exc:  # noqa: BLE001
@@ -415,7 +416,7 @@ def get_conversion_quote_sync(currency_code: str, rate_type: str = "oficial") ->
             if currency == "USD"
             else f"{DOLAR_API_BASE}/cotizaciones"
         )
-        response = httpx.get(url, timeout=10.0)
+        response = observed_http_call("dolarapi.quote", httpx.get, url, timeout=10.0)
         response.raise_for_status()
         payload = response.json()
         quote = (
@@ -498,7 +499,8 @@ def get_rate_sync(rate_type: str = "oficial") -> Optional[float]:
         return cached.get("venta") if _cached_quote_matches(normalized, cached) else None
     try:
         require_dolarapi_rates("DolarAPI FX-rate lookup")
-        response = httpx.get(f"{DOLAR_API_BASE}/dolares/{normalized}", timeout=10.0)
+        url = f"{DOLAR_API_BASE}/dolares/{normalized}"
+        response = observed_http_call("dolarapi.rate_sync", httpx.get, url, timeout=10.0)
         response.raise_for_status()
         data = response.json()
         if not _quote_matches_supported_market(data, currency="USD", market=normalized):

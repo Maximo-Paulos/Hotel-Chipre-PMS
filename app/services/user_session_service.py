@@ -28,7 +28,7 @@ USER_SESSION_COOKIE_PATH = "/api/"
 # a 7-day idle lifetime removes dormant devices without interrupting active use.
 USER_SESSION_ABSOLUTE_TTL = timedelta(days=30)
 USER_SESSION_IDLE_TTL = timedelta(days=7)
-USER_SESSION_ROTATION_RECOVERY_WINDOW = timedelta(seconds=10)
+USER_SESSION_ROTATION_RECOVERY_WINDOW = timedelta(seconds=120)
 USER_SESSION_COOKIE_MAX_AGE_SECONDS = int(USER_SESSION_ABSOLUTE_TTL.total_seconds())
 UNKNOWN_DEVICE_LABEL = "Dispositivo desconocido"
 

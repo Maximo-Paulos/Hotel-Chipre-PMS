@@ -1,11 +1,7 @@
 from __future__ import annotations
 
 import json
-import hashlib
-import logging
-import threading
 from collections import defaultdict
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -13,8 +9,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, func, or_, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -45,7 +40,9 @@ from app.schemas.analytics_api import (
 )
 from app.services.analytics_ai_providers import build_analytics_ai_config, get_analytics_ai_provider
 from app.services.analytics_contracts import build_analytics_window, calculate_physical_room_nights_for_hotel, calculate_pickup_30d_count
-from app.services.analytics_facts import refresh_fact_reservation_daily, refresh_fact_room_occupancy_daily
+from app.services.analytics_facts import (
+    touch_room_state_event_fact_window,
+)
 from app.services.reservation_service import active_reservations
 from app.services.room_service import active_rooms
 from app.services.subscription_entitlements import get_subscription_snapshot
@@ -54,22 +51,6 @@ from app.services.timezones import normalize_timezone
 MONEY_QUANTUM = Decimal("0.01")
 PLAN_ORDER = {"starter": 0, "pro": 1, "ultra": 2}
 AI_MONTHLY_QUOTA_FALLBACK = 20
-logger = logging.getLogger(__name__)
-
-_ANALYTICS_FACT_REFRESH_LOCKS: dict[int, threading.Lock] = {}
-_ANALYTICS_FACT_REFRESH_LOCKS_GUARD = threading.Lock()
-
-_FACT_CURRENCY_PAIRS = (
-    ("revenue_gross_ars", "revenue_gross_usd"),
-    ("revenue_net_ars", "revenue_net_usd"),
-    ("tax_ars", "tax_usd"),
-    ("fee_ars", "fee_usd"),
-    ("commission_ars", "commission_usd"),
-    ("variable_cost_ars", "variable_cost_usd"),
-    ("margin_operating_ars", "margin_operating_usd"),
-)
-
-
 @dataclass(frozen=True, slots=True)
 class DateWindow:
     date_from: date
@@ -86,10 +67,9 @@ def _facts_data_as_of(*fact_row_groups: list[Any]) -> datetime | None:
 
     This is a conservative fact-refresh timestamp, not an independent
     watermark of source-table writes. Reservation write paths update their
-    affected fact windows transactionally; bounded read-time recovery also
-    repairs missing or aged windows when enabled. Returning the oldest row
-    keeps mixed-age windows visibly stale instead of letting a newer row mask
-    an older one. An empty window returns None because it has no fact rows.
+    affected fact windows transactionally. Returning the oldest row keeps
+    mixed-age windows visibly stale instead of letting a newer row mask an
+    older one. An empty window returns None because it has no fact rows.
     """
     timestamps = [row.updated_at for group in fact_row_groups for row in group if getattr(row, "updated_at", None)]
     return min(timestamps) if timestamps else None
@@ -488,7 +468,6 @@ def reactivate_company(db: Session, *, hotel_id: int, user_id: int, company_id: 
 
 def get_company_fact_detail(db: Session, *, hotel_id: int, company_id: int, date_from: date, date_to: date) -> dict[str, Any]:
     company = get_company_or_404(db, hotel_id, company_id)
-    _ensure_facts_materialized(db, hotel_id, date_from, date_to)
     facts = (
         db.query(FactReservationDaily)
         .filter(
@@ -826,6 +805,12 @@ def create_room_state_event(
         entity_id=event.id,
         after=_serialize_room_state_event(event),
     )
+    touch_room_state_event_fact_window(
+        db,
+        hotel_id=hotel_id,
+        room_id=event.room_id,
+        event_started_at=event.started_at,
+    )
     return event
 
 
@@ -858,6 +843,12 @@ def close_room_state_event(db: Session, *, hotel_id: int, user_id: int, event_id
         before=before,
         after=_serialize_room_state_event(event),
     )
+    touch_room_state_event_fact_window(
+        db,
+        hotel_id=hotel_id,
+        room_id=event.room_id,
+        event_started_at=event.started_at,
+    )
     return event
 
 
@@ -883,216 +874,7 @@ def _company_lookup_map(db: Session, hotel_id: int) -> dict[int, Company]:
     return {company.id: company for company in companies}
 
 
-def _ensure_facts_materialized(db: Session, hotel_id: int, date_from: date, date_to: date) -> None:
-    """Repair missing, aged, or FX-incomplete facts within a bounded window.
-
-    Age-based recovery only runs when the full requested window fits inside
-    the hard 31-day cap. Wider historical requests keep their existing
-    freshness metadata and never trigger a partial refresh on every read.
-    """
-    settings = get_settings()
-    if not bool(getattr(settings, "SYNC_FACT_REFRESH_ENABLED", True)):
-        return
-
-    # The setting can narrow this work, but it cannot expand an API request
-    # into a large historical recompute.
-    max_days = min(max(int(getattr(settings, "SYNC_FACT_REFRESH_MAX_DAYS", 31)), 1), 31)
-    requested_days = max((date_to - date_from).days + 1, 1)
-    if requested_days > 31:
-        logger.info(
-            "analytics.sync_fact_refresh.skipped_wide_window",
-            extra={
-                "hotel_id": hotel_id,
-                "requested_date_from": date_from.isoformat(),
-                "requested_date_to": date_to.isoformat(),
-                "requested_days": requested_days,
-                "max_days": 31,
-                "reason": "wide_window_preserves_stale_metadata",
-            },
-        )
-        return
-    refresh_date_from = max(date_from, date_to - timedelta(days=max_days - 1))
-    stale_after_seconds = max(int(getattr(settings, "SYNC_FACT_REFRESH_STALE_AFTER_SECONDS", 900)), 0)
-    ars_amounts = [getattr(FactReservationDaily, ars) for ars, _usd in _FACT_CURRENCY_PAIRS]
-    usd_amounts = [getattr(FactReservationDaily, usd) for _ars, usd in _FACT_CURRENCY_PAIRS]
-    has_nonzero_ars = or_(*(column != 0 for column in ars_amounts))
-    has_nonzero_usd = or_(*(column != 0 for column in usd_amounts))
-    has_any_money = or_(has_nonzero_ars, has_nonzero_usd)
-    missing_fx = or_(FactReservationDaily.fx_rate_snapshot.is_(None), FactReservationDaily.fx_rate_snapshot <= 0)
-
-    def fact_refresh_state() -> tuple[bool, bool, bool]:
-        reservation_count, reservation_fact_as_of = (
-            db.query(func.count(FactReservationDaily.id), func.min(FactReservationDaily.updated_at))
-            .filter(
-                FactReservationDaily.hotel_id == hotel_id,
-                FactReservationDaily.stay_date.between(refresh_date_from, date_to),
-            )
-            .one()
-        )
-        room_count, room_fact_as_of = (
-            db.query(func.count(FactRoomOccupancyDaily.id), func.min(FactRoomOccupancyDaily.updated_at))
-            .filter(
-                FactRoomOccupancyDaily.hotel_id == hotel_id,
-                FactRoomOccupancyDaily.stay_date.between(refresh_date_from, date_to),
-            )
-            .one()
-        )
-        reservation_date_ranges = (
-            active_reservations(db, hotel_id)
-            # refresh_fact_reservation_daily skips reservations whose category
-            # is absent. Match that source filter so legacy/orphaned rows do
-            # not cause an endless "incomplete" refresh loop.
-            .join(
-                RoomCategory,
-                and_(RoomCategory.id == Reservation.category_id, RoomCategory.hotel_id == hotel_id),
-            )
-            .filter(
-                Reservation.check_in_date <= date_to,
-                Reservation.check_out_date > refresh_date_from,
-                Reservation.status != ReservationStatusEnum.CANCELLED,
-            )
-            .with_entities(Reservation.check_in_date, Reservation.check_out_date)
-            .all()
-        )
-        expected_reservation_rows = sum(
-            max(
-                (
-                    min(check_out, date_to + timedelta(days=1))
-                    - max(check_in, refresh_date_from)
-                ).days,
-                0,
-            )
-            for check_in, check_out in reservation_date_ranges
-        )
-        expected_room_rows = active_rooms(db, hotel_id).count() * max(
-            (date_to - refresh_date_from).days + 1,
-            0,
-        )
-        coverage_complete = (
-            reservation_count == expected_reservation_rows
-            and room_count == expected_room_rows
-        )
-        materialized_timestamps = [
-            timestamp
-            for timestamp in (reservation_fact_as_of, room_fact_as_of)
-            if timestamp is not None
-        ]
-        stale_facts = False
-        if requested_days <= max_days and stale_after_seconds > 0 and materialized_timestamps:
-            normalized_as_of = _ensure_utc(min(materialized_timestamps))
-            stale_facts = bool(
-                normalized_as_of is not None
-                and (_now() - normalized_as_of).total_seconds() >= stale_after_seconds
-            )
-        stale_fx_fact = (
-            db.query(FactReservationDaily.id)
-            .filter(
-                FactReservationDaily.hotel_id == hotel_id,
-                FactReservationDaily.stay_date.between(refresh_date_from, date_to),
-                missing_fx,
-                or_(
-                    and_(FactReservationDaily.source_currency == "ARS", has_nonzero_usd),
-                    and_(FactReservationDaily.source_currency == "USD", has_nonzero_ars),
-                    and_(FactReservationDaily.source_currency.notin_(["ARS", "USD"]), has_any_money),
-                ),
-            )
-            .first()
-        )
-        return coverage_complete, bool(stale_fx_fact), stale_facts
-
-    coverage_complete, stale_fx_fact, stale_facts = fact_refresh_state()
-    if coverage_complete and not stale_fx_fact and not stale_facts:
-        return
-
-    with _analytics_fact_refresh_guard(db, hotel_id) as acquired:
-        if not acquired:
-            logger.info(
-                "analytics.sync_fact_refresh.skipped_lock",
-                extra={
-                    "hotel_id": hotel_id,
-                    "requested_date_from": date_from.isoformat(),
-                    "requested_date_to": date_to.isoformat(),
-                    "reason": "another_refresh_is_running",
-                },
-            )
-            return
-
-        # Another request may have completed while this request was waiting
-        # to enter the guard. Recheck under the lock before deleting rows.
-        coverage_complete, stale_fx_fact, stale_facts = fact_refresh_state()
-        if coverage_complete and not stale_fx_fact and not stale_facts:
-            db.commit()
-            return
-
-        logger.warning(
-            "analytics.sync_fact_currency_refresh.inline" if stale_fx_fact else "analytics.sync_fact_refresh.inline",
-            extra={
-                "hotel_id": hotel_id,
-                "requested_date_from": date_from.isoformat(),
-                "requested_date_to": date_to.isoformat(),
-                "refresh_date_from": refresh_date_from.isoformat(),
-                "refresh_date_to": date_to.isoformat(),
-                "max_days": max_days,
-                "reason": (
-                    "missing_fx_snapshot_on_converted_fact"
-                    if stale_fx_fact
-                    else "stale_fact_window"
-                    if stale_facts
-                    else "empty_window"
-                ),
-                "stale_after_seconds": stale_after_seconds,
-                "requested_days": requested_days,
-            },
-        )
-        try:
-            refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=refresh_date_from, date_to=date_to)
-            refresh_fact_room_occupancy_daily(db, hotel_id=hotel_id, date_from=refresh_date_from, date_to=date_to)
-            db.commit()
-        except IntegrityError:
-            db.rollback()
-
-
-@contextmanager
-def _analytics_fact_refresh_guard(db: Session, hotel_id: int):
-    """Nonblocking per-hotel refresh guard across API processes and threads.
-
-    PostgreSQL's transaction-scoped advisory lock coordinates Render
-    instances. SQLite and other local test engines use a process-local lock;
-    both are try-locks so a concurrent read serves the current stale timestamp
-    instead of waiting or repeating the same rebuild.
-    """
-    bind = db.get_bind()
-    if bind is not None and bind.dialect.name == "postgresql":
-        key_material = f"hotel-chipre:analytics-fact-refresh:{hotel_id}".encode("utf-8")
-        lock_key = int.from_bytes(hashlib.blake2b(key_material, digest_size=8).digest(), "big", signed=True)
-        acquired = bool(
-            db.execute(
-                text("SELECT pg_try_advisory_xact_lock(:lock_key)"),
-                {"lock_key": lock_key},
-            ).scalar()
-        )
-        try:
-            yield acquired
-        finally:
-            # Refresh paths commit or roll back before returning. Release a
-            # lock on exceptional exits while preserving tenant context via
-            # app.database's after_begin hook.
-            if acquired and db.in_transaction():
-                db.rollback()
-        return
-
-    with _ANALYTICS_FACT_REFRESH_LOCKS_GUARD:
-        lock = _ANALYTICS_FACT_REFRESH_LOCKS.setdefault(hotel_id, threading.Lock())
-    acquired = lock.acquire(blocking=False)
-    try:
-        yield acquired
-    finally:
-        if acquired:
-            lock.release()
-
-
 def _load_reservation_facts(db: Session, hotel_id: int, date_from: date, date_to: date) -> list[FactReservationDaily]:
-    _ensure_facts_materialized(db, hotel_id, date_from, date_to)
     return (
         db.query(FactReservationDaily)
         .filter(
@@ -1104,7 +886,6 @@ def _load_reservation_facts(db: Session, hotel_id: int, date_from: date, date_to
 
 
 def _load_room_facts(db: Session, hotel_id: int, date_from: date, date_to: date) -> list[FactRoomOccupancyDaily]:
-    _ensure_facts_materialized(db, hotel_id, date_from, date_to)
     active_room_ids = active_rooms(db, hotel_id).with_entities(Room.id).statement
     return (
         db.query(FactRoomOccupancyDaily)
@@ -1371,7 +1152,6 @@ def build_room_detail_payload(
     if not room:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room no encontrada")
     category = db.get(RoomCategory, room.category_id) if room.category_id else None
-    _ensure_facts_materialized(db, hotel_id, window.date_from, window.date_to)
     facts = (
         db.query(FactRoomOccupancyDaily)
         .filter(
@@ -1453,7 +1233,6 @@ def build_category_detail_payload(
         .order_by(Room.room_number.asc())
         .all()
     )
-    _ensure_facts_materialized(db, hotel_id, window.date_from, window.date_to)
     facts = (
         db.query(FactReservationDaily)
         .filter(

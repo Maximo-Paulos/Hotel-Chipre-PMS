@@ -156,7 +156,12 @@ def test_subscription_catalog_has_updated_tier_limits():
     assert plans["pro"]["staff_limit"] == 8
     assert plans["ultra"]["room_limit"] == 80
     assert plans["ultra"]["staff_limit"] == 20
-    assert all(plan["price_month"] is None for plan in plans.values())
+    assert {code: plan["price_month"] for code, plan in plans.items()} == {
+        "starter": 20,
+        "pro": 100,
+        "ultra": 200,
+    }
+    assert {plan["price_currency"] for plan in plans.values()} == {"USD"}
 
 
 def test_trial_auto_suspends_after_fourteen_days(client):

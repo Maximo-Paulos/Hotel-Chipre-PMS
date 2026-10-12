@@ -63,6 +63,57 @@ def _hotel_default_currency(db: Session, hotel_id: int) -> str:
     return str(getattr(config, "default_currency", None) or "ARS").strip().upper()[:3] or "ARS"
 
 
+_OTA_FACT_INPUT_FIELDS = (
+    "check_in_date",
+    "check_out_date",
+    "room_id",
+    "category_id",
+    "company_id",
+    "status",
+    "outcome",
+    "total_amount",
+    "subtotal_amount",
+    "tax_amount",
+    "fee_amount",
+    "commission_amount",
+    "net_amount",
+    "amount_paid",
+    "currency_code",
+    "fx_rate_snapshot",
+    "no_show_policy_applied",
+    "settlement_status",
+    "guest_segment",
+    "guest_segment_source",
+    "channel_code",
+    "source_provider_code",
+)
+
+
+def _ota_fact_input_snapshot(reservation: Reservation) -> tuple[object, ...]:
+    return tuple(getattr(reservation, field) for field in _OTA_FACT_INPUT_FIELDS)
+
+
+def _touch_ota_reservation_facts(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation: Reservation,
+    date_from: date,
+    date_to: date,
+    previous_room_id: int | None = None,
+) -> None:
+    from app.services.analytics_facts import touch_reservation_fact_window
+
+    touch_reservation_fact_window(
+        db,
+        hotel_id=hotel_id,
+        date_from=date_from,
+        date_to=date_to,
+        reservation_id=reservation.id,
+        previous_room_id=previous_room_id,
+    )
+
+
 class OTAIntegrationService:
     """
     Handles bidirectional synchronization with OTAs (Booking.com, Expedia).
@@ -619,6 +670,13 @@ class OTAIntegrationService:
         reservation.sellable_product_id = sellable_product.id if sellable_product else None
         reservation.rate_plan_id = rate_plan.id if rate_plan else None
         OTAIntegrationService._apply_financial_snapshot(db, hotel_id, reservation, normalized)
+        _touch_ota_reservation_facts(
+            db,
+            hotel_id=hotel_id,
+            reservation=reservation,
+            date_from=reservation.check_in_date,
+            date_to=reservation.check_out_date,
+        )
 
         mapping.reservation_id = reservation.id
         mapping.sync_status = OTASyncStatusEnum.SYNCED
@@ -849,6 +907,11 @@ class OTAIntegrationService:
             db.flush()
             return mapping
 
+        original_fact_snapshot = _ota_fact_input_snapshot(reservation)
+        original_check_in = reservation.check_in_date
+        original_check_out = reservation.check_out_date
+        original_room_id = reservation.room_id
+
         sellable_product, rate_plan, candidate_categories = OTAIntegrationService._resolve_commercial_context(
             db,
             hotel_id=hotel_id,
@@ -909,6 +972,7 @@ class OTAIntegrationService:
                 reservation,
                 update_payload,
                 hotel_id=hotel_id,
+                refresh_facts=False,
             )
         except ReservationError:
             reservation.check_in_date = normalized.check_in_date
@@ -975,6 +1039,15 @@ class OTAIntegrationService:
             rate_plan_id=rate_plan.id if rate_plan else reservation.rate_plan_id,
         )
         db.flush()
+        if _ota_fact_input_snapshot(reservation) != original_fact_snapshot:
+            _touch_ota_reservation_facts(
+                db,
+                hotel_id=hotel_id,
+                reservation=reservation,
+                date_from=min(original_check_in, reservation.check_in_date),
+                date_to=max(original_check_out, reservation.check_out_date),
+                previous_room_id=(original_room_id if original_room_id != reservation.room_id else None),
+            )
         return mapping
 
     @staticmethod

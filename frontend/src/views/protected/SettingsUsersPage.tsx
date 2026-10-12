@@ -19,7 +19,7 @@ import {
 import { type AuthUser } from "../../api/auth";
 import { hasValidSession } from "../../api/client";
 import { useSession } from "../../state/session";
-import { refreshUserState } from "../../api/queryInvalidation";
+import { invalidateQueriesInBackground, refreshUserState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { roleLabels } from "../../ui/UserBadge";
@@ -81,58 +81,46 @@ export function SettingsUsersPage() {
       ...payload,
       role: payload.role as InvitePayload["role"]
     }, session),
-    onSuccess: async () => {
-      await Promise.all([
-        refreshUserState(qc, session.hotelId),
-        qc.invalidateQueries({ queryKey: ["users", "aliases", session.hotelId] }),
-        qc.invalidateQueries({ queryKey: ["users", "invitations", session.hotelId] }),
-        qc.invalidateQueries({ queryKey: hotelRolesQueryKey(session.hotelId) })
-      ]);
+    onSuccess: () => {
+      void refreshUserState(qc, session.hotelId).catch(() => undefined);
+      invalidateQueriesInBackground(qc, { queryKey: ["users", "aliases", session.hotelId] });
+      invalidateQueriesInBackground(qc, { queryKey: ["users", "invitations", session.hotelId] });
+      invalidateQueriesInBackground(qc, { queryKey: hotelRolesQueryKey(session.hotelId) });
     }
   });
   const resendMutation = useGuardedMutation({
     mutationFn: (invitationId: number) => resendInvitation(invitationId, session),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["users", "invitations", session.hotelId] });
-    }
+    onSuccess: () => invalidateQueriesInBackground(qc, { queryKey: ["users", "invitations", session.hotelId] })
   });
   const revokeInvitationMutation = useGuardedMutation({
     mutationFn: (invitationId: number) => revokeInvitation(invitationId, session),
-    onSuccess: async () => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["users", "invitations", session.hotelId] }),
-        qc.invalidateQueries({ queryKey: ["users", "aliases", session.hotelId] }),
-        refreshUserState(qc, session.hotelId)
-      ]);
+    onSuccess: () => {
+      invalidateQueriesInBackground(qc, { queryKey: ["users", "invitations", session.hotelId] });
+      invalidateQueriesInBackground(qc, { queryKey: ["users", "aliases", session.hotelId] });
+      void refreshUserState(qc, session.hotelId).catch(() => undefined);
     }
   });
   const revokeMutation = useGuardedMutation({
     mutationFn: (userId: number) => revokeUser(userId, session),
-    onSuccess: async () => {
-      await Promise.all([
-        refreshUserState(qc, session.hotelId),
-        qc.invalidateQueries({ queryKey: hotelRolesQueryKey(session.hotelId) })
-      ]);
+    onSuccess: () => {
+      void refreshUserState(qc, session.hotelId).catch(() => undefined);
+      invalidateQueriesInBackground(qc, { queryKey: hotelRolesQueryKey(session.hotelId) });
     }
   });
   const updateRoleMutation = useGuardedMutation({
     mutationFn: (payload: { userId: number; role: string }) =>
       updateUserRole(payload.userId, payload.role as InvitePayload["role"], session),
-    onSuccess: async () => {
-      await Promise.all([
-        refreshUserState(qc, session.hotelId),
-        qc.invalidateQueries({ queryKey: hotelRolesQueryKey(session.hotelId) })
-      ]);
+    onSuccess: () => {
+      void refreshUserState(qc, session.hotelId).catch(() => undefined);
+      invalidateQueriesInBackground(qc, { queryKey: hotelRolesQueryKey(session.hotelId) });
     }
   });
   const updateAliasMutation = useGuardedMutation({
     mutationFn: (payload: { userId: number; alias: string | null }) =>
       updateUserAlias(payload.userId, payload.alias, session),
-    onSuccess: async () => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["users", "aliases", session.hotelId] }),
-        qc.invalidateQueries({ queryKey: ["users", session.hotelId] })
-      ]);
+    onSuccess: () => {
+      invalidateQueriesInBackground(qc, { queryKey: ["users", "aliases", session.hotelId] });
+      invalidateQueriesInBackground(qc, { queryKey: ["users", session.hotelId] });
     }
   });
 

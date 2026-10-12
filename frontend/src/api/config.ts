@@ -15,6 +15,7 @@ export type HotelConfig = {
   fx_conversion_rate_type: "oficial" | "blue";
   fx_display_rate_types: Array<"oficial" | "blue">;
   deposit_percentage: number;
+  deposit_policy_configured: boolean;
   checkin_payment_policy: "deposit" | "total" | "free";
   free_cancellation_hours: number;
   cancellation_penalty_percentage: number;

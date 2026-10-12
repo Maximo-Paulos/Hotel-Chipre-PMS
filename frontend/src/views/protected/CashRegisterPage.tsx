@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import {
+  downloadCashExpensesCsv,
   downloadCashExpenseReceipt,
   downloadCashLedgerCsv,
   type CashCloseReport,
@@ -27,6 +28,7 @@ import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 import { formatHotelDateTime, formatHotelTime, todayIso } from "../../utils/date";
+import { cashExpenseValidationMessage } from "../../utils/cashExpenseValidation.mjs";
 
 const emptyMovementForm: CashMovementPayload = {
   movement_type: "income",
@@ -59,11 +61,13 @@ export function CashRegisterPage() {
   const [reportCurrency, setReportCurrency] = useState("");
   const [exportFromDate, setExportFromDate] = useState(() => todayIso());
   const [exportToDate, setExportToDate] = useState(() => todayIso());
+  const [exportingExpenses, setExportingExpenses] = useState(false);
   const [expenseCategory, setExpenseCategory] = useState("");
   const [expenseVendor, setExpenseVendor] = useState("");
   const [expenseReceiptReference, setExpenseReceiptReference] = useState("");
   const [expenseReceiptImage, setExpenseReceiptImage] = useState<string | null>(null);
   const [expenseReceiptFilename, setExpenseReceiptFilename] = useState<string | null>(null);
+  const [expenseValidationMessage, setExpenseValidationMessage] = useState<string | null>(null);
   const [expenseRejectionReasons, setExpenseRejectionReasons] = useState<Record<number, string>>({});
 
   const setCashActionError = (key: string, error: unknown, fallback: string) => {
@@ -263,6 +267,19 @@ export function CashRegisterPage() {
     ) return;
     if (!selectedSession || selectedSession.status !== "open") return;
     setMessage(null);
+    if (movementForm.movement_type === "expense") {
+      const validationMessage = cashExpenseValidationMessage({
+        category: expenseCategory,
+        vendor: expenseVendor,
+        receiptReference: expenseReceiptReference,
+        hasReceiptImage: Boolean(expenseReceiptImage)
+      });
+      if (validationMessage) {
+        setExpenseValidationMessage(validationMessage);
+        return;
+      }
+    }
+    setExpenseValidationMessage(null);
     try {
       if (movementForm.movement_type === "expense") {
         await mutations.createExpenseMutation.mutateAsync({
@@ -463,6 +480,36 @@ export function CashRegisterPage() {
       setMessage("Exportación de caja descargada.");
     } catch (error) {
       setCashActionError("export", error, "No se pudo exportar la caja.");
+    }
+  };
+
+  const handleExpenseExport = async () => {
+    setMessage(null);
+    setCashActionErrors((current) => {
+      const next = { ...current };
+      delete next.expense_export;
+      return next;
+    });
+    if (!exportFromDate || !exportToDate || exportToDate < exportFromDate) {
+      setCashActionErrors((current) => ({ ...current, expense_export: "Elegí un rango válido para exportar gastos." }));
+      return;
+    }
+    setExportingExpenses(true);
+    try {
+      const blob = await downloadCashExpensesCsv(exportFromDate, exportToDate, session);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `gastos-caja-${exportFromDate}-${exportToDate}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setMessage("Exportación de gastos descargada.");
+    } catch (error) {
+      setCashActionError("expense_export", error, "No se pudieron exportar los gastos.");
+    } finally {
+      setExportingExpenses(false);
     }
   };
 
@@ -823,6 +870,33 @@ export function CashRegisterPage() {
         <Metric label="Esperado" value={money(expectedBalance, currency)} />
       </div>
 
+      {summary?.by_collector.length ? (
+        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Cierre de caja</p>
+            <h2 className="text-lg font-semibold text-slate-900">Detalle por usuario</h2>
+            <p className="text-sm text-slate-600">Movimientos de esta sesión atribuidos a quien los registró.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {summary.by_collector.map((collector) => (
+              <article
+                key={`${collector.collector_user_id ?? "system"}-${collector.collector_name}`}
+                className="rounded-lg bg-slate-50 p-3"
+              >
+                <p className="truncate text-sm font-semibold text-slate-800">{collector.collector_name}</p>
+                <p className="mt-1 text-xs text-slate-500">{collector.movement_count} movimiento(s)</p>
+                <dl className="mt-2 space-y-1 text-xs text-slate-600">
+                  <div className="flex justify-between gap-2"><dt>Ingresos</dt><dd>{money(collector.income_total, currency)}</dd></div>
+                  <div className="flex justify-between gap-2"><dt>Egresos</dt><dd>{money(collector.expense_total, currency)}</dd></div>
+                  <div className="flex justify-between gap-2"><dt>Ajustes</dt><dd>{money(collector.adjustment_total, currency)}</dd></div>
+                  <div className="flex justify-between gap-2 border-t border-slate-200 pt-1 font-semibold text-slate-900"><dt>Neto</dt><dd>{money(collector.net_total, currency)}</dd></div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         <section className="space-y-4">
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -1020,7 +1094,10 @@ export function CashRegisterPage() {
                 <span className="text-slate-600">Tipo</span>
                 <select
                   value={movementForm.movement_type}
-                  onChange={(event) => setMovementForm((current) => ({ ...current, movement_type: event.target.value as CashMovementPayload["movement_type"] }))}
+                  onChange={(event) => {
+                    setExpenseValidationMessage(null);
+                    setMovementForm((current) => ({ ...current, movement_type: event.target.value as CashMovementPayload["movement_type"] }));
+                  }}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 >
                   <option value="income">Ingreso</option>
@@ -1052,30 +1129,27 @@ export function CashRegisterPage() {
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Categoría</span>
                     <input
-                      required
                       maxLength={64}
                       value={expenseCategory}
-                      onChange={(event) => setExpenseCategory(event.target.value)}
+                      onChange={(event) => { setExpenseValidationMessage(null); setExpenseCategory(event.target.value); }}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Proveedor</span>
                     <input
-                      required
                       maxLength={120}
                       value={expenseVendor}
-                      onChange={(event) => setExpenseVendor(event.target.value)}
+                      onChange={(event) => { setExpenseValidationMessage(null); setExpenseVendor(event.target.value); }}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
                     <span className="text-slate-600">Referencia del comprobante</span>
                     <input
-                      required={!expenseReceiptImage}
                       maxLength={120}
                       value={expenseReceiptReference}
-                      onChange={(event) => setExpenseReceiptReference(event.target.value)}
+                      onChange={(event) => { setExpenseValidationMessage(null); setExpenseReceiptReference(event.target.value); }}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     />
                   </label>
@@ -1084,13 +1158,18 @@ export function CashRegisterPage() {
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
-                      onChange={handleExpenseReceiptFile}
+                      onChange={(event) => { setExpenseValidationMessage(null); handleExpenseReceiptFile(event); }}
                       className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
                     />
                     <span className="block text-xs text-slate-500">JPEG, PNG o WEBP · hasta 5 MB. El archivo se guarda en almacenamiento privado.</span>
                     {expenseReceiptFilename ? <span className="block text-xs text-emerald-700">Adjunto: {expenseReceiptFilename}</span> : null}
                   </label>
                   <p className="text-xs text-amber-800 md:col-span-2">El gasto queda pendiente. Solo Dueño, Codueña o Gerencia pueden aprobarlo con MFA; hasta entonces no cambia el saldo de caja.</p>
+                  {expenseValidationMessage ? (
+                    <p className="text-sm text-rose-700 md:col-span-2" role="alert" data-testid="cash-expense-validation-error">
+                      {expenseValidationMessage}
+                    </p>
+                  ) : null}
                 </>
               ) : null}
               {movementForm.movement_type === "expense" && !canSubmitCashExpense ? (
@@ -1145,8 +1224,25 @@ export function CashRegisterPage() {
             {canViewCash ? (
               <section className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white" data-testid="cash-expenses">
                 <div className="border-b border-slate-200 px-4 py-3">
-                  <h3 className="font-semibold text-slate-900">Gastos de caja</h3>
-                  <p className="text-xs text-slate-500">Los gastos pendientes no afectan el arqueo hasta que se aprueben.</p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="font-semibold text-slate-900">Gastos de caja</h3>
+                      <p className="text-xs text-slate-500">Los gastos pendientes no afectan el arqueo hasta que se aprueben.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleExpenseExport()}
+                      disabled={exportingExpenses || !exportFromDate || !exportToDate || exportToDate < exportFromDate}
+                      className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-60"
+                      data-testid="cash-expense-export"
+                    >
+                      {exportingExpenses ? "Exportando…" : "Exportar gastos CSV"}
+                    </button>
+                  </div>
+                  <PersistentActionError
+                    message={cashActionErrors.expense_export}
+                    onClose={() => dismissCashActionError("expense_export")}
+                  />
                 </div>
                 {cashExpensesQuery.isLoading ? <p className="px-4 py-3 text-sm text-slate-500">Cargando gastos…</p> : null}
                 {cashExpensesQuery.isError ? <p className="px-4 py-3 text-sm text-rose-700">No se pudieron cargar los gastos. {(cashExpensesQuery.error as Error).message}</p> : null}

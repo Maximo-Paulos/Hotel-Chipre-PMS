@@ -46,7 +46,7 @@ def test_linen_outbound_movement_is_checked_against_its_own_location_not_hotel_w
 
     # Hotel-wide total is 10, but vendor_location has 0 -- an "out" there
     # must be rejected even though the hotel-wide total would cover it.
-    with pytest.raises(LinenError, match="negative"):
+    with pytest.raises(LinenError, match="negativo"):
         register_movement(
             db, hotel_id=1, item_id=item.id, location_id=vendor_location.id, movement_type="out",
             quantity=Decimal("3.00"), reason="bug: draws from house's balance", reservation_id=None,
@@ -118,7 +118,7 @@ def test_linen_opening_count_batch_is_atomic_and_only_applies_before_location_hi
 
     # Any prior movement locks only that item/location cell, and rejects the
     # complete batch so the other cell cannot be partially recorded.
-    with pytest.raises(LinenError, match="prior movements"):
+    with pytest.raises(LinenError, match="movimientos previos"):
         register_opening_counts(
             db,
             hotel_id=1,
@@ -223,7 +223,7 @@ def test_linen_transfer_rejects_insufficient_source_without_partial_rows(db):
     )
     db.commit()
 
-    with pytest.raises(LinenError, match="negative"):
+    with pytest.raises(LinenError, match="negativo"):
         transfer_linen_stock(
             db,
             hotel_id=1,
@@ -274,7 +274,7 @@ def test_linen_minimums_are_location_specific_and_allow_zero(db):
             db, hotel_id=1, item_id=item.id, location_id=house.id,
             min_quantity=Decimal("-1.00"), actor_user_id=10,
         )
-    with pytest.raises(LinenError, match="location not found"):
+    with pytest.raises(LinenError, match="ubicación de ropa blanca"):
         set_location_minimum(
             db, hotel_id=1, item_id=item.id, location_id=other_hotel_location.id,
             min_quantity=Decimal("1.00"), actor_user_id=10,

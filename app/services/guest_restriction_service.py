@@ -59,7 +59,7 @@ class GuestProhibitedError(GuestRestrictionServiceError):
 
     def __init__(self, restriction_id: int):
         self.restriction_id = restriction_id
-        super().__init__("Guest has an active lodging restriction")
+        super().__init__("El huésped tiene una restricción activa de alojamiento.")
 
 
 class RestrictionOverridePermissionError(GuestRestrictionServiceError):

@@ -3,9 +3,11 @@ Tests for the Allocation Engine (OR-Tools CP-SAT + greedy fallback).
 """
 import pytest
 from datetime import date, timedelta
+import app.services.allocation_engine as allocation_engine
 from app.services.allocation_engine import (
     ReservationSlot, RoomSlot, run_allocation,
     _run_allocation_greedy, _check_overlap,
+    _overlapping_reservation_pairs, _reservation_indexes_by_horizon_day,
 )
 
 def make_rooms(cat_id, count, start_id=1):
@@ -30,6 +32,34 @@ class TestOverlap:
         a = make_res(1, 1, date(2026,4,1), date(2026,4,3))
         b = make_res(2, 1, date(2026,4,10), date(2026,4,12))
         assert _check_overlap(a, b) is False
+
+
+def test_reservation_day_index_clips_to_half_open_horizon():
+    start = date(2026, 4, 10)
+    reservations = [
+        make_res(1, 1, start - timedelta(days=2), start + timedelta(days=2)),
+        make_res(2, 1, start + timedelta(days=1), start + timedelta(days=4)),
+        make_res(3, 1, start + timedelta(days=4), start + timedelta(days=5)),
+        make_res(4, 1, start - timedelta(days=5), start),
+    ]
+
+    coverage = _reservation_indexes_by_horizon_day(reservations, start, 4)
+
+    assert coverage == [[0], [0, 1], [1], [1]]
+
+
+def test_overlapping_reservation_pairs_use_half_open_dates_and_keep_original_indexes():
+    start = date(2026, 4, 10)
+    reservations = [
+        make_res(1, 1, start + timedelta(days=4), start + timedelta(days=6)),
+        make_res(2, 1, start, start + timedelta(days=2)),
+        make_res(3, 1, start + timedelta(days=1), start + timedelta(days=4)),
+        make_res(4, 1, start + timedelta(days=2), start + timedelta(days=3)),
+        make_res(5, 1, start + timedelta(days=5), start + timedelta(days=5)),
+        make_res(6, 1, start + timedelta(days=5), start + timedelta(days=6)),
+    ]
+
+    assert set(_overlapping_reservation_pairs(reservations)) == {(1, 2), (2, 3), (0, 5)}
 
 
 class TestGreedyAllocation:
@@ -93,6 +123,96 @@ class TestGreedyAllocation:
 
 
 class TestCPSATAllocation:
+    def test_non_mobility_reservations_skip_floor_search(self, monkeypatch):
+        pytest.importorskip("ortools.sat.python.cp_model")
+        checked_reservation_ids = []
+        original = allocation_engine._lowest_available_compatible_floor
+
+        def capture(reservation, rooms, reservations):
+            checked_reservation_ids.append(reservation.reservation_id)
+            return original(reservation, rooms, reservations)
+
+        monkeypatch.setattr(allocation_engine, "_lowest_available_compatible_floor", capture)
+        start = date(2026, 4, 1)
+        reservations = [
+            make_res(index, 1, start + timedelta(days=index * 3), start + timedelta(days=index * 3 + 2))
+            for index in range(1, 5)
+        ]
+        reservations[-1].mobility_restriction = True
+
+        rooms = make_rooms(1, 3) + [
+            RoomSlot(
+                room_id=4,
+                room_number="R4",
+                category_id=1,
+                floor=1,
+                is_accessible=True,
+            )
+        ]
+
+        result = run_allocation(reservations, rooms)
+
+        assert result.success is True
+        assert checked_reservation_ids == [reservations[-1].reservation_id]
+        assigned_room = next(room for room in rooms if room.room_id == result.assignments[4])
+        assert assigned_room.is_accessible is True
+        assert assigned_room.floor == 1
+
+    def test_cpsat_builds_only_compatible_room_and_gap_variables(self, monkeypatch):
+        cp_model = pytest.importorskip("ortools.sat.python.cp_model")
+        original_solver = cp_model.CpSolver
+        observed = {}
+
+        class CapturingSolver(original_solver):
+            def Solve(self, model, *args, **kwargs):
+                names = [variable.name for variable in model.Proto().variables]
+                observed["assignment_variables"] = sum(name.startswith("x_") for name in names)
+                observed["gap_variables"] = sum(name.startswith("gap_") for name in names)
+                observed["total_variables"] = len(names)
+                return super().Solve(model, *args, **kwargs)
+
+        monkeypatch.setattr(cp_model, "CpSolver", CapturingSolver)
+        rooms = [
+            RoomSlot(room_id=index + 1, room_number=f"R{index + 1:02d}", category_id=index // 20 + 1)
+            for index in range(40)
+        ]
+        start = date(2026, 4, 1)
+        reservations = [
+            make_res(
+                index + 1,
+                index // 20 + 1,
+                start + timedelta(days=index * 3),
+                start + timedelta(days=index * 3 + 2),
+            )
+            for index in range(40)
+        ]
+
+        result = run_allocation(reservations, rooms)
+
+        assert result.success is True
+        assert observed["assignment_variables"] == 800
+        assert observed["gap_variables"] < len(rooms) * 80
+        assert observed["total_variables"] < len(rooms) * 120
+
+    def test_cpsat_uses_one_worker_with_the_starter_memory_budget(self, monkeypatch):
+        cp_model = pytest.importorskip("ortools.sat.python.cp_model")
+        original_solver = cp_model.CpSolver
+        observed = {}
+
+        class CapturingSolver(original_solver):
+            def Solve(self, model, *args, **kwargs):
+                observed["num_workers"] = self.parameters.num_workers
+                return super().Solve(model, *args, **kwargs)
+
+        monkeypatch.setattr(cp_model, "CpSolver", CapturingSolver)
+        result = run_allocation(
+            [make_res(1, 1, date(2026, 4, 1), date(2026, 4, 3))],
+            make_rooms(1, 1),
+        )
+
+        assert result.success is True
+        assert observed["num_workers"] == 1
+
     def test_cpsat_simple(self):
         rooms = make_rooms(1, 3)
         reservations = [make_res(1,1,date(2026,4,1),date(2026,4,5)), make_res(2,1,date(2026,4,1),date(2026,4,3))]

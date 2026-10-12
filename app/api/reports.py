@@ -71,6 +71,8 @@ def operational_today_arrival_count(
 @router.get("/operational/daily", response_model=DailyOperationalReportRead)
 def operational_daily_report(
     report_date: date = Query(default=None, description="Date for the report (defaults to today)"),
+    pending_page: int = Query(default=1, ge=1),
+    pending_page_size: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_OPERATIONAL_VIEW)),
 ):
@@ -80,7 +82,15 @@ def operational_daily_report(
         get_cached_daily_report_payload(
             hotel_id=context.hotel_id,
             report_date=report_date,
-            producer=lambda: build_daily_operational_report(db, context.hotel_id, report_date),
+            pending_page=pending_page,
+            pending_page_size=pending_page_size,
+            producer=lambda: build_daily_operational_report(
+                db,
+                context.hotel_id,
+                report_date,
+                pending_page=pending_page,
+                pending_page_size=pending_page_size,
+            ),
         )
     )
     if resolve(db, context.hotel_id, context.user_role, PERMISSION_REPORTS_FINANCIAL_VIEW, user_id=context.user_id):

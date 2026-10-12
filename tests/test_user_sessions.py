@@ -100,9 +100,20 @@ def test_create_validate_and_rotate_session(session_user: User, db: Session, mon
     recovered = user_session_service.validate_and_touch_session(db, token, csrf, csrf)
     assert recovered == (rotated_session, new_token)
     assert rotated_session.last_seen_at == last_seen
-    assert user_session_service.validate_and_touch_session(db, new_token, csrf, csrf) is not None
-
     current_time = user_session_service._now()
+    recovered_after_slow_response = user_session_service.validate_and_touch_session(
+        db, token, csrf, csrf
+    )
+    assert recovered_after_slow_response == (rotated_session, new_token)
+    monkeypatch.setattr(
+        user_session_service,
+        "_now",
+        lambda: current_time + timedelta(seconds=60),
+    )
+    assert user_session_service.validate_and_touch_session(db, token, csrf, csrf) == (
+        rotated_session,
+        new_token,
+    )
     monkeypatch.setattr(
         user_session_service,
         "_now",

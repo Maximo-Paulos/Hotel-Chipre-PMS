@@ -45,17 +45,29 @@ async function login(page: Page) {
 }
 
 async function ensureCashSessionOpen(page: Page) {
-  const sessionsResponse = page.waitForResponse(
+  const sessionsResponsePromise = page.waitForResponse(
     (response) => response.url().includes("/api/cash-register/sessions") && response.request().method() === "GET"
   );
   await page.goto("/caja");
-  await sessionsResponse;
+  const sessionsResponse = await sessionsResponsePromise;
+  const sessions = await sessionsResponse.json() as Array<{ status?: string; currency_code?: string }>;
+  const hasOpenDefaultCurrencySession = sessions.some(
+    (session) => session.status === "open" && session.currency_code?.toUpperCase() === "ARS"
+  );
   const openingForm = page
     .locator("form")
     .filter({ hasText: localizedText("Saldo inicial", "Opening balance") })
     .filter({ hasText: localizedText("Abrir caja", "Open cash register") });
   const openButton = openingForm.getByRole("button", { name: localizedName("Abrir caja", "Open cash register") });
-  if (await openButton.isVisible().catch(() => false)) {
+  if (hasOpenDefaultCurrencySession) {
+    // The response promise resolves before React commits the updated session
+    // state. Wait for the disabled label instead of clicking the optimistic
+    // "Abrir caja" button during that brief render window.
+    await expect(
+      openingForm.getByRole("button", { name: localizedName("Ya hay una caja abierta", "Cash register already open") })
+    ).toBeDisabled();
+  } else {
+    await expect(openButton).toBeEnabled();
     await openingForm.getByText(localizedName("Saldo inicial", "Opening balance")).locator("..").locator("input").fill("0");
     await openButton.click();
     await expect(page.getByText(localizedName("Caja abierta.", "Cash register opened."))).toBeVisible();
@@ -123,6 +135,7 @@ test.describe.configure({ mode: "serial" });
 test("owner pays deposit in cash, blocks an overpayment, settles the rest by approved bank transfer with a different method", async ({
   page
 }, testInfo) => {
+  test.skip(process.env.REALTIME_E2E !== "true", "El recorrido verifica el ticket de colaboración con realtime activo.");
   const suffix = `${Date.now()}a`;
   const guestLastName = `QA-Pay-Mix ${suffix}`;
 
@@ -131,7 +144,28 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
   await ensureCashSessionOpen(page);
 
   const { reservationTable, reservationRow } = await createReservation(page, guestLastName, suffix, 60, 63);
+  const collaborationTicketResources: Array<{ resource_type?: unknown; resource_id?: unknown; stage: string }> = [];
+  const collaborationSocketCloses: Array<{ stage: string }> = [];
+  let collaborationSocketConnections = 0;
+  let collaborationStage = "open editor";
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/collaboration/tickets" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { resource_type?: unknown; resource_id?: unknown };
+      collaborationTicketResources.push({ resource_type: payload.resource_type, resource_id: payload.resource_id, stage: collaborationStage });
+    }
+  });
+  page.on("websocket", (socket) => {
+    if (new URL(socket.url()).pathname !== "/api/collaboration/ws") return;
+    collaborationSocketConnections += 1;
+    socket.on("close", () => collaborationSocketCloses.push({ stage: collaborationStage }));
+  });
   const { editModal, editForm } = await openPaymentsPanel(reservationRow, page);
+  await expect.poll(() => collaborationTicketResources.length).toBeGreaterThan(0);
+  // One mounted reservation editor needs one short-lived editing ticket. A
+  // duplicate here repeats permission/resource SQL and opens a ghost socket.
+  await page.waitForTimeout(250);
+  expect(collaborationTicketResources, `ticket resources requested: ${JSON.stringify(collaborationTicketResources)}`).toHaveLength(1);
 
   const total = await readStat(editForm, localizedText("Total", "Total"));
   expect(total).toBe(300);
@@ -139,6 +173,7 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
   expect(depositRequired).toBe(90);
 
   // 1) Seña manual en efectivo.
+  collaborationStage = "cash deposit";
   await editForm.getByRole("button", { name: localizedText("Registrar Seña", "Register deposit") }).click();
   await expect(page.getByText(localizedName("Se registró la Seña", "Deposit registered"))).toBeVisible();
   await expect.poll(() => readStat(editForm, localizedText("Pagado", "Paid"))).toBe(90);
@@ -159,6 +194,7 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
     mimeType: "image/png",
     buffer: Buffer.from(TINY_PNG_BASE64_RED, "base64")
   });
+  collaborationStage = "submit transfer proof";
   await editForm.getByRole("button", { name: localizedName("Enviar comprobante", "Send proof") }).click();
   await expect(page.getByText(localizedName("Comprobante enviado para aprobación", "Proof sent for approval"))).toBeVisible();
   // Bank transfer does not touch the balance until approved.
@@ -167,6 +203,7 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
 
   // 4) Aprobación del comprobante -> ahora sí se aplica al saldo, con el método
   // distinto al de la seña (transferencia vs. la seña en efectivo).
+  collaborationStage = "approve transfer proof";
   await editForm.getByRole("button", { name: localizedName("Aprobar", "Approve") }).click();
   await expect(page.getByText(localizedName("Comprobante aprobado", "Proof approved"))).toBeVisible();
   await expect.poll(() => readStat(editForm, localizedText("Pagado", "Paid"))).toBe(300);
@@ -178,6 +215,7 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
   await editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i).fill("50");
   await editForm.getByLabel(localizedName("Motivo de la devolución", "Refund reason")).fill("Ajuste de prueba E2E");
   page.once("dialog", (dialog) => dialog.accept());
+  collaborationStage = "refund";
   await editForm.getByRole("button", { name: localizedName("Registrar devolución", "Register refund") }).click();
   lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText(localizedName("Devolución registrada", "Refund registered"))).toBeVisible();
@@ -192,6 +230,14 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
   await expect(page.getByText(localizedName("Ingresá un importe positivo que no supere el total pagado.", "Enter a positive amount that does not exceed the total paid."))).toBeVisible();
   expect(await readStat(editForm, localizedText("Pagado", "Paid"))).toBe(250);
 
+  expect(
+    collaborationTicketResources,
+    `an open editor should not reissue tickets during unrelated payment actions; tickets: ${JSON.stringify(collaborationTicketResources)}; socket closes: ${JSON.stringify(collaborationSocketCloses)}`
+  ).toHaveLength(1);
+  expect(
+    collaborationSocketConnections,
+    `an open editor should retain one collaboration socket; socket closes: ${JSON.stringify(collaborationSocketCloses)}`
+  ).toBe(1);
   await editModal.getByRole("button", { name: localizedName("Cerrar", "Close") }).click();
   void reservationTable;
 });

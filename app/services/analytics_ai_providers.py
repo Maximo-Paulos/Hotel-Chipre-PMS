@@ -6,6 +6,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Literal, Protocol
 
 import httpx
+from app.services.outbound_http_telemetry import observed_http_call
 
 from app.config import Settings, get_settings
 
@@ -152,7 +153,9 @@ class _OpenAICompatibleProvider:
         return _normalize_provider_result(parsed, summary_key="answer")
 
     def _post_with_client(self, client: httpx.Client, *, headers: dict[str, str], body: dict[str, Any]) -> dict[str, Any]:
-        response = client.post(self.config.base_url.rstrip("/"), headers=headers, json=body)
+        response = observed_http_call(
+            "analytics_ai.generate", client.post, self.config.base_url.rstrip("/"), headers=headers, json=body
+        )
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict):

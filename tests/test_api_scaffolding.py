@@ -16,8 +16,10 @@ from app.models.guest import Guest, DocumentTypeEnum
 from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.commercial import TaxPolicy
 from app.models.user import User
 from app.services import checkin_service
+from app.services.action_step_up_service import create_action_step_up_ticket
 
 
 @pytest.fixture
@@ -68,6 +70,19 @@ def api_client(monkeypatch: pytest.MonkeyPatch):
         with SessionLocal() as db:
             if not db.get(HotelConfiguration, 1):
                 db.add(HotelConfiguration(id=1, owner_email="owner@test.com", subscription_active=True))
+            db.flush()
+            if not db.query(TaxPolicy).filter_by(hotel_id=1, code="TEST_NO_TAX").first():
+                db.add(
+                    TaxPolicy(
+                        hotel_id=1,
+                        code="TEST_NO_TAX",
+                        name="Explicit zero-tax test policy",
+                        taxes_included=True,
+                        apply_vat_by_default=False,
+                        vat_rate=0.0,
+                        is_active=True,
+                    )
+                )
             if not db.get(User, 1):
                 db.add(User(id=1, email="owner@test.com", password_hash="test-hash", is_active=True, is_verified=True))
             db.commit()
@@ -435,7 +450,7 @@ def test_checkin_api_blocks_missing_primary_guest_fields(api_client, monkeypatch
 
     resp = client.post(f"/api/checkin/{reservation_id}")
     assert resp.status_code == 400, resp.text
-    assert "missing" in resp.json()["detail"].lower() or "required" in resp.json()["detail"].lower()
+    assert "faltan datos obligatorios" in resp.json()["detail"].lower()
 
 
 def _seed_ota_no_guarantee_reservation(SessionLocal) -> int:
@@ -663,6 +678,79 @@ def test_add_reservation_guests_bulk_loads_existing_documents(api_client):
     )
 
 
+def test_add_reservation_guests_persists_a_batch_and_returns_it_after_commit(api_client):
+    client, SessionLocal = api_client
+
+    with SessionLocal() as db:
+        primary_guest = Guest(
+            first_name="Primary",
+            last_name="Guest",
+            document_type=DocumentTypeEnum.DNI,
+            document_number="BATCH-PRIMARY",
+            hotel_id=1,
+        )
+        category = RoomCategory(
+            hotel_id=1,
+            name="Batch Category",
+            code="BATCH",
+            base_price_per_night=100.0,
+            max_occupancy=4,
+        )
+        db.add_all([primary_guest, category])
+        db.flush()
+        reservation = Reservation(
+            confirmation_code="BATCH-RES-001",
+            hotel_id=1,
+            guest_id=primary_guest.id,
+            category_id=category.id,
+            check_in_date=date.today() + timedelta(days=1),
+            check_out_date=date.today() + timedelta(days=3),
+            total_amount=300.0,
+            amount_paid=0.0,
+            deposit_amount=0.0,
+            subtotal_amount=300.0,
+            tax_amount=0.0,
+            fee_amount=0.0,
+            commission_amount=0.0,
+            net_amount=300.0,
+            currency_code="ARS",
+            status=ReservationStatusEnum.PENDING,
+            num_adults=1,
+        )
+        db.add(reservation)
+        db.commit()
+        reservation_id = reservation.id
+
+    response = client.post(
+        f"/api/reservations/{reservation_id}/guests",
+        json=[
+            {
+                "first_name": f"New {index}",
+                "last_name": "Guest",
+                "document_type": DocumentTypeEnum.DNI.value,
+                "document_number": f"BATCH-{index}",
+            }
+            for index in range(1, 4)
+        ],
+    )
+
+    assert response.status_code == 200, response.text
+    assert {guest["document_number"] for guest in response.json()["additional_guests"]} == {
+        "BATCH-1",
+        "BATCH-2",
+        "BATCH-3",
+    }
+    # The response is prepared before commit to avoid an expired-instance
+    # refresh; verify that the transaction still committed all linked guests.
+    with SessionLocal() as db:
+        reservation = db.get(Reservation, reservation_id)
+        assert {guest.document_number for guest in reservation.additional_guests} == {
+            "BATCH-1",
+            "BATCH-2",
+            "BATCH-3",
+        }
+
+
 def test_add_reservation_guests_matches_existing_document_despite_whitespace(api_client):
     """A legacy row with untrimmed whitespace must still be found by the
     bulk lookup, and a freshly created row must store the trimmed value --
@@ -858,6 +946,16 @@ def test_guest_ledger_export_returns_csv_for_date_range(api_client):
     resp = client.get(
         "/api/guests/ledger/export",
         params={"from_date": "2026-04-01", "to_date": "2026-04-30"},
+        headers={
+            "X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+                user_id=1,
+                hotel_id=1,
+                token_version=0,
+                permission_code="guest:export",
+                method="GET",
+                path="/api/guests/ledger/export",
+            )
+        },
     )
     assert resp.status_code == 200, resp.text
     assert resp.headers["content-type"].startswith("text/csv")
@@ -877,3 +975,89 @@ def test_guest_ledger_export_returns_csv_for_date_range(api_client):
     assert row["arrival_date"] == "2026-04-10"
     assert row["departure_date"] == "2026-04-12"
     assert row["terms_accepted"] == "true"
+
+
+def test_n06_guest_not_found_responses_are_localized(api_client):
+    client, _ = api_client
+
+    for path in (
+        "/api/guests/999999",
+        "/api/guests/999999/quick-profile",
+        "/api/guests/999999/tags",
+        "/api/checkin/validate/999999",
+        "/api/guests/999999/restrictions",
+    ):
+        response = client.get(path)
+        assert response.status_code == 404, (path, response.text)
+        assert response.json()["detail"] == "No se encontró el huésped.", path
+
+
+def test_n06_pending_action_failure_hides_internal_exception(api_client, monkeypatch):
+    client, _ = api_client
+    from app.api import reservations as reservations_api
+
+    def fail_pending_actions(*args, **kwargs):
+        raise reservations_api.PaymentError("sensitive internal provider detail")
+
+    monkeypatch.setattr(
+        reservations_api,
+        "list_pending_reservation_actions",
+        fail_pending_actions,
+    )
+
+    response = client.get("/api/reservations/actions/pending")
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "No se pudieron calcular las acciones pendientes. Intentá de nuevo."
+    assert "sensitive internal provider detail" not in response.text
+
+
+def test_n06_cancel_errors_match_between_reservation_and_booking_routes(api_client):
+    client, SessionLocal = api_client
+    reservation_id = _seed_ota_no_guarantee_reservation(SessionLocal)
+    with SessionLocal() as db:
+        reservation = db.get(Reservation, reservation_id)
+        reservation.status = ReservationStatusEnum.CHECKED_IN
+        db.commit()
+
+    expected = "No se puede cancelar una reserva que ya tiene check-in o check-out."
+    for path in (
+        f"/api/reservations/{reservation_id}/cancel",
+        f"/api/bookings/{reservation_id}/cancel",
+    ):
+        response = client.post(path)
+        assert response.status_code == 400, (path, response.text)
+        assert response.json()["detail"] == expected
+
+
+def test_n06_terminal_edit_and_stale_version_errors_are_localized_on_both_routes(api_client):
+    client, SessionLocal = api_client
+    reservation_id = _seed_ota_no_guarantee_reservation(SessionLocal)
+    with SessionLocal() as db:
+        reservation = db.get(Reservation, reservation_id)
+        reservation.status = ReservationStatusEnum.CHECKED_OUT
+        db.commit()
+
+    expected_terminal = "No se puede modificar una reserva en estado «finalizada»."
+    update_body = {"check_out_date": "2026-08-04", "client_version": 999}
+    for path in (
+        f"/api/reservations/{reservation_id}",
+        f"/api/bookings/{reservation_id}",
+    ):
+        terminal = client.patch(path, json=update_body)
+        assert terminal.status_code == 400, (path, terminal.text)
+        assert terminal.json()["detail"] == expected_terminal
+
+    with SessionLocal() as db:
+        reservation = db.get(Reservation, reservation_id)
+        reservation.status = ReservationStatusEnum.PENDING
+        db.commit()
+
+    expected_conflict = "La reserva fue modificada por otra persona. Recargá e intentá de nuevo."
+    for path in (
+        f"/api/reservations/{reservation_id}",
+        f"/api/bookings/{reservation_id}",
+    ):
+        conflict = client.patch(path, json=update_body)
+        assert conflict.status_code == 409, (path, conflict.text)
+        assert conflict.json()["detail"] == expected_conflict

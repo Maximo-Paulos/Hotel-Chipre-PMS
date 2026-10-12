@@ -35,8 +35,17 @@ export type PaymentLinkTestCreatePayload = {
   expires_in_minutes?: number;
 };
 
-export const listPaymentLinkTests = (session?: SessionLike) =>
-  apiFetch<PaymentLinkTest[]>("/api/payment-link-tests", { session });
+export const listPaymentLinkTests = (
+  session?: SessionLike,
+  options: { limit?: number; offset?: number } = {},
+) => {
+  const params = new URLSearchParams();
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  if (options.offset !== undefined) params.set("offset", String(options.offset));
+  const serializedParams = params.toString();
+  const query = serializedParams ? `?${serializedParams}` : "";
+  return apiFetch<PaymentLinkTest[]>(`/api/payment-link-tests${query}`, { session });
+};
 
 export const createMercadoPagoPaymentLinkTest = (payload: PaymentLinkTestCreatePayload, session?: SessionLike) =>
   apiFetch<PaymentLinkTest>("/api/payment-link-tests/mercadopago", {

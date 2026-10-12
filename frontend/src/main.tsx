@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import App from "./App";
+import { ApiError } from "./api/client";
 import "./i18n";
 import "./styles/tailwind.css";
 import { SessionProvider } from "./state/session";
@@ -17,7 +18,15 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      refetchOnWindowFocus: false
+      refetchOnWindowFocus: false,
+      // A 4xx response is a permanent client/permission/plan outcome. Retrying
+      // it repeats the same SQL and payload work without changing the result.
+      // Keep a single retry for transient network and server failures so a
+      // degraded API does not multiply every active read several times.
+      retry: (failureCount, error) => {
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
+        return failureCount < 1;
+      }
     }
   }
 });

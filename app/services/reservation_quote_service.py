@@ -63,6 +63,7 @@ def build_reservation_quote(
         guest_id=guest_id,
         company_id=company_id,
     )
+    resolved_tax_policy_id = pricing.tax_policy_id
     company = None
     if company_id is not None:
         company = _resolve_reservation_company(db, hotel_id=hotel_id, company_id=company_id)
@@ -81,7 +82,7 @@ def build_reservation_quote(
         check_out=check_out_date,
         sellable_product_id=sellable_product_id,
         rate_plan_id=rate_plan_id,
-        tax_policy_id=tax_policy_id,
+        tax_policy_id=resolved_tax_policy_id,
         pricing_channel_code=pricing_channel_code,
         pricing_payment_method=normalized_payment_method,
         guest_scope=guest_scope,
@@ -122,7 +123,7 @@ def build_reservation_quote(
         "check_out_date": check_out_date.isoformat(),
         "sellable_product_id": sellable_product_id,
         "rate_plan_id": rate_plan_id,
-        "tax_policy_id": tax_policy_id,
+        "tax_policy_id": resolved_tax_policy_id,
         "pricing_channel_code": pricing_channel_code,
         "pricing_payment_method": normalized_payment_method,
         "guest_scope": guest_scope,
@@ -142,6 +143,7 @@ def build_reservation_quote(
     quote = {
         "status": "ok",
         "category_id": category_id,
+        "tax_policy_id": resolved_tax_policy_id,
         "check_in_date": check_in_date,
         "check_out_date": check_out_date,
         "nights": pricing.nights,

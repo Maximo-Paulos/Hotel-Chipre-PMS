@@ -29,7 +29,7 @@ import { InfoTip } from "../../components/InfoTip";
 import { listUsers } from "../../api/users";
 import type { AuthUser } from "../../api/auth";
 import { useSession } from "../../state/session";
-import { refreshAfterMutation } from "../../api/queryInvalidation";
+import { invalidateQueriesInBackground, refreshAfterMutation } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import {
   archiveHotelRole,
@@ -55,7 +55,7 @@ const builtinRoleLabels: Record<BuiltinPermissionRole, string> = {
 };
 
 const retryPermissionAdminQuery = (failureCount: number, error: unknown) =>
-  !(error instanceof ApiError && error.status === 428) && failureCount < 3;
+  !(error instanceof ApiError && error.status >= 400 && error.status < 500) && failureCount < 1;
 
 const visibilityOptions = [
   { value: "12", label: "12 h" },
@@ -130,6 +130,9 @@ function PermissionTable({
   onRestoreRole,
   onVisibilityChange
 }: PermissionTableProps) {
+  const { t, i18n } = useTranslation();
+  const permissionDescription = (permission: PermissionCatalogItem) =>
+    i18n.resolvedLanguage === "en" ? permission.description : permission.help_es || permission.description;
   const windowsByRole = new Map(visibilityWindows.map((window) => [window.role, window]));
 
   const renderPermissionRow = (permission: PermissionCatalogItem) => (
@@ -137,12 +140,12 @@ function PermissionTable({
       <th scope="row" className="sticky left-0 z-10 min-w-[280px] border-r border-slate-200 bg-white px-3 py-3 text-left align-top">
         <div className="flex items-start gap-2">
           <div className="min-w-0">
-            <p className="font-medium text-slate-800">{permission.description}</p>
+            <p className="font-medium text-slate-800">{permissionDescription(permission)}</p>
             <code className="text-[11px] text-slate-400">{permission.code}</code>
           </div>
           <InfoTip
-            content={permission.help_es}
-            label={`Más información sobre ${permission.description}`}
+            content={permissionDescription(permission)}
+            label={t("permissionHelpLabel", { code: permission.code })}
             tone="light"
           />
         </div>
@@ -163,7 +166,7 @@ function PermissionTable({
               <input
                 type="checkbox"
                 data-testid={`permission-toggle-${role.code}-${permission.code}`}
-                aria-label={`${permission.description} para ${role.label}`}
+                aria-label={`${permissionDescription(permission)} para ${role.label}`}
                 checked={draft?.operation === "set" ? Boolean(draft.allowed) : Boolean(cell?.allowed)}
                 disabled={!cell || locked || versionUnavailable || isBusy || !permissionEditable}
                 onChange={(event) => onToggle(role.code, permission.code, event.target.checked, expectedVersion)}
@@ -215,8 +218,8 @@ function PermissionTable({
             return (
               <details key={module} open className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 marker:hidden">
-                  <span className="capitalize">{module.split("_").join(" ")}</span>
-                  <span className="text-xs font-normal text-slate-500">{modulePermissions.length} permisos</span>
+                  <span>{t(`permissionModules.${module}`, { defaultValue: module.split("_").join(" ") })}</span>
+                  <span className="text-xs font-normal text-slate-500">{t("permissionCount", { count: modulePermissions.length })}</span>
                 </summary>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[930px] border-separate border-spacing-0 text-sm">
@@ -327,7 +330,9 @@ function UserOverridesPanel({
   onRestorePermission,
   onRestoreAll
 }: UserOverridesPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const permissionDescription = (permission: PermissionCatalogItem) =>
+    i18n.resolvedLanguage === "en" ? permission.description : permission.help_es || permission.description;
   const targetUsers = users.filter((user) => user.email !== currentEmail);
   const userRole = userQuery.data?.role ?? roleFromUser(selectedUser);
   const canEditSelectedRole = Boolean(userRole && isRoleEditable(userRole));
@@ -416,7 +421,7 @@ function UserOverridesPanel({
                     return (
                       <tr key={permission.code}>
                         <th scope="row" className="sticky left-0 z-10 bg-white px-3 py-2 text-left align-top">
-                          <p className="font-medium text-slate-800">{permission.description}</p>
+                          <p className="font-medium text-slate-800">{permissionDescription(permission)}</p>
                           <code className="text-[11px] text-slate-400">{permission.code}</code>
                         </th>
                         <td className="px-3 py-2 text-center align-top">
@@ -433,7 +438,7 @@ function UserOverridesPanel({
                             <input
                               type="checkbox"
                               data-testid={`user-permission-toggle-${permission.code}`}
-                              aria-label={`${permission.description} para ${selectedUser?.email ?? "usuario"}`}
+                              aria-label={`${permissionDescription(permission)} para ${selectedUser?.email ?? "usuario"}`}
                               checked={draft?.operation === "set"
                                 ? Boolean(draft.allowed)
                                 : draft?.operation === "restore"
@@ -475,7 +480,13 @@ function UserOverridesPanel({
 }
 
 export function SettingsPermissionsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const permissionDescription = (permission?: PermissionCatalogItem) => {
+    if (!permission) return "";
+    return i18n.resolvedLanguage === "en"
+      ? permission.description
+      : permission.help_es || permission.description;
+  };
   const { session } = useSession();
   const qc = useQueryClient();
   // Owners and co-owners share this tenant-scoped administration surface;
@@ -807,7 +818,7 @@ export function SettingsPermissionsPage() {
                 : change.allowed ? "permitir" : "denegar";
               return (
                 <li key={key} className="flex items-center justify-between gap-3 py-2">
-                  <span>{target} · {permission?.description ?? change.permission_code}: {action}</span>
+                  <span>{target} · {permissionDescription(permission) || change.permission_code}: {action}</span>
                   <button
                     type="button"
                     onClick={() => setDraftChanges((current) => {
@@ -816,7 +827,7 @@ export function SettingsPermissionsPage() {
                       return next;
                     })}
                     disabled={permissionBatchMutation.isPending}
-                    aria-label={`Quitar cambio pendiente de ${permission?.description ?? change.permission_code}`}
+                    aria-label={`Quitar cambio pendiente de ${permissionDescription(permission) || change.permission_code}`}
                     className="shrink-0 text-xs font-semibold text-amber-900 underline disabled:opacity-50"
                   >
                     Quitar
@@ -922,7 +933,7 @@ function HotelRoleManagement({ rolesQuery }: { rolesQuery: UseQueryResult<HotelR
   const canEditCustomRole = (code: string) =>
     roleCatalogReady && Boolean(rolesQuery.data?.roles.some((role) => role.code === code && role.kind === "custom" && role.is_active));
 
-  const refreshRoles = () => queryClient.invalidateQueries({ queryKey });
+  const refreshRoles = () => invalidateQueriesInBackground(queryClient, { queryKey });
   const errorText = (error: unknown, fallback: string) => {
     if (error instanceof ApiError && error.status === 409 && /rol fue modificado/i.test(error.message)) {
       return t("hotelRoles.stale");
@@ -941,10 +952,10 @@ function HotelRoleManagement({ rolesQuery }: { rolesQuery: UseQueryResult<HotelR
       if (!roleCatalogReady) throw new Error(t("hotelRoles.roleUnavailable"));
       return createHotelRole(payload, session);
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setNewName("");
       setFeedback({ kind: "status", text: t("hotelRoles.createSuccess") });
-      await refreshRoles();
+      refreshRoles();
     },
     onError: (error) => setFeedback({ kind: "alert", text: errorText(error, t("hotelRoles.createError")) })
   });
@@ -954,11 +965,11 @@ function HotelRoleManagement({ rolesQuery }: { rolesQuery: UseQueryResult<HotelR
       if (!canEditCustomRole(code)) throw new Error(t("hotelRoles.readOnlyRoleError", { role: code }));
       return renameHotelRole(code, payload, session);
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setEditingCode(null);
       setRenameDraft("");
       setFeedback({ kind: "status", text: t("hotelRoles.renameSuccess") });
-      await refreshRoles();
+      refreshRoles();
     },
     onError: (error) => {
       if (error instanceof ApiError && error.status === 409) void refreshRoles();
@@ -974,10 +985,10 @@ function HotelRoleManagement({ rolesQuery }: { rolesQuery: UseQueryResult<HotelR
       }
       return archiveHotelRole(code, expectedVersion, session);
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setArchiveCode(null);
       setFeedback({ kind: "status", text: t("hotelRoles.archiveSuccess") });
-      await refreshRoles();
+      refreshRoles();
     },
     onError: (error) => {
       if (error instanceof ApiError && error.status === 409) void refreshRoles();

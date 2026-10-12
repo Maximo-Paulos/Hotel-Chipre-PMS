@@ -9,7 +9,7 @@ from app.config import Settings
 def test_settings_default_to_bounded_api_pool_capacity():
     assert Settings.model_fields["DB_POOL_SIZE"].default == 8
     assert Settings.model_fields["DB_MAX_OVERFLOW"].default == 4
-    assert Settings.model_fields["DB_POOL_TIMEOUT_SECONDS"].default == 15.0
+    assert Settings.model_fields["DB_POOL_TIMEOUT_SECONDS"].default == 5.0
 
 
 def test_postgres_engine_uses_configured_bounded_pool(monkeypatch):
@@ -44,30 +44,23 @@ def _env_value(service_block: str, key: str) -> str:
     return match.group(1)
 
 
-def test_render_pool_budgets_keep_worker_and_beat_reservations():
+def test_render_pool_budget_is_bounded_for_one_api_and_one_cron():
     render_yaml = Path("render.yaml").read_text(encoding="utf-8")
     services = {
         name: _render_service_block(render_yaml, name)
-        for name in ("hotel-chipre-pms-api", "hotel-chipre-pms-worker", "hotel-chipre-pms-beat")
+        for name in ("hotel-chipre-pms-api", "hotel-chipre-pms-scheduled-hotel-jobs")
     }
 
-    assert {
+    api_pool = {
         key: _env_value(services["hotel-chipre-pms-api"], key)
         for key in ("DB_POOL_SIZE", "DB_MAX_OVERFLOW", "DB_POOL_TIMEOUT_SECONDS")
-    } == {"DB_POOL_SIZE": "8", "DB_MAX_OVERFLOW": "4", "DB_POOL_TIMEOUT_SECONDS": "15"}
-    worker_pool = {
-        key: _env_value(services["hotel-chipre-pms-worker"], key)
+    }
+    cron_pool = {
+        key: _env_value(services["hotel-chipre-pms-scheduled-hotel-jobs"], key)
         for key in ("DB_POOL_SIZE", "DB_MAX_OVERFLOW", "DB_POOL_TIMEOUT_SECONDS")
     }
-    assert worker_pool == {"DB_POOL_SIZE": "2", "DB_MAX_OVERFLOW": "0", "DB_POOL_TIMEOUT_SECONDS": "15"}
-    assert re.search(r"(?m)^    startCommand: .*--concurrency=4(?:\s|$)", services["hotel-chipre-pms-worker"])
+    assert api_pool == {"DB_POOL_SIZE": "4", "DB_MAX_OVERFLOW": "2", "DB_POOL_TIMEOUT_SECONDS": "5"}
+    assert cron_pool == {"DB_POOL_SIZE": "1", "DB_MAX_OVERFLOW": "0", "DB_POOL_TIMEOUT_SECONDS": "5"}
 
-    for name in ("hotel-chipre-pms-beat",):
-        assert {
-            key: _env_value(services[name], key)
-            for key in ("DB_POOL_SIZE", "DB_MAX_OVERFLOW", "DB_POOL_TIMEOUT_SECONDS")
-        } == {"DB_POOL_SIZE": "2", "DB_MAX_OVERFLOW": "0", "DB_POOL_TIMEOUT_SECONDS": "15"}
-
-    total_connections = 3 * (8 + 4) + 4 * (2 + 0) + (2 + 0)
-    assert total_connections == 46
-    assert total_connections < 60
+    total_connections = 1 * (4 + 2) + (1 + 0)
+    assert total_connections == 7

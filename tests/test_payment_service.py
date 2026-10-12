@@ -11,18 +11,24 @@ import pytest
 from datetime import date
 from decimal import Decimal
 
-from app.models.cash_register import CashSession
+from app.models.cash_register import CashMovement, CashMovementTypeEnum, CashSession
+from app.models.analytics import FactReservationDaily
 from app.models.hotel_config import HotelConfiguration
 from app.models.guest import Guest
 from app.models.operations import BillingAdjustment, BillingAdjustmentTypeEnum
 from app.models.pricing import CategoryPricing
-from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.reservation import (
+    Reservation,
+    ReservationNoShowPolicyAppliedEnum,
+    ReservationOutcomeEnum,
+    ReservationStatusEnum,
+)
 from app.models.room import Room, RoomCategory
 from app.models.transaction import Transaction, PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
 from app.models.user import User
 from app.schemas.reservation import ReservationCreate
 from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
-from app.services.reservation_service import create_reservation
+from app.services.reservation_service import create_reservation, mark_reservation_no_show
 from app.services import payment_service as payment_service_module
 from app.services.payment_service import (
     process_payment,
@@ -116,6 +122,54 @@ class TestDepositPayment:
         assert res.amount_paid == 300.0
         assert res.balance_due == 700.0
 
+    def test_payment_after_no_show_preserves_terminal_status_and_refreshes_partial_charge_facts(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        reservation = create_reservation(
+            db,
+            ReservationCreate(
+                guest_id=sample_guest.id,
+                category_id=sample_categories[0].id,
+                check_in_date=date(2026, 8, 20),
+                check_out_date=date(2026, 8, 22),
+            ),
+            hotel_id=hotel_config.id,
+        )
+        mark_reservation_no_show(
+            db,
+            reservation,
+            hotel_id=hotel_config.id,
+            client_version=reservation.version,
+        )
+        reservation.no_show_policy_applied = ReservationNoShowPolicyAppliedEnum.PARTIAL_CHARGE
+        db.flush()
+
+        process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=reservation.id,
+                amount=100.0,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            ),
+            hotel_id=hotel_config.id,
+        )
+        db.flush()
+
+        assert reservation.status == ReservationStatusEnum.NO_SHOW
+        assert reservation.outcome == ReservationOutcomeEnum.NO_SHOW
+        fact_rows = (
+            db.query(FactReservationDaily)
+            .filter(
+                FactReservationDaily.hotel_id == hotel_config.id,
+                FactReservationDaily.reservation_id == reservation.id,
+            )
+            .all()
+        )
+        assert len(fact_rows) == 2
+        assert all(row.status == ReservationStatusEnum.NO_SHOW for row in fact_rows)
+        assert sum(float(row.revenue_gross_ars) for row in fact_rows) == pytest.approx(100.0)
+
     def test_deposit_below_threshold_stays_pending(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         """
         Paying LESS than the deposit threshold should keep status as PENDING.
@@ -177,6 +231,44 @@ class TestFullPayment:
         assert res.status == ReservationStatusEnum.FULLY_PAID
         assert res.amount_paid == 500.0
         assert res.balance_due == 0.0
+
+    def test_full_payment_rejects_a_stale_amount_without_recording_it(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 6, 1),
+            check_out_date=date(2026, 6, 6),
+        )
+        reservation = create_reservation(db, data, hotel_id=DEFAULT_HOTEL_ID)
+        db.flush()
+
+        process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=reservation.id,
+                amount=100.0,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            ),
+            hotel_id=DEFAULT_HOTEL_ID,
+        )
+        with pytest.raises(PaymentError, match=r"debe cubrir el saldo pendiente \(\$400\.00\)"):
+            process_payment(
+                db,
+                PaymentRequest(
+                    reservation_id=reservation.id,
+                    amount=399.0,
+                    payment_method=PaymentMethodEnum.CASH,
+                    transaction_type=TransactionTypeEnum.FULL_PAYMENT,
+                ),
+                hotel_id=DEFAULT_HOTEL_ID,
+            )
+
+        db.refresh(reservation)
+        assert reservation.amount_paid == 100.0
+        assert db.query(Transaction).filter(Transaction.reservation_id == reservation.id).count() == 1
 
 
 class TestBalancePaymentAtCheckin:
@@ -305,7 +397,7 @@ class TestHotelIsolation:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         )
-        with pytest.raises(PaymentNotFoundError, match="Reservation not found"):
+        with pytest.raises(PaymentNotFoundError, match="No se encontró la reserva"):
             process_payment(db, payment, hotel_id=2)
 
     def test_payment_methods_are_scoped_by_hotel(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -368,7 +460,7 @@ class TestPaymentEdgeCases:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         )
-        with pytest.raises(PaymentError, match="exceeds balance due"):
+        with pytest.raises(PaymentError, match="supera el saldo pendiente"):
             process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID)
 
     def test_payment_on_cancelled_reservation(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -390,7 +482,7 @@ class TestPaymentEdgeCases:
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.DEPOSIT,
         )
-        with pytest.raises(PaymentError, match="Cannot process payment"):
+        with pytest.raises(PaymentError, match="No se puede registrar un pago"):
             process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID)
 
     def test_disabled_payment_method_rejected(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -413,7 +505,7 @@ class TestPaymentEdgeCases:
             payment_method=PaymentMethodEnum.BANK_TRANSFER,  # Disabled!
             transaction_type=TransactionTypeEnum.DEPOSIT,
         )
-        with pytest.raises(PaymentError, match="currently disabled"):
+        with pytest.raises(PaymentError, match="está deshabilitado"):
             process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID)
 
     def test_failed_gateway_payment(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -478,6 +570,17 @@ class TestPaymentEdgeCases:
         db.flush()
 
         assert tx.status == TransactionStatusEnum.COMPLETED
+        refund_movement = (
+            db.query(CashMovement)
+            .filter(
+                CashMovement.hotel_id == DEFAULT_HOTEL_ID,
+                CashMovement.transaction_id == tx.id,
+            )
+            .one()
+        )
+        assert refund_movement.movement_type == CashMovementTypeEnum.EXPENSE
+        assert refund_movement.amount == Decimal("200.00")
+        assert refund_movement.reservation_id == res.id
         db.refresh(res)
         assert res.amount_paid == 300.0
         assert res.status == ReservationStatusEnum.DEPOSIT_PAID
@@ -514,7 +617,7 @@ class TestPaymentEdgeCases:
             refund_of_transaction_id=original_tx.id,
             refund_reason="Wrong reservation regression check",
         )
-        with pytest.raises(PaymentError, match="original payment was not found"):
+        with pytest.raises(PaymentError, match="No se encontró el pago original"):
             process_payment(db, wrong_source_refund, hotel_id=DEFAULT_HOTEL_ID)
 
         non_cash_refund = PaymentRequest(
@@ -525,7 +628,7 @@ class TestPaymentEdgeCases:
             refund_of_transaction_id=original_tx.id,
             refund_reason="Gateway refund is intentionally unsupported",
         )
-        with pytest.raises(PaymentError, match="returned through cash"):
+        with pytest.raises(PaymentError, match="deben registrarse en efectivo"):
             process_payment(db, non_cash_refund, hotel_id=DEFAULT_HOTEL_ID)
 
         over_refund = PaymentRequest(
@@ -536,7 +639,7 @@ class TestPaymentEdgeCases:
             refund_of_transaction_id=original_tx.id,
             refund_reason="Approved guest cancellation",
         )
-        with pytest.raises(PaymentError, match="remaining refundable amount"):
+        with pytest.raises(PaymentError, match="saldo reembolsable restante"):
             process_payment(db, over_refund, hotel_id=DEFAULT_HOTEL_ID)
 
         db.refresh(res)
@@ -833,7 +936,7 @@ class TestPaymentEdgeCases:
         assert refund.fx_quote_details["refund_uses_original_quote"] is True
         assert reservation.amount_paid == 100
 
-        with pytest.raises(PaymentError, match="remaining refundable amount"):
+        with pytest.raises(PaymentError, match="saldo reembolsable restante"):
             process_payment(
                 db,
                 PaymentRequest(
@@ -861,7 +964,7 @@ class TestPaymentEdgeCases:
         reservation.currency_code = "USD"
         db.flush()
 
-        with pytest.raises(PaymentError, match="Cash session currency"):
+        with pytest.raises(PaymentError, match="No hay una caja abierta en la moneda"):
             process_payment(
                 db,
                 PaymentRequest(

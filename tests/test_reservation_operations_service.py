@@ -6,14 +6,19 @@ from datetime import date
 from app.models.allocation import LLMFeedbackEvent, ManualOverrideReason
 from app.models.commercial import FxPolicy, ProductRoomCompatibility, RatePlan, RatePlanPrice, SellableProduct, TaxPolicy, TaxRule
 from app.models.hotel_config import HotelConfiguration
+from app.models.analytics import FactReservationDaily
 from app.models.ota_core import OTACommissionRule, OTACurrencyRate, OTAProvider, OTAReservationLink, OTAReservationLifecycleEnum
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
+from app.models.reservation_group import ReservationGroup
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.reservation_operations_service import (
+    ReservationOperationsError,
     RoomMovePermissionError,
     enforce_room_move_permission,
+    extend_reservation_stay,
     preview_ota_rebook_as_direct,
+    preview_reservation_stay_extension,
     rebook_ota_reservation_as_direct,
 )
 
@@ -106,6 +111,91 @@ def _seed_commercial_setup(db, hotel_id: int, source_category_id: int, target_ca
     db.add(fx_policy)
     db.flush()
     return product, rate_plan, tax_policy, fx_policy
+
+
+@pytest.mark.parametrize("restriction", ["group", "provider_fields", "ota_link"])
+def test_private_stay_extension_rejects_grouped_and_provider_linked_reservations(
+    db,
+    hotel_config,
+    sample_guest,
+    sample_categories,
+    sample_rooms,
+    restriction,
+):
+    reservation = Reservation(
+        confirmation_code=f"PRIVATE-EXT-{restriction}",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=sample_rooms[0].id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 7, 1),
+        check_out_date=date(2026, 7, 3),
+        total_amount=200.0,
+        subtotal_amount=200.0,
+        net_amount=200.0,
+        amount_paid=200.0,
+        deposit_amount=60.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.FULLY_PAID,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=1,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    if restriction == "group":
+        group = ReservationGroup(
+            hotel_id=hotel_config.id,
+            guest_id=sample_guest.id,
+            check_in_date=reservation.check_in_date,
+            check_out_date=reservation.check_out_date,
+        )
+        db.add(group)
+        db.flush()
+        reservation.group_id = group.id
+    elif restriction == "provider_fields":
+        reservation.source_provider_code = "booking"
+        reservation.external_id = "booking-private-ext"
+    else:
+        provider = OTAProvider(
+            code="booking",
+            name="Booking.com",
+            auth_type="api_key",
+            security_model="shared_secret",
+        )
+        db.add(provider)
+        db.flush()
+        db.add(
+            OTAReservationLink(
+                hotel_id=hotel_config.id,
+                provider_id=provider.id,
+                reservation_id=reservation.id,
+                external_reservation_id="booking-private-ext-link",
+                provider_state=OTAReservationLifecycleEnum.CONFIRMED,
+                sync_status="linked",
+            )
+        )
+    db.flush()
+
+    with pytest.raises(ReservationOperationsError, match="extensión individual|canal externo"):
+        preview_reservation_stay_extension(
+            db,
+            reservation=reservation,
+            hotel_id=hotel_config.id,
+            new_checkout_date=date(2026, 7, 4),
+        )
+
+    with pytest.raises(ReservationOperationsError, match="extensión individual|canal externo"):
+        extend_reservation_stay(
+            db,
+            reservation=reservation,
+            hotel_id=hotel_config.id,
+            new_checkout_date=date(2026, 7, 4),
+            client_version=reservation.version or 0,
+            pricing_mode="current_rate",
+            payment_action="payment_link",
+        )
 
 
 def test_rebook_ota_reservation_as_direct_creates_adjustment_and_direct_booking(
@@ -334,6 +424,18 @@ def test_rebook_ota_reservation_as_direct_persists_commercial_fields(
     assert float(result.new_reservation.deposit_amount) == pytest.approx(98.01)
     assert result.billing_adjustment is not None
     assert float(result.billing_adjustment.total_amount) == pytest.approx(126.7)
+    fact_rows = (
+        db.query(FactReservationDaily)
+        .filter(
+            FactReservationDaily.hotel_id == hotel_config.id,
+            FactReservationDaily.reservation_id == result.new_reservation.id,
+        )
+        .all()
+    )
+    assert len(fact_rows) == 2
+    assert sum(float(row.revenue_gross_ars) for row in fact_rows) == pytest.approx(
+        result.preview.quoted_total_amount
+    )
 
 
 def test_run_persisted_allocation_assigns_rooms_and_persists_run(

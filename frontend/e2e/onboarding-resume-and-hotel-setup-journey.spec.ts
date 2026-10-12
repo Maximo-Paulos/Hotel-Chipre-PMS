@@ -90,7 +90,10 @@ test("owner can log out mid-onboarding, resume without losing progress, and conf
     await page.getByLabel("Ocupación máxima", { exact: true }).nth(index).fill(category.occupancy);
   }
   await saveAndExpectPath(page, "/onboarding/subscription");
-  await expect(page.getByText("Precio a definir", { exact: true })).toHaveCount(3);
+  await expect(page.getByText("USD $20 / mes", { exact: true })).toBeVisible();
+  await expect(page.getByText("USD $100 / mes", { exact: true })).toBeVisible();
+  await expect(page.getByText("USD $200 / mes", { exact: true })).toBeVisible();
+  await expect(page.getByText("Precio a definir", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Prueba única de 14 días", { exact: true })).toBeVisible();
   const starterPlan = page.getByRole("radio", { name: "Plan Starter, hasta 15 habitaciones", exact: true });
   await expect(starterPlan).toBeVisible();

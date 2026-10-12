@@ -101,16 +101,24 @@ def build_beat_schedule(runtime_settings: Settings) -> dict:
     touches PostgreSQL and the app's Redis only; it does not invoke providers.
     """
 
+    internal_schedule = {
+        "reservations-no-show-sweep": {
+            "task": "reservations.sweep_no_shows",
+            "schedule": 300.0,
+        }
+    }
     if not external_connections_enabled(runtime_settings):
         if _sandbox_domain_event_replay_enabled(runtime_settings):
             return {
+                **internal_schedule,
                 "domain-events-publish-outbox": {
                     "task": "domain_events.publish_outbox",
                     "schedule": 30.0,
                 }
             }
-        return {}
+        return internal_schedule
     return {
+        **internal_schedule,
         # Derived analytics is replayable from PostgreSQL. ClickPipes CDC remains
         # the production low-latency path; these jobs provide bounded recovery and
         # an explicit reconciliation signal every five minutes and nightly.
@@ -164,3 +172,4 @@ import app.tasks.analytics_tasks  # noqa: F401,E402
 import app.tasks.report_tasks  # noqa: F401,E402
 import app.tasks.notification_tasks  # noqa: F401,E402
 import app.tasks.domain_event_tasks  # noqa: F401,E402
+import app.tasks.no_show_tasks  # noqa: F401,E402

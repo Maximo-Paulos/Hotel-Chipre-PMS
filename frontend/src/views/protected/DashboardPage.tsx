@@ -193,16 +193,23 @@ export function DashboardPage() {
       }] : []),
       {
         label: t("cards.pendingActions.label"),
-        value: pendingActionsQuery.isError ? "—" : String(pendingActions.length),
-        helper: pendingActionsQuery.isError
-          ? t("cards.pendingActions.helperError")
+        testId: "dashboard-pending-actions-card",
+        value: pendingActionsQuery.isLoading
+          ? "…"
+          : pendingActionsQuery.isError
+            ? "—"
+            : String(pendingActions.length),
+        helper: pendingActionsQuery.isLoading
+          ? t("cards.pendingActions.helperLoading")
+          : pendingActionsQuery.isError
+            ? t("cards.pendingActions.helperError")
           : criticalPendingActions > 0
             ? t("cards.pendingActions.helperCritical", { count: criticalPendingActions })
             : t("cards.pendingActions.helperNone"),
         helperRole: pendingActionsQuery.isError ? "alert" : undefined
       }
     ];
-  }, [arrivalCountQuery.data?.count, arrivalCountQuery.isError, arrivalCountQuery.isLoading, bookedValueQuery.data, bookedValueQuery.isError, bookedValueQuery.isLoading, canViewFinancial, canViewOperationalReports, criticalPendingActions, occupancyError, occupancyFetching, occupancyLoading, occupancyReport, pendingActions.length, pendingActionsQuery.isError, refetchOccupancy, t]);
+  }, [arrivalCountQuery.data?.count, arrivalCountQuery.isError, arrivalCountQuery.isLoading, bookedValueQuery.data, bookedValueQuery.isError, bookedValueQuery.isLoading, canViewFinancial, canViewOperationalReports, criticalPendingActions, occupancyError, occupancyFetching, occupancyLoading, occupancyReport, pendingActions.length, pendingActionsQuery.isError, pendingActionsQuery.isLoading, refetchOccupancy, t]);
 
   const arrivals = upcomingReservations;
 

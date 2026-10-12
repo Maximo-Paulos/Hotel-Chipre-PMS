@@ -1,11 +1,14 @@
 """
 FastAPI routes for Payments.
 """
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, authorize_permission, require_permission
+from app.dependencies.auth import AuthContext, authorize_permission, require_all_permissions, require_permission
 from app.schemas.reservation_operations import ReservationFinancialSummaryRead
 from app.schemas.transaction import PaymentReceiptRead, PaymentRequest, TransactionRead
 from app.services.payment_service import (
@@ -16,8 +19,13 @@ from app.services.payment_service import (
     PaymentError,
     PaymentNotFoundError,
 )
+from app.services.payment_receipt_email_service import (
+    PaymentReceiptEmailError,
+    send_payment_receipt_email,
+)
 from app.services.permission_service import (
     PERMISSION_CASH_OPERATE,
+    PERMISSION_PAYMENT_RECEIPT_EMAIL,
     PERMISSION_CASH_RECORD_PRIOR_RECEIPT,
     PERMISSION_PAYMENT_REFUND,
 )
@@ -28,6 +36,23 @@ router = APIRouter(prefix="/api/payments", tags=["Payments"])
 EXTERNAL_GATEWAY_METHODS = frozenset(
     {PaymentMethodEnum.MERCADO_PAGO, PaymentMethodEnum.PAYPAL}
 )
+
+
+class PaymentReceiptEmailRequest(BaseModel):
+    """The operator must confirm the registered guest email before sending."""
+
+    recipient_email: EmailStr = Field(..., max_length=200)
+
+    @field_validator("recipient_email", mode="before")
+    @classmethod
+    def trim_recipient_email(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class PaymentReceiptEmailRead(BaseModel):
+    transaction_id: int
+    status: Literal["sent"]
+    replayed: bool
 
 
 @router.post("", response_model=TransactionRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)
@@ -46,7 +71,7 @@ def make_payment(
             if data.collected_on is not None and data.collected_on > hotel_today(db, context.hotel_id):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="The prior receipt date cannot be in the future.",
+                    detail="La fecha del cobro previo no puede ser futura.",
                 )
         if not is_refund and data.payment_method in EXTERNAL_GATEWAY_METHODS:
             validate_payment_method_enabled(db, data.payment_method, context.hotel_id)
@@ -62,17 +87,17 @@ def make_payment(
             if data.payment_method != PaymentMethodEnum.CASH:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Manual reservation refunds must be returned through cash.",
+                    detail="Las devoluciones manuales de reservas deben registrarse en efectivo.",
                 )
             if data.refund_of_transaction_id is None or not data.refund_reason:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="A refund must identify the original payment and include a reason.",
+                    detail="La devolución debe identificar el pago original e incluir un motivo.",
                 )
         elif data.refund_of_transaction_id is not None or data.refund_reason is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Refund source and reason are only accepted for refund transactions.",
+                detail="El pago original y el motivo solo se admiten al registrar una devolución.",
             )
 
         manual_methods = {
@@ -140,3 +165,33 @@ def payment_receipt_data(
         return get_payment_receipt_data(db, context.hotel_id, transaction_id)
     except PaymentNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post(
+    "/transactions/{transaction_id}/receipt/email",
+    response_model=PaymentReceiptEmailRead,
+    status_code=status.HTTP_200_OK,
+)
+def email_payment_receipt(
+    transaction_id: int,
+    data: PaymentReceiptEmailRequest,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=100),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_CASH_OPERATE, PERMISSION_PAYMENT_RECEIPT_EMAIL)
+    ),
+):
+    """Send a persisted receipt only to the reservation guest's confirmed email."""
+    try:
+        return send_payment_receipt_email(
+            db,
+            hotel_id=context.hotel_id,
+            transaction_id=transaction_id,
+            actor_user_id=context.user_id,
+            recipient_email=str(data.recipient_email),
+            idempotency_key=idempotency_key,
+        )
+    except PaymentNotFoundError as e:
+        raise HTTPException(status_code=404, detail="No se encontró el pago confirmado.") from e
+    except PaymentReceiptEmailError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from e

@@ -115,6 +115,16 @@ for (const persona of personas) {
   });
 }
 
+test("manager can open and manage personal MFA settings", async ({ page }) => {
+  const manager = personas.find((persona) => persona.label === "manager")!;
+  await login(page, manager);
+  await page.goto("/settings/my-security");
+
+  await expect(page.getByTestId("personal-security-page")).toBeVisible();
+  await expect(page.getByTestId("mfa-settings-card")).toBeVisible();
+  await expect(page.getByTestId("mfa-start-enrollment")).toBeEnabled();
+});
+
 test("manager sees a permission message on restricted settings routes without denied configuration reads", async ({ page }) => {
   const manager = personas.find((persona) => persona.label === "manager")!;
   await login(page, manager);
@@ -338,8 +348,17 @@ test("housekeeping can comment on existing tasks and send work for review", asyn
     buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00])
   });
   await expect(card.getByText("habitacion-revisada.png", { exact: true })).toBeVisible();
+  await page.route((url) => /^\/api\/operational-tasks\/\d+$/.test(url.pathname), async (route) => {
+    const request = route.request();
+    const payload = request.method() === "PATCH" ? request.postDataJSON() as { comment?: string } : null;
+    if (payload?.comment) await page.waitForTimeout(300);
+    await route.continue();
+  });
   await card.getByLabel(`Comentario para ${title}`).fill("Repuesto completado; revisar disponibilidad.");
   await card.getByRole("button", { name: "Agregar comentario" }).click();
+  await expect(card.getByRole("button", { name: "Tomar" })).toBeDisabled();
+  await expect(page.getByRole("status").filter({ hasText: "Comentario agregado al historial." })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Tomar" })).toBeEnabled();
   await card.getByRole("button", { name: "Ver historial" }).click();
   await expect(card).toContainText("Repuesto completado; revisar disponibilidad.");
   await expect(card.getByRole("button", { name: "Resolver" })).toHaveCount(1);
@@ -474,7 +493,7 @@ test("permissions screen shows the catalog help text in an InfoTip", async ({ pa
   });
   await expect(permissionRow).toHaveCount(1);
   const infoButton = permissionRow.getByRole("button", {
-    name: `Más información sobre ${permission!.description}`,
+    name: `Más información sobre el permiso ${permission!.code}`,
     exact: true
   });
   await expect(infoButton).toBeVisible();

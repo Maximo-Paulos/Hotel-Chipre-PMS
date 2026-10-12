@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 
+from sqlalchemy import event
+
 from app.models.commercial import ProductRoomCompatibility, SellableProduct
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.room import RoomCategory, RoomStatusEnum
@@ -76,13 +78,30 @@ def test_build_slots_from_db_uses_sellable_product_compatibility_priorities(
     db.add(reservation)
     db.flush()
 
-    slots, _ = build_slots_from_db(
-        db,
-        start_date=date(2026, 11, 1),
-        end_date=date(2026, 11, 5),
-        hotel_id=hotel_config.id,
-        policy_constraints={"allow_category_fallback": True},
-    )
+    statements = []
+
+    def capture_select(_conn, _cursor, statement, _parameters, _context, _executemany):
+        normalized = " ".join(statement.lower().split())
+        if (
+            normalized.startswith("select")
+            and " from reservations " in normalized
+            and "reservations.check_in_date < ?" in normalized
+            and "reservations.check_out_date > ?" in normalized
+        ):
+            statements.append(normalized)
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", capture_select)
+    try:
+        slots, _ = build_slots_from_db(
+            db,
+            start_date=date(2026, 11, 1),
+            end_date=date(2026, 11, 5),
+            hotel_id=hotel_config.id,
+            policy_constraints={"allow_category_fallback": True},
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_select)
 
     slot = next(item for item in slots if item.reservation_id == reservation.id)
     assert slot.allowed_category_ids == [
@@ -93,6 +112,9 @@ def test_build_slots_from_db_uses_sellable_product_compatibility_priorities(
     assert slot.category_priority(sample_categories[0].id) == 0
     assert slot.category_priority(sample_categories[1].id) == 5
     assert slot.category_priority(sample_categories[2].id) == 15
+    assert len(statements) == 1
+    assert "pricing_snapshot" not in statements[0]
+    assert " left outer join " not in statements[0]
 
 
 def test_build_slots_from_db_respects_policy_when_fallback_is_disabled(

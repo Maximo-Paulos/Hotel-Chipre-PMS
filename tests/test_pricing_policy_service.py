@@ -190,6 +190,34 @@ def test_quote_rate_plan_for_local_booking_applies_taxes_fee_and_commission(db):
     assert quote.net_amount == 214.2
 
 
+def test_rate_plan_price_extracts_included_taxes_and_fixed_fees(db):
+    rate_plan, tax_policy, _ = _seed_pricing_foundation(db)
+    price = (
+        db.query(RatePlanPrice)
+        .filter(RatePlanPrice.hotel_id == 51, RatePlanPrice.sales_channel_code == "booking")
+        .one()
+    )
+    price.tax_inclusive = True
+    db.flush()
+
+    quote = quote_rate_plan_stay(
+        db,
+        hotel_id=51,
+        rate_plan_id=rate_plan.id,
+        check_in=date(2026, 10, 1),
+        check_out=date(2026, 10, 3),
+        occupancy=2,
+        channel_code="booking",
+        guest_scope="local",
+        tax_policy_id=tax_policy.id,
+    )
+
+    assert quote.subtotal_amount == 157.02
+    assert quote.tax_amount == 32.98
+    assert quote.fee_amount == 10.0
+    assert quote.gross_total == 200.0
+
+
 def test_quote_rate_plan_for_foreign_guest_respects_tax_exemption(db):
     rate_plan, tax_policy, _ = _seed_pricing_foundation(db)
 

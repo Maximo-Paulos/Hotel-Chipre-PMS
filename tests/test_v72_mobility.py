@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -97,7 +97,15 @@ def reservation_api_client_as_receptionist():
 
 
 def _seed_reservation_prerequisites(db):
-    hotel = HotelConfiguration(id=1, owner_email="owner@test.com", subscription_active=True)
+    hotel = HotelConfiguration(
+        id=1,
+        owner_email="owner@test.com",
+        subscription_active=True,
+        deposit_percentage=30.0,
+        deposit_policy_configured=True,
+        free_cancellation_hours=48,
+        cancellation_penalty_percentage=0.0,
+    )
     guest = Guest(first_name="Mobility", last_name="Guest", hotel_id=1)
     category = RoomCategory(
         hotel_id=1,
@@ -231,14 +239,15 @@ def test_update_mobility_restriction_triggers_reoptimization(reservation_api_cli
     calls = []
     monkeypatch.setattr("app.api.reservations._trigger_reoptimization_bg", lambda **kwargs: calls.append(kwargs))
     guest, category, room, _ = _seed_reservation_prerequisites(db)
+    check_in = date.today() + timedelta(days=10)
     reservation = Reservation(
         confirmation_code="MOB-UPD-1",
         hotel_id=1,
         guest_id=guest.id,
         room_id=room.id,
         category_id=category.id,
-        check_in_date=date(2027, 4, 10),
-        check_out_date=date(2027, 4, 12),
+        check_in_date=check_in,
+        check_out_date=check_in + timedelta(days=2),
         total_amount=200.0,
         subtotal_amount=200.0,
         net_amount=200.0,
@@ -263,7 +272,7 @@ def test_update_mobility_restriction_triggers_reoptimization(reservation_api_cli
     assert response.json()["mobility_restriction"] is False
     db.refresh(reservation)
     assert reservation.mobility_restriction is False
-    assert calls == [{"hotel_id": 1, "trigger_type": "reservation_update"}]
+    assert calls == [{"hotel_id": 1, "trigger_type": "reservation_update", "origin_key": None}]
 
 
 def test_patch_reservation_silently_ignores_unsupported_category_and_status_fields(

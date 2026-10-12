@@ -562,3 +562,38 @@ def test_operational_audit_unifies_sources_filters_and_preserves_tenant_boundary
     assert "must-also-not-be-exposed" not in json.dumps(permission_item["details"])
     security_item = next(item for item in all_items if item["source"] == "security_event")
     assert "must-not-be-exposed" not in json.dumps(security_item["details"])
+
+
+def test_operational_audit_filters_only_successful_logins(db, hotel_config):
+    actor = _user(db, 9199, "Dueño auditor")
+    event_actions = (
+        "auth.login.success",
+        "google_auth.login.success",
+        "auth.login.failure",
+        "permission.denied",
+        "permission.user_override.updated",
+    )
+    db.add_all(
+        [
+            SecurityAuditLog(
+                hotel_id=hotel_config.id,
+                user_id=actor.id,
+                action=action,
+                resource_type="test",
+                resource_id=str(index),
+                created_at=datetime(2026, 9, 4, 12, index, tzinfo=timezone.utc),
+            )
+            for index, action in enumerate(event_actions)
+        ]
+    )
+    db.flush()
+
+    items, total = list_operational_audit(db, hotel_id=hotel_config.id, limit=20, offset=0)
+    actions = {item["action"] for item in items}
+
+    assert total == 3
+    assert actions == {
+        "auth.login.failure",
+        "permission.denied",
+        "permission.user_override.updated",
+    }

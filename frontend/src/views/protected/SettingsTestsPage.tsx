@@ -33,6 +33,8 @@ const statusLabel: Record<string, string> = {
   cancelled: "Cancelado",
 };
 
+const TESTS_PAGE_SIZE = 50;
+
 export function SettingsTestsPage() {
   const { session } = useSession();
   const queryClient = useQueryClient();
@@ -45,13 +47,15 @@ export function SettingsTestsPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [testsOffset, setTestsOffset] = useState(0);
 
   const testsQuery = useQuery({
-    queryKey: ["payment-link-tests", session.hotelId],
-    queryFn: () => listPaymentLinkTests(session),
-    refetchInterval: 10_000,
+    queryKey: ["payment-link-tests", session.hotelId, testsOffset],
+    queryFn: () => listPaymentLinkTests(session, { limit: TESTS_PAGE_SIZE + 1, offset: testsOffset }),
   });
-  const tests = testsQuery.data ?? [];
+  const fetchedTests = testsQuery.data ?? [];
+  const hasNextTestsPage = fetchedTests.length > TESTS_PAGE_SIZE;
+  const tests = fetchedTests.slice(0, TESTS_PAGE_SIZE);
 
   const createMutation = useGuardedMutation({
     mutationFn: () =>
@@ -66,6 +70,7 @@ export function SettingsTestsPage() {
         session,
       ),
     onSuccess: async (created) => {
+      setTestsOffset(0);
       await refreshSettingsState(queryClient, session.hotelId);
       setError(null);
       setToast(
@@ -238,8 +243,8 @@ export function SettingsTestsPage() {
           </p>
         </div>
         <p className="mt-2 text-[11px] text-slate-500">
-          En entorno local el sistema verifica el pago automáticamente por consulta directa. Cuando tengamos un dominio público HTTPS,
-          tambien va a recibir el webhook de Mercado Pago.
+          El estado cambia cuando llega el webhook firmado de Mercado Pago. En local, sin una URL pública HTTPS y los eventos entrantes habilitados,
+          la prueba puede quedar pendiente.
         </p>
 
         {toast && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{toast}</p>}
@@ -249,7 +254,7 @@ export function SettingsTestsPage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">Seguimiento de pruebas</h2>
-          {testsQuery.isFetching && <span className="text-xs text-slate-500">Verificando pagos...</span>}
+          {testsQuery.isFetching && <span className="text-xs text-slate-500">Actualizando historial...</span>}
         </div>
 
         {tests.length ? (
@@ -368,6 +373,31 @@ export function SettingsTestsPage() {
           <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-sm text-slate-600">
             Aun no hay pruebas creadas para este hotel.
           </div>
+        )}
+        {(testsOffset > 0 || hasNextTestsPage) && (
+          <nav className="flex items-center justify-between" aria-label="Paginación de pruebas de pago">
+            <span className="text-xs text-slate-500">
+              Pruebas {testsOffset + 1}–{testsOffset + tests.length}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-50"
+                onClick={() => setTestsOffset((offset) => Math.max(0, offset - TESTS_PAGE_SIZE))}
+                disabled={testsOffset === 0 || testsQuery.isFetching}
+              >
+                Más recientes
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-50"
+                onClick={() => setTestsOffset((offset) => offset + TESTS_PAGE_SIZE)}
+                disabled={!hasNextTestsPage || testsQuery.isFetching}
+              >
+                Anteriores
+              </button>
+            </div>
+          </nav>
         )}
       </section>
     </div>

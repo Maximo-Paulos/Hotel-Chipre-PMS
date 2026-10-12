@@ -17,6 +17,7 @@ from app.services.reservation_service import (
     create_reservation,
     check_room_availability,
     find_available_rooms,
+    calculate_reservation_pricing,
     transition_reservation_status,
     ReservationError,
     generate_confirmation_code,
@@ -47,9 +48,9 @@ class TestAvailability:
     def test_rejects_non_positive_stay_window(
         self, db, sample_rooms, sample_categories, hotel_config, check_in, check_out
     ):
-        with pytest.raises(ReservationError, match="Check-out date must be after check-in date"):
+        with pytest.raises(ReservationError, match="La fecha de salida debe ser posterior"):
             check_room_availability(db, sample_rooms[0].id, check_in, check_out)
-        with pytest.raises(ReservationError, match="Check-out date must be after check-in date"):
+        with pytest.raises(ReservationError, match="La fecha de salida debe ser posterior"):
             find_available_rooms(db, sample_categories[0].id, check_in, check_out)
 
     def test_empty_room_is_available(self, db, sample_rooms, sample_categories, hotel_config):
@@ -93,6 +94,65 @@ class TestAvailability:
             db, sample_rooms[0].id, date(2026, 4, 5), date(2026, 4, 8)
         ) is True
 
+    def test_availability_check_does_not_hydrate_room_reservation_graph(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        room = sample_rooms[0]
+        create_reservation(
+            db,
+            ReservationCreate(
+                guest_id=sample_guest.id,
+                category_id=sample_categories[0].id,
+                room_id=room.id,
+                check_in_date=date(2026, 4, 1),
+                check_out_date=date(2026, 4, 5),
+            ),
+        )
+        statements: list[str] = []
+        engine = db.get_bind()
+
+        def capture_statement(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", capture_statement)
+        try:
+            assert check_room_availability(db, room.id, date(2026, 4, 5), date(2026, 4, 8)) is True
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_statement)
+
+        # Room lookup, block check, and scalar overlap count are sufficient.
+        # A relationship eager load adds several reservation/guest/transaction
+        # SELECTs whose size grows with the history attached to this room.
+        assert len(statements) <= 3
+
+    def test_availability_check_reuses_the_room_already_locked_for_creation(
+        self, db, sample_rooms, hotel_config
+    ):
+        room = sample_rooms[0]
+        statements: list[str] = []
+        engine = db.get_bind()
+
+        def capture_statement(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", capture_statement)
+        try:
+            assert check_room_availability(
+                db,
+                room.id,
+                date(2026, 4, 5),
+                date(2026, 4, 8),
+                hotel_id=hotel_config.id,
+                known_room=room,
+            ) is True
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_statement)
+
+        # The room's tenant/category ownership was already checked by the
+        # locked lookup in create_reservation; only block and overlap probes
+        # remain here.
+        assert len(statements) == 2
+
     def test_find_available_rooms(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         """Find available rooms after booking some."""
         cat_std = sample_categories[0]
@@ -116,9 +176,29 @@ class TestAvailability:
         assert len(available) == total_std_rooms - 1
 
     def test_find_available_rooms_uses_bounded_query_count(
-        self, db, sample_rooms, sample_categories, hotel_config
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
     ):
-        """Availability lookup must not issue one reservation query per room."""
+        """Availability checks must not eagerly load room reservation histories."""
+        category_id = sample_categories[0].id
+        occupied_room_id = sample_rooms[0].id
+        checked_room_id = sample_rooms[1].id
+        hotel_id = sample_rooms[0].hotel_id
+        db.add(
+            Reservation(
+                confirmation_code="TEST-AVAILABILITY-EAGER-LOAD",
+                hotel_id=hotel_id,
+                guest_id=sample_guest.id,
+                category_id=category_id,
+                room_id=occupied_room_id,
+                check_in_date=date(2026, 3, 1),
+                check_out_date=date(2026, 3, 4),
+                total_amount=Decimal("300.00"),
+                amount_paid=Decimal("0.00"),
+            )
+        )
+        db.flush()
+        db.expire_all()
+
         statements: list[str] = []
         engine = db.get_bind()
 
@@ -129,19 +209,60 @@ class TestAvailability:
         try:
             available = find_available_rooms(
                 db,
-                sample_categories[0].id,
+                category_id,
                 date(2026, 4, 1),
                 date(2026, 4, 5),
+                hotel_id=hotel_id,
             )
+            assert len(available) == 20
+            assert len(statements) <= 6
+
+            statements.clear()
+            db.expire_all()
+            assert check_room_availability(
+                db,
+                checked_room_id,
+                date(2026, 4, 1),
+                date(2026, 4, 5),
+                hotel_id=hotel_id,
+            ) is True
+            assert len(statements) <= 4
         finally:
             event.remove(engine, "before_cursor_execute", capture_statement)
-
-        assert len(available) == 20
-        assert len(statements) <= 8
 
 
 class TestReservationCreation:
     """Tests for reservation creation logic."""
+
+    def test_create_reuses_category_for_room_availability_lookup(
+        self, db, sample_guest, sample_categories, sample_rooms, hotel_config
+    ):
+        statements: list[str] = []
+        engine = db.get_bind()
+
+        def capture_statement(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement.lower())
+
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 4, 1),
+            check_out_date=date(2026, 4, 3),
+        )
+        event.listen(engine, "before_cursor_execute", capture_statement)
+        try:
+            create_reservation(db, data, hotel_id=hotel_config.id)
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_statement)
+
+        category_reads = [
+            statement
+            for statement in statements
+            if "from room_categories" in statement
+            and "room_categories.id =" in statement
+            and "room_categories.id in" not in statement
+        ]
+        assert len(category_reads) == 1
 
     def test_create_basic_reservation(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         """Create a standard reservation and verify computed fields."""
@@ -163,6 +284,37 @@ class TestReservationCreation:
         assert res.status == ReservationStatusEnum.PENDING
         assert res.room_id is not None  # Auto-assigned
         assert res.allocation_status == "assigned"
+
+    def test_create_reservation_does_not_load_room_history_for_category_lookups(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        statements: list[str] = []
+        engine = db.get_bind()
+
+        def capture_statement(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", capture_statement)
+        try:
+            create_reservation(
+                db,
+                ReservationCreate(
+                    guest_id=sample_guest.id,
+                    category_id=sample_categories[0].id,
+                    room_id=sample_rooms[0].id,
+                    check_in_date=date(2026, 4, 1),
+                    check_out_date=date(2026, 4, 2),
+                ),
+                hotel_id=hotel_config.id,
+            )
+            db.flush()
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_statement)
+
+        # Category lookups need scalar pricing fields only. The default
+        # select-in relationships previously loaded rooms, their reservations,
+        # guests, transactions, tags, and companions during this write.
+        assert not any("JOIN reservations" in statement and "rooms_1" in statement for statement in statements)
 
     def test_daily_rate_reservation_converts_target_currency_and_persists_fx_provenance(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch
@@ -250,7 +402,7 @@ class TestReservationCreation:
             check_in_date=date(2026, 4, 1),
             check_out_date=date(2026, 4, 5),
         )
-        with pytest.raises(ReservationError, match="Guest.*not found"):
+        with pytest.raises(ReservationError, match="No se encontró el huésped"):
             create_reservation(db, data)
 
     def test_create_reservation_invalid_dates(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -261,7 +413,7 @@ class TestReservationCreation:
             check_in_date=date(2026, 4, 5),
             check_out_date=date(2026, 4, 1),  # Before check-in!
         )
-        with pytest.raises(ReservationError, match="Check-out date must be after"):
+        with pytest.raises(ReservationError, match="La fecha de salida debe ser posterior"):
             create_reservation(db, data)
 
     def test_create_reservation_wrong_category_room(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -275,7 +427,7 @@ class TestReservationCreation:
             check_in_date=date(2026, 4, 1),
             check_out_date=date(2026, 4, 5),
         )
-        with pytest.raises(ReservationError, match="belongs to category"):
+        with pytest.raises(ReservationError, match="pertenece a la categoría"):
             create_reservation(db, data)
 
     def test_double_booking_prevented(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -298,7 +450,7 @@ class TestReservationCreation:
             check_in_date=date(2026, 4, 3),
             check_out_date=date(2026, 4, 7),
         )
-        with pytest.raises(ReservationError, match="not available"):
+        with pytest.raises(ReservationError, match="no está disponible"):
             create_reservation(db, data2)
 
     @pytest.mark.parametrize(
@@ -517,6 +669,59 @@ def test_create_reservation_uses_daily_rates_for_payment_method_and_custom_depos
     assert '"payment_method": "transfer"' in (res.pricing_snapshot or "")
 
 
+def test_stay_pricing_query_count_is_bounded_by_night_count(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_guest,
+):
+    category = sample_categories[0]
+    check_in = date(2026, 9, 1)
+    check_out = date(2026, 9, 8)
+    db.add_all(
+        [
+            DailyRate(
+                hotel_id=hotel_config.id,
+                category_id=category.id,
+                date=check_in.fromordinal(check_in.toordinal() + offset),
+                price=100 + offset,
+                price_transfer=150 + offset,
+            )
+            for offset in range(7)
+        ]
+    )
+    db.flush()
+    category_id = category.id
+    hotel_id = hotel_config.id
+    guest_id = sample_guest.id
+    db.expire_all()
+
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        pricing = calculate_reservation_pricing(
+            db,
+            category_id=category_id,
+            check_in=check_in,
+            check_out=check_out,
+            hotel_id=hotel_id,
+            pricing_payment_method="transfer",
+            occupancy=2,
+            guest_id=guest_id,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    assert pricing.nights == 7
+    assert pricing.total_amount == 1_071.0
+    assert len(statements) <= 15
+
+
 class TestStateTransitions:
     """Tests for reservation state machine transitions."""
 
@@ -551,7 +756,7 @@ class TestStateTransitions:
         )
         res = create_reservation(db, data)
         transition_reservation_status(db, res, ReservationStatusEnum.CANCELLED)
-        with pytest.raises(ReservationError, match="Cannot transition"):
+        with pytest.raises(ReservationError, match="No se puede cambiar la reserva"):
             transition_reservation_status(db, res, ReservationStatusEnum.PENDING)
 
     def test_cancel_not_allowed_after_checkin(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
@@ -568,7 +773,7 @@ class TestStateTransitions:
         transition_reservation_status(db, res, ReservationStatusEnum.CHECKED_IN)
         original_room = res.room_id
 
-        with pytest.raises(ReservationError, match="Cannot transition"):
+        with pytest.raises(ReservationError, match="No se puede cambiar la reserva"):
             transition_reservation_status(db, res, ReservationStatusEnum.CANCELLED)
 
         assert res.status == ReservationStatusEnum.CHECKED_IN
@@ -576,5 +781,5 @@ class TestStateTransitions:
 
         # Once checked-out, cancellation is still blocked
         transition_reservation_status(db, res, ReservationStatusEnum.CHECKED_OUT)
-        with pytest.raises(ReservationError, match="Cannot transition"):
+        with pytest.raises(ReservationError, match="No se puede cambiar la reserva"):
             transition_reservation_status(db, res, ReservationStatusEnum.CANCELLED)

@@ -15,12 +15,12 @@ import { useGuardedMutation } from "./useGuardedMutation";
 
 const surchargesKey = (hotelId: number | null) => ["payment-surcharges", hotelId];
 
-export function usePaymentSurcharges() {
+export function usePaymentSurcharges(options?: { enabled?: boolean }) {
   const { session } = useSession();
   return useQuery<PaymentSurcharge[]>({
     queryKey: surchargesKey(session.hotelId),
     queryFn: () => listPaymentSurcharges(session),
-    enabled: hasValidSession(session),
+    enabled: hasValidSession(session) && (options?.enabled ?? true),
     staleTime: 60 * 1000
   });
 }

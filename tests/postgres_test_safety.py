@@ -158,7 +158,8 @@ def validate_postgres_test_target(
         raise PostgresTargetSafetyError("the PostgreSQL test target URL is malformed") from error
     if not parsed.scheme.startswith("postgresql") or not hostname:
         raise PostgresTargetSafetyError("the explicit database URL must be PostgreSQL with a host")
-    if port != 5432:
+    is_loopback = hostname in _LOOPBACK_HOSTS
+    if port is None or (not is_loopback and port != 5432):
         raise PostgresTargetSafetyError("PostgreSQL QA tests require a direct or session-mode port")
 
     database_name = unquote(parsed.path.lstrip("/").split("/", 1)[0])
@@ -205,7 +206,6 @@ def validate_postgres_test_target(
     host_tokens = set(filter(None, re.split(r"[^a-z0-9]+", hostname)))
     if host_tokens & _PRODUCTION_BRANCH_TOKENS:
         raise PostgresTargetSafetyError("a production-like host is forbidden")
-    is_loopback = hostname in _LOOPBACK_HOSTS
     is_allowed_supabase = any(hostname.endswith(suffix) for suffix in _ALLOWED_REMOTE_HOST_SUFFIXES)
     if not is_loopback and not is_allowed_supabase:
         raise PostgresTargetSafetyError("the PostgreSQL test host is not an allowed QA provider host")

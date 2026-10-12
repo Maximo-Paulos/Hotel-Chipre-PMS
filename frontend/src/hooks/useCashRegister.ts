@@ -31,7 +31,8 @@ import {
   type CashDailySummary
 } from "../api/cashRegister";
 import { hasValidSession } from "../api/client";
-import { refreshCashState } from "../api/queryInvalidation";
+import { invalidateQueriesInBackground, refreshCashState } from "../api/queryInvalidation";
+import { EVENT_REFRESHED_QUERY_STALE_TIME_MS } from "../api/queryPolicy";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -54,12 +55,12 @@ export function invalidateCashRegisterQueries(queryClient: QueryClient, hotelId:
   return refreshCashState(queryClient, hotelId);
 }
 
-export function useCashSessions() {
+export function useCashSessions(options?: { enabled?: boolean }) {
   const { session } = useSession();
   return useQuery<CashSession[]>({
     queryKey: cashSessionsKey(session.hotelId),
     queryFn: () => listCashSessions(session),
-    enabled: hasValidSession(session),
+    enabled: hasValidSession(session) && (options?.enabled ?? true),
     staleTime: 15 * 1000
   });
 }
@@ -80,7 +81,7 @@ export function usePendingCashCloseReports(options?: { enabled?: boolean }) {
     queryKey: pendingCloseReportsKey(session.hotelId),
     queryFn: () => listPendingCashCloseReports(session),
     enabled: hasValidSession(session) && (options?.enabled ?? true),
-    staleTime: 10 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
 }
 
@@ -192,26 +193,26 @@ export function useCashRegisterMutations(sessionId?: number) {
 
   const createExpenseMutation = useGuardedMutation<CashExpense, Error, CashExpensePayload>({
     mutationFn: (payload) => createCashExpense(sessionId!, payload, session),
-    onSuccess: async () => {
-      await invalidateSessions();
-      await queryClient.invalidateQueries({ queryKey: cashExpensesKey(session.hotelId) });
+    onSuccess: () => {
+      void invalidateSessions().catch(() => undefined);
+      invalidateQueriesInBackground(queryClient, { queryKey: cashExpensesKey(session.hotelId) });
     },
     onError: async () => queryClient.invalidateQueries({ queryKey: cashExpensesKey(session.hotelId) })
   });
 
   const approveExpenseMutation = useGuardedMutation<CashExpense, Error, number>({
     mutationFn: (expenseId) => approveCashExpense(expenseId, session),
-    onSuccess: async () => {
-      await invalidateSessions();
-      await queryClient.invalidateQueries({ queryKey: cashExpensesKey(session.hotelId) });
+    onSuccess: () => {
+      void invalidateSessions().catch(() => undefined);
+      invalidateQueriesInBackground(queryClient, { queryKey: cashExpensesKey(session.hotelId) });
     },
     onError: async () => queryClient.invalidateQueries({ queryKey: cashExpensesKey(session.hotelId) })
   });
 
   const rejectExpenseMutation = useGuardedMutation<CashExpense, Error, { expenseId: number; reason: string }>({
     mutationFn: ({ expenseId, reason }) => rejectCashExpense(expenseId, reason, session),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: cashExpensesKey(session.hotelId) });
+    onSuccess: () => {
+      invalidateQueriesInBackground(queryClient, { queryKey: cashExpensesKey(session.hotelId) });
     },
     onError: async () => queryClient.invalidateQueries({ queryKey: cashExpensesKey(session.hotelId) })
   });

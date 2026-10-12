@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import date, timedelta
+from functools import wraps
 from typing import Optional
 
 from sqlalchemy.orm import Session, selectinload
@@ -23,6 +24,8 @@ from app.models.allocation import (
 )
 from app.models.reservation import Reservation
 from app.services.allocation_policy_service import get_active_policy_settings
+from app.services.domain_events import coalesce_model_change_family
+from app.services.reservation_service import active_reservations
 from app.services.timezones import hotel_today
 from app.services.allocation_engine import (
     AllocationError,
@@ -52,7 +55,47 @@ class AllocationRunDetails:
     assignments: list[AllocationAssignment]
 
 
+_ALLOCATION_EVENT_TABLES = (
+    "reservations",
+    "room_move_events",
+    "room_movement_groups",
+    "allocation_assignments",
+    "allocation_explanations",
+    "allocation_runs",
+    "solver_metrics",
+)
+
+DEFAULT_ALLOCATION_HORIZON_DAYS = 90
+
+
+def reservation_overlaps_default_horizon(
+    db: Session,
+    *,
+    hotel_id: int,
+    check_in_date: date,
+    check_out_date: date,
+) -> bool:
+    """Whether a reservation can affect the default hotel-local allocation run."""
+    horizon_start = hotel_today(db, hotel_id)
+    horizon_end = horizon_start + timedelta(days=DEFAULT_ALLOCATION_HORIZON_DAYS)
+    return check_in_date < horizon_end and check_out_date > horizon_start
+
+
+def _coalesce_allocation_events(function):
+    @wraps(function)
+    def wrapped(db: Session, *args, **kwargs):
+        with coalesce_model_change_family(
+            db,
+            family="allocation",
+            table_names=_ALLOCATION_EVENT_TABLES,
+        ):
+            return function(db, *args, **kwargs)
+
+    return wrapped
+
+
 @with_distributed_lock("allocation", "hotel_id", ttl_seconds=30)
+@_coalesce_allocation_events
 def run_persisted_allocation(
     db: Session,
     *,
@@ -65,7 +108,7 @@ def run_persisted_allocation(
     if horizon_start is None:
         horizon_start = hotel_today(db, hotel_id)
     if horizon_end is None:
-        horizon_end = horizon_start + timedelta(days=90)
+        horizon_end = horizon_start + timedelta(days=DEFAULT_ALLOCATION_HORIZON_DAYS)
 
     policy_settings = get_active_policy_settings(db, hotel_id)
     policy_version = policy_settings.version
@@ -103,9 +146,22 @@ def run_persisted_allocation(
         if apply and solver_result.success
         else AllocationAssignmentStatusEnum.PROPOSED
     )
+    relevant_reservation_ids = set(solver_result.assignments) | set(
+        solver_result.unassigned_reservations
+    )
+    reservations_by_id = (
+        {
+            reservation.id: reservation
+            for reservation in active_reservations(db, hotel_id)
+            .filter(Reservation.id.in_(relevant_reservation_ids))
+            .all()
+        }
+        if relevant_reservation_ids
+        else {}
+    )
     used_rooms = set()
     for reservation_id, room_id in solver_result.assignments.items():
-        reservation = db.get(Reservation, reservation_id)
+        reservation = reservations_by_id.get(reservation_id)
         if reservation is None:
             continue
         used_rooms.add(room_id)
@@ -140,7 +196,7 @@ def run_persisted_allocation(
 
     review_reservations: list[Reservation] = []
     for reservation_id in solver_result.unassigned_reservations:
-        reservation = db.get(Reservation, reservation_id)
+        reservation = reservations_by_id.get(reservation_id)
         if reservation is None:
             continue
         reservation.allocation_status = "manual_review"
@@ -160,6 +216,7 @@ def run_persisted_allocation(
                 db,
                 solver_result,
                 hotel_id=hotel_id,
+                reservations_by_id=reservations_by_id,
                 trigger_reason=trigger_type,
                 trigger_event=trigger_type,
             )

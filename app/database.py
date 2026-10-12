@@ -4,49 +4,118 @@ Supports both PostgreSQL (production) and SQLite (testing).
 """
 import logging
 import time
+import uuid
+from collections.abc import Mapping, Sequence
 from contextvars import ContextVar, Token
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
+from sqlalchemy.pool import QueuePool
+from starlette.requests import Request
+from starlette.websockets import WebSocket
 from typing import Generator
 
 from app.config import get_settings, is_preview_qa_mode, is_production_mode
 
 LOGGER = logging.getLogger(__name__)
 _SLOW_QUERY_START_KEY = "_slow_query_start_times"
-_REQUEST_DB_METRICS: ContextVar[dict[str, float | int] | None] = ContextVar(
+_REQUEST_DB_METRICS: ContextVar[dict[str, float | int | str] | None] = ContextVar(
     "request_db_metrics",
     default=None,
 )
 
 
+def _record_pool_checkout(duration_ms: float) -> None:
+    metrics = _REQUEST_DB_METRICS.get()
+    if metrics is None:
+        return
+    metrics["pool_checkout_count"] = int(metrics["pool_checkout_count"]) + 1
+    metrics["pool_checkout_duration_ms"] = (
+        float(metrics["pool_checkout_duration_ms"]) + duration_ms
+    )
+    metrics["max_pool_checkout_ms"] = max(
+        float(metrics["max_pool_checkout_ms"]), duration_ms
+    )
+
+
+class _RequestTelemetryQueuePool(QueuePool):
+    """Capture checkout duration for the current request without SQL values."""
+
+    def connect(self):
+        started = time.perf_counter()
+        try:
+            return super().connect()
+        finally:
+            # Covers pool wait, pre-ping, and connection creation; it is total
+            # checkout duration, not pure queue wait.
+            _record_pool_checkout((time.perf_counter() - started) * 1000.0)
+
+
 def start_request_db_metrics() -> Token:
     """Begin request-scoped SQL timing without retaining SQL or bound values."""
-    metrics: dict[str, float | int] = {
+    metrics: dict[str, float | int | str] = {
         "query_count": 0,
         "duration_ms": 0.0,
         "max_duration_ms": 0.0,
+        "request_bytes_estimate": 0,
+        "destination_host": "unknown",
+        "pool_checkout_count": 0,
+        "pool_checkout_duration_ms": 0.0,
+        "max_pool_checkout_ms": 0.0,
     }
     return _REQUEST_DB_METRICS.set(metrics)
 
 
-def finish_request_db_metrics(token: Token) -> dict[str, float | int]:
+def finish_request_db_metrics(token: Token) -> dict[str, float | int | str]:
     """Return the current request's SQL timing and restore the prior context."""
     metrics = _REQUEST_DB_METRICS.get() or {
         "query_count": 0,
         "duration_ms": 0.0,
         "max_duration_ms": 0.0,
+        "request_bytes_estimate": 0,
+        "destination_host": "unknown",
+        "pool_checkout_count": 0,
+        "pool_checkout_duration_ms": 0.0,
+        "max_pool_checkout_ms": 0.0,
     }
     _REQUEST_DB_METRICS.reset(token)
     return dict(metrics)
 
 
-def _record_request_query(duration_ms: float) -> None:
+def _estimate_parameter_bytes(value) -> int:
+    """Estimate encoded SQL bytes without retaining bound values."""
+    if value is None:
+        return 0
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return len(value)
+    if isinstance(value, str):
+        return len(value.encode("utf-8"))
+    if isinstance(value, Mapping):
+        return sum(
+            _estimate_parameter_bytes(key) + _estimate_parameter_bytes(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, Sequence):
+        return sum(_estimate_parameter_bytes(item) for item in value)
+    return len(str(value).encode("utf-8"))
+
+
+def _record_request_query(
+    duration_ms: float,
+    statement: str,
+    parameters,
+    destination_host: str | None,
+) -> None:
     metrics = _REQUEST_DB_METRICS.get()
     if metrics is not None:
         metrics["query_count"] = int(metrics["query_count"]) + 1
         metrics["duration_ms"] = float(metrics["duration_ms"]) + duration_ms
         metrics["max_duration_ms"] = max(float(metrics["max_duration_ms"]), duration_ms)
+        metrics["request_bytes_estimate"] = int(metrics["request_bytes_estimate"]) + len(
+            statement.encode("utf-8")
+        ) + _estimate_parameter_bytes(parameters)
+        if metrics["destination_host"] == "unknown" and destination_host:
+            metrics["destination_host"] = destination_host
 
 
 def _slow_query_threshold_ms() -> float:
@@ -70,7 +139,7 @@ def _install_slow_query_listener(engine) -> None:
         if started is None:
             return
         duration_ms = (time.perf_counter() - started) * 1000.0
-        _record_request_query(duration_ms)
+        _record_request_query(duration_ms, statement, parameters, conn.engine.url.host)
         threshold_ms = _slow_query_threshold_ms()
         if threshold_ms <= 0:
             return
@@ -89,7 +158,13 @@ def _install_slow_query_listener(engine) -> None:
         starts = exception_context.connection.info.get(_SLOW_QUERY_START_KEY)
         if starts:
             started = starts.pop()
-            _record_request_query((time.perf_counter() - started) * 1000.0)
+            connection = exception_context.connection
+            _record_request_query(
+                (time.perf_counter() - started) * 1000.0,
+                exception_context.statement or "",
+                exception_context.parameters,
+                connection.engine.url.host if connection is not None else None,
+            )
 
 
 class Base(DeclarativeBase):
@@ -205,7 +280,7 @@ def get_engine(database_url: str | None = None):
     else:
         # PostgreSQL / Supabase: use a bounded, configurable pool suitable for
         # web workers. Defaults provide eight steady connections plus four
-        # bounded overflow connections, with a 15-second checkout wait.
+        # bounded overflow connections, with a short, configurable checkout wait.
         settings = get_settings()
         pool_size = max(1, min(int(getattr(settings, "DB_POOL_SIZE", 8)), 50))
         max_overflow = max(0, min(int(getattr(settings, "DB_MAX_OVERFLOW", 4)), 50))
@@ -218,6 +293,7 @@ def get_engine(database_url: str | None = None):
             pool_size=pool_size,
             max_overflow=max_overflow,
             pool_timeout=pool_timeout,
+            poolclass=_RequestTelemetryQueuePool,
             pool_pre_ping=True,   # drop stale connections
             pool_recycle=pool_recycle,
             connect_args={"connect_timeout": connect_timeout},
@@ -283,8 +359,13 @@ def _column_fill_value(column):
     from sqlalchemy import Boolean
 
     default = column.default
-    if default is not None and getattr(default, "is_scalar", False):
-        return default.arg
+    if default is not None:
+        if getattr(default, "is_scalar", False):
+            return default.arg
+        # A callable Python default (for example ``datetime.now``) cannot be
+        # represented by binding the SQL server expression below. The model's
+        # server default already populated newly added rows, so leave it alone.
+        return None
     server_default = column.server_default
     if server_default is not None:
         arg = getattr(server_default, "arg", None)
@@ -318,10 +399,20 @@ def _backfill_not_null_nulls(engine) -> None:
         try:
             if not insp.has_table(table.name):
                 continue
+            existing_columns = {
+                info["name"]: info for info in insp.get_columns(table.name)
+            }
         except Exception:  # pragma: no cover - defensive
             continue
         for col in table.columns:
             if col.nullable:
+                continue
+            actual_column = existing_columns.get(col.name)
+            # Model-level NOT NULL constraints do not prove the existing
+            # database has them, but an actual NOT NULL column cannot contain
+            # the rows this repair is meant to backfill. Avoid issuing an
+            # UPDATE/full scan for every healthy column on each local startup.
+            if actual_column is None or not actual_column.get("nullable", True):
                 continue
             value = _column_fill_value(col)
             if value is None:
@@ -483,11 +574,29 @@ def get_session_factory(database_url: str | None = None) -> sessionmaker:
     return _SessionLocal
 
 
-def get_db() -> Generator[Session, None, None]:
-    """FastAPI dependency: yields a database session."""
+def _get_db_session(raw_origin_key: str | None) -> Generator[Session, None, None]:
     factory = get_session_factory()
     db = factory()
+    raw_origin_key = (raw_origin_key or "").strip()
+    try:
+        origin_key = str(uuid.UUID(raw_origin_key)) if raw_origin_key else None
+    except (AttributeError, TypeError, ValueError):
+        origin_key = None
+    if origin_key:
+        # This UUID is only a short-lived event correlation key. It never
+        # grants access or changes authorization decisions.
+        db.info["domain_event_origin_key"] = origin_key
     try:
         yield db
     finally:
         db.close()
+
+
+def get_db(request: Request) -> Generator[Session, None, None]:
+    """FastAPI HTTP dependency: yield a request-scoped database session."""
+    yield from _get_db_session(request.headers.get("X-Domain-Event-Origin", ""))
+
+
+def get_websocket_db(websocket: WebSocket) -> Generator[Session, None, None]:
+    """FastAPI WebSocket dependency; a WebSocket scope is not an HTTP Request."""
+    yield from _get_db_session(websocket.headers.get("X-Domain-Event-Origin", ""))

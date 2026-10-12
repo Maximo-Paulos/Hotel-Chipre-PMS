@@ -209,6 +209,17 @@ export default defineConfig({
         EXTERNAL_EFFECTS_ENABLED: "false",
         CONNECTIONS_ENABLED: "false",
         INBOUND_PROVIDER_EVENTS_ENABLED: "false",
+        E2E_TAX_POLICY_SETUP: process.env.E2E_TAX_POLICY_SETUP === "true" ? "true" : "false",
+        // A PostgreSQL E2E run mirrors the planned SQL-only deployment. Do not
+        // silently fall back to Redis when validating that production profile.
+        REALTIME_EVENTS_TRANSPORT:
+          process.env.REALTIME_EVENTS_TRANSPORT || (postgresE2eEnabled ? "postgresql" : "redis"),
+        POSTGRES_EVENT_LISTENER_ENABLED: postgresE2eEnabled ? "true" : "false",
+        DISTRIBUTED_LOCK_ENABLED: postgresE2eEnabled ? "true" : "false",
+        DISTRIBUTED_LOCK_REQUIRED: postgresE2eEnabled ? "true" : "false",
+        DISTRIBUTED_LOCK_BACKEND:
+          process.env.DISTRIBUTED_LOCK_BACKEND || (postgresE2eEnabled ? "postgresql" : "redis"),
+        COLLABORATION_BACKEND: process.env.COLLABORATION_BACKEND || "process",
         REALTIME_EVENTS_ENABLED: realtimeE2EEnabled ? "true" : "false",
         CLICKHOUSE_ENABLED: "false",
         JWT_SECRET: jwtSecret,

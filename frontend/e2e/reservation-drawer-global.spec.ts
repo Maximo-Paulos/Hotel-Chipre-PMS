@@ -214,6 +214,8 @@ test("an authenticated second context sees a committed payment through realtime 
   await page.goto("/reservas");
   await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
   const form = page.locator("form").filter({ hasText: "Datos de la reserva" });
+  await form.getByLabel("Check-in", { exact: true }).fill(pastIsoDate(5000 + salt));
+  await form.getByLabel("Check-out", { exact: true }).fill(pastIsoDate(4998 + salt));
   await form.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
   await form.getByPlaceholder("Nombre").fill("Huésped");
   await form.getByPlaceholder("Apellido").fill(guestLastName);
@@ -229,9 +231,8 @@ test("an authenticated second context sees a committed payment through realtime 
   await categorySelect.selectOption((await categoryOption.getAttribute("value"))!);
   const roomSelect = form.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
   const roomOption = roomSelect.locator("option").filter({ hasText: "101" });
+  await expect(roomOption).toHaveCount(1);
   await roomSelect.selectOption((await roomOption.getAttribute("value"))!);
-  await form.getByLabel("Check-in", { exact: true }).fill(pastIsoDate(5000 + salt));
-  await form.getByLabel("Check-out", { exact: true }).fill(pastIsoDate(4998 + salt));
   const [createResponse] = await Promise.all([
     page.waitForResponse((response) => response.url().includes("/api/reservations/") && response.request().method() === "POST"),
     form.getByRole("button", { name: "Crear", exact: true }).click()

@@ -14,11 +14,14 @@ import {
 } from "../api/reports";
 import { hasValidSession } from "../api/client";
 import { queryKeys } from "../api/queryKeys";
+import { EVENT_REFRESHED_QUERY_STALE_TIME_MS } from "../api/queryPolicy";
 import { useSession } from "../state/session";
 
-const dailyReportKey = (hotelId: number | null, reportDate: string) => [
+const dailyReportKey = (hotelId: number | null, reportDate: string, pendingPage: number, pendingPageSize: number) => [
   ...queryKeys.reports(hotelId, "operational-daily"),
-  reportDate
+  reportDate,
+  pendingPage,
+  pendingPageSize
 ];
 const occupancyKey = (hotelId: number | null, startDate: string, endDate: string) => [
   ...queryKeys.reports(hotelId, "occupancy"),
@@ -36,14 +39,15 @@ const bookedValueKey = (hotelId: number | null, startDate: string, endDate: stri
   endDate
 ];
 
-export function useDailyOperationalReport(reportDate: string) {
+export function useDailyOperationalReport(reportDate: string, pendingPage = 1, pendingPageSize = 50) {
   const { session } = useSession();
   return useQuery<DailyOperationalReport>({
-    queryKey: dailyReportKey(session.hotelId, reportDate),
-    queryFn: ({ signal }) => getDailyOperationalReport(reportDate, session, signal),
+    queryKey: dailyReportKey(session.hotelId, reportDate, pendingPage, pendingPageSize),
+    queryFn: ({ signal }) => getDailyOperationalReport(reportDate, pendingPage, session, signal, pendingPageSize),
     enabled: Boolean(reportDate) && hasValidSession(session),
-    staleTime: 30 * 1000,
-    retry: false
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
+    retry: false,
+    placeholderData: (previousData) => previousData
   });
 }
 
@@ -53,7 +57,7 @@ export function useTodayArrivalCount() {
     queryKey: [...queryKeys.reports(session.hotelId, "today-arrival-count")],
     queryFn: ({ signal }) => getTodayArrivalCount(session, signal),
     enabled: hasValidSession(session),
-    staleTime: 30 * 1000,
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
     retry: false
   });
 }
@@ -64,7 +68,7 @@ export function useOccupancyReport(startDate: string, endDate: string, enabled =
     queryKey: occupancyKey(session.hotelId, startDate, endDate),
     queryFn: ({ signal }) => getOccupancyReport(startDate, endDate, session, signal),
     enabled: enabled && Boolean(startDate && endDate) && hasValidSession(session),
-    staleTime: 30 * 1000,
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
     retry: false
   });
 }
@@ -75,7 +79,7 @@ export function useRevenueReport(startDate: string, endDate: string, enabled = t
     queryKey: revenueKey(session.hotelId, startDate, endDate),
     queryFn: ({ signal }) => getRevenueReport(startDate, endDate, session, signal),
     enabled: enabled && Boolean(startDate && endDate) && hasValidSession(session),
-    staleTime: 30 * 1000,
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
     retry: false
   });
 }
@@ -86,7 +90,7 @@ export function useBookedValueReport(startDate: string, endDate: string, enabled
     queryKey: bookedValueKey(session.hotelId, startDate, endDate),
     queryFn: ({ signal }) => getBookedValueReport(startDate, endDate, session, signal),
     enabled: enabled && Boolean(startDate && endDate) && hasValidSession(session),
-    staleTime: 30 * 1000,
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
     retry: false
   });
 }

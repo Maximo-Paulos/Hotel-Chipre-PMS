@@ -32,7 +32,12 @@ La migración `20260424_analytics_r1_base` y `app/models/analytics.py` definen:
 
 El write-path de reservas llama a `touch_reservation_fact_window` para altas, cambios de fechas/habitación/importe, transiciones de estado y operaciones de rebooking/movimiento. El refresh ocurre dentro de un savepoint: un fallo de integridad del refresh no debe deshacer la escritura operacional. La ventana es la estadía afectada, no todo el rango que tenga abierto el dashboard.
 
-El self-heal `_ensure_facts_materialized` se ejecuta en los builders de Analytics cuando no hay ninguna fila de facts para el rango solicitado; reutiliza el mismo refresh y deja que la constraint única resuelva una carrera básica. Esto cubre particularmente el caso de un `/api/analytics/home` consultado antes de que exista materialización.
+Los builders de Analytics consumen únicamente facts existentes y no reparan
+huecos durante un GET. Las mutaciones admitidas actualizan sus ventanas
+afectadas en la misma transacción; para datos importados o históricos se usa
+`scripts/repair_analytics_facts.py` con `--dry-run` y alcance revisado. Si un
+rango no tiene facts, la respuesta marca su antigüedad como desconocida en vez
+de presentarlo como actualizado.
 
 ### 1.2 API, cache y freshness
 

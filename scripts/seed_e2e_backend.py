@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import hmac
+import ipaddress
 import os
 import re
 import sys
@@ -54,7 +55,12 @@ def _postgres_e2e_connection(url: str, env: MutableMapping[str, str]) -> dict[st
     host = (parsed.hostname or "").casefold()
     if parsed.scheme not in {"postgresql", "postgresql+psycopg2"}:
         raise E2ESafetyError("PostgreSQL E2E requires the psycopg2 PostgreSQL driver")
-    if host not in {"localhost", "127.0.0.1", "::1"} or port != 5432:
+    try:
+        loopback_host = host == "localhost" or ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback_host = False
+    local_postgres_port = port == 5432 or (port is not None and 55000 <= port <= 55999)
+    if not loopback_host or not local_postgres_port:
         raise E2ESafetyError("PostgreSQL E2E target must use the local PostgreSQL 16 endpoint")
     if parsed.query or parsed.fragment:
         raise E2ESafetyError("PostgreSQL E2E database URL cannot contain query or fragment")
@@ -316,6 +322,7 @@ def upsert_seed_data() -> None:
         StockItem,
         StockLocation,
         Subscription,
+        TaxPolicy,
         User,
         UserMfaSecret,
     )
@@ -335,7 +342,43 @@ def upsert_seed_data() -> None:
         hotel.default_currency = "ARS"
         hotel.hotel_timezone = "America/Argentina/Buenos_Aires"
         hotel.enable_bank_transfer = True
+        # The synthetic owner has explicitly completed deposit/cancellation
+        # setup; production hotels stay blocked until an owner does this.
+        hotel.deposit_percentage = 30.0
+        hotel.deposit_policy_configured = True
+        hotel.free_cancellation_hours = 48
+        hotel.cancellation_penalty_percentage = 0.0
         hotel.updated_at = now
+        # PostgreSQL checks the foreign key when the tax policy is inserted;
+        # SQLite's test database does not expose this pending-parent ordering.
+        db.flush()
+
+        zero_tax_policy = (
+            db.query(TaxPolicy)
+            .filter(TaxPolicy.hotel_id == 1, TaxPolicy.code == "E2E_NO_TAX")
+            .first()
+        )
+        if _enabled(os.environ.get("E2E_TAX_POLICY_SETUP")):
+            if zero_tax_policy is not None:
+                db.delete(zero_tax_policy)
+        elif zero_tax_policy is None:
+            db.add(
+                TaxPolicy(
+                    hotel_id=1,
+                    code="E2E_NO_TAX",
+                    name="Explicit zero-tax E2E policy",
+                    taxes_included=True,
+                    apply_vat_by_default=False,
+                    vat_rate=0.0,
+                    is_active=True,
+                )
+            )
+        else:
+            zero_tax_policy.name = "Explicit zero-tax E2E policy"
+            zero_tax_policy.taxes_included = True
+            zero_tax_policy.apply_vat_by_default = False
+            zero_tax_policy.vat_rate = 0.0
+            zero_tax_policy.is_active = True
 
         subscription = db.query(Subscription).filter(Subscription.hotel_id == 1).first()
         if subscription is None:

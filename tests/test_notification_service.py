@@ -4,6 +4,7 @@ and daily-report DST/timezone correctness."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy.orm import Session
@@ -18,6 +19,7 @@ from app.models.notification import (
     NotificationOutboxStatusEnum,
 )
 from app.models.user import User
+from app.services import domain_events
 from app.services import notification_service as svc
 
 
@@ -61,6 +63,39 @@ def test_enqueue_dedupes_same_event_recipient_channel(db: Session):
     assert NotificationChannelEnum.EMAIL not in by_channel
     assert len(rows) == len({(r.channel, r.recipient_user_id) for r in rows})
     assert len(first) == len(second) == len(rows)
+
+
+def test_notification_inbox_event_waits_until_outbox_delivery(db: Session, monkeypatch):
+    monkeypatch.setattr(
+        domain_events,
+        "_settings",
+        lambda: SimpleNamespace(REALTIME_EVENTS_ENABLED=True, REALTIME_EVENTS_TRANSPORT="postgresql"),
+    )
+    _hotel(db, 1)
+    _member(db, hotel_id=1, user_id=10, role="owner")
+    db.flush()
+    db.info.pop(domain_events.PENDING_EVENTS_KEY, None)
+
+    rows = svc.enqueue_notifications_for_event(
+        db,
+        hotel_id=1,
+        event_type="reservation.created",
+        dedupe_key="reservation:1:created",
+        title="New reservation",
+        recipient_user_ids=[10],
+        channels=[NotificationChannelEnum.IN_APP],
+    )
+
+    assert len(rows) == 1
+    assert not db.info.get(domain_events.PENDING_EVENTS_KEY)
+
+    svc.process_pending_outbox(db)
+    db.flush()
+
+    queued_events = list(db.info.get(domain_events.PENDING_EVENTS_KEY, {}).values())
+    assert [(event.domain, event.event_type) for event in queued_events] == [
+        ("notifications", "notifications.created")
+    ]
 
 
 def test_enqueue_same_dedupe_key_isolated_per_hotel(db: Session):

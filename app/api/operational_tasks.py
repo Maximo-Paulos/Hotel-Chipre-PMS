@@ -84,7 +84,13 @@ def _can_read_reservation_context(db: Session, context: AuthContext) -> bool:
 
 def _report_type_allowed(context: AuthContext, task_type: OperationalTaskTypeEnum) -> bool:
     if context.operational_role == "housekeeping":
-        return task_type in {OperationalTaskTypeEnum.HOUSEKEEPING, OperationalTaskTypeEnum.MAINTENANCE}
+        # Housekeeping may submit a general operations report. General tasks
+        # remain read-only for this role after creation (see operator scope).
+        return task_type in {
+            OperationalTaskTypeEnum.GENERAL,
+            OperationalTaskTypeEnum.HOUSEKEEPING,
+            OperationalTaskTypeEnum.MAINTENANCE,
+        }
     if context.operational_role == "receptionist":
         return task_type in {OperationalTaskTypeEnum.GENERAL, OperationalTaskTypeEnum.RECEPTION}
     return True

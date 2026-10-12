@@ -93,7 +93,14 @@ def test_canonical_pricing_from_night_n_scope_only_applies_from_that_night(db):
 def test_canonical_pricing_applies_tax_policy(db):
     category = _seed_hotel(db, 84)
     _seed_daily_rates(db, 84, category.id, date(2026, 5, 1), 2, 100.0)
-    tax_policy = TaxPolicy(hotel_id=84, code="DEFAULT", name="Default", apply_vat_by_default=True, vat_rate=21.0)
+    tax_policy = TaxPolicy(
+        hotel_id=84,
+        code="DEFAULT",
+        name="Default",
+        taxes_included=False,
+        apply_vat_by_default=True,
+        vat_rate=21.0,
+    )
     db.add(tax_policy)
     db.flush()
 
@@ -104,6 +111,34 @@ def test_canonical_pricing_applies_tax_policy(db):
     assert result.subtotal_amount == Decimal("200.00")
     assert result.tax_amount == Decimal("42.00")
     assert result.booking_total == Decimal("242.00")
+
+
+def test_canonical_pricing_extracts_included_tax_from_daily_price(db):
+    category = _seed_hotel(db, 840)
+    _seed_daily_rates(db, 840, category.id, date(2026, 5, 1), 2, 100.0)
+    tax_policy = TaxPolicy(
+        hotel_id=840,
+        code="INCLUSIVE",
+        name="Inclusive VAT",
+        taxes_included=True,
+        apply_vat_by_default=True,
+        vat_rate=21.0,
+    )
+    db.add(tax_policy)
+    db.flush()
+
+    result = compute_canonical_stay_pricing(
+        db,
+        hotel_id=840,
+        category_id=category.id,
+        check_in=date(2026, 5, 1),
+        check_out=date(2026, 5, 3),
+        tax_policy_id=tax_policy.id,
+    )
+
+    assert result.subtotal_amount == Decimal("165.29")
+    assert result.tax_amount == Decimal("34.71")
+    assert result.booking_total == Decimal("200.00")
 
 
 def test_canonical_promotion_pricing_converts_non_ars_currency_with_fx_snapshot(db, monkeypatch):

@@ -26,6 +26,7 @@ from app.schemas.company_night_charge import (
 )
 from app.services.timezones import hotel_today
 from app.services.financial_ledger import paid_amount_with_legacy_fallback
+from app.services.row_locks import lock_query
 
 
 CENT = Decimal("0.01")
@@ -49,7 +50,7 @@ def _reservation(
         Reservation.deleted_at.is_(None),
     )
     if lock:
-        query = query.with_for_update()
+        query = lock_query(query, Reservation)
     reservation = query.one_or_none()
     if reservation is None:
         raise CompanyNightChargeError("La reserva no pertenece a este hotel.")
@@ -61,7 +62,7 @@ def _reservation(
 def _company(db: Session, *, hotel_id: int, company_id: int, lock: bool = False) -> Company:
     query = db.query(Company).filter(Company.hotel_id == hotel_id, Company.id == company_id)
     if lock:
-        query = query.with_for_update()
+        query = lock_query(query.enable_eagerloads(False), Company)
     company = query.one_or_none()
     if company is None:
         raise CompanyNightChargeError("La empresa vinculada a la reserva no está disponible.")
@@ -88,6 +89,52 @@ def _rate_for_date(
         )
         .first()
     )
+
+
+def _rates_for_stay_dates(
+    db: Session,
+    *,
+    hotel_id: int,
+    company_id: int,
+    stay_dates: list[date],
+) -> dict[date, CompanyNightlySurchargeRate | None]:
+    """Resolve effective rates for a batch of dates with at most two reads."""
+    dates = sorted(set(stay_dates))
+    if not dates:
+        return {}
+
+    first_date, last_date = dates[0], dates[-1]
+    current = _rate_for_date(
+        db,
+        hotel_id=hotel_id,
+        company_id=company_id,
+        stay_date=first_date,
+    )
+    later_rates = (
+        db.query(CompanyNightlySurchargeRate)
+        .filter(
+            CompanyNightlySurchargeRate.hotel_id == hotel_id,
+            CompanyNightlySurchargeRate.company_id == company_id,
+            CompanyNightlySurchargeRate.effective_from > first_date,
+            CompanyNightlySurchargeRate.effective_from <= last_date,
+        )
+        .order_by(
+            CompanyNightlySurchargeRate.effective_from.asc(),
+            CompanyNightlySurchargeRate.id.asc(),
+        )
+        .all()
+        if first_date < last_date
+        else []
+    )
+
+    rates_by_date: dict[date, CompanyNightlySurchargeRate | None] = {}
+    next_rate = 0
+    for stay_date in dates:
+        while next_rate < len(later_rates) and later_rates[next_rate].effective_from <= stay_date:
+            current = later_rates[next_rate]
+            next_rate += 1
+        rates_by_date[stay_date] = current
+    return rates_by_date
 
 
 def list_company_nightly_surcharge_rates(
@@ -135,7 +182,7 @@ def create_company_nightly_surcharge_rate(
             CompanyNightlySurchargeRate.effective_from == effective_from,
         )
         .order_by(CompanyNightlySurchargeRate.id.desc())
-        .with_for_update()
+        .with_for_update(of=CompanyNightlySurchargeRate)
         .first()
     )
     if existing is not None and Decimal(str(existing.amount)).quantize(CENT) == normalized_amount:
@@ -269,7 +316,7 @@ def prepare_company_night_charge_refund(
             CompanyNightCharge.hotel_id == hotel_id,
             CompanyNightCharge.reservation_id == reservation_id,
         )
-        .with_for_update()
+        .with_for_update(of=(CompanyNightChargePaymentAllocation, CompanyNightCharge))
         .all()
     )
     if not source_rows:
@@ -309,7 +356,7 @@ def prepare_company_night_charge_refund(
             Transaction.transaction_type == TransactionTypeEnum.REFUND,
             Transaction.status == TransactionStatusEnum.COMPLETED,
         )
-        .with_for_update()
+        .with_for_update(of=Transaction)
         .all()
     )
     refund_ids = [row.id for row in completed_refunds]
@@ -382,6 +429,17 @@ def get_company_night_charges(
 ) -> CompanyNightChargesSummaryRead:
     reservation = _reservation(db, hotel_id=hotel_id, reservation_id=reservation_id)
     company = _company(db, hotel_id=hotel_id, company_id=reservation.company_id)
+    return _company_night_charges_summary(db, reservation=reservation, company=company)
+
+
+def _company_night_charges_summary(
+    db: Session,
+    *,
+    reservation: Reservation,
+    company: Company,
+) -> CompanyNightChargesSummaryRead:
+    hotel_id = reservation.hotel_id
+    reservation_id = reservation.id
     rows = (
         db.query(CompanyNightCharge)
         .filter(CompanyNightCharge.hotel_id == hotel_id, CompanyNightCharge.reservation_id == reservation_id)
@@ -506,19 +564,21 @@ def add_company_night_charges(
             CompanyNightCharge.reservation_id == reservation_id,
             CompanyNightCharge.stay_date.in_(stay_dates),
         )
-        .with_for_update()
+        .with_for_update(of=CompanyNightCharge)
         .all()
     }
-    created_any = False
-    for stay_date in stay_dates:
-        if stay_date in existing:
-            continue
-        rate = _rate_for_date(
-            db,
-            hotel_id=hotel_id,
-            company_id=company.id,
-            stay_date=stay_date,
-        )
+    new_dates = [stay_date for stay_date in stay_dates if stay_date not in existing]
+    rates_by_date = _rates_for_stay_dates(
+        db,
+        hotel_id=hotel_id,
+        company_id=company.id,
+        stay_dates=new_dates,
+    )
+    pending_charges: list[
+        tuple[date, CompanyNightlySurchargeRate, Decimal, Decimal, BillingAdjustment]
+    ] = []
+    for stay_date in new_dates:
+        rate = rates_by_date.get(stay_date)
         if rate is None:
             raise CompanyNightChargeError(
                 f"No hay una tarifa por persona extra vigente para la noche {stay_date.isoformat()}."
@@ -542,7 +602,15 @@ def add_company_night_charges(
             created_by_user_id=actor_user_id,
         )
         db.add(adjustment)
+        pending_charges.append((stay_date, rate, unit_amount, amount, adjustment))
+
+    # Validate every requested rate before writing, then insert the ledger
+    # adjustments as one unit-of-work batch instead of flushing once per night.
+    if pending_charges:
         db.flush()
+
+    charges_to_audit: list[CompanyNightCharge] = []
+    for stay_date, rate, unit_amount, amount, adjustment in pending_charges:
         charge = CompanyNightCharge(
             hotel_id=hotel_id,
             reservation_id=reservation_id,
@@ -558,7 +626,11 @@ def add_company_night_charges(
             created_by_user_id=actor_user_id,
         )
         db.add(charge)
+        charges_to_audit.append(charge)
+
+    if charges_to_audit:
         db.flush()
+    for charge in charges_to_audit:
         db.add(
             SecurityAuditLog(
                 hotel_id=hotel_id,
@@ -568,12 +640,12 @@ def add_company_night_charges(
                 resource_id=str(reservation_id),
                 details=(
                     f'{{"company_id":{company.id},"charge_id":{charge.id},'
-                    f'"stay_date":"{stay_date.isoformat()}","amount":"{amount:.2f}"}}'
+                    f'"stay_date":"{charge.stay_date.isoformat()}",'
+                    f'"amount":"{Decimal(str(charge.amount)):.2f}"}}'
                 ),
             )
         )
-        created_any = True
-    if created_any:
+    if charges_to_audit:
         # Re-evaluate a previously fully-paid booking when management adds a
         # new collectible amount. Keep status transitions in the finance
         # service so the same audit/history behavior is used for payments.
@@ -586,7 +658,7 @@ def add_company_night_charges(
             reason_code="company_night_charge_created",
         )
     db.flush()
-    return get_company_night_charges(db, hotel_id=hotel_id, reservation_id=reservation_id)
+    return _company_night_charges_summary(db, reservation=reservation, company=company)
 
 
 def correct_company_night_charge_amounts(
@@ -626,31 +698,42 @@ def correct_company_night_charge_amounts(
             CompanyNightCharge.reservation_id == reservation_id,
             CompanyNightCharge.id.in_(normalized),
         )
-        .with_for_update()
+        .with_for_update(of=CompanyNightCharge)
         .all()
     )
     if len(charges) != len(normalized):
         raise CompanyNightChargeError("La selección incluye un cargo que no pertenece a esta reserva.")
-    changed_any = False
-    adjustments: list[CompanyNightChargeAmountAdjustment] = []
+    changes: list[tuple[CompanyNightCharge, Decimal, str, Decimal, Decimal]] = []
     for charge in sorted(charges, key=lambda row: (row.stay_date, row.id)):
         new_amount, reason = normalized[charge.id]
         previous_amount = Decimal(str(charge.amount)).quantize(CENT)
         delta_amount = (new_amount - previous_amount).quantize(CENT)
         if delta_amount == 0:
             continue
-        billing_adjustment = (
+        changes.append((charge, new_amount, reason, previous_amount, delta_amount))
+    if not changes:
+        raise CompanyNightChargeError("Los importes seleccionados ya coinciden con los valores actuales.")
+
+    billing_adjustment_ids = {charge.billing_adjustment_id for charge, *_ in changes}
+    billing_adjustments = (
+        lock_query(
             db.query(BillingAdjustment)
             .filter(
                 BillingAdjustment.hotel_id == hotel_id,
-                BillingAdjustment.id == charge.billing_adjustment_id,
+                BillingAdjustment.id.in_(billing_adjustment_ids),
                 BillingAdjustment.reservation_id == reservation_id,
             )
-            .with_for_update()
-            .one_or_none()
+            .enable_eagerloads(False),
+            BillingAdjustment,
         )
-        if billing_adjustment is None:
-            raise CompanyNightChargeError("No se encontró el ajuste contable asociado al adicional.")
+        .all()
+    )
+    billing_adjustments_by_id = {row.id: row for row in billing_adjustments}
+    if any(charge.billing_adjustment_id not in billing_adjustments_by_id for charge, *_ in changes):
+        raise CompanyNightChargeError("No se encontró el ajuste contable asociado al adicional.")
+
+    for charge, new_amount, reason, previous_amount, delta_amount in changes:
+        billing_adjustment = billing_adjustments_by_id[charge.billing_adjustment_id]
         record = CompanyNightChargeAmountAdjustment(
             hotel_id=hotel_id,
             company_night_charge_id=charge.id,
@@ -664,8 +747,6 @@ def correct_company_night_charge_amounts(
         charge.amount = new_amount
         billing_adjustment.amount = new_amount
         billing_adjustment.total_amount = new_amount
-        db.flush()
-        adjustments.append(record)
         db.add(
             SecurityAuditLog(
                 hotel_id=hotel_id,
@@ -688,9 +769,10 @@ def correct_company_night_charge_amounts(
                 ),
             )
         )
-        changed_any = True
-    if not changed_any:
-        raise CompanyNightChargeError("Los importes seleccionados ya coinciden con los valores actuales.")
+
+    # The financial reconciliation below sums BillingAdjustment rows, so flush
+    # the complete correction batch once before querying the new total.
+    db.flush()
 
     from app.services.payment_service import sync_reservation_financial_status
 
@@ -701,7 +783,9 @@ def correct_company_night_charge_amounts(
         reason_code="company_night_charge_amount_corrected",
     )
     db.flush()
-    return get_company_night_charges(db, hotel_id=hotel_id, reservation_id=reservation_id)
+    return _company_night_charges_summary(db, reservation=reservation, company=_company(
+        db, hotel_id=hotel_id, company_id=reservation.company_id
+    ))
 
 
 def prepare_company_night_charge_payment(
@@ -751,7 +835,7 @@ def prepare_company_night_charge_payment(
     rows = (
         db.query(CompanyNightCharge)
         .filter(CompanyNightCharge.hotel_id == hotel_id, CompanyNightCharge.reservation_id == reservation_id)
-        .with_for_update()
+        .with_for_update(of=CompanyNightCharge)
         .all()
     )
     if not rows:

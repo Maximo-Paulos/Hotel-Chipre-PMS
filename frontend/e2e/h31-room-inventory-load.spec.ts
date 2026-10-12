@@ -156,8 +156,8 @@ test("H31: housekeeping sees a room blocked for maintenance", async ({ page }) =
   await logout(page);
   await login(page, personas[3], "/habitaciones");
   const roomCard = page.getByTestId("room-card").filter({ hasText: "Hab. 305" });
-  await expect(roomCard).toContainText("Libre");
   await expect(roomCard).toContainText("Bloqueada por mantenimiento");
+  await expect(roomCard).toContainText(/libre desde/i);
 });
 
 test("H31: housekeeping gets a zero-stock linen alert in each office", async ({ page }) => {

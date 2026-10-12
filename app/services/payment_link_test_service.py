@@ -7,7 +7,8 @@ from uuid import uuid4
 from urllib.parse import urlparse
 
 import requests
-from sqlalchemy.orm import Session
+from app.services.outbound_http_telemetry import observed_http_call
+from sqlalchemy.orm import Session, load_only
 
 from app.config import get_settings
 from app.models.hotel_config import HotelConfiguration
@@ -307,7 +308,7 @@ def create_mercadopago_payment_link_test(db: Session, hotel_id: int, payload: Pa
     if notification_url:
         preference_payload["notification_url"] = notification_url
 
-    response = requests.post(
+    response = observed_http_call("mercadopago.payment_link_test", requests.post,
         "https://api.mercadopago.com/checkout/preferences",
         headers={
             "Authorization": f"Bearer {access_token}",
@@ -367,11 +368,50 @@ def create_mercadopago_payment_link_test(db: Session, hotel_id: int, payload: Pa
     return record
 
 
-def list_payment_link_tests(db: Session, hotel_id: int, provider: str = "mercadopago") -> list[PaymentLinkTest]:
+def list_payment_link_tests(
+    db: Session,
+    hotel_id: int,
+    provider: str = "mercadopago",
+    *,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[PaymentLinkTest]:
+    """Return a bounded page without loading provider response payloads."""
     return (
         db.query(PaymentLinkTest)
+        .options(
+            load_only(
+                PaymentLinkTest.id,
+                PaymentLinkTest.hotel_id,
+                PaymentLinkTest.provider,
+                PaymentLinkTest.recipient_email,
+                PaymentLinkTest.amount,
+                PaymentLinkTest.currency,
+                PaymentLinkTest.description,
+                PaymentLinkTest.external_reference,
+                PaymentLinkTest.preference_id,
+                PaymentLinkTest.payment_link,
+                PaymentLinkTest.status,
+                PaymentLinkTest.external_status,
+                PaymentLinkTest.external_payment_id,
+                PaymentLinkTest.refunded_amount,
+                PaymentLinkTest.email_sent_at,
+                PaymentLinkTest.sender_channel,
+                PaymentLinkTest.sender_email,
+                PaymentLinkTest.expires_at,
+                PaymentLinkTest.last_checked_at,
+                PaymentLinkTest.last_error,
+                PaymentLinkTest.paid_at,
+                PaymentLinkTest.refunded_at,
+                PaymentLinkTest.cancelled_at,
+                PaymentLinkTest.created_at,
+                PaymentLinkTest.updated_at,
+            )
+        )
         .filter(PaymentLinkTest.hotel_id == hotel_id, PaymentLinkTest.provider == provider)
-        .order_by(PaymentLinkTest.created_at.desc())
+        .order_by(PaymentLinkTest.created_at.desc(), PaymentLinkTest.id.desc())
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 100)))
         .all()
     )
 

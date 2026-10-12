@@ -68,6 +68,7 @@ class ReservationCreate(BaseModel):
     target_currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     total_amount: Optional[Decimal] = Field(default=None, ge=0)
     manual_rate_reason: Optional[str] = Field(default=None, max_length=500)
+    confirm_large_total_adjustment: bool = False
     deposit_amount: Optional[Decimal] = Field(default=None, ge=0)
     quote_token: Optional[str] = Field(default=None, min_length=20, max_length=24000)
     mobility_restriction: bool = False
@@ -224,7 +225,12 @@ class ReservationUpdate(BaseModel):
     check_in_date: Optional[date] = None
     check_out_date: Optional[date] = None
     total_amount: Optional[Decimal] = Field(default=None, ge=0, max_digits=12, decimal_places=2)
-    paid_total_change_reason: Optional[str] = Field(default=None, max_length=500)
+    paid_total_change_reason: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Required, non-blank reason when correcting total_amount; legacy field name retained for API compatibility.",
+    )
+    confirm_large_total_adjustment: bool = False
     num_adults: Optional[int] = None
     num_children: Optional[int] = None
     notes: Optional[str] = None
@@ -236,7 +242,7 @@ class ReservationUpdate(BaseModel):
 
     @field_validator("paid_total_change_reason", mode="before")
     @classmethod
-    def normalize_paid_total_change_reason(cls, value: object) -> str | None:
+    def normalize_total_change_reason(cls, value: object) -> str | None:
         if value is None:
             return None
         if not isinstance(value, str):
@@ -245,9 +251,9 @@ class ReservationUpdate(BaseModel):
         return cleaned or None
 
     @model_validator(mode="after")
-    def validate_paid_total_change(self):
+    def validate_total_change_reason(self):
         if self.total_amount is not None and not self.paid_total_change_reason:
-            raise ValueError("El motivo es obligatorio para corregir el total de una reserva con pagos.")
+            raise ValueError("El motivo es obligatorio para corregir el total de la reserva.")
         if self.total_amount is None and self.paid_total_change_reason is not None:
             raise ValueError("El motivo solo corresponde cuando se corrige el total de la reserva.")
         return self
@@ -282,6 +288,15 @@ class ReservationDateChangeResponse(BaseModel):
     reservation: ReservationRead
     recreated: bool
     status_transitioned: bool = False
+
+
+class ReservationExtensionPreviewResponse(BaseModel):
+    reservation_id: int
+    current_checkout_date: date
+    new_checkout_date: date
+    client_version: int
+    extension_amount: Decimal
+    currency_code: str = Field(min_length=3, max_length=3)
 
 
 class ReservationExtensionRequest(BaseModel):

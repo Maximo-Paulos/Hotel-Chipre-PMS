@@ -20,7 +20,7 @@ export function useMercadoPagoTests() {
     queryKey: paymentLinkTestsKey(session.hotelId),
     queryFn: () => listPaymentLinkTests(session),
     enabled: hasValidSession(session),
-    refetchInterval: 30_000,
+    staleTime: 30_000,
   });
 }
 

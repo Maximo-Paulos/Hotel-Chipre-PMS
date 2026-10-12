@@ -14,18 +14,18 @@ import {
 } from "../api/notifications";
 import { hasValidSession } from "../api/client";
 import { refreshAfterMutation } from "../api/queryInvalidation";
+import { EVENT_REFRESHED_QUERY_STALE_TIME_MS } from "../api/queryPolicy";
 import { useSession } from "../state/session";
 
 import { useOnlineStatus } from "./useOnlineStatus";
 import { useGuardedMutation } from "./useGuardedMutation";
 
-const inboxKey = (hotelId: number | null, unreadOnly: boolean) => ["notifications", "inbox", hotelId, unreadOnly];
-const preferencesKey = (hotelId: number | null) => ["notifications", "preferences", hotelId];
-const dailyReportScheduleKey = (hotelId: number | null) => ["notifications", "daily-report-schedule", hotelId];
+const inboxKey = (hotelId: number | null, unreadOnly: boolean) => ["notification-inbox", hotelId, unreadOnly];
+const preferencesKey = (hotelId: number | null) => ["notification-preferences", hotelId];
+const dailyReportScheduleKey = (hotelId: number | null) => ["daily-report-schedules", hotelId];
 
-// Notifications still poll while open, but mutations use the same tenant-safe
-// invalidation path as the rest of the PMS so a read/unread change is visible
-// in the bell and the open inbox before the mutation reports success.
+// Active notification queries are refreshed by the tenant-scoped notifications
+// event. Realtime recovery reconciles them if the SSE connection is unavailable.
 export function useNotificationsInbox(unreadOnly = false, limit = 50, offset = 0, active = true) {
   const { session } = useSession();
   const isOnline = useOnlineStatus();
@@ -35,8 +35,7 @@ export function useNotificationsInbox(unreadOnly = false, limit = 50, offset = 0
     queryKey: [...inboxKey(session.hotelId, unreadOnly), limit, offset],
     queryFn: () => listNotifications({ unreadOnly, limit, offset }, session),
     enabled,
-    refetchInterval: enabled ? 30_000 : false,
-    staleTime: 15_000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
 }
 

@@ -23,7 +23,7 @@ export const useIntegrations = () => {
     enabled: hasValidSession(session),
     // A 4xx is a decision (connections disabled here, forbidden), not a blip.
     // Retrying it with backoff held the page on "Cargando…" for ~7s first.
-    retry: (failureCount, error) => !(error instanceof ApiError && error.status < 500) && failureCount < 3
+    retry: (failureCount, error) => !(error instanceof ApiError && error.status < 500) && failureCount < 1
   });
 };
 

@@ -1,5 +1,5 @@
 import csv
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from io import StringIO
 
@@ -113,12 +113,62 @@ def test_cash_register_api_open_add_close_and_list(client_with_db):
     assert listed.status_code == 200
     assert [row["id"] for row in listed.json()] == [session_id]
 
+
+def test_cash_session_summary_shows_movements_by_hotel_user(client_with_db):
+    client, db, ctx = client_with_db
+    second_user_id = 60
+    db.add(
+        User(
+            id=second_user_id,
+            email="manager@test.com",
+            password_hash="test-hash",
+            is_active=True,
+            is_verified=True,
+        )
+    )
+    db.add(
+        HotelMembership(
+            hotel_id=1,
+            user_id=second_user_id,
+            role="manager",
+            status="active",
+            alias="Gerencia QA",
+        )
+    )
+    db.flush()
+
+    opened = client.post("/api/cash-register/sessions", json={"opening_balance": "10.00"})
+    assert opened.status_code == 201, opened.text
+    session_id = opened.json()["id"]
+    first = client.post(
+        f"/api/cash-register/sessions/{session_id}/movements",
+        json={"movement_type": "income", "amount": "20.00"},
+    )
+    assert first.status_code == 201, first.text
+
+    ctx["user_id"] = second_user_id
+    ctx["role"] = "manager"
+    second = client.post(
+        f"/api/cash-register/sessions/{session_id}/movements",
+        json={"movement_type": "income", "amount": "30.00"},
+    )
+    assert second.status_code == 201, second.text
+
+    response = client.get(f"/api/cash-register/sessions/{session_id}/summary")
+
+    assert response.status_code == 200, response.text
+    by_collector = response.json()["by_collector"]
+    assert [row["collector_name"] for row in by_collector] == ["Recepción QA", "Gerencia QA"]
+    assert [row["income_total"] for row in by_collector] == ["20.00", "30.00"]
+    assert [row["net_total"] for row in by_collector] == ["20.00", "30.00"]
+    assert [row["movement_count"] for row in by_collector] == [1, 1]
+
     close = client.post(
         f"/api/cash-register/sessions/{session_id}/close",
-        json={"counted_balance": "125.00"},
+        json={"counted_balance": "60.00"},
     )
     assert close.status_code == 200, close.text
-    assert close.json()["expected_balance"] == "125.00"
+    assert close.json()["expected_balance"] == "60.00"
     assert close.json()["difference"] == "0.00"
 
     db.refresh(db.get(CashSession, session_id))
@@ -189,6 +239,52 @@ def test_cash_expenses_batches_actor_label_resolution(client_with_db, monkeypatc
     assert len(resolver_calls) == 1
     assert resolver_calls[0][0] == 1
     assert set(resolver_calls[0][1]) == {50, 51, 52}
+
+
+def test_cash_expense_csv_export_filters_hotel_local_date_and_sanitizes_cells(client_with_db):
+    client, db, context = client_with_db
+    opened = client.post("/api/cash-register/sessions", json={"opening_balance": "100.00"})
+    assert opened.status_code == 201, opened.text
+    session_id = opened.json()["id"]
+    db.add_all([
+        CashExpense(
+            hotel_id=context["hotel_id"],
+            session_id=session_id,
+            amount=Decimal("10.00"),
+            currency_code="ARS",
+            category="Insumos",
+            vendor="=SUM(1+1)",
+            description="Gasto de prueba",
+            receipt_reference="TKT-10",
+            status="pending",
+            recorded_by_user_id=context["user_id"],
+            created_at=datetime(2026, 9, 4, 15, 30, tzinfo=timezone.utc),
+        ),
+        CashExpense(
+            hotel_id=context["hotel_id"],
+            session_id=session_id,
+            amount=Decimal("12.00"),
+            currency_code="ARS",
+            category="Insumos",
+            vendor="Proveedor fuera del rango",
+            receipt_reference="TKT-12",
+            status="pending",
+            recorded_by_user_id=context["user_id"],
+            created_at=datetime(2026, 9, 3, 15, 30, tzinfo=timezone.utc),
+        ),
+    ])
+    db.commit()
+
+    response = client.get("/api/cash-register/expenses/export.csv?from=2026-09-04&to=2026-09-04")
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith("text/csv")
+    rows = list(csv.DictReader(StringIO(response.text.lstrip("\ufeff")), delimiter=";"))
+    assert len(rows) == 1
+    assert rows[0]["proveedor"] == "'=SUM(1+1)"
+    assert rows[0]["importe"] == "10,00"
+    assert rows[0]["estado"] == "pendiente"
+    assert rows[0]["referencia_comprobante"] == "TKT-10"
 
 
 def test_cash_expense_requires_permission_and_approval_mfa_before_affecting_drawer(client_with_db):
@@ -398,7 +494,7 @@ def test_cash_register_api_allows_one_open_session_per_currency(client_with_db):
     )
 
     assert duplicate_usd.status_code == 400
-    assert "open cash session" in duplicate_usd.json()["detail"]
+    assert "caja abierta" in duplicate_usd.json()["detail"].lower()
 
 
 def test_cash_register_api_difference_approval_requires_permission(client_with_db):

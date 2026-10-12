@@ -94,7 +94,7 @@ def validate_guest_for_checkin(
         hotel_id = config.id
     else:
         if config_or_hotel is None:
-            raise CheckInError("hotel_id is required for check-in validation")
+            raise CheckInError("Se requiere el hotel para validar el check-in.")
         hotel_id = config_or_hotel
         config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
 
@@ -115,11 +115,11 @@ def _load_reservation(db: Session, reservation_id: int, hotel_id: int | None) ->
     reservation = reservation_q.first()
 
     if not reservation:
-        raise CheckInError(f"Reservation {reservation_id} not found")
+        raise CheckInError(f"No se encontró la reserva {reservation_id}.")
 
     resolved_hotel_id = reservation.hotel_id or hotel_id
     if resolved_hotel_id is None:
-        raise CheckInError("hotel_id is required for check-in")
+        raise CheckInError("Se requiere el hotel para realizar el check-in.")
     reservation.hotel_id = resolved_hotel_id
     return reservation, resolved_hotel_id
 
@@ -166,8 +166,8 @@ def _guard_prohibido(
     if prohibido_tag and not override_prohibido:
         note = f" ({prohibido_tag.note})" if prohibido_tag.note else ""
         raise CheckInError(
-            f"Check-in blocked — guest has an active 'prohibido_alojar' tag{note}. "
-            "An authorized override by a manager is required."
+            f"No se puede realizar el check-in: el huésped tiene una marca activa de 'prohibido_alojar'{note}. "
+            "Se requiere una autorización de un gerente para continuar."
         )
 
 
@@ -190,7 +190,7 @@ def _apply_guest_patch_and_validate(
     validation_errors = validate_guest_for_checkin(db, guest, config or hotel_id, reservation=reservation)
     if validation_errors:
         raise CheckInError(
-            f"Check-in blocked — missing required guest data: {'; '.join(validation_errors)}"
+            f"No se puede realizar el check-in: faltan datos obligatorios del huésped: {'; '.join(validation_errors)}"
         )
 
 
@@ -198,11 +198,11 @@ def _validate_checkin_window_and_payment(db: Session, reservation: Reservation, 
     today = hotel_today(db, hotel_id)
     if reservation.check_in_date > today:
         raise CheckInError(
-            f"Cannot check in before the reservation arrival date ({reservation.check_in_date.isoformat()})."
+            f"No se puede realizar el check-in antes de la fecha de llegada de la reserva ({reservation.check_in_date.isoformat()})."
         )
     if reservation.check_out_date <= today:
         raise CheckInError(
-            f"Cannot check in after the reservation departure date ({reservation.check_out_date.isoformat()}); extend the stay first."
+            f"No se puede realizar el check-in después de la fecha de salida de la reserva ({reservation.check_out_date.isoformat()}); primero extendé la estadía."
         )
 
     if (
@@ -210,7 +210,7 @@ def _validate_checkin_window_and_payment(db: Session, reservation: Reservation, 
         and not reservation.external_paid_confirmed
     ):
         raise CheckInError(
-            "Cannot check in: the imported OTA prepayment needs a manager's confirmation and reference first."
+            "No se puede realizar el check-in: un gerente debe confirmar el pago anticipado importado de la OTA e indicar su referencia."
         )
 
     company = None
@@ -221,7 +221,7 @@ def _validate_checkin_window_and_payment(db: Session, reservation: Reservation, 
             .one_or_none()
         )
         if company is None:
-            raise CheckInError("Cannot check in: the linked company is unavailable.")
+            raise CheckInError("No se puede realizar el check-in: la empresa asociada a la reserva no está disponible.")
 
         documents_query = db.query(CompanyDocument).filter(
             CompanyDocument.hotel_id == hotel_id,
@@ -235,7 +235,7 @@ def _validate_checkin_window_and_payment(db: Session, reservation: Reservation, 
                 CompanyDocument.doc_type == CompanyDocumentTypeEnum.VOUCHER_PDF,
             ).first()
             if voucher_exists is None:
-                raise CheckInError("Cannot check in: this company requires an uploaded reservation voucher.")
+                raise CheckInError("No se puede realizar el check-in: esta empresa requiere que se cargue el comprobante de la reserva.")
         if company.requires_signature:
             signed_document_exists = documents_query.filter(
                 CompanyDocument.status == CompanyDocumentStatusEnum.SIGNED,
@@ -243,7 +243,7 @@ def _validate_checkin_window_and_payment(db: Session, reservation: Reservation, 
                 | CompanyDocument.requires_signature.is_(True),
             ).first()
             if signed_document_exists is None:
-                raise CheckInError("Cannot check in: this company requires a signed reservation document.")
+                raise CheckInError("No se puede realizar el check-in: esta empresa requiere un documento firmado de la reserva.")
 
         # Invoice-after-stay is a per-company exception to the hotel's
         # full-payment default. Any nightly extras remain collectible and
@@ -254,21 +254,21 @@ def _validate_checkin_window_and_payment(db: Session, reservation: Reservation, 
     config = db.get(HotelConfiguration, hotel_id)
     policy = getattr(config, "checkin_payment_policy", "total") if config else "total"
     if policy not in {"deposit", "total", "free"}:
-        raise CheckInError("Cannot check in: the hotel's payment policy is invalid.")
+        raise CheckInError("No se puede realizar el check-in: la política de pago del hotel no es válida.")
     if policy == "free":
         return
 
     paid = Decimal(str(paid_amount_with_legacy_fallback(db, hotel_id, reservation)))
     if policy == "total":
         required = Decimal(str(reservation.total_amount or 0))
-        requirement_name = "the full reservation amount"
+        requirement_name = "el importe total de la reserva"
     else:
         required = Decimal(str(reservation.deposit_amount or 0))
-        requirement_name = "the configured deposit"
+        requirement_name = "la seña configurada"
     if paid + Decimal("0.01") < required:
         raise CheckInError(
-            f"Cannot check in: {requirement_name} must be paid first. "
-            f"Required: ${required:.2f}; paid: ${paid:.2f}."
+            f"No se puede realizar el check-in: primero debe abonarse {requirement_name}. "
+            f"Importe requerido: ${required:.2f}; abonado: ${paid:.2f}."
         )
 
 
@@ -307,15 +307,15 @@ def perform_checkin(
     }
     if reservation.status not in allowed_pre_checkin:
         raise CheckInError(
-            f"Cannot check in: reservation status is '{reservation.status.value}'. "
-            "The reservation is not in an eligible pre-arrival state."
+            f"No se puede realizar el check-in: la reserva está en estado '{reservation.status.value}'. "
+            "La reserva no está en un estado válido previo a la llegada."
         )
     _validate_checkin_window_and_payment(db, reservation, hotel_id)
 
     # Load guest
     guest = db.query(Guest).filter(Guest.id == reservation.guest_id, Guest.hotel_id == hotel_id).first()
     if not guest:
-        raise CheckInError("Guest record not found for this reservation")
+        raise CheckInError("No se encontró el registro del huésped asociado a esta reserva.")
 
     overridden_restriction = validate_no_active_restriction(
         db,
@@ -387,14 +387,14 @@ def perform_partial_checkin(
         ReservationStatusEnum.FULLY_PAID,
     }:
         raise CheckInError(
-            f"Cannot start partial check-in: reservation status is '{reservation.status.value}'. "
-            "The reservation is not in an eligible pre-arrival state."
+            f"No se puede iniciar el pre check-in: la reserva está en estado '{reservation.status.value}'. "
+            "La reserva no está en un estado válido previo a la llegada."
         )
     _validate_checkin_window_and_payment(db, reservation, hotel_id)
 
     guest = db.query(Guest).filter(Guest.id == reservation.guest_id, Guest.hotel_id == hotel_id).first()
     if not guest:
-        raise CheckInError("Guest record not found for this reservation")
+        raise CheckInError("No se encontró el registro del huésped asociado a esta reserva.")
 
     _guard_prohibido(
         db, hotel_id, guest, reservation,
@@ -435,17 +435,17 @@ def perform_checkout(
     reservation = reservation_q.first()
 
     if not reservation:
-        raise CheckInError(f"Reservation {reservation_id} not found")
+        raise CheckInError(f"No se encontró la reserva {reservation_id}.")
 
     hotel_id = reservation.hotel_id or hotel_id
     if hotel_id is None:
-        raise CheckInError("hotel_id is required for check-out")
+        raise CheckInError("Se requiere el hotel para realizar el check-out.")
     reservation.hotel_id = hotel_id
 
     if reservation.status != ReservationStatusEnum.CHECKED_IN:
         raise CheckInError(
-            f"Cannot check out: reservation status is '{reservation.status.value}'. "
-            f"Must be 'checked_in'."
+            f"No se puede realizar el check-out: la reserva está en estado '{reservation.status.value}'. "
+            "Debe estar en estado 'checked_in'."
         )
 
     billing_adjustments = (

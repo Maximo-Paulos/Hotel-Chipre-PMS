@@ -95,6 +95,42 @@ def _slots(db, hotel_id: int):
     )
 
 
+def test_slot_builder_does_not_hydrate_unused_reservation_relationships(db):
+    hotel, category, rooms = _seed_hotel(db)
+    guest = _guest(db, hotel.id)
+    _reservation(
+        db,
+        hotel_id=hotel.id,
+        guest_id=guest.id,
+        category_id=category.id,
+        room_id=rooms[0].id,
+        check_in=HORIZON_START,
+        check_out=date(2027, 5, 12),
+        status=ReservationStatusEnum.PENDING,
+        confirmation_code="AVOID-ORM-HYDRATION",
+    )
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def capture_sql(_connection, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(" ".join(statement.lower().split()))
+
+    db.expire_all()
+    event.listen(engine, "before_cursor_execute", capture_sql)
+    try:
+        slots, room_slots = _slots(db, hotel.id)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_sql)
+
+    assert len(slots) == 1
+    assert len(room_slots) == 2
+    assert not any("from transactions " in statement for statement in statements), statements
+    assert not any("reservation_additional_guests" in statement for statement in statements), [
+        statement for statement in statements if "reservation_additional_guests" in statement
+    ]
+    assert not any("where ? = reservations.room_id" in statement for statement in statements), statements
+
+
 def test_active_rejection_never_leaves_guest_unassigned_when_it_is_the_only_room(db):
     hotel, category, rooms = _seed_hotel(db, room_count=1)
     guest = _guest(db, hotel.id)

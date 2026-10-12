@@ -7,6 +7,7 @@ to reoptimize room assignments for all future reservations.
 from __future__ import annotations
 
 from datetime import date
+from threading import Event, Thread
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -123,3 +124,67 @@ class TestReoptimizationIntegration:
         fake_db.rollback.assert_called_once()
         fake_db.commit.assert_not_called()
         fake_db.close.assert_called_once()
+
+    def test_reoptimization_coalesces_concurrent_triggers_per_hotel(self):
+        from app.api.reservations import _trigger_reoptimization_bg
+
+        first_run_started = Event()
+        release_first_run = Event()
+        calls = []
+        thread_errors = []
+        fake_db = MagicMock()
+        fake_session_factory = MagicMock(return_value=fake_db)
+
+        def fake_run(_db, *, hotel_id, trigger_type, **_kwargs):
+            calls.append((hotel_id, trigger_type))
+            if len(calls) == 1:
+                first_run_started.set()
+                release_first_run.wait(timeout=5)
+
+        def run_first_trigger():
+            try:
+                _trigger_reoptimization_bg(hotel_id=DEFAULT_HOTEL_ID)
+            except BaseException as exc:  # surface worker-thread failures in the assertion below
+                thread_errors.append(exc)
+
+        with patch("app.database.get_session_factory", return_value=fake_session_factory), \
+             patch("app.services.allocation_runtime_service.run_persisted_allocation", side_effect=fake_run):
+            worker = Thread(target=run_first_trigger)
+            worker.start()
+            assert first_run_started.wait(timeout=5)
+            _trigger_reoptimization_bg(
+                hotel_id=DEFAULT_HOTEL_ID,
+                trigger_type="reservation_update",
+            )
+            release_first_run.set()
+            worker.join(timeout=5)
+
+        assert not worker.is_alive()
+        assert thread_errors == []
+        assert calls == [
+            (DEFAULT_HOTEL_ID, "new_reservation"),
+            (DEFAULT_HOTEL_ID, "reservation_update"),
+        ]
+        assert fake_db.commit.call_count == 2
+        assert fake_db.close.call_count == 2
+
+    def test_reoptimization_retries_transient_distributed_lock_contention(self, monkeypatch):
+        from app.api.reservations import _trigger_reoptimization_bg
+        from app.services.distributed_lock import DistributedLockBusy
+
+        fake_db = MagicMock()
+        fake_session_factory = MagicMock(return_value=fake_db)
+        run_result = MagicMock()
+        monkeypatch.setattr("app.services.allocation_trigger_service.time.sleep", lambda _delay: None)
+
+        with patch("app.database.get_session_factory", return_value=fake_session_factory), \
+             patch(
+                 "app.services.allocation_runtime_service.run_persisted_allocation",
+                 side_effect=[DistributedLockBusy("busy"), run_result],
+             ) as run:
+            _trigger_reoptimization_bg(hotel_id=DEFAULT_HOTEL_ID)
+
+        assert run.call_count == 2
+        assert fake_db.rollback.call_count == 1
+        assert fake_db.commit.call_count == 1
+        assert fake_db.close.call_count == 2

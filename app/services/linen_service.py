@@ -29,6 +29,14 @@ class LinenError(ValueError):
     """Raised when a linen inventory operation is invalid."""
 
 
+class LinenNotFoundError(LinenError):
+    """Raised when a hotel-scoped linen resource does not exist."""
+
+
+class LinenOpeningCountConflict(LinenError):
+    """Raised when an opening count cannot replace existing inventory history."""
+
+
 class LinenIdempotencyConflict(LinenError):
     """Raised when a transfer retry key is reused for another payload."""
 
@@ -102,7 +110,7 @@ def get_linen_item(db: Session, *, hotel_id: int, item_id: int) -> LinenItem:
         .first()
     )
     if not item:
-        raise LinenError("Linen item not found")
+        raise LinenNotFoundError("No se encontró el artículo de ropa blanca.")
     return item
 
 
@@ -122,7 +130,7 @@ def create_location(db: Session, *, hotel_id: int, name: str) -> LinenLocation:
             db.add(location)
             db.flush()
     except IntegrityError as exc:
-        raise LinenError(f'Ya existe una ubicacion de ropa blanca llamada "{name}" en este hotel') from exc
+        raise LinenError(f'Ya existe una ubicación de ropa blanca llamada "{name}" en este hotel') from exc
     return location
 
 
@@ -185,7 +193,7 @@ def get_location(db: Session, *, hotel_id: int, location_id: int) -> LinenLocati
         .first()
     )
     if not location:
-        raise LinenError("Linen location not found")
+        raise LinenNotFoundError("No se encontró la ubicación de ropa blanca.")
     return location
 
 
@@ -203,9 +211,9 @@ def register_movement(
     transfer_reference: str | None = None,
 ) -> LinenMovement:
     if movement_type not in VALID_MOVEMENT_TYPES:
-        raise LinenError("Invalid linen movement type")
+        raise LinenError("El tipo de movimiento de ropa blanca no es válido.")
     if quantity <= 0:
-        raise LinenError("Linen movement quantity must be positive")
+        raise LinenError("La cantidad del movimiento de ropa blanca debe ser positiva.")
     item = (
         db.query(LinenItem)
         .filter(LinenItem.id == item_id, LinenItem.hotel_id == hotel_id, LinenItem.deleted_at.is_(None))
@@ -213,14 +221,14 @@ def register_movement(
         .one_or_none()
     )
     if item is None:
-        raise LinenError("Linen item not found")
+        raise LinenNotFoundError("No se encontró el artículo de ropa blanca.")
     # Same per-location bug as stock_service.register_movement: an outbound
     # movement scoped to one location must only be checked against THAT
     # location's balance, not the hotel-wide total across every location.
     if movement_type in _OUTBOUND_MOVEMENT_TYPES and quantity > current_stock(
         db, hotel_id=hotel_id, item_id=item.id, location_id=location_id
     ):
-        raise LinenError("Linen movement would make stock negative")
+        raise LinenError("El movimiento dejaría negativo el stock de ropa blanca.")
     if location_id is not None:
         get_location(db, hotel_id=hotel_id, location_id=location_id)
     movement = LinenMovement(
@@ -254,11 +262,11 @@ def transfer_linen_stock(
     """Move linen between hotel locations as one linked, retry-safe ledger pair."""
     normalized_reason = reason.strip()
     if quantity <= 0:
-        raise LinenError("Linen transfer quantity must be positive")
+        raise LinenError("La cantidad de la transferencia debe ser positiva.")
     if source_location_id == destination_location_id:
-        raise LinenError("Source and destination linen locations must be different")
+        raise LinenError("Las ubicaciones de origen y destino deben ser distintas.")
     if not normalized_reason:
-        raise LinenError("Linen transfer reason is required")
+        raise LinenError("El motivo de la transferencia es obligatorio.")
 
     transfer_reference = str(uuid5(NAMESPACE_URL, f"linen-transfer:{hotel_id}:{idempotency_key}"))
     item = (
@@ -268,7 +276,7 @@ def transfer_linen_stock(
         .one_or_none()
     )
     if item is None:
-        raise LinenError("Linen item not found")
+        raise LinenNotFoundError("No se encontró el artículo de ropa blanca.")
 
     existing_rows = (
         db.query(LinenMovement)
@@ -309,10 +317,10 @@ def transfer_linen_stock(
         .all()
     }
     if vendor_location_ids:
-        raise LinenError("Use a laundry remito to transfer linen to or from a laundry vendor")
+        raise LinenError("Usá un remito de lavandería para transferir ropa hacia o desde un lavadero.")
 
     if quantity > current_stock(db, hotel_id=hotel_id, item_id=item_id, location_id=source_location_id):
-        raise LinenError("Linen transfer would make stock negative at the source location")
+        raise LinenError("La transferencia dejaría negativo el stock en la ubicación de origen.")
 
     try:
         with db.begin_nested():
@@ -380,9 +388,9 @@ def register_opening_counts(
     """Record a location-by-item opening count as one all-or-nothing batch."""
     normalized_reason = reason.strip()
     if not normalized_reason:
-        raise LinenError("Opening count reason is required")
+        raise LinenError("El motivo del conteo inicial es obligatorio.")
     if not counts:
-        raise LinenError("Opening count needs at least one item/location")
+        raise LinenError("El conteo inicial necesita al menos un artículo y una ubicación.")
 
     count_by_pair: dict[tuple[int, int], Decimal] = {}
     for row in counts:
@@ -390,10 +398,10 @@ def register_opening_counts(
         location_id = int(row["location_id"])
         quantity = Decimal(row["quantity"])
         if quantity <= 0:
-            raise LinenError("Opening count quantities must be positive")
+            raise LinenError("Las cantidades del conteo inicial deben ser positivas.")
         pair = (item_id, location_id)
         if pair in count_by_pair:
-            raise LinenError("An item/location can appear only once in an opening count")
+            raise LinenError("Un artículo y una ubicación solo pueden aparecer una vez en el conteo inicial.")
         count_by_pair[pair] = quantity
 
     item_ids = sorted({item_id for item_id, _ in count_by_pair})
@@ -411,7 +419,7 @@ def register_opening_counts(
     )
     item_by_id = {item.id: item for item in items}
     if len(item_by_id) != len(item_ids):
-        raise LinenError("Linen item not found")
+        raise LinenNotFoundError("No se encontró el artículo de ropa blanca.")
 
     locations = (
         db.query(LinenLocation)
@@ -424,7 +432,7 @@ def register_opening_counts(
     )
     location_by_id = {location.id: location for location in locations}
     if len(location_by_id) != len(location_ids):
-        raise LinenError("Linen location not found")
+        raise LinenNotFoundError("No se encontró la ubicación de ropa blanca.")
 
     prior_pairs = {
         (item_id, location_id)
@@ -440,8 +448,8 @@ def register_opening_counts(
     conflicts = sorted(set(count_by_pair).intersection(prior_pairs))
     if conflicts:
         item_id, location_id = conflicts[0]
-        raise LinenError(
-            "Opening count is only available before prior movements at this location: "
+        raise LinenOpeningCountConflict(
+            "El conteo inicial solo está disponible antes de que existan movimientos previos en esta ubicación: "
             f"{item_by_id[item_id].name} — {location_by_id[location_id].name}"
         )
 

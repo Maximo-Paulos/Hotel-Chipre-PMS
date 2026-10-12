@@ -150,6 +150,10 @@ test("an owner without onboarding permission gets an access message without a de
   await onboardingEffectivePermissions;
   await expect(page).toHaveURL(/\/onboarding$/);
   expect(onboardingStatusRequests).toBe(0);
+  // The permission gate and the absence of the denied onboarding read are
+  // already verified. Ignore a permission refresh that is still in flight
+  // while Playwright tears down this page.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
 test("offline warning explicitly says operational writes are not queued", async ({ page }) => {

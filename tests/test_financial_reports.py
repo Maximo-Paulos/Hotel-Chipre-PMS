@@ -58,7 +58,12 @@ def reports_client():
     db = SessionLocal()
     db.add_all(
         [
-            HotelConfiguration(id=1, hotel_name="Hotel Uno", subscription_active=True),
+            HotelConfiguration(
+                id=1,
+                hotel_name="Hotel Uno",
+                subscription_active=True,
+                hotel_timezone="America/Argentina/Buenos_Aires",
+            ),
             User(
                 id=1,
                 email="owner@test.com",
@@ -83,14 +88,15 @@ def reports_client():
     guest = Guest(hotel_id=1, first_name="Test", last_name="Guest", document_number="DOC1", terms_accepted=True)
     db.add(guest)
     db.flush()
+    hotel_day = hotel_today(db, 1)
     reservation = Reservation(
         hotel_id=1,
         guest_id=guest.id,
         category_id=category.id,
         room_id=room.id,
         confirmation_code="RES-FIN-1",
-        check_in_date=date.today(),
-        check_out_date=date.today() + timedelta(days=1),
+        check_in_date=hotel_day,
+        check_out_date=hotel_day + timedelta(days=1),
         total_amount=Decimal("15000.50"),
         amount_paid=Decimal("0.00"),
         status=ReservationStatusEnum.PENDING,
@@ -427,7 +433,7 @@ def test_revenue_keeps_currencies_separate_and_uses_reportable_channel(reports_c
         db,
         base_reservation=base_reservation,
         confirmation_code="RES-FIN-USD",
-        check_in_date=date.today(),
+        check_in_date=hotel_today(db, 1),
         amount="50.00",
         currency="USD",
         channel=ReservationChannelCodeEnum.EXPEDIA,
@@ -507,7 +513,7 @@ def test_empty_collections_have_no_currency_or_synthetic_multicurrency_total(rep
 
 def test_revenue_reports_current_receivables_by_currency_and_due_bucket(reports_client):
     client, db, reservation_id = reports_client
-    today = date.today()
+    today = hotel_today(db, 1)
     overdue = db.get(Reservation, reservation_id)
     overdue.check_in_date = today - timedelta(days=1)
     overdue.check_out_date = today
@@ -576,7 +582,7 @@ def test_revenue_csv_groups_by_method_category_channel_and_currency(reports_clie
 
 def test_occupancy_report_uses_fixed_query_count_for_date_range(reports_client):
     _client, db, _reservation_id = reports_client
-    start_date = date.today()
+    start_date = hotel_today(db, 1)
     end_date = start_date + timedelta(days=6)
     query_count = [0]
 

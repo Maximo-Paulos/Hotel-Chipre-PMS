@@ -265,7 +265,7 @@ def test_stale_version_raises_reservation_error(db: Session):
             hotel_id=5013,
             client_version=0,  # stale — expects 0, actual is 1
         )
-    assert "concurrently" in str(exc_info.value).lower()
+    assert "modificada por otra persona" in str(exc_info.value).lower()
 
 
 def test_omitting_client_version_skips_check(db: Session):

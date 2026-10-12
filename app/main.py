@@ -16,7 +16,9 @@ from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 LOGGER = logging.getLogger(__name__)
 _GIT_SHA_RE = re.compile(r"[0-9a-fA-F]{40}")
@@ -27,6 +29,51 @@ class _DecimalAwareEncoder(json.JSONEncoder):
         if isinstance(obj, Decimal):
             return float(obj)
         return super().default(obj)
+
+
+class ResponseBodySizeTelemetryMiddleware:
+    """Count response bytes after compression without buffering body content."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        started = time.perf_counter()
+        response_body_bytes = 0
+        status_code: int | str = "aborted"
+        response_headers: dict[str, str] = {}
+
+        async def count_response_bytes(message):
+            nonlocal response_body_bytes, status_code, response_headers
+            if message.get("type") == "http.response.start":
+                status_code = int(message.get("status", 0))
+                response_headers = {
+                    key.decode("latin-1").lower(): value.decode("latin-1")
+                    for key, value in message.get("headers", [])
+                }
+            elif message.get("type") == "http.response.body":
+                response_body_bytes += len(message.get("body", b""))
+            await send(message)
+
+        try:
+            await self.app(scope, receive, count_response_bytes)
+        finally:
+            matched_route = scope.get("route")
+            route_label = getattr(matched_route, "path", None) or "unmatched"
+            LOGGER.info(
+                "http.response_transfer route=%s method=%s status=%s body_bytes=%s encoding=%s duration_ms=%.2f request_id=%s",
+                route_label,
+                str(scope.get("method", "unknown")),
+                status_code,
+                response_body_bytes,
+                response_headers.get("content-encoding", "identity"),
+                (time.perf_counter() - started) * 1000.0,
+                response_headers.get("x-request-id", "unknown"),
+            )
 
 from app.database import (
     finish_request_db_metrics,
@@ -148,7 +195,12 @@ async def lifespan(app: FastAPI):
     validate_runtime_security()
     init_db()
     _seed_permission_matrix_once()
-    yield
+    try:
+        yield
+    finally:
+        from app.services.domain_events import shutdown_postgres_event_listeners
+
+        await shutdown_postgres_event_listeners()
 
 
 app = FastAPI(
@@ -250,6 +302,14 @@ def _safe_request_path_for_logging(path: str) -> str:
     return path
 
 
+def _is_database_pool_timeout(error: BaseException) -> bool:
+    if isinstance(error, SQLAlchemyTimeoutError):
+        return True
+    if isinstance(error, BaseExceptionGroup):
+        return any(_is_database_pool_timeout(nested) for nested in error.exceptions)
+    return False
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     # The try/except also turns an unhandled exception into a real 500 response
@@ -258,9 +318,21 @@ async def security_headers(request: Request, call_next):
     # the server error as an opaque "Failed to fetch" instead of its real status.
     try:
         response = await call_next(request)
-    except Exception:
-        LOGGER.exception("Unhandled error on %s %s", request.method, _safe_request_path_for_logging(request.url.path))
-        response = JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
+    except Exception as exc:
+        if _is_database_pool_timeout(exc):
+            LOGGER.warning(
+                "database.pool_exhausted method=%s path=%s",
+                request.method,
+                _safe_request_path_for_logging(request.url.path),
+            )
+            response = JSONResponse(
+                status_code=503,
+                content={"detail": "Servidor ocupado. Reintentá en unos segundos."},
+                headers={"Retry-After": "5"},
+            )
+        else:
+            LOGGER.exception("Unhandled error on %s %s", request.method, _safe_request_path_for_logging(request.url.path))
+            response = JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -289,26 +361,51 @@ async def request_telemetry(request: Request, call_next):
     finally:
         db_metrics = finish_request_db_metrics(db_metrics_token)
     duration_ms = (time.perf_counter() - started) * 1000.0
+    query_count = int(db_metrics["query_count"])
+    db_duration_ms = float(db_metrics["duration_ms"])
+    db_request_bytes = int(db_metrics["request_bytes_estimate"])
+    db_destination_host = str(db_metrics["destination_host"])
+    pool_checkout_count = int(db_metrics["pool_checkout_count"])
+    pool_checkout_duration_ms = float(db_metrics["pool_checkout_duration_ms"])
+    max_pool_checkout_ms = float(db_metrics["max_pool_checkout_ms"])
+    response_bytes = response.headers.get("content-length", "unknown")
+    matched_route = request.scope.get("route")
+    route_label = getattr(matched_route, "path", None) or _safe_request_path_for_logging(
+        request.url.path
+    )
     LOGGER.info(
-        "http.request route=%s method=%s status=%s duration_ms=%.2f request_id=%s",
-        _safe_request_path_for_logging(request.url.path),
+        "http.request route=%s method=%s status=%s duration_ms=%.2f db_query_count=%s db_duration_ms=%.2f db_request_bytes_estimate=%s db_destination_host=%s db_pool_checkout_count=%s db_pool_checkout_duration_ms=%.2f db_pool_checkout_max_ms=%.2f declared_content_length_bytes=%s request_id=%s",
+        route_label,
         request.method,
         response.status_code,
         duration_ms,
+        query_count,
+        db_duration_ms,
+        db_request_bytes,
+        db_destination_host,
+        pool_checkout_count,
+        pool_checkout_duration_ms,
+        max_pool_checkout_ms,
+        response_bytes,
         request_id,
     )
     response.headers["X-Request-Id"] = request_id
     # Append instead of assigning so any Server-Timing metrics supplied by an
     # upstream proxy remain available alongside the application duration.
     response.headers.append("Server-Timing", f"app;dur={duration_ms:.2f}")
-    query_count = int(db_metrics["query_count"])
     if query_count:
-        db_duration_ms = float(db_metrics["duration_ms"])
         response.headers.append(
             "Server-Timing",
             f'db;dur={db_duration_ms:.2f}, '
             f'dbmax;dur={float(db_metrics["max_duration_ms"]):.2f}, '
             f'dbq;desc="{query_count} queries"',
+        )
+    if pool_checkout_count:
+        response.headers.append(
+            "Server-Timing",
+            f"dbpool;dur={pool_checkout_duration_ms:.2f}, "
+            f'dbpoolmax;dur={max_pool_checkout_ms:.2f}, '
+            f'dbpoolc;desc="{pool_checkout_count} checkouts"',
         )
     return response
 
@@ -353,6 +450,14 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["Server-Timing", "X-Request-Id"],
 )
+
+# Keep large JSON responses small on Render's metered outbound bandwidth.
+# Level 1 limits CPU cost on the Starter instance; SSE remains excluded by
+# Starlette's middleware defaults.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=1)
+# Added last so this wrapper observes body chunks after GZipMiddleware while
+# preserving streaming responses without buffering them in memory.
+app.add_middleware(ResponseBodySizeTelemetryMiddleware)
 
 # Register all API routers
 app.include_router(onboarding.router)

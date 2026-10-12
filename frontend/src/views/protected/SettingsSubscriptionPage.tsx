@@ -277,7 +277,7 @@ export default function SettingsSubscriptionPage() {
                       <p className="text-sm font-semibold text-slate-900">{plan.name}</p>
                       <p className="text-xs text-slate-600">Hasta {plan.room_limit} habitaciones</p>
                       <p className="text-xs text-slate-500">
-                        {plan.price_month != null ? `$${plan.price_month} / mes` : "Precio a definir"}
+                        {plan.price_month != null ? `${plan.price_currency ?? "USD"} $${plan.price_month} / mes` : "Precio a definir"}
                       </p>
                       {plan.features && (
                         <ul className="mt-1 space-y-1 text-xs text-slate-600">

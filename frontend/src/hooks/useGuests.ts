@@ -12,7 +12,7 @@ import {
   type GuestUpdatePayload
 } from "../api/guests";
 import { hasValidSession } from "../api/client";
-import { refreshGuestState } from "../api/queryInvalidation";
+import { refreshGuestCreatedState, refreshGuestState } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -29,7 +29,7 @@ export function useGuestCreate() {
   const { session } = useSession();
   return useGuardedMutation({
     mutationFn: (payload: GuestPayload) => createGuest(payload, session),
-    onSuccess: async () => refreshGuestState(queryClient, session.hotelId)
+    onSuccess: async () => refreshGuestCreatedState(queryClient, session.hotelId)
   });
 }
 

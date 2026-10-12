@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { hasValidSession } from "../api/client";
+import { invalidateQueriesInBackground, refreshAfterMutation } from "../api/queryInvalidation";
 import {
   archiveGemmaChatSession,
   applyGemmaDraft,
@@ -28,7 +29,6 @@ import {
   type GemmaRuntimeStatus,
 } from "../api/gemma";
 import { useSession } from "../state/session";
-import { refreshAfterMutation } from "../api/queryInvalidation";
 
 import { useGuardedMutation } from "./useGuardedMutation";
 
@@ -90,7 +90,6 @@ export function useGemmaChat() {
     queryFn: () => fetchGemmaRuntimeStatus(session),
     enabled: hasValidSession(session),
     staleTime: 1000 * 15,
-    refetchInterval: 1000 * 30,
   });
 
   const insightsQuery = useQuery<GemmaInsight[]>({
@@ -106,7 +105,7 @@ export function useGemmaChat() {
       writeStoredSessionId(storage, null);
     }
     queryClient.removeQueries({ queryKey: ["gemma-chat", session.hotelId] });
-    queryClient.invalidateQueries({ queryKey: gemmaHistoryKey(session.hotelId) });
+    invalidateQueriesInBackground(queryClient, { queryKey: gemmaHistoryKey(session.hotelId) });
   }, [queryClient, session.hotelId, storage]);
 
   const sendMessageMutation = useGuardedMutation({
@@ -117,9 +116,8 @@ export function useGemmaChat() {
       }
       const key = gemmaChatKey(session.hotelId, result.session?.id ?? sessionId);
       queryClient.setQueryData(key, result);
-      await queryClient.invalidateQueries({ queryKey: ["gemma-chat", session.hotelId] });
-      await queryClient.invalidateQueries({ queryKey: gemmaHistoryKey(session.hotelId) });
-      await queryClient.invalidateQueries({ queryKey: gemmaInsightsKey(session.hotelId) });
+      invalidateQueriesInBackground(queryClient, { queryKey: gemmaHistoryKey(session.hotelId) });
+      invalidateQueriesInBackground(queryClient, { queryKey: gemmaInsightsKey(session.hotelId) });
       if (!variables.session_id && result.session?.id && result.session.id !== sessionId) {
         setSessionId(result.session.id);
       }
@@ -129,45 +127,45 @@ export function useGemmaChat() {
   const approveActionMutation = useGuardedMutation({
     mutationFn: ({ actionRunId, payload }: { actionRunId: number; payload: GemmaApproveActionPayload }) =>
       approveGemmaAction(actionRunId, payload, session),
-    onSuccess: async (_result: GemmaApproveActionResponse, variables) => {
-      await queryClient.invalidateQueries({ queryKey: gemmaChatKey(session.hotelId, variables.payload.session_id) });
-      await queryClient.invalidateQueries({ queryKey: gemmaHistoryKey(session.hotelId) });
-      await refreshAfterMutation(queryClient, session.hotelId, ["reservations", "payments", "cash", "rooms", "guests", "stock", "settings", "analytics"]);
+    onSuccess: (_result: GemmaApproveActionResponse, variables) => {
+      invalidateQueriesInBackground(queryClient, { queryKey: gemmaChatKey(session.hotelId, variables.payload.session_id) });
+      invalidateQueriesInBackground(queryClient, { queryKey: gemmaHistoryKey(session.hotelId) });
     },
   });
 
   const rejectActionMutation = useGuardedMutation({
     mutationFn: ({ actionRunId, payload }: { actionRunId: number; payload: GemmaRejectActionPayload }) =>
       rejectGemmaAction(actionRunId, payload, session),
-    onSuccess: async (_result: GemmaRejectActionResponse, variables) => {
-      await queryClient.invalidateQueries({ queryKey: gemmaChatKey(session.hotelId, variables.payload.session_id) });
-      await queryClient.invalidateQueries({ queryKey: gemmaHistoryKey(session.hotelId) });
+    onSuccess: (_result: GemmaRejectActionResponse, variables) => {
+      invalidateQueriesInBackground(queryClient, { queryKey: gemmaChatKey(session.hotelId, variables.payload.session_id) });
+      invalidateQueriesInBackground(queryClient, { queryKey: gemmaHistoryKey(session.hotelId) });
     },
   });
 
   const reviewDraftMutation = useGuardedMutation({
     mutationFn: ({ actionRunId, payload }: { actionRunId: number; payload: GemmaReviewDraftPayload }) =>
       reviewGemmaDraft(actionRunId, payload, session),
-    onSuccess: async (_result: GemmaReviewDraftResponse, variables) => {
-      await queryClient.invalidateQueries({ queryKey: gemmaChatKey(session.hotelId, variables.payload.session_id) });
-      await queryClient.invalidateQueries({ queryKey: gemmaHistoryKey(session.hotelId) });
+    onSuccess: (_result: GemmaReviewDraftResponse, variables) => {
+      invalidateQueriesInBackground(queryClient, { queryKey: gemmaChatKey(session.hotelId, variables.payload.session_id) });
+      invalidateQueriesInBackground(queryClient, { queryKey: gemmaHistoryKey(session.hotelId) });
     },
   });
 
   const applyDraftMutation = useGuardedMutation({
     mutationFn: ({ actionRunId, payload }: { actionRunId: number; payload: GemmaApplyDraftPayload }) =>
       applyGemmaDraft(actionRunId, payload, session),
-    onSuccess: async (_result: GemmaApplyDraftResponse, variables) => {
-      await queryClient.invalidateQueries({ queryKey: gemmaChatKey(session.hotelId, variables.payload.session_id) });
-      await queryClient.invalidateQueries({ queryKey: gemmaHistoryKey(session.hotelId) });
-      await refreshAfterMutation(queryClient, session.hotelId, ["reservations", "payments", "cash", "rooms", "guests", "stock", "settings", "analytics"]);
+    onSuccess: (_result: GemmaApplyDraftResponse, variables) => {
+      invalidateQueriesInBackground(queryClient, { queryKey: gemmaChatKey(session.hotelId, variables.payload.session_id) });
+      invalidateQueriesInBackground(queryClient, { queryKey: gemmaHistoryKey(session.hotelId) });
+      void refreshAfterMutation(queryClient, session.hotelId, ["reservations", "payments", "cash", "rooms", "guests", "stock", "settings", "analytics"])
+        .catch(() => undefined);
     },
   });
 
   const archiveSessionMutation = useGuardedMutation({
     mutationFn: (targetSessionId: number) => archiveGemmaChatSession(targetSessionId, session),
-    onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: gemmaHistoryKey(session.hotelId) });
+    onSuccess: (result) => {
+      invalidateQueriesInBackground(queryClient, { queryKey: gemmaHistoryKey(session.hotelId) });
       if (result.id === sessionId) {
         setSessionId(null);
         queryClient.removeQueries({ queryKey: gemmaChatKey(session.hotelId, result.id) });

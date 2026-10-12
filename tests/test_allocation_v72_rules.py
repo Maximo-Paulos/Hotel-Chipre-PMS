@@ -1,7 +1,10 @@
 from datetime import date
 
+from sqlalchemy import event as sqlalchemy_event
+
 from app.models.allocation import ReservationAllocationLock
 from app.models.company import Company
+from app.models.domain_event_outbox import DomainEventOutbox
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.operations import RoomMoveEvent, RoomMovementGroup
@@ -91,6 +94,47 @@ def test_solver_does_not_move_corporate_manual_or_pre_checkin_reservations(db):
     assert not set(reservation.id for reservation in reservations) & set(result.moved_reservations)
 
 
+def test_solver_does_not_move_reservation_with_room_and_assigned_payment(db):
+    hotel, category, rooms, guests = _seed_hotel_rooms_guests(db, room_count=2)
+    confirmed = _reservation(
+        db,
+        hotel.id,
+        guests[0].id,
+        category.id,
+        rooms[0].id,
+        "ROOM-AND-PAID",
+        amount_paid=25,
+    )
+    competing = _reservation(
+        db,
+        hotel.id,
+        guests[1].id,
+        category.id,
+        rooms[0].id,
+        "UNPAID-COMPETITOR",
+    )
+    db.flush()
+
+    slots, room_slots = build_slots_from_db(
+        db,
+        hotel_id=hotel.id,
+        start_date=date(2026, 7, 1),
+        end_date=date(2026, 7, 5),
+    )
+    slot_by_id = {slot.reservation_id: slot for slot in slots}
+    result = run_allocation(
+        slots,
+        room_slots,
+        optimization_horizon=(date(2026, 7, 1), date(2026, 7, 5)),
+    )
+
+    assert slot_by_id[confirmed.id].is_locked is True
+    assert result.success is True
+    assert result.assignments[confirmed.id] == rooms[0].id
+    assert confirmed.id not in result.moved_reservations
+    assert result.assignments[competing.id] == rooms[1].id
+
+
 def test_allocation_run_creates_movement_group_and_events(db):
     hotel, category, rooms, guests = _seed_hotel_rooms_guests(db, room_count=2)
     _reservation(db, hotel.id, guests[0].id, category.id, rooms[0].id, "LOCK1", date(2026, 7, 1), date(2026, 7, 3), allocation_locked=True)
@@ -116,6 +160,56 @@ def test_allocation_run_creates_movement_group_and_events(db):
     assert event.reservation_id == mover.id
     assert event.from_room_id == rooms[1].id
     assert event.to_room_id == rooms[0].id
+
+
+def test_persisted_allocation_batches_reservation_entity_reads(db):
+    hotel, category, rooms, guests = _seed_hotel_rooms_guests(db, room_count=7)
+    for index in range(6):
+        _reservation(
+            db,
+            hotel.id,
+            guests[index].id,
+            category.id,
+            rooms[0].id,
+            f"BATCH{index}",
+        )
+    db.flush()
+
+    reservation_selects: list[str] = []
+
+    def count_reservation_selects(_conn, _cursor, statement, _parameters, _context, _many):
+        lowered = statement.lower()
+        if lowered.lstrip().startswith("select") and "reservations" in lowered:
+            reservation_selects.append(statement)
+
+    engine = db.get_bind()
+    sqlalchemy_event.listen(engine, "before_cursor_execute", count_reservation_selects)
+    try:
+        result = run_persisted_allocation(
+            db,
+            hotel_id=hotel.id,
+            trigger_type="query_count_regression",
+            horizon_start=date(2026, 7, 1),
+            horizon_end=date(2026, 7, 5),
+        )
+    finally:
+        sqlalchemy_event.remove(engine, "before_cursor_execute", count_reservation_selects)
+
+    assert result.solver_result.success is True
+    # The candidate and history projections plus one tenant-scoped ORM batch
+    # and two select-in relationship batches serve all six assignments. The
+    # per-assignment db.get()/Query.first() pattern is absent.
+    assert len(reservation_selects) == 5
+    allocation_events = (
+        db.query(DomainEventOutbox)
+        .filter(
+            DomainEventOutbox.hotel_id == hotel.id,
+            DomainEventOutbox.event_type == "allocation.read_model.changed",
+        )
+        .all()
+    )
+    assert len(allocation_events) == 3
+    assert {event.domain for event in allocation_events} == {"reservations", "rooms", "analytics"}
 
 
 def _seed_hotel_rooms_guests(db, *, hotel_id: int = 1, room_count: int = 3):
@@ -173,6 +267,7 @@ def _reservation(
     status: ReservationStatusEnum = ReservationStatusEnum.PENDING,
     allocation_locked: bool = False,
     company_id: int | None = None,
+    amount_paid: float = 0,
 ) -> Reservation:
     reservation = Reservation(
         hotel_id=hotel_id,
@@ -185,7 +280,7 @@ def _reservation(
         check_out_date=check_out,
         status=status,
         total_amount=100,
-        amount_paid=0,
+        amount_paid=amount_paid,
         deposit_amount=0,
         allocation_locked=allocation_locked,
     )

@@ -106,7 +106,7 @@ export function PricingSection() {
     <Section id="precios">
       <SectionHeading
         title="Una suscripción por hotel, no una por herramienta."
-        lede="Los planes se separan por cuántas habitaciones y cuántas personas del equipo usan el sistema. Estamos cerrando los precios definitivos y los publicamos acá apenas estén."
+        lede="Los planes son mensuales por hotel y se eligen por la cantidad de habitaciones y de personas del equipo que usan el sistema."
       />
 
       {isError ? (

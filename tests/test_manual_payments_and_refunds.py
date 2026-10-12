@@ -97,7 +97,7 @@ def test_manual_in_person_payment_requires_reference_and_records_actor(client_wi
         reference="pos-482901",
     )
     assert duplicate_reference.status_code == 400
-    assert "already recorded" in duplicate_reference.json()["detail"].lower()
+    assert "referencia de pago manual ya está registrada" in duplicate_reference.json()["detail"].lower()
     assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 1
 
 
@@ -125,7 +125,7 @@ def test_completed_manual_payment_retry_reuses_transaction_before_balance_valida
     assert retry.status_code == 201, retry.text
     assert retry.json()["id"] == first.json()["id"]
     assert changed_payload.status_code == 400
-    assert "idempotency key" in changed_payload.json()["detail"].lower()
+    assert "clave de idempotencia" in changed_payload.json()["detail"].lower()
     assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 1
 
 
@@ -287,7 +287,7 @@ def test_refund_cannot_exceed_original_payment_by_one_cent(client_with_db):
     )
 
     assert response.status_code == 400, response.text
-    assert "remaining refundable amount" in response.json()["detail"].lower()
+    assert "saldo reembolsable restante" in response.json()["detail"].lower()
     assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 1
     db.refresh(reservation)
     assert reservation.amount_paid == 30
@@ -405,7 +405,7 @@ def test_paid_booking_cannot_be_soft_deleted(client_with_db):
     response = client.delete(f"/api/bookings/{reservation.id}")
 
     assert response.status_code == 409
-    assert "cancellation workflow" in response.json()["detail"]
+    assert "flujo de cancelación" in response.json()["detail"]
     db.refresh(reservation)
     assert reservation.deleted_at is None
 

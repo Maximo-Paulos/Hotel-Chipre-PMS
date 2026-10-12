@@ -15,6 +15,7 @@ import json
 from typing import Any, Callable
 
 import requests
+from app.services.outbound_http_telemetry import observed_http_call
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -49,7 +50,7 @@ def fetch_mercadopago_payment(db: Session, hotel_id: int, external_payment_id: s
     if not access_token:
         raise PaymentWebhookError("El hotel no tiene una cuenta de Mercado Pago conectada")
     try:
-        response = requests.get(
+        response = observed_http_call("mercadopago.payment_verify", requests.get,
             f"https://api.mercadopago.com/v1/payments/{external_payment_id}",
             headers={"Authorization": f"Bearer {access_token}"},
             timeout=20,

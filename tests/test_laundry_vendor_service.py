@@ -4,6 +4,8 @@ from decimal import Decimal
 import pytest
 
 from app.models.hotel_config import HotelConfiguration
+from app.models.laundry_vendor import LaundryRemito, LaundryRemitoLine
+from app.models.linen import LinenMovement
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.laundry_vendor_service import (
     LaundryVendorError,
@@ -36,6 +38,17 @@ def _seed_house_stock(db, *, hotel_id, item, house_location, quantity):
     )
 
 
+def _set_test_vendor_price(db, *, vendor, item, effective_from=date(2026, 7, 1), amount=Decimal("100.00")):
+    set_vendor_price(
+        db,
+        hotel_id=vendor.hotel_id,
+        vendor_id=vendor.id,
+        linen_item_id=item.id,
+        unit_price=amount,
+        effective_from=effective_from,
+    )
+
+
 def test_create_vendor_creates_its_own_linen_location(db):
     _seed_hotels(db)
     vendor = create_vendor(db, hotel_id=1, name="Lavadero Norte", contact_phone="123", contact_email=None)
@@ -52,6 +65,7 @@ def test_create_remito_outbound_transfers_between_locations_without_changing_hot
     vendor = create_vendor(db, hotel_id=1, name="Lavadero Sur")
     db.flush()
     _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("20.00"))
+    _set_test_vendor_price(db, vendor=vendor, item=item)
     db.commit()
 
     remito = create_remito(
@@ -81,6 +95,7 @@ def test_create_remito_inbound_reverses_the_transfer(db):
     vendor = create_vendor(db, hotel_id=1, name="Lavadero Este")
     db.flush()
     _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("20.00"))
+    _set_test_vendor_price(db, vendor=vendor, item=item)
     db.commit()
 
     create_remito(
@@ -110,6 +125,8 @@ def test_remito_number_is_unique_per_hotel_vendor_and_direction(db):
     other_vendor = create_vendor(db, hotel_id=1, name="Otro lavadero remitos")
     db.flush()
     _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("20.00"))
+    _set_test_vendor_price(db, vendor=vendor, item=item)
+    _set_test_vendor_price(db, vendor=other_vendor, item=item)
     db.commit()
 
     create_remito(
@@ -173,9 +190,10 @@ def test_create_remito_rejects_insufficient_stock_at_source_and_creates_nothing(
     # Plenty of stock hotel-wide, but none of it at the "house" location --
     # the hotel-wide guard in register_movement would not catch this alone.
     _seed_house_stock(db, hotel_id=1, item=item, house_location=other_location, quantity=Decimal("50.00"))
+    _set_test_vendor_price(db, vendor=vendor, item=item)
     db.commit()
 
-    with pytest.raises(LaundryVendorError, match="Not enough"):
+    with pytest.raises(LaundryVendorError, match="No hay suficiente"):
         create_remito(
             db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-020",
             remito_date=datetime(2026, 7, 1, tzinfo=timezone.utc), house_location_id=house.id,
@@ -196,6 +214,8 @@ def test_create_remito_rolls_back_entirely_when_a_later_line_fails(db):
     db.flush()
     _seed_house_stock(db, hotel_id=1, item=ok_item, house_location=house, quantity=Decimal("10.00"))
     _seed_house_stock(db, hotel_id=1, item=short_item, house_location=house, quantity=Decimal("2.00"))
+    _set_test_vendor_price(db, vendor=vendor, item=ok_item)
+    _set_test_vendor_price(db, vendor=vendor, item=short_item)
     db.commit()
 
     with pytest.raises(LaundryVendorError):
@@ -215,7 +235,7 @@ def test_create_remito_rolls_back_entirely_when_a_later_line_fails(db):
     assert list_remitos(db, hotel_id=1, vendor_id=vendor.id) == []
 
 
-def test_remito_line_snapshots_price_and_flags_missing_price(db):
+def test_outbound_remito_requires_a_current_price_for_every_item_without_partial_writes(db):
     _seed_hotels(db)
     priced_item = create_linen_item(db, hotel_id=1, name="Sabanas", unit="unit", min_quantity=None, active=True)
     unpriced_item = create_linen_item(db, hotel_id=1, name="Fundas", unit="unit", min_quantity=None, active=True)
@@ -232,20 +252,20 @@ def test_remito_line_snapshots_price_and_flags_missing_price(db):
     )
     db.commit()
 
-    remito = create_remito(
-        db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-040",
-        remito_date=datetime(2026, 7, 1, tzinfo=timezone.utc), house_location_id=house.id,
-        lines=[
-            {"linen_item_id": priced_item.id, "quantity": Decimal("2.00")},
-            {"linen_item_id": unpriced_item.id, "quantity": Decimal("3.00")},
-        ],
-        actor_user_id=None,
-    )
-    db.commit()
+    with pytest.raises(LaundryVendorError, match="precio vigente por unidad.*Fundas"):
+        create_remito(
+            db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-040",
+            remito_date=datetime(2026, 7, 1, tzinfo=timezone.utc), house_location_id=house.id,
+            lines=[
+                {"linen_item_id": priced_item.id, "quantity": Decimal("2.00")},
+                {"linen_item_id": unpriced_item.id, "quantity": Decimal("3.00")},
+            ],
+            actor_user_id=None,
+        )
 
-    lines_by_item = {line.linen_item_id: line for line in remito.lines}
-    assert lines_by_item[priced_item.id].unit_price_snapshot == Decimal("200.00")
-    assert lines_by_item[unpriced_item.id].unit_price_snapshot is None
+    assert list_remitos(db, hotel_id=1, vendor_id=vendor.id) == []
+    assert current_stock(db, hotel_id=1, item_id=priced_item.id, location_id=house.id) == Decimal("10.00")
+    assert current_stock(db, hotel_id=1, item_id=unpriced_item.id, location_id=house.id) == Decimal("10.00")
 
 
 def test_set_vendor_price_upserts_a_single_current_price(db):
@@ -319,6 +339,7 @@ def test_vendor_balance_reflects_partial_return(db):
     vendor = create_vendor(db, hotel_id=1, name="Lavadero Balance")
     db.flush()
     _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("20.00"))
+    _set_test_vendor_price(db, vendor=vendor, item=item)
     db.commit()
 
     create_remito(
@@ -338,6 +359,128 @@ def test_vendor_balance_reflects_partial_return(db):
     assert len(balance) == 1
     assert balance[0]["linen_item_id"] == item.id
     assert balance[0]["quantity"] == Decimal("5.00")
+
+
+def test_inbound_remito_records_declared_missing_linen_as_audited_adjustment(db):
+    _seed_hotels(db)
+    item = create_linen_item(db, hotel_id=1, name="Sabanas faltantes", unit="unit", min_quantity=None, active=True)
+    house = create_location(db, hotel_id=1, name="Deposito faltantes")
+    vendor = create_vendor(db, hotel_id=1, name="Lavadero faltantes")
+    db.flush()
+    _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("20.00"))
+    _set_test_vendor_price(db, vendor=vendor, item=item)
+    db.commit()
+
+    create_remito(
+        db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-FALT-OUT",
+        remito_date=datetime(2026, 7, 1, tzinfo=timezone.utc), house_location_id=house.id,
+        lines=[{"linen_item_id": item.id, "quantity": Decimal("20.00")}], actor_user_id=None,
+    )
+    db.commit()
+    inbound = create_remito(
+        db, hotel_id=1, vendor_id=vendor.id, direction="inbound", remito_number="R-FALT-IN",
+        remito_date=datetime(2026, 7, 3, tzinfo=timezone.utc), house_location_id=house.id,
+        lines=[{"linen_item_id": item.id, "quantity": Decimal("18.00"), "missing_quantity": Decimal("2.00")}],
+        actor_user_id=None,
+    )
+    db.commit()
+
+    assert inbound.lines[0].quantity == Decimal("18.00")
+    assert inbound.lines[0].missing_quantity == Decimal("2.00")
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=house.id) == Decimal("18.00")
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=vendor.linen_location_id) == Decimal("0.00")
+    missing_adjustment = (
+        db.query(LinenMovement)
+        .filter_by(hotel_id=1, item_id=item.id, location_id=vendor.linen_location_id, movement_type="adjustment_out")
+        .one()
+    )
+    assert missing_adjustment.quantity == Decimal("2.00")
+    assert missing_adjustment.created_by_user_id is None
+    assert "R-FALT-IN" in missing_adjustment.reason
+
+
+def test_inbound_remito_can_record_all_items_missing_and_rejects_over_reconciliation(db):
+    _seed_hotels(db)
+    item = create_linen_item(db, hotel_id=1, name="Toallas sin retorno", unit="unit", min_quantity=None, active=True)
+    house = create_location(db, hotel_id=1, name="Deposito sin retorno")
+    vendor = create_vendor(db, hotel_id=1, name="Lavadero sin retorno")
+    db.flush()
+    _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("4.00"))
+    _set_test_vendor_price(db, vendor=vendor, item=item)
+    db.commit()
+    create_remito(
+        db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-MISSING-OUT",
+        remito_date=datetime(2026, 7, 1, tzinfo=timezone.utc), house_location_id=house.id,
+        lines=[{"linen_item_id": item.id, "quantity": Decimal("4.00")}], actor_user_id=None,
+    )
+    db.commit()
+
+    inbound = create_remito(
+        db, hotel_id=1, vendor_id=vendor.id, direction="inbound", remito_number="R-MISSING-IN",
+        remito_date=datetime(2026, 7, 3, tzinfo=timezone.utc), house_location_id=house.id,
+        lines=[{"linen_item_id": item.id, "quantity": Decimal("0.00"), "missing_quantity": Decimal("4.00")}],
+        actor_user_id=None,
+    )
+    db.commit()
+    assert inbound.lines[0].quantity == Decimal("0.00")
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=vendor.linen_location_id) == Decimal("0.00")
+
+    with pytest.raises(LaundryVendorError, match="No hay suficiente"):
+        create_remito(
+            db, hotel_id=1, vendor_id=vendor.id, direction="inbound", remito_number="R-MISSING-OVER",
+            remito_date=datetime(2026, 7, 4, tzinfo=timezone.utc), house_location_id=house.id,
+            lines=[{"linen_item_id": item.id, "quantity": Decimal("1.00"), "missing_quantity": Decimal("1.00")}],
+            actor_user_id=None,
+        )
+    assert len(list_remitos(db, hotel_id=1, vendor_id=vendor.id)) == 2
+
+
+def test_outbound_remito_rejects_missing_quantity(db):
+    _seed_hotels(db)
+    item = create_linen_item(db, hotel_id=1, name="Sabanas salida", unit="unit", min_quantity=None, active=True)
+    house = create_location(db, hotel_id=1, name="Deposito salida")
+    vendor = create_vendor(db, hotel_id=1, name="Lavadero salida")
+    db.flush()
+    _seed_house_stock(db, hotel_id=1, item=item, house_location=house, quantity=Decimal("2.00"))
+    _set_test_vendor_price(db, vendor=vendor, item=item)
+    db.commit()
+
+    with pytest.raises(LaundryVendorError, match="solo se puede informar en una entrega"):
+        create_remito(
+            db, hotel_id=1, vendor_id=vendor.id, direction="outbound", remito_number="R-OUT-MISSING",
+            remito_date=datetime(2026, 7, 1, tzinfo=timezone.utc), house_location_id=house.id,
+            lines=[{"linen_item_id": item.id, "quantity": Decimal("1.00"), "missing_quantity": Decimal("1.00")}],
+            actor_user_id=None,
+        )
+
+
+def test_inbound_with_no_vendor_stock_reconciles_and_returns_audited_warning(db):
+    _seed_hotels(db)
+    item = create_linen_item(db, hotel_id=1, name="Sabanas sin retiro", unit="unit", min_quantity=None, active=True)
+    house = create_location(db, hotel_id=1, name="Deposito sin retiro")
+    vendor = create_vendor(db, hotel_id=1, name="Lavadero sin retiro previo")
+    db.commit()
+
+    warnings = []
+    inbound = create_remito(
+        db, hotel_id=1, vendor_id=vendor.id, direction="inbound", remito_number="R-IN-SIN-RETIRO",
+        remito_date=datetime(2026, 7, 3, tzinfo=timezone.utc), house_location_id=house.id,
+        lines=[{"linen_item_id": item.id, "quantity": Decimal("2.00")}], actor_user_id=None,
+        reconciliation_warnings=warnings,
+    )
+    db.commit()
+
+    assert len(inbound.lines) == 1
+    assert inbound.lines[0].quantity == Decimal("2.00")
+    assert warnings == [
+        "Entrega mayor a lo registrado: se ajustó +2.00 de «Sabanas sin retiro» en el lavadero."
+    ]
+    adjustment = db.query(LinenMovement).filter_by(movement_type="adjustment").one()
+    assert adjustment.created_by_user_id is None
+    assert "R-IN-SIN-RETIRO" in adjustment.reason
+    assert list_remitos(db, hotel_id=1, vendor_id=vendor.id) == [inbound]
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=house.id) == Decimal("2.00")
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=vendor.linen_location_id) == Decimal("0.00")
 
 
 def test_vendor_spend_sums_outbound_lines_in_period(db):
@@ -384,6 +527,53 @@ def test_vendor_spend_sums_outbound_lines_in_period(db):
         date_from=datetime(2026, 7, 10, tzinfo=timezone.utc), date_to=datetime(2026, 7, 20, tzinfo=timezone.utc),
     )
     assert narrow_spend["total"] == Decimal("600.00")
+
+
+def test_legacy_unpriced_outbound_quantity_stays_visible_and_blocks_paid_settlement(db):
+    _seed_hotels(db)
+    item = create_linen_item(db, hotel_id=1, name="Fundas sin tarifa", unit="unit", min_quantity=None, active=True)
+    vendor = create_vendor(db, hotel_id=1, name="Lavadero sin tarifa")
+    db.flush()
+    # Preserve historical incomplete records for audit/reporting. New outbound
+    # remitos are rejected unless an effective unit price exists.
+    legacy_remito = LaundryRemito(
+        hotel_id=1,
+        vendor_id=vendor.id,
+        direction="outbound",
+        remito_number="R-UNPRICED-LEGACY",
+        remito_date=datetime(2026, 7, 10, tzinfo=timezone.utc),
+    )
+    db.add(legacy_remito)
+    db.flush()
+    db.add(
+        LaundryRemitoLine(
+            hotel_id=1,
+            remito_id=legacy_remito.id,
+            linen_item_id=item.id,
+            quantity=Decimal("4.00"),
+            missing_quantity=Decimal("0.00"),
+            unit_price_snapshot=None,
+        )
+    )
+    db.commit()
+
+    spend = vendor_spend(db, hotel_id=1, vendor_id=vendor.id)
+
+    assert spend["total"] == Decimal("0.00")
+    assert spend["unpriced_quantity"] == Decimal("4.00")
+    assert spend["by_item"][0]["quantity"] == Decimal("4.00")
+    assert spend["by_item"][0]["unpriced_quantity"] == Decimal("4.00")
+    quarter = next(row for row in vendor_settlements(db, hotel_id=1, vendor_id=vendor.id, year=2026) if row["period_start"] == date(2026, 7, 1))
+    assert quarter["total_amount"] == Decimal("0.00")
+    assert quarter["unpriced_quantity"] == Decimal("4.00")
+    with pytest.raises(LaundryVendorError, match="artículos sin precio"):
+        mark_vendor_settlement_paid(
+            db,
+            hotel_id=1,
+            vendor_id=vendor.id,
+            period_start=date(2026, 7, 1),
+            paid=True,
+        )
 
 
 def test_remito_price_snapshot_is_frozen_when_vendor_price_changes_later(db):
@@ -515,7 +705,7 @@ def test_mark_vendor_settlement_paid_rejects_a_non_quarter_start_date(db):
     vendor = create_vendor(db, hotel_id=1, name="Lavadero Fecha Invalida")
     db.commit()
 
-    with pytest.raises(LaundryVendorError, match="first day of a calendar quarter"):
+    with pytest.raises(LaundryVendorError, match="primer día de un trimestre calendario"):
         mark_vendor_settlement_paid(db, hotel_id=1, vendor_id=vendor.id, period_start=date(2026, 7, 15), paid=True)
 
 
@@ -541,6 +731,7 @@ def test_vendors_and_remitos_are_hotel_scoped(db):
     db.flush()
     _seed_house_stock(db, hotel_id=1, item=item1, house_location=house1, quantity=Decimal("10.00"))
     _seed_house_stock(db, hotel_id=2, item=item2, house_location=house2, quantity=Decimal("10.00"))
+    _set_test_vendor_price(db, vendor=vendor1, item=item1)
     db.commit()
 
     create_remito(

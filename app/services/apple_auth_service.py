@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
+from app.services.outbound_http_telemetry import observed_http_call
 import jwt
 
 
@@ -115,7 +116,7 @@ def exchange_apple_code(
     *, client_id: str, client_secret: str, code: str, redirect_uri: str
 ) -> dict[str, Any]:
     try:
-        response = httpx.post(
+        response = observed_http_call("apple.oauth_exchange", httpx.post,
             APPLE_TOKEN_URL,
             data={
                 "client_id": client_id,

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_any_permission, require_permission
 from app.schemas.commercial import (
     FxPolicyCreate,
     FxPolicyRead,
@@ -123,7 +123,9 @@ def patch_rate_plan(
 @router.get("/tax-policies", response_model=list[TaxPolicyRead])
 def get_tax_policies(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
+    context: AuthContext = Depends(
+        require_any_permission(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_COMMERCIAL_MANAGE)
+    ),
 ):
     return list_tax_policies(db, hotel_id=context.hotel_id)
 

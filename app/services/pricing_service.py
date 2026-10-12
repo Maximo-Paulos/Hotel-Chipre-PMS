@@ -17,7 +17,7 @@ from datetime import date, timedelta
 from typing import Optional
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, lazyload
 
 from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.hotel_config import HotelConfiguration
@@ -101,7 +101,9 @@ def get_price_for_date(
     #    the rooms inventory view (never silently returns 0 when a base price exists).
     category: Optional[RoomCategory] = (
         db.query(RoomCategory)
+        .options(lazyload(RoomCategory.rooms))
         .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
+        .enable_eagerloads(False)
         .first()
     )
     if category is not None and category.base_price_per_night is not None:
@@ -117,6 +119,7 @@ def resolve_rate_calendar(
     from_date: date,
     to_date: date,
     payment_method: Optional[str] = None,
+    category: Optional[RoomCategory] = None,
 ) -> list[dict]:
     """Resolve the effective rate for every date in ``[from_date, to_date]`` using
     a fixed number of queries (no per-date round-trips).
@@ -154,11 +157,15 @@ def resolve_rate_calendar(
         .order_by(PricePeriod.priority.desc(), PricePeriod.id.desc())
         .all()
     )
-    category: Optional[RoomCategory] = (
-        db.query(RoomCategory)
-        .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
-        .first()
-    )
+    if category is None:
+        category = (
+            db.query(RoomCategory)
+            .options(lazyload(RoomCategory.rooms))
+            .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
+            .first()
+        )
+    elif category.id != category_id or category.hotel_id != hotel_id:
+        raise ValueError("Category does not match the requested hotel and category")
     base_price = (
         float(category.base_price_per_night)
         if category is not None and category.base_price_per_night is not None
@@ -405,6 +412,7 @@ def build_pricing_revision(
     target_currency: str | None = None,
     occupancy: int | None = None,
     company_id: int | None = None,
+    category: RoomCategory | None = None,
 ) -> str:
     """Return a deterministic revision for every input that affects a quote.
 
@@ -413,14 +421,18 @@ def build_pricing_revision(
     tax policy, deposit policy, or relevant product rule changes.
     """
 
-    category = (
-        db.query(RoomCategory)
-        .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
-        .first()
-    )
+    if category is None:
+        category = (
+            db.query(RoomCategory)
+            .options(lazyload(RoomCategory.rooms))
+            .filter(RoomCategory.id == category_id, RoomCategory.hotel_id == hotel_id)
+            .first()
+        )
+    elif category.id != category_id or category.hotel_id != hotel_id:
+        raise ValueError("Category does not match the requested hotel and category")
     if category is None:
         raise ValueError("Category not found for hotel")
-    config = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
+    config = db.get(HotelConfiguration, hotel_id)
 
     def _stamp(value):
         if value is None:

@@ -233,12 +233,14 @@ def test_api_rejects_range_over_92_days_and_inverted_range():
             params={"date_from": "2027-01-01", "date_to": "2027-06-01"},
         )
         assert too_wide.status_code == 422, too_wide.text
+        assert too_wide.json()["detail"] == "El período no puede superar los 92 días."
 
         inverted = client.get(
             "/api/reservations/occupancy-grid",
             params={"date_from": "2027-01-10", "date_to": "2027-01-01"},
         )
         assert inverted.status_code == 422, inverted.text
+        assert inverted.json()["detail"] == "La fecha de salida debe ser posterior a la fecha de llegada."
 
         ok = client.get(
             "/api/reservations/occupancy-grid",

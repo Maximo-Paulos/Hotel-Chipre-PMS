@@ -8,6 +8,7 @@ import {
   addReservationCharge,
   createReservationGroupPayment,
   createReservationGroup,
+  getReservation,
   isDeferredCompanyReservation,
   listReservationGroups,
   newReservationGroupPaymentIdempotencyKey,
@@ -56,7 +57,14 @@ import { RestrictionOverrideModal } from "../../components/RestrictionOverrideMo
 import { useRestrictionOverridePrompt } from "../../hooks/useRestrictionOverridePrompt";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
-import { getPaymentReceiptData, type PaymentMethod, type PaymentRequest, type PaymentSummary } from "../../api/payments";
+import {
+  emailPaymentReceipt,
+  getPaymentReceiptData,
+  newPaymentReceiptEmailIdempotencyKey,
+  type PaymentMethod,
+  type PaymentRequest,
+  type PaymentSummary
+} from "../../api/payments";
 import { useCategories } from "../../hooks/useCategories";
 import { useGuest, useGuestCreate } from "../../hooks/useGuests";
 import {
@@ -82,6 +90,7 @@ import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { useSession } from "../../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
 import { escapeHtml, resolveVoucherOperationalBalance } from "../../utils/escapeHtml";
+import { isLargeTotalAdjustment } from "../../utils/largeTotalAdjustment.mjs";
 import { buildPaymentReceiptHtml, canPrintPaymentReceipt } from "../../utils/paymentReceiptHtml";
 import { addDaysIso, formatHotelDateTime, formatLocalIsoDate, todayIso } from "../../utils/date";
 import {
@@ -94,7 +103,11 @@ import ReservationStatCard from "../../components/StatCard";
 import { ROOM_MOVE_REASONS, moveBlockedReason } from "../../utils/roomMove";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
-import { refreshReservationState } from "../../api/queryInvalidation";
+import {
+  invalidateQueriesInBackground,
+  refreshReservationCreatedState,
+  refreshReservationState
+} from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useOperationalAudit } from "../../hooks/useOperationalAudit";
 
@@ -118,6 +131,13 @@ type FormState = {
 };
 
 type PricingPaymentMethod = "base" | "cash" | "transfer" | "mercadopago" | "credit_card" | "paypal";
+
+type PaymentReceiptEmailAttempt = {
+  transactionId: number;
+  recipientEmail: string;
+  idempotencyKey: string;
+  status: "confirm" | "sending" | "sent" | "failed" | "unknown";
+};
 
 const PAYMENT_CURRENCIES: FxCurrencyCode[] = ["ARS", "USD", "EUR", "BRL", "CLP", "UYU"];
 
@@ -240,6 +260,9 @@ export function ReservationsPage() {
   const canManageCompanyReservation = (reservation: Pick<Reservation, "company_id">) =>
     !reservation.company_id || hasPermission("company:manage");
   const canAdjustPaidReservationTotal = hasPermission("reservation:paid_total_adjust");
+  const canSetUnboundedReservationRate = hasPermission("reservation:manual_rate");
+  const canSetBoundedReservationRate = hasPermission("reservation:manual_rate_limited");
+  const canAdjustReservationRate = canSetUnboundedReservationRate || canSetBoundedReservationRate;
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<ReservationStatus | "all" | "">("");
   const [companyFilter, setCompanyFilter] = useState("");
@@ -268,7 +291,7 @@ export function ReservationsPage() {
   const [refundTargetTransactionId, setRefundTargetTransactionId] = useState<number | null>(null);
   const [refundReasonInput, setRefundReasonInput] = useState("");
   const [refundNightAmounts, setRefundNightAmounts] = useState<Record<number, string>>({});
-  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
+  const paymentProofInputRef = useRef<HTMLInputElement | null>(null);
   const [paymentProofPreview, setPaymentProofPreview] = useState<{ proofId: number; url: string } | null>(null);
   const [viewingPaymentProofId, setViewingPaymentProofId] = useState<number | null>(null);
   const [rejectingPaymentProofId, setRejectingPaymentProofId] = useState<number | null>(null);
@@ -282,6 +305,7 @@ export function ReservationsPage() {
   const [manualRateReasonInput, setManualRateReasonInput] = useState("");
   const [paidTotalAmountInput, setPaidTotalAmountInput] = useState("");
   const [paidTotalChangeReasonInput, setPaidTotalChangeReasonInput] = useState("");
+  const [confirmLargeTotalAdjustment, setConfirmLargeTotalAdjustment] = useState(false);
   const [lastCreatedReservation, setLastCreatedReservation] = useState<Reservation | null>(null);
   const [otaFormOpen, setOtaFormOpen] = useState(false);
   const [availabilityForm, setAvailabilityForm] = useState<{
@@ -300,6 +324,13 @@ export function ReservationsPage() {
   const [detailsActionError, setDetailsActionError] = useState<{ reservationId: number; message: string } | null>(null);
   const [pageActionError, setPageActionError] = useState<string | null>(null);
   const [communicationRecipient, setCommunicationRecipient] = useState("");
+  const [receiptEmailAttempt, setReceiptEmailAttempt] = useState<PaymentReceiptEmailAttempt | null>(null);
+  const receiptEmailAttemptsRef = useRef(new Map<number, PaymentReceiptEmailAttempt>());
+  const receiptEmailDialogRef = useRef<HTMLDivElement | null>(null);
+  const receiptEmailTitleRef = useRef<HTMLHeadingElement | null>(null);
+  const receiptEmailCloseRef = useRef<HTMLButtonElement | null>(null);
+  const receiptEmailTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const receiptEmailAttemptRef = useRef<PaymentReceiptEmailAttempt | null>(null);
   const [roomMoveForm, setRoomMoveForm] = useState({
     to_room_id: "",
     reason_code: "",
@@ -318,6 +349,43 @@ export function ReservationsPage() {
   });
   const toastTimeout = useRef<number | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const hasReceiptEmailDialog = receiptEmailAttempt !== null;
+  useEffect(() => {
+    if (!hasReceiptEmailDialog) return;
+    receiptEmailTitleRef.current?.focus();
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (receiptEmailAttemptRef.current?.status === "sending") return;
+        receiptEmailAttemptRef.current = null;
+        setReceiptEmailAttempt(null);
+        window.requestAnimationFrame(() => receiptEmailTriggerRef.current?.focus());
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(
+        receiptEmailDialogRef.current?.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex='-1'])"
+        ) ?? []
+      ).filter((element) => element.getAttribute("aria-hidden") !== "true");
+      if (!focusable.length) {
+        event.preventDefault();
+        receiptEmailTitleRef.current?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === receiptEmailTitleRef.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleDialogKeyDown);
+    return () => document.removeEventListener("keydown", handleDialogKeyDown);
+  }, [hasReceiptEmailDialog]);
   const { data: subscription } = useSubscriptionStatus();
   const writeBlocked = subscription?.can_write === false;
   const limitReached =
@@ -378,7 +446,36 @@ export function ReservationsPage() {
   const guestMutation = useGuestCreate();
   const guestQuery = useGuest(guestIdOpen ?? undefined);
   const paymentSummaryQuery = usePaymentSummary(editing?.id || undefined);
-  const cashSessionsQuery = useCashSessions();
+  const paymentSummary = paymentSummaryQuery.data;
+  const hasAnyPaymentEvidence = Boolean(
+    paymentSummary?.transactions?.length ||
+    Number(paymentSummary?.amount_paid ?? editing?.amount_paid ?? 0) > 0 ||
+    Number(editing?.external_paid_amount ?? 0) > 0 ||
+    editing?.external_paid_confirmed ||
+    editing?.status === "deposit_paid" ||
+    editing?.status === "fully_paid"
+  );
+  const confirmedReservationPriceLocked = Boolean(editing?.room_id != null && hasAnyPaymentEvidence);
+  const canAdjustUnpaidDirectTotal = Boolean(
+    editing &&
+    canAdjustReservationRate &&
+    editing.source === "direct" &&
+    !editing.source_provider_code &&
+    !editing.external_id &&
+    editing.company_id == null &&
+    editing.group_id == null &&
+    !paymentSummaryQuery.isLoading &&
+    !paymentSummaryQuery.isError &&
+    !hasAnyPaymentEvidence
+  );
+  const canAdjustReservationTotal = Boolean(
+    !confirmedReservationPriceLocked &&
+    ((hasAnyPaymentEvidence && canAdjustPaidReservationTotal) || canAdjustUnpaidDirectTotal)
+  );
+  const paymentFormOpen = formOpen || Boolean(payingGroup);
+  const cashSessionsQuery = useCashSessions({
+    enabled: hasPermission("cash:view") && paymentFormOpen
+  });
   const paymentReservationCurrency = normalizeCurrencyCode(
     paymentSummaryQuery.data?.currency_code ?? editing?.currency_code
   );
@@ -400,7 +497,6 @@ export function ReservationsPage() {
       hasValidSession(session)
     ),
     staleTime: 30_000,
-    refetchInterval: 60_000,
     retry: false
   });
   useEffect(() => {
@@ -432,9 +528,13 @@ export function ReservationsPage() {
   const { createMutation, updateMutation, cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations(filters);
   const createGroupMutation = useGuardedMutation<ReservationGroupSummary, unknown, ReservationPayload[]>({
     mutationFn: (payloads) => createReservationGroup(payloads, session),
-    onSuccess: async () => {
-      await refreshReservationState(queryClient, session.hotelId);
-      await queryClient.invalidateQueries({ queryKey: ["reservation-groups", session.hotelId] });
+    onSuccess: () => {
+      // Group creation should finish on the committed API response. Reconcile
+      // its reservation lists and group summary without blocking confirmation.
+      void Promise.all([
+        refreshReservationCreatedState(queryClient, session.hotelId),
+        queryClient.invalidateQueries({ queryKey: ["reservation-groups", session.hotelId] })
+      ]).catch(() => undefined);
     }
   });
   const groupPaymentMutation = useGuardedMutation<
@@ -455,12 +555,10 @@ export function ReservationsPage() {
       }
       return createReservationGroupPayment(groupId, payload, session, key);
     },
-    onSuccess: async (_result, variables) => {
+    onSuccess: (_result, variables) => {
       groupPaymentAttemptKeysRef.current.delete(JSON.stringify(variables));
-      await Promise.all([
-        refreshReservationState(queryClient, session.hotelId),
-        queryClient.invalidateQueries({ queryKey: ["reservation-groups", session.hotelId] })
-      ]);
+      void refreshReservationState(queryClient, session.hotelId).catch(() => undefined);
+      invalidateQueriesInBackground(queryClient, { queryKey: ["reservation-groups", session.hotelId] });
       setPayingGroup(null);
       setGroupPaymentError(null);
       showToast("success", t("page.groups.paymentSuccess"));
@@ -852,6 +950,17 @@ export function ReservationsPage() {
   }, [reservations, today]);
   const pendingActions = pendingActionsQuery.data ?? [];
   const criticalPendingActions = pendingActions.filter((item) => item.priority === "critical").length;
+  const reservationStatsError = Boolean(error) && reservations.length === 0;
+  const reservationStatsLoading = isLoading;
+  const reservationStatsValue = (value: number) =>
+    reservationStatsLoading ? "…" : reservationStatsError ? "—" : value;
+  const reservationStatsHelper = (normalHelper: string) =>
+    reservationStatsLoading
+      ? t("page.stats.loading")
+      : reservationStatsError
+        ? t("page.stats.error")
+        : normalHelper;
+  const reservationStatsHelperRole = reservationStatsLoading ? "status" : reservationStatsError ? "alert" : undefined;
 
   const openCreate = (initialValues: Partial<FormState> = {}) => {
     if (subscriptionBlocked) {
@@ -878,7 +987,7 @@ export function ReservationsPage() {
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
     setRefundNightAmounts({});
-    setPaymentProofFile(null);
+    if (paymentProofInputRef.current) paymentProofInputRef.current.value = "";
     setFormOpen(true);
   };
 
@@ -951,6 +1060,7 @@ export function ReservationsPage() {
     setManualRateReasonInput("");
     setPaidTotalAmountInput(Number(reservation.total_amount || 0).toFixed(2));
     setPaidTotalChangeReasonInput("");
+    setConfirmLargeTotalAdjustment(false);
     setLastCreatedReservation(null);
     setPaymentAmountInput("");
     setPaymentReferenceInput("");
@@ -960,7 +1070,7 @@ export function ReservationsPage() {
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
     setRefundNightAmounts({});
-    setPaymentProofFile(null);
+    if (paymentProofInputRef.current) paymentProofInputRef.current.value = "";
     setFormOpen(true);
   };
 
@@ -974,6 +1084,7 @@ export function ReservationsPage() {
     setManualRateReasonInput("");
     setPaidTotalAmountInput("");
     setPaidTotalChangeReasonInput("");
+    setConfirmLargeTotalAdjustment(false);
     setLastCreatedReservation(null);
     setPaymentAmountInput("");
     setPaymentReferenceInput("");
@@ -983,7 +1094,7 @@ export function ReservationsPage() {
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
     setRefundNightAmounts({});
-    setPaymentProofFile(null);
+    if (paymentProofInputRef.current) paymentProofInputRef.current.value = "";
   };
 
   const collaborativeFormValues: FormState = editing
@@ -1119,6 +1230,33 @@ export function ReservationsPage() {
         return;
       }
     }
+    const comparableManualRateQuote = Boolean(
+      !editing &&
+      formValues.source === "direct" &&
+      !(Number(currentFormValues.company_id) > 0) &&
+      reservationQuote &&
+      normalizeCurrencyCode(quoteQuery.data?.currency_code) === normalizeCurrencyCode(manualRateCurrencyCode)
+    );
+    const requiresLargeManualRateConfirmation = Boolean(
+      manualTotalAmount !== null &&
+      comparableManualRateQuote &&
+      isLargeTotalAdjustment(reservationQuote?.total ?? Number.NaN, manualTotalAmount)
+    );
+    const requiresRestrictedGuestManualRateReview = Boolean(
+      !editing &&
+      manualTotalAmount !== null &&
+      canUseUnboundedManualRate &&
+      currentFormValues.source === "direct" &&
+      !(Number(currentFormValues.company_id) > 0) &&
+      getGuestProhibitedDetail(quoteQuery.error)
+    );
+    if (
+      (requiresLargeManualRateConfirmation || requiresRestrictedGuestManualRateReview) &&
+      !confirmLargeTotalAdjustment
+    ) {
+      setFormError(t("page.errors.largeTotalAdjustmentConfirmationRequired"));
+      return;
+    }
     const effectiveTotal = manualTotalAmount ?? reservationQuote?.total;
     if (!editing && parsedDepositAmount !== null) {
       if (!Number.isFinite(parsedDepositAmount) || parsedDepositAmount < 0) {
@@ -1164,10 +1302,20 @@ export function ReservationsPage() {
         setFormError(t("page.errors.paidTotalReasonRequired"));
         return;
       }
+      if (
+        paidTotalChanged &&
+        paidTotalAmount !== null &&
+        isLargeTotalAdjustment(currentTotal, paidTotalAmount) &&
+        !confirmLargeTotalAdjustment
+      ) {
+        setFormError(t("page.errors.largeTotalAdjustmentConfirmationRequired"));
+        return;
+      }
       const updateData: ReservationUpdatePayload = { ...updatePayload };
       if (paidTotalChanged && paidTotalAmount !== null) {
         updateData.total_amount = paidTotalAmount;
         updateData.paid_total_change_reason = paidTotalChangeReason;
+        updateData.confirm_large_total_adjustment = confirmLargeTotalAdjustment;
       }
       const submitUpdate = async (payload: ReservationUpdatePayload, forceRegularMutation = false): Promise<void> => {
         try {
@@ -1225,7 +1373,8 @@ export function ReservationsPage() {
           ? {
               total_amount: manualTotalAmount,
               target_currency: manualRateCurrencyCode,
-              manual_rate_reason: manualRateReason
+              manual_rate_reason: manualRateReason,
+              confirm_large_total_adjustment: confirmLargeTotalAdjustment
             }
           : { quote_token: reservationQuote?.quoteToken })
       };
@@ -1400,9 +1549,9 @@ export function ReservationsPage() {
     }
   };
 
-  const paymentSummary = paymentSummaryQuery.data;
   const isManualPaymentMethod = manualPaymentMethods.includes(paymentMethod);
   const canOperateCash = hasPermission("cash:operate");
+  const canEmailPaymentReceipt = hasPermission("payment:receipt_email");
   const paymentFxRate = paymentTenderCurrency === paymentReservationCurrency
     ? 1
     : Number(paymentFxQuoteQuery.data?.rate ?? 0);
@@ -1494,19 +1643,18 @@ export function ReservationsPage() {
   const companyNightRefundValidationMessage = !isCompanyNightRefund
     ? null
     : originalTenderPerAppliedUnit === null
-      ? t("page.errors.refundAppliedAmountUnavailable")
+      ? t("drawer.errors.refundAppliedAmountUnavailable")
       : selectedRefundTarget && paymentTenderCurrency !== selectedRefundTarget.currency
-        ? t("page.errors.refundMustUseOriginalCurrency", { currency: selectedRefundTarget.currency })
+        ? t("drawer.errors.refundMustUseOriginalCurrency", { currency: selectedRefundTarget.currency })
       : hasInvalidCompanyNightRefund
-        ? t("page.errors.refundNightAmountInvalid")
+        ? t("drawer.errors.refundNightAmountInvalid")
         : companyNightRefundBaseAmount > 0 && !companyNightRefundWithinSource
-          ? t("page.errors.refundNightAmountExceedsSource")
+          ? t("drawer.errors.refundNightAmountExceedsSource")
           : companyNightRefundBaseAmount > 0 && !companyNightRefundMatchesAppliedAmount
-            ? t("page.errors.refundNightRoundingMismatch")
+            ? t("drawer.errors.refundNightRoundingMismatch")
             : null;
   useEffect(() => {
     setRefundNightAmounts({});
-    setPaymentAmountInput("");
   }, [selectedRefundTargetId]);
   const hotelConfigQuery = useHotelConfig();
   const availablePaymentMethods = useMemo(
@@ -1525,7 +1673,9 @@ export function ReservationsPage() {
     () => (cashSessionsQuery.data ?? []).some((s) => s.status === "open"),
     [cashSessionsQuery.data]
   );
-  const surchargesQuery = usePaymentSurcharges();
+  const surchargesQuery = usePaymentSurcharges({
+    enabled: hasPermission("cash:operate") && paymentFormOpen
+  });
   const activeSurcharge = useMemo(
     () => (surchargesQuery.data ?? []).find((s) => s.payment_method === paymentMethod && s.is_active) ?? null,
     [surchargesQuery.data, paymentMethod]
@@ -1645,19 +1795,72 @@ export function ReservationsPage() {
   const detailsOperations = detailsOperationsQuery.data;
   const detailsDeferredCompanyBilling = isDeferredCompanyReservation(detailsReservation);
   const detailsFinancialsLoading = detailsSummaryQuery.isLoading;
+  const voucherFinancialSummaryLoading = Boolean(
+    !detailsDeferredCompanyBilling &&
+      (detailsFinancialsLoading || detailsOperationsQuery.isLoading)
+  );
   const detailsGuest = useGuest(detailsReservation?.guest_id || undefined).data;
   React.useEffect(() => {
     setCommunicationRecipient(detailsGuest?.email ?? "");
   }, [detailsReservationId, detailsGuest?.email]);
   const editingCurrencyCode = normalizeCurrencyCode(paymentSummary?.currency_code ?? editing?.currency_code);
+  const proposedTotalDraft = paidTotalAmountInput.trim() === "" ? null : Number(paidTotalAmountInput);
+  const proposedManualRateTotalDraft = manualTotalAmountInput.trim() === "" ? null : Number(manualTotalAmountInput);
+  const largeManualRateAdjustmentDraft = Boolean(
+    !editing &&
+    formValues.source === "direct" &&
+    !(Number(formValues.company_id) > 0) &&
+    proposedManualRateTotalDraft !== null &&
+    Number.isFinite(proposedManualRateTotalDraft) &&
+    proposedManualRateTotalDraft >= 0 &&
+    reservationQuote &&
+    normalizeCurrencyCode(quoteQuery.data?.currency_code) === normalizeCurrencyCode(manualRateCurrencyCode) &&
+    isLargeTotalAdjustment(reservationQuote.total, proposedManualRateTotalDraft)
+  );
+  const restrictedGuestManualRateAdjustmentDraft = Boolean(
+    !editing &&
+    canUseUnboundedManualRate &&
+    formValues.source === "direct" &&
+    !(Number(formValues.company_id) > 0) &&
+    proposedManualRateTotalDraft !== null &&
+    Number.isFinite(proposedManualRateTotalDraft) &&
+    proposedManualRateTotalDraft >= 0 &&
+    getGuestProhibitedDetail(quoteQuery.error)
+  );
+  const largeTotalAdjustmentDraft = Boolean(
+    editing &&
+    proposedTotalDraft !== null &&
+    Number.isFinite(proposedTotalDraft) &&
+    proposedTotalDraft >= 0 &&
+    isLargeTotalAdjustment(Number(editing.total_amount || 0), proposedTotalDraft)
+  );
   const tenderPerReservationUnit = paymentTenderCurrency === editingCurrencyCode
     ? 1
     : Number(paymentFxQuoteQuery.data?.rate ?? 0);
   const conversionReady = Number.isFinite(tenderPerReservationUnit) && tenderPerReservationUnit > 0;
-  const convertReservationToTender = (amount: number) =>
-    conversionReady ? Number((amount * tenderPerReservationUnit).toFixed(2)) : null;
-  const convertTenderToReservation = (amount: number) =>
-    conversionReady ? Number((amount / tenderPerReservationUnit).toFixed(2)) : null;
+  const convertReservationToTender = (amount: number, rate = tenderPerReservationUnit) =>
+    Number.isFinite(rate) && rate > 0 ? Number((amount * rate).toFixed(2)) : null;
+  const convertTenderToReservation = (amount: number, rate = tenderPerReservationUnit) =>
+    Number.isFinite(rate) && rate > 0 ? Number((amount / rate).toFixed(2)) : null;
+  const refreshPaymentFxRateForAction = async (): Promise<number | null> => {
+    if (paymentTenderCurrency === editingCurrencyCode) return 1;
+    try {
+      const result = await paymentFxQuoteQuery.refetch();
+      const rate = Number(result.data?.rate ?? 0);
+      if (result.error || !Number.isFinite(rate) || rate <= 0) {
+        throw result.error instanceof Error
+          ? result.error
+          : new Error(t("page.errors.paymentFxQuoteUnavailable"));
+      }
+      return rate;
+    } catch (error: unknown) {
+      showToast(
+        "error",
+        error instanceof Error ? error.message : t("page.errors.paymentFxQuoteUnavailable")
+      );
+      return null;
+    }
+  };
   const suggestedDepositAmount = Math.max(
     Number(paymentSummary?.deposit_required ?? 0) - Number(paymentSummary?.amount_paid ?? 0),
     0
@@ -1677,7 +1880,7 @@ export function ReservationsPage() {
   const getPriorReceiptFields = (): Pick<PaymentRequest, "collected_before" | "collected_on" | "prior_receipt_note"> | null => {
     if (!collectedBefore) return {};
     if (paymentTenderCurrency !== editingCurrencyCode) {
-      showToast("error", t("page.errors.priorReceiptOtherCurrency"));
+      showToast("error", t("drawer.errors.priorReceiptOtherCurrency"));
       return null;
     }
     if (!canRecordPriorReceipt || paymentMethod !== "cash") {
@@ -1710,12 +1913,12 @@ export function ReservationsPage() {
     onSuccess: async (result) => {
       await communicationsQuery.refetch();
       const statusMessage = result.delivery.status === "accepted"
-        ? t("page.messages.communicationAccepted")
+        ? t("page.errors.communicationAccepted")
         : result.delivery.status === "unknown"
-          ? t("page.messages.communicationUnknown")
+          ? t("page.errors.communicationUnknown")
           : result.delivery.status === "failed"
-            ? t("page.messages.communicationFailed")
-            : t("page.messages.communicationPending");
+            ? t("page.errors.communicationFailed")
+            : t("page.errors.communicationPending");
       showToast(result.deduplicated ? "info" : result.delivery.status === "accepted" ? "success" : "error", statusMessage);
     },
     onError: (err: unknown) => showToast("error", err instanceof Error ? err.message : t("page.errors.communicationFailed"))
@@ -1734,7 +1937,7 @@ export function ReservationsPage() {
     }
     const manualReference = isManualPaymentMethod ? paymentReferenceInput.trim() : undefined;
     if (isManualPaymentMethod && !manualReference) {
-      showToast("error", t("page.errors.manualPaymentReferenceRequired"));
+      showToast("error", t("drawer.errors.manualPaymentReferenceRequired"));
       return;
     }
     const due = Math.max(
@@ -1745,13 +1948,15 @@ export function ReservationsPage() {
       showToast("info", t("page.messages.depositAlreadyCovered"));
       return;
     }
+    const freshFxRate = await refreshPaymentFxRateForAction();
+    if (freshFxRate === null) return;
     const enteredAmount = paymentAmountInput.trim();
-    const suggestedTenderAmount = convertReservationToTender(due);
+    const suggestedTenderAmount = convertReservationToTender(due, freshFxRate);
     const requestedAmount = enteredAmount
       ? Number(enteredAmount)
       : suggestedTenderAmount ?? due;
     const balance = Number(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
-    const appliedPreview = convertTenderToReservation(requestedAmount);
+    const appliedPreview = convertTenderToReservation(requestedAmount, freshFxRate);
     if (!Number.isFinite(requestedAmount) || requestedAmount <= 0 || appliedPreview === null || appliedPreview <= 0) {
       showToast("error", t("page.errors.invalidPartialAmount"));
       return;
@@ -1811,7 +2016,7 @@ export function ReservationsPage() {
     }
     const manualReference = isManualPaymentMethod ? paymentReferenceInput.trim() : undefined;
     if (isManualPaymentMethod && !manualReference) {
-      showToast("error", t("page.errors.manualPaymentReferenceRequired"));
+      showToast("error", t("drawer.errors.manualPaymentReferenceRequired"));
       return;
     }
     const due = paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0;
@@ -1821,9 +2026,11 @@ export function ReservationsPage() {
     }
     const priorReceiptFields = getPriorReceiptFields();
     if (!priorReceiptFields) return;
-    const tenderAmount = convertReservationToTender(Number(due));
+    const freshFxRate = await refreshPaymentFxRateForAction();
+    if (freshFxRate === null) return;
+    const tenderAmount = convertReservationToTender(Number(due), freshFxRate);
     if (tenderAmount === null) {
-      showToast("error", paymentFxQuoteQuery.error instanceof Error ? paymentFxQuoteQuery.error.message : t("page.errors.paymentFxQuoteUnavailable"));
+      showToast("error", paymentFxQuoteQuery.error instanceof Error ? paymentFxQuoteQuery.error.message : t("drawer.errors.paymentFxQuoteUnavailable"));
       return;
     }
     try {
@@ -1859,12 +2066,14 @@ export function ReservationsPage() {
     }
     const manualReference = isManualPaymentMethod ? paymentReferenceInput.trim() : undefined;
     if (isManualPaymentMethod && !manualReference) {
-      showToast("error", t("page.errors.manualPaymentReferenceRequired"));
+      showToast("error", t("drawer.errors.manualPaymentReferenceRequired"));
       return;
     }
     const amount = Number(paymentAmountInput);
     const balance = Number(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
-    const appliedPreview = convertTenderToReservation(amount);
+    const freshFxRate = await refreshPaymentFxRateForAction();
+    if (freshFxRate === null) return;
+    const appliedPreview = convertTenderToReservation(amount, freshFxRate);
     if (!Number.isFinite(amount) || amount <= 0 || appliedPreview === null || appliedPreview > balance + 0.01) {
       showToast("error", t("page.errors.invalidPartialAmount"));
       return;
@@ -1901,20 +2110,20 @@ export function ReservationsPage() {
     }
     const refundTarget = refundablePaymentOptions.find((transaction) => transaction.id === selectedRefundTargetId);
     if (!refundTarget) {
-      showToast("error", t("page.errors.refundSourceRequired"));
+      showToast("error", t("drawer.errors.refundSourceRequired"));
       return;
     }
     const refundReason = refundReasonInput.trim();
     if (!refundReason) {
-      showToast("error", t("page.errors.refundReasonRequired"));
+      showToast("error", t("drawer.errors.refundReasonRequired"));
       return;
     }
     if (paymentTenderCurrency !== refundTarget.currency) {
-      showToast("error", t("page.errors.refundMustUseOriginalCurrency", { currency: refundTarget.currency }));
+      showToast("error", t("drawer.errors.refundMustUseOriginalCurrency", { currency: refundTarget.currency }));
       return;
     }
     if (isCompanyNightRefund && !canSubmitCompanyNightRefund) {
-      showToast("error", companyNightRefundValidationMessage ?? t("page.errors.refundNightAmountInvalid"));
+      showToast("error", companyNightRefundValidationMessage ?? t("drawer.errors.refundNightAmountInvalid"));
       return;
     }
     const amount = isCompanyNightRefund
@@ -1955,7 +2164,8 @@ export function ReservationsPage() {
 
   const handleSubmitTransferProof = async () => {
     if (!editing || !paymentSummary) return;
-    if (!paymentProofFile) {
+    const proofFile = paymentProofInputRef.current?.files?.[0];
+    if (!proofFile) {
       showToast("error", t("page.errors.proofImageRequired"));
       return;
     }
@@ -1969,11 +2179,11 @@ export function ReservationsPage() {
       await paymentProofMutations.submitMutation.mutateAsync({
         reservation_id: editing.id,
         amount: Number(amount.toFixed(2)),
-        image_base64: await readFileAsDataUrl(paymentProofFile, t("page.errors.proofReadFailed")),
-        original_filename: paymentProofFile.name
+        image_base64: await readFileAsDataUrl(proofFile, t("page.errors.proofReadFailed")),
+        original_filename: proofFile.name
       });
       setPaymentAmountInput("");
-      setPaymentProofFile(null);
+      if (paymentProofInputRef.current) paymentProofInputRef.current.value = "";
       showToast("success", t("page.messages.proofSubmitted"));
     } catch (err) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.proofSubmitFailed"));
@@ -2086,6 +2296,25 @@ export function ReservationsPage() {
     setNoShowNotes("");
     setChargeForm({ description: "", amount: "" });
   };
+  const openRefundReview = async (reservationId: number) => {
+    clearToast();
+    let reservation = reservations.find((item) => item.id === reservationId);
+    if (!reservation) {
+      try {
+        reservation = await getReservation(reservationId, session);
+      } catch {
+        showToast("error", t("page.pendingActions.refundReviewOpenError"));
+        return;
+      }
+    }
+    if (!canManageCompanyReservation(reservation)) {
+      openDetailsById(reservationId);
+      return;
+    }
+    // Open the existing reservation/payment form. The refund mutation still
+    // requires its normal permission, cash session, reason, and step-up checks.
+    openEdit(reservation);
+  };
   const closeDetails = () => {
     setDetailsReservationId(null);
     setDetailsActionError(null);
@@ -2169,7 +2398,7 @@ export function ReservationsPage() {
 
   const exportVoucher = () => {
     if (!detailsReservation) return;
-    if (detailsFinancialsLoading || detailsOperationsQuery.isLoading) {
+    if (voucherFinancialSummaryLoading) {
       showToast("info", t("page.messages.waitForFinancialSummary"));
       return;
     }
@@ -2179,7 +2408,7 @@ export function ReservationsPage() {
       summary?.operational_balance_due
     );
     if (!isDeferredCompanyReservation(detailsReservation) && operationalBalanceDue === null) {
-      showToast("error", t("page.errors.voucherFinancialSummaryUnavailable"));
+      showToast("error", t("drawer.errors.voucherFinancialSummaryUnavailable"));
       return;
     }
     const guest = detailsGuest;
@@ -2345,6 +2574,94 @@ export function ReservationsPage() {
     }
   };
 
+  const openReceiptEmailDialog = (transactionId: number, trigger: HTMLButtonElement) => {
+    if (!canOperateCash || !canEmailPaymentReceipt) return;
+    receiptEmailTriggerRef.current = trigger;
+    const recipientEmail = detailsGuest?.email?.trim() ?? "";
+    const previousAttempt = receiptEmailAttemptsRef.current.get(transactionId);
+    const previousOutcomeBlocksNewAttempt = previousAttempt &&
+      ["sending", "sent", "unknown"].includes(previousAttempt.status);
+    const attempt = previousOutcomeBlocksNewAttempt ||
+      (previousAttempt && previousAttempt.recipientEmail === recipientEmail)
+      ? previousAttempt
+      : recipientEmail
+        ? {
+            transactionId,
+            recipientEmail,
+            idempotencyKey: newPaymentReceiptEmailIdempotencyKey(transactionId),
+            status: "confirm" as const
+          }
+        : {
+            transactionId,
+            recipientEmail: "",
+            idempotencyKey: "",
+            status: "failed" as const
+          };
+    receiptEmailAttemptsRef.current.set(transactionId, attempt);
+    receiptEmailAttemptRef.current = attempt;
+    setReceiptEmailAttempt(attempt);
+  };
+
+  const closeReceiptEmailDialog = () => {
+    if (receiptEmailAttemptRef.current?.status === "sending") return;
+    receiptEmailAttemptRef.current = null;
+    setReceiptEmailAttempt(null);
+    window.requestAnimationFrame(() => receiptEmailTriggerRef.current?.focus());
+  };
+
+  const sendReceiptEmail = async () => {
+    const currentAttempt = receiptEmailAttemptRef.current;
+    if (
+      !currentAttempt ||
+      !currentAttempt.recipientEmail ||
+      !currentAttempt.idempotencyKey ||
+      !["confirm", "failed"].includes(currentAttempt.status)
+    ) {
+      return;
+    }
+    const sendingAttempt: PaymentReceiptEmailAttempt = { ...currentAttempt, status: "sending" };
+    receiptEmailAttemptsRef.current.set(currentAttempt.transactionId, sendingAttempt);
+    receiptEmailAttemptRef.current = sendingAttempt;
+    setReceiptEmailAttempt(sendingAttempt);
+    window.requestAnimationFrame(() => receiptEmailTitleRef.current?.focus());
+
+    try {
+      await emailPaymentReceipt(
+        sendingAttempt.transactionId,
+        { recipient_email: sendingAttempt.recipientEmail },
+        session,
+        sendingAttempt.idempotencyKey
+      );
+      const sentAttempt: PaymentReceiptEmailAttempt = { ...sendingAttempt, status: "sent" };
+      receiptEmailAttemptsRef.current.set(sentAttempt.transactionId, sentAttempt);
+      receiptEmailAttemptRef.current = sentAttempt;
+      setReceiptEmailAttempt(sentAttempt);
+      window.requestAnimationFrame(() => receiptEmailCloseRef.current?.focus());
+    } catch (error: unknown) {
+      const detail = error instanceof ApiError &&
+        error.payload && typeof error.payload === "object" && "detail" in error.payload &&
+        typeof error.payload.detail === "string"
+        ? error.payload.detail.toLocaleLowerCase()
+        : "";
+      const definiteEmailPreflightFailure = error instanceof ApiError &&
+        error.status === 503 && detail.includes("correo del hotel no está disponible");
+      const priorUnknownOutcome = error instanceof ApiError && error.status === 409 &&
+        /(resultado.*no está confirmado|envío previo sin resultado|envío anterior no está confirmado)/i.test(detail);
+      const unknownOutcome = priorUnknownOutcome ||
+        (error instanceof ApiError
+          ? error.status === 408 || (error.status >= 500 && !definiteEmailPreflightFailure)
+          : true);
+      const failedAttempt: PaymentReceiptEmailAttempt = {
+        ...sendingAttempt,
+        status: unknownOutcome ? "unknown" : "failed"
+      };
+      receiptEmailAttemptsRef.current.set(failedAttempt.transactionId, failedAttempt);
+      receiptEmailAttemptRef.current = failedAttempt;
+      setReceiptEmailAttempt(failedAttempt);
+      if (unknownOutcome) window.requestAnimationFrame(() => receiptEmailCloseRef.current?.focus());
+    }
+  };
+
   const guestHistory = useMemo(
     () => (guestIdOpen ? reservations.filter((r) => r.guest_id === guestIdOpen) : []),
     [guestIdOpen, reservations]
@@ -2446,10 +2763,10 @@ export function ReservationsPage() {
       </header>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <ReservationStatCard label={t("page.stats.activeLabel")} value={totals.active} helper={t("page.stats.activeHelper")} />
-        <ReservationStatCard label={t("page.stats.checkInsTodayLabel")} value={totals.checkInsToday} helper={today} />
-        <ReservationStatCard label={t("page.stats.checkOutsTodayLabel")} value={totals.checkOutsToday} helper={today} />
-        <ReservationStatCard label={t("page.stats.cancelledLabel")} value={totals.cancelled} helper={t("page.stats.cancelledHelper")} />
+        <ReservationStatCard label={t("page.stats.activeLabel")} value={reservationStatsValue(totals.active)} helper={reservationStatsHelper(t("page.stats.activeHelper"))} helperRole={reservationStatsHelperRole} testId="reservation-stat-active" />
+        <ReservationStatCard label={t("page.stats.checkInsTodayLabel")} value={reservationStatsValue(totals.checkInsToday)} helper={reservationStatsHelper(today)} helperRole={reservationStatsHelperRole} testId="reservation-stat-checkins" />
+        <ReservationStatCard label={t("page.stats.checkOutsTodayLabel")} value={reservationStatsValue(totals.checkOutsToday)} helper={reservationStatsHelper(today)} helperRole={reservationStatsHelperRole} testId="reservation-stat-checkouts" />
+        <ReservationStatCard label={t("page.stats.cancelledLabel")} value={reservationStatsValue(totals.cancelled)} helper={reservationStatsHelper(t("page.stats.cancelledHelper"))} helperRole={reservationStatsHelperRole} testId="reservation-stat-cancelled" />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -2499,6 +2816,7 @@ export function ReservationsPage() {
               const isResolveExternal =
                 action.code === "resolve_external_channel" || action.code === "resolve_adjustment_external_action";
               const isManualReview = action.code === "manual_review_required";
+              const isDepositRefundReview = action.code === "refund_deposit";
 
               return (
                 <div key={`${action.reservation_id}:${action.action_key}`} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -2541,6 +2859,16 @@ export function ReservationsPage() {
                       >
                         {t("page.pendingActions.viewButton")}
                       </button>
+                      {isDepositRefundReview && canRefundPayment ? (
+                        <button
+                          type="button"
+                          data-testid={`pending-action-review-refund-${action.reservation_id}`}
+                          onClick={() => void openRefundReview(action.reservation_id)}
+                          className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 hover:border-amber-300"
+                        >
+                          {t("page.pendingActions.reviewRefund")}
+                        </button>
+                      ) : null}
                       {isManualReview ? (
                         <button
                           type="button"
@@ -3577,7 +3905,7 @@ export function ReservationsPage() {
 
                   {canSetManualRate && Number(formValues.group_size) > 1 && (
                     <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                      {t("page.form.groupManualRateUnsupported")}
+                      {t("page.errors.groupManualRateUnsupported")}
                     </p>
                   )}
 
@@ -3622,7 +3950,10 @@ export function ReservationsPage() {
                             max={isBoundedManualRate ? boundedManualRateRange?.maximum : undefined}
                             step="0.01"
                             value={manualTotalAmountInput}
-                            onChange={(e) => setManualTotalAmountInput(e.target.value)}
+                            onChange={(e) => {
+                              setManualTotalAmountInput(e.target.value);
+                              setConfirmLargeTotalAdjustment(false);
+                            }}
                             placeholder={t("page.form.manualAmountPlaceholder")}
                             disabled={isBoundedManualRate && !boundedManualRateReady}
                             className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
@@ -3642,7 +3973,10 @@ export function ReservationsPage() {
                             {t("page.form.currency")}
                             <select
                               value={manualTargetCurrency}
-                              onChange={(e) => setManualTargetCurrency(e.target.value as "ARS" | "USD")}
+                              onChange={(e) => {
+                                setManualTargetCurrency(e.target.value as "ARS" | "USD");
+                                setConfirmLargeTotalAdjustment(false);
+                              }}
                               disabled={manualTotalAmountInput.trim() === ""}
                               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm disabled:bg-slate-50"
                             >
@@ -3823,6 +4157,28 @@ export function ReservationsPage() {
                       )}
                     </>
                   )}
+                  {largeManualRateAdjustmentDraft || restrictedGuestManualRateAdjustmentDraft ? (
+                    <div className="mt-3 rounded-lg border border-amber-300 bg-white p-3" role="alert" data-testid="manual-rate-adjustment-warning">
+                      <p className="text-sm text-amber-950">
+                        {restrictedGuestManualRateAdjustmentDraft
+                          ? t("page.form.restrictedGuestManualRateAdjustmentWarning")
+                          : t("page.form.largeManualRateAdjustmentWarning", {
+                              current: formatMoney(reservationQuote?.total ?? 0, manualRateCurrencyCode),
+                              proposed: formatMoney(proposedManualRateTotalDraft ?? 0, manualRateCurrencyCode)
+                            })}
+                      </p>
+                      <label className="mt-2 flex items-start gap-2 text-sm text-slate-800">
+                        <input
+                          type="checkbox"
+                          data-testid="manual-rate-adjustment-confirm"
+                          checked={confirmLargeTotalAdjustment}
+                          onChange={(event) => setConfirmLargeTotalAdjustment(event.target.checked)}
+                          className="mt-0.5"
+                        />
+                        <span>{t("page.form.largeTotalAdjustmentConfirm")}</span>
+                      </label>
+                    </div>
+                  ) : null}
                 </div>
               )}
 
@@ -3995,32 +4351,37 @@ export function ReservationsPage() {
                     <p className="mt-2 text-sm text-slate-600">{t("page.form.loadingSummary")}</p>
                   )}
 
-                  {canAdjustPaidReservationTotal && (
-                    Number(editing.amount_paid || 0) > 0 ||
-                    Number(editing.external_paid_amount || 0) > 0 ||
-                    editing.status === "deposit_paid" ||
-                    editing.status === "fully_paid"
-                  ) ? (
-                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  {canAdjustReservationTotal ? (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="reservation-total-adjustment">
                       <p className="text-sm font-semibold text-amber-950">{t("page.form.paidTotalAdjustmentTitle")}</p>
-                      <p className="mt-1 text-xs text-amber-900">{t("page.form.paidTotalAdjustmentHint")}</p>
+                      <p className="mt-1 text-xs text-amber-900">
+                        {hasAnyPaymentEvidence
+                          ? t("page.form.paidTotalAdjustmentHint")
+                          : canSetBoundedReservationRate && !canSetUnboundedReservationRate
+                            ? t("page.form.boundedUnpaidTotalAdjustmentHint")
+                            : t("page.form.unpaidTotalAdjustmentHint")}
+                      </p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         <label className="text-xs font-semibold text-slate-700">
                           {t("page.form.paidTotalAdjustmentAmount")}
                           <input
+                            data-testid="reservation-total-adjustment-amount"
                             type="number"
                             min="0"
                             step="0.01"
                             value={paidTotalAmountInput}
-                            onChange={(event) => setPaidTotalAmountInput(event.target.value)}
+                            onChange={(event) => {
+                              setPaidTotalAmountInput(event.target.value);
+                              setConfirmLargeTotalAdjustment(false);
+                            }}
                             className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-slate-800"
                           />
                         </label>
                         <label className="text-xs font-semibold text-slate-700">
                           {t("page.form.paidTotalAdjustmentReason")}
                           <textarea
+                            data-testid="reservation-total-adjustment-reason"
                             maxLength={500}
-                            required
                             value={paidTotalChangeReasonInput}
                             onChange={(event) => setPaidTotalChangeReasonInput(event.target.value)}
                             placeholder={t("page.form.paidTotalAdjustmentReasonPlaceholder")}
@@ -4029,7 +4390,36 @@ export function ReservationsPage() {
                           />
                         </label>
                       </div>
+                      {largeTotalAdjustmentDraft ? (
+                        <div className="mt-3 rounded-lg border border-amber-300 bg-white p-3" role="alert" data-testid="reservation-total-adjustment-warning">
+                          <p className="text-sm text-amber-950">
+                            {t("page.form.largeTotalAdjustmentWarning", {
+                              current: formatMoney(Number(editing.total_amount || 0), editingCurrencyCode),
+                              proposed: formatMoney(proposedTotalDraft ?? 0, editingCurrencyCode)
+                            })}
+                          </p>
+                          <label className="mt-2 flex items-start gap-2 text-sm text-slate-800">
+                            <input
+                              type="checkbox"
+                              data-testid="reservation-total-adjustment-confirm"
+                              checked={confirmLargeTotalAdjustment}
+                              onChange={(event) => setConfirmLargeTotalAdjustment(event.target.checked)}
+                              className="mt-0.5"
+                            />
+                            <span>{t("page.form.largeTotalAdjustmentConfirm")}</span>
+                          </label>
+                        </div>
+                      ) : null}
                     </div>
+                  ) : null}
+                  {confirmedReservationPriceLocked ? (
+                    <p
+                      className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+                      role="alert"
+                      data-testid="confirmed-reservation-price-review-required"
+                    >
+                      {t("page.form.confirmedPriceReviewRequired")}
+                    </p>
                   ) : null}
 
                   <div className="mt-3 grid gap-2 sm:grid-cols-6 sm:items-end">
@@ -4328,7 +4718,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handlePayFull}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || !canRegisterSelectedPayment}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isFetching || !canRegisterSelectedPayment}
                       className="rounded-lg border border-emerald-200 bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {t("page.form.fullPayment")}
@@ -4382,7 +4772,7 @@ export function ReservationsPage() {
                           aria-label={t("page.form.transferProofImage")}
                           type="file"
                           accept="image/jpeg,image/png,image/webp"
-                          onChange={(event) => setPaymentProofFile(event.target.files?.[0] ?? null)}
+                          ref={paymentProofInputRef}
                           className="mt-1 block w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-normal"
                         />
                       </label>
@@ -4695,7 +5085,9 @@ export function ReservationsPage() {
                 <button
                   type="button"
                   onClick={exportVoucher}
-                  className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100"
+                  disabled={voucherFinancialSummaryLoading}
+                  aria-busy={voucherFinancialSummaryLoading}
+                  className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {t("page.details.exportVoucher")}
                 </button>
@@ -5355,15 +5747,28 @@ export function ReservationsPage() {
                             {formatHotelDateTime(tx.created_at, hotelConfigQuery.data?.hotel_timezone, i18n.language === "en" ? "en-US" : "es-AR")}
                           </span>
                           {canPrintPaymentReceipt(tx.status, canOperateCash) ? (
-                            <button
-                              type="button"
-                              data-testid={"payment-receipt-download-" + tx.id}
-                              aria-label={t("page.details.receipt.downloadAria", { id: tx.id })}
-                              onClick={() => void printPaymentReceipt(tx)}
-                              className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-                            >
-                              {t("page.details.receipt.download")}
-                            </button>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                data-testid={"payment-receipt-download-" + tx.id}
+                                aria-label={t("page.details.receipt.downloadAria", { id: tx.id })}
+                                onClick={() => void printPaymentReceipt(tx)}
+                                className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                              >
+                                {t("page.details.receipt.download")}
+                              </button>
+                              {canEmailPaymentReceipt ? (
+                                <button
+                                  type="button"
+                                  data-testid={`payment-receipt-email-${tx.id}`}
+                                  aria-label={t("page.details.receipt.sendEmailAria", { id: tx.id })}
+                                  onClick={(event) => openReceiptEmailDialog(tx.id, event.currentTarget)}
+                                  className="rounded-md border border-brand-200 px-2 py-1 text-xs font-semibold text-brand-800 hover:border-brand-300 hover:bg-brand-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                                >
+                                  {t("page.details.receipt.sendEmail")}
+                                </button>
+                              ) : null}
+                            </div>
                           ) : null}
                         </div>
                       </li>
@@ -5559,7 +5964,7 @@ export function ReservationsPage() {
                 className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-50"
                 data-testid="group-payment-submit"
               >
-                {groupPaymentMutation.isPending ? t("page.common.saving") : t("page.groups.paymentSubmit")}
+                {groupPaymentMutation.isPending ? t("common:saving") : t("page.groups.paymentSubmit")}
               </button>
             </div>
           </section>
@@ -5614,6 +6019,98 @@ export function ReservationsPage() {
                   <p className="mt-2 text-xs text-slate-600">{t("page.guestPanel.noHistory")}</p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {receiptEmailAttempt && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-slate-950/50 px-4 py-6">
+          <div
+            ref={receiptEmailDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="payment-receipt-email-title"
+            aria-describedby="payment-receipt-email-description"
+            data-testid="payment-receipt-email-dialog"
+            className="my-auto w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6"
+          >
+            <h2
+              ref={receiptEmailTitleRef}
+              id="payment-receipt-email-title"
+              tabIndex={-1}
+              className="text-lg font-semibold text-slate-900"
+            >
+              {t("page.details.receipt.emailDialogTitle")}
+            </h2>
+            <p id="payment-receipt-email-description" className="mt-2 text-sm text-slate-600">
+              {t("page.details.receipt.emailDialogDescription", { id: receiptEmailAttempt.transactionId })}
+            </p>
+
+            <div className="mt-4">
+              <label htmlFor="payment-receipt-email-recipient" className="text-sm font-semibold text-slate-700">
+                {t("page.details.receipt.recipientLabel")}
+              </label>
+              <input
+                id="payment-receipt-email-recipient"
+                type="email"
+                readOnly
+                aria-readonly="true"
+                value={receiptEmailAttempt.recipientEmail}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+              />
+            </div>
+
+            {!receiptEmailAttempt.recipientEmail ? (
+              <p className="mt-3 text-sm text-amber-800" role="alert">
+                {t("page.details.receipt.missingEmail")}
+              </p>
+            ) : null}
+            {receiptEmailAttempt.status === "sending" ? (
+              <p className="mt-3 text-sm text-sky-800" role="status" aria-live="polite">
+                {t("page.details.receipt.sending")}
+              </p>
+            ) : null}
+            {receiptEmailAttempt.status === "sent" ? (
+              <p className="mt-3 text-sm text-emerald-800" role="status" aria-live="polite">
+                {t("page.details.receipt.sent")}
+              </p>
+            ) : null}
+            {receiptEmailAttempt.status === "failed" && receiptEmailAttempt.recipientEmail ? (
+              <p className="mt-3 text-sm text-rose-800" role="alert">
+                {t("page.details.receipt.sendFailed")}
+              </p>
+            ) : null}
+            {receiptEmailAttempt.status === "unknown" ? (
+              <p className="mt-3 text-sm text-amber-900" role="alert" aria-live="assertive">
+                {t("page.details.receipt.ambiguous")}
+              </p>
+            ) : null}
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                ref={receiptEmailCloseRef}
+                onClick={closeReceiptEmailDialog}
+                disabled={receiptEmailAttempt.status === "sending"}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {receiptEmailAttempt.status === "sent" || receiptEmailAttempt.status === "unknown"
+                  ? t("page.details.receipt.close")
+                  : t("page.details.receipt.cancel")}
+              </button>
+              {(receiptEmailAttempt.status === "confirm" || receiptEmailAttempt.status === "failed") ? (
+                <button
+                  type="button"
+                  data-testid="payment-receipt-email-confirm"
+                  onClick={() => void sendReceiptEmail()}
+                  disabled={!receiptEmailAttempt.recipientEmail}
+                  className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {receiptEmailAttempt.status === "failed"
+                    ? t("page.details.receipt.retrySend")
+                    : t("page.details.receipt.confirmSend")}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

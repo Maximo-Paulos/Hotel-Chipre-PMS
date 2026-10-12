@@ -139,7 +139,7 @@ def test_cash_movement_requires_open_session(db):
         counted_balance=Decimal("0.00"),
     )
 
-    with pytest.raises(CashRegisterError):
+    with pytest.raises(CashRegisterError, match="La caja no está abierta"):
         add_movement(
             db,
             hotel_id=1,
@@ -147,6 +147,22 @@ def test_cash_movement_requires_open_session(db):
             recorded_by_user_id=10,
             movement_type=CashMovementTypeEnum.INCOME,
             amount=Decimal("10.00"),
+        )
+
+
+def test_cash_movement_rejects_non_positive_amount_with_spanish_message(db):
+    _hotel(db, 1)
+    _user(db, 10)
+    session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("0.00"))
+
+    with pytest.raises(CashRegisterError, match="El importe del movimiento de caja debe ser mayor que cero"):
+        add_movement(
+            db,
+            hotel_id=1,
+            session_id=session.id,
+            recorded_by_user_id=10,
+            movement_type=CashMovementTypeEnum.INCOME,
+            amount=Decimal("0.00"),
         )
 
 
@@ -412,7 +428,7 @@ def test_cash_payment_without_open_session_is_rejected(db):
     _user(db, 10)
     reservation = _reservation(db, 1, "CASH-PAY-2")
 
-    with pytest.raises(PaymentError, match="open cash session"):
+    with pytest.raises(PaymentError, match="primero debe abrirse una caja"):
         process_payment(
             db,
             PaymentRequest(
@@ -582,7 +598,7 @@ def test_close_counts_full_cash_then_records_successor_float_as_a_separate_actio
         action="cash.successor_float.declared",
         resource_id=str(report.id),
     ).count() == 1
-    with pytest.raises(CashRegisterError, match="different successor float"):
+    with pytest.raises(CashRegisterError, match="otro fondo inicial"):
         confirm_cash_custody(
             db,
             hotel_id=1,
@@ -614,7 +630,7 @@ def test_cash_custody_cannot_rewrite_float_after_successor_is_closed(db):
     )
     successor_close_report = db.query(CashCloseReport).filter_by(session_id=successor.id).one()
 
-    with pytest.raises(CashRegisterError, match="[Ss]uccessor cash session is not open"):
+    with pytest.raises(CashRegisterError, match="caja del turno siguiente no está abierta"):
         confirm_cash_custody(
             db,
             hotel_id=1,
@@ -802,7 +818,7 @@ def test_twenty_seven_prior_receipts_do_not_inflate_the_open_cash_session(db):
             )
             assert retry.id == transaction.id
             mismatched_retry = request.model_copy(update={"prior_receipt_note": "Motivo distinto"})
-            with pytest.raises(PaymentError, match="different payment request"):
+            with pytest.raises(PaymentError, match="solicitud de pago diferente"):
                 process_payment(
                     db,
                     mismatched_retry,

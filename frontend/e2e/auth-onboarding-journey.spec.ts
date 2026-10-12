@@ -88,7 +88,7 @@ test("owner can register, verify, recover access and complete onboarding through
   await saveAndExpectPath(page, "/onboarding/finish");
   const savedStaff = await (await staffSaveResponse).json();
   expect(savedStaff.staff_invitations).toHaveLength(1);
-  await expect(page.getByRole("status")).toContainText("Personal guardado. Invitaciones:");
+  await expect(page.getByRole("status").filter({ hasText: "Personal guardado. Invitaciones:" })).toBeVisible();
 
   // Reproduce a late onboarding refetch after the user has already navigated
   // away from the wizard; it must not redirect the user back to the dashboard.

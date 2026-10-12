@@ -1,10 +1,17 @@
-# Activar infraestructura opcional
+# Perfil SQL-only de Render con presupuesto máximo de USD 25
 
-Esta guía responde, en cada sección, qué se cambia y qué efecto tiene. El
-servicio web free que está activo hoy fue creado manualmente fuera del
-Blueprint; no se modificó ningún recurso cloud durante esta tarea.
+El perfil local de `render.yaml` propone un workspace Hobby con una API Starter
+(0,5 CPU/512 MB) y un Cron Starter que ejecuta el barrido SQL de no-show cada
+cinco minutos. El costo fijo estimado es USD 8/mes antes del egress. No declara
+Redis/Key Value, worker, Beat ni ClickHouse. Render sigue suspendido y no se
+aplicó el Blueprint ni se cambió la facturación.
 
-## Interpretar `/health/ready` cuando Redis está caído
+Render incluye 5 GB de egress compartidos en Hobby y cobra USD 0,15/GB de
+exceso. No hay un tope general que garantice que la factura total quede debajo
+de USD 25; el consumo debe monitorizarse. [Precios de Render](https://render.com/pricing)
+· [Ancho de banda saliente](https://render.com/docs/outbound-bandwidth)
+
+## Interpretar `/health/ready` en perfil SQL-only
 
 `ready=true` y HTTP 200 significan que PostgreSQL responde y las escrituras
 críticas conservan un mecanismo de lock seguro. Si Redis no responde, el lock
@@ -22,6 +29,14 @@ el backend puede leer el outbox confirmado de PostgreSQL mediante el fallback
 acotado de `REALTIME_EVENTS_FALLBACK_POLL_SECONDS`. Redis/Valkey sigue siendo
 recomendado para fan-out de baja latencia entre workers, locks, Celery y la
 coedición WebSocket.
+
+El polling PostgreSQL usa 5 segundos por defecto y no puede superar ese valor.
+Esto reduce un 60% la frecuencia de sondeo frente a 2 segundos (de 30 a 12
+lecturas por minuto por stream inactivo), dejando cinco segundos del presupuesto
+de frescura para la consulta y actualización del cliente. Los clientes sin SSE
+conservan su recuperación HTTP cada 5 segundos mientras el servidor responde;
+ante errores, ese fallback aplica backoff hasta 30 segundos para no intensificar
+una degradación.
 
 En el proceso que atiende el API, cambie `READ_MODEL_CACHE_ENABLED` de `false` a
 `true` y configure `REDIS_URL` con la URL del Redis/Valkey contratado. En el
@@ -62,13 +77,11 @@ los proveedores que correspondan. Entonces empiezan a publicarse:
 - procesamiento del outbox de notificaciones cada minuto;
 - generación de reportes diarios cada quince minutos.
 
-En el perfil con worker/beat, `SYNC_FACT_REFRESH_ENABLED` debe ser `false` en
-el worker, beat y también en el servicio web que recibe las peticiones: el
-fallback se ejecuta en el API, no dentro de Celery. El servicio free manual
-actual debe conservarlo omitido o en `true`, porque allí el fallback síncrono
-es la única materialización disponible. `SYNC_FACT_REFRESH_MAX_DAYS` limita el
-fallback a 31 días por defecto y el log
-`analytics.sync_fact_refresh.inline` muestra cuándo todavía se está usando.
+Las lecturas de Analytics nunca reconstruyen facts ni tienen un flag para
+habilitar esa reconstrucción. Las mutaciones normales mantienen sus facts en
+la misma transacción. Los backfills históricos/out-of-band se ejecutan como
+operación explícita, con vista previa y alcance revisado mediante
+`scripts/repair_analytics_facts.py`.
 
 ## ¿Qué cambio para activar MongoDB, Cassandra o Neo4j?
 
@@ -93,18 +106,19 @@ la recomendación de seguir en PostgreSQL hasta medir límites está en
 [`docs/decisions/tech-0080-warehouse-options.md`](../decisions/tech-0080-warehouse-options.md).
 Las tablas `fact_reservation_daily` y `fact_room_occupancy_daily` ya son el
 datamart actual: se derivan de PostgreSQL y conservan el alcance por hotel.
-ClickHouse tiene una frontera opcional en el código, pero no hay evidencia aquí
-de un proveedor conectado ni de una proyección live confiable.
+ClickHouse tiene una frontera opcional en el código, pero queda apagado en el
+perfil hasta USD 25. No hay evidencia aquí de un proveedor conectado ni de una
+proyección live confiable.
 
-## ¿Qué cambio para aplicar `render.yaml` como Blueprint?
+## ¿Qué cambia al aplicar `render.yaml` como Blueprint?
 
-En Render, seleccione el repositorio y aplique `render.yaml` como Blueprint.
-Eso declara el web, Redis/Key Value, worker y beat, además de sus variables y
-comandos. No se realizó esa aplicación aquí. La advertencia operativa es que
-el servicio live actual fue creado manualmente fuera del Blueprint: aplicar el
-archivo no demuestra que ese servicio existente quede adoptado, migrado o
-reemplazado automáticamente. Hay que comparar nombres, base, variables
-secretas y dominio antes de cualquier cambio humano.
+El archivo declara una API Starter y un Cron Starter SQL. No se realizó esa
+aplicación aquí. El servicio existente fue creado fuera del Blueprint y Render
+está suspendido; aplicar el YAML puede crear/adoptar recursos con nombres y
+configuración distintos, ejecutar migraciones o iniciar una API contra la base
+configurada. Antes de cualquier cambio humano hay que comparar servicios,
+región, Supabase URL, variables secretas, dominio, egress acumulado y el modo de
+listener. El YAML local no es autorización para reactivar ni desplegar.
 
 ## ¿Qué cambio para migrar de Render a otra plataforma con Docker Compose?
 
@@ -114,9 +128,10 @@ API, worker y beat reciben los nombres internos `db` y `redis` para sus URLs.
 Luego ejecute las migraciones con
 `docker compose run --rm backend alembic upgrade head`.
 
-La sintaxis de `docker-compose.yml` se valida en esta tarea, pero Docker no está
-instalado en esta máquina: el arranque real, la conectividad entre contenedores,
-las migraciones y el ciclo Celery/Redis siguen sin verificación runtime.
+El perfil Render SQL-only no depende de Docker; la sintaxis de
+`docker-compose.yml` mantiene la infraestructura general de desarrollo. El
+arranque real, la conectividad entre contenedores, las migraciones y el ciclo
+Celery/Redis siguen sin verificación runtime para ese Compose.
 
 ## Limitación conocida: `alembic downgrade base`
 

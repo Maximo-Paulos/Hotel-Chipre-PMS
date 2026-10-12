@@ -1,41 +1,34 @@
 previews:
-  # Deliberately manual until the provider has proven isolated Supabase Branch
-  # credentials and QA-only secrets for every generated environment.
+  # Manual until every preview has isolated Supabase credentials and QA data.
   generation: manual
   expireAfterDays: 7
 
 services:
+  # Budget profile: one small, always-on API. PostgreSQL stays authoritative;
+  # Redis, Celery, ClickHouse and extra API replicas are deliberately absent.
   - type: web
     name: hotel-chipre-pms-api
     runtime: python
+    plan: starter
+    numInstances: 1
     buildCommand: pip install -r requirements.txt
     preDeployCommand: python -m alembic upgrade head
     startCommand: exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-graceful-shutdown 30
     healthCheckPath: /health
-    # Production capacity profile. Render autoscaling requires a Pro
-    # workspace; preview environments deliberately run minInstances only.
-    plan: standard
-    # PostgreSQL budget: 3 API instances x 12 connections = 36; the Celery
-    # prefork worker has 4 child processes x 2 = 8, and beat has 2, for 46 total.
-    # This reserves 14 connections from the documented 60 limit for migrations/admin.
-    # Verify the live database limit before changing this budget or scaling services.
-    # If the Postgres plan changes, recalculate max_connections / (pool_size + max_overflow) and update this limit.
-    scaling:
-      minInstances: 3
-      maxInstances: 3
-      targetCPUPercent: 60
-      targetMemoryPercent: 70
-    previews:
-      numInstances: 3
     envVars:
       - key: APP_ENV
         value: production
+      # One API instance: keep the database pool conservative. The API can
+      # open at most six pooled connections; do not raise without checking the
+      # Supabase connection budget and measuring pool wait under load.
       - key: DB_POOL_SIZE
-        value: "8"
-      - key: DB_MAX_OVERFLOW
         value: "4"
+      - key: DB_MAX_OVERFLOW
+        value: "2"
       - key: DB_POOL_TIMEOUT_SECONDS
-        value: "15"
+        value: "5"
+      - key: DB_CONNECT_TIMEOUT_SECONDS
+        value: "5"
       - key: EXTERNAL_EFFECTS_ENABLED
         value: "false"
       - key: INBOUND_PROVIDER_EVENTS_ENABLED
@@ -44,6 +37,40 @@ services:
         value: "false"
       - key: DOLARAPI_RATES_ENABLED
         value: "true"
+      - key: REALTIME_EVENTS_ENABLED
+        value: "true"
+      - key: REALTIME_EVENTS_TRANSPORT
+        value: postgresql
+      - key: REALTIME_EVENTS_HEARTBEAT_SECONDS
+        value: "30"
+      - key: REALTIME_EVENTS_FALLBACK_POLL_SECONDS
+        value: "60"
+      - key: POSTGRES_EVENT_LISTENER_ENABLED
+        value: "true"
+      - key: POSTGRES_EVENT_LISTENER_DATABASE_URL
+        sync: false # Supabase direct/session URL; transaction pooler cannot retain LISTEN.
+      - key: DISTRIBUTED_LOCK_ENABLED
+        value: "true"
+      - key: DISTRIBUTED_LOCK_REQUIRED
+        value: "true"
+      - key: DISTRIBUTED_LOCK_BACKEND
+        value: postgresql
+      # WebSocket draft fan-out and one-use tickets stay process-local. This
+      # requires exactly one API instance and one Uvicorn worker.
+      - key: COLLABORATION_BACKEND
+        value: process
+      - key: READ_MODEL_CACHE_ENABLED
+        value: "false"
+      - key: ANALYTICS_FACTS_SYNC_ON_WRITE
+        value: "false"
+      - key: ANALYTICS_WAREHOUSE_PERIODIC_REPLAY_ENABLED
+        value: "false"
+      - key: CLICKHOUSE_ENABLED
+        value: "false"
+      - key: CLICKHOUSE_REQUIRED
+        value: "false"
+      - key: REDIS_URL
+        value: ""
       - key: GOOGLE_LOGIN_ENABLED
         value: "false"
       - key: APPLE_LOGIN_ENABLED
@@ -59,39 +86,39 @@ services:
       - key: APPLE_REDIRECT_URI
         sync: false
       - key: DATABASE_URL
-        sync: false   # set manually in Render dashboard (Supabase connection string)
+        sync: false # Supabase PostgreSQL URL used by request transactions.
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        sync: false   # set to https://hotels-pms.com,https://app.hotels-pms.com
+        value: https://hotels-pms.com,https://app.hotels-pms.com
       - key: FRONTEND_URL
-        sync: false   # set to https://app.hotels-pms.com (used in invitation emails)
+        sync: false
       - key: APP_BASE_URL
-        sync: false   # set to your Render service URL, e.g. https://hotel-chipre-pms-api.onrender.com
+        sync: false
       - key: MANAGER_PIN
-        sync: false   # at least 6 digits, not 1234
+        sync: false
       - key: INTEGRATIONS_ENCRYPTION_KEY
-        sync: false   # generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+        sync: false
       - key: MERCADOPAGO_CLIENT_ID
-        sync: false   # platform OAuth app id; required for hotels to connect their own MP account
+        sync: false
       - key: MERCADOPAGO_CLIENT_SECRET
-        sync: false   # platform OAuth app secret
+        sync: false
       - key: MERCADOPAGO_WEBHOOK_SECRET
-        sync: false   # required (fail-closed) once any hotel has Mercado Pago connected
+        sync: false
       - key: PAYPAL_CLIENT_ID
-        sync: false   # platform OAuth app id; required for hotels to connect their own PayPal account
+        sync: false
       - key: PAYPAL_CLIENT_SECRET
-        sync: false   # platform OAuth app secret
+        sync: false
       - key: PAYPAL_WEBHOOK_ID
         sync: false
       - key: EMAIL_PROVIDER
         value: "null"
       - key: RESEND_API_KEY
-        sync: false   # set in Render dashboard; required when EMAIL_PROVIDER=resend
+        sync: false
       - key: SYSTEM_EMAIL_FROM
-        sync: false   # set in Render dashboard; required when EMAIL_PROVIDER=resend
+        sync: false
       - key: SYSTEM_EMAIL_REPLY_TO
-        sync: false   # set in Render dashboard; required when EMAIL_PROVIDER=resend
+        sync: false
       - key: GEMMA_ENABLED
         value: "false"
       - key: GEMMA_PROVIDER
@@ -104,71 +131,31 @@ services:
         value: sandbox
       - key: ANALYTICS_EXPORTS_DIR
         value: /var/exports/analytics
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: hotel-chipre-pms-redis
-          property: connectionString
-      - key: CELERY_BROKER_URL
-        fromService:
-          type: keyvalue
-          name: hotel-chipre-pms-redis
-          property: connectionString
-      - key: CELERY_RESULT_BACKEND
-        fromService:
-          type: keyvalue
-          name: hotel-chipre-pms-redis
-          property: connectionString
-      # The current live web service is on Render Free and has no Redis.
-      # Flip this to true when the paid Redis service is actually available.
-      - key: READ_MODEL_CACHE_ENABLED
-        value: "false"
-      # Missing or aged fact windows can be repaired synchronously on reads,
-      # but only when the complete requested range is at most 31 days.
-      - key: SYNC_FACT_REFRESH_ENABLED
-        value: "true"
-      - key: DISTRIBUTED_LOCK_ENABLED
-        value: "true"
-      - key: DISTRIBUTED_LOCK_REQUIRED
-        value: "true"
-      - key: CLICKHOUSE_ENABLED
-        value: "true"
-      - key: CLICKHOUSE_REQUIRED
-        value: "true"
-      - key: CLICKHOUSE_URL
-        sync: false
-      - key: CLICKHOUSE_DATABASE
-        value: hotel_analytics
-      - key: CLICKHOUSE_USER
-        sync: false
-      - key: CLICKHOUSE_PASSWORD
-        sync: false
     autoDeploy: true
 
-  - type: keyvalue
-    name: hotel-chipre-pms-redis
-    # Keep this private to Render services. Persistence is required for queue
-    # recovery; PostgreSQL remains the transactional source of truth.
-    ipAllowList: []
-    plan: standard
-    maxmemoryPolicy: noeviction
-    persistenceMode: journal-snapshot
-
-  - type: worker
-    name: hotel-chipre-pms-worker
+  # One SQL-only scheduler per five-minute interval. It enumerates hotels once,
+  # then processes no-shows, due reports, and bounded notification outboxes
+  # under each hotel's RLS context. No worker, Redis, or NoSQL service required.
+  - type: cron
+    name: hotel-chipre-pms-scheduled-hotel-jobs
     runtime: python
+    plan: starter
+    schedule: "*/5 * * * *"
     buildCommand: pip install -r requirements.txt
-    startCommand: celery -A app.tasks.celery_app worker --loglevel=INFO --concurrency=4
-    plan: standard
+    startCommand: python -m app.tasks.run_scheduled_hotel_jobs
     envVars:
       - key: APP_ENV
         value: production
       - key: DB_POOL_SIZE
-        value: "2"
+        value: "1"
       - key: DB_MAX_OVERFLOW
         value: "0"
       - key: DB_POOL_TIMEOUT_SECONDS
-        value: "15"
+        value: "5"
+      - key: DB_CONNECT_TIMEOUT_SECONDS
+        value: "5"
+      - key: DATABASE_URL
+        sync: false
       - key: EXTERNAL_EFFECTS_ENABLED
         value: "false"
       - key: INBOUND_PROVIDER_EVENTS_ENABLED
@@ -191,109 +178,3 @@ services:
         value: disabled
       - key: PAYPAL_MODE
         value: sandbox
-      - key: SYNC_FACT_REFRESH_ENABLED
-        value: "false"
-      - key: DATABASE_URL
-        sync: false
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: hotel-chipre-pms-redis
-          property: connectionString
-      - key: CELERY_BROKER_URL
-        fromService:
-          type: keyvalue
-          name: hotel-chipre-pms-redis
-          property: connectionString
-      - key: CELERY_RESULT_BACKEND
-        fromService:
-          type: keyvalue
-          name: hotel-chipre-pms-redis
-          property: connectionString
-      - key: JWT_SECRET
-        sync: false
-      - key: DISTRIBUTED_LOCK_ENABLED
-        value: "true"
-      - key: DISTRIBUTED_LOCK_REQUIRED
-        value: "true"
-      - key: CLICKHOUSE_ENABLED
-        value: "true"
-      - key: CLICKHOUSE_REQUIRED
-        value: "true"
-      - key: CLICKHOUSE_URL
-        sync: false
-      - key: CLICKHOUSE_DATABASE
-        value: hotel_analytics
-      - key: CLICKHOUSE_USER
-        sync: false
-      - key: CLICKHOUSE_PASSWORD
-        sync: false
-
-  - type: worker
-    name: hotel-chipre-pms-beat
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: celery -A app.tasks.celery_app beat --loglevel=INFO
-    plan: standard
-    envVars:
-      - key: APP_ENV
-        value: production
-      - key: DB_POOL_SIZE
-        value: "2"
-      - key: DB_MAX_OVERFLOW
-        value: "0"
-      - key: DB_POOL_TIMEOUT_SECONDS
-        value: "15"
-      - key: EXTERNAL_EFFECTS_ENABLED
-        value: "false"
-      - key: INBOUND_PROVIDER_EVENTS_ENABLED
-        value: "false"
-      - key: CONNECTIONS_ENABLED
-        value: "false"
-      - key: GOOGLE_LOGIN_ENABLED
-        value: "false"
-      - key: APPLE_LOGIN_ENABLED
-        value: "false"
-      - key: EMAIL_PROVIDER
-        value: "null"
-      - key: AI_ENABLED
-        value: "false"
-      - key: AI_PROVIDER
-        value: disabled
-      - key: GEMMA_ENABLED
-        value: "false"
-      - key: GEMMA_PROVIDER
-        value: disabled
-      - key: PAYPAL_MODE
-        value: sandbox
-      - key: SYNC_FACT_REFRESH_ENABLED
-        value: "false"
-      - key: DATABASE_URL
-        sync: false
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: hotel-chipre-pms-redis
-          property: connectionString
-      - key: CELERY_BROKER_URL
-        fromService:
-          type: keyvalue
-          name: hotel-chipre-pms-redis
-          property: connectionString
-      - key: CELERY_RESULT_BACKEND
-        fromService:
-          type: keyvalue
-          name: hotel-chipre-pms-redis
-          property: connectionString
-      - key: CLICKHOUSE_ENABLED
-        value: "true"
-      - key: CLICKHOUSE_REQUIRED
-        value: "true"
-      - key: CLICKHOUSE_URL
-        sync: false
-      - key: CLICKHOUSE_DATABASE
-        value: hotel_analytics
-      - key: CLICKHOUSE_USER
-        sync: false
-      - key: CLICKHOUSE_PASSWORD
-        sync: false

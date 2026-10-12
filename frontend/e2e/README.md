@@ -56,7 +56,8 @@ Use a new, empty local PostgreSQL 16 database and two dedicated login roles
 for each run. The database and both role names must begin with
 `hotel_chipre_e2e_`; the app role must end in `_app_runner`, and the seed role
 must end in `_seed_runner`. The database endpoint must be loopback on port
-5432. Keep the database synthetic-only. The seed refuses PostgreSQL unless
+5432, or a local port in 55000–55999 if 5432 is occupied. Keep the database
+synthetic-only. The seed refuses PostgreSQL unless
 both URLs are passed twice as explicit opt-ins, and it checks that the
 `public` schema has no user objects before migrations. It never drops,
 truncates, or resets a PostgreSQL database. Reusing a migrated database is
@@ -77,6 +78,12 @@ Set `E2E_DATABASE_URL` to that local DSN, then set
 DSNs must point to the same local database. The normal test server still
 forces external effects, provider connections, and inbound provider events
 off.
+
+For the focused `tax-policy-setup.spec.ts`, set `E2E_TAX_POLICY_SETUP=true`.
+This seeds the same synthetic hotel and users but deliberately omits its zero-tax
+policy so the browser test can create one in Settings. Do not combine this flag
+with unrelated reservation flows, which correctly refuse to quote without an
+active hotel policy.
 
 ## Manual boot
 

@@ -51,7 +51,7 @@ const sameSessionSnapshot = (snapshot: SessionLike | null, current: SessionLike 
 };
 
 export function ActionStepUpProvider({ children }: { children: ReactNode }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation("auth");
   const { session } = useSession();
   const [activePrompt, setActivePrompt] = useState<PendingStepUp | null>(null);
   const [totpCode, setTotpCode] = useState("");
@@ -189,21 +189,15 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
       if (!controller.signal.aborted && activePromptRef.current === pending) {
         if (error instanceof ApiError && error.status === 401) {
           setErrorMessage(
-            t("auth.stepUp.invalidCode", {
-              defaultValue: "El código no es válido o ya fue usado. Ingresá uno nuevo."
-            })
+            t("stepUp.invalidCode")
           );
         } else if (error instanceof ApiError && error.status === 429) {
           setErrorMessage(
-            t("auth.stepUp.rateLimited", {
-              defaultValue: "Hubo demasiados intentos. Esperá un momento y probá de nuevo."
-            })
+            t("stepUp.rateLimited")
           );
         } else {
           setErrorMessage(
-            t("auth.stepUp.error", {
-              defaultValue: "No se pudo completar la verificación. Revisá tu conexión y volvé a intentar."
-            })
+            t("stepUp.error")
           );
         }
       }
@@ -237,32 +231,30 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
             className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl outline-none"
           >
             <h2 id={titleId} className="text-lg font-semibold text-slate-900">
-              {t("auth.stepUp.title", { defaultValue: "Confirmá que sos vos" })}
+              {t("stepUp.title")}
             </h2>
             <p id={descriptionId} className="mt-2 text-sm leading-6 text-slate-600">
-              {t("auth.stepUp.description", {
-                defaultValue: "Esta acción sensible requiere una verificación adicional. Ingresá el código temporal de tu app autenticadora."
-              })}
+              {t("stepUp.description")}
             </p>
 
             {mfaStatusQuery.isPending ? (
               <div className="mt-5 flex items-center justify-between gap-3">
-                <p className="text-sm text-slate-600" role="status">Comprobando el estado del autenticador...</p>
-                <button type="button" onClick={cancelPrompt} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">Cancelar</button>
+                <p className="text-sm text-slate-600" role="status">{t("stepUp.statusLoading")}</p>
+                <button type="button" onClick={cancelPrompt} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">{t("stepUp.cancel")}</button>
               </div>
             ) : mfaStatusQuery.isError ? (
               <div className="mt-5 flex flex-wrap items-center gap-3">
-                <p role="alert" className="text-sm text-red-700">No se pudo comprobar si tenés un autenticador activo.</p>
+                <p role="alert" className="text-sm text-red-700">{t("stepUp.statusError")}</p>
                 <button type="button" onClick={() => void mfaStatusQuery.refetch()} className="text-sm font-semibold text-indigo-700 underline">
-                  Reintentar
+                  {t("stepUp.retry")}
                 </button>
-                <button type="button" onClick={cancelPrompt} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">Cancelar</button>
+                <button type="button" onClick={cancelPrompt} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700">{t("stepUp.cancel")}</button>
               </div>
             ) : mfaStatusQuery.data?.enabled ? (
               <form className="mt-5 space-y-5" onSubmit={handleSubmit}>
                 <div>
                   <label htmlFor={inputId} className="mb-1.5 block text-sm font-medium text-slate-800">
-                    {t("auth.stepUp.codeLabel", { defaultValue: "Código de autenticación o recuperación" })}
+                    {t("stepUp.codeLabel")}
                   </label>
                   <input
                     ref={codeInputRef}
@@ -272,7 +264,7 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
                     maxLength={64}
                     name="totp-code"
                     onChange={(event) => setTotpCode(event.currentTarget.value)}
-                    placeholder={t("auth.stepUp.codePlaceholder", { defaultValue: "Ingresá tu código" })}
+                    placeholder={t("stepUp.codePlaceholder")}
                     required
                     type="text"
                     value={totpCode}
@@ -295,7 +287,7 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
                     onClick={cancelPrompt}
                     className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                   >
-                    {t("auth.stepUp.cancel", { defaultValue: "Cancelar" })}
+                    {t("stepUp.cancel")}
                   </button>
                   <button
                     type="submit"
@@ -303,15 +295,15 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
                     className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isSubmitting
-                      ? t("auth.stepUp.submitting", { defaultValue: "Verificando…" })
-                      : t("auth.stepUp.submit", { defaultValue: "Verificar y continuar" })}
+                      ? t("stepUp.submitting")
+                      : t("stepUp.submit")}
                   </button>
                 </div>
               </form>
             ) : (
               <div className="mt-5 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
                 <p className="text-sm leading-6 text-indigo-950">
-                  Esta acción requiere verificación en 2 pasos y tu cuenta todavía no tiene un autenticador activo.
+                  {t("stepUp.mfaRequired")}
                 </p>
                 <button
                   type="button"
@@ -324,14 +316,14 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
                   className="mt-3 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                   data-testid="step-up-activate-mfa"
                 >
-                  Activar verificación en 2 pasos
+                  {t("stepUp.activateMfa")}
                 </button>
                 <button
                   type="button"
                   onClick={cancelPrompt}
                   className="ml-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                 >
-                  {t("auth.stepUp.cancel", { defaultValue: "Cancelar" })}
+                  {t("stepUp.cancel")}
                 </button>
               </div>
             )}

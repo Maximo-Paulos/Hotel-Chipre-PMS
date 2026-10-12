@@ -66,6 +66,25 @@ test("owner controls manual cash movements, approves an arqueo difference and co
   await expect(movementForm.getByText("Referencia del comprobante", { exact: true })).toBeVisible();
   await expect(movementForm.getByText("Reserva ID", { exact: true })).not.toBeVisible();
   await expect(movementForm.getByText("Transaccion ID", { exact: true })).not.toBeVisible();
+
+  const rejectedExpensePosts: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (
+      request.method() === "POST" &&
+      /^\/api\/cash-register\/sessions\/\d+\/expenses$/.test(url.pathname)
+    ) {
+      rejectedExpensePosts.push(url.pathname);
+    }
+  });
+  await movementForm.getByText("Importe", { exact: true }).locator("..").locator("input").fill("200");
+  await movementForm.getByText("Descripción", { exact: true }).locator("..").locator("input").fill("Gasto sin proveedor");
+  await movementForm.getByText("Categoría", { exact: true }).locator("..").locator("input").fill("Insumos");
+  await movementForm.getByText("Referencia del comprobante", { exact: true }).locator("..").locator("input").fill("COMP-E2E-NEGATIVE");
+  await movementForm.getByRole("button", { name: "Registrar gasto pendiente", exact: true }).click();
+  await expect(page.getByTestId("cash-expense-validation-error")).toHaveText("Completá: Proveedor.");
+  expect(rejectedExpensePosts).toHaveLength(0);
+
   await movementForm.getByText("Tipo", { exact: true }).locator("..").locator("select").selectOption("income");
   await movementForm.getByText("Importe", { exact: true }).locator("..").locator("input").fill("500");
   await movementForm.getByText("Descripción", { exact: true }).locator("..").locator("input").fill("Venta de minibar");

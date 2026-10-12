@@ -178,6 +178,7 @@ def test_confirmed_reservation_stores_pricing_revision(
         category_id=category.id,
         check_in=date(2030, 1, 10),
         check_out=date(2030, 1, 12),
+        tax_policy_id=reservation.tax_policy_id,
         occupancy=2,
     )
     snapshot = json.loads(reservation.pricing_snapshot or "{}")

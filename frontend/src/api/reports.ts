@@ -21,6 +21,10 @@ export type OperationalReservationSummary = {
 export type OperationalReservationGroup = {
   count: number;
   reservations: OperationalReservationSummary[];
+  page?: number | null;
+  page_size?: number | null;
+  total_pages?: number | null;
+  total_balance_by_currency?: Array<{ currency_code: string; total_balance: CurrencyAmount }>;
 };
 
 export type ArrivalCount = {
@@ -81,6 +85,7 @@ export type DailyOperationalReport = {
   available_with_review: AvailableWithReviewItem[];
   active_room_blocks: ActiveRoomBlockItem[];
   cash_session: CashSessionStatusRead;
+  alert_count: number;
   alerts: OperationalAlert[];
 };
 
@@ -189,11 +194,20 @@ export type BookedValueReport = {
   }>;
 };
 
-export const getDailyOperationalReport = (reportDate: string, session?: SessionLike, signal?: AbortSignal) =>
-  apiFetch<DailyOperationalReport>(
-    `/api/reports/operational/daily?report_date=${encodeURIComponent(reportDate)}`,
-    { session, signal }
-  );
+export const getDailyOperationalReport = (
+  reportDate: string,
+  pendingPage = 1,
+  session?: SessionLike,
+  signal?: AbortSignal,
+  pendingPageSize = 50
+) => {
+  const query = new URLSearchParams({
+    report_date: reportDate,
+    pending_page: String(pendingPage),
+    pending_page_size: String(pendingPageSize)
+  });
+  return apiFetch<DailyOperationalReport>(`/api/reports/operational/daily?${query.toString()}`, { session, signal });
+};
 
 export const getTodayArrivalCount = (session?: SessionLike, signal?: AbortSignal) =>
   apiFetch<ArrivalCount>("/api/reports/operational/arrivals/count", { session, signal });

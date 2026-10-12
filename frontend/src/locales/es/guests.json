@@ -15,6 +15,23 @@
     "prevPage": "← Anterior",
     "nextPage": "Siguiente →"
   },
+  "export": {
+    "eyebrow": "Exportación",
+    "title": "Libro de huéspedes en CSV",
+    "description": "Incluye las estadías no canceladas que coincidan con al menos una noche del período.",
+    "from": "Desde",
+    "through": "Hasta (inclusive)",
+    "download": "Descargar CSV",
+    "downloading": "Preparando CSV...",
+    "downloaded": "La descarga del CSV comenzó.",
+    "errors": {
+      "datesRequired": "Ingresá las dos fechas para exportar.",
+      "invalidRange": "La fecha Hasta debe ser igual o posterior a Desde.",
+      "unauthorized": "La sesión venció. Volvé a iniciar sesión e intentá de nuevo.",
+      "forbidden": "No tenés permiso para exportar el libro de huéspedes.",
+      "failed": "No se pudo exportar el libro de huéspedes. Intentá de nuevo."
+    }
+  },
   "profile": {
     "eyebrow": "Ficha operativa",
     "updatedAt": "Actualizado {{date}}",

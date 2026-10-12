@@ -214,6 +214,15 @@ export function SettingsAssistantPage() {
               {chatEnvelope?.requires_confirmation && (
                 <span className="rounded-full bg-white/70 px-2 py-1 text-amber-800">Requiere confirmación</span>
               )}
+              <button
+                type="button"
+                onClick={() => void runtimeStatusQuery.refetch()}
+                disabled={runtimeStatusQuery.isFetching}
+                aria-label="Verificar el estado del runtime"
+                className="rounded-full bg-white/70 px-2 py-1 text-slate-700 underline decoration-dotted underline-offset-2 disabled:cursor-wait disabled:opacity-60"
+              >
+                {runtimeStatusQuery.isFetching ? "Verificando…" : "Verificar runtime"}
+              </button>
             </div>
           </div>
           {missingInformation.length > 0 && <p className="mt-2 text-xs">Faltan datos: {missingInformation.join(", ")}.</p>}

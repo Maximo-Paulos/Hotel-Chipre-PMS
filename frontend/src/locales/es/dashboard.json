@@ -35,6 +35,7 @@
     },
     "pendingActions": {
       "label": "Acciones pendientes",
+      "helperLoading": "Consultando acciones pendientes...",
       "helperCritical_one": "{{count}} crítica",
       "helperCritical_other": "{{count}} críticas",
       "helperNone": "Sin críticas",

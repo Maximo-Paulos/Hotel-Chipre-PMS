@@ -7,6 +7,7 @@ export type SubscriptionPlan = {
   name: string;
   room_limit: number;
   price_month?: number | null;
+  price_currency?: string;
   price_year?: number | null;
   description?: string;
   features?: string[];

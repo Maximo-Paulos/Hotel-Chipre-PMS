@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import { revealCollapsedNavLink } from "./support/sidebar";
 
+const backendURL = (process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040").replace(/\/$/, "");
+
 const ownerCredentials = {
   email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
   password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!"
@@ -327,7 +329,7 @@ test("rate calendar page renders annual editor and integrated channel view", asy
     await route.abort();
   });
 
-  await page.route("http://127.0.0.1:8040/api/**", async (route) => {
+  await page.route(`${backendURL}/api/**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
 

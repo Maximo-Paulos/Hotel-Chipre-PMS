@@ -18,7 +18,18 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
 }
 
+async function mockAvailableRooms(page: Page) {
+  await page.route((url) => url.pathname === "/api/rooms/availability", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "ok", count: 1, available_rooms: [101] })
+    });
+  });
+}
+
 test("reservation quote failure explains why confirmation is blocked", async ({ page }) => {
+  await mockAvailableRooms(page);
   await page.route("**/api/rooms/categories**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -52,7 +63,7 @@ test("reservation quote failure explains why confirmation is blocked", async ({ 
   await reservationForm.getByLabel("Check-in", { exact: true }).fill(localIsoDate(1));
   await reservationForm.getByLabel("Check-out", { exact: true }).fill(localIsoDate(2));
 
-  const quoteAlert = reservationForm.getByRole("alert");
+  const quoteAlert = reservationForm.getByRole("alert").filter({ hasText: "No se pudo calcular la cotización" });
   await expect(quoteAlert).toContainText("No se pudo calcular la cotización");
   await expect(quoteAlert.getByRole("button", { name: "Reintentar", exact: true })).toBeVisible();
   await expect(reservationForm.getByText("Total no disponible", { exact: true })).toBeVisible();
@@ -66,6 +77,7 @@ test("reservation quote failure explains why confirmation is blocked", async ({ 
 test("reservation quote 400 (no active rate plan) shows the dedicated error, not a stuck loading state", async ({
   page
 }) => {
+  await mockAvailableRooms(page);
   await page.route("**/api/rooms/categories**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -99,7 +111,7 @@ test("reservation quote 400 (no active rate plan) shows the dedicated error, not
   await reservationForm.getByLabel("Check-in", { exact: true }).fill(localIsoDate(1));
   await reservationForm.getByLabel("Check-out", { exact: true }).fill(localIsoDate(2));
 
-  const quoteAlert = reservationForm.getByRole("alert");
+  const quoteAlert = reservationForm.getByRole("alert").filter({ hasText: "No hay una tarifa disponible" });
   await expect(quoteAlert).toContainText("No hay una tarifa disponible");
   await expect(quoteAlert.getByRole("button", { name: "Reintentar", exact: true })).toBeVisible();
   await expect(reservationForm.getByText("Calculando la cotización vigente desde Tarifas...")).toHaveCount(0);

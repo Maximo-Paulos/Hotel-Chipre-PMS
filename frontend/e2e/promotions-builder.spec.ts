@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+const backendURL = (process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040").replace(/\/$/, "");
+
 const mockCategories = [
   { id: 7, name: "Suite Vista Mar", code: "SVM", base_price_per_night: 42000, max_occupancy: 2 }
 ];
@@ -92,7 +94,7 @@ test("owner creates a promotion and simulates its price breakdown", async ({ pag
     await route.abort();
   });
 
-  await page.route("http://127.0.0.1:8040/api/**", async (route) => {
+  await page.route(`${backendURL}/api/**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
 

@@ -13,15 +13,24 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def main() -> None:
+def main() -> int:
     from app.tasks.notification_tasks import generate_daily_reports, process_outbox
 
-    report_result = generate_daily_reports()
-    logger.info("generate_daily_reports: %s", report_result)
+    report_result = generate_daily_reports.run()
+    logger.info("generate_daily_reports hotels_reported=%s", report_result.get("hotels_reported", 0))
 
-    outbox_result = process_outbox()
-    logger.info("process_outbox: %s", outbox_result)
+    outbox_result = process_outbox.run()
+    logger.info(
+        "process_outbox processed=%s sent=%s failed=%s expired=%s retried=%s deferred=%s",
+        outbox_result.get("processed", 0),
+        outbox_result.get("sent", 0),
+        outbox_result.get("failed", 0),
+        outbox_result.get("expired", 0),
+        outbox_result.get("retried", 0),
+        outbox_result.get("deferred", 0),
+    )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

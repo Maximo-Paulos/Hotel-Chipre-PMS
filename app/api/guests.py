@@ -2,6 +2,7 @@
 FastAPI routes for Guest management.
 """
 import csv
+import json
 from datetime import date
 from io import StringIO
 
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.guest import Guest, GuestCompanion, DocumentTypeEnum
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.schemas.guest import GuestCreate, GuestRead, GuestUpdate, GuestCompanionCreate, GuestCompanionRead
 from app.schemas.guest_tag import GuestRatingUpdate, GuestTagCreate, GuestTagRead
@@ -39,6 +41,15 @@ from app.services.permission_service import (
 )
 
 router = APIRouter(prefix="/api/guests", tags=["Guests"])
+_GUEST_LEDGER_MAX_RANGE_DAYS = 367
+_GUEST_LEDGER_MAX_ROWS = 10_000
+
+
+def _guest_service_error_detail(exc: GuestServiceError) -> str:
+    return {
+        "Guest not found": "No se encontró el huésped.",
+        "Guest tag not found": "No se encontró la etiqueta del huésped.",
+    }.get(str(exc), "No se pudo completar la operación del huésped.")
 
 
 def _enum_value(value) -> str:
@@ -159,19 +170,32 @@ def export_guest_ledger(
     context: AuthContext = Depends(require_permission(PERMISSION_GUEST_EXPORT)),
 ):
     if to_date <= from_date:
-        raise HTTPException(status_code=400, detail="to_date must be after from_date")
+        raise HTTPException(status_code=422, detail="El período de exportación es inválido.")
+    range_days = (to_date - from_date).days
+    if range_days > _GUEST_LEDGER_MAX_RANGE_DAYS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"El período máximo de exportación es de {_GUEST_LEDGER_MAX_RANGE_DAYS} días.",
+        )
 
     reservations = (
         active_reservations(db, context.hotel_id)
-        .join(Guest, Guest.id == Reservation.guest_id)
+        .join(Guest, (Guest.id == Reservation.guest_id) & (Guest.hotel_id == context.hotel_id))
         .filter(
             Reservation.status != ReservationStatusEnum.CANCELLED,
+            Guest.deleted_at.is_(None),
             Reservation.check_in_date < to_date,
             Reservation.check_out_date > from_date,
         )
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
+        .limit(_GUEST_LEDGER_MAX_ROWS + 1)
         .all()
     )
+    if len(reservations) > _GUEST_LEDGER_MAX_ROWS:
+        raise HTTPException(
+            status_code=413,
+            detail="El resultado supera el máximo de huéspedes exportables; acotá el período.",
+        )
 
     csv_rows: list[dict[str, object]] = []
     for reservation in reservations:
@@ -195,10 +219,32 @@ def export_guest_ledger(
 
     csv_text = _build_guest_ledger_csv(csv_rows)
     filename = f"guest-ledger-{context.hotel_id}-{from_date.isoformat()}-{to_date.isoformat()}.csv"
+    db.add(
+        SecurityAuditLog(
+            hotel_id=context.hotel_id,
+            user_id=context.user_id,
+            action="guest.ledger_csv_exported",
+            resource_type="guest_ledger_export",
+            resource_id=None,
+            details=json.dumps(
+                {
+                    "from_date": from_date.isoformat(),
+                    "to_date": to_date.isoformat(),
+                    "row_count": len(reservations),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
+    )
+    db.commit()
     return Response(
         content=csv_text,
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "private, no-store",
+        },
     )
 
 
@@ -210,7 +256,7 @@ def get_guest(
 ):
     guest = db.query(Guest).filter(Guest.id == guest_id, Guest.hotel_id == context.hotel_id).first()
     if not guest:
-        raise HTTPException(status_code=404, detail="Guest not found")
+        raise HTTPException(status_code=404, detail="No se encontró el huésped.")
     return guest
 
 
@@ -242,7 +288,7 @@ def get_guest_quick_profile(
             ],
         }
     except GuestServiceError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=_guest_service_error_detail(exc)) from exc
 
 
 @router.get("/{guest_id}/tags", response_model=list[GuestTagRead])
@@ -254,7 +300,7 @@ def get_guest_tags(
     try:
         return list_active_tags(db, hotel_id=context.hotel_id, guest_id=guest_id)
     except GuestServiceError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=_guest_service_error_detail(exc)) from exc
 
 
 @router.post("/{guest_id}/tags", response_model=GuestTagRead, status_code=status.HTTP_201_CREATED)
@@ -278,7 +324,7 @@ def create_guest_tag(
         db.refresh(tag)
         return tag
     except GuestServiceError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=_guest_service_error_detail(exc)) from exc
 
 
 @router.post("/{guest_id}/tags/{tag_id}/resolve", response_model=GuestTagRead)
@@ -300,7 +346,7 @@ def resolve_tag(
         db.refresh(tag)
         return tag
     except GuestServiceError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=_guest_service_error_detail(exc)) from exc
 
 
 @router.patch("/{guest_id}/rating", response_model=GuestRead)
@@ -322,7 +368,7 @@ def update_guest_rating(
         db.refresh(guest)
         return guest
     except GuestServiceError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=_guest_service_error_detail(exc)) from exc
 
 
 @router.patch("/{guest_id}", response_model=GuestRead)
@@ -334,7 +380,7 @@ def update_guest(
 ):
     guest = db.query(Guest).filter(Guest.id == guest_id, Guest.hotel_id == context.hotel_id).first()
     if not guest:
-        raise HTTPException(status_code=404, detail="Guest not found")
+        raise HTTPException(status_code=404, detail="No se encontró el huésped.")
 
     before = audit_log_service.model_snapshot(guest)
     update_data = data.model_dump(exclude_unset=True)
@@ -365,7 +411,7 @@ def add_companions(
     """Add new companions to an existing guest."""
     guest = db.query(Guest).filter(Guest.id == guest_id, Guest.hotel_id == context.hotel_id).first()
     if not guest:
-        raise HTTPException(status_code=404, detail="Guest not found")
+        raise HTTPException(status_code=404, detail="No se encontró el huésped.")
         
     new_companions = []
     for comp_data in companions:

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, aliased, joinedload, lazyload, load_only
 
 from app.models.operations import BillingAdjustment, ReservationAdjustment, ReservationAdjustmentStatusEnum, RoomMoveEvent
 from app.models.ota_core import OTAReservationLink, OTAReservationLifecycleEnum
+from app.models.company import Company
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
 from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.models.guest import Guest
@@ -38,17 +39,17 @@ _PRIORITY_SCORE = {
 # Mirrors the trigger conditions read by `_build_pending_actions` /
 # `_recommended_financial_action` so the SQL-level prefilter below can't drift
 # silently from the actual candidates for an action.
-_TERMINAL_STATUSES = {ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT}
+_REFUND_REVIEW_STATUSES = {ReservationStatusEnum.CANCELLED, ReservationStatusEnum.NO_SHOW}
+_TERMINAL_STATUSES = {
+    ReservationStatusEnum.CANCELLED,
+    ReservationStatusEnum.CHECKED_OUT,
+    ReservationStatusEnum.NO_SHOW,
+}
 _PROBLEM_ALLOCATION_STATUSES = {"manual_review", "unassigned", "error"}
 _PROBLEM_SETTLEMENT_STATUSES = {"manual_resolution_required", "pending_hotel_action", "review_cancellation"}
 _PENDING_ADJUSTMENT_STATUSES = {ReservationAdjustmentStatusEnum.DRAFT, ReservationAdjustmentStatusEnum.PENDING}
 _PENDING_ADJUSTMENT_EXTERNAL_STATUSES = {"manual_resolution_required", "pending_hotel_action"}
 _ACTIVE_WINDOW_DAYS = 1
-# ponytail: known ceiling -- if a hotel legitimately has more real candidates
-# than this, only the first `_CANDIDATE_CAP_MULTIPLIER * limit` (min 100) get a
-# full summary computed. Raise the multiplier if that ever clips a real hotel.
-_CANDIDATE_CAP_MULTIPLIER = 5
-_MIN_CANDIDATE_CAP = 100
 
 
 @dataclass(slots=True)
@@ -65,6 +66,7 @@ class _ActionCandidate:
 
 def get_reservation_operations_summary(db: Session, *, hotel_id: int, reservation_id: int) -> dict[str, Any]:
     reservation = _get_reservation_or_error(db, hotel_id=hotel_id, reservation_id=reservation_id)
+    hotel_date = hotel_today(db, hotel_id)
     financial_summary = get_reservation_financial_summary(db, hotel_id, reservation.id)
     if (
         reservation.status == ReservationStatusEnum.CANCELLED
@@ -82,6 +84,7 @@ def get_reservation_operations_summary(db: Session, *, hotel_id: int, reservatio
         ota_link=ota_link,
         related_adjustments=related_adjustments,
         financial_summary=financial_summary,
+        today=hotel_date,
     )
 
     return {
@@ -184,8 +187,11 @@ def list_pending_reservation_actions(
     hotel_id: int,
     limit: int = 100,
 ) -> list[dict[str, Any]]:
-    cap = max(_MIN_CANDIDATE_CAP, limit * _CANDIDATE_CAP_MULTIPLIER)
-    candidate_ids = _candidate_reservation_ids(db, hotel_id=hotel_id, limit=cap)
+    # Rank actions only after building them: candidate-level date ordering does
+    # not match action priority, so capping IDs here can hide a later critical
+    # action behind older medium-priority candidates.
+    hotel_date = hotel_today(db, hotel_id)
+    candidate_ids = _candidate_reservation_ids(db, hotel_id=hotel_id, today=hotel_date)
     if not candidate_ids:
         return []
 
@@ -223,6 +229,7 @@ def list_pending_reservation_actions(
                 ota_link=latest_ota_links.get(reservation_id),
                 related_adjustments=related_adjustments.get(reservation_id, []),
                 financial_summary=financial_inputs[reservation_id],
+                today=hotel_date,
             )
         )
 
@@ -469,6 +476,8 @@ def _pending_action_financial_inputs(
             has_reconciliation_gap = abs(materialized_paid - evidenced_paid) > Decimal("0.01")
 
         summaries[reservation_id] = {
+            "amount_paid": None if is_deferred else paid,
+            "company_billing_deferred": is_deferred,
             "recommended_next_action": recommended_next_action,
             "has_financial_reconciliation_gap": has_reconciliation_gap,
         }
@@ -480,18 +489,25 @@ def _candidate_reservation_ids(
     *,
     hotel_id: int,
     limit: int | None = None,
+    today: date | None = None,
 ) -> list[int]:
     """Bulk-compute reservation ids that could produce a pending action.
 
     The SQL predicate mirrors the pending-action builders and financial
     recommendation rules. It preserves actionable terminal history, but does not transfer
     clean terminal reservations or their financial/reconciliation inputs into
-    Python. The optional limit is pushed into this source query so history after
-    the displayed candidate cap never fans out into detail reads.
+    Python. Callers that need a complete priority-sorted action list should omit
+    ``limit``; the optional SQL limit is for callers that explicitly accept a
+    check-in-date prefix instead of the globally ranked action list.
     """
-    cutoff = hotel_today(db, hotel_id) - timedelta(days=_ACTIVE_WINDOW_DAYS)
+    hotel_date = today or hotel_today(db, hotel_id)
+    cutoff = hotel_date - timedelta(days=_ACTIVE_WINDOW_DAYS)
     is_terminal = Reservation.status.in_(_TERMINAL_STATUSES)
     is_active = Reservation.status.notin_(_TERMINAL_STATUSES)
+    overdue_stay_review = and_(
+        Reservation.status == ReservationStatusEnum.CHECKED_IN,
+        Reservation.check_out_date < hotel_date,
+    )
     is_ota = or_(
         func.coalesce(Reservation.source_provider_code, "") != "",
         func.coalesce(Reservation.external_id, "") != "",
@@ -592,9 +608,32 @@ def _candidate_reservation_ids(
         )
         > Decimal("0.01")
     )
+    deferred_company = (
+        select(1)
+        .select_from(Company)
+        .where(
+            Company.hotel_id == hotel_id,
+            Company.id == Reservation.company_id,
+            Company.payment_deferred.is_(True),
+        )
+        .exists()
+    )
+    refund_review_action = and_(
+        Reservation.status.in_(_REFUND_REVIEW_STATUSES),
+        Reservation.source == ReservationSourceEnum.DIRECT,
+        func.coalesce(Reservation.source_provider_code, "") == "",
+        func.coalesce(Reservation.external_id, "") == "",
+        Reservation.settlement_status.notin_({"deferred", "settled"}),
+        ~deferred_company,
+        or_(
+            func.coalesce(Reservation.amount_paid, Decimal("0.00")) > Decimal("0.00"),
+            signed_completed_amount > Decimal("0.00"),
+        ),
+    )
 
     has_operational_action = or_(
         Reservation.requires_manual_review.is_(True),
+        overdue_stay_review,
         and_(
             is_active,
             or_(
@@ -623,13 +662,14 @@ def _candidate_reservation_ids(
         ota_manual_resolution,
         pending_adjustment,
         has_financial_reconciliation_gap,
+        refund_review_action,
     )
 
     query = (
         active_reservations_select(hotel_id)
         .with_only_columns(Reservation.id)
         .where(
-            or_(Reservation.check_out_date >= cutoff, is_terminal),
+            or_(Reservation.check_out_date >= cutoff, is_terminal, overdue_stay_review),
             has_operational_action,
         )
         .order_by(Reservation.check_in_date, Reservation.id)
@@ -727,6 +767,7 @@ def _build_pending_actions(
     ota_link: OTAReservationLink | None,
     related_adjustments: list[ReservationAdjustment],
     financial_summary: dict[str, Any],
+    today: date | None = None,
 ) -> list[dict[str, Any]]:
     candidates: list[_ActionCandidate] = []
     guest_name = _guest_display_name(reservation)
@@ -736,10 +777,7 @@ def _build_pending_actions(
     def add(candidate: _ActionCandidate) -> None:
         candidates.append(candidate)
 
-    active_reservation = reservation.status not in {
-        ReservationStatusEnum.CANCELLED,
-        ReservationStatusEnum.CHECKED_OUT,
-    }
+    active_reservation = reservation.status not in _TERMINAL_STATUSES
 
     if reservation.requires_manual_review:
         add(
@@ -749,6 +787,24 @@ def _build_pending_actions(
                 priority="critical",
                 title=f"Revisar reserva de {guest_name} — llega {check_in}",
                 detail="La reserva quedo marcada para revision manual antes de seguir operando.",
+            )
+        )
+
+    if (
+        today is not None
+        and reservation.status == ReservationStatusEnum.CHECKED_IN
+        and reservation.check_out_date < today
+    ):
+        add(
+            _ActionCandidate(
+                action_key="overdue_stay_review",
+                code="overdue_stay_review",
+                priority="high",
+                title=f"Revisar estadía vencida de {guest_name} — check-out {check_out}",
+                detail=(
+                    "La fecha prevista de check-out ya pasó y la reserva sigue en curso. "
+                    "Abrí la ficha para que un operador revise la situación."
+                ),
             )
         )
 
@@ -818,6 +874,32 @@ def _build_pending_actions(
                 priority="high",
                 title=f"Revisar cancelación y liquidación de {guest_name} — sale {check_out}",
                 detail="La reserva fue cancelada pero todavia requiere revisar el settlement o devolucion con el canal.",
+            )
+        )
+
+    net_paid_amount = financial_summary.get("amount_paid")
+    if (
+        reservation.status in _REFUND_REVIEW_STATUSES
+        and reservation.source == ReservationSourceEnum.DIRECT
+        and not reservation.source_provider_code
+        and not reservation.external_id
+        and not financial_summary.get("company_billing_deferred")
+        and net_paid_amount is not None
+        and Decimal(str(net_paid_amount)) > Decimal("0.00")
+    ):
+        net_paid = Decimal(str(net_paid_amount)).quantize(Decimal("0.01"))
+        currency = str(reservation.currency_code or "ARS").strip().upper()
+        add(
+            _ActionCandidate(
+                action_key="refund_deposit",
+                code="refund_deposit",
+                priority="high",
+                title=f"Revisar devolución pendiente de {guest_name} — sale {check_out}",
+                detail=(
+                    f"Hay {currency} {net_paid} de pagos netos registrados. Revisá las condiciones de "
+                    "cancelación o no-show y definí manualmente si corresponde devolver el depósito; "
+                    "esta alerta no ejecuta ningún movimiento."
+                ),
             )
         )
 

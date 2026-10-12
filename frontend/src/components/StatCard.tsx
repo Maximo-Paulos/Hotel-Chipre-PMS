@@ -4,6 +4,8 @@ type StatCardProps = {
   label: string;
   value: number | string;
   helper?: string;
+  helperRole?: "status" | "alert";
+  testId?: string;
   tone?: "default" | "success" | "danger" | "info";
 };
 
@@ -14,12 +16,12 @@ const toneClasses: Record<NonNullable<StatCardProps["tone"]>, string> = {
   info: "border-sky-200 bg-sky-50"
 };
 
-export function StatCard({ label, value, helper, tone = "default" }: StatCardProps) {
+export function StatCard({ label, value, helper, helperRole, testId, tone = "default" }: StatCardProps) {
   return (
-    <div className={`rounded-lg border p-4 shadow-sm ${toneClasses[tone]}`}>
+    <div className={`rounded-lg border p-4 shadow-sm ${toneClasses[tone]}`} data-testid={testId}>
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className="text-2xl font-semibold text-slate-900">{value}</p>
-      {helper && <p className="text-xs text-slate-500">{helper}</p>}
+      {helper && <p className="text-xs text-slate-500" role={helperRole}>{helper}</p>}
     </div>
   );
 }

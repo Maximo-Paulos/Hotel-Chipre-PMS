@@ -255,7 +255,6 @@ def analytics_segments(
         require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_ANALYTICS_ADVANCED_VIEW)
     ),
 ):
-    require_analytics_plan(db, context.hotel_id, "pro")
     return annotate_analytics_payload(
         build_segments_payload(
             db,
@@ -327,7 +326,6 @@ def analytics_channels(
         require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_ANALYTICS_ADVANCED_VIEW)
     ),
 ):
-    require_analytics_plan(db, context.hotel_id, "pro")
     return annotate_analytics_payload(
         build_channels_payload(
             db,
@@ -432,13 +430,15 @@ def export_analytics_xlsx(
 
 @router.get("/exports", response_model=list[AnalyticsExportJobRead])
 def list_analytics_exports(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=100_000),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(
         require_all_permissions(PERMISSION_REPORTS_FINANCIAL_VIEW, PERMISSION_ANALYTICS_ADVANCED_VIEW)
     ),
 ):
     require_analytics_plan(db, context.hotel_id, "ultra")
-    jobs = list_export_jobs(db, hotel_id=context.hotel_id)
+    jobs = list_export_jobs(db, hotel_id=context.hotel_id, limit=limit, offset=offset)
     if not resolve(db, context.hotel_id, context.user_role, PERMISSION_COMPANY_VIEW, user_id=context.user_id):
         return [job for job in jobs if job.entity_code != "company"]
     return jobs

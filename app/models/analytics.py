@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, CHAR, Column, Date, DateTime, Enum, ForeignKey, ForeignKeyConstraint, Index, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CHAR, CheckConstraint, Column, Date, DateTime, Enum, ForeignKey, ForeignKeyConstraint, Index, Integer, Numeric, String, Text, UniqueConstraint, func
 
 from app.database import Base
 from app.models.reservation import (
@@ -127,6 +127,35 @@ class AnalyticsAIUsageMonthly(Base):
     last_call_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
+
+
+class AnalyticsFactRefreshJob(Base):
+    """Coalesced, durable refresh work for reservation-derived analytics facts.
+
+    ``reservation_id`` intentionally has no foreign key: a reservation can be
+    deleted while its refresh is pending, and the worker still needs the old
+    fact rows to discover and repair the affected room/date window.
+    """
+
+    __tablename__ = "analytics_fact_refresh_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
+    reservation_id = Column(Integer, nullable=False)
+    date_from = Column(Date, nullable=False)
+    date_to = Column(Date, nullable=False)
+    attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    available_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, server_default=func.current_timestamp())
+    last_error_type = Column(String(80), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, server_default=func.current_timestamp())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow, server_default=func.current_timestamp())
+
+    __table_args__ = (
+        CheckConstraint("date_to >= date_from", name="ck_analytics_fact_refresh_jobs_date_window"),
+        CheckConstraint("attempts >= 0", name="ck_analytics_fact_refresh_jobs_attempts_nonnegative"),
+        UniqueConstraint("hotel_id", "reservation_id", name="uq_analytics_fact_refresh_jobs_hotel_reservation"),
+        Index("ix_analytics_fact_refresh_jobs_hotel_available", "hotel_id", "available_at", "id"),
+    )
 
 
 class HotelAuditEvent(Base):

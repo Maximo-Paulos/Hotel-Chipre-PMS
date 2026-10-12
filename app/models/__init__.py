@@ -18,6 +18,7 @@ from app.models.reservation_group_payment import (
     ReservationGroupPaymentAllocation,
 )
 from app.models.transaction import Transaction, PaymentMethodEnum, TransactionStatusEnum
+from app.models.payment_receipt_email_delivery import PaymentReceiptEmailDelivery
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
 from app.models.hotel_role import HotelRole
@@ -196,6 +197,7 @@ from app.models.analytics import (
     AnalyticsAlertSnooze,
     AnalyticsExportJob,
     AnalyticsAIUsageMonthly,
+    AnalyticsFactRefreshJob,
     HotelAuditEvent,
     RoomStateEventTypeEnum,
     RoomStateEventReasonCodeEnum,
@@ -312,6 +314,7 @@ __all__ = [
     "AnalyticsAlertSnooze",
     "AnalyticsExportJob",
     "AnalyticsAIUsageMonthly",
+    "AnalyticsFactRefreshJob",
     "HotelAuditEvent",
     "RoomStateEventTypeEnum",
     "RoomStateEventReasonCodeEnum",

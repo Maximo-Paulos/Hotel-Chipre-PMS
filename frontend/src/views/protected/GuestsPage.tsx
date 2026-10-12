@@ -7,6 +7,8 @@ import { hasValidSession } from "../../api/client";
 import {
   addGuestTag,
   checkInGuestReservation,
+  exportGuestLedger,
+  GuestLedgerExportError,
   getGuestQuickProfile,
   listGuestTags,
   resolveGuestTag,
@@ -29,6 +31,8 @@ import { useSession } from "../../state/session";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 import { refreshAfterMutation, refreshGuestState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
+import { useHotelConfig } from "../../hooks/useHotelConfig";
+import { addDaysIso, todayIso } from "../../utils/date";
 
 const DOCUMENT_TYPES = ["DNI", "PASSPORT", "CEDULA"] as const;
 
@@ -93,11 +97,32 @@ const formatDate = (value: string | null | undefined, t: TFunction) => {
 
 const isProhibidoTag = (tag: GuestTag) => tag.tag_type === "prohibido_alojar";
 
+const hotelTodayIso = (timeZone?: string | null) => {
+  if (!timeZone) return todayIso();
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(new Date());
+    const dateParts = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+    if (dateParts.year && dateParts.month && dateParts.day) {
+      return `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+    }
+  } catch {
+    // An invalid or unavailable hotel timezone falls back to the shared local-date helper.
+  }
+  return todayIso();
+};
+
 export function GuestsPage() {
   const { t } = useTranslation("guests");
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
+  const hotelConfigQuery = useHotelConfig();
   const canEditGuest = hasPermission("guest:update");
+  const canExportGuestLedger = hasPermission("guest:export");
   const canManageTags = hasPermission("guest:tags_manage");
   const canCheckIn = hasPermission("checkin:perform");
   const canOverrideProhibido = hasPermission("reservation:prohibition_override");
@@ -116,6 +141,12 @@ export function GuestsPage() {
   const [companionMessage, setCompanionMessage] = useState<string | null>(null);
   const [tagMessage, setTagMessage] = useState<string | null>(null);
   const [checkInMessage, setCheckInMessage] = useState<string | null>(null);
+  const [ledgerFromDate, setLedgerFromDate] = useState<string | null>(null);
+  const [ledgerThroughDate, setLedgerThroughDate] = useState<string | null>(null);
+  const [ledgerExportError, setLedgerExportError] = useState<string | null>(null);
+  const [ledgerExportSuccess, setLedgerExportSuccess] = useState(false);
+  const [isExportingLedger, setIsExportingLedger] = useState(false);
+  const ledgerExportInFlightRef = useRef(false);
   const initializedGuestIdRef = useRef<number | null>(null);
   const guestsQuery = useGuests(search, page);
   const updateGuestMutation = useGuestUpdate();
@@ -129,6 +160,9 @@ export function GuestsPage() {
   // No exact total from the backend (deliberate -- see api/guests.ts):
   // a full page is the only signal that a next page might exist.
   const hasNextPage = guests.length === GUEST_PAGE_SIZE;
+  const ledgerToday = hotelTodayIso(hotelConfigQuery.data?.hotel_timezone);
+  const effectiveLedgerFromDate = ledgerFromDate ?? addDaysIso(ledgerToday, -29);
+  const effectiveLedgerThroughDate = ledgerThroughDate ?? ledgerToday;
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -376,6 +410,61 @@ export function GuestsPage() {
     }
   };
 
+  const handleGuestLedgerExport = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canExportGuestLedger || ledgerExportInFlightRef.current) return;
+
+    setLedgerExportError(null);
+    setLedgerExportSuccess(false);
+    if (!effectiveLedgerFromDate || !effectiveLedgerThroughDate) {
+      setLedgerExportError(t("export.errors.datesRequired"));
+      return;
+    }
+    if (effectiveLedgerThroughDate < effectiveLedgerFromDate) {
+      setLedgerExportError(t("export.errors.invalidRange"));
+      return;
+    }
+
+    ledgerExportInFlightRef.current = true;
+    setIsExportingLedger(true);
+    let objectUrl: string | null = null;
+    let downloadAnchor: HTMLAnchorElement | null = null;
+    try {
+      // The API's to_date is exclusive; the visible "Hasta" date is inclusive.
+      const toDateExclusive = addDaysIso(effectiveLedgerThroughDate, 1);
+      const blob = await exportGuestLedger(effectiveLedgerFromDate, toDateExclusive, session);
+      objectUrl = URL.createObjectURL(blob);
+      downloadAnchor = document.createElement("a");
+      downloadAnchor.href = objectUrl;
+      downloadAnchor.download = `guest-ledger-${effectiveLedgerFromDate}-${effectiveLedgerThroughDate}.csv`;
+      downloadAnchor.style.display = "none";
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      setLedgerExportSuccess(true);
+    } catch (error) {
+      if (error instanceof GuestLedgerExportError) {
+        const messageKey = error.status === 400
+          ? "export.errors.invalidRange"
+          : error.status === 401
+            ? "export.errors.unauthorized"
+            : error.status === 403
+              ? "export.errors.forbidden"
+              : "export.errors.failed";
+        setLedgerExportError(t(messageKey));
+      } else {
+        setLedgerExportError(t("export.errors.failed"));
+      }
+    } finally {
+      downloadAnchor?.remove();
+      if (objectUrl) {
+        const urlToRevoke = objectUrl;
+        window.setTimeout(() => URL.revokeObjectURL(urlToRevoke), 60_000);
+      }
+      ledgerExportInFlightRef.current = false;
+      setIsExportingLedger(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -394,6 +483,64 @@ export function GuestsPage() {
           />
         </div>
       </header>
+
+      {canExportGuestLedger ? (
+        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="guest-ledger-export-title">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">{t("export.eyebrow")}</p>
+            <h2 id="guest-ledger-export-title" className="text-base font-semibold text-slate-900">{t("export.title")}</h2>
+            <p id="guest-ledger-export-hint" className="text-sm text-slate-600">{t("export.description")}</p>
+          </div>
+          <form className="grid gap-3 sm:grid-cols-[minmax(150px,1fr)_minmax(150px,1fr)_auto] sm:items-end" onSubmit={handleGuestLedgerExport}>
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">{t("export.from")}</span>
+              <input
+                type="date"
+                value={effectiveLedgerFromDate}
+                onChange={(event) => {
+                  setLedgerFromDate(event.target.value);
+                  setLedgerExportError(null);
+                  setLedgerExportSuccess(false);
+                }}
+                aria-describedby="guest-ledger-export-hint"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              />
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">{t("export.through")}</span>
+              <input
+                type="date"
+                value={effectiveLedgerThroughDate}
+                onChange={(event) => {
+                  setLedgerThroughDate(event.target.value);
+                  setLedgerExportError(null);
+                  setLedgerExportSuccess(false);
+                }}
+                aria-describedby="guest-ledger-export-hint"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              />
+            </label>
+            <button
+              type="submit"
+              data-testid="guest-ledger-export"
+              disabled={isExportingLedger}
+              className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-wait disabled:opacity-60"
+            >
+              {isExportingLedger ? t("export.downloading") : t("export.download")}
+            </button>
+            {ledgerExportError ? (
+              <p className="sm:col-span-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">
+                {ledgerExportError}
+              </p>
+            ) : null}
+            {ledgerExportSuccess ? (
+              <p className="sm:col-span-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status">
+                {t("export.downloaded")}
+              </p>
+            ) : null}
+          </form>
+        </section>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

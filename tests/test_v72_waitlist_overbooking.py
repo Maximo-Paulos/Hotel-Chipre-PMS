@@ -248,7 +248,7 @@ class TestOverbookingBlocked:
             check_in_date=CHECK_IN,
             check_out_date=CHECK_OUT,
         )
-        with pytest.raises(ReservationError, match="No rooms available"):
+        with pytest.raises(ReservationError, match="No hay habitaciones disponibles"):
             create_reservation(db, data2, hotel_id=HOTEL_ID)
 
     def test_specific_occupied_room_raises_error(self, db: Session, tiny_hotel: dict):
@@ -274,6 +274,100 @@ class TestOverbookingBlocked:
         )
         with pytest.raises(ReservationError):
             create_reservation(db, data2, hotel_id=HOTEL_ID)
+
+    @pytest.mark.parametrize(
+        ("allow_overbooking", "expected_waitlisted"),
+        [(False, False), (True, True)],
+        ids=["disabled-rejects", "enabled-waitlists"],
+    )
+    def test_six_twin_room_capacity_never_assigns_a_seventh_overlapping_stay(
+        self,
+        db: Session,
+        tiny_hotel: dict,
+        allow_overbooking: bool,
+        expected_waitlisted: bool,
+    ):
+        """Six physical Twin rooms hold six overlapping stays; the seventh is
+        rejected or waitlisted according to the hotel's existing setting.
+        """
+        config = tiny_hotel["config"]
+        config.allow_overbooking = allow_overbooking
+
+        category = tiny_hotel["category_std"]
+        category.name = "Twin"
+        category.code = "TWIN"
+        additional_rooms = [
+            Room(
+                room_number=f"10{number}",
+                floor=1,
+                category_id=category.id,
+                status=RoomStatusEnum.AVAILABLE,
+                hotel_id=HOTEL_ID,
+            )
+            for number in range(2, 7)
+        ]
+        db.add_all(additional_rooms)
+        db.flush()
+
+        twin_rooms = (
+            db.query(Room)
+            .filter(Room.hotel_id == HOTEL_ID, Room.category_id == category.id)
+            .all()
+        )
+        assert len(twin_rooms) == 6
+
+        def request_twin_stay() -> ReservationCreate:
+            return ReservationCreate(
+                guest_id=tiny_hotel["guest"].id,
+                category_id=category.id,
+                room_id=None,
+                check_in_date=CHECK_IN,
+                check_out_date=CHECK_OUT,
+            )
+
+        accepted = [
+            create_reservation(db, request_twin_stay(), hotel_id=HOTEL_ID)
+            for _ in range(6)
+        ]
+        assigned_room_ids = {reservation.room_id for reservation in accepted}
+        assert len(assigned_room_ids) == 6
+        assert all(reservation.is_wait_listed is False for reservation in accepted)
+        assert find_available_rooms(
+            db,
+            category.id,
+            CHECK_IN,
+            CHECK_OUT,
+            hotel_id=HOTEL_ID,
+        ) == []
+
+        if expected_waitlisted:
+            overflow = create_reservation(db, request_twin_stay(), hotel_id=HOTEL_ID)
+            assert overflow.is_wait_listed is True
+            assert overflow.room_id is None
+        else:
+            with pytest.raises(ReservationError, match="No hay habitaciones disponibles"):
+                create_reservation(db, request_twin_stay(), hotel_id=HOTEL_ID)
+            overflow = None
+
+        overlapping = (
+            db.query(Reservation)
+            .filter(
+                Reservation.hotel_id == HOTEL_ID,
+                Reservation.check_in_date < CHECK_OUT,
+                Reservation.check_out_date > CHECK_IN,
+                Reservation.status.notin_(
+                    [ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT]
+                ),
+            )
+            .all()
+        )
+        assigned = [reservation for reservation in overlapping if reservation.room_id]
+        waitlisted = [reservation for reservation in overlapping if reservation.is_wait_listed]
+        assert len(assigned) == 6
+        assert {reservation.room_id for reservation in assigned} == assigned_room_ids
+        assert len(waitlisted) == int(expected_waitlisted)
+        if overflow is not None:
+            assert waitlisted == [overflow]
 
 
 # ===========================================================================
@@ -526,7 +620,7 @@ class TestWaitlistResolveLogic:
     def test_resolve_room_not_found_raises(self, db: Session, tiny_hotel: dict):
         """Trying to resolve with a non-existent room raises ReservationError."""
         non_existent_room_id = 99999
-        with pytest.raises(ReservationError, match="not found"):
+        with pytest.raises(ReservationError, match="No se encontró la habitación"):
             check_room_availability(
                 db, non_existent_room_id, CHECK_IN, CHECK_OUT,
                 hotel_id=HOTEL_ID,

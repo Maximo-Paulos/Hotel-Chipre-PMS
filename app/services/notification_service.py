@@ -41,7 +41,7 @@ from app.models.notification import (
     PushSubscription,
 )
 from app.models.user import User
-from app.services.domain_events import SAFE_PAYLOAD_KEYS, queue_domain_change
+from app.services.domain_events import SAFE_PAYLOAD_KEYS
 from app.services.permission_service import (
     PERMISSION_GUEST_PROHIBITION_READ,
     PERMISSION_RESERVATION_READ,
@@ -383,16 +383,9 @@ def enqueue_notifications_for_event(
         ["hotel_id", "dedupe_key", "channel", "recipient_user_id"],
     )
     db.flush()
-    # The outbox insert uses a dialect-specific Core statement, so the ORM
-    # change collector cannot see it. Queue only a generic inbox signal; the
-    # notification body and recipient data never enter Redis.
-    queue_domain_change(
-        db,
-        hotel_id=hotel_id,
-        domain="notifications",
-        event_type="notifications.outbox.changed",
-        payload={"family": "outbox"},
-    )
+    # The inbox is read from Notification, not NotificationOutbox. Its
+    # notifications-domain event is emitted only when delivery materializes
+    # the row, avoiding an empty inbox refetch for every queued notification.
 
     return (
         db.query(NotificationOutbox)
@@ -686,7 +679,14 @@ def _build_daily_report_body(db: Session, *, hotel_id: int, report_date: date, s
     if "departures" in sections:
         lines.append(f"Departures: {len(report.departures.reservations)}")
     if "pending_payments" in sections:
-        lines.append(f"Pending payments: {len(report.pending_payments.reservations)}")
+        lines.append(f"Pending payments: {report.pending_payments.count}")
+        lines.append(
+            "Pending balance total: "
+            + (" · ".join(
+                f"{item.currency_code} {item.total_balance:.2f}"
+                for item in report.pending_payments.total_balance_by_currency
+            ) or "0")
+        )
     if "late_arrivals" in sections:
         lines.append(f"Late arrivals: {len(report.late_arrivals)}")
     if "room_blocks" in sections:
@@ -703,8 +703,7 @@ def _build_daily_report_body(db: Session, *, hotel_id: int, report_date: date, s
         outbound = [r for r in list_remitos(db, hotel_id=hotel_id, date_from=window_start) if r.direction == "outbound"]
         lines.append(f"Laundry outbound remitos (last 14 days): {len(outbound)}")
     if "critical_alerts" in sections:
-        critical = [a for a in report.alerts if a.severity in ("warning", "critical")]
-        lines.append(f"Alerts: {len(critical)}")
+        lines.append(f"Alerts: {report.warning_alert_count}")
 
     return "\n".join(lines), {}
 

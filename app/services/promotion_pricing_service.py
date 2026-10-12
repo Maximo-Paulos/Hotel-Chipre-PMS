@@ -215,10 +215,16 @@ def compute_canonical_stay_pricing(
         tax_policy=tax_policy,
         guest_scope=guest_scope,
         channel_code=sales_channel_code,
+        taxes_included=tax_policy.taxes_included,
+        currency_code=base_currency,
     )
     tax_amount = _quantize(Decimal(str(tax_amount_f)))
     fee_amount = _quantize(Decimal(str(fee_amount_f)))
-    gross_total = _quantize(subtotal + tax_amount + fee_amount)
+    if tax_policy.taxes_included:
+        gross_total = subtotal
+        subtotal = _quantize(max(gross_total - tax_amount - fee_amount, Decimal("0.00")))
+    else:
+        gross_total = _quantize(subtotal + tax_amount + fee_amount)
 
     # Step 5: currency conversion with an FX-rate snapshot.
     output_currency = base_currency

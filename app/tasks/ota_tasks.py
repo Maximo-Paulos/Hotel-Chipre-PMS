@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from typing import Optional
 
 import httpx
+from app.services.outbound_http_telemetry import observed_http_call
 
 from app.tasks.celery_app import celery_app
 from app.services.timezones import hotel_today
@@ -143,7 +144,7 @@ def _push_to_booking(availability: list[dict], category_id: int) -> dict:
 
     try:
         with httpx.Client(timeout=30.0) as client:
-            response = client.post(
+            response = observed_http_call("booking.availability_push", client.post,
                 f"{settings.BOOKING_API_URL}/availability",
                 json=payload,
                 auth=(settings.BOOKING_USERNAME, settings.BOOKING_PASSWORD),
@@ -182,7 +183,7 @@ def _push_to_expedia(availability: list[dict], category_id: int) -> dict:
 
     try:
         with httpx.Client(timeout=30.0) as client:
-            response = client.put(
+            response = observed_http_call("expedia.availability_push", client.put,
                 f"{settings.EXPEDIA_API_URL}/v3/properties/{settings.EXPEDIA_HOTEL_ID}/availability",
                 json=payload,
                 headers={

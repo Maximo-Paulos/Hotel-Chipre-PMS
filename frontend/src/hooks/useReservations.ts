@@ -42,6 +42,7 @@ import { validateGuestForCheckin, type GuestCheckinValidation } from "../api/gue
 import type { SessionState } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
 import { refreshReservationCreatedState, refreshReservationGuestState, refreshReservationRecordState } from "../api/queryInvalidation";
+import { EVENT_REFRESHED_QUERY_STALE_TIME_MS } from "../api/queryPolicy";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -77,7 +78,7 @@ export function useReservations(filters: ReservationFilters) {
     // Filters without a search term behave exactly as before.
     enabled: hasValidSession(session) && searchFilterReady,
     placeholderData: keepPreviousData,
-    staleTime: 1000 * 15,
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
     retry: false
   });
 }
@@ -157,7 +158,7 @@ export function usePendingReservationActions(limit = 100) {
     queryKey: pendingReservationActionsKey(session.hotelId, limit),
     queryFn: ({ signal }) => listPendingReservationActions(limit, session, signal),
     enabled: hasValidSession(session),
-    staleTime: 1000 * 15,
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
     retry: false
   });
 }
@@ -195,14 +196,21 @@ export function useReservationMutations(filters?: ReservationFilters) {
   // them twice would double-apply their side effects.
   const createMutation = useGuardedMutation({
     mutationFn: (payload: ReservationPayload) => createReservation(payload, session),
-    onSuccess: async () => invalidateCreatedReservation()
+    // The write response is authoritative for the operator. Let active lists,
+    // pending actions and occupancy reconcile in the background so a slow
+    // follow-up read cannot keep the create form open after the booking saved.
+    onSuccess: () => {
+      void invalidateCreatedReservation().catch(() => undefined);
+    }
   });
 
   // B4: "Cargar reserva de OTA" -- upsert by (channel, external_id), see
   // createManualOtaReservation.
   const createManualOtaMutation = useGuardedMutation({
     mutationFn: (payload: ManualOtaReservationPayload) => createManualOtaReservation(payload, session),
-    onSuccess: async () => invalidateCreatedReservation()
+    onSuccess: () => {
+      void invalidateCreatedReservation().catch(() => undefined);
+    }
   });
 
   const updateMutation = useGuardedMutation({

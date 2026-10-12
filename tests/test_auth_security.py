@@ -275,6 +275,36 @@ def test_successful_login_upgrades_legacy_bcrypt_hash(client_and_db):
     assert verify_password(LEGACY_PASSWORD, user.password_hash)
 
 
+def test_successful_login_does_not_run_scheduled_hotel_jobs(client_and_db, monkeypatch):
+    from app.tasks import notification_tasks
+
+    client, db, _session_factory = client_and_db
+    user = User(
+        email="scheduled-jobs-login@example.com",
+        password_hash=hash_password("E2E-login-pass-123!"),
+        role="owner",
+        is_verified=True,
+        is_active=True,
+    )
+    db.add(user)
+    db.flush()
+    db.add(HotelConfiguration(id=1, owner_email=user.email, hotel_name="Scheduled jobs hotel", subscription_active=True))
+    db.add(HotelMembership(hotel_id=1, user_id=user.id, role="owner", status="active"))
+    db.commit()
+
+    task_calls: list[str] = []
+    monkeypatch.setattr(notification_tasks, "generate_daily_reports", lambda: task_calls.append("reports"))
+    monkeypatch.setattr(notification_tasks, "process_outbox", lambda: task_calls.append("outbox"))
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": user.email, "password": "E2E-login-pass-123!"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert task_calls == []
+
+
 def test_argon2id_does_not_truncate_long_passwords():
     long_password = "long-password-" + ("x" * 100)
     hashed = hash_password(long_password)

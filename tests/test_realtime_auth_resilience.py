@@ -22,6 +22,9 @@ def test_realtime_auth_uses_recent_positive_check_during_pool_timeout(monkeypatc
 
 def test_realtime_auth_still_closes_stream_for_explicitly_inactive_member(monkeypatch):
     class Query:
+        def join(self, *_args, **_kwargs):
+            return self
+
         def filter(self, *_conditions):
             return self
 

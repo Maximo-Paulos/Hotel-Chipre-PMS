@@ -18,8 +18,8 @@ type AnalyticsEnvelope = {
   date_to?: string;
   currency_display?: string;
   generated_at: string;
-  data_as_of: string;
-  source_lag_seconds: number;
+  data_as_of: string | null;
+  source_lag_seconds: number | null;
   data_source?: string | null;
   comparison?: Record<string, unknown>;
   data: Record<string, unknown>;
@@ -31,8 +31,8 @@ type AnalyticsStarterSummary = {
   date_to?: string;
   data: { cards: Array<Record<string, unknown>> };
   generated_at: string;
-  data_as_of: string;
-  source_lag_seconds: number;
+  data_as_of: string | null;
+  source_lag_seconds: number | null;
   data_source?: string | null;
 };
 
@@ -464,7 +464,8 @@ function MetricGrid({ cards }: { cards: Array<Record<string, unknown>> }) {
   );
 }
 
-function formatFreshnessLag(seconds: number) {
+function formatFreshnessLag(seconds: number | null) {
+  if (seconds === null || !Number.isFinite(seconds)) return "antigüedad desconocida";
   if (!Number.isFinite(seconds) || seconds <= 0) return "al día";
   if (seconds < 60) return `${Math.round(seconds)} s de atraso`;
   if (seconds < 3600) return `${Math.round(seconds / 60)} min de atraso`;
@@ -476,24 +477,28 @@ function AnalyticsFreshness({
   sourceLagSeconds,
   dataSource
 }: {
-  dataAsOf: string;
-  sourceLagSeconds: number;
+  dataAsOf: string | null;
+  sourceLagSeconds: number | null;
   dataSource?: string | null;
 }) {
-  const asOf = new Date(dataAsOf);
-  const asOfLabel = Number.isNaN(asOf.getTime())
+  const asOf = dataAsOf ? new Date(dataAsOf) : null;
+  const asOfLabel = !asOf || Number.isNaN(asOf.getTime())
     ? "fecha no disponible"
     : new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" }).format(asOf);
   const normalizedSource = typeof dataSource === "string" ? dataSource.trim().toLowerCase() : "";
   const sourceLabel = normalizedSource === "clickhouse" ? "ClickHouse" : normalizedSource === "postgresql" ? "PostgreSQL" : normalizedSource || "PostgreSQL";
-  const isDelayed = Number.isFinite(sourceLagSeconds) && sourceLagSeconds > 0;
+  const freshnessLabel =
+    dataAsOf === null || sourceLagSeconds === null
+      ? "frescura no verificada"
+      : formatFreshnessLag(sourceLagSeconds);
+  const isDelayed = freshnessLabel !== "al día";
   return (
     <div
       className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border px-3 py-2 text-xs ${
         isDelayed ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"
       }`}
       role="status"
-      aria-label={`Datos ${sourceLabel}, ${formatFreshnessLag(sourceLagSeconds)}`}
+      aria-label={`Datos ${sourceLabel}, ${freshnessLabel}`}
     >
       <span className="font-semibold">Fuente: {sourceLabel}</span>
       <span aria-hidden="true">•</span>
@@ -712,6 +717,7 @@ function StarterLandingScreen() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">Qué incluye Pro y Ultra</h2>
           <ul className="mt-3 space-y-2 text-sm text-slate-700">
+            <li>• Desglose de ingresos por canal y segmento disponible en Starter.</li>
             <li>• Analytics completo con comparadores y drill-down.</li>
             <li>• Exportes PNG/CSV en Pro.</li>
             <li>• Exportes XLSX, IA Gemma, alertas y snooze en Ultra.</li>
@@ -794,11 +800,7 @@ export function AnalyticsCategoryDetailPage() {
 }
 
 export function AnalyticsSegmentsPage() {
-  return (
-    <PlanGuard>
-      <ReportScreen title="Segmentos" subtitle="Lectura por segmento de huésped." path="/api/analytics/segments" routeName="segments" />
-    </PlanGuard>
-  );
+  return <ReportScreen title="Segmentos" subtitle="Lectura por segmento de huésped." path="/api/analytics/segments" routeName="segments" />;
 }
 
 export function AnalyticsCompanyDetailPage() {
@@ -816,11 +818,7 @@ export function AnalyticsCompanyDetailPage() {
 }
 
 export function AnalyticsChannelsPage() {
-  return (
-    <PlanGuard>
-      <ReportScreen title="Canales" subtitle="Mix de canales y performance por origen." path="/api/analytics/channels" routeName="channels" />
-    </PlanGuard>
-  );
+  return <ReportScreen title="Canales" subtitle="Mix de canales y performance por origen." path="/api/analytics/channels" routeName="channels" />;
 }
 
 export function AnalyticsOperationsPage() {

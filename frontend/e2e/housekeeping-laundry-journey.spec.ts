@@ -33,6 +33,58 @@ async function logout(page: Page) {
   await page.waitForURL("**/login");
 }
 
+test("laundry data stays cached across navigation and refreshes after a saved vendor", async ({ page }) => {
+  test.skip(process.env.REALTIME_E2E !== "true", "La actualización tras guardar depende de realtime activo.");
+  const watchedPaths = [
+    "/api/laundry/vendors",
+    "/api/laundry/items",
+    "/api/laundry/locations",
+    "/api/laundry/remitos"
+  ];
+  const requestCounts = new Map(watchedPaths.map((path) => [path, 0]));
+  page.on("request", (request) => {
+    if (request.method() !== "GET") return;
+    const pathname = new URL(request.url()).pathname;
+    if (requestCounts.has(pathname)) requestCounts.set(pathname, requestCounts.get(pathname)! + 1);
+  });
+
+  await login(page, owner, "/dashboard");
+  const initialReads = watchedPaths.map((path) => page.waitForResponse((response) =>
+    response.request().method() === "GET" && new URL(response.url()).pathname === path
+  ));
+  await page.goto("/operacion/lavanderia");
+  for (const response of await Promise.all(initialReads)) expect(response.status()).toBe(200);
+  await expect(page.getByText("Conectado: cambios en tiempo real activos.", { exact: true })).toBeVisible();
+  await page.waitForTimeout(500);
+  const warmCounts = new Map(requestCounts);
+
+  const dashboardLink = page.getByRole("link", { name: "Dashboard", exact: true });
+  if (!(await dashboardLink.isVisible())) await page.getByText("Más operación", { exact: true }).click();
+  await dashboardLink.click();
+  await expect(page.getByRole("heading", { name: "Visión general", exact: true })).toBeVisible();
+  const laundryLink = page.getByRole("link", { name: "Lavandería", exact: true });
+  if (!(await laundryLink.isVisible())) await page.getByText("Más operación", { exact: true }).click();
+  await laundryLink.click();
+  await expect(page.getByRole("heading", { name: "Lavandería", exact: true })).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(requestCounts).toEqual(warmCounts);
+
+  const vendorName = `QA Cache Lavadero ${Date.now()}`;
+  const vendorRefresh = page.waitForResponse((response) =>
+    response.request().method() === "GET" && new URL(response.url()).pathname === "/api/laundry/vendors"
+  );
+  const vendorCreate = page.waitForResponse((response) =>
+    response.request().method() === "POST" && new URL(response.url()).pathname === "/api/laundry/vendors"
+  );
+  const vendorForm = page.locator("form").filter({ hasText: "Nuevo lavadero" });
+  await vendorForm.getByLabel("Nombre").fill(vendorName);
+  await vendorForm.getByRole("button", { name: "Crear lavadero", exact: true }).click();
+  expect((await vendorCreate).status()).toBe(201);
+  expect((await vendorRefresh).status()).toBe(200);
+  await expect(page.getByText(`Lavadero \"${vendorName}\" creado.`, { exact: true })).toBeVisible();
+  expect(requestCounts.get("/api/laundry/vendors")).toBe((warmCounts.get("/api/laundry/vendors") ?? 0) + 1);
+});
+
 test("housekeeping sends a laundry remito on a vendor set up by the owner", async ({ page }) => {
   const suffix = Date.now().toString();
   const vendorName = `QA HK Lavadero ${suffix}`;
@@ -93,6 +145,11 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
   await vendorForm.getByLabel("Nombre").fill(vendorName);
   await vendorForm.getByRole("button", { name: "Crear lavadero", exact: true }).click();
   await expect(page.getByText(`Lavadero "${vendorName}" creado.`, { exact: true })).toBeVisible();
+  const vendorPriceForm = page.locator("form").filter({ hasText: "Guardar precio" });
+  await vendorPriceForm.getByLabel("Ítem").selectOption({ label: itemName });
+  await vendorPriceForm.getByLabel("Precio por unidad").fill("100");
+  await vendorPriceForm.getByRole("button", { name: "Guardar precio", exact: true }).click();
+  await expect(page.getByText("Precio guardado.", { exact: true })).toBeVisible();
   await logout(page);
 
   await login(page, housekeeping, "/habitaciones");
@@ -114,9 +171,6 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
   await remitoForm.getByLabel("N° de remito (papel)").fill(`R-HK-${suffix}`);
   await remitoForm.getByLabel(`Retiro ${itemName}`, { exact: true }).fill("5");
   await remitoForm.getByRole("button", { name: "Guardar remito", exact: true }).click();
-  // No price was set for this vendor/item (out of scope for a permission
-  // test), so the success message also carries the "sin precio" warning --
-  // assert the guardado fragment is present, not the whole string.
   await expect(page.getByText(`Remito R-HK-${suffix} guardado.`, { exact: false })).toBeVisible();
 
   const remitoEntry = main

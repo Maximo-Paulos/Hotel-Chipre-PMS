@@ -1,4 +1,9 @@
-import { broadcastDomainChange } from "../sync/crossTabSync";
+import {
+  beginLocalDomainMutation,
+  broadcastDomainChange,
+  finishLocalDomainMutation
+} from "../sync/crossTabSync";
+import i18n from "../i18n";
 
 export type SessionLike = {
   hotelId?: number | null;
@@ -349,6 +354,8 @@ type RequestOptions = {
   signal?: AbortSignal;
   timeoutMs?: number;
   session?: SessionLike;
+  responseType?: "json" | "blob";
+  domainEventOriginKey?: string;
 };
 
 const createRequestDeadline = (callerSignal: AbortSignal | undefined, timeoutMs: number) => {
@@ -398,7 +405,12 @@ const mergeSession = (session?: SessionLike | null): SessionLike | null => {
   };
 };
 
-const requestHeaders = (method: string, session: SessionLike | null, headers?: HeadersInit) => {
+const requestHeaders = (
+  method: string,
+  session: SessionLike | null,
+  headers?: HeadersInit,
+  domainEventOriginKey?: string
+) => {
   const finalHeaders = new Headers();
   finalHeaders.set("Content-Type", "application/json");
   Object.entries(buildAuthHeaders(session ?? undefined)).forEach(([key, value]) => finalHeaders.set(key, value));
@@ -407,9 +419,11 @@ const requestHeaders = (method: string, session: SessionLike | null, headers?: H
   if (MUTATING_METHODS.has(method) && csrfToken) {
     finalHeaders.set("X-CSRF-Token", csrfToken);
   }
-
   if (headers) {
     new Headers(headers).forEach((value, key) => finalHeaders.set(key, value));
+  }
+  if (MUTATING_METHODS.has(method) && domainEventOriginKey) {
+    finalHeaders.set("X-Domain-Event-Origin", domainEventOriginKey);
   }
   return finalHeaders;
 };
@@ -478,8 +492,15 @@ const makeApiError = (response: Response, payload: unknown) => {
     typeof payload === "object" && payload !== null && "detail" in (payload as Record<string, unknown>)
       ? (payload as Record<string, unknown>).detail
       : undefined;
-  const message = formatErrorDetail(detail) || response.statusText || "Request failed";
+  const message = formatErrorDetail(detail) || requestFailureFallback();
   return new ApiError(response.status, message, payload);
+};
+
+const requestFailureFallback = () => {
+  if (i18n?.language?.toLowerCase().startsWith("en")) {
+    return "The request could not be completed. Please try again.";
+  }
+  return "No se pudo completar la solicitud. Intentá de nuevo.";
 };
 
 const isAuthResponsePayload = (payload: unknown): payload is AuthResponsePayload => {
@@ -579,9 +600,17 @@ async function requestWithRefresh<T>(
   allowActionStepUp = true,
   actionStepUpTicket?: string
 ): Promise<T> {
-  const { method = "GET", data, headers, signal, session } = options;
+  const {
+    method = "GET",
+    data,
+    headers,
+    signal,
+    session,
+    responseType = "json",
+    domainEventOriginKey
+  } = options;
   const requestSession = mergeSession(session);
-  const fetchHeaders = requestHeaders(method, requestSession, headers);
+  const fetchHeaders = requestHeaders(method, requestSession, headers, domainEventOriginKey);
   const readStepUpTicket = getPermissionAdminReadStepUpTicket(method, path, requestSession);
   const readStepUpTicketUsed = Boolean(
     readStepUpTicket &&
@@ -590,13 +619,28 @@ async function requestWithRefresh<T>(
   );
   if (actionStepUpTicket) fetchHeaders.set("X-Action-Step-Up-Ticket", actionStepUpTicket);
   else if (readStepUpTicketUsed) fetchHeaders.set("X-Action-Step-Up-Ticket", readStepUpTicket as string);
-  const response = await fetch(buildUrl(path), {
-    method,
-    headers: fetchHeaders,
-    body: data !== undefined ? JSON.stringify(data) : undefined,
-    signal,
-    credentials: "include"
-  });
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path), {
+      method,
+      headers: fetchHeaders,
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+      signal,
+      credentials: "include"
+    });
+  } catch (error) {
+    if (error instanceof TypeError && !signal?.aborted) {
+      throw new ApiError(0, requestFailureFallback());
+    }
+    throw error;
+  }
+
+  if (response.ok && responseType === "blob") {
+    if (MUTATING_METHODS.has(method) && requestSession?.hotelId) {
+      broadcastDomainChange(requestSession.hotelId, path, domainEventOriginKey);
+    }
+    return (await response.blob()) as T;
+  }
 
   const text = await response.text();
   const payload = text ? safeJson(text) : null;
@@ -682,7 +726,7 @@ async function requestWithRefresh<T>(
   }
 
   if (MUTATING_METHODS.has(method) && requestSession?.hotelId) {
-    broadcastDomainChange(requestSession.hotelId, path);
+    broadcastDomainChange(requestSession.hotelId, path, domainEventOriginKey);
   }
 
   return payload as T;
@@ -690,21 +734,39 @@ async function requestWithRefresh<T>(
 
 export async function apiFetch<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = options.method ?? "GET";
+  const normalizedMethod = method.toUpperCase();
+  const domainEventOriginKey = MUTATING_METHODS.has(normalizedMethod)
+    ? typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : undefined
+    : undefined;
+  const requestSession = mergeSession(options.session);
+  if (domainEventOriginKey) {
+    beginLocalDomainMutation(requestSession?.hotelId, path, domainEventOriginKey);
+  }
   const timeoutMs = options.timeoutMs ?? (
-    MUTATING_METHODS.has(method.toUpperCase())
+    MUTATING_METHODS.has(normalizedMethod)
       ? DEFAULT_API_MUTATION_TIMEOUT_MS
       : DEFAULT_API_REQUEST_TIMEOUT_MS
   );
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    if (domainEventOriginKey) finishLocalDomainMutation(requestSession?.hotelId, domainEventOriginKey, false);
     throw new RangeError("timeoutMs must be a positive finite number");
   }
 
   const deadline = createRequestDeadline(options.signal, timeoutMs);
+  let succeeded = false;
   try {
-    return await Promise.race<T>([
-      requestWithRefresh<T>(path, { ...options, signal: deadline.signal }, true),
+    const result = await Promise.race<T>([
+      requestWithRefresh<T>(
+        path,
+        { ...options, domainEventOriginKey, signal: deadline.signal },
+        true
+      ),
       deadline.timeoutPromise
     ]);
+    succeeded = true;
+    return result;
   } catch (error) {
     if (deadline.didTimeout()) {
       const message = MUTATING_METHODS.has(method.toUpperCase())
@@ -714,6 +776,7 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
     }
     throw error;
   } finally {
+    if (domainEventOriginKey) finishLocalDomainMutation(requestSession?.hotelId, domainEventOriginKey, succeeded);
     deadline.dispose();
   }
 }
@@ -743,6 +806,7 @@ const formatErrorDetail = (detail: unknown): string | null => {
   }
   if (detail && typeof detail === "object") {
     const rec = detail as Record<string, unknown>;
+    if (typeof rec.message === "string") return rec.message;
     if (typeof rec.msg === "string") return rec.msg;
   }
   return null;

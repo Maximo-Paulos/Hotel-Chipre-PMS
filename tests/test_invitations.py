@@ -814,6 +814,9 @@ def _enable_test_google(monkeypatch):
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
     monkeypatch.setenv("GOOGLE_LOGIN_ENABLED", "true")
     monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    # These tests replace Google's token verifier; keep the provider lane
+    # explicitly enabled only for the mocked request under test.
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
     get_settings.cache_clear()
 
 

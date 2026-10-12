@@ -9,7 +9,9 @@ type CheckoutStubProps = {
 export function CheckoutStub({ open, plan, onClose }: CheckoutStubProps) {
   if (!open || !plan) return null;
 
-  const price = plan.price_month != null && plan.price_month >= 0 ? `$${plan.price_month}/mes` : "Precio no publicado";
+  const price = plan.price_month != null && plan.price_month >= 0
+    ? `${plan.price_currency ?? "USD"} $${plan.price_month}/mes`
+    : "Precio no publicado";
 
   return (
     <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-slate-900/50 px-4 py-6">
@@ -39,7 +41,7 @@ export function CheckoutStub({ open, plan, onClose }: CheckoutStubProps) {
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Precio del plan</p>
             <p className="text-base font-semibold text-slate-900">{price}</p>
-            <p className="text-xs text-slate-500">El precio definitivo todavía no está aprobado ni publicado.</p>
+            <p className="text-xs text-slate-500">El pago real todavía no está disponible.</p>
           </div>
 
           {plan.features?.length ? (

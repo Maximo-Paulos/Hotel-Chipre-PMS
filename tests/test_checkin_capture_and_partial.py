@@ -104,10 +104,10 @@ def test_checkin_without_new_fields_fails_with_clear_message(monkeypatch):
         response = client.post(f"/api/checkin/{reservation.id}")
         assert response.status_code == 400
         detail = response.json()["detail"]
-        assert "Birth place is required" in detail
-        assert "Birth country is required" in detail
-        assert "Marital status is required" in detail
-        assert "Occupation is required" in detail
+        assert "El lugar de nacimiento es obligatorio" in detail
+        assert "El país de nacimiento es obligatorio" in detail
+        assert "El estado civil es obligatorio" in detail
+        assert "La ocupación es obligatoria" in detail
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()
@@ -186,7 +186,7 @@ def test_partial_checkin_requires_full_payment_under_default_policy(monkeypatch)
 
         response = client.post(f"/api/checkin/{reservation.id}/partial")
         assert response.status_code == 400
-        assert "full reservation amount" in response.json()["detail"]
+        assert "importe total de la reserva" in response.json()["detail"]
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

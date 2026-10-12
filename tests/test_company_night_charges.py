@@ -2,6 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import event
 
 from app.models.company import Company
 from app.models.guest import Guest
@@ -141,6 +142,41 @@ def test_company_night_charges_snapshot_configured_rate_and_skip_duplicates(
     assert [charge.stay_date for charge in first.charges] == selected_dates
     assert [charge.amount for charge in repeated.charges] == [Decimal("75.00"), Decimal("75.00")]
     assert db.query(BillingAdjustment).filter_by(hotel_id=1, reservation_id=reservation.id).count() == 2
+
+
+def test_company_night_charge_batch_resolves_rate_history_with_bounded_queries(
+    db, sample_guest, sample_rooms, sample_categories, hotel_config
+):
+    _company, reservation, today = _company_reservation(
+        db,
+        sample_guest=sample_guest,
+        sample_rooms=sample_rooms,
+        sample_categories=sample_categories,
+    )
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement.lower())
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        summary = add_company_night_charges(
+            db,
+            hotel_id=1,
+            reservation_id=reservation.id,
+            stay_dates=[today, today + timedelta(days=1), today + timedelta(days=2)],
+            actor_user_id=None,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    rate_selects = [statement for statement in statements if "from company_nightly_surcharge_rates" in statement]
+    assert len(summary.charges) == 3
+    # The three-night batch uses a predecessor lookup, a bounded range lookup,
+    # and one current-rate read for the response. It must not query once per
+    # selected night.
+    assert len(rate_selects) <= 3, f"expected bounded rate reads, got {len(rate_selects)}"
 
 
 def test_company_night_charges_use_effective_rate_and_extra_person_quantity(
@@ -311,6 +347,54 @@ def test_explicit_charge_correction_audits_delta_without_rewriting_payment_histo
     assert db.query(CompanyNightChargePaymentAllocation).filter_by(company_night_charge_id=charge.id).count() == 1
     assert billing_adjustment.amount == Decimal("90.00")
     assert billing_adjustment.total_amount == Decimal("90.00")
+
+
+def test_company_night_charge_corrections_lock_ledger_rows_as_one_batch(
+    db, sample_guest, sample_rooms, sample_categories, hotel_config
+):
+    _company, reservation, today = _company_reservation(
+        db,
+        sample_guest=sample_guest,
+        sample_rooms=sample_rooms,
+        sample_categories=sample_categories,
+    )
+    created = add_company_night_charges(
+        db,
+        hotel_id=1,
+        reservation_id=reservation.id,
+        stay_dates=[today, today + timedelta(days=1), today + timedelta(days=2)],
+        actor_user_id=None,
+    )
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def capture(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement.lower())
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        corrected = correct_company_night_charge_amounts(
+            db,
+            hotel_id=1,
+            reservation_id=reservation.id,
+            items=[
+                {"charge_id": charge.id, "new_amount": Decimal("90.00"), "reason": "Ajuste aprobado"}
+                for charge in created.charges
+            ],
+            actor_user_id=None,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    billing_adjustment_selects = [
+        statement
+        for statement in statements
+        if statement.lstrip().startswith("select") and "from billing_adjustments" in statement
+    ]
+    assert [charge.amount for charge in corrected.charges] == [Decimal("90.00")] * 3
+    # One batched row-lock read and one ledger total are independent of the
+    # number of selected nights; the earlier implementation queried each row.
+    assert len(billing_adjustment_selects) == 2, billing_adjustment_selects
 
 
 def test_company_night_payment_requires_exact_selected_nights_and_tracks_pending_then_paid(
@@ -536,7 +620,7 @@ def test_payment_service_enforces_and_persists_company_night_allocations(
     different_night_retry = selected_night_payment.model_copy(
         update={"company_night_charge_ids": [summary.charges[1].id]}
     )
-    with pytest.raises(PaymentError, match="Idempotency key was already used"):
+    with pytest.raises(PaymentError, match="clave de idempotencia"):
         process_payment(
             db,
             different_night_retry,
@@ -667,7 +751,7 @@ def test_company_night_refund_reduces_only_the_selected_night(
             ]
         }
     )
-    with pytest.raises(PaymentError, match="Idempotency key was already used"):
+    with pytest.raises(PaymentError, match="clave de idempotencia"):
         process_payment(
             db,
             changed_night_retry,

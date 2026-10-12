@@ -31,7 +31,7 @@ test("reservations and reports read queries forward their TanStack abort signal 
   assert.match(reservationHooks, /queryFn: \(\{ signal \}\) => listReservations\(filters, session, signal\)/);
   assert.match(reservationHooks, /queryFn: \(\{ signal \}\) => listPendingReservationActions\(limit, session, signal\)/);
   assert.match(reservationHooks, /retry: false/);
-  assert.match(reportHooks, /queryFn: \(\{ signal \}\) => getDailyOperationalReport\(reportDate, session, signal\)/);
+  assert.match(reportHooks, /queryFn: \(\{ signal \}\) => getDailyOperationalReport\(reportDate, pendingPage, session, signal, pendingPageSize\)/);
   assert.match(reportHooks, /queryFn: \(\{ signal \}\) => getOccupancyReport\(startDate, endDate, session, signal\)/);
   assert.match(reservationApi, /listPendingReservationActions = \(limit = 100, session\?: SessionLike, signal\?: AbortSignal\)/);
 });

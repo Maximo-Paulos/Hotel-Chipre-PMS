@@ -3,7 +3,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { hasValidSession } from "../../api/client";
+import { invalidateQueriesInBackground } from "../../api/queryInvalidation";
 import { queryKeys } from "../../api/queryKeys";
+import { EVENT_REFRESHED_QUERY_STALE_TIME_MS } from "../../api/queryPolicy";
 import { getHousekeepingBoard, updateRoomCleaningStatus, type HousekeepingStatus } from "../../api/rooms";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
@@ -29,14 +31,14 @@ export function HousekeepingTodayPage() {
     queryKey: queryKeys.housekeepingBoard(session.hotelId),
     queryFn: () => getHousekeepingBoard(session),
     enabled,
-    staleTime: 15_000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const statusMutation = useGuardedMutation({
     mutationFn: ({ roomId, status }: { roomId: number; status: HousekeepingStatus }) =>
       updateRoomCleaningStatus(roomId, status, undefined, session),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["housekeeping-board", session.hotelId] });
-      await queryClient.invalidateQueries({ queryKey: ["rooms", session.hotelId] });
+    onSuccess: () => {
+      invalidateQueriesInBackground(queryClient, { queryKey: ["housekeeping-board", session.hotelId] });
+      invalidateQueriesInBackground(queryClient, { queryKey: ["rooms", session.hotelId] });
     }
   });
 

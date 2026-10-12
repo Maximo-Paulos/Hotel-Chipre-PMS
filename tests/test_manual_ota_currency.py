@@ -14,6 +14,7 @@ from app.services.financial_ledger import (
     reconciled_paid_amounts_by_reservation,
 )
 from app.services.financial_report_service import build_financial_report
+from app.services.timezones import hotel_today
 from app.services.ota_manual_service import create_or_update_manual_ota_reservation
 from app.services.timezones import hotel_today
 

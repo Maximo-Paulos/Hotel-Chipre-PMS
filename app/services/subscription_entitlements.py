@@ -20,9 +20,9 @@ from app.models.subscription_v2 import Subscription, SubscriptionAdjustment, Sub
 
 # Minimal catalog for the new plans
 PLAN_CATALOG: Dict[str, Dict[str, Any]] = {
-    "starter": {"name": "Starter", "room_limit": 15, "staff_limit": 3, "price_month": None},
-    "pro": {"name": "Pro", "room_limit": 40, "staff_limit": 8, "price_month": None},
-    "ultra": {"name": "Ultra", "room_limit": 80, "staff_limit": 20, "price_month": None},
+    "starter": {"name": "Starter", "room_limit": 15, "staff_limit": 3, "price_month": 20},
+    "pro": {"name": "Pro", "room_limit": 40, "staff_limit": 8, "price_month": 100},
+    "ultra": {"name": "Ultra", "room_limit": 80, "staff_limit": 20, "price_month": 200},
 }
 
 # Feature-level entitlements stay alongside the canonical plan catalog so
@@ -58,7 +58,7 @@ def _plan_defaults(plan_code: str) -> Dict[str, Any]:
 def plan_catalog() -> list[Dict[str, Any]]:
     """Return the available plan catalog as a list for API responses."""
     return [
-        {"code": code, **data}
+        {"code": code, **data, "price_currency": "USD"}
         for code, data in PLAN_CATALOG.items()
     ]
 

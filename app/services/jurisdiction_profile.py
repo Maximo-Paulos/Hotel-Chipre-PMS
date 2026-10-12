@@ -10,16 +10,16 @@ from dataclasses import dataclass
 
 
 FIELD_MESSAGES = {
-    "first_name": "First name is required",
-    "last_name": "Last name is required",
-    "document_type": "Document type (DNI/Passport) is required",
-    "document_number": "Document number is required",
-    "nationality": "Nationality is required",
-    "country": "Country is required",
-    "birth_place": "Birth place is required",
-    "birth_country": "Birth country is required",
-    "marital_status": "Marital status is required",
-    "occupation": "Occupation is required",
+    "first_name": "El nombre es obligatorio",
+    "last_name": "El apellido es obligatorio",
+    "document_type": "El tipo de documento (DNI/pasaporte) es obligatorio",
+    "document_number": "El número de documento es obligatorio",
+    "nationality": "La nacionalidad es obligatoria",
+    "country": "El país es obligatorio",
+    "birth_place": "El lugar de nacimiento es obligatorio",
+    "birth_country": "El país de nacimiento es obligatorio",
+    "marital_status": "El estado civil es obligatorio",
+    "occupation": "La ocupación es obligatoria",
 }
 
 # B3.3: mandatory for every check-in regardless of jurisdiction/config —
@@ -100,11 +100,11 @@ def compute_missing_guest_fields(
     for field_name in required_fields:
         value = getattr(guest, field_name, None)
         if value is None or (isinstance(value, str) and not value.strip()):
-            message = FIELD_MESSAGES.get(field_name, f"{field_name} is required")
+            message = FIELD_MESSAGES.get(field_name, "Este dato es obligatorio")
             if message not in missing:
                 missing.append(message)
 
     if require_terms and profile.requires_terms_acceptance and not getattr(guest, "terms_accepted", False):
-        missing.append("Guest must accept terms and conditions")
+        missing.append("El huésped debe aceptar los términos y condiciones")
 
     return missing

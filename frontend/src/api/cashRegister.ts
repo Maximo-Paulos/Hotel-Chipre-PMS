@@ -80,6 +80,15 @@ export type CashSessionSummary = {
   confirmed_cash_total: number;
   expected_balance: number;
   movements_count: number;
+  by_collector: Array<{
+    collector_user_id: number | null;
+    collector_name: string;
+    income_total: number;
+    expense_total: number;
+    adjustment_total: number;
+    net_total: number;
+    movement_count: number;
+  }>;
 };
 
 export type CashDailyPaymentMethod = {
@@ -297,6 +306,29 @@ export const downloadCashLedgerCsv = async (
   });
   if (!response.ok) {
     let message = response.statusText || "No se pudo exportar la caja";
+    try {
+      const payload = await response.json() as { detail?: string };
+      message = payload.detail || message;
+    } catch {
+      // Keep the safe HTTP status message when the response is not JSON.
+    }
+    throw new Error(message);
+  }
+  return response.blob();
+};
+
+export const downloadCashExpensesCsv = async (
+  fromDate: string,
+  toDate: string,
+  session?: SessionLike
+): Promise<Blob> => {
+  const query = new URLSearchParams({ from: fromDate, to: toDate });
+  const response = await fetch(buildUrl(`/api/cash-register/expenses/export.csv?${query.toString()}`), {
+    headers: buildAuthHeaders(session),
+    credentials: "include"
+  });
+  if (!response.ok) {
+    let message = response.statusText || "No se pudo exportar gastos";
     try {
       const payload = await response.json() as { detail?: string };
       message = payload.detail || message;

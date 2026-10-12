@@ -48,11 +48,28 @@ type ReservationRecordRefreshOptions = {
 };
 
 /**
- * Invalidate every active query affected by a committed mutation and wait for
- * its refetch to settle. Inactive queries are marked stale and reconcile when
- * opened. A refetch failure retains the last data but does not roll back the
- * committed mutation. The predicate requires a known tenant index so an
- * unscoped operational key cannot cross tenant boundaries.
+ * Mark committed-write queries stale and start active refetches without making
+ * the mutation wait for network reads. The last successful cache stays visible
+ * until each authoritative response arrives.
+ */
+export function invalidateQueriesInBackground(
+  queryClient: QueryClient,
+  filters: NonNullable<Parameters<QueryClient["invalidateQueries"]>[0]>
+): void {
+  const refetch = queryClient.invalidateQueries(
+    { ...filters, refetchType: filters.refetchType ?? "active" },
+    { throwOnError: false }
+  );
+  void refetch.catch(() => undefined);
+}
+
+/**
+ * Invalidate every query affected by a committed mutation. Active views start
+ * reconciling in the background so a slow read cannot keep a successful save
+ * in a pending state; inactive queries are marked stale and reconcile when
+ * opened. Realtime event recovery uses `refreshDomains` below, which waits for
+ * active views before advancing its cursor. The predicate requires a known
+ * tenant index so an unscoped operational key cannot cross tenant boundaries.
  */
 export async function refreshAfterMutation(
   queryClient: QueryClient,
@@ -62,39 +79,51 @@ export async function refreshAfterMutation(
   if (!hotelId || !Number.isInteger(hotelId) || hotelId <= 0 || domains.length === 0) return;
 
   const prefixes = new Set(domains.flatMap((domain) => QUERY_PREFIXES_BY_DOMAIN[domain]));
-  await refreshHotelQueriesByPrefix(queryClient, hotelId, prefixes);
+  await refreshHotelQueriesByPrefix(queryClient, hotelId, prefixes, false);
 }
 
 const refreshHotelQueriesByPrefix = async (
   queryClient: QueryClient,
   hotelId: number,
-  prefixes: ReadonlySet<string>
+  prefixes: ReadonlySet<string>,
+  waitForActiveRefetch = true
 ): Promise<void> => {
-  await refreshHotelQueries(queryClient, hotelId, (queryKey) => {
-    const prefix = queryKey[0];
-    return typeof prefix === "string" && prefixes.has(prefix);
-  });
+  return refreshHotelQueries(
+    queryClient,
+    hotelId,
+    (queryKey) => {
+      const prefix = queryKey[0];
+      return typeof prefix === "string" && prefixes.has(prefix);
+    },
+    waitForActiveRefetch
+  );
 };
 
 const refreshHotelQueries = async (
   queryClient: QueryClient,
   hotelId: number,
-  matches: (queryKey: readonly unknown[]) => boolean
+  matches: (queryKey: readonly unknown[]) => boolean,
+  waitForActiveRefetch = true
 ): Promise<void> => {
-  await queryClient.invalidateQueries({
+  const filters: NonNullable<Parameters<QueryClient["invalidateQueries"]>[0]> = {
     predicate: (query) => {
       const prefix = query.queryKey[0];
       if (typeof prefix !== "string" || !matches(query.queryKey)) return false;
       const hotelIndex = HOTEL_ID_INDEX_BY_QUERY_PREFIX[prefix];
       return hotelIndex !== undefined && query.queryKey[hotelIndex] === hotelId;
     },
-    // Wait for active views to reconcile after the committed write.
     refetchType: "active"
-  }, {
+  };
+  const refetch = queryClient.invalidateQueries(filters, {
     // A committed mutation stays committed even if one active cache refetch
     // has a transient network error. TanStack keeps the last successful data.
     throwOnError: false
   });
+  if (waitForActiveRefetch) {
+    await refetch;
+    return;
+  }
+  void refetch.catch(() => undefined);
 };
 
 const validHotelId = (hotelId: number | null | undefined): hotelId is number =>
@@ -133,7 +162,7 @@ const refreshReservationQueries = (
       return queryKey[2] === options.reservationId;
     }
     return true;
-  });
+  }, false);
 };
 
 /** Refresh reservation-facing caches without involving payments or cash. */
@@ -154,7 +183,8 @@ export const refreshReservationCreatedState = (
   return refreshHotelQueriesByPrefix(
     queryClient,
     hotelId,
-    new Set(["reservations", "reservation-pending-actions", "occupancy-grid"])
+    new Set(["reservations", "reservation-pending-actions", "occupancy-grid"]),
+    false
   );
 };
 
@@ -190,6 +220,12 @@ export const refreshGuestState = (
   void guestId;
   return refreshAfterMutation(queryClient, hotelId, ["guests", "reservations", "analytics"]);
 };
+
+/** A newly created guest cannot yet change an existing reservation projection. */
+export const refreshGuestCreatedState = (
+  queryClient: QueryClient,
+  hotelId: number | null | undefined
+) => refreshAfterMutation(queryClient, hotelId, ["guests", "analytics"]);
 
 export const refreshCashState = (queryClient: QueryClient, hotelId: number | null | undefined) =>
   refreshAfterMutation(queryClient, hotelId, ["cash", "payments", "analytics"]);

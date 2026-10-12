@@ -33,12 +33,14 @@ def test_derived_analytics_has_incremental_and_nightly_schedules():
 
 
 def test_sandbox_has_no_scheduled_network_tasks():
-    assert build_beat_schedule(
+    schedule = build_beat_schedule(
         Settings(EXTERNAL_EFFECTS_ENABLED=False, CONNECTIONS_ENABLED=False)
-    ) == {}
+    )
+    assert set(schedule) == {"reservations-no-show-sweep"}
+    assert schedule["reservations-no-show-sweep"]["task"] == "reservations.sweep_no_shows"
     assert build_beat_schedule(
         Settings(EXTERNAL_EFFECTS_ENABLED=True, CONNECTIONS_ENABLED=False)
-    ) == {}
+    )["reservations-no-show-sweep"]["task"] == "reservations.sweep_no_shows"
 
 
 def test_closed_sandbox_with_internal_redis_schedules_only_domain_event_replay():
@@ -53,7 +55,7 @@ def test_closed_sandbox_with_internal_redis_schedules_only_domain_event_replay()
         )
     )
 
-    assert set(schedule) == {"domain-events-publish-outbox"}
+    assert set(schedule) == {"domain-events-publish-outbox", "reservations-no-show-sweep"}
     assert schedule["domain-events-publish-outbox"] == {
         "task": "domain_events.publish_outbox",
         "schedule": 30.0,
@@ -85,9 +87,9 @@ def test_closed_sandbox_keeps_beat_empty_without_explicit_matching_redis():
         CELERY_RESULT_BACKEND="redis://redis:6379/0",
     )
 
-    assert build_beat_schedule(settings_without_redis) == {}
-    assert build_beat_schedule(settings_with_mismatched_redis) == {}
-    assert build_beat_schedule(settings_with_realtime_disabled) == {}
+    for settings in (settings_without_redis, settings_with_mismatched_redis, settings_with_realtime_disabled):
+        schedule = build_beat_schedule(settings)
+        assert set(schedule) == {"reservations-no-show-sweep"}
 
 
 def _safe_worker_env() -> dict[str, str]:
@@ -126,7 +128,7 @@ def test_celery_process_accepts_explicit_closed_production_profile():
             "-c",
             f"{_ISOLATED_WORKER_IMPORT}; "
             "schedule=app.tasks.celery_app.celery_app.conf.beat_schedule; "
-            "assert set(schedule) == {'domain-events-publish-outbox'}; "
+            "assert set(schedule) == {'domain-events-publish-outbox', 'reservations-no-show-sweep'}; "
             "assert schedule['domain-events-publish-outbox']['task'] == 'domain_events.publish_outbox'; "
             "assert schedule['domain-events-publish-outbox']['schedule'] == 30.0",
         ],
