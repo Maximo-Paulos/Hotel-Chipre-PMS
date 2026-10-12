@@ -1,13 +1,13 @@
 # Graph Report - .  (2026-10-12)
 
 ## Corpus Check
-- Large corpus: 1571 files · ~2,195,317 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
+- Large corpus: 1571 files · ~2,195,866 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
 
 ## Summary
-- 14204 nodes · 48585 edges · 639 communities detected
+- 14208 nodes · 48594 edges · 639 communities detected
 - Extraction: 74% EXTRACTED · 26% INFERRED · 0% AMBIGUOUS · INFERRED: 12707 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
-- Edge kinds: uses: 12707 · contains: 9496 · ON_BRANCH: 7402 · calls: 7127 · MODIFIES: 4481 · rationale_for: 2213 · imports: 1649 · imports_from: 1348 · inherits: 949 · method: 876 · PARENT_OF: 333 · re_exports: 4
+- Edge kinds: uses: 12707 · contains: 9496 · ON_BRANCH: 7406 · calls: 7127 · MODIFIES: 4482 · rationale_for: 2213 · imports: 1649 · imports_from: 1348 · inherits: 949 · method: 876 · PARENT_OF: 337 · re_exports: 4
 
 
 ## Input Scope
@@ -17,7 +17,7 @@
 - Excluded: 0 untracked · 0 ignored · 15 sensitive · 0 missing committed
 
 ## Graph Freshness
-- Built from Git commit: `7e0daf9`
+- Built from Git commit: `78718d1`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `Reservation` - 530 edges
@@ -46,8 +46,8 @@
 ## Communities
 
 ### Community 0 - "Community 0"
-Cohesion: 0.06
-Nodes (402): create_lead(), Unauthenticated endpoints the marketing site calls.  Nothing here touches hotel, _request_source(), Bound inbound webhook bodies before parsing or signature verification., codex/day2-feedback, codex/fix-ronda-2-week-simulation, codex/postmerge-day2-fixes, codex/pr125-merge-main-local (+394 more)
+Cohesion: 0.05
+Nodes (407): create_lead(), Unauthenticated endpoints the marketing site calls.  Nothing here touches hotel, _request_source(), Bound inbound webhook bodies before parsing or signature verification., codex/day2-feedback, codex/fix-ronda-2-week-simulation, codex/postmerge-day2-fixes, codex/pr125-merge-main-local (+399 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.01
@@ -119,7 +119,7 @@ Nodes (65): _cors_contains_wildcard(), get_settings(), _gmail_is_active(), _has_
 
 ### Community 18 - "Community 18"
 Cohesion: 0.02
-Nodes (35): main(), validate(), 7e0daf9 Document current PMS architecture and remaining release work, 9e4b357 Reduce PMS request load and complete simulation remediation, backendURL, backendURL, createdPromotion, mockCategories (+27 more)
+Nodes (34): main(), validate(), 9e4b357 Reduce PMS request load and complete simulation remediation, backendURL, backendURL, createdPromotion, mockCategories, simulateResult (+26 more)
 
 ### Community 19 - "Community 19"
 Cohesion: 0.04

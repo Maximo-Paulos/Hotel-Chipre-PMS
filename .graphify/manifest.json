@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1791784938304.6106,
-    "hash": "e775967e68740bd897b91278c9f368de"
+    "mtime": 1791843788345.522,
+    "hash": "eeeb428617569d5090178b7b13aa33df"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1791784937683.4644,
-    "hash": "ce9175d20cc230cfc170aed0d4d993b7"
+    "mtime": 1791843787722.6267,
+    "hash": "010f1a2f07f939a3d7b0859044bc3294"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1791784938294.1416,
-    "hash": "dd9546c2bb989bd8e5f7c5df559e8db4"
+    "mtime": 1791843788335.1565,
+    "hash": "f895b16d38429f2ac4819851070c90f5"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1791784937694.8848,
-    "hash": "cb67d3be229664640ce79b548a68f440"
+    "mtime": 1791843787733.5725,
+    "hash": "2c26df012a1fd4616e08cf687e8e5b89"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1791784938281.1829,
-    "hash": "fc71454f0e03b8379d70ad59a6cb7edd"
+    "mtime": 1791843788324.0225,
+    "hash": "3f104c617e519216c692dfc42084acb9"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1791784937873.961,
-    "hash": "41dfcfe69c4a55b8461ee0681f36ccf6"
+    "mtime": 1791843787909.171,
+    "hash": "a152eb76de54a7ccd4216c871cfd9c37"
   },
   "qa/evidence/README.md": {
     "mtime": 1791675150538.1396,
@@ -3504,8 +3504,8 @@
     "hash": "b2b32a85f2d46d4fabaa738a6c43160c"
   },
   "frontend/e2e/reservation-lifecycle.spec.ts": {
-    "mtime": 1791675150452.1619,
-    "hash": "717dc0c461cf56b664bf7575af546820"
+    "mtime": 1791847073475.7786,
+    "hash": "7528268791caa5da23dcce75ffaebb52"
   },
   "frontend/e2e/analytics-success.spec.ts": {
     "mtime": 1791675150447.0457,
@@ -6840,8 +6840,8 @@
     "hash": "832c9e9066e450cfd32d546fbf2f395e"
   },
   "docs/audits/reporte-final-remediacion-consumo-y-simulaciones-2026-10-12.md": {
-    "mtime": 1791843643685.5818,
-    "hash": "da6e83a8ff0faa8cb434e1606a4877f6"
+    "mtime": 1791845902297.2244,
+    "hash": "5629f730402b2c487a12e37c2cef206a"
   },
   "alembic/versions/20261017_analytics_fact_refresh_queue.py": {
     "mtime": 1791779219148.454,
@@ -6856,7 +6856,7 @@
     "hash": "a694213bdf3af3b66e65056435165726"
   },
   "docs/architecture/mapa-arquitectura-actual.md": {
-    "mtime": 1791843446428.076,
-    "hash": "a22cf7b59dac61fc484fb785e62919b5"
+    "mtime": 1791845858852.9639,
+    "hash": "328ed328d5ecb781ab646954d2b1f415"
   }
 }
