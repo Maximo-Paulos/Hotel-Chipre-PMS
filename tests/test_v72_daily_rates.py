@@ -524,6 +524,36 @@ class TestPricePeriodModel:
 # ---------------------------------------------------------------------------
 
 class TestResolveRateCalendar:
+    def test_resolver_query_count_does_not_grow_with_stay_length(self, db, sample_categories):
+        from datetime import timedelta
+        from app.services.pricing_service import resolve_rate_calendar
+
+        category = sample_categories[0]
+        engine = db.get_bind()
+        query_counts = []
+
+        for nights in (1, 7):
+            statements = []
+
+            def capture_statement(conn, cursor, statement, parameters, context, executemany):
+                statements.append(statement)
+
+            event.listen(engine, "before_cursor_execute", capture_statement)
+            try:
+                rows = resolve_rate_calendar(
+                    db,
+                    1,
+                    category.id,
+                    date(2026, 9, 1),
+                    date(2026, 9, 1) + timedelta(days=nights - 1),
+                )
+            finally:
+                event.remove(engine, "before_cursor_execute", capture_statement)
+            assert len(rows) == nights
+            query_counts.append(len(statements))
+
+        assert query_counts == [3, 3]
+
     def test_batched_resolver_uses_selected_payment_method(self, db, sample_categories):
         from app.services.pricing_service import get_price_for_date, resolve_rate_calendar
 

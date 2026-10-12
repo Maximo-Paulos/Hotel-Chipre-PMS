@@ -10,6 +10,11 @@ const loadCrossTabSync = async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "hotel-chipre-cross-tab-"));
   context.after(() => rm(directory, { recursive: true, force: true }));
   const source = await readFile(new URL("./src/sync/crossTabSync.ts", import.meta.url), "utf8");
+  const retrySource = await readFile(new URL("./src/sync/retryPolicy.ts", import.meta.url), "utf8");
+  const retryPolicyPath = join(directory, "retryPolicy.mjs");
+  await writeFile(retryPolicyPath, ts.transpileModule(retrySource, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
+  }).outputText);
   let compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
   }).outputText;
@@ -24,6 +29,7 @@ const loadCrossTabSync = async (context) => {
     ['import { useQueryClient } from "@tanstack/react-query";', "const useQueryClient = () => ({});"],
     ['import { buildAuthHeaders, buildUrl } from "../api/client";', "const buildAuthHeaders = () => ({}); const buildUrl = (path) => path;"],
     ['import { recoveryDomainsForCursor, refreshDomains } from "../api/queryInvalidation";', "const recoveryDomainsForCursor = () => []; const refreshDomains = (...args) => { globalThis.__testRefreshDomains(...args); return Promise.resolve(); };"],
+    ['import { nextRealtimeRetryPlan } from "./retryPolicy";', "const nextRealtimeRetryPlan = () => ({ failureCount: 1, delayMs: 1_000 });"],
     [
       'import { QUERY_PREFIXES_BY_DOMAIN } from "../api/queryKeys";',
       'const QUERY_PREFIXES_BY_DOMAIN = { analytics: [], assistant: [], cash: [], guests: [], onboarding: [], payments: [], reservations: [], rooms: [], security: [], settings: [], stock: [], users: [] };'
@@ -39,15 +45,34 @@ const loadCrossTabSync = async (context) => {
   return import(`${pathToFileURL(modulePath).href}?test=${Math.random()}`);
 };
 
-test("recovery polling backs off after failures and stays bounded", async (context) => {
-  const { realtimeRecoveryPollDelay } = await loadCrossTabSync(context);
+test("degraded recovery is slow and backs off after failures", async (context) => {
+  const { isTerminalRealtimeAuthorizationError, realtimeRecoveryPollDelay } = await loadCrossTabSync(context);
 
   assert.deepEqual(
     [0, 1, 2, 3, 20].map(realtimeRecoveryPollDelay),
-    [5_000, 10_000, 20_000, 30_000, 30_000]
+    [60_000, 120_000, 240_000, 300_000, 300_000]
   );
-  assert.equal(realtimeRecoveryPollDelay(-1), 5_000);
-  assert.equal(realtimeRecoveryPollDelay(Number.NaN), 5_000);
+  assert.equal(realtimeRecoveryPollDelay(-1), 60_000);
+  assert.equal(realtimeRecoveryPollDelay(Number.NaN), 60_000);
+  assert.equal(isTerminalRealtimeAuthorizationError({ status: 401 }), true);
+  assert.equal(isTerminalRealtimeAuthorizationError({ status: 403 }), true);
+  assert.equal(isTerminalRealtimeAuthorizationError({ status: 503 }), false);
+  assert.equal(isTerminalRealtimeAuthorizationError(new Error("network unavailable")), false);
+});
+
+test("realtime reconnect attempts back off to at most once per minute", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "hotel-chipre-realtime-retry-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const source = await readFile(new URL("./src/sync/retryPolicy.ts", import.meta.url), "utf8");
+  const modulePath = join(directory, "retryPolicy.mjs");
+  await writeFile(modulePath, ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
+  }).outputText);
+  const { nextRealtimeRetryPlan } = await import(`${pathToFileURL(modulePath).href}?test=${Math.random()}`);
+
+  assert.deepEqual(nextRealtimeRetryPlan(0, null, 0), { failureCount: 1, delayMs: 1_000 });
+  assert.deepEqual(nextRealtimeRetryPlan(20, null, 0), { failureCount: 10, delayMs: 60_000 });
+  assert.deepEqual(nextRealtimeRetryPlan(20, 60_000, 0), { failureCount: 1, delayMs: 1_000 });
 });
 
 test("concurrent recovery callers share one read and never rewind the stored cursor", async (context) => {

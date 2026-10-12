@@ -27,8 +27,9 @@ def validate(root: Path) -> list[str]:
     render_text = render.read_text(encoding="utf-8")
     if "preDeployCommand:" not in render_text or "alembic upgrade head" not in render_text:
         errors.append("render.yaml must keep Alembic as the pre-deploy schema job")
-    if "maxInstances:" not in render_text or "DB_POOL_SIZE" not in env_example.read_text(encoding="utf-8"):
-        errors.append("connection-budget inputs must be explicit before Cloud Run autoscaling")
+    render_instance_cap = re.search(r"^\s*numInstances:\s*1\s*$", render_text, re.MULTILINE)
+    if not render_instance_cap or "DB_POOL_SIZE" not in env_example.read_text(encoding="utf-8"):
+        errors.append("Render must cap the API at one instance until database connection capacity is measured")
     env_text = env_example.read_text(encoding="utf-8")
     for name in ("OBJECT_STORAGE_GCS_BUCKET", "OBJECT_STORAGE_GCS_PROJECT", "REDIS_NAMESPACE"):
         if f"{name}=" not in env_text:

@@ -606,6 +606,13 @@ def process_payment(
             raise PaymentError(
                 f"El importe del pago (${applied_amount:.2f}) supera el saldo pendiente (${balance:.2f})."
             )
+        if (
+            request.transaction_type == TransactionTypeEnum.FULL_PAYMENT
+            and Decimal(str(balance)) - applied_amount > _TOLERANCE
+        ):
+            raise PaymentError(
+                f"El pago total debe cubrir el saldo pendiente (${Decimal(str(balance)):.2f})."
+            )
 
     if request.payment_method == PaymentMethodEnum.CASH and not request.collected_before:
         from app.services import cash_register_service

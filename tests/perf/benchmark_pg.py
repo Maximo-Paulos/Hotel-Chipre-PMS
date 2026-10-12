@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
 
-from sqlalchemy import create_engine, delete, event, text
+from sqlalchemy import create_engine, delete, event, func, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
@@ -30,7 +30,15 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# Reservation creation emits durable domain events. Mirror the intended local
+# SQL-only profile so this benchmark never attempts to contact Redis/Valkey.
+os.environ.setdefault("REALTIME_EVENTS_TRANSPORT", "postgresql")
+os.environ.setdefault("DISTRIBUTED_LOCK_BACKEND", "postgresql")
+os.environ.setdefault("COLLABORATION_BACKEND", "process")
+
 import app.models  # noqa: E402,F401
+from app.models.analytics import FactReservationDaily, FactRoomOccupancyDaily  # noqa: E402
+from app.models.commercial import TaxPolicy  # noqa: E402
 from app.models.guest import DocumentTypeEnum, Guest  # noqa: E402
 from app.models.hotel_config import HotelConfiguration  # noqa: E402
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum  # noqa: E402
@@ -83,7 +91,7 @@ EXPLAIN_PLAN_BY_OPERATION = {
     "availability.check_room_availability": "availability",
     "allocation.build_slots_from_db": "allocation",
     "balance.balance_due_from_transactions": "balance",
-    "daily_report": "daily report",
+    "daily_report": "daily report direct balance summary",
     "guest_search.last_name": "guest search",
 }
 
@@ -129,6 +137,8 @@ def run_alembic_upgrade(dsn: str) -> None:
 
 def cleanup(session: Session) -> None:
     session.execute(text("DELETE FROM reservation_additional_guests WHERE reservation_id IN (SELECT id FROM reservations WHERE hotel_id = :hotel_id)"), {"hotel_id": HOTEL_ID})
+    session.execute(delete(FactReservationDaily).where(FactReservationDaily.hotel_id == HOTEL_ID))
+    session.execute(delete(FactRoomOccupancyDaily).where(FactRoomOccupancyDaily.hotel_id == HOTEL_ID))
     session.execute(delete(Transaction).where(Transaction.hotel_id == HOTEL_ID))
     session.execute(delete(RoomBlock).where(RoomBlock.hotel_id == HOTEL_ID))
     session.execute(delete(Reservation).where(Reservation.hotel_id == HOTEL_ID))
@@ -149,8 +159,25 @@ def seed(session: Session) -> dict[str, object]:
             id=HOTEL_ID,
             hotel_name="Benchmark Hotel Chipre",
             deposit_percentage=30.0,
+            # This synthetic hotel has explicitly confirmed its policy so the
+            # benchmark exercises reservation creation under the current rules.
+            deposit_policy_configured=True,
+            free_cancellation_hours=48,
+            cancellation_penalty_percentage=0.0,
             subscription_active=True,
             default_currency="ARS",
+        )
+    )
+    session.flush()
+    session.add(
+        TaxPolicy(
+            hotel_id=HOTEL_ID,
+            code="BENCHMARK_NO_TAX",
+            name="Explicit zero-tax benchmark policy",
+            taxes_included=True,
+            apply_vat_by_default=False,
+            vat_rate=0.0,
+            is_active=True,
         )
     )
     session.flush()
@@ -522,6 +549,24 @@ def run_benchmarks(
         check_out_date=date(2030, 6, 3),
     )
 
+    direct_pending_query = _daily_report_balance_candidate_query(
+        session,
+        hotel_id=HOTEL_ID,
+        report_date=report_date,
+        mode="direct_pending",
+    )
+    direct_pending_projection = direct_pending_query.order_by(None).subquery(
+        "daily_report_direct_pending"
+    )
+    direct_pending_summary_query = (
+        session.query(
+            direct_pending_projection.c.balance_currency_code,
+            func.count(direct_pending_projection.c.id),
+            func.sum(direct_pending_projection.c.direct_balance),
+        )
+        .group_by(direct_pending_projection.c.balance_currency_code)
+    )
+
     explain_results = {
         "availability": explain(
             session,
@@ -565,11 +610,30 @@ def run_benchmarks(
             {"hotel_id": HOTEL_ID, "reservation_id": seed_info["reservation_id"]},
             ("transactions",),
         )[0],
-        "daily report": explain_query(
+        "daily report flags": explain_query(
             session,
             engine,
-            "daily report balance candidates (production query)",
-            _daily_report_balance_candidate_query(session, hotel_id=HOTEL_ID, report_date=report_date),
+            "daily report actionable flags (production path)",
+            _daily_report_balance_candidate_query(
+                session,
+                hotel_id=HOTEL_ID,
+                report_date=report_date,
+                mode="flags",
+            ),
+            ("reservations", "transactions", "billing_adjustments"),
+        )[0],
+        "daily report direct balance summary": explain_query(
+            session,
+            engine,
+            "daily report exact direct-balance summary (production path)",
+            direct_pending_summary_query,
+            ("reservations", "transactions", "billing_adjustments"),
+        )[0],
+        "daily report direct balance page": explain_query(
+            session,
+            engine,
+            "daily report paginated direct-balance detail (production path)",
+            direct_pending_query.offset(0).limit(50),
             ("reservations", "transactions", "billing_adjustments"),
         )[0],
         "guest search": explain(
@@ -730,6 +794,15 @@ def main() -> int:
         )
         return 2
     finally:
+        try:
+            with SessionLocal() as cleanup_session:
+                cleanup(cleanup_session)
+        except Exception as cleanup_error:
+            print(
+                "WARNING: failed to clean the synthetic hotel from hotel_chipre_test; "
+                f"error_type={type(cleanup_error).__name__}",
+                file=sys.stderr,
+            )
         engine.dispose()
     return 0
 

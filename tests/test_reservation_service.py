@@ -94,6 +94,65 @@ class TestAvailability:
             db, sample_rooms[0].id, date(2026, 4, 5), date(2026, 4, 8)
         ) is True
 
+    def test_availability_check_does_not_hydrate_room_reservation_graph(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        room = sample_rooms[0]
+        create_reservation(
+            db,
+            ReservationCreate(
+                guest_id=sample_guest.id,
+                category_id=sample_categories[0].id,
+                room_id=room.id,
+                check_in_date=date(2026, 4, 1),
+                check_out_date=date(2026, 4, 5),
+            ),
+        )
+        statements: list[str] = []
+        engine = db.get_bind()
+
+        def capture_statement(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", capture_statement)
+        try:
+            assert check_room_availability(db, room.id, date(2026, 4, 5), date(2026, 4, 8)) is True
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_statement)
+
+        # Room lookup, block check, and scalar overlap count are sufficient.
+        # A relationship eager load adds several reservation/guest/transaction
+        # SELECTs whose size grows with the history attached to this room.
+        assert len(statements) <= 3
+
+    def test_availability_check_reuses_the_room_already_locked_for_creation(
+        self, db, sample_rooms, hotel_config
+    ):
+        room = sample_rooms[0]
+        statements: list[str] = []
+        engine = db.get_bind()
+
+        def capture_statement(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", capture_statement)
+        try:
+            assert check_room_availability(
+                db,
+                room.id,
+                date(2026, 4, 5),
+                date(2026, 4, 8),
+                hotel_id=hotel_config.id,
+                known_room=room,
+            ) is True
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_statement)
+
+        # The room's tenant/category ownership was already checked by the
+        # locked lookup in create_reservation; only block and overlap probes
+        # remain here.
+        assert len(statements) == 2
+
     def test_find_available_rooms(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         """Find available rooms after booking some."""
         cat_std = sample_categories[0]
@@ -175,6 +234,36 @@ class TestAvailability:
 class TestReservationCreation:
     """Tests for reservation creation logic."""
 
+    def test_create_reuses_category_for_room_availability_lookup(
+        self, db, sample_guest, sample_categories, sample_rooms, hotel_config
+    ):
+        statements: list[str] = []
+        engine = db.get_bind()
+
+        def capture_statement(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement.lower())
+
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 4, 1),
+            check_out_date=date(2026, 4, 3),
+        )
+        event.listen(engine, "before_cursor_execute", capture_statement)
+        try:
+            create_reservation(db, data, hotel_id=hotel_config.id)
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_statement)
+
+        category_reads = [
+            statement
+            for statement in statements
+            if "from room_categories" in statement
+            and "room_categories.id =" in statement
+            and "room_categories.id in" not in statement
+        ]
+        assert len(category_reads) == 1
+
     def test_create_basic_reservation(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         """Create a standard reservation and verify computed fields."""
         data = ReservationCreate(
@@ -195,6 +284,37 @@ class TestReservationCreation:
         assert res.status == ReservationStatusEnum.PENDING
         assert res.room_id is not None  # Auto-assigned
         assert res.allocation_status == "assigned"
+
+    def test_create_reservation_does_not_load_room_history_for_category_lookups(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        statements: list[str] = []
+        engine = db.get_bind()
+
+        def capture_statement(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", capture_statement)
+        try:
+            create_reservation(
+                db,
+                ReservationCreate(
+                    guest_id=sample_guest.id,
+                    category_id=sample_categories[0].id,
+                    room_id=sample_rooms[0].id,
+                    check_in_date=date(2026, 4, 1),
+                    check_out_date=date(2026, 4, 2),
+                ),
+                hotel_id=hotel_config.id,
+            )
+            db.flush()
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_statement)
+
+        # Category lookups need scalar pricing fields only. The default
+        # select-in relationships previously loaded rooms, their reservations,
+        # guests, transactions, tags, and companions during this write.
+        assert not any("JOIN reservations" in statement and "rooms_1" in statement for statement in statements)
 
     def test_daily_rate_reservation_converts_target_currency_and_persists_fx_provenance(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch

@@ -755,7 +755,7 @@ def create_laundry_remito(
     warnings.extend(
         f"No hay precio configurado para el item {line.linen_item_id}"
         for line in remito.lines
-        if line.unit_price_snapshot is None
+        if remito.direction == "outbound" and line.unit_price_snapshot is None
     )
     warnings.extend(
         f"Se registró un faltante de {line.missing_quantity} en el remito {remito.remito_number}."

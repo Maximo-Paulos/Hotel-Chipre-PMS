@@ -110,6 +110,8 @@ def quote_rate_plan_stay(
         tax_policy=tax_policy,
         guest_scope=guest_scope,
         channel_code=channel_code,
+        taxes_included=price.tax_inclusive,
+        currency_code=currency_code,
     )
 
     if price.tax_inclusive:
@@ -144,6 +146,10 @@ def quote_rate_plan_stay(
         subtotal_amount = round(subtotal_amount * fx_rate_snapshot, 2)
         tax_amount = round(tax_amount * fx_rate_snapshot, 2)
         fee_amount = round(fee_amount * fx_rate_snapshot, 2)
+        tax_breakdown = [
+            {**item, "amount": round(float(item.get("amount", 0.0)) * fx_rate_snapshot, 2)}
+            for item in tax_breakdown
+        ]
         commission_amount = round(commission_amount * fx_rate_snapshot, 2)
         net_amount = round(gross_total - commission_amount, 2)
         output_currency = target_currency
@@ -211,8 +217,20 @@ def _select_tax_policy(db: Session, *, hotel_id: int, tax_policy_id: int | None)
         policy = query.filter(TaxPolicy.id == tax_policy_id).first()
         if not policy:
             raise PricingPolicyError("Tax policy not found for hotel")
-        return policy
-    return query.order_by(TaxPolicy.id.asc()).first()
+    else:
+        policy = query.order_by(TaxPolicy.id.asc()).first()
+        if not policy:
+            raise PricingPolicyError(
+                "El hotel debe configurar y activar una política impositiva antes de cotizar."
+            )
+
+    if policy.apply_vat_by_default and policy.vat_rate is None and not any(
+        rule.is_active for rule in policy.rules
+    ):
+        raise PricingPolicyError(
+            "Completá la tasa de IVA o desactivá el IVA por defecto para indicar explícitamente que no aplica."
+        )
+    return policy
 
 
 def _apply_tax_policy(
@@ -222,6 +240,8 @@ def _apply_tax_policy(
     tax_policy: TaxPolicy | None,
     guest_scope: str,
     channel_code: str | None,
+    taxes_included: bool = False,
+    currency_code: str | None = None,
 ) -> tuple[float, float, list[dict]]:
     if not tax_policy:
         return 0.0, 0.0, []
@@ -241,13 +261,54 @@ def _apply_tax_policy(
         and (rule.channel_code in (None, "", channel_code))
         and (rule.guest_scope in ("all", effective_guest_scope))
     ]
+    if currency_code:
+        mismatched_currency = next(
+            (
+                rule.currency_code
+                for rule in applicable_rules
+                if rule.tax_type != "percentage"
+                and rule.currency_code
+                and rule.currency_code.strip().upper() != currency_code.strip().upper()
+            ),
+            None,
+        )
+        if mismatched_currency:
+            raise PricingPolicyError(
+                "La moneda de los importes fijos debe coincidir con la moneda de la tarifa; no se convierte automáticamente."
+            )
 
     if not applicable_rules and tax_policy.apply_vat_by_default and tax_policy.vat_rate:
-        vat_amount = round(quoted_amount * (tax_policy.vat_rate / 100.0), 2)
+        vat_rate = float(tax_policy.vat_rate)
+        denominator = 100.0 + vat_rate if taxes_included else 100.0
+        vat_amount = round(quoted_amount * (vat_rate / denominator), 2)
         return vat_amount, 0.0, [{"tax_code": "VAT_DEFAULT", "kind": "tax", "amount": vat_amount}]
 
+    if taxes_included:
+        fixed_amounts = {
+            rule.id: _calculate_rule_amount(rule=rule, quoted_amount=quoted_amount, nights=nights)
+            for rule in applicable_rules
+            if rule.tax_type != "percentage"
+        }
+        fixed_total = sum(fixed_amounts.values())
+        if fixed_total > quoted_amount:
+            raise PricingPolicyError("Los importes fijos de impuestos superan el precio con impuestos incluidos.")
+        percentage_rate = sum(
+            float(rule.amount) for rule in applicable_rules if rule.tax_type == "percentage"
+        )
+        if percentage_rate <= -100.0:
+            raise PricingPolicyError("La tasa impositiva configurada no permite calcular un precio inclusivo.")
+        included_base = (quoted_amount - fixed_total) / (1.0 + percentage_rate / 100.0)
+    else:
+        included_base = quoted_amount
+
     for rule in sorted(applicable_rules, key=lambda current: (current.priority, current.id)):
-        amount = _calculate_rule_amount(rule=rule, quoted_amount=quoted_amount, nights=nights)
+        amount = (
+            round(included_base * (float(rule.amount) / 100.0), 2)
+            if taxes_included and rule.tax_type == "percentage"
+            else fixed_amounts[rule.id]
+            if taxes_included
+            else _calculate_rule_amount(rule=rule, quoted_amount=quoted_amount, nights=nights)
+        )
         entry = {"tax_code": rule.tax_code, "amount": amount}
         if str(rule.tax_code).lower().startswith("fee"):
             total_fee += amount

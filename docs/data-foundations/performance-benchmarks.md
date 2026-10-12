@@ -1,6 +1,6 @@
 # PostgreSQL Performance Benchmarks
 
-Date: 2026-10-07
+Date: 2026-10-12
 
 Status: an isolated local PostgreSQL 16 benchmark is recorded in the latest revalidation section below. It is synthetic and does not establish production latency or production query plans.
 
@@ -218,3 +218,138 @@ These are loopback timings, not provider-bound latencies. A prior 25-iteration r
 Plan notes from this fixture: availability used `ix_reservation_hotel_room_dates`; balance used `ix_transactions_hotel_reservation_created`; allocation, daily-report candidates, and last-name search used sequential scans over at most 2,000 rows. Those small scans do not justify new indexes. The benchmark's `index-used` field is `n/a` when there is no matching plan; when it reports `y` or `n`, it describes one representative SQL plan and not every query inside a multi-query service operation.
 
 For the reported Render/Supabase incident, the missing evidence is provider-bound and byte-level: Render's outbound bandwidth split by service and hour; Supabase's project/org egress split among Database API, Shared Pooler, Realtime, Auth, and Storage; query frequency and rows returned; and request-level SQL/pool/serialization/network timings. Supabase's API Gateway path logs can help locate request volume but do not currently expose response bytes. This benchmark does not attribute the reported 7.18 GB Render `Service-Initiated` traffic or 5.976 GB Supabase egress.
+
+## Latest isolated revalidation — 2026-10-12
+
+Environment: a disposable local PostgreSQL 16 container bound to loopback,
+database `hotel_chipre_test`; the same synthetic scale profile described above;
+20 measured iterations per operation. The benchmark used the deferred analytics
+fact queue and removed its randomized hotel and related rows after the run.
+These numbers help compare query shape and local latency; they do not represent
+provider network latency or production traffic.
+
+| Operation | Median ms | p95 ms | Median SQL statements |
+| --- | ---: | ---: | ---: |
+| `reservation.create_service` (explicit total) | 11.22 | 13.65 | 18 |
+| `reservation.create_auto_priced_service` | 20.27 | 29.82 | 21 |
+| `availability.check_room_availability` | 10.09 | 11.22 | 3 |
+| `availability.find_available_rooms` | 7.31 | 12.82 | 4 |
+| `allocation.build_slots_from_db` | 16.56 | 21.76 | 6 |
+| `balance.balance_due_from_transactions` | 22.47 | 27.22 | 9 |
+| `daily_report` | 57.71 | 67.52 | 12 |
+| `guest_search.document` | 22.92 | 24.56 | 8 |
+| `guest_search.last_name` | 25.40 | 37.04 | 8 |
+
+### Work removed from reservation saves
+
+Reservation creation previously rebuilt both daily analytics fact tables inside
+the booking transaction. It issued 34 SQL statements for an explicit-total
+reservation and 37 for an automatically priced one. The new path writes one
+durable, coalesced refresh request in the same transaction and leaves the
+rebuild to the hotel-scoped SQL cron. The latest profile issued 18 and 21
+statements respectively: 16 fewer database statements per save. Median times
+vary between runs, so query counts are the stronger signal.
+
+The queue is unique by hotel and reservation, widens the date window when
+several edits happen before a run, processes up to 50 reservations per hotel
+each cycle, and retains failed work with a growing retry delay. The migration
+forces PostgreSQL row-level security. Queue rows contain no guest names,
+documents, payment details, or reservation text.
+
+### Fewer repeated reads in the daily report
+
+The exact global balance summary previously ran correlated transaction and
+adjustment lookups for each candidate reservation. On the 2,000-reservation
+profile, its plan reported 10,389 shared-buffer hits and 4.616 ms at the top
+aggregate. The revised query groups transactions and adjustments by hotel and
+reservation once, then joins those totals to candidate reservations. Its plan
+reported 76 shared-buffer hits and 1.379 ms at the top aggregate. This is an
+improvement on synthetic local data; larger hotel datasets and Supabase still
+need measurement.
+
+The migration passed a fresh PostgreSQL 16 upgrade, repeat upgrade, one-step
+downgrade, and upgrade again. That test checks forced row-level security and
+the hotel policy on the queue. The PostgreSQL upsert path is exercised by the
+reservation benchmark; queue processing, retry, and hotel scoping have focused
+regression tests.
+
+These results do not attribute historical Render or Supabase byte totals.
+Exact response-body telemetry is now available for future backend runs. It
+measures bytes emitted after response compression, excluding TLS overhead and
+provider billing rules. Provider-side usage is still required to establish
+actual monthly costs and savings.
+
+### Constrained PostgreSQL rerun — 2026-10-12
+
+A second run used the same local synthetic profile while limiting the
+PostgreSQL container to 0.5 CPU and 512 MiB RAM, with up to 512 MiB swap. The
+benchmark/API process ran on the host and did not have the same memory limit.
+It measured 20 iterations per operation. These results are separate from the
+earlier 2026-10-12 run above; timing variation means the within-run query count
+is the safer comparison.
+
+| Operation | p50 ms | p95 ms | Median SQL statements |
+| --- | ---: | ---: | ---: |
+| `reservation.create_service` (explicit total) | 12.09 | 12.91 | 18 |
+| `reservation.create_auto_priced_service` | 13.65 | 17.18 | 21 |
+| `availability.check_room_availability` | 2.28 | 2.42 | 3 |
+| `availability.find_available_rooms` | 2.82 | 2.90 | 4 |
+| `allocation.build_slots_from_db` | 7.45 | 8.24 | 6 |
+| `balance.balance_due_from_transactions` | 7.98 | 11.17 | 9 |
+| `daily_report` | 41.07 | 68.29 | 12 |
+| `guest_search.document` | 21.91 | 25.69 | 8 |
+| `guest_search.last_name` | 24.91 | 28.41 | 8 |
+
+This PostgreSQL-constrained profile is not a full application capacity test:
+the API process did not share the CPU/memory cap, and local loopback does not
+reproduce Supabase or Render network cost. It does show that reservation saves
+use 16 fewer SQL statements than the earlier 34/37-statement path.
+
+### Daily-report flag query after removing unused financial aggregation — 2026-10-12
+
+An isolated PostgreSQL 16 profile compared the existing flag projection before
+and after the optimization. The test hotel had 2,000 synthetic reservations,
+40,667 payment rows, 40,000 billing adjustments, and 46 actionable report
+rows. PostgreSQL was limited to 0.5 CPU and 512 MiB RAM, with up to 512 MiB
+swap; the Python benchmark process ran on the host. Both measurements used the
+same disposable database and 20 daily-report iterations after warm-up.
+
+| Measure | Before | After |
+| --- | ---: | ---: |
+| Actionable flag query, `EXPLAIN ANALYZE` | 12.072 ms | 2.872 ms |
+| Shared buffer hits in that query | 1,036 | 214 |
+| Whole daily-report median | 67.03 ms | 54.64 ms |
+| Whole daily-report p95 | 90.43 ms | 73.13 ms |
+| SQL statements per report | 12 | 12 |
+
+The flag query no longer scans and groups every payment and adjustment for the
+hotel. It returns the same 46 candidate rows; the report's existing batch
+helpers calculate money only for the selected reservations. The unchanged
+statement count is expected: this removes work inside one SQL statement. The
+focused report tests still verify the returned alerts, ordering, tenant scope,
+and financial totals. On PostgreSQL, the before/after flag count remained 46
+and the complete daily-report service ran successfully.
+
+This is evidence of lower PostgreSQL CPU/buffer work for the daily report. It
+does not explain the historical Render bandwidth spike: the database performed
+the removed aggregation internally, and the query returned the same number of
+rows to the API. The numbers are synthetic and do not predict provider egress
+or production latency.
+
+### API container memory check — 2026-10-12
+
+The backend image was built from the current dirty worktree (base revision
+`150ca645`) and run in an isolated Docker network with 0.5 CPU and a 512 MiB
+memory limit, with swap disabled. PostgreSQL 16 ran separately with 0.5 CPU,
+512 MiB RAM, and up to 512 MiB swap. The database had the disposable E2E seed
+and active RLS; no provider services were contacted.
+
+Two browser E2E cases ran against the containerized API: idle Dashboard
+request/reconnect budget and reservation save/refresh behavior. Both passed.
+The test recorded the cgroup's `memory.peak` at 316,137,472 bytes (301.5 MiB)
+and `memory.current` at 315,580,416 bytes at collection time. `memory.events`
+reported zero `high`, `max`, `oom`, or `oom_kill` events, and the container logs
+contained no HTTP 5xx responses. This is an exact-code local startup and
+workflow check, but it covers one synthetic hotel and two journeys. It does
+not certify 50 hotels, 400 concurrent employees, reservation optimization at
+scale, or provider network behavior.

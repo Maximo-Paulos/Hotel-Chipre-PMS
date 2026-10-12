@@ -31,6 +31,7 @@ def _normalize_currency(value: str) -> str:
 class HotelConfigRead(BaseModel):
     id: int
     deposit_percentage: float
+    deposit_policy_configured: bool
     checkin_payment_policy: Literal["deposit", "total", "free"]
     enable_full_payment: bool
     enable_deposit_payment: bool
@@ -78,6 +79,7 @@ class HotelConfigRead(BaseModel):
 
 class HotelConfigUpdate(BaseModel):
     deposit_percentage: Optional[float] = Field(default=None, ge=0, le=100)
+    deposit_policy_configured: Optional[bool] = None
     checkin_payment_policy: Optional[Literal["deposit", "total", "free"]] = None
     enable_full_payment: Optional[bool] = None
     enable_deposit_payment: Optional[bool] = None
@@ -213,4 +215,20 @@ class HotelConfigUpdate(BaseModel):
                 raise ValueError("Configurá o limpiá juntos los dos límites de tarifa manual")
             if lower is not None and upper is not None and lower > upper:
                 raise ValueError("El límite inferior no puede superar al límite superior")
+        if self.deposit_policy_configured is True:
+            required_policy_fields = {
+                "deposit_percentage",
+                "free_cancellation_hours",
+                "cancellation_penalty_percentage",
+            }
+            missing_policy_values = {
+                field
+                for field in required_policy_fields
+                if field not in self.model_fields_set or getattr(self, field) is None
+            }
+            if missing_policy_values:
+                raise ValueError(
+                    "Para confirmar las reglas del hotel, enviá el porcentaje de depósito, "
+                    "las horas de cancelación gratis y la penalidad."
+                )
         return self

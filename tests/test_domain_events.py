@@ -9,19 +9,29 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event as sqlalchemy_event, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.schema import CreateIndex
 
 from app.api import events
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.dependencies.auth import AuthContext
 from app.models.domain_event_outbox import DomainEventOutbox
 from app.models.hotel_config import HotelConfiguration
 from app.services import domain_events
 from app.services.outbox_poll_cache import CachedOutboxPollFailure, OutboxPollBatchCache
+
+
+@pytest.fixture(autouse=True)
+def _isolate_realtime_configuration(monkeypatch: pytest.MonkeyPatch):
+    """Keep Redis-default event tests independent of other test modules."""
+    monkeypatch.setenv("REALTIME_EVENTS_ENABLED", "true")
+    monkeypatch.setenv("REALTIME_EVENTS_TRANSPORT", "redis")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def _event_engine():
@@ -66,6 +76,7 @@ class FakeRedis:
 def _settings(**overrides) -> Settings:
     values = {
         "REALTIME_EVENTS_ENABLED": True,
+        "REALTIME_EVENTS_TRANSPORT": "redis",
         "DISTRIBUTED_LOCK_REQUIRED": True,
         "REDIS_URL": "redis://localhost:6379/0",
     }
@@ -81,11 +92,33 @@ def _successful_publisher(published: list[dict]):
     return publish
 
 
-def test_realtime_fallback_poll_budget_is_below_ten_seconds():
-    assert _settings().REALTIME_EVENTS_FALLBACK_POLL_SECONDS == 5.0
-    assert domain_events.POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS == 5.0
+def test_realtime_fallback_poll_is_bounded_when_listener_is_unavailable():
+    assert _settings().REALTIME_EVENTS_FALLBACK_POLL_SECONDS == 60.0
+    assert domain_events.POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS == 60.0
     with pytest.raises(ValueError):
-        _settings(REALTIME_EVENTS_FALLBACK_POLL_SECONDS=6)
+        _settings(REALTIME_EVENTS_FALLBACK_POLL_SECONDS=61)
+
+
+def test_postgres_listener_prefers_separate_session_url_when_configured(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        domain_events,
+        "get_settings",
+        lambda: SimpleNamespace(POSTGRES_EVENT_LISTENER_DATABASE_URL="postgresql://listener/session"),
+    )
+    session_factory = SimpleNamespace(kw={"bind": SimpleNamespace(url="postgresql://transaction/pooler")})
+
+    assert domain_events._postgres_event_listener_database_url(session_factory) == "postgresql://listener/session"
+
+
+def test_postgres_listener_falls_back_to_primary_database_url(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        domain_events,
+        "get_settings",
+        lambda: SimpleNamespace(POSTGRES_EVENT_LISTENER_DATABASE_URL=None, DATABASE_URL="postgresql://primary/session"),
+    )
+    session_factory = SimpleNamespace(kw={"bind": SimpleNamespace(url=None)})
+
+    assert domain_events._postgres_event_listener_database_url(session_factory) == "postgresql://primary/session"
 
 
 def test_outbox_poll_cache_shares_one_hotel_cursor_result_for_one_poll_window():
@@ -878,6 +911,91 @@ def test_model_change_collector_fans_out_payment_dependencies_without_sensitive_
         assert "description" not in event["payload"]
 
 
+def test_postgresql_transport_queues_durable_row_without_attempting_redis(monkeypatch, db, hotel_config):
+    settings = _settings(REALTIME_EVENTS_TRANSPORT="postgresql")
+    monkeypatch.setattr(domain_events, "_settings", lambda: settings)
+
+    def unexpected_redis(*args, **kwargs):
+        raise AssertionError("PostgreSQL transport must not construct or publish through Redis")
+
+    monkeypatch.setattr(domain_events, "get_sync_redis_client", unexpected_redis)
+    assert domain_events._get_redis_client() is None
+    assert domain_events._get_realtime_fast_fail_client() is None
+    assert domain_events.get_realtime_client() is None
+
+    domain_events.queue_domain_change(
+        db,
+        hotel_id=hotel_config.id,
+        domain="reservations",
+        event_type="reservations.updated",
+        payload={"reservation_id": 41},
+    )
+    db.flush()
+    row = (
+        db.query(DomainEventOutbox)
+        .filter(
+            DomainEventOutbox.hotel_id == hotel_config.id,
+            DomainEventOutbox.event_type == "reservations.updated",
+        )
+        .one()
+    )
+    assert row.status == "published"
+    assert row.published_at is not None
+
+    # The Session after-commit hook must only consume its in-memory event;
+    # PostgreSQL's trigger delivers the notification on a real PostgreSQL DB.
+    db.commit()
+
+
+def test_whatsapp_model_changes_publish_only_safe_ids_for_realtime_invalidation(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    published: list[dict] = []
+    monkeypatch.setattr(domain_events, "publish_domain_event", _successful_publisher(published))
+    message = SimpleNamespace(
+        __tablename__="whatsapp_messages",
+        hotel_id=42,
+        id=91,
+        conversation_id=17,
+        status="received",
+        text="guest phone and private message",
+        phone_number="+5491100000000",
+        provider_message_id="private-provider-id",
+    )
+    session = SimpleNamespace(
+        info={}, new=[message], dirty=[], deleted=[], add=lambda _row: None, get_bind=lambda: None
+    )
+
+    domain_events.queue_model_changes(session)
+    domain_events.publish_queued_domain_changes(session)
+
+    assert len(published) == 1
+    assert published[0]["domain"] == "whatsapp"
+    assert published[0]["payload"] == {
+        "action_id": 91,
+        "conversation_id": 17,
+        "status": "received",
+    }
+    assert "text" not in published[0]["payload"]
+    assert "phone_number" not in published[0]["payload"]
+    assert "provider_message_id" not in published[0]["payload"]
+
+
+def test_new_guest_event_does_not_refetch_existing_reservations(monkeypatch: pytest.MonkeyPatch):
+    published: list[dict] = []
+    monkeypatch.setattr(domain_events, "publish_domain_event", _successful_publisher(published))
+    guest = SimpleNamespace(__tablename__="guests", hotel_id=42, id=91)
+    session = SimpleNamespace(
+        info={}, new=[guest], dirty=[], deleted=[], add=lambda _row: None, get_bind=lambda: None
+    )
+
+    domain_events.queue_model_changes(session)
+    domain_events.publish_queued_domain_changes(session)
+
+    assert {event["domain"] for event in published} == {"guests", "analytics"}
+    assert all(event["event_type"] == "guests.created" for event in published)
+
+
 def test_derived_analytics_changes_are_coalesced_by_family(monkeypatch: pytest.MonkeyPatch):
     published: list[dict] = []
     monkeypatch.setattr(domain_events, "publish_domain_event", _successful_publisher(published))
@@ -902,6 +1020,43 @@ def test_derived_analytics_changes_are_coalesced_by_family(monkeypatch: pytest.M
     assert published[0]["event_type"] == "analytics.read_model.changed"
     assert published[0]["payload"] == {"family": "reservation_daily"}
     assert published[0]["event_id"]
+
+
+def test_bulk_allocation_model_changes_coalesce_to_one_invalidation_per_domain(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    published: list[dict] = []
+    monkeypatch.setattr(domain_events, "publish_domain_event", _successful_publisher(published))
+    allocation_tables = (
+        "reservations",
+        "room_move_events",
+        "room_movement_groups",
+        "allocation_assignments",
+        "allocation_explanations",
+        "allocation_runs",
+        "solver_metrics",
+    )
+    rows = [
+        SimpleNamespace(__tablename__=table_name, hotel_id=42, id=index, reservation_id=index)
+        for table_name in allocation_tables
+        for index in range(1, 51)
+    ]
+    session = SimpleNamespace(
+        info={}, new=rows, dirty=[], deleted=[], add=lambda _row: None, get_bind=lambda: None
+    )
+
+    with domain_events.coalesce_model_change_family(
+        session,
+        family="allocation",
+        table_names=allocation_tables,
+    ):
+        domain_events.queue_model_changes(session)
+    domain_events.publish_queued_domain_changes(session)
+
+    assert len(published) == 3
+    assert {event["domain"] for event in published} == {"reservations", "rooms", "analytics"}
+    assert all(event["event_type"] == "allocation.read_model.changed" for event in published)
+    assert all(event["payload"] == {"family": "allocation"} for event in published)
 
 
 def test_session_hooks_publish_model_changes_only_after_commit(monkeypatch: pytest.MonkeyPatch):
@@ -1046,7 +1201,7 @@ def test_stream_closes_with_control_event_when_membership_is_revoked(monkeypatch
     assert "authorization_lost" in control
 
 
-def test_redis_stream_uses_one_second_internal_ticks_and_sends_only_real_heartbeats(monkeypatch):
+def test_redis_stream_sends_heartbeats_at_the_configured_interval(monkeypatch):
     class FakeClock:
         now = 0.0
 
@@ -1076,10 +1231,8 @@ def test_redis_stream_uses_one_second_internal_ticks_and_sends_only_real_heartbe
 
     stream = domain_events.iter_event_stream(42, fake, heartbeat_seconds=5)
     assert "event: ready" in next(stream)
-    assert next(stream) == ""
-    assert [next(stream) for _ in range(3)] == ["", "", ""]
     assert next(stream) == ": heartbeat\n\n"
-    assert pubsub.timeouts == [1.0] * 5
+    assert pubsub.timeouts == [5]
     stream.close()
 
 
@@ -1247,7 +1400,7 @@ def test_postgres_fallback_stream_starts_after_latest_cursor_when_cursor_is_omit
     engine.dispose()
 
 
-def test_postgres_fallback_stream_caps_poll_interval_at_five_seconds(monkeypatch: pytest.MonkeyPatch):
+def test_postgres_fallback_stream_caps_poll_interval_at_sixty_seconds(monkeypatch: pytest.MonkeyPatch):
     engine = _event_engine()
     factory = sessionmaker(bind=engine)
     stream = domain_events.iter_postgres_event_stream(
@@ -1271,9 +1424,47 @@ def test_postgres_fallback_stream_caps_poll_interval_at_five_seconds(monkeypatch
     assert next(stream) == ": heartbeat\n\n"
     with pytest.raises(StopPolling):
         next(stream)
-    assert sleep_calls == [5.0]
+    assert sleep_calls == [60.0]
     stream.close()
     engine.dispose()
+
+
+def test_domain_event_recovery_uses_two_bounded_roundtrips():
+    engine = _event_engine()
+    factory = sessionmaker(bind=engine)
+    session = factory()
+    session.add(
+        DomainEventOutbox(
+            event_id="00000000-0000-0000-0000-000000000046",
+            hotel_id=42,
+            domain="reservations",
+            event_type="reservation.updated",
+            payload={"large_unused_payload": "not selected"},
+            stream_cursor=17,
+            occurred_at=datetime.now(timezone.utc),
+            status="pending",
+        )
+    )
+    session.commit()
+    session.close()
+
+    statements: list[str] = []
+
+    def count_outbox_queries(_connection, _cursor, statement, _parameters, _context, _executemany):
+        if "domain_event_outbox" in statement.lower():
+            statements.append(statement.lower())
+
+    sqlalchemy_event.listen(engine, "before_cursor_execute", count_outbox_queries)
+    try:
+        with factory() as db:
+            result = domain_events.get_domain_event_recovery(db, hotel_id=42, after_cursor=0)
+    finally:
+        engine.dispose()
+
+    assert result["latest_cursor"] == 17
+    assert result["domains"] == ["reservations"]
+    assert len(statements) == 2
+    assert all("domain_event_outbox.payload" not in statement for statement in statements)
 
 
 def test_async_postgres_fallback_preserves_cursor_payload_and_tenant_isolation():
@@ -1346,6 +1537,94 @@ def test_async_postgres_fallback_preserves_cursor_payload_and_tenant_isolation()
     assert "must not stream" not in event_frame
     assert '"hotel_id": 43' not in event_frame
     assert "00000000-0000-0000-0000-000000000045" not in event_frame
+
+
+@pytest.mark.asyncio
+async def test_async_postgres_fallback_shares_poll_queries_across_streams():
+    engine = _thread_safe_event_engine()
+    factory = sessionmaker(bind=engine)
+    outbox_selects: list[str] = []
+
+    def count_outbox_queries(_connection, _cursor, statement, _parameters, _context, _executemany):
+        if "from domain_event_outbox" in statement.lower():
+            outbox_selects.append(statement.lower())
+
+    sqlalchemy_event.listen(engine, "before_cursor_execute", count_outbox_queries)
+    streams = [
+        domain_events.aiter_postgres_event_stream(
+            42,
+            after_cursor=0,
+            poll_seconds=1,
+            session_factory=factory,
+        )
+        for _ in range(3)
+    ]
+    try:
+        ready_frames = await asyncio.gather(*(stream.__anext__() for stream in streams))
+        assert all('"transport": "postgres-outbox"' in frame for frame in ready_frames)
+        await asyncio.sleep(1.1)
+    finally:
+        await asyncio.gather(*(stream.aclose() for stream in streams))
+        engine.dispose()
+
+    # Three open SSE streams share the first poll and one cadence query. Each
+    # stream used to execute its own query at each poll interval.
+    assert len(outbox_selects) <= 4
+    assert all("domain_event_outbox.payload" not in statement for statement in outbox_selects)
+
+
+@pytest.mark.asyncio
+async def test_async_postgres_listener_fans_out_without_idle_outbox_polls(monkeypatch):
+    engine = _thread_safe_event_engine()
+    factory = sessionmaker(bind=engine)
+    outbox_selects: list[str] = []
+
+    def count_outbox_queries(_connection, _cursor, statement, _parameters, _context, _executemany):
+        if "from domain_event_outbox" in statement.lower():
+            outbox_selects.append(statement.lower())
+
+    class AvailableListener:
+        available = True
+
+    sqlalchemy_event.listen(engine, "before_cursor_execute", count_outbox_queries)
+    monkeypatch.setattr(
+        domain_events,
+        "_get_postgres_event_listener",
+        lambda *_args: AvailableListener(),
+    )
+    stream = domain_events.aiter_postgres_event_stream(
+        42,
+        after_cursor=0,
+        poll_seconds=1,
+        session_factory=factory,
+    )
+    try:
+        assert "event: ready" in await stream.__anext__()
+        assert await stream.__anext__() == ": heartbeat\n\n"
+
+        domain_events._deliver_postgres_notification(
+            asyncio.get_running_loop(),
+            id(factory),
+            {
+                "id": 17,
+                "event_id": "00000000-0000-0000-0000-000000000017",
+                "hotel_id": 42,
+                "domain": "reservations",
+                "event_type": "reservation.updated",
+                "schema_version": 1,
+                "stream_cursor": 17,
+                "revision": 0,
+                "occurred_at": "2026-10-09T12:00:00+00:00",
+            },
+        )
+        event_frame = await asyncio.wait_for(stream.__anext__(), timeout=1)
+        await asyncio.sleep(1.1)
+    finally:
+        await stream.aclose()
+        engine.dispose()
+
+    assert '"event_type": "reservation.updated"' in event_frame
+    assert len(outbox_selects) == 1
 
 
 @pytest.mark.asyncio

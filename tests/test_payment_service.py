@@ -232,6 +232,44 @@ class TestFullPayment:
         assert res.amount_paid == 500.0
         assert res.balance_due == 0.0
 
+    def test_full_payment_rejects_a_stale_amount_without_recording_it(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 6, 1),
+            check_out_date=date(2026, 6, 6),
+        )
+        reservation = create_reservation(db, data, hotel_id=DEFAULT_HOTEL_ID)
+        db.flush()
+
+        process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=reservation.id,
+                amount=100.0,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            ),
+            hotel_id=DEFAULT_HOTEL_ID,
+        )
+        with pytest.raises(PaymentError, match=r"debe cubrir el saldo pendiente \(\$400\.00\)"):
+            process_payment(
+                db,
+                PaymentRequest(
+                    reservation_id=reservation.id,
+                    amount=399.0,
+                    payment_method=PaymentMethodEnum.CASH,
+                    transaction_type=TransactionTypeEnum.FULL_PAYMENT,
+                ),
+                hotel_id=DEFAULT_HOTEL_ID,
+            )
+
+        db.refresh(reservation)
+        assert reservation.amount_paid == 100.0
+        assert db.query(Transaction).filter(Transaction.reservation_id == reservation.id).count() == 1
+
 
 class TestBalancePaymentAtCheckin:
     """

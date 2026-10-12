@@ -42,6 +42,7 @@ import { validateGuestForCheckin, type GuestCheckinValidation } from "../api/gue
 import type { SessionState } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
 import { refreshReservationCreatedState, refreshReservationGuestState, refreshReservationRecordState } from "../api/queryInvalidation";
+import { EVENT_REFRESHED_QUERY_STALE_TIME_MS } from "../api/queryPolicy";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -77,7 +78,7 @@ export function useReservations(filters: ReservationFilters) {
     // Filters without a search term behave exactly as before.
     enabled: hasValidSession(session) && searchFilterReady,
     placeholderData: keepPreviousData,
-    staleTime: 1000 * 15,
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
     retry: false
   });
 }
@@ -157,7 +158,7 @@ export function usePendingReservationActions(limit = 100) {
     queryKey: pendingReservationActionsKey(session.hotelId, limit),
     queryFn: ({ signal }) => listPendingReservationActions(limit, session, signal),
     enabled: hasValidSession(session),
-    staleTime: 1000 * 15,
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
     retry: false
   });
 }

@@ -1,13 +1,15 @@
 # Reporte final de pendientes para cerrar los fallos conocidos del PMS
 
-**Actualizado:** 7 de octubre de 2026
-**Base del informe:** historial de Ronda 2, inspección read-only en vivo de Supabase/GitHub/API y benchmark local PostgreSQL del 7 de octubre de 2026
-**Estado:** remediación de código parcialmente validada; producción y cierre del release pendientes
+**Actualizado:** 10 de octubre de 2026
+**Base del informe:** historial de Ronda 1 y Ronda 2, auditorías read-only de proveedores, código local integrado sobre `150ca645` y validación sintética local PostgreSQL 16 del 10 de octubre de 2026
+**Estado:** correcciones locales y validaciones ampliadas; atribución del consumo en producción y cierre del release pendientes
 **Certeza:** ver las etiquetas `confirmado`, `inferido` y `pendiente de verificar` en cada sección.
 
 ## Resumen ejecutivo
 
 Este informe concentra el estado comunicado para la simulación semanal Ronda 2, las correcciones de latencia integradas en `main` y la auditoría de datos/egress. Sirve como lista única de trabajo pendiente; no equivale a aprobación de release.
+
+Las secciones cronológicas anteriores preservan lo observado en cada fecha. Para saber qué sigue pendiente hoy, prevalece la sección **“Actualización integrada y validación local — 10 de octubre de 2026”**; sus resultados reemplazan los estados previos cuando haya diferencias.
 
 ### Actualización crítica — comprobación en vivo del 7 de octubre de 2026
 
@@ -87,7 +89,7 @@ En los planes `EXPLAIN` de esta corrida, las consultas de disponibilidad y saldo
 - **Inferido:** explicación plausible que todavía necesita medición o evidencia directa.
 - **Pendiente de verificar:** no se obtuvo el estado actual o falta una decisión/persona/servicio externo.
 
-Los apartados fechados conservan snapshots históricos. El corte más reciente de Supabase, GitHub Branching y checks del PR es del 7 de octubre a las 05:19 ART (08:19 UTC); el último corte de Render `/health` en este hilo es el de las 05:10 ART, que mostró suspensión. En una inspección previa se observó que Google tenía GitHub como aplicación vinculada mediante “Iniciar sesión con Google”; la lectura más reciente confirma el usuario GitHub visible, pero no el proveedor que emitió esa sesión. El worktree de esta actualización está en `codex/fix-ronda-2-week-simulation`, basado en `3cfba65a`; contiene cambios locales staged/unstaged que no se publicaron. El head remoto del PR coincide con ese SHA base, no con todo el contenido local. Antes de un release hay que volver a comprobar el head y sus checks.
+Los apartados fechados conservan snapshots históricos. El corte más reciente de Supabase, GitHub Branching y checks del PR es del 7 de octubre a las 05:19 ART (08:19 UTC); el último corte de Render `/health` en este hilo es de las 05:10 ART, que mostró suspensión. En una inspección previa se observó que Google tenía GitHub como aplicación vinculada mediante “Iniciar sesión con Google”; la lectura más reciente confirma el usuario GitHub visible, pero no el proveedor que emitió esa sesión. El worktree de la actualización del 7 de octubre estaba en `codex/fix-ronda-2-week-simulation`, basado en `3cfba65a`; esa nota describe el estado de entonces. La validación local del 10 de octubre usa otro worktree, `fix/lock-paid-room-reservations`, basado en `150ca645`, con cambios locales sin commit ni publicación. El head remoto, CI y estado actual de PR #125 deben verificarse de nuevo antes del release.
 
 **Distinguir métricas:** el número de solicitudes HTTP y los GB de egress son métricas diferentes. El polling SSE y la invalidación de consultas pueden multiplicar solicitudes a la API y consultas a PostgreSQL; solo medir bytes por destino permitirá atribuir qué parte explica el egress facturado por Render.
 
@@ -170,10 +172,10 @@ Estos resultados comprueban los comandos/artefactos indicados en ese SHA. No com
 
 ### P1 — Decisiones de producto, fiscalidad y operación
 
-1. **Huésped restringido:** decidir si un manager con permiso explícito `reservation:prohibition_override` puede cotizar para ese huésped, y definir autorización, confirmación y auditoría.
-2. **Fiscalización (R14):** establecer alcance y reglas fiscales para cerrar los flujos afectados.
-3. **Reclamos a proveedores:** definir una fuente de costos verificable para lavandería y reclamos; no inventar montos.
-4. **Depósitos:** decidir política de retención/devolución, casos cubiertos y responsables.
+1. **Huésped restringido:** decisión tomada: revisión manual; no mover reservas ni cotizar con una excepción automática. El permiso, motivo y auditoría existentes siguen siendo necesarios para cualquier resolución autorizada.
+2. **Fiscalidad:** decisión tomada: reglas operativas configurables por hotel y política explícita antes de cotizar. La emisión fiscal/ARCA sigue fuera de alcance; la pantalla de perfil fiscal solo prepara una vista previa no fiscal.
+3. **Reclamos a proveedores:** decisión tomada: mantener los reclamos sin monto por ahora. Se registra el seguimiento, sin importe reclamable ni efecto en cobros, pagos o liquidaciones.
+4. **Depósitos y otras reglas operativas:** definirlas por hotel antes de operar; no inferir retenciones, devoluciones ni valores por defecto. La validación final debe confirmar que cada hotel usa su política configurada.
 5. **No-show:** provisionar el cron/Blueprint aprobado y verificar su ejecución, frecuencia, idempotencia y alertas. El código del barrido no demuestra que la tarea esté desplegada.
 
 ### Evidencia de QA manual existente
@@ -533,8 +535,81 @@ Graphify volvió a extraer el código: **14.297 nodos, 48.667 aristas y 711 comu
 - **Conclusión del corte:** no hay evidencia concluyente de una caída actual de Supabase; sí hay exceso de egress y advertencia de cuota. La causa inmediata del 503 del PMS es la suspensión de Render. El consumo de Render y los GB de Supabase siguen sin atribución correlacionada. El análisis del código desplegado en `e172ceb` mantiene como hipótesis fuerte que reconstrucciones analíticas activadas en rutas de lectura y la falta de caché hayan amplificado consultas/tráfico; el fallback de polling PostgreSQL cada 2 segundos es un contribuyente plausible de carga, pero no explica por sí solo GB de egress. Ninguna hipótesis queda demostrada con los paneles actuales.
 - **Cambio local en este corte:** `.env.example` ahora coincide con `app/config.py` y `render.yaml`: `SYNC_FACT_REFRESH_ENABLED=false` por defecto, con comentario que dirige los datos antiguos/importados al script explícito de reparación. Esta edición local aún debe incluirse en la validación integral del worktree.
 
+## Actualización integrada y validación local — 10 de octubre de 2026
+
+### Identidad del código y alcance
+
+- **Base confirmada:** `150ca6456402a4215ed4fb378b00ac433f16947c`. El árbol `fix/lock-paid-room-reservations` contiene cambios sin commit en asignación, protección E2E de PostgreSQL, pruebas y lockfile. Por lo tanto, no existe todavía un SHA único que identifique todo el código validado.
+- El E2E se ejecutó únicamente contra un PostgreSQL 16 desechable local, con base/roles de prueba y datos sintéticos. No se usaron la base de Supabase ni los servicios de producción; no se cobraron pagos, enviaron correos, dispararon webhooks, cambiaron planes ni reactivaron Render.
+- La pantalla/servicio de Render sigue fuera de QA hasta que el propietario lo reactive. Esta sección no afirma que el código esté desplegado ni listo para liberar.
+
+### Qué indican las mediciones sobre el consumo y la lentitud
+
+**El dato central:** Render factura bytes salientes, no una cuota simple de “cantidad de solicitudes”. Su documentación incluye tanto respuestas HTTP/WebSocket como comunicaciones iniciadas por el servicio hacia destinos externos. Supabase, a su vez, muestra egress por bytes. Si el backend consulta Supabase, las respuestas SQL grandes o repetidas pueden contribuir a ambos medidores; las ventanas y categorías vistas no están alineadas y no permiten reconciliar los 7,18 GB de Render con los 5,976 GB de Supabase. [Render: medición de outbound bandwidth](https://render.com/docs/outbound-bandwidth)
+
+**Causa exacta: pendiente de demostrar.** La evidencia histórica confirma el exceso de `Service-Initiated` en Render y el exceso de cuota de egress de Supabase. No hay desglose del período por host/destino, endpoint, consulta, usuario ni bytes transferidos. La mejor explicación actual es una combinación de tráfico repetido hacia PostgreSQL/Supabase, refrescos disparados por mutaciones/eventos y trabajo analítico o respuestas grandes. Cada mecanismo existe o existió en el código, pero los paneles no demuestran qué proporción aportó.
+
+Los puntos concretos que más pueden explicar el salto repentino son:
+
+1. **Refresh analítico síncrono durante lecturas.** En el código histórico de `e172ceb` se observó la posibilidad de reconstruir hechos de hasta 31 días desde rutas de consulta, con un flag que no se pudo confirmar en el runtime. Eso puede multiplicar lecturas a Supabase y trabajo de Render. La rama local cambia el default a apagado y deja la reparación amplia para un comando explícito; la configuración productiva del período no se pudo recuperar.
+2. **SSE/fallback y sesión por pestaña.** El fallback histórico consultaba PostgreSQL cada 2 segundos; la rama local lo lleva a 5 segundos y comparte consultas simultáneas por proceso/hotel/cursor. El cambio baja 60% los ciclos teóricos por stream (30 a 12 por minuto), pero no elimina el factor “sesiones activas × hoteles × procesos”. Sin compartir consultas, 500 pestañas abiertas podrían equivaler a 6.000 sondeos por minuto a 5 s; es un techo ilustrativo, no una medición, y la coalescencia real puede reducirlo. La demora de 2 a 5 segundos tampoco es una solución suficiente por sí sola.
+3. **Fan-out después de acciones.** Una reserva/edición puede refrescar listas y datos relacionados; antes, la interfaz esperaba terminar esos GET y el evento SSE de la propia escritura podía repetirlos. El código local responde al POST antes del refresco y deduplica el evento coincidente. En el E2E posterior al commit, la lista de reservas y acciones pendientes se solicitaron una vez cada una. El registro del E2E mostró una lectura por cada una de ocho rutas durante la ventana observada; no prueba que las ocho hayan sido causadas por la mutación.
+4. **Muchos viajes SQL por alta y filtros amplios.** En PostgreSQL sintético local, la creación con tarifa automática aún ejecutó 38 sentencias SQL (bajó de 60); creación manual, 33. En una conexión remota cada viaje puede sumar latencia de red. El test local no reproduce el RTT entre Render y Supabase. Una espera de varios segundos en producción puede aparecer aunque la base local responda rápido si el flujo hace muchos viajes secuenciales o espera refetches.
+5. **Respuestas grandes repetidas.** El objeto JSON equivalente del reporte diario midió 641.117 bytes sin comprimir y 33.997 bytes comprimido con gzip. Es una serialización local del modelo, no una captura HTTP ni una medida de bytes de protocolo/DB. A ese tamaño, harían falta aproximadamente 176.000 respuestas comprimidas para igualar 5,976 GB; por sí solo no explica el egreso sin una tasa muy alta. Otros endpoints, datos, frecuencia y bytes de DB siguen sin medir.
+
+**Benchmark PostgreSQL sintético actual** (2.000 reservas/huéspedes, 40 habitaciones, 667 transacciones; p50/p95, milisegundos):
+
+| Operación | p50 / p95 | Lectura útil |
+|---|---:|---|
+| Crear reserva con importe manual | 22,22 / 27,86 | SQL local rápido; no incluye ida y vuelta de Supabase |
+| Crear reserva con tarifa automática | 65,73 / 99,63 | 38 sentencias; hay margen para reducir viajes |
+| Comprobar disponibilidad | 6,93 / 7,44 |  |
+| Buscar habitaciones disponibles | 5,02 / 7,79 |  |
+| Construir espacios de asignación | 25,34 / 28,00 |  |
+| Calcular saldo desde transacciones | 17,03 / 25,92 |  |
+| Reporte diario | 112,85 / 135,60 | 21 sentencias; salida grande respecto de otras rutas |
+| Buscar huésped por documento | 22,75 / 24,90 |  |
+| Buscar huésped por apellido | 24,15 / 25,79 |  |
+
+El plan caliente del query de reporte leyó 1.173 candidatos, devolvió 1.023 filas, marcó 249 shared-buffer hits y tardó 4,503 ms en esa corrida. Estas cifras no sustituyen mediciones con hoteles y cardinalidades reales, ni explican la cuota observada en los proveedores.
+
+**Conclusión operativa:** sí hay defectos de diseño capaces de amplificar solicitudes y consultas, en particular polling, fan-out y refresh analítico; ya hay mitigaciones locales. El benchmark sugiere que el código y el número de viajes de red merecen optimización, pero no demuestra por sí solo el origen de varios GB. Antes de habilitar tráfico real hace falta capturar por operación: conteo de solicitudes, bytes salientes por destino, tamaño de respuesta, tiempo del POST, tiempo SQL, pool, hidratación, serialización, refetch y eventos SSE. Nunca registrar DSN, tokens, cabeceras ni PII.
+
+### Validaciones locales y límites
+
+- Suite completa de backend en el worktree integrado: **3.031 pasaron, 35 omitidas y 12 xfailed**, sin fallos, en 345 segundos. Los tres módulos que habían quedado afectados por las políticas fiscales sintéticas se repitieron antes y pasaron: **49 pruebas**.
+- Después se amplió el guard de E2E para admitir loopback secundario y puertos locales 55000–55999 cuando 5432 está ocupado; sigue exigiendo opt-in explícito, roles/base desechables con nombres dedicados, base vacía y roles separados. **39 pruebas de `test_e2e_seed_safety.py` pasaron.**
+- E2E Chromium contra **PostgreSQL 16 local**: pasó la prueba de guardado de reserva sin esperar el refresco demorado de listas y pasó **1/1** la prueba de creación de política fiscal 0%, recarga y persistencia. La migración completa a `head` también pasó en la base nueva de esa prueba. Los datos y roles eran sintéticos y desechables.
+- Frontend: **119 pruebas**, typecheck, lint y build pasaron. El bundle principal generado es de 569,45 kB antes de gzip (178,60 kB comprimido), por encima de la advertencia de Vite de 500 kB. `npm audit --omit=dev` se revalidó el 10 de octubre y reportó cero vulnerabilidades de producción. La lectura previa de auditoría completa mostró alertas solo de herramientas de desarrollo (3 moderadas, 12 altas); no se forzó un salto mayor.
+- El suite de backend anterior corrió con SQLite de test, no PostgreSQL. La base PostgreSQL aislada se usó para benchmark y E2E focal; no se afirma que el conjunto completo de backend haya corrido en PostgreSQL.
+- Alembic `upgrade head` pasó tanto en una base temporal SQLite vacía como durante la inicialización de una base PostgreSQL 16 E2E nueva. `tests/test_docs_baseline.py`: **2 pasaron**.
+- Graphify AST-only quedó actualizado: **13.545 nodos, 43.547 relaciones y 644 comunidades**; generó **1.107 flujos**, `portable-check` pasó y `check-update` quedó current. La gramática de esta instalación no reconoce tres archivos Swift; se omitieron esos archivos, sin generar descripciones o etiquetas semánticas.
+
+### Reglas de producto acordadas y estado de implementación
+
+- **Asignación:** una reserva con habitación y pago asignados se considera confirmada; ninguna optimización automática debe moverla. Los casos que compiten por disponibilidad requieren revisión humana. La rama actual protege las reservas con habitación y pago realizado (o estado de depósito/pago completo) y añade regresión de solver. **No se ejecutó una optimización en producción.**
+- **Huéspedes restringidos:** revisión manual para cada caso; sin movimiento o excepción automática. Cualquier excepción sigue sujeta al permiso explícito, motivo y auditoría existentes.
+- **Reglas por hotel:** se añadió la interfaz para que owner/co-owner o un usuario autorizado por `commercial:manage` cree y mantenga la política fiscal. Si no corresponde cobrar, debe guardarse explícitamente 0%; la ausencia de política activa bloquea cotizar y crear reservas. La prueba de navegador con PostgreSQL 16 verificó alta, persistencia tras recarga y estado sin política antes del alta. La conversión de IVA incluido y reglas fijas/porcentuales tiene regresiones de cálculo. Límite pendiente: los totales manuales/OTA/corporativos ya informados se conservan como totales finales y no se recalculan ni se desglosan en impuestos; la pantalla no constituye asesoramiento ni emisión fiscal. Los hoteles existentes deben configurar y revisar su política antes de volver a cotizar; depósitos y otras reglas siguen dependiendo de su configuración por hotel y verificación operativa.
+- **Lavandería y reclamos a proveedor:** los reclamos quedan **sin monto por ahora**. El seguimiento conserva estado/nota y no crea cobro, pago ni liquidación. La prueba API comprueba que campos monetarios se rechazan y que el flujo no crea movimientos financieros.
+- **Avisos y permisos:** se mantienen los permisos actuales; los avisos operativos se entregan solo a usuarios autorizados para esa área.
+
+### Render y el límite mensual de USD 25
+
+La página oficial actual separa el plan del workspace del costo de cómputo: Hobby cuesta USD 0 e incluye 5 GB; Pro cuesta USD 25 e incluye 25 GB, antes del cómputo. El web service de 0,5 CPU/512 MB cuesta USD 7 al mes; desde agosto de 2026 el identificador nuevo es `0.5c-512mb` y el nombre heredado `Starter` sigue aceptado, sin cambio de precio. Por eso, **Pro + un backend de ese tamaño cuesta al menos USD 32/mes**, antes de otros servicios, y supera el máximo acordado. [Planes y precios de workspace](https://render.com/pricing) · [equivalencias de cómputo](https://render.com/docs/compute-plans-update)
+
+Hobby + un backend de ese tamaño cuesta nominalmente USD 7 más otros recursos, pero conserva solo 5 GB. El egress público adicional cuesta USD 0,15/GB; con método de pago Render factura el excedente y sin él suspende los servicios al agotarse la cuota. No se verificó un tope de gasto que mantenga el total debajo de USD 25 y a la vez garantice que el servicio siga activo. Para respetar ese presupuesto, no alcanza con elegir un plan: primero hay que reducir y medir egress y acordar qué debe ocurrir al llegar al límite. [Cómo se factura el egress](https://render.com/docs/outbound-bandwidth) · [planes de workspace](https://render.com/docs/new-workspace-plans)
+
+**No se cambió plan, tarjeta, servicio, cobro ni configuración.** Conviene mantener PostgreSQL como fuente de verdad y no agregar Redis/Valkey hasta medir tráfico y justificar su costo; Redis no corrige consultas repetidas mal diseñadas ni elimina el egress de datos que la app necesita.
+
+### Pendientes que impiden declarar el cierre
+
+1. Medir y atribuir en un entorno de preview aislado los bytes de Render por destino y las consultas/egress de Supabase por operación; confirmar si el exceso provino de refresh analítico, SSE, refetch, respuestas grandes u otro cliente.
+2. Resolver CI/estado exacto de PR #125 en el SHA que finalmente se publique; permanece draft según el último registro disponible. No se hizo push ni se modificó el PR.
+3. Provisionar/verificar el cron de no-show y completar QA funcional de todas las áreas con las cuentas/roles autorizados cuando el servicio se reactive.
+4. Cuando el propietario reactive Render, verificar `/health` y `/build-meta.json`, medir latencia/bytes por operación y confirmar el SHA antes de habilitar hoteles. La opción de infraestructura dentro de USD 25 no garantiza un límite duro de gasto si se aceptan cargos por excedente; no levantar hasta acordar cómo evitarlo y revisar métricas.
+
 ## Seguridad, límites y conclusión
 
 No se debe afirmar que la remediación está verificada en producción: la API estaba suspendida y no se comprobó el SHA servido. Se midieron consultas y latencias solo en PostgreSQL local sintético; siguen faltando percentiles y planes de la base activa, y el origen exacto del egress no está identificado. La evidencia de aislamiento se limita a rutas y pruebas concretas. El build publicado, el login HTTP 200 y las pruebas locales no sustituyen el release gate.
 
-Hasta cerrar los puntos de operación, decisiones de producto, medición y QA anteriores, PR #125 debe seguir abierto y en borrador. No se necesita cerrar ningún PR ni retirar controles para conservar el trabajo.
+Las decisiones de producto registradas en esta sección ya están tomadas. El cierre sigue pendiente por la atribución del egress, los gates/CI y preview de la versión final, el cron de no-show y el QA cloud posterior a la reactivación de Render. PR #125 debe seguir abierto y en borrador; no hace falta cerrarlo ni retirar controles para conservar el trabajo.

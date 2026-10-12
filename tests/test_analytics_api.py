@@ -50,8 +50,10 @@ from app.services.permission_service import PERMISSION_COMPANY_VIEW
 
 def assert_freshness_metadata(payload: dict) -> None:
     assert payload["data_source"] in {"postgresql", "clickhouse"}
-    assert payload["source_lag_seconds"] >= 0
-    assert payload["data_as_of"]
+    if payload["data_as_of"] is None:
+        assert payload["source_lag_seconds"] is None
+    else:
+        assert payload["source_lag_seconds"] >= 0
 
 
 @pytest.fixture
@@ -839,22 +841,13 @@ def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatc
         get_object_storage().get_bytes(object_key)
 
 
-def test_analytics_read_preserves_stale_metadata_without_rebuilding_complete_facts(api_client, monkeypatch):
+def test_analytics_read_preserves_stale_metadata_without_rebuilding_complete_facts(api_client):
     # Fact timestamps are materialization metadata, not a source-write
     # watermark. A complete window is not rescanned just because it is old;
     # the caller receives honest freshness metadata instead.
     client, SessionLocal, headers, plan_state = api_client
     import app.services.analytics_service as analytics_service_module
 
-    monkeypatch.setattr(
-        analytics_service_module,
-        "get_settings",
-        lambda: Settings(
-            _env_file=None,
-            SYNC_FACT_REFRESH_ENABLED=True,
-            SYNC_FACT_REFRESH_MAX_DAYS=31,
-        ),
-    )
     _seed_analytics_data(SessionLocal)
     plan_state["plan"] = "pro"
 
@@ -884,14 +877,16 @@ def test_analytics_read_preserves_stale_metadata_without_rebuilding_complete_fac
     assert min(timestamps) == stale_since
 
 
-def test_analytics_home_repairs_missing_facts_when_read_recovery_is_enabled(api_client, monkeypatch):
-    # Simulate a legacy/out-of-band reservation inserted without the normal
-    # transactional fact hook. A first bounded read repairs missing coverage
-    # only under the explicit recovery setting; ordinary writes maintain facts.
+def test_analytics_home_does_not_rebuild_missing_facts_on_read(api_client, monkeypatch):
+    # Even a legacy opt-in environment value cannot turn an Analytics GET into
+    # a historical repair. Supported reservation writes maintain facts in
+    # their own transaction; out-of-band gaps stay explicitly unverified until
+    # the reviewed maintenance command is run.
     client, SessionLocal, headers, plan_state = api_client
     plan_state["plan"] = "pro"
     import app.services.analytics_service as analytics_service_module
 
+    monkeypatch.setenv("SYNC_FACT_REFRESH_ENABLED", "true")
     monkeypatch.setattr(
         analytics_service_module,
         "get_settings",
@@ -901,76 +896,22 @@ def test_analytics_home_repairs_missing_facts_when_read_recovery_is_enabled(api_
             SYNC_FACT_REFRESH_MAX_DAYS=31,
         ),
     )
-
+    _seed_analytics_data(SessionLocal)
     with SessionLocal() as db:
-        from app.models.guest import Guest
-
-        category = RoomCategory(
-            hotel_id=1,
-            name="Standard",
-            code="STD-SH",
-            description="Standard room",
-            base_price_per_night=100.0,
-            variable_cost_per_night=12.50,
-            max_occupancy=2,
-        )
-        db.add(category)
-        db.flush()
-        room = Room(hotel_id=1, room_number="201", floor=2, category_id=category.id, status=RoomStatusEnum.AVAILABLE, is_active=True)
-        db.add(room)
-        db.flush()
-        guest = Guest(hotel_id=1, first_name="Rita", last_name="Gomez", email="rita@test.com", terms_accepted=True)
-        db.add(guest)
-        db.flush()
-        db.add(
-            Reservation(
-                confirmation_code="RES-SELFHEAL",
-                hotel_id=1,
-                guest_id=guest.id,
-                room_id=room.id,
-                category_id=category.id,
-                check_in_date=date(2026, 5, 1),
-                check_out_date=date(2026, 5, 3),
-                total_amount=198000.0,
-                subtotal_amount=180000.0,
-                tax_amount=18000.0,
-                fee_amount=0.0,
-                commission_amount=0.0,
-                net_amount=180000.0,
-                amount_paid=198000.0,
-                deposit_amount=0.0,
-                currency_code="ARS",
-                status=ReservationStatusEnum.FULLY_PAID,
-                outcome=ReservationOutcomeEnum.PENDING,
-                source=ReservationSourceEnum.DIRECT,
-                channel_code=ReservationChannelCodeEnum.OTHER_DIRECT,
-                guest_segment=ReservationGuestSegmentEnum.LEISURE,
-                guest_segment_source=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
-                no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
-                num_adults=2,
-                num_children=0,
-            )
-        )
+        db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == 1).delete()
+        db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == 1).delete()
         db.commit()
-        assert db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == 1).count() == 0
 
     resp = client.get(
         "/api/analytics/home",
-        params={"date_from": "2026-04-20", "date_to": "2026-05-20"},
+        params={"date_from": "2026-04-01", "date_to": "2026-04-05"},
         headers=headers,
     )
     assert resp.status_code == 200, resp.text
     payload = resp.json()
-    cards = {card["card_code"]: card for card in payload["data"]["cards"]}
-    assert Decimal(cards["home_revenue_gross"]["value_ars"]) > 0, payload
-    assert Decimal(cards["home_revenue_net"]["value_ars"]) > 0, payload
-    assert cards["home_occupancy"]["value_pct"] > 0, payload
-    assert Decimal(cards["home_adr"]["value_ars"]) == Decimal("90000.00"), payload
-    assert Decimal(cards["home_revpar"]["value_ars"]) == Decimal("5806.45"), payload
-    assert "USD" in payload["data"]["top_channels"][0]["unavailable_currencies"], payload
+    assert payload["data_as_of"] is None
+    assert payload["source_lag_seconds"] is None
 
     with SessionLocal() as db:
-        # Self-heal must have materialized the facts, not just computed them
-        # ad hoc -- future reads (and the freshness annotation) stay correct.
-        assert db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == 1).count() > 0
-        assert db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == 1).count() > 0
+        assert db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == 1).count() == 0
+        assert db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == 1).count() == 0

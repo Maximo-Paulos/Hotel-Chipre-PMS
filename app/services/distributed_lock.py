@@ -37,7 +37,11 @@ def _settings():
 
 
 def _get_redis_client() -> redis.Redis | None:
-    if not _settings().DISTRIBUTED_LOCK_ENABLED:
+    settings = _settings()
+    if (
+        not settings.DISTRIBUTED_LOCK_ENABLED
+        or getattr(settings, "DISTRIBUTED_LOCK_BACKEND", "redis") != "redis"
+    ):
         return None
     try:
         return get_sync_redis_client(capability="locks")

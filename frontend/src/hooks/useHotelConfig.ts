@@ -8,6 +8,7 @@ import {
   type HotelInterfaceLanguage
 } from "../api/config";
 import { hasValidSession } from "../api/client";
+import { EVENT_REFRESHED_QUERY_STALE_TIME_MS } from "../api/queryPolicy";
 import { useSession } from "../state/session";
 import i18n, { normalizeInterfaceLanguage } from "../i18n";
 
@@ -22,7 +23,7 @@ export function useHotelConfig() {
     queryKey: hotelConfigKey(session.hotelId, session.userId),
     queryFn: () => getHotelConfig(session),
     enabled: hasValidSession(session) && hasPermission("hotel_settings:read"),
-    staleTime: 60 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
 
   useEffect(() => {
@@ -38,7 +39,7 @@ export function useHotelInterfaceLanguage() {
     queryKey: ["hotel-interface-language", session.hotelId, session.userId],
     queryFn: () => getHotelInterfaceLanguage(session),
     enabled: hasValidSession(session),
-    staleTime: 60 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const interfaceLanguage = query.data?.interface_language;
 

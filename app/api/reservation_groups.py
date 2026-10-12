@@ -18,6 +18,7 @@ from app.services.permission_service import PERMISSION_COMPANY_MANAGE, PERMISSIO
 from app.services.permission_service import PERMISSION_CASH_OPERATE
 from app.services.payment_service import PaymentError, PaymentNotFoundError
 from app.services.reservation_group_payment_service import create_reservation_group_payment
+from app.services.allocation_runtime_service import reservation_overlaps_default_horizon
 
 
 router = APIRouter(prefix="/api/reservation-groups", tags=["Reservation Groups"])
@@ -82,11 +83,20 @@ def create_reservation_group_route(
                 },
             )
         db.commit()
-        background_tasks.add_task(
-            _trigger_reoptimization_bg,
-            hotel_id=context.hotel_id,
-            trigger_type="reservation_group_created",
-        )
+        if any(
+            reservation_overlaps_default_horizon(
+                db,
+                hotel_id=context.hotel_id,
+                check_in_date=reservation.check_in_date,
+                check_out_date=reservation.check_out_date,
+            )
+            for reservation in reservations
+        ):
+            background_tasks.add_task(
+                _trigger_reoptimization_bg,
+                hotel_id=context.hotel_id,
+                trigger_type="reservation_group_created",
+            )
         summary = list_reservation_groups(db, hotel_id=context.hotel_id, limit=1, group_id=group.id)
         if not summary:
             raise HTTPException(status_code=500, detail="No se pudo leer el grupo recién creado.")

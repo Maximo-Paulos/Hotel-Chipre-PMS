@@ -119,6 +119,7 @@ def test_redis_health_is_active_for_distributed_locks_when_cache_is_off(monkeypa
             return True
 
     monkeypatch.setenv("DISTRIBUTED_LOCK_ENABLED", "true")
+    monkeypatch.setenv("DISTRIBUTED_LOCK_BACKEND", "redis")
     monkeypatch.setattr("redis.Redis.from_url", lambda *args, **kwargs: FakeRedis())
     get_settings.cache_clear()
 
@@ -129,6 +130,35 @@ def test_redis_health_is_active_for_distributed_locks_when_cache_is_off(monkeypa
     assert payload["connected"] is True
     assert payload["cache_enabled"] is False
     assert payload["distributed_locks_enabled"] is True
+
+
+def test_sql_only_profile_does_not_attempt_redis_and_reports_postgres_backends(monkeypatch: pytest.MonkeyPatch):
+    import app.api.health as health_module
+
+    monkeypatch.setenv("READ_MODEL_CACHE_ENABLED", "false")
+    monkeypatch.setenv("DISTRIBUTED_LOCK_ENABLED", "true")
+    monkeypatch.setenv("DISTRIBUTED_LOCK_REQUIRED", "true")
+    monkeypatch.setenv("DISTRIBUTED_LOCK_BACKEND", "postgresql")
+    monkeypatch.setenv("REALTIME_EVENTS_ENABLED", "true")
+    monkeypatch.setenv("REALTIME_EVENTS_TRANSPORT", "postgresql")
+    get_settings.cache_clear()
+
+    def unexpected_redis_client(*args, **kwargs):
+        raise AssertionError("SQL-only profile must not construct a Redis client")
+
+    monkeypatch.setattr(health_module, "get_sync_redis_client", unexpected_redis_client)
+    payload = health_module._redis_healthcheck()
+    lock = health_module._critical_lock_readiness(payload)
+
+    assert payload["status"] == "disabled"
+    assert payload["enabled"] is False
+    assert payload["distributed_lock_backend"] == "postgresql"
+    assert payload["realtime_transport"] == "postgresql"
+    assert lock == {
+        "status": "ok",
+        "safe": True,
+        "mechanism": "postgres_advisory_xact_lock",
+    }
 
 
 def test_postgres_healthcheck_does_not_return_or_log_connection_error(monkeypatch: pytest.MonkeyPatch, caplog):

@@ -1,4 +1,4 @@
-"""Tenant-scoped realtime domain events backed by Redis/Valkey pub/sub.
+"""Tenant-scoped realtime events backed by Redis/Valkey or PostgreSQL.
 
 Postgres remains the source of truth. These events are only invalidation
 signals: consumers must refetch the authoritative API representation.
@@ -12,19 +12,21 @@ import logging
 import threading
 import time
 import uuid
+from collections import deque
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncIterator, Callable, Iterable, Literal, Mapping, TYPE_CHECKING
+from weakref import WeakKeyDictionary
 
 import anyio
 import redis
 from sqlalchemy import func, inspect
-from sqlalchemy.orm import load_only
 
 from app.config import get_settings
 from app.infrastructure.redis_backend import get_sync_redis_client, namespaced_key
 from app.models.domain_event_outbox import DomainEventOutbox
-from app.services.outbox_poll_cache import CachedOutboxPollFailure, OutboxPollBatchCache
+from app.services.postgres_event_listener import PostgresEventNotificationListener
 from app.services.tenant_context import set_tenant_hotel_context
 
 
@@ -37,6 +39,7 @@ EVENT_CHANNEL_TEMPLATE = "hotel:{hotel_id}:events"
 REVISION_KEY_TEMPLATE = "hotel:{hotel_id}:revision:{domain}"
 EVENT_NAME = "domain_change"
 PENDING_EVENTS_KEY = "_hotel_pms_pending_domain_events"
+COALESCED_MODEL_CHANGE_FAMILY_KEY = "_hotel_pms_coalesced_model_change_family"
 
 # Exponential backoff base for outbox replay (worker/Celery retries), in
 # seconds: attempt 1 waits this long, attempt 2 waits 2x, attempt 3 4x, etc.
@@ -45,22 +48,19 @@ OUTBOX_RETRY_MAX_SECONDS = 15 * 60
 OUTBOX_MAX_ATTEMPTS = 8
 RECOVERY_MAX_ROWS = 500
 POSTGRES_FALLBACK_BATCH_SIZE = 100
-# The default reduces idle polls by 60% versus a two-second poll while
-# preserving five seconds for the network hop and authoritative refetch inside
-# the ten-second cross-session freshness budget.
-POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS = 5.0
-# Even a direct caller that bypasses Settings must keep the full poll below
-# the ten-second freshness budget so the client can refetch authoritative data.
-POSTGRES_FALLBACK_MAX_POLL_SECONDS = 5.0
-_POSTGRES_EVENT_BATCH_CACHE = OutboxPollBatchCache[DomainEventOutbox]()
+# PostgreSQL LISTEN/NOTIFY delivers committed changes immediately in the
+# normal path. Poll only during listener outages, at the same maximum interval
+# used by the browser's degraded recovery path.
+POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS = 60.0
+POSTGRES_FALLBACK_MAX_POLL_SECONDS = 60.0
 # Redis can spend up to a second per connection attempt while the durable
 # outbox already has a PostgreSQL recovery path. Bound repeated request-path
 # waits while keeping probes frequent enough to recover realtime delivery.
 OUTBOX_PUBLISH_FAILURE_COOLDOWN_SECONDS = 30.0
 SUPPORTED_DOMAINS = frozenset(
     {
-        "analytics",
         "assistant",
+        "analytics",
         "cash",
         "guests",
         "notifications",
@@ -72,6 +72,7 @@ SUPPORTED_DOMAINS = frozenset(
         "settings",
         "stock",
         "users",
+        "whatsapp",
     }
 )
 
@@ -346,9 +347,16 @@ MODEL_DOMAIN_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "hotel_role_visibility_window": ("security", "settings"),
     "temporary_action_grants": ("security", "users"),
     "notification_preferences": ("notifications", "settings"),
+    # Only materialized inbox rows affect the visible notifications query.
+    # Queue and delivery-state changes stay internal to the durable outbox.
     "notifications": ("notifications",),
-    "notification_outbox": ("notifications",),
     "daily_report_schedules": ("notifications", "settings", "analytics"),
+    # WhatsApp event payloads contain only tenant-scoped numeric identifiers
+    # and status enums. Message bodies, contact data and provider IDs stay in SQL.
+    "whatsapp_channels": ("settings",),
+    "whatsapp_conversations": ("whatsapp",),
+    "whatsapp_messages": ("whatsapp",),
+    "whatsapp_conversation_notes": ("whatsapp",),
     # Allocation and AI read models. Their prompts, explanations and numeric
     # scores are deliberately not copied into the event payload; the event is
     # only a tenant-scoped cache invalidation signal.
@@ -406,6 +414,32 @@ DERIVED_ANALYTICS_MODEL_FAMILIES = {
     "analytics_ai_usage_monthly": "ai_usage_monthly",
 }
 
+
+@contextmanager
+def coalesce_model_change_family(
+    session: Any,
+    *,
+    family: str,
+    table_names: Iterable[str],
+):
+    """Collapse bulk ORM invalidations to one safe signal per domain.
+
+    The persisted rows remain untouched. This only changes the metadata sent
+    to consumers, which refetch the authoritative tenant-scoped API data.
+    """
+
+    previous = session.info.get(COALESCED_MODEL_CHANGE_FAMILY_KEY)
+    session.info[COALESCED_MODEL_CHANGE_FAMILY_KEY] = {
+        table_name: family for table_name in table_names
+    }
+    try:
+        yield
+    finally:
+        if previous is None:
+            session.info.pop(COALESCED_MODEL_CHANGE_FAMILY_KEY, None)
+        else:
+            session.info[COALESCED_MODEL_CHANGE_FAMILY_KEY] = previous
+
 _MODEL_ID_PAYLOAD_KEYS: dict[str, str] = {
     "reservations": "reservation_id",
     "reservation_adjustments": "adjustment_id",
@@ -461,6 +495,10 @@ _MODEL_ID_PAYLOAD_KEYS: dict[str, str] = {
     "notifications": "action_id",
     "notification_outbox": "action_id",
     "daily_report_schedules": "action_id",
+    "whatsapp_channels": "action_id",
+    "whatsapp_conversations": "conversation_id",
+    "whatsapp_messages": "action_id",
+    "whatsapp_conversation_notes": "action_id",
     "ai_assistant_action_runs": "action_id",
     "ai_assistant_insights": "action_id",
     "ai_assistant_messages": "action_id",
@@ -532,6 +570,7 @@ def _model_event_payload(model: Any, table_name: str) -> dict[str, Any]:
 
     for attribute, payload_key in (
         ("reservation_id", "reservation_id"),
+        ("conversation_id", "conversation_id"),
         ("guest_id", "guest_id"),
         ("room_id", "room_id"),
         ("category_id", "category_id"),
@@ -563,10 +602,6 @@ def _model_event_payload(model: Any, table_name: str) -> dict[str, Any]:
 def queue_model_changes(session: Any) -> None:
     """Collect safe domain signals from ORM writes before a transaction ends."""
 
-    # When realtime delivery is disabled (notably in isolated local/E2E
-    # environments), there is no stream consumer for these cache invalidation
-    # signals. Avoid adding outbox rows and doing post-commit Redis attempts to
-    # every business write in that mode.
     if not bool(getattr(_settings(), "REALTIME_EVENTS_ENABLED", True)):
         session.info.pop(PENDING_EVENTS_KEY, None)
         return
@@ -577,6 +612,7 @@ def queue_model_changes(session: Any) -> None:
         ("deleted", getattr(session, "deleted", ())),
     )
     seen: set[tuple[int, str]] = set()
+    coalesced_families = session.info.get(COALESCED_MODEL_CHANGE_FAMILY_KEY, {})
     for action, models in collections:
         for model in models:
             table_name = str(getattr(model, "__tablename__", "") or "")
@@ -585,8 +621,16 @@ def queue_model_changes(session: Any) -> None:
             if not domains or not hotel_id or (id(model), action) in seen:
                 continue
             seen.add((id(model), action))
+            if table_name == "guests" and action == "created":
+                # A new guest is not yet part of any existing reservation.
+                # The reservation write in a booking flow emits its own event.
+                domains = tuple(domain for domain in domains if domain != "reservations")
             derived_family = DERIVED_ANALYTICS_MODEL_FAMILIES.get(table_name)
-            if derived_family:
+            coalesced_family = coalesced_families.get(table_name)
+            if coalesced_family:
+                event_type = f"{coalesced_family}.read_model.changed"
+                payload = {"family": coalesced_family}
+            elif derived_family:
                 event_type = "analytics.read_model.changed"
                 payload = {"family": derived_family}
             else:
@@ -617,6 +661,7 @@ def queue_domain_change(
     domain: str,
     event_type: str,
     payload: Mapping[str, Any] | None = None,
+    origin_key: str | None = None,
     durable: bool = True,
 ) -> None:
     """Queue one tenant-scoped change for publication after commit.
@@ -629,8 +674,7 @@ def queue_domain_change(
     A ``DomainEventOutbox`` row is added to ``session`` in the same breath, so
     it is inserted in the very same (still-open) transaction as the business
     change it describes -- if the process dies between this commit and the
-    Redis publish, the row survives for a worker to replay. When realtime is
-    disabled, this is a no-op because there is no stream consumer. Pass
+    Redis publish, the row survives for a worker to replay. Pass
     ``durable=False`` to skip that row (best-effort live publish only) for the
     rare case where there is no tenant left to durably notify -- see
     ``queue_model_changes``'s hotel_configuration-delete handling.
@@ -645,11 +689,11 @@ def queue_domain_change(
         event_type=event_type,
         payload=payload,
     )
-    raw_origin_key = session.info.get("domain_event_origin_key")
+    raw_origin_key = origin_key or session.info.get("domain_event_origin_key")
     try:
-        origin_key = str(uuid.UUID(str(raw_origin_key))) if raw_origin_key else None
+        normalized_origin_key = str(uuid.UUID(str(raw_origin_key))) if raw_origin_key else None
     except (AttributeError, TypeError, ValueError):
-        origin_key = None
+        normalized_origin_key = None
     pending = session.info.setdefault(PENDING_EVENTS_KEY, {})
     dedupe_key = (
         hotel_id,
@@ -669,17 +713,21 @@ def queue_domain_change(
     if durable:
         outbox_event_id = str(uuid.uuid4())
         outbox_schema_version = 1
+        postgres_transport = getattr(_settings(), "REALTIME_EVENTS_TRANSPORT", "redis") == "postgresql"
         outbox_row = DomainEventOutbox(
             hotel_id=hotel_id,
             event_id=outbox_event_id,
-            origin_key=origin_key,
+            origin_key=normalized_origin_key,
             domain=domain.strip().lower(),
             event_type=event_type.strip(),
             payload=normalized_payload,
             schema_version=outbox_schema_version,
             stream_cursor=outbox_cursor,
             deduplication_key=f"{hotel_id}:{domain.strip().lower()}:{event_type.strip()}:{uuid.uuid4()}",
-            status="pending",
+            # The PostgreSQL insert trigger emits LISTEN/NOTIFY after commit.
+            # SQL-only deployments have no Redis replay queue to drain.
+            status="published" if postgres_transport else "pending",
+            published_at=datetime.now(timezone.utc) if postgres_transport else None,
         )
         session.add(outbox_row)
     pending[dedupe_key] = QueuedDomainChange(
@@ -687,7 +735,7 @@ def queue_domain_change(
         domain=domain.strip().lower(),
         event_type=event_type.strip(),
         payload=normalized_payload,
-        origin_key=origin_key,
+        origin_key=normalized_origin_key,
         transaction_id=_session_transaction_id(session),
         outbox=outbox_row,
         outbox_event_id=outbox_event_id,
@@ -709,7 +757,9 @@ def publish_queued_domain_changes(session: "Session") -> None:
     """
 
     pending = session.info.pop(PENDING_EVENTS_KEY, {})
-    if not bool(getattr(_settings(), "REALTIME_EVENTS_ENABLED", True)):
+    if getattr(_settings(), "REALTIME_EVENTS_TRANSPORT", "redis") == "postgresql":
+        # The committed outbox insert is delivered by PostgreSQL's trigger.
+        # Avoid a Redis connection attempt and request-path latency.
         return
     if not pending:
         return
@@ -978,7 +1028,10 @@ def _validate_hotel_id(hotel_id: int) -> None:
 
 def _get_redis_client() -> redis.Redis | None:
     settings = _settings()
-    if not bool(getattr(settings, "REALTIME_EVENTS_ENABLED", True)):
+    if (
+        not bool(getattr(settings, "REALTIME_EVENTS_ENABLED", True))
+        or getattr(settings, "REALTIME_EVENTS_TRANSPORT", "redis") != "redis"
+    ):
         return None
     try:
         return get_sync_redis_client(capability="realtime")
@@ -990,7 +1043,10 @@ def _get_redis_client() -> redis.Redis | None:
 def _get_realtime_fast_fail_client() -> redis.Redis | None:
     """Get the short-timeout Redis client used only by post-commit signals."""
     settings = _settings()
-    if not bool(getattr(settings, "REALTIME_EVENTS_ENABLED", True)):
+    if (
+        not bool(getattr(settings, "REALTIME_EVENTS_ENABLED", True))
+        or getattr(settings, "REALTIME_EVENTS_TRANSPORT", "redis") != "redis"
+    ):
         return None
     try:
         return get_sync_redis_client(capability="realtime_fast_fail")
@@ -1036,6 +1092,10 @@ def publish_domain_event(
         payload=payload,
     )
     if not bool(getattr(_settings(), "REALTIME_EVENTS_ENABLED", True)):
+        return None
+    if getattr(_settings(), "REALTIME_EVENTS_TRANSPORT", "redis") == "postgresql":
+        # Durable events are inserted in the business transaction and sent by
+        # the PostgreSQL trigger. Redis is not part of this transport.
         return None
     redis_client = client
     if redis_client is None:
@@ -1101,6 +1161,14 @@ def publish_pending_domain_events(
     """
 
     _validate_hotel_id(hotel_id)
+    if getattr(_settings(), "REALTIME_EVENTS_TRANSPORT", "redis") == "postgresql":
+        return {
+            "selected": 0,
+            "published": 0,
+            "failed": 0,
+            "retry_after_seconds": None,
+            "postgres_trigger_active": True,
+        }
 
     query = (
         db.query(DomainEventOutbox)
@@ -1253,15 +1321,10 @@ def get_domain_event_recovery(
         raise ValueError("after_cursor must be non-negative")
 
     cursor_value = func.coalesce(DomainEventOutbox.stream_cursor, DomainEventOutbox.id)
-    latest_value = (
-        db.query(func.max(cursor_value))
+    latest_value, oldest_value = (
+        db.query(func.max(cursor_value), func.min(cursor_value))
         .filter(DomainEventOutbox.hotel_id == hotel_id)
-        .scalar()
-    )
-    oldest_value = (
-        db.query(func.min(cursor_value))
-        .filter(DomainEventOutbox.hotel_id == hotel_id)
-        .scalar()
+        .one()
     )
 
     cursor = after_cursor or 0
@@ -1269,19 +1332,9 @@ def get_domain_event_recovery(
         DomainEventOutbox.hotel_id == hotel_id,
         cursor_value > cursor,
     )
-    has_more = (
-        recovery_query.order_by(cursor_value.asc())
-        .offset(RECOVERY_MAX_ROWS)
-        .limit(1)
-        .first()
-        is not None
-    )
-    rows = (
-        recovery_query
-        .order_by(cursor_value.asc())
-        .limit(RECOVERY_MAX_ROWS)
-        .all()
-    )
+    bounded_rows = recovery_query.order_by(cursor_value.asc()).limit(RECOVERY_MAX_ROWS + 1).all()
+    has_more = len(bounded_rows) > RECOVERY_MAX_ROWS
+    rows = bounded_rows[:RECOVERY_MAX_ROWS]
     domains = sorted({str(domain) for _event_cursor, domain in rows if domain})
 
     reset_required = after_cursor in (None, 0)
@@ -1307,7 +1360,11 @@ def get_domain_event_recovery(
 def get_realtime_client() -> redis.Redis | None:
     """Return a configured client after a bounded connectivity check."""
 
-    if not bool(getattr(_settings(), "REALTIME_EVENTS_ENABLED", True)):
+    settings = _settings()
+    if (
+        not bool(getattr(settings, "REALTIME_EVENTS_ENABLED", True))
+        or getattr(settings, "REALTIME_EVENTS_TRANSPORT", "redis") == "postgresql"
+    ):
         return None
     client = _get_redis_client()
     if client is None:
@@ -1345,7 +1402,7 @@ def _outbox_sse_payload(row: DomainEventOutbox, cursor: int) -> dict[str, Any] |
             occurred_at_value = occurred_at.isoformat()
         else:
             occurred_at_value = str(occurred_at)
-        payload = {
+        return {
             "version": 1,
             "schema_version": int(row.schema_version or 1),
             "event_id": str(row.event_id),
@@ -1357,10 +1414,8 @@ def _outbox_sse_payload(row: DomainEventOutbox, cursor: int) -> dict[str, Any] |
             "occurred_at": occurred_at_value,
             "payload": {},
             "transport": "postgres-outbox",
+            **({"origin_key": str(row.origin_key)} if row.origin_key else {}),
         }
-        if row.origin_key:
-            payload["origin_key"] = str(row.origin_key)
-        return payload
     except (TypeError, ValueError) as exc:
         # A malformed row must not take down every tenant's stream, and the
         # error log must not echo its payload or provider details.
@@ -1454,19 +1509,10 @@ def iter_postgres_event_stream(
                 return
 
         try:
-            rows = _cached_postgres_event_batch(
-                session_factory,
-                hotel_id,
-                cursor,
-                poll_delay,
-            )
-        except Exception as exc:  # pragma: no cover - provider/runtime failure
-            if not isinstance(exc, CachedOutboxPollFailure):
-                logger.warning(
-                    "realtime_events.postgres_fallback_poll_failed",
-                    extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
-                )
+            rows = _read_postgres_event_batch(session_factory, hotel_id, cursor)
+        except Exception:  # pragma: no cover - provider/runtime failure
             rows = []
+            _record_postgres_fallback_poll(rows=0, duration_ms=0.0, failed=True)
 
         if rows:
             for row in rows:
@@ -1504,28 +1550,39 @@ def _read_latest_postgres_event_cursor(session_factory: Callable[[], Any], hotel
         initial_db.close()
 
 
+@dataclass(frozen=True)
+class _PostgresOutboxStreamRow:
+    id: int
+    event_id: str
+    hotel_id: int
+    domain: str
+    event_type: str
+    schema_version: int
+    stream_cursor: int | None
+    revision: int
+    occurred_at: datetime | str | None
+    origin_key: str | None
+
+
 def _read_postgres_event_batch(
     session_factory: Callable[[], Any], hotel_id: int, cursor: int
-) -> list[DomainEventOutbox]:
+) -> list[_PostgresOutboxStreamRow]:
     cursor_value = func.coalesce(DomainEventOutbox.stream_cursor, DomainEventOutbox.id)
     poll_db = session_factory()
     try:
         set_tenant_hotel_context(poll_db, hotel_id)
-        return (
-            poll_db.query(DomainEventOutbox)
-            .options(
-                load_only(
-                    DomainEventOutbox.id,
-                    DomainEventOutbox.event_id,
-                    DomainEventOutbox.hotel_id,
-                    DomainEventOutbox.domain,
-                    DomainEventOutbox.event_type,
-                    DomainEventOutbox.schema_version,
-                    DomainEventOutbox.stream_cursor,
-                    DomainEventOutbox.revision,
-                    DomainEventOutbox.occurred_at,
-                    DomainEventOutbox.origin_key,
-                )
+        selected_rows = (
+            poll_db.query(
+                DomainEventOutbox.id,
+                DomainEventOutbox.event_id,
+                DomainEventOutbox.hotel_id,
+                DomainEventOutbox.domain,
+                DomainEventOutbox.event_type,
+                DomainEventOutbox.schema_version,
+                DomainEventOutbox.stream_cursor,
+                DomainEventOutbox.revision,
+                DomainEventOutbox.occurred_at,
+                DomainEventOutbox.origin_key,
             )
             .filter(
                 DomainEventOutbox.hotel_id == hotel_id,
@@ -1535,21 +1592,484 @@ def _read_postgres_event_batch(
             .limit(POSTGRES_FALLBACK_BATCH_SIZE)
             .all()
         )
+        return [
+            _PostgresOutboxStreamRow(
+                id=int(row.id),
+                event_id=str(row.event_id),
+                hotel_id=int(row.hotel_id),
+                domain=str(row.domain or ""),
+                event_type=str(row.event_type or ""),
+                schema_version=int(row.schema_version or 1),
+                stream_cursor=int(row.stream_cursor) if row.stream_cursor is not None else None,
+                revision=int(row.revision or 0),
+                occurred_at=row.occurred_at,
+                origin_key=str(row.origin_key) if row.origin_key else None,
+            )
+            for row in selected_rows
+        ]
     finally:
         poll_db.close()
 
 
-def _cached_postgres_event_batch(
-    session_factory: Callable[[], Any],
-    hotel_id: int,
-    cursor: int,
-    poll_seconds: float,
-) -> list[DomainEventOutbox]:
-    return _POSTGRES_EVENT_BATCH_CACHE.get(
-        (session_factory, hotel_id, cursor),
-        ttl_seconds=poll_seconds,
-        loader=lambda: _read_postgres_event_batch(session_factory, hotel_id, cursor),
+_POSTGRES_STREAM_QUEUE_SIZE = 256
+_POSTGRES_STREAM_HISTORY_SIZE = RECOVERY_MAX_ROWS
+_POSTGRES_STREAM_HEARTBEAT_SECONDS = 15.0
+_postgres_fallback_metrics_lock = threading.Lock()
+_postgres_fallback_metrics: dict[str, float | int] = {
+    "window_started_at": time.monotonic(),
+    "polls": 0,
+    "rows": 0,
+    "errors": 0,
+    "duration_ms": 0.0,
+    "active_streams": 0,
+}
+
+
+def _record_postgres_stream_count(delta: int) -> None:
+    with _postgres_fallback_metrics_lock:
+        _postgres_fallback_metrics["active_streams"] = max(
+            0, int(_postgres_fallback_metrics["active_streams"]) + delta
+        )
+
+
+def _record_postgres_fallback_poll(*, rows: int, duration_ms: float, failed: bool) -> None:
+    now = time.monotonic()
+    summary: dict[str, int | float] | None = None
+    with _postgres_fallback_metrics_lock:
+        _postgres_fallback_metrics["polls"] = int(_postgres_fallback_metrics["polls"]) + 1
+        _postgres_fallback_metrics["rows"] = int(_postgres_fallback_metrics["rows"]) + rows
+        _postgres_fallback_metrics["errors"] = int(_postgres_fallback_metrics["errors"]) + int(failed)
+        _postgres_fallback_metrics["duration_ms"] = float(_postgres_fallback_metrics["duration_ms"]) + duration_ms
+        window_started_at = float(_postgres_fallback_metrics["window_started_at"])
+        if now - window_started_at >= 60:
+            summary = {
+                "polls": int(_postgres_fallback_metrics["polls"]),
+                "rows": int(_postgres_fallback_metrics["rows"]),
+                "errors": int(_postgres_fallback_metrics["errors"]),
+                "duration_ms": round(float(_postgres_fallback_metrics["duration_ms"]), 1),
+                "active_streams": int(_postgres_fallback_metrics["active_streams"]),
+            }
+            _postgres_fallback_metrics.update(
+                {
+                    "window_started_at": now,
+                    "polls": 0,
+                    "rows": 0,
+                    "errors": 0,
+                    "duration_ms": 0.0,
+                }
+            )
+    if summary is not None:
+        log = logger.warning if summary["errors"] else logger.info
+        log("realtime_events.postgres_fallback_summary", extra=summary)
+
+
+class _PostgresEventStreamHub:
+    """Share PostgreSQL notifications and a bounded poll fallback per hotel."""
+
+    def __init__(self, session_factory: Callable[[], Any], hotel_id: int) -> None:
+        self._session_factory = session_factory
+        self._hotel_id = hotel_id
+        self._lock = asyncio.Lock()
+        self._subscribers: dict[asyncio.Queue[dict[str, Any]], float] = {}
+        self._history: deque[dict[str, Any]] = deque(maxlen=_POSTGRES_STREAM_HISTORY_SIZE)
+        self._cursor = 0
+        self._history_floor = 0
+        self._poll_seconds = POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS
+        self._poll_task: asyncio.Task[None] | None = None
+        self._listener_available = False
+
+    async def subscribe(
+        self,
+        after_cursor: int | None,
+        poll_seconds: float,
+        *,
+        listener_available: bool = False,
+    ) -> tuple[asyncio.Queue[dict[str, Any]], int]:
+        poll_delay = max(1.0, min(float(poll_seconds), POSTGRES_FALLBACK_MAX_POLL_SECONDS))
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=_POSTGRES_STREAM_QUEUE_SIZE)
+        async with self._lock:
+            self._listener_available = listener_available
+            first_subscriber = not self._subscribers
+            if first_subscriber:
+                if after_cursor is None:
+                    self._cursor = await anyio.to_thread.run_sync(
+                        _read_latest_postgres_event_cursor, self._session_factory, self._hotel_id
+                    )
+                else:
+                    self._cursor = int(after_cursor)
+                self._history.clear()
+                self._history_floor = self._cursor
+            elif after_cursor is not None and after_cursor < self._cursor:
+                self._replay_or_reset(queue, after_cursor)
+
+            stream_cursor = self._cursor if after_cursor is None else int(after_cursor)
+            self._subscribers[queue] = poll_delay
+            self._poll_seconds = min(self._subscribers.values())
+            _record_postgres_stream_count(1)
+            if first_subscriber:
+                started = time.perf_counter()
+                try:
+                    rows = await anyio.to_thread.run_sync(
+                        _read_postgres_event_batch,
+                        self._session_factory,
+                        self._hotel_id,
+                        self._cursor,
+                    )
+                except Exception:
+                    _record_postgres_fallback_poll(
+                        rows=0,
+                        duration_ms=(time.perf_counter() - started) * 1000,
+                        failed=True,
+                    )
+                else:
+                    self._publish_rows(rows)
+                    _record_postgres_fallback_poll(
+                        rows=len(rows),
+                        duration_ms=(time.perf_counter() - started) * 1000,
+                        failed=False,
+                    )
+            if not self._listener_available and (self._poll_task is None or self._poll_task.done()):
+                self._poll_task = asyncio.create_task(self._poll(wait_before_first_query=first_subscriber))
+            return queue, stream_cursor
+
+    async def publish_notification(self, payload: dict[str, Any]) -> None:
+        row = _notification_to_stream_row(payload)
+        async with self._lock:
+            if self._subscribers:
+                self._publish_rows([row])
+
+    async def set_listener_available(self, available: bool) -> None:
+        poll_task: asyncio.Task[None] | None = None
+        catch_up = False
+        async with self._lock:
+            if self._listener_available == available:
+                return
+            self._listener_available = available
+            if available:
+                poll_task = self._poll_task
+                self._poll_task = None
+                catch_up = bool(self._subscribers)
+            elif self._subscribers and (self._poll_task is None or self._poll_task.done()):
+                self._poll_task = asyncio.create_task(self._poll(wait_before_first_query=True))
+
+        if poll_task is not None and poll_task is not asyncio.current_task():
+            poll_task.cancel()
+            try:
+                await poll_task
+            except asyncio.CancelledError:
+                pass
+
+        if catch_up:
+            try:
+                rows = await anyio.to_thread.run_sync(
+                    _read_postgres_event_batch,
+                    self._session_factory,
+                    self._hotel_id,
+                    self._cursor,
+                )
+            except Exception:
+                logger.warning(
+                    "realtime_events.postgres_listener_recovery_failed",
+                    extra={"hotel_id": self._hotel_id},
+                )
+                return
+            async with self._lock:
+                if self._listener_available and self._subscribers:
+                    self._publish_rows(rows)
+
+    def _replay_or_reset(self, queue: asyncio.Queue[dict[str, Any]], after_cursor: int) -> None:
+        if after_cursor >= self._history_floor:
+            for frame in self._history:
+                if int(frame.get("cursor") or 0) > after_cursor:
+                    self._queue_frame(queue, frame)
+            return
+
+        # The cursor predates bounded process history. Refetch once per domain
+        # instead of replaying an unbounded outbox backlog to one reconnecting tab.
+        for domain in sorted(SUPPORTED_DOMAINS):
+            self._queue_frame(
+                queue,
+                {
+                    "version": 1,
+                    "hotel_id": self._hotel_id,
+                    "domain": domain,
+                    "event_type": "recovery_required",
+                    "cursor": self._cursor,
+                    "payload": {},
+                    "transport": "postgres-outbox",
+                },
+            )
+
+    def _queue_frame(self, queue: asyncio.Queue[dict[str, Any]], frame: dict[str, Any]) -> None:
+        if queue.full():
+            while not queue.empty():
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:  # pragma: no cover - same-loop queue operation
+                    break
+            for domain in sorted(SUPPORTED_DOMAINS):
+                queue.put_nowait(
+                    {
+                        "version": 1,
+                        "hotel_id": self._hotel_id,
+                        "domain": domain,
+                        "event_type": "recovery_required",
+                        "cursor": int(frame.get("cursor") or self._cursor),
+                        "payload": {},
+                        "transport": "postgres-outbox",
+                    }
+                )
+            return
+        try:
+            queue.put_nowait(frame)
+        except asyncio.QueueFull:  # pragma: no cover - queue was drained above
+            return
+
+    def _publish_rows(self, rows: list[_PostgresOutboxStreamRow]) -> None:
+        for row in rows:
+            row_cursor = int(row.stream_cursor or row.id)
+            if row_cursor <= self._cursor:
+                continue
+            self._cursor = row_cursor
+            frame = _outbox_sse_payload(row, row_cursor)
+            if frame is None:
+                continue
+            if len(self._history) == self._history.maxlen:
+                self._history_floor = int(self._history[0].get("cursor") or self._history_floor)
+            self._history.append(frame)
+            for queue in tuple(self._subscribers):
+                self._queue_frame(queue, frame)
+
+    async def unsubscribe(self, queue: asyncio.Queue[dict[str, Any]]) -> bool:
+        poll_task: asyncio.Task[None] | None = None
+        async with self._lock:
+            if self._subscribers.pop(queue, None) is not None:
+                _record_postgres_stream_count(-1)
+            if not self._subscribers:
+                poll_task = self._poll_task
+                self._poll_task = None
+            else:
+                self._poll_seconds = min(self._subscribers.values())
+
+        if poll_task is not None and poll_task is not asyncio.current_task():
+            poll_task.cancel()
+            try:
+                await poll_task
+            except asyncio.CancelledError:
+                pass
+        return not self._subscribers
+
+    async def _poll(self, *, wait_before_first_query: bool) -> None:
+        if wait_before_first_query:
+            await asyncio.sleep(self._poll_seconds)
+        while self._subscribers and not self._listener_available:
+            started = time.perf_counter()
+            try:
+                rows = await anyio.to_thread.run_sync(
+                    _read_postgres_event_batch,
+                    self._session_factory,
+                    self._hotel_id,
+                    self._cursor,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                _record_postgres_fallback_poll(
+                    rows=0,
+                    duration_ms=(time.perf_counter() - started) * 1000,
+                    failed=True,
+                )
+                await asyncio.sleep(self._poll_seconds)
+                continue
+
+            async with self._lock:
+                if not self._subscribers:
+                    break
+                self._publish_rows(rows)
+
+            _record_postgres_fallback_poll(
+                rows=len(rows),
+                duration_ms=(time.perf_counter() - started) * 1000,
+                failed=False,
+            )
+            if len(rows) >= POSTGRES_FALLBACK_BATCH_SIZE:
+                continue
+            await asyncio.sleep(self._poll_seconds)
+
+
+_postgres_stream_hubs_lock = threading.Lock()
+_postgres_stream_hubs: WeakKeyDictionary[
+    asyncio.AbstractEventLoop, dict[tuple[int, int], _PostgresEventStreamHub]
+] = WeakKeyDictionary()
+_postgres_event_listeners_lock = threading.Lock()
+_postgres_event_listeners: WeakKeyDictionary[
+    asyncio.AbstractEventLoop, dict[int, PostgresEventNotificationListener]
+] = WeakKeyDictionary()
+
+
+def _notification_to_stream_row(payload: dict[str, Any]) -> _PostgresOutboxStreamRow:
+    return _PostgresOutboxStreamRow(
+        id=int(payload["id"]),
+        event_id=str(payload["event_id"]),
+        hotel_id=int(payload["hotel_id"]),
+        domain=str(payload["domain"]),
+        event_type=str(payload["event_type"]),
+        schema_version=int(payload["schema_version"]),
+        stream_cursor=int(payload["stream_cursor"]),
+        revision=int(payload["revision"]),
+        occurred_at=payload.get("occurred_at"),
+        origin_key=str(payload["origin_key"]) if payload.get("origin_key") else None,
     )
+
+
+def _deliver_postgres_notification(
+    loop: asyncio.AbstractEventLoop,
+    factory_id: int,
+    payload: dict[str, Any],
+) -> None:
+    hotel_id = int(payload["hotel_id"])
+    with _postgres_stream_hubs_lock:
+        hubs = _postgres_stream_hubs.get(loop)
+        hub = hubs.get((factory_id, hotel_id)) if hubs else None
+    if hub is not None:
+        asyncio.create_task(hub.publish_notification(payload))
+
+
+def _update_postgres_listener_state(
+    loop: asyncio.AbstractEventLoop,
+    factory_id: int,
+    available: bool,
+) -> None:
+    with _postgres_stream_hubs_lock:
+        hubs = tuple(
+            hub
+            for (candidate_factory_id, _hotel_id), hub in (_postgres_stream_hubs.get(loop) or {}).items()
+            if candidate_factory_id == factory_id
+        )
+    for hub in hubs:
+        asyncio.create_task(hub.set_listener_available(available))
+
+
+def _session_factory_database_url(session_factory: Callable[[], Any]) -> str:
+    factory_options = getattr(session_factory, "kw", {})
+    bind = factory_options.get("bind") if isinstance(factory_options, dict) else None
+    url = getattr(bind, "url", None)
+    if url is not None:
+        return url.render_as_string(hide_password=False)
+    return str(get_settings().DATABASE_URL)
+
+
+def _postgres_event_listener_database_url(session_factory: Callable[[], Any]) -> str:
+    settings = get_settings()
+    dedicated_url = getattr(settings, "POSTGRES_EVENT_LISTENER_DATABASE_URL", None)
+    return str(dedicated_url or _session_factory_database_url(session_factory))
+
+
+def _get_postgres_event_listener(
+    loop: asyncio.AbstractEventLoop,
+    session_factory: Callable[[], Any],
+) -> PostgresEventNotificationListener:
+    factory_id = id(session_factory)
+    with _postgres_event_listeners_lock:
+        listeners = _postgres_event_listeners.setdefault(loop, {})
+        listener = listeners.get(factory_id)
+        if listener is not None:
+            return listener
+
+        def on_notification(payload: dict[str, Any]) -> None:
+            try:
+                loop.call_soon_threadsafe(
+                    _deliver_postgres_notification,
+                    loop,
+                    factory_id,
+                    payload,
+                )
+            except RuntimeError:  # loop is closing
+                return
+
+        def on_state_change(available: bool) -> None:
+            try:
+                loop.call_soon_threadsafe(
+                    _update_postgres_listener_state,
+                    loop,
+                    factory_id,
+                    available,
+                )
+            except RuntimeError:  # loop is closing
+                return
+
+        settings = get_settings()
+        listener = PostgresEventNotificationListener(
+            _postgres_event_listener_database_url(session_factory),
+            enabled=bool(getattr(settings, "POSTGRES_EVENT_LISTENER_ENABLED", True)),
+            on_notification=on_notification,
+            on_state_change=on_state_change,
+            connect_timeout_seconds=int(getattr(settings, "DB_CONNECT_TIMEOUT_SECONDS", 5)),
+        )
+        listeners[factory_id] = listener
+        listener.start()
+        return listener
+
+
+def _get_postgres_event_stream_hub(
+    session_factory: Callable[[], Any], hotel_id: int
+) -> tuple[asyncio.AbstractEventLoop, tuple[int, int], _PostgresEventStreamHub]:
+    loop = asyncio.get_running_loop()
+    key = (id(session_factory), hotel_id)
+    with _postgres_stream_hubs_lock:
+        hubs = _postgres_stream_hubs.setdefault(loop, {})
+        hub = hubs.get(key)
+        if hub is None:
+            hub = _PostgresEventStreamHub(session_factory, hotel_id)
+            hubs[key] = hub
+    return loop, key, hub
+
+
+def _forget_postgres_event_stream_hub(
+    loop: asyncio.AbstractEventLoop,
+    key: tuple[int, int],
+    hub: _PostgresEventStreamHub,
+) -> None:
+    with _postgres_stream_hubs_lock:
+        hubs = _postgres_stream_hubs.get(loop)
+        if hubs is not None and hubs.get(key) is hub:
+            hubs.pop(key, None)
+            if not hubs:
+                _postgres_stream_hubs.pop(loop, None)
+
+
+async def _stop_postgres_event_listener_if_idle(
+    loop: asyncio.AbstractEventLoop,
+    factory_id: int,
+) -> None:
+    with _postgres_stream_hubs_lock:
+        hubs = _postgres_stream_hubs.get(loop) or {}
+        has_active_streams = any(
+            candidate_factory_id == factory_id
+            for candidate_factory_id, _hotel_id in hubs
+        )
+    if has_active_streams:
+        return
+
+    with _postgres_event_listeners_lock:
+        listeners = _postgres_event_listeners.get(loop)
+        listener = listeners.pop(factory_id, None) if listeners else None
+        if listeners is not None and not listeners:
+            _postgres_event_listeners.pop(loop, None)
+    if listener is not None:
+        await anyio.to_thread.run_sync(listener.stop)
+
+
+async def shutdown_postgres_event_listeners() -> None:
+    """Close any lazy PostgreSQL notification connections at app shutdown."""
+
+    loop = asyncio.get_running_loop()
+    with _postgres_event_listeners_lock:
+        listeners = _postgres_event_listeners.pop(loop, {})
+    if listeners:
+        await anyio.to_thread.run_sync(
+            lambda: [listener.stop() for listener in listeners.values()]
+        )
 
 
 async def aiter_postgres_event_stream(
@@ -1557,17 +2077,18 @@ async def aiter_postgres_event_stream(
     *,
     after_cursor: int | None = None,
     poll_seconds: float = POSTGRES_FALLBACK_DEFAULT_POLL_SECONDS,
+    heartbeat_seconds: int = int(_POSTGRES_STREAM_HEARTBEAT_SECONDS),
     authorization_check: Callable[[], bool] | None = None,
     authorization_revalidate_seconds: int = 60,
     session_factory: Callable[[], Any] | None = None,
 ) -> AsyncIterator[str]:
     """Stream tenant-scoped outbox invalidations without blocking the event loop.
 
-    PostgreSQL access and the synchronous membership check run as short
-    threadpool calls. Poll waits use ``asyncio.sleep`` so an idle SSE stream
-    never occupies a worker thread. Each database helper closes its session
-    before returning, including when the query raises or the stream is
-    cancelled while waiting for that helper to finish.
+    One PostgreSQL LISTEN connection fans committed outbox notifications to
+    active tenant streams. Transaction-pooler URLs and listener failures use
+    one bounded SQL poller per active hotel and process. Membership checks and
+    recovery reads use short threadpool calls; each database helper closes its
+    session before returning.
     """
 
     _validate_hotel_id(hotel_id)
@@ -1577,80 +2098,81 @@ async def aiter_postgres_event_stream(
     resolved_factory = await anyio.to_thread.run_sync(
         _resolve_postgres_event_session_factory, session_factory
     )
-    poll_delay = max(1.0, min(float(poll_seconds), POSTGRES_FALLBACK_MAX_POLL_SECONDS))
-    cursor = int(after_cursor or 0)
-    if after_cursor is None:
-        cursor = await anyio.to_thread.run_sync(
-            _read_latest_postgres_event_cursor, resolved_factory, hotel_id
-        )
-
-    last_authorization_check = time.monotonic()
-    yield format_sse(
-        {
-            "schema_version": 2,
-            "hotel_id": hotel_id,
-            "status": "ready",
-            "transport": "postgres-outbox",
-            "cursor": cursor,
-        },
-        event_name="ready",
+    loop, hub_key, hub = _get_postgres_event_stream_hub(resolved_factory, hotel_id)
+    listener = _get_postgres_event_listener(loop, resolved_factory)
+    queue, cursor = await hub.subscribe(
+        after_cursor,
+        poll_seconds,
+        listener_available=listener.available,
     )
 
-    while True:
-        now = time.monotonic()
-        if (
-            authorization_check
-            and now - last_authorization_check >= max(1, authorization_revalidate_seconds)
-        ):
-            last_authorization_check = now
+    last_authorization_check = time.monotonic()
+    try:
+        yield format_sse(
+            {
+                "schema_version": 2,
+                "hotel_id": hotel_id,
+                "status": "ready",
+                "transport": "postgres-outbox",
+                "cursor": cursor,
+            },
+            event_name="ready",
+        )
+        if queue.empty():
+            yield ": heartbeat\n\n"
+
+        while True:
+            now = time.monotonic()
+            if (
+                authorization_check
+                and now - last_authorization_check >= max(1, authorization_revalidate_seconds)
+            ):
+                last_authorization_check = now
+                try:
+                    authorized = await anyio.to_thread.run_sync(authorization_check)
+                except Exception as exc:  # pragma: no cover - provider/runtime failure
+                    logger.warning(
+                        "realtime_events.authorization_check_failed",
+                        extra={"error_type": type(exc).__name__},
+                    )
+                    authorized = False
+                if not authorized:
+                    yield format_sse(
+                        {
+                            "schema_version": 2,
+                            "hotel_id": hotel_id,
+                            "event_type": "authorization_lost",
+                            "status": "reauthenticate",
+                            "transport": "postgres-outbox",
+                        },
+                        event_name="control",
+                    )
+                    return
+
+            wait_seconds = max(5, min(int(heartbeat_seconds), 60))
+            if authorization_check:
+                remaining = max(
+                    0.01,
+                    authorization_revalidate_seconds - (time.monotonic() - last_authorization_check),
+                )
+                wait_seconds = min(wait_seconds, remaining)
             try:
-                authorized = await anyio.to_thread.run_sync(authorization_check)
-            except Exception as exc:  # pragma: no cover - fail closed on provider errors
-                logger.warning(
-                    "realtime_events.authorization_check_failed",
-                    extra={"error_type": type(exc).__name__},
-                )
-                authorized = False
-            if not authorized:
-                yield format_sse(
-                    {
-                        "schema_version": 2,
-                        "hotel_id": hotel_id,
-                        "event_type": "authorization_lost",
-                        "status": "reauthenticate",
-                        "transport": "postgres-outbox",
-                    },
-                    event_name="control",
-                )
-                return
-
-        try:
-            rows = await anyio.to_thread.run_sync(
-                _cached_postgres_event_batch,
-                resolved_factory,
-                hotel_id,
-                cursor,
-                poll_delay,
-            )
-        except Exception as exc:  # pragma: no cover - provider/runtime failure
-            if not isinstance(exc, CachedOutboxPollFailure):
-                logger.warning(
-                    "realtime_events.postgres_fallback_poll_failed",
-                    extra={"hotel_id": hotel_id, "error_type": type(exc).__name__},
-                )
-            rows = []
-
-        if rows:
-            for row in rows:
-                row_cursor = int(row.stream_cursor or row.id)
-                cursor = max(cursor, row_cursor)
-                payload = _outbox_sse_payload(row, row_cursor)
-                if payload is not None:
-                    yield format_sse(payload)
-            continue
-
-        yield ": heartbeat\n\n"
-        await asyncio.sleep(poll_delay)
+                frame = await asyncio.wait_for(queue.get(), timeout=wait_seconds)
+            except asyncio.TimeoutError:
+                if (
+                    authorization_check
+                    and time.monotonic() - last_authorization_check
+                    >= max(1, authorization_revalidate_seconds)
+                ):
+                    continue
+                yield ": heartbeat\n\n"
+                continue
+            cursor = max(cursor, int(frame.get("cursor") or cursor))
+            yield format_sse(frame)
+    finally:
+        if await hub.unsubscribe(queue):
+            _forget_postgres_event_stream_hub(loop, hub_key, hub)
+            await _stop_postgres_event_listener_if_idle(loop, id(resolved_factory))
 
 
 def format_sse(payload: Mapping[str, Any], *, event_name: str = EVENT_NAME) -> str:
@@ -1677,14 +2199,12 @@ def iter_event_stream(
     pubsub = client.pubsub(ignore_subscribe_messages=True)
     pubsub.subscribe(channel_for_hotel(hotel_id))
     last_authorization_check = time.monotonic()
-    last_heartbeat = last_authorization_check
     try:
         yield format_sse({"schema_version": 2, "hotel_id": hotel_id, "status": "ready"}, event_name="ready")
         while True:
-            message = pubsub.get_message(timeout=1.0)
-            now = time.monotonic()
+            message = pubsub.get_message(timeout=heartbeat_seconds)
             if authorization_check and time.monotonic() - last_authorization_check >= max(1, authorization_revalidate_seconds):
-                last_authorization_check = now
+                last_authorization_check = time.monotonic()
                 try:
                     authorized = authorization_check()
                 except Exception as exc:  # pragma: no cover - fail closed on DB/provider errors
@@ -1712,12 +2232,8 @@ def iter_event_stream(
                     continue
                 if isinstance(payload, dict) and payload.get("hotel_id") == hotel_id:
                     yield format_sse(payload)
-            elif now - last_heartbeat >= heartbeat_seconds:
-                last_heartbeat = now
-                yield ": heartbeat\n\n"
             else:
-                # Internal tick lets the ASGI adapter observe disconnects promptly.
-                yield ""
+                yield ": heartbeat\n\n"
     finally:
         try:
             pubsub.close()

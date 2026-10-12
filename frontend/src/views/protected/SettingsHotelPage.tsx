@@ -29,6 +29,8 @@ import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 import { moveBlockedReason, requiredMovePermission } from "../../utils/roomMove";
 
+import { TaxPoliciesCard } from "./TaxPoliciesCard";
+
 const roomStatuses: RoomStatus[] = ["available", "occupied", "maintenance", "blocked", "cleaning"];
 
 type RoomDeleteState = {
@@ -313,7 +315,16 @@ export function SettingsHotelPage() {
     });
   }, [hasPermission, roomCategoryById, roomDeleteMoveDestinations, roomDeleteState]);
 
-  const handleChange = (key: keyof HotelConfig, value: unknown) => setForm((prev) => ({ ...prev, [key]: value }));
+  const handleChange = (key: keyof HotelConfig, value: unknown) =>
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+      ...(key === "deposit_percentage" ||
+      key === "free_cancellation_hours" ||
+      key === "cancellation_penalty_percentage"
+        ? { deposit_policy_configured: false }
+        : {})
+    }));
   const handleRoomEditField = (field: "room_number" | "floor" | "category_id" | "notes", value: unknown) => {
     setRoomEdit((current) => ({ ...current, [field]: value }));
     collaborativeRoom.setField(field, value);
@@ -519,6 +530,29 @@ export function SettingsHotelPage() {
               Penalidad por cancelación (%)
               <input type="number" min={0} max={100} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.cancellation_penalty_percentage ?? 0} onChange={(e) => handleChange("cancellation_penalty_percentage", parseFloat(e.target.value || "0"))} />
             </label>
+            <section
+              className={`rounded-lg border p-4 ${form.deposit_policy_configured ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}
+              data-testid="deposit-policy-confirmation"
+            >
+              <p className="text-sm font-semibold text-slate-800">Confirmación de depósito y cancelación</p>
+              <p className="mt-1 text-xs text-slate-600">
+                El valor guardado por defecto no cuenta como una decisión del hotel. Confirmá estos valores antes de cotizar o crear reservas.
+              </p>
+              <label className="mt-3 flex items-start gap-2 text-sm font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.deposit_policy_configured)}
+                  onChange={(event) => handleChange("deposit_policy_configured", event.target.checked)}
+                  className="mt-1"
+                />
+                Confirmo que las reglas mostradas fueron definidas por este hotel.
+              </label>
+              {!form.deposit_policy_configured && (
+                <p className="mt-2 text-xs font-semibold text-amber-800">
+                  Las cotizaciones y reservas nuevas estarán bloqueadas hasta guardar la confirmación.
+                </p>
+              )}
+            </section>
             <label className="text-sm font-semibold text-slate-700">
               Idiomas (separados por coma)
               <input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={(form.languages ?? []).join(", ")} onChange={(e) => handleChange("languages", e.target.value.split(",").map((item) => item.trim()).filter(Boolean))} />
@@ -1161,6 +1195,7 @@ function TarifasPromocionesPagosSection() {
           </Link>
         </div>
       </div>
+      <TaxPoliciesCard />
       <PaymentSurchargesCard />
     </section>
   );

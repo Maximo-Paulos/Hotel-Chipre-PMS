@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.database as database_module
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app
@@ -45,7 +47,8 @@ def collaboration_client(monkeypatch):
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    db = sessionmaker(autocommit=False, autoflush=False, bind=engine)()
+    session_factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = session_factory()
     db.add(HotelConfiguration(id=1, hotel_name="Hotel original"))
     db.add(User(id=11, email="collaboration@example.test", password_hash="not-used", is_active=True, is_verified=True))
     db.add(HotelMembership(hotel_id=1, user_id=11, role="owner", status="active"))
@@ -59,6 +62,7 @@ def collaboration_client(monkeypatch):
         is_verified=True,
     )
     fake_redis = FakeTicketRedis()
+    monkeypatch.setattr(database_module, "get_session_factory", lambda database_url=None: session_factory)
     monkeypatch.setattr(collaboration_api, "get_realtime_client", lambda: fake_redis)
     monkeypatch.setattr(collaboration_api, "resolve", lambda *args, **kwargs: True)
     monkeypatch.setattr(collaboration_api, "audit_permission_denied", lambda *args, **kwargs: None)
@@ -163,6 +167,48 @@ def test_ticket_is_tenant_bound_and_one_use_for_websocket(collaboration_client):
             websocket.receive_json()
 
     assert fake_redis.values == {}
+
+
+def test_process_ticket_backend_uses_no_redis_and_consumes_once(collaboration_client, monkeypatch):
+    client, _db, fake_redis = collaboration_client
+    monkeypatch.setattr(
+        collaboration_api,
+        "get_settings",
+        lambda: SimpleNamespace(
+            COLLABORATION_BACKEND="process",
+            COLLABORATION_TICKET_TTL_SECONDS=30,
+        ),
+    )
+
+    def unexpected_redis(*args, **kwargs):
+        raise AssertionError("process collaboration must not use Redis")
+
+    monkeypatch.setattr(collaboration_api, "get_realtime_client", unexpected_redis)
+    response = client.post(
+        "/api/collaboration/tickets",
+        json={"resource_type": "settings", "resource_id": 1},
+    )
+
+    assert response.status_code == 200
+    ticket = response.json()["ticket"]
+    claims = collaboration_api._consume_ticket(None, 1, ticket)
+    assert claims["user_id"] == 11
+    assert collaboration_api._consume_ticket(None, 1, ticket) is None
+    assert fake_redis.values == {}
+
+
+def test_live_ticket_authorization_sets_rls_context_from_server_claims(collaboration_client):
+    _client, db, _redis = collaboration_client
+    claims = {
+        "hotel_id": 1,
+        "user_id": 11,
+        "resource_type": "settings",
+        "resource_id": 1,
+        "allowed_fields": sorted(collaboration_service.get_resource_spec("settings").editable_fields),
+    }
+
+    assert collaboration_api._live_ticket_is_authorized(db, claims) is True
+    assert db.info["_tenant_settings"] == {"app.user_id": "11", "app.hotel_id": "1"}
 
 
 def test_ticket_does_not_reveal_a_resource_from_another_hotel(collaboration_client):

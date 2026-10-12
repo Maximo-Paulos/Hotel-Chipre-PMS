@@ -13,6 +13,8 @@ from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.api import reports as reports_api
 from app.models.cash_register import CashSession, CashSessionStatusEnum
+from app.models.company import Company
+from app.models.company_night_charge import CompanyNightCharge
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.operations import BillingAdjustment, BillingAdjustmentTypeEnum
@@ -542,6 +544,9 @@ def test_daily_report_derives_late_and_review_lists_from_unbounded_candidates(re
     )
 
     reservation_selects: list[str] = []
+    redundant_transaction_loads: list[str] = []
+    additional_guest_loads: list[str] = []
+    related_collection_loads: list[str] = []
 
     def capture_reservation_select(_connection, _cursor, statement, _parameters, _context, _executemany):
         normalized = " ".join(statement.lower().split())
@@ -551,6 +556,25 @@ def test_daily_report_derives_late_and_review_lists_from_unbounded_candidates(re
             and "where reservations.hotel_id = ? and reservations.deleted_at is null" in normalized
         ):
             reservation_selects.append(normalized)
+        if (
+            normalized.lstrip().startswith("select transactions.id")
+            and " from transactions " in normalized
+            and "transactions.id" in normalized
+            and " in (" in normalized
+        ):
+            redundant_transaction_loads.append(normalized)
+        if "reservation_additional_guests" in normalized:
+            additional_guest_loads.append(normalized)
+        if any(
+            marker in normalized
+            for marker in (
+                "from guest_companions ",
+                "from guest_tags ",
+                "where guests_1.id in (",
+                "where rooms_1.id in (",
+            )
+        ):
+            related_collection_loads.append(normalized)
 
     engine = db.get_bind()
     event.listen(engine, "before_cursor_execute", capture_reservation_select)
@@ -577,12 +601,86 @@ def test_daily_report_derives_late_and_review_lists_from_unbounded_candidates(re
     assert [item["reservation_id"] for item in payload["pending_payments"]["reservations"]] == [
         far_future.id,
     ]
-    # Arrivals, no-shows, departures, and the unbounded balance candidate set
-    # remain their own query groups; late/review are projections of the latter.
-    assert len(reservation_selects) == 4, (
-        "expected four hotel-scoped report reservation reads, "
+    # The report keeps one lightweight flag projection, aggregates direct
+    # balances in SQL, and fetches only the visible payment page.
+    assert len(reservation_selects) == 6, (
+        "expected three operational groups and three hotel-scoped candidate reads, "
         f"got {len(reservation_selects)}"
     )
+    candidate_queries = [
+        statement
+        for statement in reservation_selects
+        if "from transactions " in statement and "from billing_adjustments " in statement
+    ]
+    assert len(candidate_queries) == 2, candidate_queries
+    flags_queries = [
+        statement
+        for statement in reservation_selects
+        if "company_night_charges" in statement and "requires_manual_review" in statement
+    ]
+    assert len(flags_queries) == 1, flags_queries
+    flags_query = flags_queries[0]
+    # The flags projection is flat and tenant scoped, and does not aggregate
+    # payments/adjustments that the later batch helpers load for selected IDs.
+    assert "join guests " in flags_query
+    assert "guests.hotel_id = reservations.hotel_id" in flags_query
+    assert "join rooms " in flags_query
+    assert "rooms.hotel_id = reservations.hotel_id" in flags_query
+    assert "daily_report_balance_scope" not in flags_query
+    assert "daily_report_transaction_totals" not in flags_query
+    assert "daily_report_adjustment_totals" not in flags_query
+    assert "from transactions " not in flags_query
+    assert "from billing_adjustments " not in flags_query
+    for query in candidate_queries:
+        assert "daily_report_transaction_totals" in query
+        assert "daily_report_adjustment_totals" in query
+        assert "group by transactions.hotel_id, transactions.reservation_id" in query
+    page_queries = [statement for statement in candidate_queries if " limit " in statement]
+    assert len(page_queries) == 1, page_queries
+    assert redundant_transaction_loads == [], redundant_transaction_loads
+    assert additional_guest_loads == [], additional_guest_loads
+    assert related_collection_loads == [], related_collection_loads
+
+
+def test_daily_report_does_not_hydrate_future_reservation_entities(reports_client):
+    _client, db, _ctx = reports_client
+    report_date = date(2026, 6, 13)
+    category, _rooms = _make_room_set(db, 1, "FUTURE-SCALAR")
+    guest = _make_guest(db, 1, "future-scalar")
+    reservations = [
+        _make_reservation(
+            db,
+            hotel_id=1,
+            guest=guest,
+            category=category,
+            room=None,
+            code=f"RPT-FUTURE-SCALAR-{idx}",
+            check_in=date(2026, 7, idx + 1),
+            check_out=date(2026, 7, idx + 3),
+            total="200.00",
+            paid="200.00" if idx < 19 else "0.00",
+            status=ReservationStatusEnum.FULLY_PAID if idx < 19 else ReservationStatusEnum.PENDING,
+        )
+        for idx in range(20)
+    ]
+    db.commit()
+    pending_id = reservations[-1].id
+    db.expunge_all()
+
+    loaded_reservation_ids = []
+
+    def record_loaded_reservation(session, instance):
+        if isinstance(instance, Reservation):
+            loaded_reservation_ids.append(instance.id)
+
+    event.listen(db, "loaded_as_persistent", record_loaded_reservation)
+    try:
+        report = reports_api.build_daily_operational_report(db, hotel_id=1, report_date=report_date)
+    finally:
+        event.remove(db, "loaded_as_persistent", record_loaded_reservation)
+
+    assert [item.reservation_id for item in report.pending_payments.reservations] == [pending_id]
+    assert loaded_reservation_ids == []
 
 
 def test_billing_adjustment_aggregation_is_tenant_scoped_projection(reports_client):
@@ -805,7 +903,7 @@ def test_daily_report_pending_payments_reflect_consumption_charges(reports_clien
     assert reservation.id in alert_reservation_ids
 
 
-def test_daily_report_materializes_only_future_reservations_with_pending_balance(reports_client):
+def test_daily_report_projects_only_future_reservations_with_pending_balance(reports_client):
     _client, db, _ctx = reports_client
     report_date = date(2026, 6, 13)
     category, _rooms = _make_room_set(db, 1, "FUTURE")
@@ -877,4 +975,168 @@ def test_daily_report_materializes_only_future_reservations_with_pending_balance
         event.remove(db, "loaded_as_persistent", record_loaded_reservation)
 
     assert [item.reservation_id for item in report.pending_payments.reservations] == [pending_id, adjustment_id]
-    assert loaded_reservation_ids == [pending_id, adjustment_id]
+    assert loaded_reservation_ids == []
+
+
+def test_daily_report_paginates_pending_details_and_keeps_global_balance(reports_client):
+    client, db, ctx = reports_client
+    ctx["role"] = "owner"
+    report_date = date(2026, 6, 13)
+    category, _rooms = _make_room_set(db, 1, "PAGED")
+    guest = _make_guest(db, 1, "paged")
+    reservations = [
+        _make_reservation(
+            db,
+            hotel_id=1,
+            guest=guest,
+            category=category,
+            room=None,
+            code=f"RPT-PAGED-{idx:03d}",
+            check_in=date(2026, 7, 1),
+            check_out=date(2026, 7, 3),
+            total="200.00",
+            paid="0.00",
+        )
+        for idx in range(65)
+    ]
+    db.commit()
+
+    candidate_page_selects = []
+
+    def capture_candidate_page(_connection, _cursor, statement, parameters, _context, _executemany):
+        normalized = " ".join(statement.lower().split())
+        if (
+            "from transactions " in normalized
+            and "from billing_adjustments " in normalized
+            and " limit " in normalized
+        ):
+            candidate_page_selects.append((normalized, tuple(parameters)))
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", capture_candidate_page)
+    try:
+        first_response = client.get(
+            "/api/reports/operational/daily",
+            params={"report_date": report_date.isoformat()},
+        )
+        second_response = client.get(
+            "/api/reports/operational/daily",
+            params={"report_date": report_date.isoformat(), "pending_page": 2},
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_candidate_page)
+
+    assert first_response.status_code == 200, first_response.text
+    assert second_response.status_code == 200, second_response.text
+    first = first_response.json()
+    second = second_response.json()
+    first_group = first["pending_payments"]
+    second_group = second["pending_payments"]
+    assert first_group["count"] == second_group["count"] == 65
+    assert first_group["page"] == 1
+    assert second_group["page"] == 2
+    assert first_group["page_size"] == second_group["page_size"] == 50
+    assert first_group["total_pages"] == second_group["total_pages"] == 2
+    assert len(first_group["reservations"]) == 50
+    assert len(second_group["reservations"]) == 15
+    first_ids = {item["reservation_id"] for item in first_group["reservations"]}
+    second_ids = {item["reservation_id"] for item in second_group["reservations"]}
+    assert first_ids.isdisjoint(second_ids)
+    assert first_ids | second_ids == {reservation.id for reservation in reservations}
+    assert first_group["total_balance_by_currency"] == [
+        {"currency_code": "ARS", "total_balance": "13000.00"}
+    ]
+    assert second_group["total_balance_by_currency"] == first_group["total_balance_by_currency"]
+    assert len(candidate_page_selects) == 2, candidate_page_selects
+    assert [query_params[-2:] for _query, query_params in candidate_page_selects] == [
+        (50, 0),
+        (15, 50),
+    ]
+    assert sum(alert["code"] == "pending_payment" for alert in first["alerts"]) == 50
+    assert sum(alert["code"] == "pending_payment" for alert in second["alerts"]) == 15
+    assert first["alert_count"] == second["alert_count"] == 66
+
+
+def test_daily_report_pages_direct_balances_before_deferred_company_extras(reports_client):
+    client, db, ctx = reports_client
+    ctx["role"] = "owner"
+    report_date = date(2026, 6, 13)
+    category, _rooms = _make_room_set(db, 1, "MIXED-PAGE")
+    guest = _make_guest(db, 1, "mixed-page")
+    direct = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=guest,
+        category=category,
+        room=None,
+        code="RPT-MIXED-DIRECT",
+        check_in=date(2026, 7, 1),
+        check_out=date(2026, 7, 3),
+        total="100.00",
+    )
+    company = Company(
+        hotel_id=1,
+        legal_name="Empresa Mixta SA",
+        display_name="Empresa Mixta",
+        payment_deferred=True,
+    )
+    db.add(company)
+    db.flush()
+    deferred = _make_reservation(
+        db,
+        hotel_id=1,
+        guest=guest,
+        category=category,
+        room=None,
+        code="RPT-MIXED-DEFERRED",
+        check_in=date(2026, 7, 4),
+        check_out=date(2026, 7, 6),
+        total="500.00",
+    )
+    deferred.company_id = company.id
+    deferred.settlement_status = "deferred"
+    db.flush()
+    adjustment = BillingAdjustment(
+        hotel_id=1,
+        reservation_id=deferred.id,
+        adjustment_type=BillingAdjustmentTypeEnum.CHARGE,
+        amount=Decimal("50.00"),
+        currency_code="ARS",
+        total_amount=Decimal("50.00"),
+    )
+    db.add(adjustment)
+    db.flush()
+    db.add(
+        CompanyNightCharge(
+            hotel_id=1,
+            reservation_id=deferred.id,
+            company_id=company.id,
+            billing_adjustment_id=adjustment.id,
+            stay_date=report_date,
+            amount=Decimal("50.00"),
+            currency_code="ARS",
+        )
+    )
+    db.commit()
+
+    first = client.get(
+        "/api/reports/operational/daily",
+        params={"report_date": report_date.isoformat(), "pending_page_size": 1},
+    )
+    second = client.get(
+        "/api/reports/operational/daily",
+        params={"report_date": report_date.isoformat(), "pending_page": 2, "pending_page_size": 1},
+    )
+
+    assert first.status_code == second.status_code == 200
+    first_group = first.json()["pending_payments"]
+    second_group = second.json()["pending_payments"]
+    assert first_group["count"] == second_group["count"] == 2
+    assert first_group["total_balance_by_currency"] == second_group["total_balance_by_currency"] == [
+        {"currency_code": "ARS", "total_balance": "150.00"}
+    ]
+    assert first_group["reservations"][0]["reservation_id"] == direct.id
+    assert first_group["reservations"][0]["balance_due"] == "100.00"
+    assert second_group["reservations"][0]["reservation_id"] == deferred.id
+    assert second_group["reservations"][0]["company_billing_deferred"] is True
+    assert second_group["reservations"][0]["company_night_extra_due"] == "50.00"

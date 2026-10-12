@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from app.config import Settings
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 from starlette.requests import Request
@@ -12,6 +13,16 @@ from app.models.domain_event_outbox import DomainEventOutbox
 from app.models.hotel_config import HotelConfiguration
 from app.services import domain_events
 from app.tasks.celery_app import celery_app
+
+
+@pytest.fixture(autouse=True)
+def use_redis_for_redis_outbox_replay_tests(monkeypatch):
+    """Exercise the retained Redis recovery path explicitly, independent of deployment defaults."""
+    monkeypatch.setattr(
+        domain_events,
+        "_settings",
+        lambda: Settings(REALTIME_EVENTS_TRANSPORT="redis"),
+    )
 
 
 def _seed_hotels(db, *hotel_ids: int) -> None:

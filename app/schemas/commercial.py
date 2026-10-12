@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ProductRoomCompatibilityWrite(BaseModel):
@@ -134,15 +134,31 @@ class RatePlanRead(RatePlanBase):
 
 class TaxRuleWrite(BaseModel):
     channel_code: Optional[str] = Field(default=None, max_length=50)
-    guest_scope: str = Field(default="all", min_length=1, max_length=30)
+    guest_scope: Literal["all", "local", "foreign"] = "all"
     tax_code: str = Field(..., min_length=1, max_length=50)
     tax_name: str = Field(..., min_length=1, max_length=150)
-    tax_type: str = Field(default="percentage", min_length=1, max_length=30)
-    amount: float = 0.0
+    tax_type: Literal["percentage", "fixed"] = "percentage"
+    amount: float = Field(default=0.0, ge=0)
     currency_code: Optional[str] = Field(default=None, min_length=3, max_length=3)
     priority: int = Field(default=100, ge=0)
     applies_when_json: Optional[str] = None
     is_active: bool = True
+
+    @field_validator("currency_code")
+    @classmethod
+    def normalize_currency_code(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().upper()
+        if len(normalized) != 3 or not normalized.isalpha():
+            raise ValueError("currency_code must contain a three-letter currency code")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_percentage_amount(self):
+        if self.tax_type == "percentage" and self.amount > 100:
+            raise ValueError("percentage tax rules cannot exceed 100%")
+        return self
 
 
 class TaxRuleRead(TaxRuleWrite):
@@ -155,7 +171,7 @@ class TaxPolicyBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=150)
     taxes_included: bool = True
     apply_vat_by_default: bool = True
-    vat_rate: Optional[float] = None
+    vat_rate: Optional[float] = Field(default=None, ge=0, le=100)
     foreign_guest_tax_exempt: bool = False
     is_active: bool = True
     metadata_json: Optional[str] = None

@@ -90,7 +90,6 @@ export function useGemmaChat() {
     queryFn: () => fetchGemmaRuntimeStatus(session),
     enabled: hasValidSession(session),
     staleTime: 1000 * 15,
-    refetchInterval: 1000 * 30,
   });
 
   const insightsQuery = useQuery<GemmaInsight[]>({

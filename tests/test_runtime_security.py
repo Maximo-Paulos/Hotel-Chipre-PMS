@@ -453,7 +453,12 @@ def test_validate_runtime_security_rejects_insecure_cookie_override_and_cors_wil
             raise AssertionError(f"Production security validation should reject {field}={value!r}")
 
 
-def test_validate_runtime_security_requires_explicit_external_policy_flags():
+def test_validate_runtime_security_requires_explicit_external_policy_flags(monkeypatch):
+    # The caller's environment may deliberately set safe provider flags for
+    # the rest of the test run. This test verifies omission is rejected, so
+    # remove those two values before constructing Settings.
+    monkeypatch.delenv("EXTERNAL_EFFECTS_ENABLED", raising=False)
+    monkeypatch.delenv("INBOUND_PROVIDER_EVENTS_ENABLED", raising=False)
     settings = Settings(
         APP_ENV="production",
         JWT_SECRET="super-secret-value-for-production-1234567890",

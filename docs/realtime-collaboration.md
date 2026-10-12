@@ -59,10 +59,25 @@ vista las monta de nuevo.
 
 El recolector de `app.services.domain_events` guarda las señales en la sesión,
 elimina duplicados y las publica desde `after_commit`. `after_rollback`
-descarta las señales. Redis/Valkey es el transporte rápido de fan-out cuando
-está disponible; si no responde, `/api/events/stream` lee el outbox confirmado
-de PostgreSQL en sondeo acotado y mantiene la misma semántica de invalidación.
-Los fallos del transporte no deshacen una operación ya guardada.
+descarta las señales. El outbox de PostgreSQL es durable. Si
+`POSTGRES_EVENT_LISTENER_ENABLED=true` y el API puede abrir una conexión de
+sesión PostgreSQL, un trigger envía por `NOTIFY` sólo metadatos de invalidación
+y un listener por proceso los distribuye a los streams activos. En el pooler de
+transacciones de Supabase (puerto 6543), `LISTEN` no mantiene una sesión y se
+usa el fallback SQL acotado: un sondeo cada 60 segundos por hotel activo y
+proceso, compartido entre sus streams. Si el listener se desconecta, el hub
+vuelve a ese fallback y recupera el cursor desde el outbox. Redis/Valkey queda
+opcional para el SSE. La coedición puede usar `COLLABORATION_BACKEND=process`
+con tickets y fan-out acotados a una sola instancia; Redis/Valkey se necesita
+para distribuir borradores entre varios procesos. Los procesos Celery que usan
+ese broker también necesitan Redis. Los fallos del transporte no deshacen una
+operación ya guardada.
+
+Si `DATABASE_URL` usa el pooler de transacciones, configure opcionalmente
+`POSTGRES_EVENT_LISTENER_DATABASE_URL` con una URL Supabase de sesión o directa
+por el puerto 5432. El listener abre una sola conexión adicional por proceso
+mientras haya streams; la API sigue usando `DATABASE_URL` para las consultas
+normales. No registre ninguna de esas URLs.
 
 El cliente combina SSE con `BroadcastChannel` y el fallback de `localStorage`
 para pestañas del mismo navegador. Las mutaciones del navegador incluyen un
@@ -91,14 +106,16 @@ DISTRIBUTED_LOCK_ENABLED=true
 DISTRIBUTED_LOCK_REQUIRED=true   # producción
 ```
 
-Para tests E2E locales sin Redis, Playwright desactiva explícitamente el
-cliente realtime; para verificar el camino Redis se puede ejecutar con
-`REALTIME_E2E=true` y Redis/Valkey activo. El fallback de SSE con PostgreSQL
-requiere un preview con la migración del outbox aplicada y debe validarse con
-el proveedor antes de medir latencia. En producción, Redis/Valkey sigue siendo
-recomendado para fan-out de baja latencia, locks y coedición WebSocket; la
-validación de arranque exige `REALTIME_EVENTS_ENABLED=true` y los locks
-distribuidos.
+Para tests E2E locales, Playwright puede desactivar explícitamente el cliente
+realtime. El camino PostgreSQL requiere aplicar la migración del trigger
+`LISTEN/NOTIFY` y comprobar que la URL del listener usa una conexión directa o
+de sesión; con el pooler de transacciones seguirá activo el fallback de 60
+segundos. Redis/Valkey no es requisito para el SSE ni para los locks que usan
+el fallback de advisory locks PostgreSQL. Con `COLLABORATION_BACKEND=process`,
+la coedición WebSocket guarda tickets y mantiene presencia/borradores sólo en
+memoria del proceso; por eso exige una instancia y un worker de API. Antes de
+escalar a varios procesos o instancias hay que cambiar a Redis/Valkey y probar
+el fan-out. Los servicios Celery que usan Redis también lo requieren.
 
 ## Coedición por campo
 
@@ -106,10 +123,12 @@ La coedición es una capa de borradores y presencia, no un CRDT de texto. El
 flujo autenticado es:
 
 - `POST /api/collaboration/tickets`: emite un ticket corto, vinculado al hotel,
-  usuario, recurso, permisos y campos permitidos; se guarda en Redis y sólo
-  puede consumirse una vez.
+  usuario, recurso, permisos y campos permitidos; se guarda en Redis o en un
+  almacén acotado en memoria, según `COLLABORATION_BACKEND`, y sólo puede
+  consumirse una vez.
 - `WS /api/collaboration/ws`: consume el ticket y transmite presencia y
-  `draft_patch` efímeros. Redis pub/sub permite fan-out entre workers.
+  `draft_patch` efímeros. Redis pub/sub permite fan-out entre workers; el
+  backend `process` lo mantiene dentro de una sola instancia.
 - `PATCH /api/collaboration/resources/{resource_type}/{resource_id}`: persiste
   los cambios con `base_revision` y `base_values`, bajo autorización y
   tenant-scope del servidor.

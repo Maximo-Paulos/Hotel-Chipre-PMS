@@ -52,8 +52,6 @@ export function SettingsTestsPage() {
   const testsQuery = useQuery({
     queryKey: ["payment-link-tests", session.hotelId, testsOffset],
     queryFn: () => listPaymentLinkTests(session, { limit: TESTS_PAGE_SIZE + 1, offset: testsOffset }),
-    refetchInterval: 30_000,
-    refetchIntervalInBackground: false,
   });
   const fetchedTests = testsQuery.data ?? [];
   const hasNextTestsPage = fetchedTests.length > TESTS_PAGE_SIZE;
@@ -245,8 +243,8 @@ export function SettingsTestsPage() {
           </p>
         </div>
         <p className="mt-2 text-[11px] text-slate-500">
-          En entorno local el sistema verifica el pago automáticamente por consulta directa. Cuando tengamos un dominio público HTTPS,
-          tambien va a recibir el webhook de Mercado Pago.
+          El estado cambia cuando llega el webhook firmado de Mercado Pago. En local, sin una URL pública HTTPS y los eventos entrantes habilitados,
+          la prueba puede quedar pendiente.
         </p>
 
         {toast && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{toast}</p>}

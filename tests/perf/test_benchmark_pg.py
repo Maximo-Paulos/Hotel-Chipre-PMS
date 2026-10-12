@@ -15,7 +15,7 @@ def test_index_signal_is_limited_to_an_operation_with_a_matching_plan():
         "availability": True,
         "allocation": False,
         "balance": True,
-        "daily report": False,
+        "daily report direct balance summary": False,
         "guest search": False,
     }
 

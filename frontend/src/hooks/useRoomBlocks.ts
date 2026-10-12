@@ -11,6 +11,7 @@ import {
 } from "../api/roomBlocks";
 import { hasValidSession } from "../api/client";
 import { refreshRoomState } from "../api/queryInvalidation";
+import { EVENT_REFRESHED_QUERY_STALE_TIME_MS } from "../api/queryPolicy";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -36,7 +37,7 @@ export function useRoomBlocks(options?: { enabled?: boolean }) {
     queryKey: roomBlocksKey(session.hotelId),
     queryFn: () => listActiveRoomBlocks({}, session),
     enabled: hasValidSession(session) && (options?.enabled ?? true),
-    staleTime: 1000 * 15
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
 
   const invalidate = () => refreshRoomState(queryClient, session.hotelId);

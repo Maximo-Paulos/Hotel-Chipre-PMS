@@ -15,8 +15,9 @@ import json
 import logging
 import secrets
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from dataclasses import dataclass, field
+from threading import RLock
 from typing import Any
 
 import redis.asyncio as redis_async
@@ -25,7 +26,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.database import get_db
+from app.database import get_db, get_websocket_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.models.audit_log import AuditActionEnum
 from app.models.hotel_membership import HotelMembership
@@ -56,7 +57,8 @@ from app.services.permission_service import (
     resolve,
 )
 from app.services.reservation_operations_service import reservation_has_payment_or_deposit
-from app.services.reservation_service import ReservationError
+from app.services.reservation_service import ConfirmedReservationPriceLocked, ReservationError
+from app.services.tenant_context import set_tenant_context
 
 
 logger = logging.getLogger(__name__)
@@ -65,11 +67,29 @@ router = APIRouter(prefix="/api/collaboration", tags=["Collaboration"])
 TICKET_KEY_TEMPLATE = "hotel:{hotel_id}:collaboration:ticket:{digest}"
 TICKET_CONSUME_SCRIPT = "local value = redis.call('GET', KEYS[1]); if value then redis.call('DEL', KEYS[1]); end; return value"
 COLLABORATION_ROOM_TEMPLATE = "hotel:{hotel_id}:collaboration:{resource_type}:{resource_id}"
+_PROCESS_TICKET_CAPACITY = 2048
+_PROCESS_TICKETS: OrderedDict[str, tuple[float, str]] = OrderedDict()
+_PROCESS_TICKETS_LOCK = RLock()
 
 
 def _ticket_key(hotel_id: int, raw_ticket: str) -> str:
     digest = hashlib.sha256(raw_ticket.encode("utf-8")).hexdigest()
     return TICKET_KEY_TEMPLATE.format(hotel_id=hotel_id, digest=digest)
+
+
+def _store_process_ticket(hotel_id: int, raw_ticket: str, ttl_seconds: int, claims: dict[str, Any]) -> bool:
+    """Store bounded, short-lived ticket state for a single API process."""
+    key = _ticket_key(hotel_id, raw_ticket)
+    now = time.monotonic()
+    with _PROCESS_TICKETS_LOCK:
+        expired = [ticket_key for ticket_key, (expires_at, _value) in _PROCESS_TICKETS.items() if expires_at <= now]
+        for ticket_key in expired:
+            _PROCESS_TICKETS.pop(ticket_key, None)
+        if key not in _PROCESS_TICKETS and len(_PROCESS_TICKETS) >= _PROCESS_TICKET_CAPACITY:
+            return False
+        _PROCESS_TICKETS[key] = (now + ttl_seconds, json.dumps(claims, separators=(",", ":")))
+        _PROCESS_TICKETS.move_to_end(key)
+    return True
 
 
 def _require_permission(db: Session, context: AuthContext, permission: str) -> None:
@@ -142,8 +162,8 @@ def create_collaboration_ticket(
         # indistinguishable from an absent one.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recurso no encontrado")
 
-    client = _realtime_client_or_503()
     settings = get_settings()
+    client = None if settings.COLLABORATION_BACKEND == "process" else _realtime_client_or_503()
     ttl = max(5, min(int(settings.COLLABORATION_TICKET_TTL_SECONDS), 300))
     raw_ticket = secrets.token_urlsafe(32)
     claims = {
@@ -158,7 +178,12 @@ def create_collaboration_ticket(
         "issued_at": int(time.time()),
     }
     try:
-        client.setex(_ticket_key(context.hotel_id, raw_ticket), ttl, json.dumps(claims, separators=(",", ":")))
+        if settings.COLLABORATION_BACKEND == "process":
+            if not _store_process_ticket(context.hotel_id, raw_ticket, ttl, claims):
+                raise RuntimeError("process ticket store is full")
+        else:
+            assert client is not None
+            client.setex(_ticket_key(context.hotel_id, raw_ticket), ttl, json.dumps(claims, separators=(",", ":")))
     except Exception as exc:
         logger.warning("collaboration.ticket_store_failed", extra={"hotel_id": context.hotel_id, "error_type": type(exc).__name__})
         raise HTTPException(
@@ -331,6 +356,9 @@ def patch_collaborative_resource(
     except HTTPException:
         db.rollback()
         raise
+    except ConfirmedReservationPriceLocked as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except (ReservationError, ValueError) as exc:
         db.rollback()
         raise HTTPException(
@@ -358,10 +386,23 @@ def patch_collaborative_resource(
     }
 
 
-def _consume_ticket(client: Any, hotel_id: int, raw_ticket: str) -> dict[str, Any] | None:
+def _consume_ticket(client: Any | None, hotel_id: int, raw_ticket: str) -> dict[str, Any] | None:
     if not isinstance(raw_ticket, str) or not raw_ticket or len(raw_ticket) > 256:
         return None
     key = _ticket_key(hotel_id, raw_ticket)
+    if get_settings().COLLABORATION_BACKEND == "process":
+        now = time.monotonic()
+        with _PROCESS_TICKETS_LOCK:
+            stored = _PROCESS_TICKETS.pop(key, None)
+        if stored is None or stored[0] <= now:
+            return None
+        try:
+            claims = json.loads(stored[1])
+        except (TypeError, json.JSONDecodeError):
+            return None
+        return claims if isinstance(claims, dict) else None
+    if client is None:
+        return None
     try:
         getdel = getattr(client, "getdel", None)
         if callable(getdel):
@@ -398,6 +439,14 @@ def _live_ticket_is_authorized(db: Session, claims: dict[str, Any]) -> bool:
         spec = get_resource_spec(resource_type)
     except (KeyError, TypeError, ValueError):
         return False
+    if hotel_id <= 0 or user_id <= 0 or resource_id <= 0:
+        return False
+    # WebSocket handshakes do not pass through get_auth_context. The ticket was
+    # issued only after HTTP authorization and its claims are stored server-
+    # side, so bind the database checks to those tenant/user claims before RLS
+    # queries run. Without this, PostgreSQL hides the membership/resource and
+    # the client reconnect loop repeatedly requests fresh tickets.
+    set_tenant_context(db, user_id=user_id, hotel_id=hotel_id)
     user = db.query(User).filter(User.id == user_id, User.is_active.is_(True), User.is_verified.is_(True)).one_or_none()
     membership = (
         db.query(HotelMembership)
@@ -457,6 +506,8 @@ class CollaborationManager:
     async def join(self, room: str, peer: _Peer) -> None:
         async with self._lock:
             self._rooms.setdefault(room, {})[peer.connection_id] = peer
+            if get_settings().COLLABORATION_BACKEND == "process":
+                return
             if room not in self._transports:
                 await self._start_transport(room)
             if room not in self._transports and room not in self._transport_retry_tasks:
@@ -487,6 +538,8 @@ class CollaborationManager:
                 pass
 
     async def _start_transport(self, room: str) -> None:
+        if get_settings().COLLABORATION_BACKEND == "process":
+            return
         client = None
         pubsub = None
         try:
@@ -568,6 +621,9 @@ class CollaborationManager:
                 self._transport_retry_tasks.pop(room, None)
 
     async def publish(self, room: str, payload: dict[str, Any], *, sender_connection_id: str) -> None:
+        if get_settings().COLLABORATION_BACKEND == "process":
+            await self._broadcast_local(room, payload, skip_connection_id=sender_connection_id)
+            return
         envelope = {"sender_connection_id": sender_connection_id, "payload": payload}
         raw = json.dumps(envelope, separators=(",", ":"), ensure_ascii=True)
         transport = self._transports.get(room)
@@ -614,7 +670,7 @@ async def _send_peer(peer: _Peer, payload: dict[str, Any]) -> None:
 
 
 @router.websocket("/ws")
-async def collaboration_websocket(websocket: WebSocket, db: Session = Depends(get_db)):
+async def collaboration_websocket(websocket: WebSocket, db: Session = Depends(get_websocket_db)):
     """Authenticate with a one-use ticket, then exchange safe draft signals."""
 
     await websocket.accept()
@@ -634,16 +690,18 @@ async def collaboration_websocket(websocket: WebSocket, db: Session = Depends(ge
         if not isinstance(handshake, dict) or not isinstance(handshake.get("ticket"), str):
             await websocket.close(code=4401, reason="Ticket invalido")
             return
-        # The ticket is tenant-bound, so the hotel id is carried inside the
-        # claim. We first use the backend's configured client to atomically
-        # consume it, then verify the live membership and permissions below.
-        try:
-            client = get_realtime_client()
-        except RealtimeEventsUnavailable:
-            client = None
-        if client is None:
-            await websocket.close(code=1013, reason="Realtime no disponible")
-            return
+        # Redis atomically consumes tickets in multi-instance mode. The
+        # budget profile stores only short-lived one-use tickets in this
+        # process and is explicitly pinned to one API instance.
+        client = None
+        if settings.COLLABORATION_BACKEND == "redis":
+            try:
+                client = get_realtime_client()
+            except RealtimeEventsUnavailable:
+                client = None
+            if client is None:
+                await websocket.close(code=1013, reason="Realtime no disponible")
+                return
         # Tickets are only accepted after decoding their signed-by-storage
         # tenant binding. We need a bounded candidate hotel id to locate the
         # key; the browser cannot choose a different tenant because the claim

@@ -16,6 +16,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
@@ -28,6 +29,51 @@ class _DecimalAwareEncoder(json.JSONEncoder):
         if isinstance(obj, Decimal):
             return float(obj)
         return super().default(obj)
+
+
+class ResponseBodySizeTelemetryMiddleware:
+    """Count response bytes after compression without buffering body content."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        started = time.perf_counter()
+        response_body_bytes = 0
+        status_code: int | str = "aborted"
+        response_headers: dict[str, str] = {}
+
+        async def count_response_bytes(message):
+            nonlocal response_body_bytes, status_code, response_headers
+            if message.get("type") == "http.response.start":
+                status_code = int(message.get("status", 0))
+                response_headers = {
+                    key.decode("latin-1").lower(): value.decode("latin-1")
+                    for key, value in message.get("headers", [])
+                }
+            elif message.get("type") == "http.response.body":
+                response_body_bytes += len(message.get("body", b""))
+            await send(message)
+
+        try:
+            await self.app(scope, receive, count_response_bytes)
+        finally:
+            matched_route = scope.get("route")
+            route_label = getattr(matched_route, "path", None) or "unmatched"
+            LOGGER.info(
+                "http.response_transfer route=%s method=%s status=%s body_bytes=%s encoding=%s duration_ms=%.2f request_id=%s",
+                route_label,
+                str(scope.get("method", "unknown")),
+                status_code,
+                response_body_bytes,
+                response_headers.get("content-encoding", "identity"),
+                (time.perf_counter() - started) * 1000.0,
+                response_headers.get("x-request-id", "unknown"),
+            )
 
 from app.database import (
     finish_request_db_metrics,
@@ -149,7 +195,12 @@ async def lifespan(app: FastAPI):
     validate_runtime_security()
     init_db()
     _seed_permission_matrix_once()
-    yield
+    try:
+        yield
+    finally:
+        from app.services.domain_events import shutdown_postgres_event_listeners
+
+        await shutdown_postgres_event_listeners()
 
 
 app = FastAPI(
@@ -323,7 +374,7 @@ async def request_telemetry(request: Request, call_next):
         request.url.path
     )
     LOGGER.info(
-        "http.request route=%s method=%s status=%s duration_ms=%.2f db_query_count=%s db_duration_ms=%.2f db_request_bytes_estimate=%s db_destination_host=%s db_pool_checkout_count=%s db_pool_checkout_duration_ms=%.2f db_pool_checkout_max_ms=%.2f content_length_bytes=%s request_id=%s",
+        "http.request route=%s method=%s status=%s duration_ms=%.2f db_query_count=%s db_duration_ms=%.2f db_request_bytes_estimate=%s db_destination_host=%s db_pool_checkout_count=%s db_pool_checkout_duration_ms=%.2f db_pool_checkout_max_ms=%.2f declared_content_length_bytes=%s request_id=%s",
         route_label,
         request.method,
         response.status_code,
@@ -399,6 +450,14 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["Server-Timing", "X-Request-Id"],
 )
+
+# Keep large JSON responses small on Render's metered outbound bandwidth.
+# Level 1 limits CPU cost on the Starter instance; SSE remains excluded by
+# Starlette's middleware defaults.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=1)
+# Added last so this wrapper observes body chunks after GZipMiddleware while
+# preserving streaming responses without buffering them in memory.
+app.add_middleware(ResponseBodySizeTelemetryMiddleware)
 
 # Register all API routers
 app.include_router(onboarding.router)

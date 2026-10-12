@@ -32,6 +32,11 @@ class HotelConfiguration(Base):
 
     # Financial policies
     deposit_percentage = Column(Float, nullable=False, default=30.0)  # % of total required as deposit
+    # Defaults are not hotel decisions; reservations stay blocked until an
+    # owner explicitly confirms the deposit and cancellation rules.
+    deposit_policy_configured = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     # Check-in requires the full hotel-collected amount unless this hotel
     # explicitly selects another policy. Deferred company accounts are
     # evaluated from their company profile in checkin_service.

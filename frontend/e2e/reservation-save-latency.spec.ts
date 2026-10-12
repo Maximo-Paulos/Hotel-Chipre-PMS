@@ -120,4 +120,5 @@ test("reservation create confirms the committed write while list refresh is dela
   expect(mutationOriginKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
   expect(postCommitGetCounts.get("/api/reservations/") ?? 0).toBe(1);
   expect(postCommitGetCounts.get("/api/reservations/actions/pending") ?? 0).toBe(1);
+  expect(postCommitGetCounts.get("/api/notifications") ?? 0).toBe(0);
 });

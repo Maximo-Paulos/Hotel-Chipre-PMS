@@ -5,12 +5,14 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
+from app.config import get_settings
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.guest import Guest
@@ -22,6 +24,16 @@ from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services import domain_events
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
+
+
+@pytest.fixture(autouse=True)
+def _isolate_realtime_configuration(monkeypatch):
+    """The event assertion below requires the Redis realtime path explicitly."""
+    monkeypatch.setenv("REALTIME_EVENTS_ENABLED", "true")
+    monkeypatch.setenv("REALTIME_EVENTS_TRANSPORT", "redis")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def _auth(hotel_id: int, role: str, user_id: int):

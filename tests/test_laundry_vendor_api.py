@@ -98,6 +98,11 @@ def test_duplicate_remito_returns_conflict_but_other_direction_is_allowed():
             created_by_user_id=None,
         )
         db.commit()
+        price = client.post(
+            f"/api/laundry/vendors/{vendor_id}/prices",
+            json={"linen_item_id": item.id, "unit_price": "100.00", "effective_from": "2026-10-01"},
+        )
+        assert price.status_code == 201, price.text
         payload = {
             "vendor_id": vendor_id,
             "direction": "outbound",
@@ -461,6 +466,19 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
             "house_location_id": house.id,
             "lines": [{"linen_item_id": item.id, "quantity": "4.00"}],
         }
+        missing_price = client.post("/api/laundry/remitos", json=remito_payload)
+        assert missing_price.status_code == 400
+        assert "precio vigente por unidad" in missing_price.json()["detail"]
+        assert client.get("/api/laundry/remitos").json() == []
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=1)
+        price_response = client.post(
+            f"/api/laundry/vendors/{vendor_id}/prices",
+            json={"linen_item_id": item.id, "unit_price": "100.00", "effective_from": "2026-07-01"},
+        )
+        assert price_response.status_code == 201, price_response.text
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping", user_id=2)
+
         created = client.post("/api/laundry/remitos", json=remito_payload)
         assert created.status_code == 201
         body = created.json()
@@ -468,7 +486,7 @@ def test_housekeeping_can_operate_remitos_but_not_manage_vendors():
         assert body["remito"]["house_location_id"] == house.id
         assert body["remito"]["created_by_name"] == "Rosa"
         assert body["remito"]["created_by_user_id"] is None
-        assert "No hay precio configurado" in body["warnings"][0]
+        assert body["warnings"] == []
 
         history = client.get("/api/laundry/remitos")
         assert history.status_code == 200
@@ -522,6 +540,11 @@ def test_missing_follow_up_is_neutral_audited_tenant_scoped_and_financially_iner
             reason="saldo inicial",
             created_by_user_id=None,
         )
+        price_response = client.post(
+            f"/api/laundry/vendors/{vendor_id}/prices",
+            json={"linen_item_id": item.id, "unit_price": "100.00", "effective_from": "2026-10-03"},
+        )
+        assert price_response.status_code == 201, price_response.text
         db.commit()
 
         remito_base = {
@@ -665,6 +688,11 @@ def test_missing_follow_up_endpoints_ignore_and_reject_lines_without_shortage():
             reason="saldo inicial",
             created_by_user_id=None,
         )
+        price_response = client.post(
+            f"/api/laundry/vendors/{vendor.json()['id']}/prices",
+            json={"linen_item_id": item.id, "unit_price": "100.00", "effective_from": "2026-10-03"},
+        )
+        assert price_response.status_code == 201, price_response.text
         db.commit()
         response = client.post(
             "/api/laundry/remitos",
@@ -695,6 +723,11 @@ def test_remito_rejects_insufficient_house_stock_via_api():
         item = create_linen_item(db, hotel_id=1, name="Toallas", unit="unit", min_quantity=None, active=True)
         house = create_location(db, hotel_id=1, name="Deposito casa")
         db.flush()
+        price_response = client.post(
+            f"/api/laundry/vendors/{vendor_id}/prices",
+            json={"linen_item_id": item.id, "unit_price": "100.00", "effective_from": "2026-07-01"},
+        )
+        assert price_response.status_code == 201, price_response.text
         db.commit()
 
         response = client.post(
@@ -729,6 +762,11 @@ def test_inbound_remito_api_persists_missing_quantity_and_returns_warning():
             db, hotel_id=1, item_id=item.id, location_id=house.id, movement_type="in",
             quantity=Decimal("10.00"), reason="conteo de apertura", created_by_user_id=None,
         )
+        price_response = client.post(
+            f"/api/laundry/vendors/{vendor_id}/prices",
+            json={"linen_item_id": item.id, "unit_price": "100.00", "effective_from": "2026-07-01"},
+        )
+        assert price_response.status_code == 201, price_response.text
         db.commit()
         outbound = client.post(
             "/api/laundry/remitos",

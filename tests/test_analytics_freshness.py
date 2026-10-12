@@ -64,3 +64,19 @@ def test_non_finite_explicit_lag_is_recomputed_from_data_as_of():
     )
 
     assert payload["source_lag_seconds"] == 18.0
+
+
+def test_missing_materialization_timestamp_is_not_claimed_as_current():
+    generated_at = datetime(2026, 7, 24, 12, 0, tzinfo=timezone.utc)
+    payload = annotate_analytics_payload(
+        {
+            "generated_at": generated_at,
+            "data_as_of": None,
+            "source_lag_seconds": None,
+            "data": {},
+        },
+        now=generated_at + timedelta(hours=1),
+    )
+
+    assert payload["data_as_of"] is None
+    assert payload["source_lag_seconds"] is None

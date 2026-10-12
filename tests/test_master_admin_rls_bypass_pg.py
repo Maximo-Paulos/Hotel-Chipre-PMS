@@ -18,6 +18,7 @@ Run with:
 from __future__ import annotations
 
 import os
+import secrets
 import subprocess
 import sys
 from typing import Optional
@@ -98,6 +99,8 @@ def test_master_admin_reproduces_the_bug_then_the_bypass_fixes_it():
 
     engine = create_engine(safe_dsn)
     hotel_a, hotel_b = 99101, 99102
+    rls_probe_role = f"hotel_chipre_master_admin_rls_probe_{secrets.token_hex(6)}"
+    rls_probe_role_created = False
     try:
         # Seed through the ORM (for column defaults) with the bypass enabled,
         # since a plain insert would otherwise hit the same RLS WITH CHECK gap.
@@ -142,8 +145,18 @@ def test_master_admin_reproduces_the_bug_then_the_bypass_fixes_it():
 
         count_sql = text("SELECT count(*) FROM subscriptions WHERE hotel_id IN (:a, :b)")
 
+        # RLS is bypassed by PostgreSQL superusers, so run the probe as a
+        # dedicated NOBYPASSRLS role rather than the superuser used to run
+        # isolated migrations. The role is granted read access only.
+        with engine.begin() as conn:
+            conn.execute(text(f'CREATE ROLE "{rls_probe_role}" NOLOGIN NOBYPASSRLS'))
+            rls_probe_role_created = True
+            conn.execute(text(f'GRANT USAGE ON SCHEMA public TO "{rls_probe_role}"'))
+            conn.execute(text(f'GRANT SELECT ON subscriptions TO "{rls_probe_role}"'))
+
         # Step 3 -- reproduce the bug: no context set at all.
-        with engine.connect() as conn:
+        with engine.connect() as conn, conn.begin():
+            conn.execute(text(f'SET LOCAL ROLE "{rls_probe_role}"'))
             no_context_count = conn.execute(count_sql, {"a": hotel_a, "b": hotel_b}).scalar_one()
         assert no_context_count == 0, (
             "Pre-fix bug did not reproduce: an uncontextualized connection must "
@@ -152,12 +165,14 @@ def test_master_admin_reproduces_the_bug_then_the_bypass_fixes_it():
 
         # Step 4 -- prove the fix: master_admin bypass sees both hotels.
         with engine.connect() as conn, conn.begin():
+            conn.execute(text(f'SET LOCAL ROLE "{rls_probe_role}"'))
             conn.execute(text("SELECT set_config('app.master_admin', 'true', true)"))
             bypass_count = conn.execute(count_sql, {"a": hotel_a, "b": hotel_b}).scalar_one()
         assert bypass_count == 2
 
         # Step 5 -- the bypass must not leak into ordinary tenant sessions.
         with engine.connect() as conn, conn.begin():
+            conn.execute(text(f'SET LOCAL ROLE "{rls_probe_role}"'))
             conn.execute(text("SELECT set_config('app.hotel_id', :hotel_id, true)"), {"hotel_id": str(hotel_a)})
             scoped_count = conn.execute(count_sql, {"a": hotel_a, "b": hotel_b}).scalar_one()
         assert scoped_count == 1, "A tenant-scoped session must only see its own hotel's row"
@@ -166,6 +181,10 @@ def test_master_admin_reproduces_the_bug_then_the_bypass_fixes_it():
             conn.execute(text("SELECT set_config('app.master_admin', 'true', true)"))
             conn.execute(text("DELETE FROM subscriptions WHERE hotel_id IN (:a, :b)"), {"a": hotel_a, "b": hotel_b})
             conn.execute(text("DELETE FROM hotel_configuration WHERE id IN (:a, :b)"), {"a": hotel_a, "b": hotel_b})
+        if rls_probe_role_created:
+            with engine.begin() as conn:
+                conn.execute(text(f'DROP OWNED BY "{rls_probe_role}"'))
+                conn.execute(text(f'DROP ROLE "{rls_probe_role}"'))
         engine.dispose()
 
 

@@ -38,7 +38,13 @@ def annotate_analytics_payload(
 
     observed_at = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     generated_at = _as_utc_datetime(payload.get("generated_at")) or observed_at
-    data_as_of = _as_utc_datetime(payload.get("data_as_of")) or generated_at
+    # An explicitly missing materialization timestamp must stay unknown. Only
+    # payloads that omit the field use calculation time as their fallback.
+    data_as_of = (
+        _as_utc_datetime(payload.get("data_as_of"))
+        if "data_as_of" in payload
+        else generated_at
+    )
 
     explicit_lag = payload.get("source_lag_seconds")
     try:
@@ -46,7 +52,11 @@ def annotate_analytics_payload(
     except (TypeError, ValueError):
         source_lag = None
     if source_lag is None or not isfinite(source_lag) or source_lag < 0:
-        source_lag = max(0.0, (observed_at - data_as_of).total_seconds())
+        source_lag = (
+            max(0.0, (observed_at - data_as_of).total_seconds())
+            if data_as_of is not None
+            else None
+        )
 
     data_source = payload.get("data_source") or "postgresql"
     if not isinstance(data_source, str) or not data_source.strip():

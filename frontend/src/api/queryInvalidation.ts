@@ -183,7 +183,8 @@ export const refreshReservationCreatedState = (
   return refreshHotelQueriesByPrefix(
     queryClient,
     hotelId,
-    new Set(["reservations", "reservation-pending-actions", "occupancy-grid"])
+    new Set(["reservations", "reservation-pending-actions", "occupancy-grid"]),
+    false
   );
 };
 
@@ -219,6 +220,12 @@ export const refreshGuestState = (
   void guestId;
   return refreshAfterMutation(queryClient, hotelId, ["guests", "reservations", "analytics"]);
 };
+
+/** A newly created guest cannot yet change an existing reservation projection. */
+export const refreshGuestCreatedState = (
+  queryClient: QueryClient,
+  hotelId: number | null | undefined
+) => refreshAfterMutation(queryClient, hotelId, ["guests", "analytics"]);
 
 export const refreshCashState = (queryClient: QueryClient, hotelId: number | null | undefined) =>
   refreshAfterMutation(queryClient, hotelId, ["cash", "payments", "analytics"]);

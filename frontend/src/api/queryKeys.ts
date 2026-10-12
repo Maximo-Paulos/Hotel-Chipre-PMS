@@ -52,6 +52,7 @@ export type QueryDomain =
   | "security"
   | "settings"
   | "stock"
+  | "whatsapp"
   | "users";
 
 /**
@@ -87,12 +88,14 @@ export const HOTEL_ID_INDEX_BY_QUERY_PREFIX: Readonly<Record<string, number>> = 
   "hotel-config": 1,
   "hotel-interface-language": 1,
   integrations: 1,
-  "notification-preferences": 2,
-  notifications: 2,
+  "daily-report-schedules": 1,
+  "notification-inbox": 1,
+  "notification-preferences": 1,
   "laundry-vendor-balance": 1,
   "laundry-vendor-prices": 1,
   "laundry-vendor-settlements": 1,
   "laundry-vendor-spend": 1,
+  "laundry-missing-follow-ups": 1,
   "laundry-vendors": 1,
   "laundry-remitos": 1,
   "linen-items": 1,
@@ -138,6 +141,8 @@ export const HOTEL_ID_INDEX_BY_QUERY_PREFIX: Readonly<Record<string, number>> = 
   subscription: 1,
   users: 1,
   waitlist: 1,
+  "whatsapp-channel": 1,
+  "whatsapp-conversations": 1,
   "occupancy-grid": 1,
   "onboarding-status": 1,
   "operational-audit": 1
@@ -208,11 +213,11 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
     "promotions",
     "payment-surcharges",
     "settings-sessions",
-    "notifications",
     "notification-preferences",
-    "daily-report-schedules"
+    "daily-report-schedules",
+    "whatsapp-channel"
   ],
-  notifications: ["notifications", "notification-preferences", "daily-report-schedules"],
+  notifications: ["notification-inbox", "notification-preferences", "daily-report-schedules"],
   stock: [
     "stock",
     "stock-items",
@@ -228,12 +233,14 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
     "laundry-vendor-settlements",
     "laundry-vendor-balance",
     "laundry-vendor-spend",
+    "laundry-missing-follow-ups",
     "linen-items",
     "linen-locations",
     "linen-summary",
     "laundry-remitos"
   ],
-  users: ["users"]
+  users: ["users"],
+  whatsapp: ["whatsapp-conversations"]
 };
 
 export const hotelIdForQueryKey = (queryKey: readonly unknown[]): number | null => {

@@ -24,7 +24,10 @@ function parseMoney(text: string) {
 }
 
 test("owner finds and approves a receptionist's pending close from another browser session", async ({ browser }, testInfo) => {
-  test.setTimeout(120_000);
+  // This cross-browser journey consumes three distinct TOTP steps: owner
+  // login, close approval, and custody receipt. Leave room for code-window
+  // boundaries so a healthy MFA flow does not time out before the last step.
+  test.setTimeout(180_000);
   const receptionContext = await browser.newContext();
   const ownerContext = await browser.newContext();
   try {

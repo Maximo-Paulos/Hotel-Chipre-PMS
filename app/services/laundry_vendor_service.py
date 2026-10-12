@@ -240,6 +240,39 @@ def create_remito(
         )
     linen_service.get_location(db, hotel_id=hotel_id, location_id=house_location_id)
 
+    item_ids = sorted({line["linen_item_id"] for line in lines})
+    effective_prices = (
+        db.query(LaundryVendorPrice)
+        .filter(
+            LaundryVendorPrice.hotel_id == hotel_id,
+            LaundryVendorPrice.vendor_id == vendor_id,
+            LaundryVendorPrice.linen_item_id.in_(item_ids),
+            LaundryVendorPrice.effective_from <= remito_date.date(),
+        )
+        .order_by(
+            LaundryVendorPrice.linen_item_id.asc(),
+            LaundryVendorPrice.effective_from.desc(),
+            LaundryVendorPrice.id.desc(),
+        )
+        .all()
+    ) if item_ids else []
+    price_by_item = {}
+    for price in effective_prices:
+        price_by_item.setdefault(price.linen_item_id, price)
+    if direction == "outbound":
+        missing_price_item_ids = [item_id for item_id in item_ids if item_id not in price_by_item]
+        if missing_price_item_ids:
+            missing_names = [
+                linen_service.get_linen_item(db, hotel_id=hotel_id, item_id=item_id).name
+                for item_id in missing_price_item_ids
+            ]
+            formatted_names = ", ".join(f"«{name}»" for name in missing_names)
+            db.rollback()
+            raise LaundryVendorError(
+                "Configurá un precio vigente por unidad para cada artículo "
+                f"({formatted_names}) antes de registrar el retiro al lavadero."
+            )
+
     if direction == "outbound":
         source_location_id, dest_location_id = house_location_id, vendor.linen_location_id
     else:
@@ -350,17 +383,7 @@ def create_remito(
                     created_by_user_id=actor_user_id,
                 )
 
-            price = (
-                db.query(LaundryVendorPrice)
-                .filter(
-                    LaundryVendorPrice.hotel_id == hotel_id,
-                    LaundryVendorPrice.vendor_id == vendor_id,
-                    LaundryVendorPrice.linen_item_id == linen_item_id,
-                    LaundryVendorPrice.effective_from <= remito_date.date(),
-                )
-                .order_by(LaundryVendorPrice.effective_from.desc(), LaundryVendorPrice.id.desc())
-                .first()
-            )
+            price = price_by_item.get(linen_item_id)
             line_record = LaundryRemitoLine(
                 hotel_id=hotel_id,
                 remito_id=remito.id,
@@ -594,13 +617,35 @@ def mark_vendor_settlement_paid(
     notes: str | None = None,
     actor_user_id: int | None = None,
 ) -> LaundryVendorSettlement:
-    """Upsert the paid/not-paid mark for one quarter. Visual alert only -- never blocks anything."""
+    """Record the hotel's reconciliation status without moving money."""
 
     _get_vendor(db, hotel_id=hotel_id, vendor_id=vendor_id)
     quarter = (period_start.month - 1) // 3 + 1
     expected_start, period_end = _quarter_bounds(period_start.year, quarter)
     if period_start != expected_start:
         raise LaundryVendorError("El período debe comenzar el primer día de un trimestre calendario.")
+
+    if paid:
+        period_from = datetime.combine(period_start, time.min, tzinfo=timezone.utc)
+        period_to = datetime.combine(period_end, time.max, tzinfo=timezone.utc)
+        unpriced_quantity = (
+            db.query(func.coalesce(func.sum(LaundryRemitoLine.quantity), 0))
+            .join(LaundryRemito, LaundryRemito.id == LaundryRemitoLine.remito_id)
+            .filter(
+                LaundryRemito.hotel_id == hotel_id,
+                LaundryRemito.vendor_id == vendor_id,
+                LaundryRemito.direction == "outbound",
+                LaundryRemito.remito_date >= period_from,
+                LaundryRemito.remito_date <= period_to,
+                LaundryRemitoLine.unit_price_snapshot.is_(None),
+            )
+            .scalar()
+        )
+        if Decimal(unpriced_quantity or 0) > 0:
+            raise LaundryVendorError(
+                "No se puede marcar como pagado: hay artículos sin precio en remitos del período. "
+                "Revisá esos remitos manualmente antes de confirmar la liquidación."
+            )
 
     settlement = (
         db.query(LaundryVendorSettlement)

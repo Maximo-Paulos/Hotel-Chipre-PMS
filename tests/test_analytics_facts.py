@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from types import SimpleNamespace
-
 import pytest
 from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError
@@ -41,368 +39,52 @@ from app.services import analytics_service
 from app.services.analytics_service import build_home_payload
 
 
-def test_sync_fact_refresh_defaults_to_disabled():
-    settings = Settings(_env_file=None)
-    assert settings.SYNC_FACT_REFRESH_ENABLED is False
-
-
-def test_inline_fact_refresh_can_be_disabled_explicitly(monkeypatch, db):
-    monkeypatch.setattr(
-        analytics_service,
-        "get_settings",
-        lambda: Settings(_env_file=None),
+def test_legacy_read_repair_flags_are_not_supported():
+    settings = Settings(
+        _env_file=None,
+        SYNC_FACT_REFRESH_ENABLED=True,
+        SYNC_FACT_REFRESH_MAX_DAYS=31,
     )
+    assert not hasattr(settings, "SYNC_FACT_REFRESH_ENABLED")
+    assert not hasattr(settings, "SYNC_FACT_REFRESH_MAX_DAYS")
 
-    def fail_if_called(*_args, **_kwargs):
-        raise AssertionError("inline fact refresh must be disabled")
 
-    monkeypatch.setattr(analytics_service, "refresh_fact_reservation_daily", fail_if_called)
-    monkeypatch.setattr(analytics_service, "refresh_fact_room_occupancy_daily", fail_if_called)
-
-    analytics_service._ensure_facts_materialized(
+def test_explicit_fact_refresh_repairs_legacy_currency_fact(
+    db, hotel_config, sample_guest, sample_categories, sample_rooms
+):
+    reservation = _make_fact_refresh_reservation(
         db,
-        hotel_id=1,
-        date_from=date(2026, 1, 1),
-        date_to=date(2026, 1, 10),
-    )
-
-
-def test_inline_fact_refresh_is_bounded_and_logged(monkeypatch, caplog, db, hotel_config, sample_rooms):
-    monkeypatch.setattr(
-        analytics_service,
-        "get_settings",
-        lambda: SimpleNamespace(
-            SYNC_FACT_REFRESH_ENABLED=True,
-            SYNC_FACT_REFRESH_MAX_DAYS=3,
-        ),
-    )
-    refresh_ranges = []
-
-    def record_refresh(*_args, date_from, date_to, **_kwargs):
-        refresh_ranges.append((date_from, date_to))
-
-    monkeypatch.setattr(analytics_service, "refresh_fact_reservation_daily", record_refresh)
-    monkeypatch.setattr(analytics_service, "refresh_fact_room_occupancy_daily", record_refresh)
-
-    with caplog.at_level("WARNING", logger="app.services.analytics_service"):
-        analytics_service._ensure_facts_materialized(
-            db,
-            hotel_id=hotel_config.id,
-            date_from=date(2026, 1, 1),
-            date_to=date(2026, 1, 10),
-        )
-
-    assert refresh_ranges == [
-        (date(2026, 1, 8), date(2026, 1, 10)),
-        (date(2026, 1, 8), date(2026, 1, 10)),
-    ]
-    assert sum(record.message == "analytics.sync_fact_refresh.inline" for record in caplog.records) == 1
-
-
-def _make_refresh_test_reservation(hotel_config, sample_guest, sample_categories, sample_rooms):
-    return Reservation(
-        confirmation_code="ANALYTICS-REFRESH-001",
         hotel_id=hotel_config.id,
         guest_id=sample_guest.id,
-        room_id=sample_rooms[0].id,
         category_id=sample_categories[0].id,
+        room_id=sample_rooms[0].id,
+        confirmation_code="FX-EXPLICIT-REPAIR-001",
         check_in_date=date(2026, 4, 1),
-        check_out_date=date(2026, 4, 3),
-        total_amount=200.0,
-        subtotal_amount=180.0,
-        tax_amount=20.0,
-        fee_amount=0.0,
-        commission_amount=0.0,
-        net_amount=180.0,
-        amount_paid=200.0,
-        deposit_amount=0.0,
-        currency_code="ARS",
-        status=ReservationStatusEnum.FULLY_PAID,
-        outcome=ReservationOutcomeEnum.PENDING,
-        source=ReservationSourceEnum.DIRECT,
-        channel_code=ReservationChannelCodeEnum.OTHER_DIRECT,
-        guest_segment=ReservationGuestSegmentEnum.LEISURE,
-        guest_segment_source=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
-        no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
-        num_adults=2,
-        num_children=0,
-    )
-
-
-def _enable_bounded_fact_refresh(monkeypatch):
-    monkeypatch.setattr(
-        analytics_service,
-        "get_settings",
-        lambda: SimpleNamespace(
-            SYNC_FACT_REFRESH_ENABLED=True,
-            SYNC_FACT_REFRESH_MAX_DAYS=31,
-        ),
-    )
-
-
-def test_complete_fact_window_is_not_refreshed_based_on_age(
-    monkeypatch, db, hotel_config, sample_guest, sample_categories, sample_rooms
-):
-    _enable_bounded_fact_refresh(monkeypatch)
-    db.add(_make_refresh_test_reservation(hotel_config, sample_guest, sample_categories, sample_rooms))
-    db.flush()
-    refresh_fact_reservation_daily(db, hotel_id=hotel_config.id, date_from=date(2026, 4, 1), date_to=date(2026, 4, 3))
-    refresh_fact_room_occupancy_daily(db, hotel_id=hotel_config.id, date_from=date(2026, 4, 1), date_to=date(2026, 4, 3))
-
-    stale_since = datetime.now(timezone.utc) - pytest.importorskip("datetime").timedelta(hours=2)
-    db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == hotel_config.id).update(
-        {FactReservationDaily.updated_at: stale_since}
-    )
-    db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id).update(
-        {FactRoomOccupancyDaily.updated_at: stale_since}
-    )
-    db.commit()
-
-    analytics_service._ensure_facts_materialized(
-        db,
-        hotel_id=hotel_config.id,
-        date_from=date(2026, 4, 1),
-        date_to=date(2026, 4, 3),
-    )
-
-    reservation_as_of = min(
-        analytics_service._ensure_utc(row.updated_at)
-        for row in db.query(FactReservationDaily.updated_at).filter(FactReservationDaily.hotel_id == hotel_config.id).all()
-    )
-    occupancy_as_of = min(
-        analytics_service._ensure_utc(row.updated_at)
-        for row in db.query(FactRoomOccupancyDaily.updated_at).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id).all()
-    )
-    assert reservation_as_of == stale_since
-    assert occupancy_as_of == stale_since
-
-
-def test_partial_fact_window_refreshes_both_tables(
-    monkeypatch, db, hotel_config, sample_guest, sample_categories, sample_rooms
-):
-    _enable_bounded_fact_refresh(monkeypatch)
-    db.add(_make_refresh_test_reservation(hotel_config, sample_guest, sample_categories, sample_rooms))
-    db.flush()
-    refresh_fact_reservation_daily(db, hotel_id=hotel_config.id, date_from=date(2026, 4, 1), date_to=date(2026, 4, 3))
-    refresh_fact_room_occupancy_daily(db, hotel_id=hotel_config.id, date_from=date(2026, 4, 1), date_to=date(2026, 4, 3))
-
-    stale_since = datetime.now(timezone.utc) - pytest.importorskip("datetime").timedelta(hours=2)
-    db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == hotel_config.id).update(
-        {FactReservationDaily.updated_at: stale_since}
-    )
-    db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id).delete()
-    db.commit()
-
-    analytics_service._ensure_facts_materialized(
-        db,
-        hotel_id=hotel_config.id,
-        date_from=date(2026, 4, 1),
-        date_to=date(2026, 4, 3),
-    )
-
-    reservation_rows = db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == hotel_config.id).all()
-    occupancy_rows = db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id).all()
-    assert len(reservation_rows) == 2
-    assert min(analytics_service._ensure_utc(row.updated_at) for row in reservation_rows) > stale_since
-    assert len(occupancy_rows) == len(sample_rooms) * 3
-
-
-def test_targeted_touch_keeps_unaffected_age_visible_and_read_repairs_fx_gaps(
-    monkeypatch,
-    db,
-    hotel_config,
-    sample_guest,
-    sample_categories,
-    sample_rooms,
-):
-    _enable_bounded_fact_refresh(monkeypatch)
-    date_from = date(2026, 4, 1)
-    date_to = date(2026, 4, 3)
-    target = _make_fact_refresh_reservation(
-        db,
-        hotel_id=hotel_config.id,
-        guest_id=sample_guest.id,
-        category_id=sample_categories[0].id,
-        room_id=sample_rooms[0].id,
-        confirmation_code="FACT-TOUCH-FRESHNESS-TARGET",
-        check_in_date=date_from,
-        check_out_date=date_to,
-    )
-    unaffected = _make_fact_refresh_reservation(
-        db,
-        hotel_id=hotel_config.id,
-        guest_id=sample_guest.id,
-        category_id=sample_categories[0].id,
-        room_id=sample_rooms[1].id,
-        confirmation_code="FACT-TOUCH-FRESHNESS-OTHER",
-        check_in_date=date_from,
-        check_out_date=date_to,
+        check_out_date=date(2026, 4, 2),
     )
     refresh_fact_reservation_daily(
         db,
         hotel_id=hotel_config.id,
-        date_from=date_from,
-        date_to=date_to,
+        date_from=date(2026, 4, 1),
+        date_to=date(2026, 4, 1),
     )
-    refresh_fact_room_occupancy_daily(
+    fact = db.query(FactReservationDaily).filter_by(reservation_id=reservation.id).one()
+    fact.revenue_net_usd = fact.revenue_net_ars
+    db.flush()
+
+    # Explicit maintenance refreshes remain available for legacy/imported
+    # rows; regular Analytics reads no longer perform this repair.
+    refresh_fact_reservation_daily(
         db,
         hotel_id=hotel_config.id,
-        date_from=date_from,
-        date_to=date_to,
-    )
-
-    stale_since = datetime.now(timezone.utc) - timedelta(hours=2)
-    db.query(FactReservationDaily).filter(FactReservationDaily.hotel_id == hotel_config.id).update(
-        {FactReservationDaily.updated_at: stale_since},
-        synchronize_session=False,
-    )
-    db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id).update(
-        {FactRoomOccupancyDaily.updated_at: stale_since},
-        synchronize_session=False,
-    )
-    db.commit()
-
-    touch_reservation_fact_window(
-        db,
-        hotel_id=hotel_config.id,
-        date_from=date_from,
-        date_to=date_to,
-        reservation_id=target.id,
-    )
-    unaffected_fact = (
-        db.query(FactReservationDaily)
-        .filter_by(reservation_id=unaffected.id)
-        .order_by(FactReservationDaily.stay_date.asc())
-        .first()
-    )
-    unaffected_room_fact = (
-        db.query(FactRoomOccupancyDaily)
-        .filter_by(room_id=sample_rooms[1].id, stay_date=date_from)
-        .one()
-    )
-    assert analytics_service._ensure_utc(unaffected_fact.updated_at) == stale_since
-    assert analytics_service._ensure_utc(unaffected_room_fact.updated_at) == stale_since
-    db.expunge(unaffected_fact)
-    db.expunge(unaffected_room_fact)
-
-    analytics_service._ensure_facts_materialized(
-        db,
-        hotel_id=hotel_config.id,
-        date_from=date_from,
-        date_to=date_to,
-    )
-    refreshed_reservation_timestamps = [
-        analytics_service._ensure_utc(row.updated_at)
-        for row in db.query(FactReservationDaily.updated_at)
-        .filter(FactReservationDaily.hotel_id == hotel_config.id)
-        .all()
-    ]
-    refreshed_room_timestamps = [
-        analytics_service._ensure_utc(row.updated_at)
-        for row in db.query(FactRoomOccupancyDaily.updated_at)
-        .filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id)
-        .all()
-    ]
-    assert refreshed_reservation_timestamps
-    assert refreshed_room_timestamps
-    assert min(refreshed_reservation_timestamps) == stale_since
-    assert min(refreshed_room_timestamps) == stale_since
-
-    # A fresh timestamp must not hide the independent legacy-FX repair signal.
-    legacy_fact = (
-        db.query(FactReservationDaily)
-        .filter_by(reservation_id=unaffected.id)
-        .order_by(FactReservationDaily.stay_date.asc())
-        .first()
-    )
-    legacy_fact.revenue_net_usd = legacy_fact.revenue_net_ars
-    legacy_fact.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.expunge(legacy_fact)
-    analytics_service._ensure_facts_materialized(
-        db,
-        hotel_id=hotel_config.id,
-        date_from=date_from,
-        date_to=date_to,
+        date_from=date(2026, 4, 1),
+        date_to=date(2026, 4, 1),
     )
     db.expire_all()
-    repaired_fact = (
-        db.query(FactReservationDaily)
-        .filter_by(reservation_id=unaffected.id, stay_date=date_from)
-        .one()
-    )
-    assert repaired_fact.revenue_net_usd == Decimal("0.00")
 
-
-def test_wide_fact_window_does_not_refresh_or_mask_stale_metadata(
-    monkeypatch, db, hotel_config, sample_rooms
-):
-    _enable_bounded_fact_refresh(monkeypatch)
-    date_from = date(2026, 4, 1)
-    date_to = date(2026, 5, 2)  # 32 days, above the hard refresh cap.
-    refresh_fact_reservation_daily(db, hotel_id=hotel_config.id, date_from=date_from, date_to=date_to)
-    refresh_fact_room_occupancy_daily(db, hotel_id=hotel_config.id, date_from=date_from, date_to=date_to)
-    stale_since = datetime.now(timezone.utc) - pytest.importorskip("datetime").timedelta(hours=2)
-    db.query(FactRoomOccupancyDaily).filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id).update(
-        {FactRoomOccupancyDaily.updated_at: stale_since}
-    )
-    db.commit()
-
-    def fail_if_called(*_args, **_kwargs):
-        raise AssertionError("wide analytics windows must retain honest stale metadata without a read-time rebuild")
-
-    monkeypatch.setattr(analytics_service, "refresh_fact_reservation_daily", fail_if_called)
-    monkeypatch.setattr(analytics_service, "refresh_fact_room_occupancy_daily", fail_if_called)
-    analytics_service._ensure_facts_materialized(
-        db,
-        hotel_id=hotel_config.id,
-        date_from=date_from,
-        date_to=date_to,
-    )
-
-    remaining_timestamps = [
-        analytics_service._ensure_utc(row.updated_at)
-        for row in db.query(FactRoomOccupancyDaily.updated_at)
-        .filter(FactRoomOccupancyDaily.hotel_id == hotel_config.id)
-        .all()
-    ]
-    assert remaining_timestamps
-    assert min(remaining_timestamps) == stale_since
-
-
-def test_fact_refresh_guard_is_nonblocking_per_hotel(db):
-    with analytics_service._analytics_fact_refresh_guard(db, hotel_id=1) as first:
-        assert first is True
-        with analytics_service._analytics_fact_refresh_guard(db, hotel_id=1) as second:
-            assert second is False
-
-
-def test_missing_fact_window_skips_refresh_while_another_request_holds_lock(
-    monkeypatch, db, hotel_config, sample_rooms
-):
-    monkeypatch.setattr(
-        analytics_service,
-        "get_settings",
-        lambda: SimpleNamespace(
-            SYNC_FACT_REFRESH_ENABLED=True,
-            SYNC_FACT_REFRESH_MAX_DAYS=31,
-        ),
-    )
-
-    def fail_if_called(*_args, **_kwargs):
-        raise AssertionError("a concurrent request already owns this hotel's refresh guard")
-
-    monkeypatch.setattr(analytics_service, "refresh_fact_reservation_daily", fail_if_called)
-    monkeypatch.setattr(analytics_service, "refresh_fact_room_occupancy_daily", fail_if_called)
-
-    with analytics_service._analytics_fact_refresh_guard(db, hotel_config.id) as acquired:
-        assert acquired is True
-        analytics_service._ensure_facts_materialized(
-            db,
-            hotel_id=hotel_config.id,
-            date_from=date(2026, 1, 1),
-            date_to=date(2026, 1, 3),
-        )
+    refreshed = db.query(FactReservationDaily).filter_by(reservation_id=reservation.id).one()
+    assert refreshed.revenue_net_ars == Decimal("100.00")
+    assert refreshed.revenue_net_usd == Decimal("0.00")
 
 
 def test_detect_no_shows_marks_reservation(db, hotel_config, sample_guest, sample_categories, sample_rooms):
@@ -699,70 +381,6 @@ def test_partial_cross_month_refresh_home_metrics_use_only_selected_local_nights
     assert cards["home_physical_room_nights"]["value_count"] == len(sample_rooms)
 
 
-def test_analytics_read_rebuilds_legacy_one_to_one_currency_facts(
-    db, hotel_config, sample_guest, sample_categories, sample_rooms, monkeypatch
-):
-    monkeypatch.setattr(
-        analytics_service,
-        "get_settings",
-        lambda: Settings(
-            _env_file=None,
-            SYNC_FACT_REFRESH_ENABLED=True,
-            SYNC_FACT_REFRESH_MAX_DAYS=31,
-        ),
-    )
-    reservation = Reservation(
-        confirmation_code="FX-LEGACY-001",
-        hotel_id=hotel_config.id,
-        guest_id=sample_guest.id,
-        room_id=sample_rooms[0].id,
-        category_id=sample_categories[0].id,
-        check_in_date=date(2026, 4, 1),
-        check_out_date=date(2026, 4, 2),
-        total_amount=100.0,
-        subtotal_amount=100.0,
-        net_amount=90.0,
-        amount_paid=0.0,
-        currency_code="ARS",
-        fx_rate_snapshot=None,
-        status=ReservationStatusEnum.PENDING,
-        outcome=ReservationOutcomeEnum.PENDING,
-        source=ReservationSourceEnum.DIRECT,
-        channel_code=ReservationChannelCodeEnum.OTHER_DIRECT,
-        guest_segment=ReservationGuestSegmentEnum.LEISURE,
-        guest_segment_source=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
-        no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
-        num_adults=1,
-        num_children=0,
-    )
-    db.add(reservation)
-    db.flush()
-    refresh_fact_reservation_daily(
-        db,
-        hotel_id=hotel_config.id,
-        date_from=date(2026, 4, 1),
-        date_to=date(2026, 4, 1),
-    )
-    fact = db.query(FactReservationDaily).filter_by(reservation_id=reservation.id).one()
-    assert float(fact.revenue_net_usd) == pytest.approx(0.0)
-
-    # Simulate a materialized fact written by the previous 1:1 fallback.
-    fact.revenue_net_usd = fact.revenue_net_ars
-    db.flush()
-    db.expunge(fact)
-    monkeypatch.setattr(db, "commit", lambda: db.flush())
-    analytics_service._ensure_facts_materialized(
-        db,
-        hotel_id=hotel_config.id,
-        date_from=date(2026, 4, 1),
-        date_to=date(2026, 4, 1),
-    )
-
-    refreshed = db.query(FactReservationDaily).filter_by(reservation_id=reservation.id).one()
-    assert float(refreshed.revenue_net_ars) == pytest.approx(90.0)
-    assert float(refreshed.revenue_net_usd) == pytest.approx(0.0)
-
-
 def test_refresh_fact_room_occupancy_daily_handles_blocking_events(
     db,
     hotel_config,
@@ -867,10 +485,8 @@ def test_celery_tasks_are_registered():
 #
 # These reproduce the owner's actual ask: fact rows must reflect a new
 # reservation/edit/cancellation *immediately*, without waiting for anyone to
-# hit an /api/analytics/* endpoint first. None of these tests call
-# _ensure_facts_materialized, refresh_fact_*, or any analytics builder --
-# they only call the reservation-mutating service functions and then read
-# FactReservationDaily/FactRoomOccupancyDaily directly.
+# hit an /api/analytics/* endpoint first. The tests call reservation-mutating
+# services and then inspect FactReservationDaily/FactRoomOccupancyDaily.
 
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.reservation_service import (

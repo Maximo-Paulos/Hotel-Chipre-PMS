@@ -200,6 +200,74 @@ def test_find_applicable_promotions_matches_guest_tag_type(db):
     assert find_applicable_promotions(db, _ctx(65, date(2026, 3, 1), guest_id=None)) == []
 
 
+def test_find_applicable_promotions_for_many_nights_uses_bounded_queries(db):
+    category = _seed_hotel(db, 69)
+    guest = Guest(hotel_id=69, first_name="Vip", last_name="Guest")
+    db.add(guest)
+    db.flush()
+    db.add(GuestTag(hotel_id=69, guest_id=guest.id, tag_type=GuestTagTypeEnum.VIP))
+    create_promotion(
+        db,
+        hotel_id=69,
+        payload=PromotionCreate(
+            code="VIP_FULL_STAY",
+            name="VIP full stay",
+            benefit_type=PromotionBenefitTypeEnum.PERCENTAGE,
+            benefit_value=Decimal("5"),
+            conditions=PromotionConditions(category_id=category.id, guest_tag_type="vip"),
+        ),
+        created_by_user_id=None,
+    )
+    create_promotion(
+        db,
+        hotel_id=69,
+        payload=PromotionCreate(
+            code="THIRD_NIGHT",
+            name="From third night",
+            benefit_type=PromotionBenefitTypeEnum.FIXED,
+            benefit_value=Decimal("10"),
+            scope=PromotionScopeEnum.FROM_NIGHT_N,
+            from_night_number=3,
+            conditions=PromotionConditions(category_id=category.id),
+        ),
+        created_by_user_id=None,
+    )
+    contexts = [
+        _ctx(
+            69,
+            date(2026, 3, 1 + offset),
+            night_index=offset + 1,
+            nights_total=7,
+            category_id=category.id,
+            guest_id=guest.id,
+        )
+        for offset in range(7)
+    ]
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def capture_statement(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture_statement)
+    try:
+        matches = find_applicable_promotions_for_nights(db, contexts)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_statement)
+
+    assert len(matches) == 7
+    assert [sorted(promotion.code for promotion in nightly) for nightly in matches] == [
+        ["VIP_FULL_STAY"],
+        ["VIP_FULL_STAY"],
+        ["THIRD_NIGHT", "VIP_FULL_STAY"],
+        ["THIRD_NIGHT", "VIP_FULL_STAY"],
+        ["THIRD_NIGHT", "VIP_FULL_STAY"],
+        ["THIRD_NIGHT", "VIP_FULL_STAY"],
+        ["THIRD_NIGHT", "VIP_FULL_STAY"],
+    ]
+    assert len(statements) == 2
+
+
 def test_apply_promotions_never_goes_negative(db):
     _seed_hotel(db, 66)
     payload = PromotionCreate(

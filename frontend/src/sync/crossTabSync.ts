@@ -9,6 +9,8 @@ import {
 } from "../api/queryKeys";
 import { useSession } from "../state/session";
 
+import { nextRealtimeRetryPlan } from "./retryPolicy";
+
 export type SyncDomain = QueryDomain;
 
 type SyncMessage = {
@@ -42,15 +44,23 @@ const EVENT_ID_LIMIT = 2048;
 const ORIGIN_DOMAIN_LIMIT = 2048;
 // Coalesce a burst of committed table events into one tenant-scoped refetch.
 const REALTIME_EVENT_DEBOUNCE_MS = 1_000;
-// Keep fallback recovery at five seconds while the API responds; back off
-// during errors so an outage does not become a steady stream of failed reads.
+const CROSS_TAB_INVALIDATION_DEBOUNCE_MS = 100;
+// Recovery is a slow safety net only after the stream has been marked
+// degraded. The stream itself recovers before every reconnect attempt, so a
+// second fast poll would duplicate database reads while it is reconnecting.
 // Hidden tabs pause recovery and catch up when they become visible again.
-const REALTIME_RECOVERY_POLL_MS = 5_000;
-const REALTIME_RECOVERY_MAX_POLL_MS = 30_000;
+const REALTIME_RECOVERY_POLL_MS = 60_000;
+const REALTIME_RECOVERY_MAX_POLL_MS = 5 * 60_000;
 
 export const realtimeRecoveryPollDelay = (consecutiveFailures: number): number => {
   const failures = Number.isSafeInteger(consecutiveFailures) ? Math.max(0, consecutiveFailures) : 0;
   return Math.min(REALTIME_RECOVERY_MAX_POLL_MS, REALTIME_RECOVERY_POLL_MS * 2 ** failures);
+};
+
+export const isTerminalRealtimeAuthorizationError = (error: unknown): boolean => {
+  if (!error || typeof error !== "object" || !("status" in error)) return false;
+  const status = Number((error as { status?: unknown }).status);
+  return status === 401 || status === 403;
 };
 
 export type RealtimeConnectionStatus = "disabled" | "connecting" | "connected" | "reconnecting" | "degraded";
@@ -215,6 +225,8 @@ export const domainsForPath = (path: string): SyncDomain[] => {
   if (normalized.includes("permission") || normalized.includes("security")) return ["security", "users", "settings"];
   if (normalized.includes("user") || normalized.includes("invitation")) return ["users", "security", "settings"];
   if (normalized.includes("notification")) return ["notifications", "settings"];
+  if (normalized.includes("/whatsapp/channel")) return ["settings"];
+  if (normalized.includes("whatsapp")) return ["whatsapp"];
   if (
     normalized.includes("company") ||
     normalized.includes("integration") ||
@@ -299,8 +311,20 @@ const notifyIfRelevant = (
   scheduleRefresh(message.domain);
 };
 
-const startCrossTabSubscription = (hotelId: number, scheduleRefresh: (domain: SyncDomain) => void) => {
+const startCrossTabSubscription = (queryClient: QueryClient, hotelId: number) => {
   if (typeof window === "undefined") return () => undefined;
+  const pendingDomains = new Set<SyncDomain>();
+  let refreshTimer: number | null = null;
+  const scheduleRefresh = (domain: SyncDomain) => {
+    pendingDomains.add(domain);
+    if (refreshTimer !== null) return;
+    refreshTimer = window.setTimeout(() => {
+      const domains = Array.from(pendingDomains);
+      pendingDomains.clear();
+      refreshTimer = null;
+      void refreshDomains(queryClient, hotelId, domains);
+    }, CROSS_TAB_INVALIDATION_DEBOUNCE_MS);
+  };
   const onStorage = (event: StorageEvent) => {
     if (event.key !== STORAGE_KEY || !event.newValue) return;
     try {
@@ -330,6 +354,8 @@ const startCrossTabSubscription = (hotelId: number, scheduleRefresh: (domain: Sy
     /* storage listener remains available */
   }
   return () => {
+    if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+    pendingDomains.clear();
     window.removeEventListener("storage", onStorage);
     window.removeEventListener(LOCAL_ORIGIN_REFRESH_EVENT, onLocalOriginRecovery);
     try {
@@ -515,12 +541,18 @@ const runEventStream = async (
   }
 
   let retryCount = 0;
+  let connectedAt: number | null = null;
   const seenEventIds = new Set<string>();
   const waitBeforeRetry = async () => {
-    retryCount += 1;
+    const retryPlan = nextRealtimeRetryPlan(
+      retryCount,
+      connectedAt === null ? null : performance.now() - connectedAt,
+      Math.random()
+    );
+    retryCount = retryPlan.failureCount;
+    connectedAt = null;
     updateRealtimeStatus(hotelId, retryCount >= 3 ? "degraded" : "reconnecting");
-    const delay = Math.min(30_000, 1_000 * 2 ** (retryCount - 1));
-    const jitter = Math.floor(Math.random() * Math.max(250, delay * 0.2));
+    const delay = retryPlan.delayMs;
     await new Promise<void>((resolve) => {
       let timer: number | null = null;
       const finish = () => {
@@ -531,7 +563,7 @@ const runEventStream = async (
         signal.removeEventListener("abort", finish);
         resolve();
       };
-      timer = window.setTimeout(finish, delay + jitter);
+      timer = window.setTimeout(finish, delay);
       signal.addEventListener("abort", finish, { once: true });
       if (signal.aborted) finish();
     });
@@ -570,7 +602,7 @@ const runEventStream = async (
         throw new Error(`realtime stream returned ${response.status}`);
       }
       if (!response.body) throw new Error("realtime stream has no body");
-      retryCount = 0;
+      connectedAt = performance.now();
       updateRealtimeStatus(hotelId, "connected");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -610,6 +642,10 @@ const runEventStream = async (
     } catch (error) {
       if (signal.aborted) break;
       if (document.visibilityState === "hidden") continue;
+      if (isTerminalRealtimeAuthorizationError(error)) {
+        updateRealtimeStatus(hotelId, "degraded");
+        return;
+      }
       await waitBeforeRetry();
     } finally {
       document.removeEventListener("visibilitychange", pauseWhenHidden);
@@ -633,8 +669,8 @@ export function useCrossTabSync() {
 
   useEffect(() => {
     if (!hotelId) return undefined;
-    return startCrossTabSubscription(hotelId, refreshScheduler.schedule);
-  }, [hotelId, refreshScheduler]);
+    return startCrossTabSubscription(queryClient, hotelId);
+  }, [hotelId, queryClient]);
 
   useEffect(() => {
     if (!hotelId || !session.accessToken || !session.userId) return undefined;
@@ -653,7 +689,7 @@ export function useCrossTabSync() {
   }, [hotelId, queryClient, refreshScheduler, session.accessToken, session.userId]);
 
   useEffect(() => {
-    if (!hotelId || !session.accessToken || !session.userId || realtimeStatus === "connected" || realtimeStatus === "disabled") {
+    if (!hotelId || !session.accessToken || !session.userId || realtimeStatus !== "degraded") {
       return undefined;
     }
     if (recoveryFailureState.current.hotelId !== hotelId) {
@@ -676,7 +712,12 @@ export function useCrossTabSync() {
             hotelId
           );
           recoveryFailureState.current.count = 0;
-        } catch {
+        } catch (error) {
+          if (isTerminalRealtimeAuthorizationError(error)) {
+            stopped = true;
+            timer = null;
+            return;
+          }
           recoveryFailureState.current.count += 1;
         }
         schedule(realtimeRecoveryPollDelay(recoveryFailureState.current.count));

@@ -14,7 +14,7 @@ from app.api import checkin as checkin_api
 from app.api import bookings as bookings_api
 from app.services import reservation_service
 from app.services import reservation_operations_service
-from app.services.reservation_service import ReservationPricingResult
+from app.services.reservation_service import ConfirmedReservationPriceLocked, ReservationPricingResult
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.guest import Guest
@@ -419,6 +419,9 @@ def test_primary_reservation_patch_requires_version_and_skips_noop_audits():
 def test_paid_reservation_total_adjustment_is_audited_and_keeps_payment_rows():
     client, db, engine, auth, reservation, _stock_item = _client()
     try:
+        # A paid but still unassigned reservation is not confirmed under the
+        # hotel's chosen rule; its permitted financial correction stays audited.
+        reservation.room_id = None
         payment = Transaction(
             hotel_id=1,
             reservation_id=reservation.id,
@@ -515,6 +518,7 @@ def test_paid_reservation_total_adjustment_is_audited_and_keeps_payment_rows():
 def test_large_paid_total_adjustment_requires_confirmation_and_keeps_payment_rows():
     client, db, engine, auth, reservation, _stock_item = _client()
     try:
+        reservation.room_id = None
         payment = Transaction(
             hotel_id=1,
             reservation_id=reservation.id,
@@ -554,6 +558,71 @@ def test_large_paid_total_adjustment_requires_confirmation_and_keeps_payment_row
             hotel_id=1, reservation_id=reservation.id
         ).one()
         assert stored_payment.amount == Decimal("50.00")
+
+    finally:
+        _close(db, engine)
+
+
+def test_confirmed_reservation_price_change_requires_manual_review_without_partial_updates():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        payment = Transaction(
+            hotel_id=1,
+            reservation_id=reservation.id,
+            amount=Decimal("50.00"),
+            currency="ARS",
+            transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            payment_method=PaymentMethodEnum.CASH,
+            status=TransactionStatusEnum.COMPLETED,
+            processed_at=datetime.now(timezone.utc),
+            created_by_user_id=10,
+        )
+        reservation.amount_paid = Decimal("50.00")
+        db.add(payment)
+        db.commit()
+        original_version = reservation.version
+        original_audit_count = db.query(AuditLog).filter_by(
+            table_name="reservations", record_id=reservation.id
+        ).count()
+
+        auth.update({"user_id": 10, "role": "owner"})
+        response = client.patch(
+            f"/api/reservations/{reservation.id}",
+            json={
+                "total_amount": "180.00",
+                "paid_total_change_reason": "Intento de tarifa posterior a la confirmación",
+                "notes": "Este cambio tampoco debe guardarse",
+                "client_version": original_version,
+            },
+        )
+
+        assert response.status_code == 409, response.text
+        assert "revisión manual" in response.json()["detail"].lower()
+        db.refresh(reservation)
+        assert reservation.room_id is not None
+        assert reservation.total_amount == Decimal("200.00")
+        assert reservation.amount_paid == Decimal("50.00")
+        assert reservation.notes is None
+        assert reservation.version == original_version
+        assert db.query(AuditLog).filter_by(
+            table_name="reservations", record_id=reservation.id
+        ).count() == original_audit_count
+        stored_payment = db.query(Transaction).filter_by(
+            hotel_id=1, reservation_id=reservation.id
+        ).one()
+        assert stored_payment.amount == Decimal("50.00")
+
+        with pytest.raises(ConfirmedReservationPriceLocked, match="revisión manual"):
+            reservation_service.update_reservation_fields(
+                db,
+                reservation,
+                ReservationUpdate(
+                    total_amount=Decimal("180.00"),
+                    paid_total_change_reason="Intento desde servicio de dominio",
+                ),
+                hotel_id=1,
+                total_adjustment_kind="paid",
+            )
     finally:
         _close(db, engine)
 

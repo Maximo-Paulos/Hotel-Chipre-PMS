@@ -4,6 +4,19 @@ import test from "node:test";
 
 const source = async (path) => readFile(new URL(path, import.meta.url), "utf8");
 
+test("API 4xx query failures do not trigger repeated SQL requests", async () => {
+  const main = await source("./src/main.tsx");
+
+  assert.match(main, /retry: \(failureCount, error\) => \{/);
+  assert.match(main, /error instanceof ApiError && error\.status >= 400 && error\.status < 500\) return false/);
+  assert.match(main, /return failureCount < 1/);
+  assert.doesNotMatch(main, /return failureCount < 3/);
+  const integrations = await source("./src/hooks/useIntegrations.ts");
+  assert.match(integrations, /failureCount < 1/);
+  const permissionPage = await source("./src/views/protected/SettingsPermissionsPage.tsx");
+  assert.match(permissionPage, /error\.status >= 400 && error\.status < 500\) && failureCount < 1/);
+});
+
 test("room category consumers share one hotel-scoped query key", async () => {
   const [keys, rooms, categories] = await Promise.all([
     source("./src/api/queryKeys.ts"),
@@ -78,13 +91,92 @@ test("reservation creation refreshes only related views without waiting for the 
 });
 
 test("slow-changing reference data uses a five-minute cache window", async () => {
-  const [rooms, permissions] = await Promise.all([
+  const [policy, rooms, permissions] = await Promise.all([
+    source("./src/api/queryPolicy.ts"),
     source("./src/hooks/useRooms.ts"),
     source("./src/hooks/usePermissions.ts")
   ]);
 
-  assert.match(rooms, /staleTime: 5 \* 60 \* 1000/);
+  assert.match(policy, /EVENT_REFRESHED_QUERY_STALE_TIME_MS = 5 \* 60 \* 1000/);
+  assert.match(rooms, /staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS/);
   assert.match(permissions, /staleTime: 5 \* 60 \* 1000/);
+});
+
+test("frequently revisited operator reads rely on hotel-scoped event invalidation instead of short timers", async () => {
+  const [reports, reservations, notifications, rooms, roomBlocks, cash, hotelConfig, housekeeping, laundry, keys] = await Promise.all([
+    source("./src/hooks/useReports.ts"),
+    source("./src/hooks/useReservations.ts"),
+    source("./src/hooks/useNotifications.ts"),
+    source("./src/hooks/useRooms.ts"),
+    source("./src/hooks/useRoomBlocks.ts"),
+    source("./src/hooks/useCashRegister.ts"),
+    source("./src/hooks/useHotelConfig.ts"),
+    source("./src/views/protected/HousekeepingTodayPage.tsx"),
+    source("./src/views/protected/LaundryPage.tsx"),
+    source("./src/api/queryKeys.ts")
+  ]);
+  const cachePolicy = /EVENT_REFRESHED_QUERY_STALE_TIME_MS/;
+
+  for (const hook of [reports, reservations, notifications, rooms, roomBlocks, cash, hotelConfig, housekeeping, laundry]) {
+    assert.match(hook, cachePolicy);
+  }
+  assert.doesNotMatch(laundry, /staleTime:\s*\d+\s*\*\s*1000/);
+  assert.match(keys, /analytics:\s*\[[\s\S]*?"reports"/);
+  assert.match(keys, /reservations:\s*\[[\s\S]*?"reservations"[\s\S]*?"reservation-pending-actions"/);
+  assert.match(keys, /rooms:\s*\[[\s\S]*?"rooms"[\s\S]*?"room-blocks"/);
+  assert.match(keys, /cash:\s*\["cash-sessions"[\s\S]*?"cash-latest-close-report"\]/);
+  assert.match(keys, /stock:\s*\[[\s\S]*?"laundry-missing-follow-ups"/);
+  assert.match(keys, /"laundry-missing-follow-ups": 1/);
+  assert.doesNotMatch(reports, /refetchInterval/);
+  assert.doesNotMatch(notifications, /refetchInterval/);
+});
+
+test("notification, WhatsApp, and payment-test lists rely on domain events instead of recurring polls", async () => {
+  const [notifications, whatsapp, paymentPage, paymentHook, queryKeys] = await Promise.all([
+    source("./src/hooks/useNotifications.ts"),
+    source("./src/hooks/useWhatsappCRM.ts"),
+    source("./src/views/protected/SettingsTestsPage.tsx"),
+    source("./src/hooks/usePaymentLinkTests.ts"),
+    source("./src/api/queryKeys.ts")
+  ]);
+
+  for (const hook of [notifications, whatsapp, paymentPage, paymentHook]) {
+    assert.doesNotMatch(hook, /refetchInterval/);
+  }
+  assert.match(queryKeys, /\| "whatsapp"/);
+  assert.match(queryKeys, /"whatsapp-conversations": 1/);
+  assert.match(queryKeys, /whatsapp: \["whatsapp-conversations"\]/);
+});
+
+test("Gemma runtime health probes run on demand instead of every 30 seconds", async () => {
+  const [hook, page] = await Promise.all([
+    source("./src/hooks/useGemmaChat.ts"),
+    source("./src/views/protected/SettingsAssistantPage.tsx")
+  ]);
+  const runtimeQuery = hook.match(/const runtimeStatusQuery = useQuery[\s\S]*?\n  \}\);/)?.[0];
+
+  assert.ok(runtimeQuery, "Gemma runtime status query must remain defined");
+  assert.doesNotMatch(runtimeQuery, /refetchInterval/);
+  assert.match(page, /runtimeStatusQuery\.refetch\(\)/);
+  assert.match(page, /aria-label="Verificar el estado del runtime"/);
+});
+
+test("payment FX quotes do not poll and refresh only when a payment action needs a rate", async () => {
+  const page = await source("./src/views/protected/ReservationsPage.tsx");
+  const quoteQuery = page.match(/const paymentFxQuoteQuery = useQuery\([\s\S]*?\n  \}\);/)?.[0];
+  const refreshHelper = page.match(/const refreshPaymentFxRateForAction = async \(\)[\s\S]*?\n  \};/)?.[0];
+  const depositHandler = page.match(/const handlePayDeposit = async \(\) => \{[\s\S]*?\n  \};/)?.[0];
+  const fullPaymentHandler = page.match(/const handlePayFull = async \(\) => \{[\s\S]*?\n  \};/)?.[0];
+  const partialPaymentHandler = page.match(/const handlePayPartial = async \(\) => \{[\s\S]*?\n  \};/)?.[0];
+
+  assert.ok(quoteQuery, "payment FX quote query must remain defined");
+  assert.doesNotMatch(quoteQuery, /refetchInterval/);
+  assert.match(quoteQuery, /staleTime: 30_000/);
+  assert.match(refreshHelper ?? "", /paymentFxQuoteQuery\.refetch\(\)/);
+  assert.match(refreshHelper ?? "", /result\.error \|\| !Number\.isFinite\(rate\) \|\| rate <= 0/);
+  for (const handler of [depositHandler, fullPaymentHandler, partialPaymentHandler]) {
+    assert.match(handler ?? "", /await refreshPaymentFxRateForAction\(\)/);
+  }
 });
 
 test("reservation quotes stay fresh for 30 seconds", async () => {
@@ -102,6 +194,9 @@ test("realtime recovery does not invalidate every domain on a first connection",
   ]);
 
   assert.match(sync, /REALTIME_EVENT_DEBOUNCE_MS = 1_000/);
+  assert.match(sync, /CROSS_TAB_INVALIDATION_DEBOUNCE_MS = 100/);
+  assert.match(sync, /void refreshDomains\(queryClient, hotelId, domains\)/);
+  assert.doesNotMatch(sync, /invalidateDomainQueries/);
   assert.match(sync, /recoveryDomainsForCursor\(currentCursor, payload\)/);
   assert.match(invalidation, /if \(currentCursor === 0 && payload\.has_more\) return allDomains/);
   assert.match(invalidation, /if \(currentCursor === 0\) return changedDomains/);
@@ -115,12 +210,15 @@ test("realtime recovery does not invalidate every domain on a first connection",
 test("degraded realtime recovery backs off and cannot reschedule after cleanup", async () => {
   const sync = await source("./src/sync/crossTabSync.ts");
   const recoveryPoll = sync.match(/const REALTIME_RECOVERY_POLL_MS = [\s\S]*?export type RealtimeConnectionStatus/)?.[0] ?? "";
-  const recoveryEffect = sync.match(/if \(!hotelId \|\| !session\.accessToken \|\| !session\.userId \|\| realtimeStatus === "connected"[\s\S]*?\}, \[hotelId, queryClient, realtimeStatus, session\.accessToken, session\.userId\]\);/)?.[0] ?? "";
+  const recoveryEffect = sync.match(/if \(!hotelId \|\| !session\.accessToken \|\| !session\.userId \|\| realtimeStatus !== "degraded"[\s\S]*?\}, \[hotelId, queryClient, realtimeStatus, session\.accessToken, session\.userId\]\);/)?.[0] ?? "";
 
-  assert.match(recoveryPoll, /REALTIME_RECOVERY_POLL_MS = 5_000/);
-  assert.match(recoveryPoll, /REALTIME_RECOVERY_MAX_POLL_MS = 30_000/);
+  assert.match(recoveryPoll, /REALTIME_RECOVERY_POLL_MS = 60_000/);
+  assert.match(recoveryPoll, /REALTIME_RECOVERY_MAX_POLL_MS = 5 \* 60_000/);
   assert.match(recoveryPoll, /Math\.min\(REALTIME_RECOVERY_MAX_POLL_MS/);
+  assert.match(recoveryEffect, /realtimeStatus !== "degraded"/);
   assert.match(recoveryEffect, /recoveryFailureState\.current\.count \+= 1/);
+  assert.match(recoveryEffect, /isTerminalRealtimeAuthorizationError\(error\)/);
+  assert.match(recoveryEffect, /stopped = true/);
   assert.match(recoveryEffect, /if \(stopped\) return;/);
 });
 

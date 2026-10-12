@@ -6,6 +6,10 @@ import os
 import re as _re
 import pathlib as _pathlib
 
+# The broad regression suite retains synchronous materialization assertions.
+# Queue-specific tests opt out explicitly; production defaults to deferred SQL.
+os.environ["ANALYTICS_FACTS_SYNC_ON_WRITE"] = "true"
+
 from tests.postgres_test_safety import (
     PostgresTargetSafetyError,
     validate_postgres_test_target,
@@ -51,7 +55,7 @@ Settings.model_config["env_file"] = None
 
 import pytest
 from datetime import date, timedelta
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -161,6 +165,7 @@ from app.models.ota import OTAReservationMapping
 from app.models.pricing import CategoryPricing
 from app.models.security_token import SecurityToken
 from app.models.rate_limit_event import RateLimitEvent
+from app.models.commercial import TaxPolicy
 
 
 # â”€â”€ SQLite in-memory engine for tests â”€â”€
@@ -233,16 +238,103 @@ def db(db_engine) -> Session:
         session.close()
 
 
+_TEST_PENDING_HOTELS_KEY = "test_hotels_needing_explicit_zero_tax_policy"
+
+
+def _remember_test_hotels(session, _flush_context, _instances):
+    """Give synthetic hotels an explicit baseline policy and track their IDs.
+
+    Production-created hotels remain unconfirmed until an owner saves the
+    hotel's deposit and cancellation rules. Legacy tests that create hotels
+    without specifying a policy need an explicit synthetic setup to exercise
+    reservation flows; tests for the missing-policy gate pass False directly.
+    """
+    new_hotel_ids = set()
+    for hotel in session.new:
+        if not isinstance(hotel, HotelConfiguration):
+            continue
+        if hotel.deposit_policy_configured is None:
+            hotel.deposit_percentage = 30.0 if hotel.deposit_percentage is None else hotel.deposit_percentage
+            hotel.free_cancellation_hours = (
+                48 if hotel.free_cancellation_hours is None else hotel.free_cancellation_hours
+            )
+            hotel.cancellation_penalty_percentage = (
+                0.0
+                if hotel.cancellation_penalty_percentage is None
+                else hotel.cancellation_penalty_percentage
+            )
+            hotel.deposit_policy_configured = True
+        if hotel.id is not None:
+            new_hotel_ids.add(hotel.id)
+    session.info[_TEST_PENDING_HOTELS_KEY] = {
+        *session.info.get(_TEST_PENDING_HOTELS_KEY, set()),
+        *new_hotel_ids,
+    }
+
+
+def _insert_explicit_zero_tax_test_policies(session, _flush_context):
+    """Give legacy test hotels an explicit no-tax setup after the parent row exists.
+
+    Production intentionally has no implicit tax-policy default. The shared
+    pytest process uses this synthetic policy for hotels inserted by all test
+    sessions, including module-local clients. Missing-policy tests delete it.
+    """
+    hotel_ids = session.info.pop(_TEST_PENDING_HOTELS_KEY, set())
+    if not hotel_ids:
+        return
+    connection = session.connection()
+    if not connection.dialect.has_table(connection, TaxPolicy.__tablename__):
+        return
+    for hotel_id in hotel_ids:
+        existing_policy = connection.execute(
+            select(TaxPolicy.id).where(TaxPolicy.hotel_id == hotel_id).limit(1)
+        ).first()
+        if existing_policy is None:
+            connection.execute(
+                TaxPolicy.__table__.insert().values(
+                    hotel_id=hotel_id,
+                    code="TEST_NO_TAX",
+                    name="Explicit zero-tax test policy",
+                    taxes_included=True,
+                    apply_vat_by_default=False,
+                    vat_rate=0.0,
+                    foreign_guest_tax_exempt=False,
+                    is_active=True,
+                )
+            )
+
+
+event.listen(Session, "before_flush", _remember_test_hotels)
+event.listen(Session, "after_flush_postexec", _insert_explicit_zero_tax_test_policies)
+
+
+@pytest.fixture(autouse=True)
+def _clear_process_local_read_model_cache():
+    """Keep tests isolated from cached reports produced by earlier fixtures."""
+    from app.services import read_model_cache
+
+    def clear_cache():
+        with read_model_cache._local_read_model_lock:
+            read_model_cache._local_read_model_cache.clear()
+            read_model_cache._local_read_model_inflight.clear()
+
+    clear_cache()
+    yield
+    clear_cache()
+
+
 # â”€â”€ Seed data fixtures â”€â”€
 
 @pytest.fixture
 def sample_categories(db: Session) -> list[RoomCategory]:
     """Create sample room categories for hotel 1."""
     # Ensure hotel configuration exists for FK integrity
-    if not db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first():
+    config = db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first()
+    if config is None:
         config = HotelConfiguration(
             id=1,
             deposit_percentage=30.0,
+            deposit_policy_configured=True,
             enable_full_payment=True,
             enable_deposit_payment=True,
             enable_cash=True,
@@ -254,6 +346,9 @@ def sample_categories(db: Session) -> list[RoomCategory]:
         )
         db.add(config)
         db.flush()
+    else:
+        config.deposit_policy_configured = True
+    _ensure_explicit_zero_tax_policy(db, hotel_id=1)
 
     categories = [
         RoomCategory(
@@ -289,9 +384,20 @@ def sample_categories(db: Session) -> list[RoomCategory]:
 @pytest.fixture
 def sample_categories_hotel2(db: Session) -> list[RoomCategory]:
     """Minimal categories for a second hotel to verify isolation."""
-    if not db.query(HotelConfiguration).filter(HotelConfiguration.id == 2).first():
-        db.add(HotelConfiguration(id=2, deposit_percentage=20.0, subscription_active=True))
+    config = db.query(HotelConfiguration).filter(HotelConfiguration.id == 2).first()
+    if config is None:
+        db.add(
+            HotelConfiguration(
+                id=2,
+                deposit_percentage=20.0,
+                deposit_policy_configured=True,
+                subscription_active=True,
+            )
+        )
         db.flush()
+    else:
+        config.deposit_policy_configured = True
+    _ensure_explicit_zero_tax_policy(db, hotel_id=2)
 
     cats = [
         RoomCategory(
@@ -394,7 +500,7 @@ def sample_rooms_hotel2(db: Session, sample_categories_hotel2: list[RoomCategory
 def sample_guest(db: Session) -> Guest:
     """Create a sample guest with full check-in data."""
     if not db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first():
-        db.add(HotelConfiguration(id=1, subscription_active=True))
+        db.add(HotelConfiguration(id=1, deposit_policy_configured=True, subscription_active=True))
         db.flush()
     guest = Guest(
         first_name="Carlos",
@@ -421,7 +527,7 @@ def sample_guest(db: Session) -> Guest:
 def sample_guest_incomplete(db: Session) -> Guest:
     """Create a guest WITHOUT identity documents (for check-in validation tests)."""
     if not db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).first():
-        db.add(HotelConfiguration(id=1, subscription_active=True))
+        db.add(HotelConfiguration(id=1, deposit_policy_configured=True, subscription_active=True))
         db.flush()
     guest = Guest(
         first_name="María",
@@ -443,6 +549,7 @@ def hotel_config(db: Session) -> HotelConfiguration:
     if existing:
         # Normalize to expected test defaults
         existing.deposit_percentage = 30.0
+        existing.deposit_policy_configured = True
         existing.enable_full_payment = True
         existing.enable_deposit_payment = True
         existing.enable_cash = True
@@ -453,12 +560,14 @@ def hotel_config(db: Session) -> HotelConfiguration:
         existing.require_document_for_checkin = True
         existing.require_terms_acceptance = True
         existing.subscription_active = True
+        _ensure_explicit_zero_tax_policy(db, hotel_id=existing.id)
         db.flush()
         return existing
 
     config = HotelConfiguration(
         id=1,
         deposit_percentage=30.0,
+        deposit_policy_configured=True,
         enable_full_payment=True,
         enable_deposit_payment=True,
         enable_cash=True,
@@ -472,4 +581,26 @@ def hotel_config(db: Session) -> HotelConfiguration:
     )
     db.add(config)
     db.flush()
+    _ensure_explicit_zero_tax_policy(db, hotel_id=config.id)
     return config
+
+
+def _ensure_explicit_zero_tax_policy(db: Session, *, hotel_id: int) -> None:
+    policy = (
+        db.query(TaxPolicy)
+        .filter(TaxPolicy.hotel_id == hotel_id, TaxPolicy.code == "TEST_NO_TAX")
+        .first()
+    )
+    if policy is None:
+        db.add(
+            TaxPolicy(
+                hotel_id=hotel_id,
+                code="TEST_NO_TAX",
+                name="Explicit zero-tax test policy",
+                taxes_included=True,
+                apply_vat_by_default=False,
+                vat_rate=0.0,
+                is_active=True,
+            )
+        )
+        db.flush()

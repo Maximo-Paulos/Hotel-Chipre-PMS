@@ -5,6 +5,7 @@ const customRoleCode = "night-auditor";
 const permissionCode = "guest:read";
 const assistantActionsPermissionCode = "settings:assistant:actions:manage";
 const rateAdjustPermissionCode = "reservation:rate_adjust";
+const backendURL = (process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040").replace(/\/$/, "");
 
 const roleCatalog = {
   roles: [
@@ -157,7 +158,7 @@ async function installMocks(page: Page, options: {
 
   await page.route("https://fonts.googleapis.com/**", (route) => route.fulfill({ status: 200, body: "" }));
   await page.route("https://fonts.gstatic.com/**", (route) => route.abort());
-  await page.route("http://127.0.0.1:8040/api/**", async (route) => {
+  await page.route(`${backendURL}/api/**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const { pathname } = url;

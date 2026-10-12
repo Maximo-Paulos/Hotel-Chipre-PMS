@@ -23,6 +23,7 @@ from app.models.guest import Guest
 from app.schemas.booking import BookingCreate, BookingRead, BookingUpdate
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.reservation_service import (
+    ConfirmedReservationPriceLocked,
     ManualRatePolicyError,
     ReservationError,
     ReservationVersionConflict,
@@ -808,6 +809,9 @@ def update_booking(
     except RestrictionOverridePermissionError as exc:
         db.rollback()
         raise HTTPException(status_code=403, detail="No tenés permisos para esta acción") from exc
+    except ConfirmedReservationPriceLocked as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ReservationVersionConflict as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc

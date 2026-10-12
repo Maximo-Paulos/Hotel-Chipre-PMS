@@ -4,6 +4,7 @@ Uses pydantic-settings for environment variable management.
 """
 import hmac
 import os
+from typing import Literal
 from urllib.parse import urlsplit
 from cryptography.fernet import Fernet
 from pydantic import AliasChoices, Field
@@ -30,6 +31,8 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "postgresql+psycopg2://pms:pms@localhost:5432/hotel_pms"
+    # Dedicated direct/session URL; transaction poolers cannot retain LISTEN.
+    POSTGRES_EVENT_LISTENER_DATABASE_URL: str | None = None
     DB_POOL_SIZE: int = 8
     DB_MAX_OVERFLOW: int = 4
     DB_POOL_TIMEOUT_SECONDS: float = 5.0
@@ -50,23 +53,29 @@ class Settings(BaseSettings):
     READ_MODEL_CACHE_FAILURE_COOLDOWN_SECONDS: float = 30.0
     READ_MODEL_AVAILABILITY_TTL_SECONDS: int = 15
     READ_MODEL_ANALYTICS_TTL_SECONDS: int = 60
-    # Keep fact repair out of request paths by default. Reservation writes
-    # maintain narrow fact windows; historical repair is an explicit operation.
-    SYNC_FACT_REFRESH_ENABLED: bool = False
-    SYNC_FACT_REFRESH_MAX_DAYS: int = 31
+    # Reservation writes enqueue derived-fact work by default. The SQL-only
+    # hotel cron drains it; synchronous refresh is opt-in for tests/diagnostics.
+    ANALYTICS_FACTS_SYNC_ON_WRITE: bool = False
     # Disabled by default; bound SQL parameters are never included in logs.
     SLOW_QUERY_LOG_MS: float = 0
     DISTRIBUTED_LOCK_ENABLED: bool = True
+    DISTRIBUTED_LOCK_BACKEND: Literal["redis", "postgresql"] = "redis"
     DISTRIBUTED_LOCK_REQUIRED: bool = False
     DISTRIBUTED_LOCK_DEFAULT_TTL_SECONDS: int = 60
+    # Process-local tickets/fan-out suit the one-instance SQL-only profile.
+    # Multi-instance collaboration must explicitly select Redis.
+    COLLABORATION_BACKEND: Literal["redis", "process"] = "process"
     REALTIME_EVENTS_ENABLED: bool = True
+    # The Render SQL-only profile selects PostgreSQL; Redis remains available
+    # for existing local or provisioned deployments.
+    REALTIME_EVENTS_TRANSPORT: Literal["redis", "postgresql"] = "redis"
     REALTIME_EVENTS_HEARTBEAT_SECONDS: int = 15
-    # Bound PostgreSQL outbox reads while leaving half of the ten-second
-    # cross-session freshness budget for network and client refetch work.
-    REALTIME_EVENTS_FALLBACK_POLL_SECONDS: float = Field(default=5.0, gt=0, le=5.0)
-    # Collaboration tickets are intentionally short-lived and one-use. Redis
-    # / Valkey is required for issuing them so a multi-worker deployment cannot
-    # accidentally accept a ticket twice.
+    # LISTEN/NOTIFY is the normal delivery path; poll only while it is down.
+    REALTIME_EVENTS_FALLBACK_POLL_SECONDS: float = Field(default=60.0, gt=0, le=60.0)
+    POSTGRES_EVENT_LISTENER_ENABLED: bool = True
+    # Collaboration tickets are intentionally short-lived and one-use. The
+    # process backend is safe only with one API instance and worker; use
+    # Redis/Valkey before scaling collaboration across processes.
     COLLABORATION_TICKET_TTL_SECONDS: int = 30
     COLLABORATION_MAX_WS_MESSAGE_BYTES: int = 16 * 1024
     COLLABORATION_MAX_PATCH_FIELDS: int = 20

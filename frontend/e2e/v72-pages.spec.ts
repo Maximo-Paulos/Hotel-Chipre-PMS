@@ -41,15 +41,14 @@ async function login(page: Page) {
   await page.waitForTimeout(250);
 }
 
-async function clientNavigate(page: Page, path: string) {
+async function clientNavigate(page: Page, path: string, marker: RegExp) {
   const link = page.locator(`aside nav a[href="${path}"]`);
   await revealCollapsedNavLink(link);
   await expect(link).toHaveCount(1);
   await expect(link).toBeVisible();
   await link.click();
   await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}$`));
-  await page.waitForLoadState("networkidle").catch(() => {});
-  await page.waitForTimeout(600);
+  await expect(page.getByText(marker).first()).toBeVisible();
 }
 
 test.describe("V72 authenticated pages", () => {
@@ -63,7 +62,7 @@ test.describe("V72 authenticated pages", () => {
 
   for (const p of PAGES) {
     test(`renders authenticated page ${p.path}`, async ({ page }) => {
-      await clientNavigate(page, p.path);
+      await clientNavigate(page, p.path, p.marker);
       await page.screenshot({ path: `e2e/screenshots/${p.shot}.png`, fullPage: true });
       // Authenticated shell present (not bounced to login).
       await expect(page.getByText(credentials.email).first()).toBeVisible();

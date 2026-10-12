@@ -98,6 +98,10 @@ ADDITIVE_RLS_TABLE_CONTRACT = (
         ("company_night_charges", "company_night_charge_payment_allocations"),
     ),
     (
+        "20261017_analytics_fact_refresh_queue.py",
+        ("analytics_fact_refresh_jobs",),
+    ),
+    (
         "20261016_payment_receipt_email_delivery.py",
         ("payment_receipt_email_deliveries",),
     ),
@@ -339,6 +343,7 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "reservation_groups",
         "company_night_charges",
         "company_night_charge_payment_allocations",
+        "analytics_fact_refresh_jobs",
     }
     assert set(migration.TENANT_TABLES) == expected
     assert "hotel_memberships" not in migration.TENANT_TABLES

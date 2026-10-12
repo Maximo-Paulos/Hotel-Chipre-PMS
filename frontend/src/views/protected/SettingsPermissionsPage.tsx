@@ -55,7 +55,7 @@ const builtinRoleLabels: Record<BuiltinPermissionRole, string> = {
 };
 
 const retryPermissionAdminQuery = (failureCount: number, error: unknown) =>
-  !(error instanceof ApiError && error.status === 428) && failureCount < 3;
+  !(error instanceof ApiError && error.status >= 400 && error.status < 500) && failureCount < 1;
 
 const visibilityOptions = [
   { value: "12", label: "12 h" },

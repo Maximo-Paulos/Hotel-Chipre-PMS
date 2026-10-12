@@ -5,7 +5,8 @@
     "knownTotal": "Costs with configured prices",
     "unpricedWarning": "No price is set for {{quantity}} units; subtotals include only quantities with a price.",
     "unpricedByItem": "{{quantity}} units without a price",
-    "subtotalWithPrice": "Priced subtotal: {{amount}}"
+    "subtotalWithPrice": "Priced subtotal: {{amount}}",
+    "settlementBlockedByUnpriced": "Review unpriced delivery notes manually before marking this settlement as paid."
   },
   "stockAlerts": {
     "linenLowTitle": "Linen below minimum",

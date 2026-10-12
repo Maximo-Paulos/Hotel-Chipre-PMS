@@ -5,6 +5,7 @@ import { listCategories } from "../api/categories";
 import { hasValidSession } from "../api/client";
 import { useSession } from "../state/session";
 import { queryKeys } from "../api/queryKeys";
+import { EVENT_REFRESHED_QUERY_STALE_TIME_MS } from "../api/queryPolicy";
 import { refreshRoomState } from "../api/queryInvalidation";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -16,14 +17,14 @@ export function useRooms(options?: { includeCategories?: boolean }) {
     queryKey: queryKeys.rooms(session.hotelId),
     queryFn: () => listRooms(session),
     enabled: hasValidSession(session),
-    staleTime: 1000 * 15
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
 
   const categoriesQuery = useQuery<RoomCategory[]>({
     queryKey: queryKeys.roomCategories(session.hotelId),
     queryFn: () => listCategories(session),
     enabled: hasValidSession(session) && (options?.includeCategories ?? true),
-    staleTime: 5 * 60 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
 
   const queryClient = useQueryClient();

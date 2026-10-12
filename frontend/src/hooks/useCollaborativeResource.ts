@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { ApiError } from "../api/client";
@@ -34,6 +34,7 @@ type Options = {
 };
 
 const MAX_RECONNECT_DELAY_MS = 30_000;
+const NON_RETRYABLE_COLLABORATION_CLOSE_CODES = new Set([1008, 1009, 1013, 4401, 4403]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -59,11 +60,25 @@ export function useCollaborativeResource({
   enabled = true
 }: Options) {
   const { session } = useSession();
+  // Permission refreshes replace the broader session state object, but they do
+  // not change the credentials used by collaboration. Keep the resource
+  // socket and ticket stable across those unrelated updates so each editor
+  // opens only one authorized connection.
+  const collaborationSession = useMemo(
+    () => ({
+      hotelId: session.hotelId,
+      userId: session.userId,
+      accessToken: session.accessToken,
+      csrfToken: session.csrfToken
+    }),
+    [session.accessToken, session.csrfToken, session.hotelId, session.userId]
+  );
+  const collaborationSessionRef = useRef(collaborationSession);
+  collaborationSessionRef.current = collaborationSession;
   const queryClient = useQueryClient();
   const resourceKey = `${resourceType}:${resourceId ?? "none"}`;
   const socketRef = useRef<WebSocket | null>(null);
   const retryTimerRef = useRef<number | null>(null);
-  const cancelledRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
   const connectionIdRef = useRef<string | null>(null);
   const revisionRef = useRef<string | null>(null);
@@ -138,25 +153,28 @@ export function useCollaborativeResource({
   }, [initialValues, initialValuesSignature, resourceKey]);
 
   useEffect(() => {
-    cancelledRef.current = false;
-    if (!enabled || import.meta.env.VITE_REALTIME_EVENTS_ENABLED === "false" || !resourceId || !session.hotelId || !session.userId) {
+    let cancelled = false;
+    if (!enabled || import.meta.env.VITE_REALTIME_EVENTS_ENABLED === "false" || !resourceId || !collaborationSession.hotelId || !collaborationSession.userId) {
       setStatus("idle");
       return () => {
-        cancelledRef.current = true;
+        cancelled = true;
       };
     }
 
     let retryDelay = 500;
     const connect = async () => {
-      if (cancelledRef.current) return;
+      if (cancelled) return;
       setStatus(reconnectAttemptRef.current > 0 ? "reconnecting" : "connecting");
       try {
-        const ticket = await createCollaborationTicket(resourceType, resourceId, session);
-        if (cancelledRef.current) return;
+        // Auth credentials can rotate after an unrelated API action. Use the
+        // latest credentials for a future connection without tearing down a
+        // healthy socket whenever those credentials change.
+        const ticket = await createCollaborationTicket(resourceType, resourceId, collaborationSessionRef.current);
+        if (cancelled) return;
         const socket = new WebSocket(collaborationWebSocketUrl());
         socketRef.current = socket;
         socket.onopen = () => {
-          socket.send(JSON.stringify({ ticket: ticket.ticket, hotel_id: session.hotelId }));
+          socket.send(JSON.stringify({ ticket: ticket.ticket, hotel_id: collaborationSession.hotelId }));
         };
         socket.onmessage = (event) => {
           let parsed: unknown;
@@ -233,10 +251,17 @@ export function useCollaborativeResource({
         socket.onerror = () => {
           setStatus("degraded");
         };
-        socket.onclose = () => {
-          if (cancelledRef.current) return;
+        socket.onclose = (event) => {
+          if (cancelled) return;
           socketRef.current = null;
           connectionIdRef.current = null;
+          if (NON_RETRYABLE_COLLABORATION_CLOSE_CODES.has(event.code)) {
+            // Invalid tickets, policy/rate-limit failures and unavailable
+            // realtime infrastructure will not improve by issuing another
+            // ticket in a loop. Leave the editor usable and wait for remount.
+            setStatus("degraded");
+            return;
+          }
           reconnectAttemptRef.current += 1;
           setStatus(reconnectAttemptRef.current >= 3 ? "degraded" : "reconnecting");
           const delay = Math.min(retryDelay, MAX_RECONNECT_DELAY_MS) + Math.floor(Math.random() * 250);
@@ -244,7 +269,7 @@ export function useCollaborativeResource({
           retryTimerRef.current = window.setTimeout(() => void connect(), delay);
         };
       } catch (cause) {
-        if (cancelledRef.current) return;
+        if (cancelled) return;
         setError(cause instanceof Error ? cause.message : "No se pudo conectar la colaboración");
         // Ticket issuance depends on Redis/Valkey. A 503 here is a known
         // non-ready state, so retrying would keep hammering the API until the
@@ -261,17 +286,22 @@ export function useCollaborativeResource({
         retryTimerRef.current = window.setTimeout(() => void connect(), delay);
       }
     };
-    void connect();
+    // React.StrictMode runs a development-only setup/cleanup/setup cycle.
+    // Start in the next microtask so the discarded first setup exits before
+    // it issues a ticket or opens a socket.
+    void Promise.resolve().then(() => {
+      if (!cancelled) void connect();
+    });
 
     return () => {
-      cancelledRef.current = true;
+      cancelled = true;
       if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
       socketRef.current?.close();
       socketRef.current = null;
       setPeers({});
     };
-  }, [enabled, resendDirtyDraft, resourceId, resourceKey, resourceType, sendPresence, session]);
+  }, [collaborationSession.hotelId, collaborationSession.userId, enabled, resendDirtyDraft, resourceId, resourceKey, resourceType, sendPresence]);
 
   const setField = useCallback(
     (field: string, value: unknown) => {
@@ -365,7 +395,7 @@ export function useCollaborativeResource({
           changes,
           base_values: base
         },
-        session
+        collaborationSession
       );
       baseValuesRef.current = response.resource;
       draftValuesRef.current = response.resource;
@@ -376,7 +406,7 @@ export function useCollaborativeResource({
       setDirtyFields(new Set());
       setConflicts({});
       setStatus("connected");
-      await refreshAfterMutation(queryClient, session.hotelId, resourceDomains(resourceType));
+      await refreshAfterMutation(queryClient, collaborationSession.hotelId, resourceDomains(resourceType));
       return response;
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 409 && isRecord(cause.payload)) {
@@ -410,7 +440,7 @@ export function useCollaborativeResource({
       // "saving", while a structured conflict must remain visible.
       setStatus((current) => (current === "saving" ? "connected" : current));
     }
-  }, [queryClient, resourceId, resourceType, session]);
+  }, [collaborationSession, queryClient, resourceId, resourceType]);
 
   return {
     baseValues,

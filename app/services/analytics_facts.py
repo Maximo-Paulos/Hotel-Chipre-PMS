@@ -48,6 +48,33 @@ class NoShowDetectionResult:
     reservation_ids: tuple[int, ...]
 
 
+def _load_category_cost_rows(
+    db: Session,
+    *,
+    hotel_id: int,
+    category_ids: set[int],
+    cache: dict[int, object] | None = None,
+) -> dict[int, object]:
+    """Read only missing category costs and share them across one fact touch."""
+    cache = cache if cache is not None else {}
+    missing_ids = category_ids.difference(cache)
+    if missing_ids:
+        cache.update(
+            {
+                category.id: category
+                for category in (
+                    db.query(RoomCategory.id, RoomCategory.variable_cost_per_night)
+                    .filter(
+                        RoomCategory.hotel_id == hotel_id,
+                        RoomCategory.id.in_(missing_ids),
+                    )
+                    .all()
+                )
+            }
+        )
+    return {category_id: cache[category_id] for category_id in category_ids if category_id in cache}
+
+
 @dataclass(frozen=True, slots=True)
 class FactRefreshResult:
     hotel_id: int
@@ -143,6 +170,7 @@ def refresh_fact_reservation_daily(
     date_from: date,
     date_to: date,
     reservation_id: int | None = None,
+    _category_cost_cache: dict[int, object] | None = None,
 ) -> FactRefreshResult:
     if date_to < date_from:
         raise ValueError("date_to must be greater than or equal to date_from")
@@ -180,16 +208,12 @@ def refresh_fact_reservation_daily(
     reservations = reservation_query.all()
 
     category_ids = {reservation.category_id for reservation in reservations}
-    categories_by_id = {
-        category.id: category
-        for category in (
-            db.query(RoomCategory.id, RoomCategory.variable_cost_per_night)
-            .filter(RoomCategory.hotel_id == hotel_id, RoomCategory.id.in_(category_ids))
-            .all()
-            if category_ids
-            else []
-        )
-    }
+    categories_by_id = _load_category_cost_rows(
+        db,
+        hotel_id=hotel_id,
+        category_ids=category_ids,
+        cache=_category_cost_cache,
+    )
     company_ids = {reservation.company_id for reservation in reservations if reservation.company_id is not None}
     companies_by_id = {
         company.id: company
@@ -306,6 +330,7 @@ def refresh_fact_room_occupancy_daily(
     date_from: date,
     date_to: date,
     room_ids: set[int] | None = None,
+    _category_cost_cache: dict[int, object] | None = None,
 ) -> FactRefreshResult:
     if date_to < date_from:
         raise ValueError("date_to must be greater than or equal to date_from")
@@ -367,6 +392,7 @@ def refresh_fact_room_occupancy_daily(
         hotel_id=hotel_id,
         date_from=date_from,
         date_to=date_to,
+        _category_cost_cache=_category_cost_cache,
     )
     room_events = _room_state_events_map(
         db,
@@ -468,13 +494,15 @@ def touch_reservation_fact_window(
     date_to: date,
     reservation_id: int | None = None,
     previous_room_id: int | None = None,
+    force_sync: bool = False,
 ) -> None:
-    """Refresh facts for a narrow window in the source write transaction.
+    """Queue or refresh facts for a narrow reservation window.
 
-    Reservation create/move/cancel/no-show operations use this hook so their
-    analytics facts become current at commit time. Out-of-band imports and
-    legacy gaps use the explicit maintenance repair command; request-time
-    repair is disabled by default.
+    Reservation create/move/cancel/no-show operations enqueue one durable,
+    coalesced SQL job by default. A hotel-scoped cron drains those jobs every
+    five minutes. Tests, maintenance, and the queue worker may opt into the
+    synchronous path. Out-of-band imports and legacy gaps use the explicit
+    maintenance repair command.
 
     Reuses the existing idempotent refresh_fact_* functions (delete+rebuild
     only inside [date_from, date_to]). When a reservation id is provided, it
@@ -486,12 +514,27 @@ def touch_reservation_fact_window(
     id preserves the full-window behavior used by analytics recovery and
     maintenance paths.
 
-    The refresh runs in a SAVEPOINT, but failures propagate to the caller.
-    The outer transaction must roll back the source write as well; otherwise
-    the system could commit current reservation data with stale fact tables.
+    Enqueueing happens in the same transaction as the reservation write, so a
+    committed source change cannot lose its refresh request. The synchronous
+    refresh runs in a SAVEPOINT and failures propagate to its caller.
     """
     if date_to < date_from:
         return
+    if reservation_id is not None and not force_sync:
+        from app.config import get_settings
+
+        if not get_settings().ANALYTICS_FACTS_SYNC_ON_WRITE:
+            from app.services.analytics_fact_refresh_queue import enqueue_analytics_fact_refresh
+
+            enqueue_analytics_fact_refresh(
+                db,
+                hotel_id=hotel_id,
+                reservation_id=reservation_id,
+                date_from=date_from,
+                date_to=date_to,
+            )
+            return
+
     with db.begin_nested():
         if reservation_id is None:
             refresh_fact_reservation_daily(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
@@ -777,19 +820,16 @@ def _occupied_nightly_fact_map(
     hotel_id: int,
     date_from: date,
     date_to: date,
+    _category_cost_cache: dict[int, object] | None = None,
 ) -> dict[tuple[int, date], object]:
     room_map: dict[tuple[int, date], object] = {}
     category_ids = {reservation.category_id for reservation in reservations}
-    categories_by_id = {
-        category.id: category
-        for category in (
-            db.query(RoomCategory.id, RoomCategory.variable_cost_per_night)
-            .filter(RoomCategory.hotel_id == hotel_id, RoomCategory.id.in_(category_ids))
-            .all()
-            if category_ids
-            else []
-        )
-    }
+    categories_by_id = _load_category_cost_rows(
+        db,
+        hotel_id=hotel_id,
+        category_ids=category_ids,
+        cache=_category_cost_cache,
+    )
     company_ids = {reservation.company_id for reservation in reservations if reservation.company_id is not None}
     companies_by_id = {
         company.id: company

@@ -35,8 +35,8 @@ def _postgres_healthcheck() -> dict[str, Any]:
 def _redis_healthcheck() -> dict[str, Any]:
     settings = get_settings()
     cache_enabled = bool(settings.READ_MODEL_CACHE_ENABLED)
-    locks_enabled = bool(settings.DISTRIBUTED_LOCK_ENABLED)
-    realtime_enabled = bool(settings.REALTIME_EVENTS_ENABLED)
+    locks_enabled = bool(settings.DISTRIBUTED_LOCK_ENABLED) and settings.DISTRIBUTED_LOCK_BACKEND == "redis"
+    realtime_enabled = bool(settings.REALTIME_EVENTS_ENABLED) and settings.REALTIME_EVENTS_TRANSPORT == "redis"
     if not cache_enabled and not locks_enabled and not realtime_enabled:
         return {
             "status": "disabled",
@@ -46,6 +46,8 @@ def _redis_healthcheck() -> dict[str, Any]:
             "distributed_locks_enabled": False,
             "distributed_locks_required": bool(settings.DISTRIBUTED_LOCK_REQUIRED),
             "realtime_events_enabled": False,
+            "distributed_lock_backend": settings.DISTRIBUTED_LOCK_BACKEND,
+            "realtime_transport": settings.REALTIME_EVENTS_TRANSPORT,
             "error": None,
         }
     try:
@@ -61,6 +63,8 @@ def _redis_healthcheck() -> dict[str, Any]:
             "distributed_locks_enabled": locks_enabled,
             "distributed_locks_required": bool(settings.DISTRIBUTED_LOCK_REQUIRED),
             "realtime_events_enabled": realtime_enabled,
+            "distributed_lock_backend": settings.DISTRIBUTED_LOCK_BACKEND,
+            "realtime_transport": settings.REALTIME_EVENTS_TRANSPORT,
             "error": None,
         }
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
@@ -73,6 +77,8 @@ def _redis_healthcheck() -> dict[str, Any]:
             "distributed_locks_enabled": locks_enabled,
             "distributed_locks_required": bool(settings.DISTRIBUTED_LOCK_REQUIRED),
             "realtime_events_enabled": realtime_enabled,
+            "distributed_lock_backend": settings.DISTRIBUTED_LOCK_BACKEND,
+            "realtime_transport": settings.REALTIME_EVENTS_TRANSPORT,
             "error": "Redis healthcheck failed",
         }
 
@@ -84,6 +90,12 @@ def _critical_lock_readiness(redis_payload: dict[str, Any]) -> dict[str, Any]:
             "status": "error" if settings.DISTRIBUTED_LOCK_REQUIRED else "disabled",
             "safe": not settings.DISTRIBUTED_LOCK_REQUIRED,
             "mechanism": "none",
+        }
+    if settings.DISTRIBUTED_LOCK_BACKEND == "postgresql":
+        return {
+            "status": "ok",
+            "safe": True,
+            "mechanism": "postgres_advisory_xact_lock",
         }
     if redis_payload.get("connected"):
         return {"status": "ok", "safe": True, "mechanism": "redis"}

@@ -26,6 +26,10 @@ from app.api import reservations as reservation_api
 from app.services import payment_link_service
 from app.services.collaboration import editable_resource_values, resource_revision
 from app.services.operational_task_service import create_task
+from app.services.company_night_charge_service import (
+    CompanyNightChargeError,
+    _reservation as get_locked_company_reservation,
+)
 from app.services.permission_service import seed_default_permissions
 from app.services.row_locks import lock_query
 from app.services import company_night_charge_service
@@ -133,6 +137,20 @@ def test_lock_query_executes_on_postgres_with_joined_eager_loads(pg_session):
     reservations = lock_query(pg_session.query(Reservation), Reservation).limit(1).all()
 
     assert reservations == []
+
+
+def test_company_night_charge_reservation_lock_executes_on_postgres(pg_session):
+    # A missing reservation is an expected domain error. Reaching that error
+    # proves PostgreSQL executed the SELECT ... FOR UPDATE OF reservations
+    # successfully despite the model's joined optional relations.
+    with pytest.raises(CompanyNightChargeError, match="no pertenece a este hotel"):
+        get_locked_company_reservation(
+            pg_session,
+            hotel_id=1,
+            reservation_id=-1,
+            lock=True,
+            require_company=False,
+        )
 
 
 def test_room_move_handler_executes_on_postgres_with_joined_reservation_relations(pg_session, monkeypatch):

@@ -80,6 +80,91 @@ test("reservation refresh invalidates only related data and the selected entity"
   client.clear();
 });
 
+test("committed reservation mutations do not wait for active query refetches", async (context) => {
+  const { invalidation } = await loadQueryModules(context);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryKey = ["reservation", 41, 703];
+  client.setQueryData(queryKey, { id: 703, status: "confirmed" });
+
+  let releaseRefetch;
+  let markRefetchStarted;
+  const refetchStarted = new Promise((resolve) => {
+    markRefetchStarted = resolve;
+  });
+  const observer = new QueryObserver(client, {
+    queryKey,
+    queryFn: () => new Promise((resolve) => {
+      releaseRefetch = resolve;
+      markRefetchStarted();
+    }),
+    staleTime: Infinity,
+    retry: false
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+
+  const refreshPromise = invalidation.refreshReservationRecordState(client, 41, 703);
+  await refetchStarted;
+  const returnedBeforeRefetch = await Promise.race([
+    refreshPromise.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 50))
+  ]);
+  releaseRefetch({ id: 703, status: "checked_in" });
+  await refreshPromise;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(returnedBeforeRefetch, true);
+  assert.deepEqual(client.getQueryData(queryKey), { id: 703, status: "checked_in" });
+  unsubscribe();
+  client.clear();
+});
+
+test("creating a guest refreshes guest and analytics views without refetching reservations", async (context) => {
+  const { invalidation } = await loadQueryModules(context);
+  const client = new QueryClient();
+  const entries = [
+    [["guests", 41, "", 0], true],
+    [["reservations", 41, { limit: 200 }], false],
+    [["reservation-pending-actions", 41, 12], false],
+    [["analytics", 41], true],
+    [["guests", 42, "", 0], false]
+  ];
+  entries.forEach(([key]) => client.setQueryData(key, { key }));
+
+  await invalidation.refreshGuestCreatedState(client, 41);
+
+  for (const [key, shouldInvalidate] of entries) {
+    assert.equal(
+      client.getQueryState(key)?.isInvalidated ?? false,
+      shouldInvalidate,
+      `unexpected guest-create invalidation for ${JSON.stringify(key)}`
+    );
+  }
+  client.clear();
+});
+
+test("settings refreshes notification preferences without refetching the inbox", async (context) => {
+  const { invalidation } = await loadQueryModules(context);
+  const client = new QueryClient();
+  const entries = [
+    [["notification-inbox", 41, false, 50, 0], false],
+    [["notification-preferences", 41], true],
+    [["daily-report-schedules", 41], true],
+    [["hotel-config", 41], true]
+  ];
+  entries.forEach(([key]) => client.setQueryData(key, { key }));
+
+  await invalidation.refreshAfterMutation(client, 41, ["settings"]);
+
+  for (const [key, shouldInvalidate] of entries) {
+    assert.equal(
+      client.getQueryState(key)?.isInvalidated ?? false,
+      shouldInvalidate,
+      `unexpected settings invalidation for ${JSON.stringify(key)}`
+    );
+  }
+  client.clear();
+});
+
 test("reservation record effects invalidate only explicitly selected financial queries", async (context) => {
   const { invalidation } = await loadQueryModules(context);
   const client = new QueryClient();

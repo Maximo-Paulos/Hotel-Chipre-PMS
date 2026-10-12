@@ -185,7 +185,18 @@ test("owner completes the core reservation journey through the UI", async ({ pag
     mimeType: "image/png",
     buffer: await syntheticProofBuffer(page, Number(suffix.slice(-6)))
   });
-  await editForm.getByRole("button", { name: "Enviar comprobante", exact: true }).click();
+  await expect(partialAmount).toHaveValue("500");
+  const [proofResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().includes("/api/payment-proofs") && response.request().method() === "POST"
+    ),
+    editForm.getByRole("button", { name: "Enviar comprobante", exact: true }).click()
+  ]);
+  const proofResponseBody = await proofResponse.text();
+  expect(
+    proofResponse.ok(),
+    "El servidor rechazó el comprobante (" + proofResponse.status() + "): " + proofResponseBody
+  ).toBeTruthy();
   await expect(page.getByText("Comprobante enviado para aprobación", { exact: true })).toBeVisible();
   await expect(editForm.getByText(/pending$/)).toBeVisible();
 

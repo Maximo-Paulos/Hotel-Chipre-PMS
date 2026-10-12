@@ -49,6 +49,30 @@ def test_seed_guard_accepts_only_explicit_loopback_postgres_e2e_database():
     assert normalized == LOCAL_POSTGRES_E2E_URL
 
 
+def test_seed_guard_accepts_secondary_ipv4_loopback_for_isolated_postgres():
+    app_url = LOCAL_POSTGRES_E2E_URL.replace("127.0.0.1", "127.0.0.2")
+    seed_url = LOCAL_POSTGRES_E2E_SEED_URL.replace("127.0.0.1", "127.0.0.2")
+    env = _postgres_e2e_environment(app_url)
+    env["E2E_POSTGRES_SEED_DATABASE_URL"] = seed_url
+    env[seed_e2e_backend.E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT] = seed_url
+
+    normalized = seed_e2e_backend.prepare_e2e_environment(env)
+
+    assert normalized == app_url
+
+
+def test_seed_guard_accepts_explicit_high_local_postgres_port():
+    app_url = LOCAL_POSTGRES_E2E_URL.replace(":5432/", ":55504/")
+    seed_url = LOCAL_POSTGRES_E2E_SEED_URL.replace(":5432/", ":55504/")
+    env = _postgres_e2e_environment(app_url)
+    env["E2E_POSTGRES_SEED_DATABASE_URL"] = seed_url
+    env[seed_e2e_backend.E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT] = seed_url
+
+    normalized = seed_e2e_backend.prepare_e2e_environment(env)
+
+    assert normalized == app_url
+
+
 @pytest.mark.parametrize(
     "seed_url, explicit_seed_url",
     [
@@ -102,6 +126,11 @@ def test_seed_guard_requires_a_distinct_explicit_seed_role_on_the_same_local_dat
         (
             LOCAL_POSTGRES_E2E_URL.replace(":5432/", ":5433/"),
             LOCAL_POSTGRES_E2E_URL.replace(":5432/", ":5433/"),
+            "true",
+        ),
+        (
+            LOCAL_POSTGRES_E2E_URL.replace(":5432/", ":56000/"),
+            LOCAL_POSTGRES_E2E_URL.replace(":5432/", ":56000/"),
             "true",
         ),
     ],

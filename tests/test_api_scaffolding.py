@@ -16,6 +16,7 @@ from app.models.guest import Guest, DocumentTypeEnum
 from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.commercial import TaxPolicy
 from app.models.user import User
 from app.services import checkin_service
 from app.services.action_step_up_service import create_action_step_up_ticket
@@ -69,6 +70,19 @@ def api_client(monkeypatch: pytest.MonkeyPatch):
         with SessionLocal() as db:
             if not db.get(HotelConfiguration, 1):
                 db.add(HotelConfiguration(id=1, owner_email="owner@test.com", subscription_active=True))
+            db.flush()
+            if not db.query(TaxPolicy).filter_by(hotel_id=1, code="TEST_NO_TAX").first():
+                db.add(
+                    TaxPolicy(
+                        hotel_id=1,
+                        code="TEST_NO_TAX",
+                        name="Explicit zero-tax test policy",
+                        taxes_included=True,
+                        apply_vat_by_default=False,
+                        vat_rate=0.0,
+                        is_active=True,
+                    )
+                )
             if not db.get(User, 1):
                 db.add(User(id=1, email="owner@test.com", password_hash="test-hash", is_active=True, is_verified=True))
             db.commit()
@@ -662,6 +676,79 @@ def test_add_reservation_guests_bulk_loads_existing_documents(api_client):
     assert len(bulk_document_selects) == 1, (
         "existing guests should be loaded with one document-number IN query"
     )
+
+
+def test_add_reservation_guests_persists_a_batch_and_returns_it_after_commit(api_client):
+    client, SessionLocal = api_client
+
+    with SessionLocal() as db:
+        primary_guest = Guest(
+            first_name="Primary",
+            last_name="Guest",
+            document_type=DocumentTypeEnum.DNI,
+            document_number="BATCH-PRIMARY",
+            hotel_id=1,
+        )
+        category = RoomCategory(
+            hotel_id=1,
+            name="Batch Category",
+            code="BATCH",
+            base_price_per_night=100.0,
+            max_occupancy=4,
+        )
+        db.add_all([primary_guest, category])
+        db.flush()
+        reservation = Reservation(
+            confirmation_code="BATCH-RES-001",
+            hotel_id=1,
+            guest_id=primary_guest.id,
+            category_id=category.id,
+            check_in_date=date.today() + timedelta(days=1),
+            check_out_date=date.today() + timedelta(days=3),
+            total_amount=300.0,
+            amount_paid=0.0,
+            deposit_amount=0.0,
+            subtotal_amount=300.0,
+            tax_amount=0.0,
+            fee_amount=0.0,
+            commission_amount=0.0,
+            net_amount=300.0,
+            currency_code="ARS",
+            status=ReservationStatusEnum.PENDING,
+            num_adults=1,
+        )
+        db.add(reservation)
+        db.commit()
+        reservation_id = reservation.id
+
+    response = client.post(
+        f"/api/reservations/{reservation_id}/guests",
+        json=[
+            {
+                "first_name": f"New {index}",
+                "last_name": "Guest",
+                "document_type": DocumentTypeEnum.DNI.value,
+                "document_number": f"BATCH-{index}",
+            }
+            for index in range(1, 4)
+        ],
+    )
+
+    assert response.status_code == 200, response.text
+    assert {guest["document_number"] for guest in response.json()["additional_guests"]} == {
+        "BATCH-1",
+        "BATCH-2",
+        "BATCH-3",
+    }
+    # The response is prepared before commit to avoid an expired-instance
+    # refresh; verify that the transaction still committed all linked guests.
+    with SessionLocal() as db:
+        reservation = db.get(Reservation, reservation_id)
+        assert {guest.document_number for guest in reservation.additional_guests} == {
+            "BATCH-1",
+            "BATCH-2",
+            "BATCH-3",
+        }
 
 
 def test_add_reservation_guests_matches_existing_document_despite_whitespace(api_client):

@@ -7,7 +7,7 @@ explicit reservation:manual_rate override) should be able to do this.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 import json
 
 import pytest
@@ -17,6 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
+from app.api import reservations as reservations_api
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.guest import Guest
@@ -25,6 +26,7 @@ from app.models.reservation import Reservation
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.permission_service import set_override
+from app.services.timezones import hotel_today
 
 
 def _override_auth(hotel_id: int, role: str):
@@ -473,6 +475,103 @@ def test_receptionist_can_still_create_reservation_without_manual_rate():
 
         assert response.status_code == 201, response.text
         assert response.json()["total_amount"] == 200.0  # 2 nights x $100 auto-quote
+    finally:
+        _cleanup_client(db, engine)
+
+
+@pytest.mark.parametrize(
+    "days_ahead",
+    [10, 90, 120],
+)
+def test_reservation_create_skips_global_optimizer_after_room_assignment(
+    days_ahead: int,
+    monkeypatch,
+):
+    client, db, engine = _build_client()
+    try:
+        hotel_id = 521 + days_ahead
+        guest_id, category_id = _seed_bookable_state(db, hotel_id)
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "owner")
+        check_in = hotel_today(db, hotel_id) + timedelta(days=days_ahead)
+        check_out = check_in + timedelta(days=2)
+        triggered = []
+
+        monkeypatch.setattr(
+            reservations_api,
+            "_trigger_reoptimization_bg",
+            lambda *args, **kwargs: triggered.append((args, kwargs)),
+        )
+        quote = client.get(
+            "/api/bookings/price-quote",
+            params={
+                "category_id": category_id,
+                "check_in_date": check_in.isoformat(),
+                "check_out_date": check_out.isoformat(),
+            },
+        )
+        assert quote.status_code == 200, quote.text
+
+        response = client.post(
+            "/api/reservations/",
+            json=_payload(
+                guest_id,
+                category_id,
+                check_in_date=check_in.isoformat(),
+                check_out_date=check_out.isoformat(),
+                quote_token=quote.json()["quote_token"],
+            ),
+        )
+
+        assert response.status_code == 201, response.text
+        assert response.json()["room_id"] is not None
+        # The create service already chose and locked an available room. A
+        # full-hotel solve after this write is redundant at every horizon.
+        assert triggered == []
+    finally:
+        _cleanup_client(db, engine)
+
+
+def test_waitlisted_reservation_creation_does_not_trigger_automatic_assignment(monkeypatch):
+    client, db, engine = _build_client()
+    try:
+        hotel_id = 532
+        guest_id, category_id = _seed_bookable_state(db, hotel_id)
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "owner")
+        triggered = []
+        monkeypatch.setattr(
+            reservations_api,
+            "_trigger_reoptimization_bg",
+            lambda *args, **kwargs: triggered.append((args, kwargs)),
+        )
+        check_in = hotel_today(db, hotel_id) + timedelta(days=10)
+        check_out = check_in + timedelta(days=2)
+        quote = client.get(
+            "/api/bookings/price-quote",
+            params={
+                "category_id": category_id,
+                "check_in_date": check_in.isoformat(),
+                "check_out_date": check_out.isoformat(),
+            },
+        )
+        assert quote.status_code == 200, quote.text
+
+        response = client.post(
+            "/api/reservations/",
+            json=_payload(
+                guest_id,
+                category_id,
+                check_in_date=check_in.isoformat(),
+                check_out_date=check_out.isoformat(),
+                quote_token=quote.json()["quote_token"],
+                is_wait_listed=True,
+                wait_list_reason="Revisión manual solicitada",
+            ),
+        )
+
+        assert response.status_code == 201, response.text
+        assert response.json()["room_id"] is None
+        assert response.json()["is_wait_listed"] is True
+        assert triggered == []
     finally:
         _cleanup_client(db, engine)
 

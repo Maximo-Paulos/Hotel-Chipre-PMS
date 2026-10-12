@@ -25,9 +25,18 @@ class OperationalReservationSummary(BaseModel):
     company_night_extra_due: Decimal | None = None
 
 
+class OperationalBalanceCurrencyTotalRead(BaseModel):
+    currency_code: str
+    total_balance: Decimal
+
+
 class OperationalReservationGroup(BaseModel):
     count: int
     reservations: list[OperationalReservationSummary] = Field(default_factory=list)
+    page: int | None = None
+    page_size: int | None = None
+    total_pages: int | None = None
+    total_balance_by_currency: list[OperationalBalanceCurrencyTotalRead] = Field(default_factory=list)
 
 
 class ArrivalCountRead(BaseModel):
@@ -89,6 +98,8 @@ class DailyOperationalReportRead(BaseModel):
     available_with_review: list[AvailableWithReviewItem] = Field(default_factory=list)
     active_room_blocks: list[ActiveRoomBlockItem] = Field(default_factory=list)
     cash_session: CashSessionStatusRead
+    alert_count: int = 0
+    warning_alert_count: int = 0
     alerts: list[OperationalAlertRead] = Field(default_factory=list)
 
 
@@ -102,6 +113,8 @@ class NightlyOperationalSummaryRead(BaseModel):
     available_with_review_count: int
     active_room_block_count: int
     cash_session_status: str
+    pending_balance_by_currency: list[OperationalBalanceCurrencyTotalRead] = Field(default_factory=list)
+    pending_payment_page_size: int = 0
     alerts: list[OperationalAlertRead] = Field(default_factory=list)
 
 

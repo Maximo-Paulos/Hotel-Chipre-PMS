@@ -12,6 +12,7 @@ from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 from sqlalchemy.pool import QueuePool
 from starlette.requests import Request
+from starlette.websockets import WebSocket
 from typing import Generator
 
 from app.config import get_settings, is_preview_qa_mode, is_production_mode
@@ -358,8 +359,13 @@ def _column_fill_value(column):
     from sqlalchemy import Boolean
 
     default = column.default
-    if default is not None and getattr(default, "is_scalar", False):
-        return default.arg
+    if default is not None:
+        if getattr(default, "is_scalar", False):
+            return default.arg
+        # A callable Python default (for example ``datetime.now``) cannot be
+        # represented by binding the SQL server expression below. The model's
+        # server default already populated newly added rows, so leave it alone.
+        return None
     server_default = column.server_default
     if server_default is not None:
         arg = getattr(server_default, "arg", None)
@@ -393,10 +399,20 @@ def _backfill_not_null_nulls(engine) -> None:
         try:
             if not insp.has_table(table.name):
                 continue
+            existing_columns = {
+                info["name"]: info for info in insp.get_columns(table.name)
+            }
         except Exception:  # pragma: no cover - defensive
             continue
         for col in table.columns:
             if col.nullable:
+                continue
+            actual_column = existing_columns.get(col.name)
+            # Model-level NOT NULL constraints do not prove the existing
+            # database has them, but an actual NOT NULL column cannot contain
+            # the rows this repair is meant to backfill. Avoid issuing an
+            # UPDATE/full scan for every healthy column on each local startup.
+            if actual_column is None or not actual_column.get("nullable", True):
                 continue
             value = _column_fill_value(col)
             if value is None:
@@ -558,11 +574,10 @@ def get_session_factory(database_url: str | None = None) -> sessionmaker:
     return _SessionLocal
 
 
-def get_db(request: Request) -> Generator[Session, None, None]:
-    """FastAPI dependency: yields a database session."""
+def _get_db_session(raw_origin_key: str | None) -> Generator[Session, None, None]:
     factory = get_session_factory()
     db = factory()
-    raw_origin_key = request.headers.get("X-Domain-Event-Origin", "").strip()
+    raw_origin_key = (raw_origin_key or "").strip()
     try:
         origin_key = str(uuid.UUID(raw_origin_key)) if raw_origin_key else None
     except (AttributeError, TypeError, ValueError):
@@ -575,3 +590,13 @@ def get_db(request: Request) -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+def get_db(request: Request) -> Generator[Session, None, None]:
+    """FastAPI HTTP dependency: yield a request-scoped database session."""
+    yield from _get_db_session(request.headers.get("X-Domain-Event-Origin", ""))
+
+
+def get_websocket_db(websocket: WebSocket) -> Generator[Session, None, None]:
+    """FastAPI WebSocket dependency; a WebSocket scope is not an HTTP Request."""
+    yield from _get_db_session(websocket.headers.get("X-Domain-Event-Origin", ""))

@@ -348,8 +348,17 @@ test("housekeeping can comment on existing tasks and send work for review", asyn
     buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00])
   });
   await expect(card.getByText("habitacion-revisada.png", { exact: true })).toBeVisible();
+  await page.route((url) => /^\/api\/operational-tasks\/\d+$/.test(url.pathname), async (route) => {
+    const request = route.request();
+    const payload = request.method() === "PATCH" ? request.postDataJSON() as { comment?: string } : null;
+    if (payload?.comment) await page.waitForTimeout(300);
+    await route.continue();
+  });
   await card.getByLabel(`Comentario para ${title}`).fill("Repuesto completado; revisar disponibilidad.");
   await card.getByRole("button", { name: "Agregar comentario" }).click();
+  await expect(card.getByRole("button", { name: "Tomar" })).toBeDisabled();
+  await expect(page.getByRole("status").filter({ hasText: "Comentario agregado al historial." })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Tomar" })).toBeEnabled();
   await card.getByRole("button", { name: "Ver historial" }).click();
   await expect(card).toContainText("Repuesto completado; revisar disponibilidad.");
   await expect(card.getByRole("button", { name: "Resolver" })).toHaveCount(1);

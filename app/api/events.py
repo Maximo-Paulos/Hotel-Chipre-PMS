@@ -83,17 +83,18 @@ def _build_authorization_check(hotel_id: int, user_id: int | None):
         try:
             check_db = get_session_factory()()
             set_tenant_user_context(check_db, user_id)
-            user = check_db.query(User).filter(User.id == user_id, User.is_active.is_(True)).one_or_none()
             membership = (
-                check_db.query(HotelMembership)
+                check_db.query(User.id)
+                .join(HotelMembership, HotelMembership.user_id == User.id)
                 .filter(
+                    User.id == user_id,
+                    User.is_active.is_(True),
                     HotelMembership.hotel_id == hotel_id,
-                    HotelMembership.user_id == user_id,
                     HotelMembership.status == "active",
                 )
                 .one_or_none()
             )
-            last_authorized = user is not None and membership is not None
+            last_authorized = membership is not None
             last_checked_at = time.monotonic()
             return last_authorized
         except SQLAlchemyError as exc:
@@ -188,7 +189,8 @@ def stream_domain_events(
         else aiter_postgres_event_stream(
             context.hotel_id,
             after_cursor=after_cursor,
-            poll_seconds=float(getattr(settings, "REALTIME_EVENTS_FALLBACK_POLL_SECONDS", 5.0)),
+            poll_seconds=float(getattr(settings, "REALTIME_EVENTS_FALLBACK_POLL_SECONDS", 60.0)),
+            heartbeat_seconds=heartbeat_seconds,
             authorization_check=authorization_check,
         )
     )

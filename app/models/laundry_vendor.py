@@ -186,8 +186,8 @@ class LaundryRemitoLine(Base):
     missing_quantity = Column(Numeric(12, 2), nullable=False, server_default="0")
     # Copied from LaundryVendorPrice at creation time so historical cost does
     # not change if the vendor's price is updated later. Null when no price
-    # was configured for this (vendor, item) yet -- the API surfaces a
-    # warning for that case instead of blocking remito creation.
+    # was configured for this (vendor, item) when a historical outbound row
+    # was created; current outbound creation requires an effective price.
     unit_price_snapshot = Column(Numeric(12, 2), nullable=True)
     # Neutral operational follow-up for an explicitly declared missing return.
     # These fields do not value the linen or affect vendor spend/cash.

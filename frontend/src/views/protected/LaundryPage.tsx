@@ -41,6 +41,7 @@ import {
 } from "../../api/linen";
 import type { StockMovementType } from "../../api/stock";
 import { hasValidSession } from "../../api/client";
+import { EVENT_REFRESHED_QUERY_STALE_TIME_MS } from "../../api/queryPolicy";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useIsDesktopViewport } from "../../hooks/useIsDesktopViewport";
@@ -158,7 +159,7 @@ export function LaundryPage() {
     queryKey: ["laundry-vendors", session.hotelId],
     queryFn: () => listLaundryVendors(session),
     enabled,
-    staleTime: 30 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   // LaundryPage's own linen_items/linen_locations tables -- physically
   // separate from StockPage's general supplies (see api/linen.ts).
@@ -166,31 +167,31 @@ export function LaundryPage() {
     queryKey: ["linen-items", session.hotelId],
     queryFn: () => listLinenItems(session),
     enabled,
-    staleTime: 30 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const locationsQuery = useQuery({
     queryKey: ["linen-locations", session.hotelId],
     queryFn: () => listLinenLocations(session),
     enabled,
-    staleTime: 60 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const openingCountSummaryQuery = useQuery({
     queryKey: ["linen-summary", session.hotelId, "opening-count-grid"],
     queryFn: () => getLinenSummary({}, session),
     enabled: enabled && manageVendors,
-    staleTime: 15 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const remitosQuery = useQuery({
     queryKey: ["laundry-remitos", session.hotelId],
     queryFn: () => listLaundryRemitos({}, session),
     enabled,
-    staleTime: 15 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const missingFollowUpsQuery = useQuery({
     queryKey: ["laundry-missing-follow-ups", session.hotelId],
     queryFn: () => listLaundryMissingFollowUps(session),
     enabled: enabled && manageVendors,
-    staleTime: 15 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
 
   const vendors = useMemo(() => vendorsQuery.data ?? [], [vendorsQuery.data]);
@@ -229,7 +230,7 @@ export function LaundryPage() {
     queryKey: ["laundry-vendor-prices", session.hotelId, selectedVendorId],
     queryFn: () => listLaundryVendorPrices(selectedVendorId as number, session),
     enabled: enabled && manageVendors && selectedVendorId !== null,
-    staleTime: 15 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const selectedVendorPrices = useMemo(() => pricesQuery.data ?? [], [pricesQuery.data]);
 
@@ -241,7 +242,7 @@ export function LaundryPage() {
     queryKey: ["laundry-vendor-settlements", session.hotelId, selectedVendorId, settlementYear],
     queryFn: () => getLaundryVendorSettlements(selectedVendorId as number, settlementYear, session),
     enabled: enabled && viewFinancial && selectedVendorId !== null,
-    staleTime: 15 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const settlementQuarters = useMemo(() => settlementsQuery.data ?? [], [settlementsQuery.data]);
 
@@ -252,7 +253,7 @@ export function LaundryPage() {
     queryKey: ["laundry-vendor-prices", session.hotelId, remitoVendorId],
     queryFn: () => listLaundryVendorPrices(remitoVendorId as number, session),
     enabled: enabled && manageVendors && remitoVendorId !== null,
-    staleTime: 15 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const remitoVendorPriceByItem = useMemo(() => {
     const map = new Map<number, { unit_price: string; currency_code: string; effective_from: string }>();
@@ -275,7 +276,7 @@ export function LaundryPage() {
       queryKey: ["laundry-vendor-balance", session.hotelId, vendor.id],
       queryFn: () => getLaundryVendorBalance(vendor.id, session),
       enabled,
-      staleTime: 15 * 1000
+      staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
     }))
   });
   // "En el lavadero" per item, for the vendor picked in the remito form --
@@ -303,7 +304,7 @@ export function LaundryPage() {
     queryKey: ["linen-summary", session.hotelId, "remito-form", remitoForm.house_location_id],
     queryFn: () => getLinenSummary({ locationId: Number(remitoForm.house_location_id) }, session),
     enabled: enabled && Boolean(remitoForm.house_location_id),
-    staleTime: 15 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const remitoHouseStockByItemId = useMemo(() => {
     const map = new Map<number, string>();
@@ -352,7 +353,7 @@ export function LaundryPage() {
           session
         ),
       enabled: enabled && viewFinancial,
-      staleTime: 15 * 1000
+      staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
     }))
   });
   const spendTotal = useMemo(
@@ -380,7 +381,7 @@ export function LaundryPage() {
     queryFn: () =>
       getLinenSummary(houseStockLocationId ? { locationId: Number(houseStockLocationId) } : {}, session),
     enabled: enabled && Boolean(houseStockLocationId),
-    staleTime: 15 * 1000
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const houseStockByItemId = useMemo(() => {
     const map = new Map<number, string>();
@@ -2212,7 +2213,8 @@ function SettlementQuarterRow({
         <button
           type="button"
           onClick={() => void mark(!quarter.paid)}
-          disabled={marking}
+          disabled={marking || (!quarter.paid && Number(quarter.unpriced_quantity ?? 0) > 0)}
+          title={!quarter.paid && Number(quarter.unpriced_quantity ?? 0) > 0 ? t("laundryCost.settlementBlockedByUnpriced") : undefined}
           className={`min-h-11 rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60 ${
             quarter.paid ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200" : "bg-amber-100 text-amber-800 hover:bg-amber-200"
           }`}
@@ -2222,11 +2224,14 @@ function SettlementQuarterRow({
       </div>
 
       {Number(quarter.unpriced_quantity ?? 0) > 0 ? (
-        <p className="mt-2 text-xs text-amber-800" role="status" data-testid="laundry-settlement-unpriced-warning">
-          {t("laundryCost.unpricedWarning", {
-            quantity: new Intl.NumberFormat(i18n.language === "en" ? "en-US" : "es-AR", { maximumFractionDigits: 2 }).format(Number(quarter.unpriced_quantity))
-          })}
-        </p>
+        <div className="mt-2 space-y-1 text-xs text-amber-800" role="status" data-testid="laundry-settlement-unpriced-warning">
+          <p>
+            {t("laundryCost.unpricedWarning", {
+              quantity: new Intl.NumberFormat(i18n.language === "en" ? "en-US" : "es-AR", { maximumFractionDigits: 2 }).format(Number(quarter.unpriced_quantity))
+            })}
+          </p>
+          {!quarter.paid && <p>{t("laundryCost.settlementBlockedByUnpriced")}</p>}
+        </div>
       ) : null}
 
       {quarter.by_item.length > 0 && (

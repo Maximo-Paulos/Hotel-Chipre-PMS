@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { hasValidSession } from "../../api/client";
+import { ApiError, hasValidSession } from "../../api/client";
 import { invalidateQueriesInBackground } from "../../api/queryInvalidation";
 import LocalizedDateField from "../../components/LocalizedDateField";
 import {
@@ -158,6 +158,11 @@ export function OperationalTasksPage() {
       invalidateQueriesInBackground(queryClient, { queryKey: ["operational-handoffs", session.hotelId] });
     }
   };
+  const refreshAfterTaskVersionConflict = (error: unknown) => {
+    if (error instanceof ApiError && error.status === 409) {
+      invalidateQueriesInBackground(queryClient, { queryKey: ["operational-tasks", session.hotelId] });
+    }
+  };
   const updateTaskSnapshot = (updatedTask: OperationalTask) => {
     queryClient.setQueryData<OperationalTask[]>(["operational-tasks", session.hotelId], (current) =>
       current?.map((task) => task.id === updatedTask.id ? updatedTask : task)
@@ -178,7 +183,8 @@ export function OperationalTasksPage() {
     onSuccess: (updatedTask) => {
       updateTaskSnapshot(updatedTask);
       refresh();
-    }
+    },
+    onError: refreshAfterTaskVersionConflict
   });
   const commentMutation = useGuardedMutation({
     mutationFn: ({ id, version, comment }: { id: number; version: number; comment: string }) =>
@@ -188,15 +194,21 @@ export function OperationalTasksPage() {
       setTaskComments((current) => ({ ...current, [variables.id]: "" }));
       refresh();
       setMessage("Comentario agregado al historial.");
-    }
+    },
+    onError: refreshAfterTaskVersionConflict
   });
   const resolveMutation = useGuardedMutation({
     mutationFn: ({ id, version }: { id: number; version: number }) => resolveOperationalTask(id, version, undefined, session),
     onSuccess: (updatedTask) => {
       updateTaskSnapshot(updatedTask);
       refresh();
-    }
+    },
+    onError: refreshAfterTaskVersionConflict
   });
+  const isTaskMutationPending = (taskId: number) =>
+    (statusMutation.isPending && statusMutation.variables?.id === taskId) ||
+    (commentMutation.isPending && commentMutation.variables?.id === taskId) ||
+    (resolveMutation.isPending && resolveMutation.variables?.id === taskId);
   const handoffMutation = useGuardedMutation({
     mutationFn: () => createShiftHandoff({
       task_ids: selectedIds,
@@ -474,13 +486,13 @@ export function OperationalTasksPage() {
                   </div>
                   <div className="flex shrink-0 flex-wrap justify-end gap-2">
                     {canOperateTask(task) && task.status === "pending" && (
-                      <button type="button" onClick={() => void run(() => statusMutation.mutateAsync({ id: task.id, version: task.version, status: "in_progress" }), "Tarea tomada por el turno.", `task-${task.id}`)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Tomar</button>
+                      <button type="button" disabled={isTaskMutationPending(task.id)} onClick={() => void run(() => statusMutation.mutateAsync({ id: task.id, version: task.version, status: "in_progress" }), "Tarea tomada por el turno.", `task-${task.id}`)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Tomar</button>
                     )}
                     {canOperateTask(task) && task.status === "in_progress" && (
-                      <button type="button" onClick={() => void run(() => statusMutation.mutateAsync({ id: task.id, version: task.version, status: "pending_review" }), "Tarea enviada a revisión.", `task-${task.id}`)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Enviar a revisión</button>
+                      <button type="button" disabled={isTaskMutationPending(task.id)} onClick={() => void run(() => statusMutation.mutateAsync({ id: task.id, version: task.version, status: "pending_review" }), "Tarea enviada a revisión.", `task-${task.id}`)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Enviar a revisión</button>
                     )}
                     {(canManage || (session.baseRole === "housekeeping" && canOperateTask(task))) && task.status !== "resolved" && (
-                      <button type="button" onClick={() => void run(() => resolveMutation.mutateAsync({ id: task.id, version: task.version }), "Tarea resuelta.", `task-${task.id}`)} className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white">Resolver</button>
+                      <button type="button" disabled={isTaskMutationPending(task.id)} onClick={() => void run(() => resolveMutation.mutateAsync({ id: task.id, version: task.version }), "Tarea resuelta.", `task-${task.id}`)} className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Resolver</button>
                     )}
                     <button
                       type="button"
@@ -507,7 +519,7 @@ export function OperationalTasksPage() {
                     </label>
                     <button
                       type="button"
-                      disabled={!taskComments[task.id]?.trim() || commentMutation.isPending}
+                      disabled={!taskComments[task.id]?.trim() || isTaskMutationPending(task.id)}
                       onClick={() => void run(() => commentMutation.mutateAsync({ id: task.id, version: task.version, comment: taskComments[task.id].trim() }), undefined, `task-${task.id}`)}
                       className="min-h-11 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50"
                     >

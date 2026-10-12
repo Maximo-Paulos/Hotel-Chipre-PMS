@@ -5,7 +5,8 @@
     "knownTotal": "Costos con tarifa configurada",
     "unpricedWarning": "Falta precio para {{quantity}} unidades; los subtotales solo incluyen cantidades con tarifa.",
     "unpricedByItem": "{{quantity}} unidades sin tarifa",
-    "subtotalWithPrice": "Con tarifa: {{amount}}"
+    "subtotalWithPrice": "Con tarifa: {{amount}}",
+    "settlementBlockedByUnpriced": "Revisá manualmente los remitos sin tarifa antes de marcar esta liquidación como pagada."
   },
   "stockAlerts": {
     "linenLowTitle": "Ropa blanca bajo mínimo",

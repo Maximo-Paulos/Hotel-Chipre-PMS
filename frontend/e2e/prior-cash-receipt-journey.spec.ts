@@ -31,17 +31,29 @@ async function login(page: Page, user: typeof manager) {
 }
 
 async function ensureCashSessionOpen(page: Page) {
-  const sessionsResponse = page.waitForResponse(
+  const sessionsResponsePromise = page.waitForResponse(
     (response) => response.url().includes("/api/cash-register/sessions") && response.request().method() === "GET"
   );
   await page.goto("/caja");
-  await sessionsResponse;
+  const sessionsResponse = await sessionsResponsePromise;
+  const sessions = await sessionsResponse.json() as Array<{ status?: string; currency_code?: string }>;
+  const hasOpenDefaultCurrencySession = sessions.some(
+    (session) => session.status === "open" && session.currency_code?.toUpperCase() === "ARS"
+  );
   const openingForm = page
     .locator("form")
     .filter({ hasText: localizedText("Saldo inicial", "Opening balance") })
     .filter({ hasText: localizedText("Abrir caja", "Open cash register") });
   const openButton = openingForm.getByRole("button", { name: localizedName("Abrir caja", "Open cash register") });
-  if (await openButton.isVisible().catch(() => false)) {
+  if (hasOpenDefaultCurrencySession) {
+    // The response promise resolves before React commits the updated session
+    // state. Wait for the disabled label instead of clicking the optimistic
+    // "Abrir caja" button during that brief render window.
+    await expect(
+      openingForm.getByRole("button", { name: localizedName("Ya hay una caja abierta", "Cash register already open") })
+    ).toBeDisabled();
+  } else {
+    await expect(openButton).toBeEnabled();
     await openingForm.getByText(localizedName("Saldo inicial", "Opening balance")).locator("..").locator("input").fill("50000");
     await openButton.click();
     await expect(page.getByText(localizedName("Caja abierta.", "Cash register opened."))).toBeVisible();

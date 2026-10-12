@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from concurrent.futures import Future
 from datetime import date
 from threading import RLock
 from typing import Any, Callable, TypeVar
@@ -20,6 +21,11 @@ _redis_unavailable_until = 0.0
 _redis_was_unavailable = False
 _redis_availability_known = False
 _redis_state_lock = RLock()
+_LOCAL_READ_MODEL_TTL_SECONDS = 2.0
+_LOCAL_READ_MODEL_MAX_ENTRIES = 128
+_local_read_model_cache: dict[str, tuple[float, Any]] = {}
+_local_read_model_inflight: dict[str, Future[Any]] = {}
+_local_read_model_lock = RLock()
 
 
 def _settings():
@@ -128,17 +134,74 @@ def _store_json(key: str, payload: Any, ttl_seconds: int, *, client: redis.Redis
         _mark_redis_unavailable(exc)
 
 
-def _get_cached_or_compute(key: str, ttl_seconds: int, producer: Callable[[], T]) -> T:
+def _get_local_cached_or_compute(key: str, producer: Callable[[], T]) -> T:
+    now = time.monotonic()
+    with _local_read_model_lock:
+        cached = _local_read_model_cache.get(key)
+        if cached is not None:
+            expires_at, payload = cached
+            if expires_at > now:
+                return payload
+            _local_read_model_cache.pop(key, None)
+
+        pending = _local_read_model_inflight.get(key)
+        is_producer = pending is None
+        if pending is None:
+            pending = Future()
+            _local_read_model_inflight[key] = pending
+
+    if not is_producer:
+        return pending.result()
+
+    try:
+        payload = producer()
+    except BaseException as exc:
+        with _local_read_model_lock:
+            if _local_read_model_inflight.get(key) is pending:
+                _local_read_model_inflight.pop(key, None)
+        pending.set_exception(exc)
+        raise
+
+    cached_at = time.monotonic()
+    with _local_read_model_lock:
+        expired_keys = [
+            cached_key
+            for cached_key, (expires_at, _cached_payload) in _local_read_model_cache.items()
+            if expires_at <= now
+        ]
+        for cached_key in expired_keys:
+            _local_read_model_cache.pop(cached_key, None)
+        while len(_local_read_model_cache) >= _LOCAL_READ_MODEL_MAX_ENTRIES:
+            _local_read_model_cache.pop(next(iter(_local_read_model_cache)))
+        _local_read_model_cache[key] = (cached_at + _LOCAL_READ_MODEL_TTL_SECONDS, payload)
+        if _local_read_model_inflight.get(key) is pending:
+            _local_read_model_inflight.pop(key, None)
+    pending.set_result(payload)
+    return payload
+
+
+def _get_cached_or_compute(
+    key: str,
+    ttl_seconds: int,
+    producer: Callable[[], T],
+    *,
+    local_fallback: bool = False,
+) -> T:
+    if not _cache_enabled():
+        return _get_local_cached_or_compute(key, producer) if local_fallback else producer()
+
     client = _get_redis_client()
-    if client is not None:
-        try:
-            cached = _load_json(client.get(key))
-            _mark_redis_available()
-            if cached is not None:
-                return cached
-        except Exception as exc:  # pragma: no cover - defensive runtime fallback
-            _mark_redis_unavailable(exc)
-            client = None
+    if client is None:
+        return _get_local_cached_or_compute(key, producer) if local_fallback else producer()
+
+    try:
+        cached = _load_json(client.get(key))
+        _mark_redis_available()
+        if cached is not None:
+            return cached
+    except Exception as exc:  # pragma: no cover - defensive runtime fallback
+        _mark_redis_unavailable(exc)
+        return _get_local_cached_or_compute(key, producer) if local_fallback else producer()
 
     payload = producer()
     _store_json(key, payload, ttl_seconds, client=client)
@@ -181,8 +244,11 @@ def _rate_calendar_key(hotel_id: int, category_id: int, date_from: date, date_to
     )
 
 
-def _daily_report_key(hotel_id: int, report_date: date) -> str:
-    return f"hotel:{hotel_id}:daily_report:date:{report_date.isoformat()}"
+def _daily_report_key(hotel_id: int, report_date: date, pending_page: int, pending_page_size: int) -> str:
+    return (
+        f"hotel:{hotel_id}:daily_report:date:{report_date.isoformat()}:"
+        f"pending_page:{pending_page}:page_size:{pending_page_size}"
+    )
 
 
 def _occupancy_grid_key(hotel_id: int, date_from: date, date_to: date, role: str) -> str:
@@ -220,6 +286,7 @@ def get_cached_starter_summary_payload(
         _analytics_starter_key(hotel_id, date_from, date_to),
         _settings().READ_MODEL_ANALYTICS_TTL_SECONDS,
         producer,
+        local_fallback=True,
     )
 
 
@@ -244,6 +311,7 @@ def get_cached_home_payload(
         ),
         _settings().READ_MODEL_ANALYTICS_TTL_SECONDS,
         producer,
+        local_fallback=True,
     )
 
 
@@ -266,12 +334,15 @@ def get_cached_daily_report_payload(
     *,
     hotel_id: int,
     report_date: date,
+    pending_page: int = 1,
+    pending_page_size: int = 50,
     producer: Callable[[], T],
 ) -> T:
     return _get_cached_or_compute(
-        _daily_report_key(hotel_id, report_date),
+        _daily_report_key(hotel_id, report_date, pending_page, pending_page_size),
         _settings().READ_MODEL_ANALYTICS_TTL_SECONDS,
         producer,
+        local_fallback=True,
     )
 
 
@@ -308,6 +379,12 @@ def invalidate_hotel_analytics_cache(hotel_id: int) -> None:
 
 
 def _invalidate_hotel_cache_prefixes(hotel_id: int, families: tuple[str, ...]) -> None:
+    prefixes = tuple(f"hotel:{hotel_id}:{family}:" for family in families)
+    with _local_read_model_lock:
+        for key in tuple(_local_read_model_cache):
+            if key.startswith(prefixes):
+                _local_read_model_cache.pop(key, None)
+
     client = _get_redis_client()
     if client is None:
         return

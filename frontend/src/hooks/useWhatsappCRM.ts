@@ -15,7 +15,7 @@ export function useWhatsAppChannel() {
   const { session } = useSession();
   const enabled = hasValidSession(session);
   return useQuery({
-    queryKey: ["whatsapp", "channel", session.hotelId],
+    queryKey: ["whatsapp-channel", session.hotelId],
     queryFn: () => fetchWhatsAppChannel(session), enabled, retry: false,
   });
 }
@@ -26,8 +26,10 @@ export function useWhatsAppCRM() {
   const enabled = hasValidSession(session);
   const channel = useWhatsAppChannel();
   const conversations = useQuery({
-    queryKey: ["whatsapp", "conversations", session.hotelId],
-    queryFn: () => fetchWhatsAppConversations(session), enabled, refetchInterval: enabled ? 15_000 : false,
+    queryKey: ["whatsapp-conversations", session.hotelId],
+    queryFn: () => fetchWhatsAppConversations(session),
+    enabled,
+    staleTime: 15_000,
   });
   const invalidate = () => invalidateQueriesInBackground(queryClient, {
     queryKey: ["whatsapp", "conversations", session.hotelId]

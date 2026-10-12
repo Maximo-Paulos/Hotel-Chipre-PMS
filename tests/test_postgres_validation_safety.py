@@ -10,6 +10,7 @@ import inspect
 import json
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 import pytest
@@ -449,6 +450,21 @@ def test_destructive_postgres_operations_are_guarded_before_execution():
     assert empty_schema_guard_position < empty_schema_source.index("engine = create_engine")
     assert empty_schema_guard_position < empty_schema_source.index("DROP SCHEMA")
 
+    migration_test_source = (
+        Path(__file__).parent / "integration" / "test_postgres_migrations.py"
+    ).read_text(encoding="utf-8")
+    migration_target_guard = migration_test_source[
+        migration_test_source.index("def _migration_dsn"):
+        migration_test_source.index("def _run_alembic")
+    ]
+    migration_execution = migration_test_source[
+        migration_test_source.index("def test_fresh_postgres_migrations"):
+    ]
+    assert "validate_postgres_test_target" in migration_target_guard
+    assert migration_execution.index("_migration_dsn()") < migration_execution.index("create_engine")
+    assert migration_execution.index("_migration_dsn()") < migration_execution.index("DROP SCHEMA")
+    assert "current_database()" in migration_execution
+
 
 def test_postgres_validation_has_no_tautological_true_assertions():
     tree = ast.parse(inspect.getsource(postgres_validation))
@@ -521,6 +537,21 @@ def test_rejects_transaction_pooler_port(tmp_path):
             dsn,
             _safe_environment(tmp_path, POSTGRES_TEST_DATABASE_URL_EXPLICIT=dsn),
         )
+
+
+def test_allows_a_proven_loopback_postgres_on_a_dynamic_local_port(tmp_path):
+    dsn = "postgresql://postgres@127.0.0.1:55517/hotel_chipre_migration_test"
+    environment = _safe_environment(
+        tmp_path,
+        POSTGRES_TEST_DATABASE_URL_EXPLICIT=dsn,
+        POSTGRES_TEST_EXPECTED_HOST="127.0.0.1",
+        POSTGRES_TEST_EXPECTED_ROLE="postgres",
+        POSTGRES_TEST_EXPECTED_DATABASE="hotel_chipre_migration_test",
+        POSTGRES_TEST_ISOLATED_BRANCH_REF="hotel_chipre_migration_test",
+        local_evidence_overrides={"port": 55517},
+    )
+
+    assert validate_postgres_test_target(dsn, environment) == dsn
 
 
 def test_rejects_unapproved_remote_host(tmp_path):

@@ -13,7 +13,8 @@ const ids = {
   directUnpaid: 870001,
   directPaid: 870002,
   ota: 870003,
-  group: 870004
+  group: 870004,
+  confirmedPaid: 870005
 } as const;
 
 const futureDate = (daysAhead: number) => {
@@ -100,6 +101,31 @@ const fixtures = [
     version: 1
   },
   {
+    id: ids.confirmedPaid,
+    confirmation_code: "QA-RATE-CONFIRMED",
+    guest_id: 870005,
+    guest: { id: 870005, first_name: "Huésped", last_name: "Confirmado QA" },
+    room_id: 101,
+    category_id: 1,
+    category_name: "Standard QA",
+    company_id: null,
+    group_id: null,
+    check_in_date: futureDate(36),
+    check_out_date: futureDate(38),
+    total_amount: 100,
+    amount_paid: 20,
+    deposit_amount: 20,
+    status: "deposit_paid",
+    source: "direct",
+    external_id: null,
+    source_provider_code: null,
+    num_adults: 1,
+    num_children: 0,
+    currency_code: "ARS",
+    allocation_status: "assigned",
+    version: 1
+  },
+  {
     id: ids.group,
     confirmation_code: "QA-RATE-GROUP",
     guest_id: 870004,
@@ -131,6 +157,17 @@ const transactionsByReservation: Record<number, Array<Record<string, unknown>>> 
   [ids.directPaid]: [
     {
       id: 870201,
+      amount: 20,
+      currency: "ARS",
+      method: "cash",
+      type: "deposit",
+      status: "completed",
+      created_at: "2026-10-05T12:00:00Z"
+    }
+  ],
+  [ids.confirmedPaid]: [
+    {
+      id: 870202,
       amount: 20,
       currency: "ARS",
       method: "cash",
@@ -361,4 +398,20 @@ test("paid total correction requires the paid adjustment permission and reason w
   expect(paymentWrites).toHaveLength(0);
   expect(paymentSummaryReads.filter((read) => read.id === ids.directPaid).length).toBeGreaterThan(0);
   expect(paymentSummaryReads.filter((read) => read.id === ids.directPaid).every((read) => read.transactionIds.join(",") === "870201")).toBe(true);
+});
+
+test("a reservation with both an assigned room and payment requires manual price review", async ({ page }) => {
+  await login(page, owner);
+  const { patchRequests, paymentWrites } = await installReservationMocks(page);
+  await page.goto("/reservas");
+
+  const confirmedRow = rowFor(page, "QA-RATE-CONFIRMED");
+  await expect(confirmedRow).toHaveCount(1);
+  await confirmedRow.getByRole("button", { name: "Editar", exact: true }).click();
+
+  const form = editForm(page);
+  await expect(form.getByTestId("confirmed-reservation-price-review-required")).toContainText("pedí una revisión manual");
+  await expect(form.getByTestId("reservation-total-adjustment")).toHaveCount(0);
+  expect(patchRequests).toHaveLength(0);
+  expect(paymentWrites).toHaveLength(0);
 });

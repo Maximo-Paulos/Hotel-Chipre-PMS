@@ -55,6 +55,7 @@ from app.schemas.reservation_operations import (
     RoomMoveResponse,
 )
 from app.services.reservation_service import (
+    ConfirmedReservationPriceLocked,
     ManualRatePolicyError,
     create_reservation,
     transition_reservation_status,
@@ -103,7 +104,13 @@ from app.services.financial_ledger import (
     external_paid_balance_credit,
     has_payment_history_for_cancellation,
 )
-from app.services.allocation_runtime_service import run_persisted_allocation
+from app.services.allocation_runtime_service import (
+    reservation_overlaps_default_horizon,
+    run_persisted_allocation,
+)
+from app.services.allocation_trigger_service import (
+    trigger_reoptimization_bg as _coalesced_reoptimization_bg,
+)
 from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_all_permissions, require_any_permission, require_permission
 from app.api.manual_rate_access import authorize_manual_rate_scope
 from app.services.timezones import hotel_today
@@ -285,35 +292,12 @@ def _trigger_reoptimization_bg(
     trigger_type: str = "new_reservation",
     origin_key: str | None = None,
 ) -> None:
-    """
-    §5.2 — Run allocation engine in background after reservation changes.
-    Creates its own DB session; all errors are suppressed to never affect the booking flow.
-    """
-    from app.database import get_session_factory
-    from app.services.allocation_runtime_service import run_persisted_allocation
-    from app.services.tenant_context import set_tenant_hotel_context
-
-    db = None
-    try:
-        SessionFactory = get_session_factory()
-        db = SessionFactory()
-        if origin_key:
-            db.info["domain_event_origin_key"] = origin_key
-        set_tenant_hotel_context(db, hotel_id)
-        run_persisted_allocation(db, hotel_id=hotel_id, trigger_type=trigger_type)
-        db.commit()
-    except Exception as exc:
-        logger.error(
-            "Background reservation reoptimization failed for hotel_id=%s trigger_type=%s",
-            hotel_id,
-            trigger_type,
-            extra={"error_type": type(exc).__name__},
-        )
-        if db is not None:
-            db.rollback()
-    finally:
-        if db is not None:
-            db.close()
+    """Coalesce concurrent hotel triggers and preserve their event origin."""
+    _coalesced_reoptimization_bg(
+        hotel_id=hotel_id,
+        trigger_type=trigger_type,
+        origin_key=origin_key,
+    )
 
 
 def _project_reservation_graph(hotel_id: int, reservation: Reservation) -> None:
@@ -415,6 +399,22 @@ def create_new_reservation(
             actor_user_id=context.user_id, actor_role=context.user_role,
             manual_rate_scope=manual_rate_scope,
         )
+        # create_reservation already validates and assigns a free room under
+        # row-level locking. Running the hotel-wide optimizer immediately for
+        # that same reservation repeats work and may move other unconfirmed
+        # bookings. Keep the global solve for allocation-changing updates; a
+        # new unassigned reservation may still request it unless it was
+        # deliberately wait-listed for manual review.
+        should_reoptimize = (
+            reservation.room_id is None
+            and not reservation.is_wait_listed
+            and reservation_overlaps_default_horizon(
+                db,
+                hotel_id=context.hotel_id,
+                check_in_date=reservation.check_in_date,
+                check_out_date=reservation.check_out_date,
+            )
+        )
         audit_log_service.safe_create_audit_log(
             db,
             hotel_id=context.hotel_id,
@@ -430,11 +430,12 @@ def create_new_reservation(
         db.commit()
         db.refresh(reservation)
         _project_reservation_graph(context.hotel_id, reservation)
-        background_tasks.add_task(
-            _trigger_reoptimization_bg,
-            hotel_id=context.hotel_id,
-            origin_key=db.info.get("domain_event_origin_key"),
-        )
+        if should_reoptimize:
+            background_tasks.add_task(
+                _trigger_reoptimization_bg,
+                hotel_id=context.hotel_id,
+                origin_key=db.info.get("domain_event_origin_key"),
+            )
         return _to_read(reservation, db=db)
     except ManualRatePolicyError as e:
         db.rollback()
@@ -1003,17 +1004,23 @@ def add_reservation_guests(
                 guest_fields["document_number"] = document_number
             guest = Guest(**guest_fields, hotel_id=context.hotel_id)
             db.add(guest)
-            db.flush()
             if document_number:
                 existing_guests_by_document[document_number] = guest
         
         # Link if not linked
         if guest not in reservation.additional_guests:
             reservation.additional_guests.append(guest)
-            
+
+    # Flush once for the whole guest batch. Per-guest flushes add a database
+    # round trip for every new companion, even though relationship inserts can
+    # be persisted together by the unit of work.
+    db.flush()
+    response = _to_read(reservation, db=db)
+    # Build the response while ORM relationships remain loaded. Committing
+    # expires the instance by default; refreshing it here re-queries the full
+    # reservation graph after a mutation whose result is already in memory.
     db.commit()
-    db.refresh(reservation)
-    return _to_read(reservation, db=db)
+    return response
 
 
 @router.post("/{reservation_id}/cancel", response_model=ReservationRead)
@@ -1345,6 +1352,7 @@ def change_dates(
         raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     _authorize_company_reservation_management(request, db, context, r)
     before = audit_log_service.model_snapshot(r)
+    previous_allocation_interval = (r.check_in_date, r.check_out_date)
     try:
         result = change_reservation_dates(
             db,
@@ -1372,12 +1380,24 @@ def change_dates(
             payload_before=before,
             payload_after=audit_log_service.model_snapshot(result.reservation),
         )
-        background_tasks.add_task(
-            _trigger_reoptimization_bg,
-            hotel_id=context.hotel_id,
-            trigger_type="reservation_date_change",
-            origin_key=db.info.get("domain_event_origin_key"),
-        )
+        if any(
+            reservation_overlaps_default_horizon(
+                db,
+                hotel_id=context.hotel_id,
+                check_in_date=check_in,
+                check_out_date=check_out,
+            )
+            for check_in, check_out in (
+                previous_allocation_interval,
+                (result.reservation.check_in_date, result.reservation.check_out_date),
+            )
+        ):
+            background_tasks.add_task(
+                _trigger_reoptimization_bg,
+                hotel_id=context.hotel_id,
+                trigger_type="reservation_date_change",
+                origin_key=db.info.get("domain_event_origin_key"),
+            )
         return ReservationDateChangeResponse(
             original_reservation=_to_read(result.original_reservation, db=db),
             reservation=_to_read(result.reservation, db=db),
@@ -1435,6 +1455,7 @@ def modify_reservation(
         _authorize_company_reservation_management(request, db, context, r)
     total_adjustment_kind: Literal["manual", "paid"] | None = None
     manual_rate_scope: Literal["bounded", "unbounded"] | None = None
+    confirmed_price_change_review_required = False
     if "total_amount" in effective_data:
         if reservation_has_deferred_company_billing(
             db,
@@ -1450,6 +1471,15 @@ def modify_reservation(
             hotel_id=context.hotel_id,
             reservation=r,
         )
+        confirmed_price_change_review_required = r.room_id is not None and has_payment_or_deposit
+        if confirmed_price_change_review_required:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "La reserva tiene habitación y pago asignados. El cambio de tarifa quedó bloqueado; "
+                    "solicitá una revisión manual."
+                ),
+            )
         if has_payment_or_deposit:
             # Existing paid-total corrections retain their stricter financial
             # permission. This never rewrites the original transaction ledger.
@@ -1531,6 +1561,7 @@ def modify_reservation(
         ]
     update_data = ReservationUpdate.model_validate(update_payload)
     before = audit_log_service.model_snapshot(r)
+    previous_allocation_interval = (r.check_in_date, r.check_out_date)
     mobility_restriction_changed = (
         "mobility_restriction" in effective_data
     )
@@ -1548,6 +1579,7 @@ def modify_reservation(
             preserve_unclassified_price=True,
             total_adjustment_kind=total_adjustment_kind,
             manual_rate_scope=manual_rate_scope,
+            confirmed_price_change_review_required=confirmed_price_change_review_required,
         )
         after = {
             **(audit_log_service.model_snapshot(r) or {}),
@@ -1590,7 +1622,21 @@ def modify_reservation(
         )
         db.commit()
         db.refresh(r)
-        if any(field in effective_data for field in ("check_in_date", "check_out_date", "room_id")) or mobility_restriction_changed:
+        if (
+            any(field in effective_data for field in ("check_in_date", "check_out_date", "room_id"))
+            or mobility_restriction_changed
+        ) and any(
+            reservation_overlaps_default_horizon(
+                db,
+                hotel_id=context.hotel_id,
+                check_in_date=check_in,
+                check_out_date=check_out,
+            )
+            for check_in, check_out in (
+                previous_allocation_interval,
+                (r.check_in_date, r.check_out_date),
+            )
+        ):
             background_tasks.add_task(
                 _trigger_reoptimization_bg,
                 hotel_id=context.hotel_id,
@@ -1598,6 +1644,9 @@ def modify_reservation(
                 origin_key=db.info.get("domain_event_origin_key"),
             )
         return _to_read(r, db=db)
+    except ConfirmedReservationPriceLocked as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ManualRatePolicyError as e:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
@@ -1674,6 +1723,7 @@ def extend_stay(
                 detail="La fecha del cobro previo no puede ser futura.",
             )
     before = audit_log_service.model_snapshot(r)
+    previous_allocation_interval = (r.check_in_date, r.check_out_date)
     try:
         result = extend_reservation_stay(
             db,
@@ -1722,12 +1772,24 @@ def extend_stay(
             transaction=result.transaction,
             payment_link=result.payment_link,
         )
-        background_tasks.add_task(
-            _trigger_reoptimization_bg,
-            hotel_id=context.hotel_id,
-            trigger_type="reservation_date_change",
-            origin_key=db.info.get("domain_event_origin_key"),
-        )
+        if any(
+            reservation_overlaps_default_horizon(
+                db,
+                hotel_id=context.hotel_id,
+                check_in_date=check_in,
+                check_out_date=check_out,
+            )
+            for check_in, check_out in (
+                previous_allocation_interval,
+                (r.check_in_date, r.check_out_date),
+            )
+        ):
+            background_tasks.add_task(
+                _trigger_reoptimization_bg,
+                hotel_id=context.hotel_id,
+                trigger_type="reservation_date_change",
+                origin_key=db.info.get("domain_event_origin_key"),
+            )
         return response
     except ReservationVersionConflict as e:
         db.rollback()
@@ -1892,12 +1954,18 @@ def room_move(
             event.to_room_id,
             event.movement_group_id or event.id,
         )
-        background_tasks.add_task(
-            _trigger_reoptimization_bg,
+        if reservation_overlaps_default_horizon(
+            db,
             hotel_id=context.hotel_id,
-            trigger_type="reservation_room_move",
-            origin_key=db.info.get("domain_event_origin_key"),
-        )
+            check_in_date=reservation.check_in_date,
+            check_out_date=reservation.check_out_date,
+        ):
+            background_tasks.add_task(
+                _trigger_reoptimization_bg,
+                hotel_id=context.hotel_id,
+                trigger_type="reservation_room_move",
+                origin_key=db.info.get("domain_event_origin_key"),
+            )
         return RoomMoveResponse(
             reservation=_to_read(reservation, db=db),
             category_changed=result.category_changed,

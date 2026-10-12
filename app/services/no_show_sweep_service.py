@@ -24,7 +24,13 @@ ELIGIBLE_STATUSES = (
 )
 
 
-def sweep_no_shows(db: Session, *, hotel_id: int | None = None, now_utc: datetime | None = None) -> dict:
+def sweep_no_shows(
+    db: Session,
+    *,
+    hotel_id: int | None = None,
+    now_utc: datetime | None = None,
+    tenant_context_already_set: bool = False,
+) -> dict:
     """Mark eligible, not-arrived reservations after each hotel's local cutoff.
 
     The cutoff is measured from local midnight on the scheduled check-in date,
@@ -41,14 +47,22 @@ def sweep_no_shows(db: Session, *, hotel_id: int | None = None, now_utc: datetim
     # Reservation lifecycle cleanup must continue even when a hotel's
     # subscription has expired or been canceled; otherwise existing stays can
     # remain indefinitely in an open state.
-    hotels_query = db.query(HotelConfiguration.id)
-    if hotel_id is not None:
-        hotels_query = hotels_query.filter(HotelConfiguration.id == hotel_id)
-    hotel_ids = [row[0] for row in hotels_query.order_by(HotelConfiguration.id.asc()).all()]
+    if hotel_id is None:
+        hotel_ids = [
+            row[0]
+            for row in db.query(HotelConfiguration.id)
+            .order_by(HotelConfiguration.id.asc())
+            .all()
+        ]
+    else:
+        # The shared scheduler has already enumerated hotel IDs once for its
+        # cycle. Avoid re-reading HotelConfiguration once per tenant.
+        hotel_ids = [hotel_id]
     totals = {"hotels_scanned": 0, "scanned": 0, "marked": 0, "reservation_ids": []}
 
     for current_hotel_id in hotel_ids:
-        set_tenant_hotel_context(db, current_hotel_id)
+        if not tenant_context_already_set:
+            set_tenant_hotel_context(db, current_hotel_id)
         hotel = db.query(HotelConfiguration).filter(
             HotelConfiguration.id == current_hotel_id
         ).one_or_none()

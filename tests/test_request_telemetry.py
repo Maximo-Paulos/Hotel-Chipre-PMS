@@ -2,6 +2,8 @@ import re
 import sqlite3
 
 from fastapi import FastAPI, Response
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -11,7 +13,7 @@ from app.database import (
     get_engine,
     start_request_db_metrics,
 )
-from app.main import app, request_telemetry
+from app.main import ResponseBodySizeTelemetryMiddleware, app, request_telemetry
 
 
 def test_request_timing_and_correlation_id_are_exposed_to_first_party_browser():
@@ -97,3 +99,56 @@ def test_request_pool_checkout_duration_is_recorded():
     assert metrics["pool_checkout_count"] == 1
     assert metrics["pool_checkout_duration_ms"] >= 0
     assert metrics["max_pool_checkout_ms"] >= 0
+
+
+def test_response_transfer_telemetry_counts_compressed_body_without_logging_content(caplog):
+    telemetry_app = FastAPI()
+    telemetry_app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=1)
+    telemetry_app.add_middleware(ResponseBodySizeTelemetryMiddleware)
+
+    @telemetry_app.get("/payload")
+    async def payload():
+        return {"message": "private guest data " * 300}
+
+    with caplog.at_level("INFO", logger="app.main"):
+        with TestClient(telemetry_app).stream(
+            "GET", "/payload", headers={"accept-encoding": "gzip"}
+        ) as response:
+            raw_body = b"".join(response.iter_raw())
+
+    assert response.status_code == 200
+    assert response.headers.get("content-encoding") == "gzip"
+    record = next(
+        item.getMessage()
+        for item in caplog.records
+        if item.getMessage().startswith("http.response_transfer")
+    )
+    assert "route=/payload" in record
+    assert f"body_bytes={len(raw_body)}" in record
+    assert "encoding=gzip" in record
+    assert "private guest data" not in record
+
+
+def test_response_transfer_telemetry_counts_streaming_body(caplog):
+    telemetry_app = FastAPI()
+    telemetry_app.add_middleware(ResponseBodySizeTelemetryMiddleware)
+
+    @telemetry_app.get("/events")
+    async def events():
+        async def stream():
+            yield b"data: changed\n\n"
+            yield b": heartbeat\n\n"
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
+
+    with caplog.at_level("INFO", logger="app.main"):
+        response = TestClient(telemetry_app).get("/events")
+
+    assert response.status_code == 200
+    record = next(
+        item.getMessage()
+        for item in caplog.records
+        if item.getMessage().startswith("http.response_transfer")
+    )
+    assert f"body_bytes={len(response.content)}" in record
+    assert "encoding=identity" in record

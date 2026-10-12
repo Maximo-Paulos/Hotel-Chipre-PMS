@@ -114,6 +114,8 @@ async function installMocks(page: import("@playwright/test").Page, result: Recei
     "/api/cash/sessions",
     "/api/cash-register/sessions",
     "/api/notifications",
+    "/api/events/recovery",
+    "/api/events/stream",
     "/api/payment-surcharges",
     "/api/operations/audit"
   ]);
@@ -143,6 +145,8 @@ async function installMocks(page: import("@playwright/test").Page, result: Recei
       const method = request.method();
       const pathForAllowlist = path.endsWith("/") ? path : path;
       const requestBody = request.postData() ? JSON.parse(request.postData() || "null") as unknown : null;
+      let status = 200;
+      let body: unknown = [];
       const entry: InterceptedApiRequest = {
         method,
         path,
@@ -157,8 +161,26 @@ async function installMocks(page: import("@playwright/test").Page, result: Recei
         unexpectedApiRequests.push(`${method} ${path}`);
       }
 
-      let status = 200;
-      let body: unknown = [];
+      // Receipt email behavior does not depend on realtime. A 403 makes the
+      // stream bootstrap exit instead of opening a live connection in this
+      // request-contract test.
+      if (path === "/api/events/stream") {
+        status = 403;
+        body = { detail: "Realtime is not part of this request-contract test." };
+        await route.fulfill({
+          status,
+          contentType: "application/json",
+          headers: {
+            "access-control-allow-origin": appOrigin,
+            "access-control-allow-credentials": "true",
+            "access-control-allow-headers": "authorization,content-type,x-hotel-id,x-user-id,x-csrf-token,idempotency-key",
+            "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+          },
+          body: JSON.stringify(body)
+        });
+        return;
+      }
+
       if (path === "/api/auth/session/refresh") {
         body = {
           access_token: "local-e2e-access-token",

@@ -291,7 +291,7 @@ export function ReservationsPage() {
   const [refundTargetTransactionId, setRefundTargetTransactionId] = useState<number | null>(null);
   const [refundReasonInput, setRefundReasonInput] = useState("");
   const [refundNightAmounts, setRefundNightAmounts] = useState<Record<number, string>>({});
-  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
+  const paymentProofInputRef = useRef<HTMLInputElement | null>(null);
   const [paymentProofPreview, setPaymentProofPreview] = useState<{ proofId: number; url: string } | null>(null);
   const [viewingPaymentProofId, setViewingPaymentProofId] = useState<number | null>(null);
   const [rejectingPaymentProofId, setRejectingPaymentProofId] = useState<number | null>(null);
@@ -455,6 +455,7 @@ export function ReservationsPage() {
     editing?.status === "deposit_paid" ||
     editing?.status === "fully_paid"
   );
+  const confirmedReservationPriceLocked = Boolean(editing?.room_id != null && hasAnyPaymentEvidence);
   const canAdjustUnpaidDirectTotal = Boolean(
     editing &&
     canAdjustReservationRate &&
@@ -468,9 +469,13 @@ export function ReservationsPage() {
     !hasAnyPaymentEvidence
   );
   const canAdjustReservationTotal = Boolean(
-    (hasAnyPaymentEvidence && canAdjustPaidReservationTotal) || canAdjustUnpaidDirectTotal
+    !confirmedReservationPriceLocked &&
+    ((hasAnyPaymentEvidence && canAdjustPaidReservationTotal) || canAdjustUnpaidDirectTotal)
   );
-  const cashSessionsQuery = useCashSessions();
+  const paymentFormOpen = formOpen || Boolean(payingGroup);
+  const cashSessionsQuery = useCashSessions({
+    enabled: hasPermission("cash:view") && paymentFormOpen
+  });
   const paymentReservationCurrency = normalizeCurrencyCode(
     paymentSummaryQuery.data?.currency_code ?? editing?.currency_code
   );
@@ -492,7 +497,6 @@ export function ReservationsPage() {
       hasValidSession(session)
     ),
     staleTime: 30_000,
-    refetchInterval: 60_000,
     retry: false
   });
   useEffect(() => {
@@ -983,7 +987,7 @@ export function ReservationsPage() {
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
     setRefundNightAmounts({});
-    setPaymentProofFile(null);
+    if (paymentProofInputRef.current) paymentProofInputRef.current.value = "";
     setFormOpen(true);
   };
 
@@ -1066,7 +1070,7 @@ export function ReservationsPage() {
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
     setRefundNightAmounts({});
-    setPaymentProofFile(null);
+    if (paymentProofInputRef.current) paymentProofInputRef.current.value = "";
     setFormOpen(true);
   };
 
@@ -1090,7 +1094,7 @@ export function ReservationsPage() {
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
     setRefundNightAmounts({});
-    setPaymentProofFile(null);
+    if (paymentProofInputRef.current) paymentProofInputRef.current.value = "";
   };
 
   const collaborativeFormValues: FormState = editing
@@ -1651,7 +1655,6 @@ export function ReservationsPage() {
             : null;
   useEffect(() => {
     setRefundNightAmounts({});
-    setPaymentAmountInput("");
   }, [selectedRefundTargetId]);
   const hotelConfigQuery = useHotelConfig();
   const availablePaymentMethods = useMemo(
@@ -1670,7 +1673,9 @@ export function ReservationsPage() {
     () => (cashSessionsQuery.data ?? []).some((s) => s.status === "open"),
     [cashSessionsQuery.data]
   );
-  const surchargesQuery = usePaymentSurcharges();
+  const surchargesQuery = usePaymentSurcharges({
+    enabled: hasPermission("cash:operate") && paymentFormOpen
+  });
   const activeSurcharge = useMemo(
     () => (surchargesQuery.data ?? []).find((s) => s.payment_method === paymentMethod && s.is_active) ?? null,
     [surchargesQuery.data, paymentMethod]
@@ -1833,10 +1838,29 @@ export function ReservationsPage() {
     ? 1
     : Number(paymentFxQuoteQuery.data?.rate ?? 0);
   const conversionReady = Number.isFinite(tenderPerReservationUnit) && tenderPerReservationUnit > 0;
-  const convertReservationToTender = (amount: number) =>
-    conversionReady ? Number((amount * tenderPerReservationUnit).toFixed(2)) : null;
-  const convertTenderToReservation = (amount: number) =>
-    conversionReady ? Number((amount / tenderPerReservationUnit).toFixed(2)) : null;
+  const convertReservationToTender = (amount: number, rate = tenderPerReservationUnit) =>
+    Number.isFinite(rate) && rate > 0 ? Number((amount * rate).toFixed(2)) : null;
+  const convertTenderToReservation = (amount: number, rate = tenderPerReservationUnit) =>
+    Number.isFinite(rate) && rate > 0 ? Number((amount / rate).toFixed(2)) : null;
+  const refreshPaymentFxRateForAction = async (): Promise<number | null> => {
+    if (paymentTenderCurrency === editingCurrencyCode) return 1;
+    try {
+      const result = await paymentFxQuoteQuery.refetch();
+      const rate = Number(result.data?.rate ?? 0);
+      if (result.error || !Number.isFinite(rate) || rate <= 0) {
+        throw result.error instanceof Error
+          ? result.error
+          : new Error(t("page.errors.paymentFxQuoteUnavailable"));
+      }
+      return rate;
+    } catch (error: unknown) {
+      showToast(
+        "error",
+        error instanceof Error ? error.message : t("page.errors.paymentFxQuoteUnavailable")
+      );
+      return null;
+    }
+  };
   const suggestedDepositAmount = Math.max(
     Number(paymentSummary?.deposit_required ?? 0) - Number(paymentSummary?.amount_paid ?? 0),
     0
@@ -1924,13 +1948,15 @@ export function ReservationsPage() {
       showToast("info", t("page.messages.depositAlreadyCovered"));
       return;
     }
+    const freshFxRate = await refreshPaymentFxRateForAction();
+    if (freshFxRate === null) return;
     const enteredAmount = paymentAmountInput.trim();
-    const suggestedTenderAmount = convertReservationToTender(due);
+    const suggestedTenderAmount = convertReservationToTender(due, freshFxRate);
     const requestedAmount = enteredAmount
       ? Number(enteredAmount)
       : suggestedTenderAmount ?? due;
     const balance = Number(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
-    const appliedPreview = convertTenderToReservation(requestedAmount);
+    const appliedPreview = convertTenderToReservation(requestedAmount, freshFxRate);
     if (!Number.isFinite(requestedAmount) || requestedAmount <= 0 || appliedPreview === null || appliedPreview <= 0) {
       showToast("error", t("page.errors.invalidPartialAmount"));
       return;
@@ -2000,7 +2026,9 @@ export function ReservationsPage() {
     }
     const priorReceiptFields = getPriorReceiptFields();
     if (!priorReceiptFields) return;
-    const tenderAmount = convertReservationToTender(Number(due));
+    const freshFxRate = await refreshPaymentFxRateForAction();
+    if (freshFxRate === null) return;
+    const tenderAmount = convertReservationToTender(Number(due), freshFxRate);
     if (tenderAmount === null) {
       showToast("error", paymentFxQuoteQuery.error instanceof Error ? paymentFxQuoteQuery.error.message : t("drawer.errors.paymentFxQuoteUnavailable"));
       return;
@@ -2043,7 +2071,9 @@ export function ReservationsPage() {
     }
     const amount = Number(paymentAmountInput);
     const balance = Number(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
-    const appliedPreview = convertTenderToReservation(amount);
+    const freshFxRate = await refreshPaymentFxRateForAction();
+    if (freshFxRate === null) return;
+    const appliedPreview = convertTenderToReservation(amount, freshFxRate);
     if (!Number.isFinite(amount) || amount <= 0 || appliedPreview === null || appliedPreview > balance + 0.01) {
       showToast("error", t("page.errors.invalidPartialAmount"));
       return;
@@ -2134,7 +2164,8 @@ export function ReservationsPage() {
 
   const handleSubmitTransferProof = async () => {
     if (!editing || !paymentSummary) return;
-    if (!paymentProofFile) {
+    const proofFile = paymentProofInputRef.current?.files?.[0];
+    if (!proofFile) {
       showToast("error", t("page.errors.proofImageRequired"));
       return;
     }
@@ -2148,11 +2179,11 @@ export function ReservationsPage() {
       await paymentProofMutations.submitMutation.mutateAsync({
         reservation_id: editing.id,
         amount: Number(amount.toFixed(2)),
-        image_base64: await readFileAsDataUrl(paymentProofFile, t("page.errors.proofReadFailed")),
-        original_filename: paymentProofFile.name
+        image_base64: await readFileAsDataUrl(proofFile, t("page.errors.proofReadFailed")),
+        original_filename: proofFile.name
       });
       setPaymentAmountInput("");
-      setPaymentProofFile(null);
+      if (paymentProofInputRef.current) paymentProofInputRef.current.value = "";
       showToast("success", t("page.messages.proofSubmitted"));
     } catch (err) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.proofSubmitFailed"));
@@ -4381,6 +4412,15 @@ export function ReservationsPage() {
                       ) : null}
                     </div>
                   ) : null}
+                  {confirmedReservationPriceLocked ? (
+                    <p
+                      className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+                      role="alert"
+                      data-testid="confirmed-reservation-price-review-required"
+                    >
+                      {t("page.form.confirmedPriceReviewRequired")}
+                    </p>
+                  ) : null}
 
                   <div className="mt-3 grid gap-2 sm:grid-cols-6 sm:items-end">
                     <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
@@ -4678,7 +4718,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handlePayFull}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || !canRegisterSelectedPayment}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isFetching || !canRegisterSelectedPayment}
                       className="rounded-lg border border-emerald-200 bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {t("page.form.fullPayment")}
@@ -4732,7 +4772,7 @@ export function ReservationsPage() {
                           aria-label={t("page.form.transferProofImage")}
                           type="file"
                           accept="image/jpeg,image/png,image/webp"
-                          onChange={(event) => setPaymentProofFile(event.target.files?.[0] ?? null)}
+                          ref={paymentProofInputRef}
                           className="mt-1 block w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-normal"
                         />
                       </label>
