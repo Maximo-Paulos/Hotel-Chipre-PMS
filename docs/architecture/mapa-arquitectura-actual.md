@@ -4,24 +4,38 @@ Guía visual para que una persona que se incorpora al desarrollo pueda entender 
 
 > **Alcance de esta guía:** describe el código y la configuración versionada revisados para esta entrega. `render.yaml` es el perfil previsto en el repositorio; no confirma qué variables o servicios están activos en las cuentas de Render, Supabase o Vercel. La última evidencia operativa disponible en el proyecto indicaba que Render respondía `503 suspend-by-user`. Hay que volver a comprobar el estado real antes de hablar de producción.
 
+El repositorio contiene **una aplicación React/Vite** que cambia de rutas según el dominio: el sitio público de `hotels-pms.com` muestra marketing y capta consultas; `app.hotels-pms.com` sirve el PMS del hotel y la consola separada de master-admin. El huésped no tiene aquí una interfaz operativa independiente: el check-in se gestiona desde la aplicación del personal. También hay envoltorios móviles con Capacitor; que estén publicados o en uso no está verificado. Los dos archivos `vercel.json` definen variantes de compilación/ruteo; la asignación actual de dominios en Vercel debe confirmarse en su panel.
+
 ## 1. Vista general
 
 ```mermaid
 flowchart LR
-    PERSONA[Personal del hotel / huésped]
+    VISITA[Visitante / posible cliente]
+    PERSONAL[Personal del hotel<br/>owner, gerencia, recepción, limpieza]
+    MASTER[Administrador de la plataforma]
 
     subgraph CLIENTE[Dispositivo del usuario]
-        WEB[Aplicación React<br/>React Router + TanStack Query]
+        WEB[Aplicación React/Vite<br/>React Router + TanStack Query<br/>rutas según el dominio]
+        SITIO[Rutas públicas<br/>marketing, precios, contacto]
+        PMS[Rutas del PMS<br/>operación y onboarding]
+        ADMIN[Consola master-admin<br/>administración global]
         CACHE[Caché temporal del navegador<br/>No es fuente de verdad]
+        MOVIL[Capacitor iOS/Android<br/>opcional; publicación no verificada]
+        SITIO --> WEB
+        PMS --> WEB
+        ADMIN --> WEB
         WEB <--> CACHE
     end
 
     subgraph VERCEL[Entrega web prevista — Vercel]
-        SPA[Archivos estáticos<br/>frontend/dist]
+        SPA[Archivos estáticos<br/>frontend/dist<br/>dos configs Vercel en el repo]
     end
 
     subgraph RENDER[Backend previsto — Render]
-        API[Una instancia FastAPI<br/>routers + servicios + validaciones]
+        API[Una instancia FastAPI<br/>rutas públicas, hotel y master-admin]
+        PUBLIC[Validación pública<br/>API keys y límites antiabuso]
+        AUTH[Sesión/JWT y autorización<br/>tenant o master-admin]
+        DOMAIN[Servicios de dominio<br/>y validaciones]
         LISTENER[Listener PostgreSQL<br/>una conexión LISTEN compartida]
         CRON[Cron cada 5 minutos<br/>trabajos por hotel]
     end
@@ -30,23 +44,35 @@ flowchart LR
         PG[(PostgreSQL<br/>fuente de verdad transaccional)]
         DOUT[(Outbox de eventos)]
         NOUT[(Outbox de notificaciones)]
+        HOTELDATA[(Datos operativos<br/>separados por hotel)]
+        PLATFORMDATA[(Datos de plataforma<br/>marketing y administración)]
         PG --- DOUT
         PG --- NOUT
+        PG --- HOTELDATA
+        PG --- PLATFORMDATA
     end
 
-    PROVIDERS[Servicios externos<br/>solo si su integración está habilitada]
+    PROVIDERS[Proveedores externos<br/>pagos, OTA, correo, WhatsApp, tasas]
 
-    PERSONA --> WEB
+    VISITA --> SITIO
+    PERSONAL --> PMS
+    MASTER --> ADMIN
     SPA -. entrega la interfaz .-> WEB
-    WEB -->|HTTPS: API| API
-    WEB <-->|SSE: cambios de dominios| API
-    API -->|SQLAlchemy / DATABASE_URL| PG
-    API -->|misma transacción| DOUT
+    MOVIL -. aloja el frontend .-> WEB
+    WEB -->|HTTPS: páginas públicas| API
+    WEB -->|HTTPS: sesión y hotel activo| API
+    WEB <-->|SSE: cambios para sesiones autorizadas| API
+    API -->|rutas públicas| PUBLIC
+    API -->|rutas protegidas| AUTH
+    AUTH --> DOMAIN
+    PUBLIC -->|solo datos públicos| PG
+    DOMAIN -->|SQLAlchemy / DATABASE_URL| PG
+    DOMAIN -->|misma transacción| DOUT
     DOUT -->|trigger LISTEN / NOTIFY: solo señal| LISTENER
     CRON -->|procesa pendientes con límites| NOUT
     LISTENER --> API
     CRON -->|trabajos SQL acotados por hotel| PG
-    API -.->|pagos, email, OTA, WhatsApp, etc.| PROVIDERS
+    API <-->|webhooks o solicitudes, si se habilitan| PROVIDERS
 
     REDIS[Redis: desactivado en el perfil versionado]
     CH[ClickHouse: desactivado en el perfil versionado]
@@ -54,7 +80,7 @@ flowchart LR
     API -. no requerido .- CH
 ```
 
-La persona usa la interfaz web. Vercel entrega los archivos de React; desde el navegador, la aplicación habla directamente con la API FastAPI. La API y el cron leen y escriben en el mismo PostgreSQL. No hay una base NoSQL en el camino transaccional. La caché de TanStack Query vive en el navegador y sirve para reutilizar temporalmente lecturas; PostgreSQL conserva el dato oficial.
+Vercel entrega los archivos de React; el dominio decide si se muestra el sitio público, la operación del hotel o el master-admin. El visitante usa sólo las rutas públicas; el personal entra al PMS y el administrador de plataforma usa un flujo de autenticación y permisos separado. Todas esas rutas llaman a FastAPI: ninguna se conecta directamente a PostgreSQL ni a un proveedor con credenciales privadas. La API y el cron leen y escriben en el mismo PostgreSQL. No hay una base NoSQL en el camino transaccional. La caché de TanStack Query vive en el navegador y sirve para reutilizar temporalmente lecturas; PostgreSQL conserva el dato oficial.
 
 ## 2. Qué pasa cuando alguien consulta o guarda algo
 
@@ -95,6 +121,8 @@ sequenceDiagram
 - El flujo de la aplicación usa tokens JWT propios y una sesión de servidor opaca para recuperación/rotación. Las solicitudes operativas llevan la identidad a la API; la autenticación de webhooks y de reservas públicas tiene sus propias credenciales o firmas.
 - En cada operación se resuelven la cuenta activa, la membresía del hotel elegido y el permiso requerido. Esto permite aplicar cambios de roles o revocaciones sin esperar a que caduque toda la sesión.
 - El hotel no se acepta como prueba de acceso por venir en un encabezado: se contrasta con la membresía autenticada. Los servicios filtran por hotel y establecen el contexto de tenant para las políticas de PostgreSQL que correspondan.
+- La consola master-admin tiene rutas, autenticación y auditoría propias para administrar la plataforma; no es un rol hotelero ni usa la membresía del hotel como autorización.
+- Las páginas públicas de marketing consultan precios publicados y envían leads o consultas a rutas públicas de FastAPI. Esas escrituras no crean datos operativos de un hotel y tienen validación y límites contra abuso.
 - Una reserva, pago o movimiento se escribe en PostgreSQL dentro de una transacción. Los bloqueos e idempotencia protegen operaciones que no deben duplicarse o competir.
 
 ### Cómo se actualizan las otras pantallas
@@ -108,6 +136,7 @@ Los reintentos del cliente también están limitados: los errores 4xx no se repi
 | Área | Fuente de verdad | Cómo se usa |
 | --- | --- | --- |
 | Hoteles, usuarios, membresías, roles y permisos | PostgreSQL | Decide qué hotel y qué operaciones puede usar cada persona. |
+| Planes publicados, leads, consultas comerciales y registros de plataforma | PostgreSQL | El master-admin administra los datos globales; el sitio público lee precios y envía consultas a endpoints públicos. |
 | Huéspedes, restricciones, reservas, habitaciones, bloqueos y tarifas | PostgreSQL | Datos operativos; las listas y fichas se consultan desde la API con alcance por hotel. |
 | Pagos, comprobantes, caja, saldos y ajustes del ledger | PostgreSQL | Registros financieros y auditoría de movimientos. No se sustituyen por una caché. |
 | Lavandería, stock, tareas y configuración fiscal/de depósitos por hotel | PostgreSQL | Reglas y operaciones de cada establecimiento. El hotel debe definir las políticas requeridas antes de operar. |
@@ -117,6 +146,7 @@ Los reintentos del cliente también están limitados: los errores 4xx no se repi
 | Fotos, documentos u otros blobs | Depende del backend de almacenamiento configurado | El código admite opciones local/S3/GCS. El manifiesto revisado no prueba cuál está configurada en producción; verificarlo antes de asumir persistencia de archivos. |
 | Cotizaciones de moneda | Proveedor externo de tasas, si está habilitado | El perfil versionado deja habilitada la lectura de DolarAPI; confirmar disponibilidad y configuración activas. |
 | Pagos externos, emails, OTA, WhatsApp e identidad social | Proveedor correspondiente, con flags y credenciales | El perfil de Render versionado mantiene desactivados los efectos externos y varias conexiones. No asumir que una integración está activa solo porque existe su código. |
+| Archivos estáticos de web | Vercel a partir de `frontend/dist` | El bundle contiene rutas públicas y del PMS; el host determina cuáles muestra. La asignación activa de cada dominio debe revisarse en Vercel. |
 
 ### Dominios principales guardados en PostgreSQL
 
@@ -165,7 +195,8 @@ El trabajo programado está fuera del inicio de sesión. El cron procesa hoteles
 
 | Componente | Configuración versionada | Lo que implica |
 | --- | --- | --- |
-| Frontend | Vercel, React/Vite; sirve `frontend/dist` | El navegador descarga la interfaz como archivos estáticos y luego llama a la API. |
+| Frontend | Vercel, React/Vite; sirve `frontend/dist` | El mismo bundle contiene el sitio público y el PMS; React decide las rutas según el hostname. El repositorio tiene configuración Vercel en la raíz y en `frontend/`; verificar en el panel qué proyecto y dominio usa cada una. |
+| App móvil | Capacitor iOS/Android en el repositorio | Es un envoltorio del frontend que usa la misma API; la publicación y configuración activa no se comprobaron. |
 | API | Render, FastAPI, una instancia `starter`, un worker | El backend no escala horizontalmente con este perfil; la colaboración en memoria requiere una instancia y un worker. |
 | Base de datos | PostgreSQL de Supabase mediante `DATABASE_URL` | Autoridad única para datos operativos y financieros. La conexión de peticiones no reemplaza la conexión dedicada a `LISTEN`. |
 | Eventos realtime | PostgreSQL `LISTEN/NOTIFY` si se configura `POSTGRES_EVENT_LISTENER_DATABASE_URL` | Debe ser una URL directa o de pooler de sesión. El pooler transaccional del puerto 6543 no conserva `LISTEN`; si se usa, se recurre al respaldo acotado. |
@@ -184,6 +215,8 @@ El trabajo programado está fuera del inicio de sesión. El cron procesa hoteles
 | Cómo se arma la API y qué rutas monta | `app/main.py` |
 | Cómo se conecta el backend con PostgreSQL y configura el pool | `app/database.py`, `app/config.py` |
 | Cómo se autentica y obtiene el hotel activo | `app/dependencies/auth.py`, `app/services/tenant_context.py` |
+| Cómo se separan marketing, PMS y master-admin por host/ruta | `frontend/src/router.tsx`, `frontend/src/config/publicUrls.ts`, `frontend/src/master_admin/` |
+| Cómo el sitio público muestra precios y guarda consultas | `frontend/src/api/marketing.ts`, `frontend/src/api/publicInquiries.ts`, `app/api/public_marketing.py`, `app/api/public_inquiries.py` |
 | Cómo se escriben y anuncian cambios | `app/services/domain_events.py`, `app/services/postgres_event_listener.py`, `app/api/events.py` |
 | Cómo React reduce lecturas y refresca solo los datos afectados | `frontend/src/main.tsx`, `frontend/src/api/queryInvalidation.ts`, `frontend/src/sync/crossTabSync.ts` |
 | Cómo corren avisos y no-shows programados | `app/tasks/run_scheduled_hotel_jobs.py`, `app/services/scheduled_hotel_jobs_service.py`, `render.yaml` |

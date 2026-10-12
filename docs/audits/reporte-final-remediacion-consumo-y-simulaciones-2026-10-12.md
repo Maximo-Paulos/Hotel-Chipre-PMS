@@ -249,7 +249,9 @@ Los cambios y las pruebas locales están integrados en este checkout, pero no eq
 - **R29:** se registraron los planes de USD 20, USD 100 y USD 200, pero el checkout sigue sin cobrar. La suscripción y la facturación real no se probaron.
 - No se probó la entrega real de correo ni la autenticación con OAuth de Google; esas integraciones requieren cuentas y servicios reales.
 - La matriz automatizada local pasó, pero todavía falta la aceptación operativa de los cinco roles del hotel.
-- En el head `8276f7e7` del PR #125, CI aprobó backend (**20 min 56 s**), frontend (**45 s**), contrato y Vercel; Playwright aprobó **193 recorridos y omitió 10** (**16 min 49 s**). El PR sigue en borrador y no se integró a `main`. Supabase Preview y los gates confiables de release figuran omitidos: falta un entorno aislado con la evidencia cloud de los cinco roles que exige el repositorio. No se quitó ningún control.
+- En el head `8276f7e7` del PR #125, CI aprobó backend (**20 min 56 s**), frontend (**45 s**), contrato y Vercel; Playwright aprobó **193 recorridos y omitió 10** (**16 min 49 s**). En el head posterior `3e1c15b0`, que solo añadió documentación, frontend, contrato y Vercel volvieron a pasar; backend y E2E seguían en curso en la última revisión.
+- Para ejecutar el control de release se aplicó la etiqueta `require-provider-qa`. En `3e1c15b0`, las puertas de release fallaron cerradas porque no encontraron evidencia: `operating-system` encontró **0** resúmenes QA (se exige uno) y `trusted-base-evidence` encontró **0** resúmenes modificados. Supabase Preview quedó omitido. No es un fallo de pruebas funcionales: falta la evidencia cloud aislada con las cinco personas que exige el repositorio. La configuración visible del entorno `preview-qa` tampoco incluye la variable `RENDER_QA_SERVICE_ID` que requiere el flujo de proveedores.
+- El PR #125 sigue abierto en borrador y no se integró a `main`; no se quitó ningún control ni se desplegó a producción.
 
 ## Límite de gasto de Render
 
