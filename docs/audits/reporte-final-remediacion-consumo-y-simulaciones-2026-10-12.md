@@ -249,7 +249,7 @@ Los cambios y las pruebas locales están integrados en este checkout, pero no eq
 - **R29:** se registraron los planes de USD 20, USD 100 y USD 200, pero el checkout sigue sin cobrar. La suscripción y la facturación real no se probaron.
 - No se probó la entrega real de correo ni la autenticación con OAuth de Google; esas integraciones requieren cuentas y servicios reales.
 - La matriz automatizada local pasó, pero todavía falta la aceptación operativa de los cinco roles del hotel.
-- El PR #125 sigue en borrador y no se integró a `main`. La vista previa de Supabase figura omitida porque no se preparó un entorno cloud aislado. Se mantienen todos los gates; antes de integrar falta la validación del head final y la evidencia de release que exige el repositorio.
+- En el head `8276f7e7` del PR #125, CI aprobó backend (**20 min 56 s**), frontend (**45 s**), contrato y Vercel; Playwright aprobó **193 recorridos y omitió 10** (**16 min 49 s**). El PR sigue en borrador y no se integró a `main`. Supabase Preview y los gates confiables de release figuran omitidos: falta un entorno aislado con la evidencia cloud de los cinco roles que exige el repositorio. No se quitó ningún control.
 
 ## Límite de gasto de Render
 
