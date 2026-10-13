@@ -1,0 +1,151 @@
+--- exp_lazy/app/dependencies/auth.py	2026-10-13 21:09:36.000000000 +0000
++++ exp_auth/app/dependencies/auth.py	2026-10-13 21:52:44.092697670 +0000
+@@ -17,7 +17,8 @@
+ active hotel membership. We never fall back to hotel 1 or fabricate a hotel
+ context from headers alone.
+ """
+-from dataclasses import dataclass
++from dataclasses import dataclass, replace as _dc_replace
++import time as _time
+ from typing import Optional, Set
+ 
+ from fastapi import Depends, Header, HTTPException, Request, status
+@@ -32,6 +33,12 @@
+ from app.services.tenant_context import set_tenant_hotel_context, set_tenant_user_context
+ 
+ 
++_AUTH_CACHE: dict = {}
++_AUTH_TTL = 10.0
++_PERM_CACHE: dict = {}
++_STEPUP_CACHE: dict = {}
++
++
+ @dataclass
+ class AuthContext:
+     """Minimal request context used by routers that expect a hotel scope."""
+@@ -153,11 +160,20 @@
+     x_hotel_id: Optional[str] = Header(default=None),
+     authorization: Optional[str] = Header(default=None),
+ ) -> AuthContext:
+-    """Return an authenticated context scoped to an active hotel membership."""
++    """PROTOTYPE: 10s in-process cache of (user, membership, role) + ONE set_config round trip."""
++    if not authorization:
++        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autenticacion requerida")
++    payload = _decode_authorization_header(authorization)
++    key = (payload.get("sub"), payload.get("token_version", 0), x_hotel_id, payload.get("hotel_id"))
++    now = _time.monotonic()
++    hit = _AUTH_CACHE.get(key)
++    if hit and hit[0] > now:
++        ctx = _dc_replace(hit[1], permissions=set())
++        from app.services.tenant_context import set_tenant_context
++        set_tenant_context(db, user_id=ctx.user_id, hotel_id=ctx.hotel_id)
++        return ctx
+ 
+     user, payload = _authenticate_user(db, authorization)
+-    # Membership resolution itself is protected by RLS and therefore needs
+-    # the user principal before we can select the active hotel.
+     set_tenant_user_context(db, user.id)
+     memberships = get_memberships_for_user(db, user.id)
+     membership = _resolve_membership(
+@@ -166,25 +182,17 @@
+         token_hotel_id=_parse_token_hotel_id(payload),
+     )
+     set_tenant_hotel_context(db, membership.hotel_id)
+-
+     try:
+         base_role = effective_role_code(db, membership.hotel_id, membership.role)
+     except HotelRoleNotFound as exc:
+-        raise HTTPException(
+-            status_code=status.HTTP_403_FORBIDDEN,
+-            detail="El rol asignado no está disponible en este hotel",
+-        ) from exc
+-
+-    return AuthContext(
+-        hotel_id=membership.hotel_id,
+-        user_id=user.id,
+-        user_email=user.email,
+-        user_role=membership.role,
+-        base_role=base_role if base_role != membership.role else None,
+-        is_verified=user.is_verified,
+-        permissions=set(),
+-        token_version=user.token_version or 0,
++        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="El rol asignado no está disponible en este hotel") from exc
++    ctx = AuthContext(
++        hotel_id=membership.hotel_id, user_id=user.id, user_email=user.email, user_role=membership.role,
++        base_role=base_role if base_role != membership.role else None, is_verified=user.is_verified,
++        permissions=set(), token_version=user.token_version or 0,
+     )
++    _AUTH_CACHE[key] = (now + _AUTH_TTL, ctx)
++    return ctx
+ 
+ 
+ def _action_step_up_tickets(request: Request) -> list[str]:
+@@ -332,13 +340,15 @@
+     context.permissions = permissions
+     if not context.is_verified:
+         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verifica tu email para usar el sistema")
+-    if not resolve(
+-        db,
+-        context.hotel_id,
+-        context.user_role,
+-        permission,
+-        user_id=context.user_id,
+-    ):
++    pkey = (context.hotel_id, context.user_role, context.user_id, permission)
++    now = _time.monotonic()
++    hit = _PERM_CACHE.get(pkey)
++    if hit and hit[0] > now:
++        allowed = hit[1]
++    else:
++        allowed = resolve(db, context.hotel_id, context.user_role, permission, user_id=context.user_id)
++        _PERM_CACHE[pkey] = (now + _AUTH_TTL, allowed)
++    if not allowed:
+         audit_permission_denied(
+             db,
+             hotel_id=context.hotel_id,
+@@ -347,7 +357,13 @@
+             permission_code=permission,
+         )
+         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenes permisos para esta accion")
+-    _require_action_step_up(db, request, context, permission)
++    sk = _STEPUP_CACHE.get(permission)
++    if sk is None or sk[0] < now:
++        from app.services.action_step_up_service import permission_requires_step_up
++        sk = (now + 300.0, permission_requires_step_up(db, permission))
++        _STEPUP_CACHE[permission] = sk
++    if sk[1]:
++        _require_action_step_up(db, request, context, permission)
+     return context
+ 
+ 
+--- exp_lazy/app/services/tenant_context.py	2026-10-13 21:09:37.000000000 +0000
++++ exp_auth/app/services/tenant_context.py	2026-10-13 21:52:44.092943695 +0000
+@@ -68,8 +68,15 @@
+     settings = db.info.get(_SESSION_INFO_KEY)
+     if not settings:
+         return
+-    for setting_name, setting_value in settings.items():
+-        _apply_setting(db, setting_name, setting_value, connection=connection)
++    bind = db.get_bind()
++    if bind is None or bind.dialect.name != "postgresql":
++        return
++    items = list(settings.items())
++    sql = "SELECT " + ", ".join(f"set_config(:n{i}, :v{i}, true)" for i in range(len(items)))
++    params = {}
++    for i, (n, v) in enumerate(items):
++        params[f"n{i}"] = n; params[f"v{i}"] = v
++    connection.execute(text(sql), params)
+ 
+ 
+ def set_tenant_user_context(db: Session, user_id: int | None) -> None:
+--- exp_lazy/app/database.py	2026-10-13 21:09:36.000000000 +0000
++++ exp_auth/app/database.py	2026-10-13 21:52:44.093163044 +0000
+@@ -294,7 +294,7 @@
+             max_overflow=max_overflow,
+             pool_timeout=pool_timeout,
+             poolclass=_RequestTelemetryQueuePool,
+-            pool_pre_ping=True,   # drop stale connections
++            pool_pre_ping=False,
+             pool_recycle=pool_recycle,
+             connect_args={"connect_timeout": connect_timeout},
+         )
