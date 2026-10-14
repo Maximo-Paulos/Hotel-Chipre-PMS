@@ -2,7 +2,7 @@
 
 - **code_sha auditado:** `ef0aa41f0efd7cfdebf42918700add640adbcbf6` (rama `claude/modest-goldberg-5dd5am`, sin cambios de código de producto)
 - **Fecha:** 2026-10-13
-- **Estado de certeza:** cada cifra de este documento fue **medida** en esta sesión (`confirmed`) salvo donde dice `inferred` o `needs-verification`. Los scripts para repetir todo están en [`scripts/`](scripts/); el inventario archivo por archivo, en [`INVENTARIO.md`](INVENTARIO.md).
+- **Estado de certeza:** cada cifra de este documento fue **medida** en esta sesión (`confirmed`) salvo donde dice `inferred` o `needs-verification`. Los scripts para repetir todo están en [`scripts/`](scripts/); el inventario archivo por archivo, en [`INVENTARIO.md`](INVENTARIO.md); las notas de la lectura completa, en [`LECTURA-COMPLETA.md`](LECTURA-COMPLETA.md); el cambio concreto para cada hallazgo (con código probado), en [`SOLUCIONES.md`](SOLUCIONES.md).
 - **Alcance leído:** 375 archivos Python de `app/` (101.418 LOC, 2.866 funciones analizadas por AST), 239 archivos de `frontend/src` (~57.000 líneas), 173 migraciones Alembic, `render.yaml`, `vercel.json`, Dockerfiles, `docker-compose.yml`, workflows de CI y la documentación de decisiones. Los archivos de mayor impacto se leyeron enteros (`main.py`, `database.py`, `config.py`, `dependencies/auth.py`, `tenant_context.py`, `permission_service.py`, `domain_events.py` clave, `financial_report_service.py`, `reservation.py`, `events.py`, `rate_limiter.py`, tasks/cron, `queryPolicy.ts`, `main.tsx`, `i18n.ts`); el resto se cubrió con análisis estático y con **ejecución real** de los 171 `GET` sin parámetros.
 
 ---
