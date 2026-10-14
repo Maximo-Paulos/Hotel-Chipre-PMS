@@ -75,11 +75,11 @@ La segunda pasada leyó **cada archivo** de `app/` (71 modelos, 137 servicios, 6
 | N6 | Autenticación de la API pública: **10 sentencias + `commit` por llamada** (escribe `last_used_at` siempre) ✔ | `measure_hot_paths.py` |
 | N7 | `billing_policy` refleja la tabla en cada llamada: **21 sentencias**; el panel master lo repite por hotel (50 hoteles = 1.050 sentencias, 1,4 s) ✔ | `measure_hot_paths.py` |
 | N8 | **Argon2id para códigos de 6 dígitos**: 59 ms de CPU por verificación (20 intentos ≈ 1,2 s de CPU en un worker de 0,5 CPU: un vector de saturación) ✔; HMAC cuesta < 0,1 ms | `measure_hot_paths.py` |
-| N9 | **Endpoints `async def` que hacen trabajo síncrono de base** (webhooks de OTA y de WhatsApp, snapshot de FX): bloquean el bucle de eventos del único worker y congelan los SSE | lectura de `api/` |
+| N9 | **Endpoints `async def` que hacen trabajo síncrono de base** (webhooks de OTA y de WhatsApp, snapshot de FX): bloquean el bucle de eventos del único worker y congelan los SSE | verificado: `api/ota_webhooks.py:48-80` (`async def` + `validate_webhook_secret`/`process_*_webhook`/`commit` síncronos) |
 | N10 | **I/O externo síncrono dentro de la transacción del request** (correo, enlaces de Mercado Pago, validación de Stripe): retiene una conexión del pool (de 6) mientras espera a un tercero | lectura de `services/` y `master_admin/` |
 | N11 | **Sin tareas de retención** para `rate_limit_events`, `security_tokens`, `domain_event_outbox` (hay un modelo de *watermark* que nadie usa), exportaciones y sesiones. Solo existe `pg_cron` para *leads*/consultas públicas (migraciones `20260925`/`20260926`): **ese es el patrón a extender** | `grep` + migraciones |
-| N12 | **Semántica de permisos cruzada**: un permiso de *ver* autoriza escrituras en `payment_surcharges` y `room_state_events` | lectura de `api/` |
-| N13 | **Sin límite global de tamaño de cuerpo**: solo topes de 7 MB por campo base64; un cliente puede mantener ocupadas las 6 conexiones del pool y la RAM | `main.py` |
+| N12 | **Semántica de permisos cruzada**: `POST`/`PATCH`/`DELETE` de `payment_surcharges` exigen `reports.financial.view` (un permiso de *ver*); igual `room_state_events` | verificado: `api/payment_surcharges.py:140,198,250` |
+| N13 | **Sin límite global de tamaño de cuerpo**: solo topes por endpoint (webhooks 2 MB vía `read_bounded_body`; imágenes base64 de 5–7 MB por campo). Un cuerpo grande a cualquier otra ruta se lee entero en memoria | verificado: no hay middleware ni `413` global en `main.py`/`config.py`/`render.yaml` |
 | N14 | **Dinero en `float`** en los contratos de la API (`PaymentRequest.amount`, tarifas, impuestos) y en decenas de columnas (`daily_rates`, `price_periods`, `rate_plan_prices`, `tax_rules`…), mientras reportes y caja usan `Decimal`: errores de redondeo al sumar | `schemas/`, `models/commercial.py`, `daily_rate.py` |
 | N15 | `/health/datastores` **sin autenticación** revela qué almacenes existen ✔ | `verify_misc_findings.py` |
 | N16 | `guest.digital_signature` (`Text` sin tope) viaja en **todas** las lecturas de huésped y `ReservationRead` serializa 55 campos también en listados | `schemas/guest.py`, `schemas/reservation.py` |
@@ -352,12 +352,22 @@ Esquema vacío: **22 MB** (catálogo de 173 tablas/656 índices). Datos: **~7 MB
 4. Verificar en los paneles: región de Render vs Supabase, rol de la `DATABASE_URL` (¿`postgres`?), tamaño real, plan de Vercel.
 5. Borrar `render-no-show-cron.yaml` (roto y duplicado).
 
+### Fase 0-bis — Integridad y seguridad (antes de que entre un usuario real; § 0.2)
+- **N1** Mover las 15 escrituras de auditoría posteriores al `commit` a la misma transacción; test de auditoría contra PostgreSQL (el SQLite de los tests lo oculta).
+- **N2** Almacenamiento de objetos persistente (R2 o Supabase Storage); prohibir `OBJECT_STORAGE_BACKEND=local` en el validador de producción; migrar `payment_proof_blobs`.
+- **N3** Cifrar o no persistir las credenciales del asistente de onboarding; rotar las que ya se hayan cargado.
+- **N4** API pública: resolver/crear el huésped dentro del endpoint y devolver un esquema público sin documento.
+- **N15** Autenticar `/health/datastores` (dejar `/health/live` y `/health/ready` públicos).
+- **N18** Decidir el perfil de correo del piloto: con `EXTERNAL_EFFECTS_ENABLED=false` no sale ningún correo.
+- **N19** Tests de fechas con la zona del hotel (`hotel_today`) en lugar de `date.today()`: elimina el fallo de CI entre 00:00 y 03:00 UTC.
+
 ### Fase 1 — Capacidad y memoria (1–2 semanas) — el mayor retorno
 6. **Carga perezosa por defecto** + `selectinload` explícito donde se serializan relaciones (medido: reportes ×3–×6, RSS −50 %, sin 503; rompe 6 tests de forma de SQL). Agregar un test de presupuesto de consultas por endpoint para no reintroducir N+1.
 7. **Colapsar el costo fijo por request** (9 → 3–4 consultas): quitar `pool_pre_ping` (usar `pool_recycle` + reintento por desconexión), fusionar los `set_config` en una sola sentencia, cachear usuario/membresías/permisos con TTL corto invalidado por el `NOTIFY` que ya existe, resolver solo el permiso pedido. (Medido: +36 % req/s liviano.)
 8. **Reportes con `GROUP BY` en SQL** (`financial_report`, `analytics/rooms`, `housekeeping`, `cash_daily_summary`).
 9. Pool/hilos: liberar la conexión antes de serializar o limitar concurrencia de endpoints pesados con un semáforo; el pool 4+2 con 40 hilos genera 503 a partir de ~40 usuarios simultáneos.
 10. Reducir login: 4 commits → 1–2; rate limiter en memoria para el proceso único (con respaldo persistente solo en bloqueo).
+10-bis. **Costos nuevos de § 0.2:** `async def` con base síncrona en webhooks de OTA/WhatsApp/FX → `def` (hilo) o `run_in_threadpool` (N9); sacar el I/O externo (correo, Mercado Pago, Stripe) de la transacción del request (N10); caché de `billing_policy` y de verificación de claves de API, con `last_used_at` espaciado (N6, N7); HMAC en lugar de Argon2id para códigos de 6 dígitos (N8); tope global de cuerpo de request en un middleware ASGI (N13).
 
 ### Fase 2 — Costo y plan gratuito (días)
 11. Frontend a Cloudflare Pages; endpoint interno `POST /internal/jobs` con secreto + **Cloudflare Cron** cada 5–15 min; apagar el servicio cron de Render. Decidir entre topología A (gratis) o B (USD 7).
@@ -368,7 +378,7 @@ Esquema vacío: **22 MB** (catálogo de 173 tablas/656 índices). Datos: **~7 MB
 ### Fase 3 — Higiene de datos (antes de escalar)
 15. Dinero `Float → Numeric` (empezar por tarifas y reglas de impuestos); fechas a `timestamptz`; enums nativos → `text + CHECK` al tocar cada dominio.
 16. Índices: quitar los claramente redundantes (`ix_reservation_dates`, `*_hotel_id` solitarios, `external_id`/`source_provider_code` solitarios), pasar a **parciales `WHERE deleted_at IS NULL`**, consolidar GIN de huéspedes, `fillfactor` 85–90 en `reservations`; **decidir con 2 semanas de `pg_stat_user_indexes`**. Para grandes hoteles: cota inferior por estadía en la grilla o GiST `daterange`.
-17. Purga del outbox y de `rate_limit_events`, sesiones y auditorías operativas; medir crecimiento semanal.
+17. Purga del outbox, `rate_limit_events`, `security_tokens`, sesiones, exportaciones y auditorías operativas **con `pg_cron`, siguiendo el patrón de las migraciones `20260925`/`20260926`** (N11); medir crecimiento semanal. Corregir la semántica de permisos cruzada (N12) y pasar el dinero de la API a `Decimal` (N14).
 18. Consolidar sistemas paralelos (suscripción legacy/v2, OTA, conexiones, precios por método de pago) y las 28 rutas duplicadas `/x` vs `/api/x`.
 
 ### Metas medibles (para validar cada fase)
