@@ -54,6 +54,42 @@ Pregunta de fondo del encargo: *"necesito que consuma mucho menos de lo que cons
 
 **Lectura de la tabla:** los tres cambios con mayor efecto por esfuerzo son (1) carga perezosa por defecto, (2) costo fijo por request y (3) `GROUP BY` en reportes; solo con la carga perezosa el proceso baja del 240 % al ~120 % del límite de memoria del plan Starter (1.233 → 611 MB sobre 512 MB), y con el SQL agregado de los reportes debería quedar por debajo del 100 % (meta < 400 MB). El cambio de lenguaje no aparece en la tabla porque **ninguna de estas cifras depende de él** (§ 10).
 
+### 0.2 Hallazgos de la lectura completa que no estaban en la primera pasada
+
+La segunda pasada leyó **cada archivo** de `app/` (71 modelos, 137 servicios, 67 routers, 50 esquemas, tareas, adaptadores, panel master) y está en [`LECTURA-COMPLETA.md`](LECTURA-COMPLETA.md). Lo siguiente **cambia el orden del plan**: hay problemas de integridad y seguridad que pesan más que el consumo. Los marcados ✔ se **reprodujeron** con un script (tabla final de `LECTURA-COMPLETA.md`).
+
+**Bloquean el piloto (P0)**
+
+| # | Hallazgo | Evidencia | Arreglo |
+|---|---|---|---|
+| N1 | **La auditoría escrita después de `db.commit()` se pierde en PostgreSQL** (15 sitios; en SQLite persiste por una rareza del SAVEPOINT, por eso los tests no lo ven) ✔ | `scripts/audit_loss_repro.py`, `scripts/scan_post_commit_audit.py` | Escribir la auditoría **antes** del `commit` en la misma transacción; test contra PostgreSQL |
+| N2 | **Los archivos (comprobantes de pago, vouchers de empresa, exportaciones) se guardan en disco local de Render, que es efímero**: se pierden en cada despliegue o reinicio mientras la fila sigue "aprobada". El valor por defecto es `OBJECT_STORAGE_BACKEND=local`, el validador de producción **no lo prohíbe** y `render.yaml` no declara disco. El backend S3 es un esqueleto (solo GCS está implementado) | `config.py`, `object_storage.py`, `render.yaml` | Bucket compatible con S3 (Cloudflare R2 tiene capa gratuita) o Supabase Storage; prohibir `local` en producción; quitar los blobs de la tabla `payment_proof_blobs` |
+| N3 | **Credenciales de proveedores (Mercado Pago, OTAs) en texto plano** dentro de `onboarding_state.payment_methods_json` / `ota_channels_json` ✔ | `scripts/verify_misc_findings.py` | Cifrar con `INTEGRATIONS_ENCRYPTION_KEY` (ya existe para Stripe) o no persistir el secreto en el asistente |
+| N4 | **La API pública de reservas devuelve `document_type` y `document_number` del huésped** y acepta un `guest_id` cualquiera: con la clave de API de un hotel se leen documentos de otros huéspedes ✔ | `scripts/verify_public_booking_pii.py` | Crear/resolver el huésped dentro del endpoint, esquema público sin documento |
+
+**Capacidad, costo y datos (P1)**
+
+| # | Hallazgo | Evidencia |
+|---|---|---|
+| N5 | Limitador de intentos persistido en BD: **4 sentencias + `commit` por intento** y sin purga global de `rate_limit_events` ✔ | `measure_hot_paths.py` |
+| N6 | Autenticación de la API pública: **10 sentencias + `commit` por llamada** (escribe `last_used_at` siempre) ✔ | `measure_hot_paths.py` |
+| N7 | `billing_policy` refleja la tabla en cada llamada: **21 sentencias**; el panel master lo repite por hotel (50 hoteles = 1.050 sentencias, 1,4 s) ✔ | `measure_hot_paths.py` |
+| N8 | **Argon2id para códigos de 6 dígitos**: 59 ms de CPU por verificación (20 intentos ≈ 1,2 s de CPU en un worker de 0,5 CPU: un vector de saturación) ✔; HMAC cuesta < 0,1 ms | `measure_hot_paths.py` |
+| N9 | **Endpoints `async def` que hacen trabajo síncrono de base** (webhooks de OTA y de WhatsApp, snapshot de FX): bloquean el bucle de eventos del único worker y congelan los SSE | lectura de `api/` |
+| N10 | **I/O externo síncrono dentro de la transacción del request** (correo, enlaces de Mercado Pago, validación de Stripe): retiene una conexión del pool (de 6) mientras espera a un tercero | lectura de `services/` y `master_admin/` |
+| N11 | **Sin tareas de retención** para `rate_limit_events`, `security_tokens`, `domain_event_outbox` (hay un modelo de *watermark* que nadie usa), exportaciones y sesiones. Solo existe `pg_cron` para *leads*/consultas públicas (migraciones `20260925`/`20260926`): **ese es el patrón a extender** | `grep` + migraciones |
+| N12 | **Semántica de permisos cruzada**: un permiso de *ver* autoriza escrituras en `payment_surcharges` y `room_state_events` | lectura de `api/` |
+| N13 | **Sin límite global de tamaño de cuerpo**: solo topes de 7 MB por campo base64; un cliente puede mantener ocupadas las 6 conexiones del pool y la RAM | `main.py` |
+| N14 | **Dinero en `float`** en los contratos de la API (`PaymentRequest.amount`, tarifas, impuestos) y en decenas de columnas (`daily_rates`, `price_periods`, `rate_plan_prices`, `tax_rules`…), mientras reportes y caja usan `Decimal`: errores de redondeo al sumar | `schemas/`, `models/commercial.py`, `daily_rate.py` |
+| N15 | `/health/datastores` **sin autenticación** revela qué almacenes existen ✔ | `verify_misc_findings.py` |
+| N16 | `guest.digital_signature` (`Text` sin tope) viaja en **todas** las lecturas de huésped y `ReservationRead` serializa 55 campos también en listados | `schemas/guest.py`, `schemas/reservation.py` |
+| N17 | **Integraciones que no hacen lo que aparentan**: el webhook de Stripe se guarda y **nunca se procesa**; la salida a OTAs usa credenciales globales, traga `ConnectError` y es un esqueleto; los adaptadores de Mercado Pago/PayPal no se usan | lectura de `adapters/`, `services/ota/` |
+| N18 | **Perfil "sandbox"** (`EXTERNAL_EFFECTS_ENABLED=false` ⇒ proveedor de correo `null`): con la configuración actual **no sale ningún correo** (confirmaciones, invitaciones, recuperación). Hay que decidirlo antes del piloto | `config.py`, `render.yaml` |
+| N19 | **Tests con `date.today()` (UTC) frente a la zona del hotel (Buenos Aires)**: entre 00:00 y 03:00 UTC fallan pruebas de backend y recorridos E2E sin que cambie el código (observado en el PR #126) | CI del PR |
+
+**Superposiciones y código muerto** (reducen costo de mantenimiento y de arranque): tres implementaciones de *no-show*; tres caminos públicos de creación de reserva; `api/connections.py` y `api/email.py` sin montar (✔ el primero responde 410 por el *catch-all*); `job_dispatcher`; `SubscriptionEnforcementMiddleware` sin registrar; árbol Celery inactivo; proyecciones NoSQL que solo escriben; `bookings`/`daily_rates` heredados; `demo.router` solo fuera de producción.
+
+
 ---
 
 ## 1. Cómo se midió (y límites)
