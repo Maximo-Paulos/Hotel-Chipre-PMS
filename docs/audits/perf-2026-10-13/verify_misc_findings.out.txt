@@ -1,0 +1,3 @@
+GET /health/datastores sin autenticación -> 200 ['cassandra', 'clickhouse', 'mongo', 'neo4j', 'postgres', 'redis']
+POST /api/connections/mercadopago/connect -> 410
+onboarding_state.payment_methods_json contiene el secreto en claro: True

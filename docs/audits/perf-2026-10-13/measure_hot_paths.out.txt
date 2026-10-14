@@ -1,0 +1,68 @@
+limitador BD: 1 intento (allow + commit)                   sentencias=    4  commits=  1      12.2 ms
+limitador BD: 20 intentos en una transacción               sentencias=   80  commits=  1      62.2 ms
+limitador en memoria: 20 intentos                          sentencias=    0  commits=  0       0.1 ms
+API pública: autenticación de 1 llamada                    sentencias=   10  commits=  1       6.9 ms
+billing_policy.get_policy_payload (1 hotel)                sentencias=   21  commits=  0      32.3 ms
+billing_policy.get_policy_payload x50 hoteles              sentencias= 1050  commits=  0    1395.7 ms
+código 6 dígitos: hash+verify con Argon2id (hash_password) sentencias=    0  commits=  0      58.8 ms
+código 6 dígitos: HMAC-SHA256 + compare_digest             sentencias=    0  commits=  0       0.0 ms
+telemetría: bytes de sentencia de 75 columnas + 31 parámetros     30.4 µs/sentencia
+audited_change: _get_model_for_table (173 mappers)             31.9 µs/llamada
+[
+  {
+    "label": "limitador BD: 1 intento (allow + commit)",
+    "statements": 4,
+    "commits": 1,
+    "ms": 12.2
+  },
+  {
+    "label": "limitador BD: 20 intentos en una transacción",
+    "statements": 80,
+    "commits": 1,
+    "ms": 62.2
+  },
+  {
+    "label": "limitador en memoria: 20 intentos",
+    "statements": 0,
+    "commits": 0,
+    "ms": 0.1
+  },
+  {
+    "label": "API pública: autenticación de 1 llamada",
+    "statements": 10,
+    "commits": 1,
+    "ms": 6.9
+  },
+  {
+    "label": "billing_policy.get_policy_payload (1 hotel)",
+    "statements": 21,
+    "commits": 0,
+    "ms": 32.3
+  },
+  {
+    "label": "billing_policy.get_policy_payload x50 hoteles",
+    "statements": 1050,
+    "commits": 0,
+    "ms": 1395.7
+  },
+  {
+    "label": "código 6 dígitos: hash+verify con Argon2id (hash_password)",
+    "statements": 0,
+    "commits": 0,
+    "ms": 58.8
+  },
+  {
+    "label": "código 6 dígitos: HMAC-SHA256 + compare_digest",
+    "statements": 0,
+    "commits": 0,
+    "ms": 0.0
+  },
+  {
+    "label": "telemetría bytes por sentencia (µs)",
+    "us": 30.4
+  },
+  {
+    "label": "_get_model_for_table (173 mappers) µs",
+    "us": 31.9
+  }
+]
