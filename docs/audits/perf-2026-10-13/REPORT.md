@@ -28,6 +28,32 @@
 
 **Qué *no* hace falta:** reescribir el backend en otro lenguaje, agregar más índices, ni ninguna base NoSQL. Qué *sí* produce el mayor efecto: los puntos 1–5 (≈ 3–6× de capacidad y la mitad de la memoria, medido con dos prototipos de pocas líneas), y arreglar 6–8 antes de abrir el piloto.
 
+### 0.1 Presupuesto de consumo: hoy vs. objetivo
+
+Pregunta de fondo del encargo: *"necesito que consuma mucho menos de lo que consume ahora"*. Esta tabla junta, por recurso, lo medido hoy, lo que ya demostró un prototipo y la meta que propone el plan (§ 11). **Medido** = reproducido con los scripts de [`scripts/`](scripts/); **Prototipo** = medido en una copia descartable; **Meta** = objetivo de diseño, aún no medido.
+
+| Recurso | Hoy (medido) | Qué lo baja | Después | Estado de la cifra "después" |
+|---|---|---|---|---|
+| Sentencias SQL por `GET` autenticado (mediana) | **9** | colapsar `set_config`, quitar `pool_pre_ping`, caché de permisos invalidada por `NOTIFY` | **≤ 4** | Prototipo: +36 % req/s en endpoints livianos |
+| Login | **37 sentencias / 5 transacciones** | un solo `commit`, limitador en memoria | **≤ 12 / 2** | Meta |
+| `GET /api/reports/revenue` | **110 sentencias, 2,9 s** | `GROUP BY` en SQL | **≤ 6 sentencias, ≤ 150 ms** | Meta (carga perezosa sola: 26 sentencias, 724 ms, medido) |
+| `GET /api/analytics/rooms` | 90 sentencias, 2.370 ms | carga perezosa por defecto | 13 sentencias, **17 ms** | Prototipo |
+| Memoria del proceso bajo carga mixta | **1.233 MB** (límite del plan Starter: 512 MB) | carga perezosa + SQL agregado | **611 MB** → meta < 400 MB | Prototipo (611) / Meta (< 400) |
+| Capacidad con reportes en la mezcla | **2,3–2,7 req/s**, p95 6–12 s, errores 503 | carga perezosa, semáforo para endpoints pesados | **7–11 req/s, sin errores** → meta ≥ 15 | Prototipo / Meta |
+| Egreso DB→API por request liviano / pesado | **68 KB / 2,1 MB** | carga perezosa, listas paginadas, columnas mínimas | **46 KB / 334 KB** → meta ≤ 25 KB liviano | Prototipo / Meta |
+| Un intento de login contra el limitador | **4 sentencias + `commit`** (80 por 20 intentos) | limitador en memoria con respaldo en BD solo al bloquear | **0 sentencias** | Medido (variante en memoria) |
+| Una llamada de la API pública (clave de API) | **10 sentencias + `commit`** (escribe `last_used_at` siempre) | verificar con caché corto y escribir `last_used_at` como máximo cada N minutos | ~2 sentencias, 0 `commit` | Meta |
+| Política de facturación del panel master | **21 sentencias por hotel** (50 hoteles: 1.050 sentencias, 1,4 s) | no reflejar la tabla en cada llamada; una consulta agregada | 1–2 sentencias en total | Meta |
+| Código de 6 dígitos (verificación de correo, MFA, recuperación) | **59 ms de CPU** con Argon2id | HMAC-SHA256 con *pepper* + comparación en tiempo constante | **< 0,1 ms** | Medido (HMAC) |
+| Tareas programadas | **288 contenedores/día** (cron Render cada 5 min; ≈ 5,5 s de *import* + conexión TLS cada vez) + posible segundo cron | `POST /internal/jobs` con secreto + Cloudflare Cron (5 gratuitos) | **0 contenedores**; costo del cron Render −USD 1–2/mes | Meta |
+| Costo fijo mensual | **≈ USD 8–9** (Starter + cron; Vercel Hobby no es válido para uso comercial) | topología A o B (§ 7) | **≈ USD 0 (A) / ≈ USD 7 (B)** | Estimado por listas de precios |
+| Dependencias instaladas | **291 MB** (178 MB `ortools`/pandas/numpy; 33 MB Mongo/Cassandra/Neo4j/Celery/pytest) | núcleo + extras opcionales | **≈ 80 MB** de núcleo (291 − 178 − 33) | Cuenta directa del desglose |
+| Chunk de entrada del frontend | **571 kB / 179 kB gzip** (44 % `react-router` v7) | router más liviano, locales bajo demanda | meta ≤ 350 kB | Meta |
+| Imágenes servidas | **2,7 MB** (logo de 992 kB) | WebP/SVG | ≈ 0,3 MB (−90 %) | Estimado |
+| Almacenamiento | **63 % índices** (126 MB de 200 MB con 30 hoteles) y sin purga de outbox, sesiones, límite de tasa, exportaciones | quitar redundantes (decidir con `pg_stat_user_indexes`) + tareas de retención (`pg_cron`, ya usado en las migraciones `20260925`/`20260926`) | sin crecimiento no acotado | Meta (sin cifra hasta medir) |
+
+**Lectura de la tabla:** los tres cambios con mayor efecto por esfuerzo son (1) carga perezosa por defecto, (2) costo fijo por request y (3) `GROUP BY` en reportes; solo con la carga perezosa el proceso baja del 240 % al ~120 % del límite de memoria del plan Starter (1.233 → 611 MB sobre 512 MB), y con el SQL agregado de los reportes debería quedar por debajo del 100 % (meta < 400 MB). El cambio de lenguaje no aparece en la tabla porque **ninguna de estas cifras depende de él** (§ 10).
+
 ---
 
 ## 1. Cómo se midió (y límites)
