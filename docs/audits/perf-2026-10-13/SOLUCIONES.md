@@ -205,9 +205,9 @@ requirements-celery.txt   # celery, redis   (solo si se reactiva)
 
 **Cambio:** [`solutions/ci_concurrency_snippet.yml`](solutions/ci_concurrency_snippet.yml): `concurrency` con `cancel-in-progress` por PR (un push nuevo cancela los jobs ya obsoletos), `paths-ignore` para `docs/`, `knowledge/`, `qa/`, `.graphify/` y `*.md`, `timeout-minutes` en los jobs sin tope, caché de `~/.cache/ms-playwright`, y `buildFilter` en `render.yaml` para que solo `app/`, `alembic/`, `requirements.txt` y `runtime.txt` disparen despliegue. Quitar (o pasar a `workflow_dispatch`) `build-and-push.yml`: construye 2 imágenes por merge y nadie las consume. **Advertencia:** `paths-ignore` bloquea el merge si esos checks son *required* en la rama; en ese caso filtrar dentro del job.
 
-**Ahorro:** con 63 de 132 commits sin tocar código de ejecución y ≈ 29–35 min por push (e2e 16,1 min medido; resto estimado), lo evitable es del orden de la mitad de los minutos. No se midió en CI real.
+**Ahorro:** con 63 de 111 commits no-merge (57 %) sin tocar código de ejecución y ≈ 29–35 min por push (e2e 16,1 min medido; resto estimado), lo evitable es del orden de la mitad de los minutos. No se midió en CI real.
 
-### S22 · Arranque del frontend: de 9–10 requests a 2–3 antes de la primera consulta (F2) — *Diseño*
+### S22 · Arranque del frontend: menos requests antes de la primera consulta (F2) — *Diseño*
 
 **Cambio** (los tres en `frontend/src`, sin tocar el backend):
 1. `hooks/usePermissions.ts:16-22`: sembrar con lo que el refresh/login ya trajo.
@@ -225,9 +225,9 @@ const query = useQuery<EffectivePermissionsResponse>({
 });
 ```
 2. El idioma de interfaz ya llega en `hotel-config`: eliminar `useHotelInterfaceLanguage` para quien tiene `hotel_settings:read` (y devolver `interface_language` en la respuesta del refresh para el resto; hoy `GET /api/config/interface-language` = 1 request + 1 `SELECT` por carga de página).
-3. `GET /api/events/recovery` y `/api/events/stream` hoy son secuenciales (`crossTabSync.ts:589-592`): lanzarlos en paralelo o fusionar el recovery en el primer mensaje del stream.
+3. `GET /api/events/recovery` y `/api/events/stream` hoy son secuenciales (`src/sync/crossTabSync.ts:589-592`): lanzarlos en paralelo o fusionar el recovery en el primer mensaje del stream.
 
-**Efecto esperado:** quita 2 de las 6–7 lecturas (permisos, idioma) y 1 viaje secuencial; el refresh sigue bloqueando el render para quien ya tenía sesión (F2), por eso no es el cambio de mayor retorno por sí solo. No se ejecutó ni se midió.
+**Efecto esperado:** quita 2 de las 6 lecturas del shell (permisos, idioma: de 9 a 7 requests) y 1 viaje secuencial; fusionar `config/`, `onboarding/status`, `subscription/status` y `notifications?limit=1` en un `GET` de arranque lo lleva a ≈ 4; el refresh sigue bloqueando el render para quien ya tenía sesión (F2), por eso no es el cambio de mayor retorno por sí solo. No se ejecutó ni se midió.
 
 ### S23 · Datos de otra persona tras cerrar sesión (F5) — *Diseño trivial*
 
@@ -262,4 +262,4 @@ Backend: `schemas/marketing.py:84-85` → `plans: list[PlanIn] = Field(..., min_
 | 5 | S9 con prueba de paridad | 3–5 días | Reportes de 2,9 s a ~150 ms |
 | 6 | S10, S11, S12, S13, S14 | 2–3 días | Sin crecimiento no acotado, sin cron de pago, sin bloqueos del bucle |
 | 7 | S18 y migración de frontend a Cloudflare Pages | 1–2 días | −65 % de dependencias; plan gratuito válido en licencia |
-| 8 | S22 y el resto de F1–F16 (§ 0.3 del informe) | 3–5 días | De 9–10 requests de arranque a 2–3; listas con ventana de fechas; sin fan-out de `analytics` |
+| 8 | S22 y el resto de F1–F16 (§ 0.3 del informe) | 3–5 días | De 9 requests de arranque a 7 (a ≈ 4 con un `GET` de arranque único); listas con ventana de fechas; sin fan-out de `analytics` |

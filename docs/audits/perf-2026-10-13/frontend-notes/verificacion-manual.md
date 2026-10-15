@@ -51,3 +51,35 @@ Comprobados por mí contra el código, independientemente del agente que escribi
 | Hallazgo | Resultado | Evidencia |
 |---|---|---|
 | `hotel_api_keys` tiene RLS `FORCE` con política `hotel_id = NULLIF(current_setting('app.hotel_id'),'')::int`, pero `verify_key` busca la clave por hash **antes** de conocer el hotel | **Reproducido en PostgreSQL 16**: con un rol `NOBYPASSRLS` y sin `app.hotel_id`, `SELECT … WHERE key_hash = …` devuelve **0 filas**; con `app.hotel_id=1` devuelve 1. Consecuencia: o la `DATABASE_URL` de producción usa un rol con `BYPASSRLS` (entonces la RLS no protege nada), o **toda** clave de la API pública responde 401. | `alembic/versions/20260820_missing_tenant_rls.py:24-26,53-56`; `app/dependencies/api_key_auth.py:35-70` (el comentario de la línea 66-69 afirma que la búsqueda "queda fuera de RLS", pero la política no lo permite); `app/services/hotel_api_key_service.py:69` |
+
+## Verificación por un segundo lector (Workflow `wf_99bb92bc-b2c`)
+
+Un agente independiente por parte comprobó contra el código las afirmaciones principales de cada nota y dejó las líneas `CORREGIDO (verificación)` / `IMPRECISO` en la nota correspondiente. Resultado: **262 afirmaciones comprobadas, 198 confirmadas y 64 corregidas**.
+
+| Parte | Comprobadas | Confirmadas | Corregidas | Tasa de corrección |
+|---|---:|---:|---:|---:|
+| fe1 (reservas) | 26 | 19 | 7 | 27 % |
+| fe2 (páginas grandes, api/hooks) | 32 | 27 | 5 | 16 % |
+| fe3 (vistas protegidas restantes) | 22 | 19 | 3 | 14 % |
+| fe4 (onboarding, público, master, marketing) | 22 | 18 | 4 | 18 % |
+| fe5 (`api/*` y `hooks/*`) | 26 | 16 | 10 | 38 % |
+| fe6 (i18n) | 23 | 20 | 3 | 13 % |
+| fe7 (shell, router, sesión, config) | 25 | 16 | 9 | 36 % |
+| migraciones A | 24 | 17 | 7 | 29 % |
+| migraciones B | 40 | 31 | 9 | 22 % |
+| ops (CI, despliegue, scripts, QA) | 22 | 15 | 7 | 32 % |
+
+Correcciones que cambiaron una conclusión del informe (todas incorporadas en `REPORT.md` § 0.3 y `SOLUCIONES.md`):
+
+- **Arranque del frontend:** el endpoint es `POST /api/auth/session/refresh`; el peor caso es 62 s; son 6 lecturas propias del shell (9 requests en total, no 9–10); `render.yaml` declara plan Starter (siempre encendido), así que el cold start de Render Free solo aplica si el servicio real es Free (F2, O1).
+- **SSE:** el hilo fijo por stream solo existe con transporte Redis; `render.yaml:42-43` fija `REALTIME_EVENTS_TRANSPORT=postgresql` (asíncrono) y el heartbeat de producción es 30 s (F4).
+- **Onboarding:** las credenciales se pierden solo al volver a montar el wizard, no al guardar dentro de la misma sesión (F7).
+- **Auditoría operativa:** 12 consultas, no 9 (cota de 240.000 filas ORM por request) (F9).
+- **Calendario de tarifas:** hasta 366 columnas (≈ 3.660 celdas, 2.196 inputs), no 365 filas siempre (F9).
+- **Service worker:** las navegaciones son network-first (`sw.js:77-82`); el cache-first es `:84-98` (F12).
+- **`useEffectivePermissions()`:** 28 llamadas en 27 archivos, no 29 en 28 (F16).
+- **CI:** 63 de 111 commits no-merge (57 %; clon superficial desde 2026-09-26), no 63 de 132 (O3, O5).
+- **Región:** `.env.render` es un archivo de ejemplo; 38–50 ms por consulta (no solo 50) (O2).
+- **`vercel.json` raíz:** el impacto es SEO y vista previa de enlaces (los `.html` son copias de `index.html` con meta tags por ruta), no ancho de banda (O8, § 7).
+- **Dinero `Float`** (migraciones B): el libro ya es `Numeric(12,2)`; quedan 30 columnas `Float` en esa era y 61 en el ORM actual (N14, M5).
+- **Migraciones A:** `price_periods` no se retira; "+17 índices" eran ≤ 14; 4 FKs compuestas con `CASCADE`, no 5; `TokenStore.issue()` también purga tokens previos (M1, M2, M5).
