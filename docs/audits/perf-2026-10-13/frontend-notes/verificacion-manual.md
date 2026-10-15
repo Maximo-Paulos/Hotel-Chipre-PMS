@@ -16,3 +16,11 @@ Comprobados por mí contra el código, independientemente del agente que escribi
 |---|---|---|
 | El wizard de onboarding envía credenciales de 6 proveedores en texto plano y el backend las guarda sin cifrar | **Confirmado** (también reproducido con `scripts/verify_misc_findings.py`) | `OnboardingWizard.tsx:1603-1617` (campo de texto), `onboarding_service.py:462,484`, lector solo expone `has_credentials` (`onboarding_service.py:149-155`) |
 | `PUT /api/master-admin/pricing/plans` con `plans: []` borra todos los planes públicos | **Confirmado** | `marketing_service.py:140-142` borra todo plan que no esté en el payload; `schemas/marketing.py:84-85` sin `min_length`; `PricingPage.tsx:57-93` arranca con `plans = []` y el formulario sigue enviable si el GET falla |
+
+## Partes 3 y 5 (vistas protegidas restantes; capa `api/` y hooks)
+
+| Hallazgo | Resultado | Evidencia |
+|---|---|---|
+| `CORSMiddleware` sin `max_age` (preflight en cada request cross-origin) | **Confirmado el hecho, con matiz sobre el impacto** | `app/main.py:443-451` no define `max_age`; Starlette usa 600 s por defecto y el navegador cachea por URL (con query incluida), así que el costo real depende de cuántas URLs distintas se piden por sesión: el "hasta el doble" de la nota es una **inferencia sin medir** |
+| La bandeja de WhatsApp carga conversaciones con `selectin` | **Confirmado** | `models/whatsapp_crm.py:85-86,137` (`conversations` con `lazy="selectin"` en canal y contacto) |
+| Los endpoints MFA devuelven `401` por código inválido | **Confirmado** | `api/auth.py:1489,1500,1532`; el cliente solo exceptúa ese `401` del cierre de sesión cuando la ruta es de *step-up* y el texto coincide exactamente (`client.ts:482-488`) |
