@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1792095256797.0103,
-    "hash": "430b3a997371f2598cb6fd4a90645b09"
+    "mtime": 1792097625471.8813,
+    "hash": "049dfc18a973b4f18b2dc6f5049d1022"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1792095256129.2673,
-    "hash": "0e2f88bc04c04880d4072274aa54579f"
+    "mtime": 1792097624805.8164,
+    "hash": "855ea3e3862f66a3b76e2be7f82f028c"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1792095256785.3152,
-    "hash": "96bc0739159a38727b8bbd24c1041a88"
+    "mtime": 1792097625460.9346,
+    "hash": "b40a8f664d017b71a000ad270ccd40ef"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1792095256141.6943,
-    "hash": "048fb88929ac84918f7aa0e35abe04f6"
+    "mtime": 1792097624817.4216,
+    "hash": "f670403a981b4e4951f64f9354c46dfa"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1792095256772.5024,
-    "hash": "e8688c0de92c0827b70edcdc1493fe3c"
+    "mtime": 1792097625446.9297,
+    "hash": "4ab732cc14359413206c754acf78962a"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1792095256321.7642,
-    "hash": "69bb44f8b2ddc855caf2bfd80186af10"
+    "mtime": 1792097625002.5056,
+    "hash": "3c25a7fb38881165815438adb3635f79"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -3596,16 +3596,16 @@
     "hash": "a97b319cdd1ad26d679fd4ebb5217a0f"
   },
   "frontend/e2e/onboarding-resume-and-hotel-setup-journey.spec.ts": {
-    "mtime": 1791849255898.1682,
-    "hash": "47cf06892e5f3352fbdbae0917afc150"
+    "mtime": 1792098264563.835,
+    "hash": "c1d59e521ea9fe1297f5b1f9e9d28354"
   },
   "frontend/e2e/support/email-outbox.ts": {
     "mtime": 1787360058509.2014,
     "hash": "e2d0560e6f954b5f3f2b69bb1edd7bf6"
   },
   "frontend/e2e/payment-journey-full-matrix.spec.ts": {
-    "mtime": 1791849255898.367,
-    "hash": "eca87bd6d850c3024e5e58b59e6bfb84"
+    "mtime": 1792098264564.7463,
+    "hash": "f8b9f4a333e3cbf67c418f35d1be608d"
   },
   "tests/test_mercadopago_webhook_endpoint.py": {
     "mtime": 1791849255944.5999,
