@@ -36,6 +36,7 @@ import { useTimezones } from "../../hooks/useTimezones";
 import { useSession } from "../../state/session";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { formatHotelDate } from "../../utils/date";
+import { DepositPolicyRulesEditor } from "../../components/DepositPolicyRulesEditor";
 
 const steps = [
   { path: "", label: "Owner" },
@@ -61,6 +62,7 @@ const defaultIdentityForm: HotelIdentityPayload = {
 
 const defaultPolicyForm: DepositPolicyPayload = {
   deposit_percentage: 30,
+  deposit_policy_rules: [{ max_nights: null, calculation: "percentage", value: 30 }],
   free_cancellation_hours: 48,
   cancellation_penalty_percentage: 0
 };
@@ -161,8 +163,14 @@ export function OnboardingWizard() {
     }
 
     if (status.deposit_policy && policyForm.deposit_percentage === defaultPolicyForm.deposit_percentage) {
+      const legacyDepositPercentage = Number(
+        status.deposit_policy.deposit_percentage ?? defaultPolicyForm.deposit_percentage
+      );
       setPolicyForm({
-        deposit_percentage: Number(status.deposit_policy.deposit_percentage ?? defaultPolicyForm.deposit_percentage),
+        deposit_percentage: legacyDepositPercentage,
+        deposit_policy_rules: Array.isArray(status.deposit_policy.deposit_policy_rules)
+          ? status.deposit_policy.deposit_policy_rules as DepositPolicyPayload["deposit_policy_rules"]
+          : [{ max_nights: null, calculation: "percentage", value: legacyDepositPercentage }],
         free_cancellation_hours: Number(
           status.deposit_policy.free_cancellation_hours ?? defaultPolicyForm.free_cancellation_hours
         ),
@@ -1168,15 +1176,12 @@ function PolicyStep({
 }) {
   return (
     <StepCard title="Política de depósitos y cancelación" status={status}>
+      <DepositPolicyRulesEditor
+        rules={form.deposit_policy_rules}
+        onChange={(rules) => setForm({ ...form, deposit_policy_rules: rules })}
+        testId="onboarding-deposit-policy-rules"
+      />
       <div className="grid gap-3 md:grid-cols-3">
-        <Field label="Seña (%)">
-          <input
-            className={inputClassName}
-            type="number"
-            value={form.deposit_percentage}
-            onChange={(event) => setForm({ ...form, deposit_percentage: Number(event.target.value || 0) })}
-          />
-        </Field>
         <Field label="Cancelación gratis hasta (horas)">
           <input
             className={inputClassName}

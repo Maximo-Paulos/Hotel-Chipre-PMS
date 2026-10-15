@@ -429,7 +429,7 @@ def set_deposit_policy(db: Session, payload: DepositPolicyPayload, hotel_id: Opt
     state = get_or_create_state(db, hid)
     config = _get_or_create_config(db, hid)
 
-    state.set_deposit_policy(payload.model_dump())
+    state.set_deposit_policy(payload.model_dump(mode="json"))
     state.policy_set = True
 
     apply_deposit_policy(
@@ -437,6 +437,11 @@ def set_deposit_policy(db: Session, payload: DepositPolicyPayload, hotel_id: Opt
         deposit_percentage=payload.deposit_percentage,
         free_cancellation_hours=payload.free_cancellation_hours,
         cancellation_penalty_percentage=payload.cancellation_penalty_percentage,
+        deposit_policy_rules=(
+            [rule.model_dump() for rule in payload.deposit_policy_rules]
+            if payload.deposit_policy_rules is not None
+            else None
+        ),
     )
     db.flush()
     return _status_from_state(db, state)

@@ -31,3 +31,33 @@ test("owner can save an enabled transfer method without completing the category 
   await expect(page.getByLabel("Check-in desde")).toHaveValue("14:00");
   await expect(page.getByLabel("Check-out hasta")).toHaveValue("10:00");
 });
+
+test("owner can configure and persist a percentage rule for one night and one-night deposits for longer stays", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/hotel");
+
+  const rules = page.getByTestId("settings-deposit-policy-rules");
+  await expect(rules).toBeVisible();
+  await rules.getByLabel("Límite de noches de regla 1").fill("1");
+  await rules.getByLabel("Tipo de seña de regla 1").selectOption("percentage");
+  await rules.getByLabel("Valor de seña de regla 1").fill("30");
+  await rules.getByRole("button", { name: "Agregar rango de estadía" }).click();
+  await expect(rules.getByText("Desde 2 noches")).toBeVisible();
+  await rules.getByLabel("Tipo de seña de regla 2").selectOption("nights");
+  await rules.getByLabel("Valor de seña de regla 2").fill("1");
+
+  const confirmation = page.getByLabel("Confirmo que las reglas mostradas fueron definidas por este hotel.");
+  if (!(await confirmation.isChecked())) await confirmation.check();
+  await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+  await expect(page.getByText("Cambios guardados.", { exact: true })).toBeVisible();
+
+  await page.reload();
+  const savedRules = page.getByTestId("settings-deposit-policy-rules");
+  await expect(savedRules.getByLabel("Límite de noches de regla 1")).toHaveValue("1");
+  await expect(savedRules.getByLabel("Tipo de seña de regla 1")).toHaveValue("percentage");
+  await expect(savedRules.getByLabel("Valor de seña de regla 1")).toHaveValue("30");
+  await expect(savedRules.getByText("Desde 2 noches")).toBeVisible();
+  await expect(savedRules.getByLabel("Tipo de seña de regla 2")).toHaveValue("nights");
+  await expect(savedRules.getByLabel("Valor de seña de regla 2")).toHaveValue("1");
+  await expect(confirmation).toBeChecked();
+});

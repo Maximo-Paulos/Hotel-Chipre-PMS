@@ -297,12 +297,18 @@ def test_config_rejects_invalid_hotel_schedule_time(ctx, field, value):
     assert response.status_code == 422
 
 
-@pytest.mark.parametrize("policy", ["deposit", "total", "free"])
-def test_config_can_select_checkin_payment_policy(ctx, policy):
+def test_config_only_allows_full_payment_checkin_policy(ctx):
+    client, _db = ctx
+    response = client.patch("/api/config/", json={"checkin_payment_policy": "total"})
+    assert response.status_code == 200, response.text
+    assert response.json()["checkin_payment_policy"] == "total"
+
+
+@pytest.mark.parametrize("policy", ["deposit", "free"])
+def test_config_rejects_non_full_checkin_payment_policy(ctx, policy):
     client, _db = ctx
     response = client.patch("/api/config/", json={"checkin_payment_policy": policy})
-    assert response.status_code == 200, response.text
-    assert response.json()["checkin_payment_policy"] == policy
+    assert response.status_code == 422
 
 
 def test_config_rejects_unknown_checkin_payment_policy(ctx):

@@ -170,6 +170,8 @@ class _ReservationListProjection:
     tax_policy_id: int | None
     check_in_date: date
     check_out_date: date
+    reserved_nights: int
+    used_nights: int | None
     actual_check_in: Any
     actual_check_out: Any
     total_amount: Any
@@ -1055,7 +1057,13 @@ def _daily_rate_pricing_result(
             row["output_currency"] = output_currency
 
     nightly_rate = round(total_amount / nights, 2) if nights else 0.0
-    deposit_amount = _compute_deposit_amount(db, hotel_id=hotel_id, gross_total=total_amount)
+    deposit_amount = _compute_deposit_amount(
+        db,
+        hotel_id=hotel_id,
+        gross_total=total_amount,
+        nights=nights,
+        nightly_amounts=[row["price"] for row in breakdown],
+    )
     snapshot = {
         "pricing_source": "daily_rates",
         "base_currency": base_currency,
@@ -1268,7 +1276,13 @@ def _pricing_with_total(
         nightly_rate=nightly,
         total_amount=total,
         currency_code=(currency_code or pricing.currency_code),
-        deposit_amount=_compute_deposit_amount(db, hotel_id=hotel_id, gross_total=total),
+        deposit_amount=_compute_deposit_amount(
+            db,
+            hotel_id=hotel_id,
+            gross_total=total,
+            nights=pricing.nights,
+            pricing_snapshot=pricing.pricing_snapshot,
+        ),
         subtotal_amount=total,
         tax_amount=0.0,
         fee_amount=0.0,
@@ -2110,6 +2124,8 @@ def list_reservations(
         Reservation.tax_policy_id,
         Reservation.check_in_date,
         Reservation.check_out_date,
+        Reservation.reserved_nights,
+        Reservation.used_nights,
         Reservation.actual_check_in,
         Reservation.actual_check_out,
         Reservation.total_amount,
@@ -2214,6 +2230,8 @@ def list_reservations(
             tax_policy_id=row.tax_policy_id,
             check_in_date=row.check_in_date,
             check_out_date=row.check_out_date,
+            reserved_nights=row.reserved_nights,
+            used_nights=row.used_nights,
             actual_check_in=row.actual_check_in,
             actual_check_out=row.actual_check_out,
             total_amount=row.total_amount,
@@ -3051,7 +3069,13 @@ def _pricing_result_from_quote(
     pricing_payment_method: str | None,
 ) -> ReservationPricingResult:
     nightly_rate = round(quote.gross_total / nights, 2) if nights > 0 else 0.0
-    deposit_amount = _compute_deposit_amount(db, hotel_id=hotel_id, gross_total=quote.gross_total)
+    deposit_amount = _compute_deposit_amount(
+        db,
+        hotel_id=hotel_id,
+        gross_total=quote.gross_total,
+        nights=nights,
+        nightly_amounts=[quote.nightly_amount] * nights,
+    )
     snapshot = {
         "pricing_source": "rate_plan_quote",
         "rate_plan_id": rate_plan.id,
@@ -3112,10 +3136,49 @@ def _apply_pricing_result_to_reservation(reservation: Reservation, pricing: Rese
     reservation.pricing_snapshot = pricing.pricing_snapshot
 
 
-def _compute_deposit_amount(db: Session, *, hotel_id: int, gross_total) -> float:
+def _compute_deposit_amount(
+    db: Session,
+    *,
+    hotel_id: int,
+    gross_total,
+    nights: int,
+    nightly_amounts: list[float] | None = None,
+    pricing_snapshot: str | None = None,
+) -> float:
     config = _require_deposit_policy_configured(db, hotel_id=hotel_id)
-    deposit_pct = config.deposit_percentage
-    return round(float(gross_total) * (deposit_pct / 100.0), 2)
+    from app.schemas.deposit_policy import normalize_deposit_policy_rules
+
+    rules = normalize_deposit_policy_rules(
+        config.deposit_policy_rules,
+        legacy_percentage=config.deposit_percentage,
+    )
+    rule = next(
+        (item for item in rules if item["max_nights"] is None or nights <= int(item["max_nights"])),
+        rules[-1],
+    )
+    total = Decimal(str(gross_total or 0))
+    if rule["calculation"] == "percentage":
+        amount = total * Decimal(str(rule["value"])) / Decimal("100")
+    else:
+        requested_nights = min(int(rule["value"]), max(nights, 0))
+        prices = nightly_amounts
+        if prices is None and pricing_snapshot:
+            try:
+                snapshot = json.loads(pricing_snapshot)
+                breakdown = snapshot.get("breakdown") if isinstance(snapshot, dict) else None
+                if isinstance(breakdown, list):
+                    prices = [float(item["price"]) for item in breakdown if isinstance(item, dict) and item.get("price") is not None]
+            except (TypeError, ValueError, json.JSONDecodeError):
+                prices = None
+        if prices and len(prices) == nights and sum(prices) > 0:
+            base_total = sum(Decimal(str(price)) for price in prices)
+            selected_base = sum(Decimal(str(price)) for price in prices[:requested_nights])
+            amount = total * selected_base / base_total
+        else:
+            # Explicit negotiated totals do not carry a nightly breakdown;
+            # distribute the total evenly without another rate query.
+            amount = total * Decimal(requested_nights) / Decimal(max(nights, 1))
+    return float(min(max(amount, Decimal("0")), total).quantize(Decimal("0.01")))
 
 
 def _require_deposit_policy_configured(

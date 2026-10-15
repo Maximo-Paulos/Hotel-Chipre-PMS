@@ -151,7 +151,7 @@ test("owner can log out mid-onboarding, resume without losing progress, and conf
   expect(new Set((savedRoomStatus.rooms as Array<{ floor: number }>).map((room) => room.floor))).toEqual(new Set([1, 2, 3]));
   expect(roomSetupActions).toBeLessThanOrEqual(12);
 
-  await page.getByLabel("Seña (%)", { exact: true }).fill("25");
+  await page.getByLabel("Valor de seña de regla 1", { exact: true }).fill("25");
   await page.getByLabel("Cancelación gratis hasta (horas)", { exact: true }).fill("24");
   await saveAndExpectPath(page, "/onboarding/payments");
 

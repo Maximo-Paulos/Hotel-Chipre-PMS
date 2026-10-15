@@ -2,6 +2,7 @@
 Hotel PMS — FastAPI Main Application.
 Serves the API + bundled frontend files.
 """
+import asyncio
 import json
 import logging
 import os
@@ -195,12 +196,71 @@ async def lifespan(app: FastAPI):
     validate_runtime_security()
     init_db()
     _seed_permission_matrix_once()
+    export_queue: asyncio.Queue[tuple[int, int] | None] = asyncio.Queue()
+    export_loop = asyncio.get_running_loop()
+    app.state.analytics_export_queue = export_queue
+    app.state.analytics_export_loop = export_loop
+    export_worker = asyncio.create_task(
+        _consume_xlsx_export_queue(export_queue),
+        name="analytics-xlsx-worker",
+    )
+    try:
+        from app.database import get_session_factory
+        from app.services.analytics_exports import prepare_xlsx_export_jobs_for_recovery
+
+        recovery_db = get_session_factory()()
+        try:
+            recovered_jobs = prepare_xlsx_export_jobs_for_recovery(recovery_db)
+        finally:
+            recovery_db.close()
+        if recovered_jobs:
+            for recovered_job in recovered_jobs:
+                export_queue.put_nowait(recovered_job)
+            LOGGER.info("analytics xlsx recovery scheduled job_count=%s", len(recovered_jobs))
+    except Exception as exc:
+        # Recovery is best-effort at boot. A database/storage outage must not
+        # prevent reception from opening; the durable job rows remain eligible
+        # for the next startup attempt.
+        LOGGER.warning("analytics xlsx recovery deferred error_type=%s", type(exc).__name__)
+
     try:
         yield
     finally:
+        # Drain the local queue before graceful shutdown. A forced process kill
+        # leaves any active row RUNNING and queued rows PENDING; startup recovery
+        # requeues both from the database on the next launch.
+        await asyncio.shield(export_queue.join())
+        export_queue.put_nowait(None)
+        await asyncio.shield(export_worker)
+        if getattr(app.state, "analytics_export_queue", None) is export_queue:
+            del app.state.analytics_export_queue
+            del app.state.analytics_export_loop
         from app.services.domain_events import shutdown_postgres_event_listeners
 
         await shutdown_postgres_event_listeners()
+
+
+async def _consume_xlsx_export_queue(queue: asyncio.Queue[tuple[int, int] | None]) -> None:
+    """Generate queued XLSX reports one at a time to bound local resource use."""
+    from app.services.analytics_exports import generate_xlsx_export_job
+
+    while True:
+        job = await queue.get()
+        try:
+            if job is None:
+                return
+            job_id, hotel_id = job
+            await asyncio.to_thread(generate_xlsx_export_job, job_id, hotel_id)
+        except Exception as exc:
+            # The job service records a safe error code/message; logs identify
+            # only the job and exception class, never guest or report contents.
+            LOGGER.warning(
+                "analytics xlsx worker failed job_id=%s error_type=%s",
+                job[0] if job is not None else "shutdown",
+                type(exc).__name__,
+            )
+        finally:
+            queue.task_done()
 
 
 app = FastAPI(

@@ -9,7 +9,9 @@ const localizedText = (spanish: string, english: string) =>
 
 // Fase 4 (Fase master): full payments/balance journey, real backend, real UI.
 // Standard E2E category prices at $100/night (see manager-reports-journey.spec.ts),
-// so a deterministic 3-night reservation totals $300 and a 30% deposit is $90.
+// so a deterministic 3-night reservation totals $300. The configured deposit
+// policy is shared with other journeys, so payment assertions use the amount
+// shown by the reservation instead of assuming a global policy value.
 const owner = {
   email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
   password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!"
@@ -170,25 +172,27 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
   const total = await readStat(editForm, localizedText("Total", "Total"));
   expect(total).toBe(300);
   const depositRequired = await readStat(editForm, localizedText("Seña requerida", "Deposit required"));
-  expect(depositRequired).toBe(90);
+  expect(depositRequired).toBeGreaterThan(0);
+  expect(depositRequired).toBeLessThan(total);
+  const balanceAfterDeposit = Number((total - depositRequired).toFixed(2));
 
   // 1) Seña manual en efectivo.
   collaborationStage = "cash deposit";
   await editForm.getByRole("button", { name: localizedText("Registrar Seña", "Register deposit") }).click();
   await expect(page.getByText(localizedName("Se registró la Seña", "Deposit registered"))).toBeVisible();
-  await expect.poll(() => readStat(editForm, localizedText("Pagado", "Paid"))).toBe(90);
-  await expect.poll(() => readStat(editForm, localizedText("Saldo", "Balance"))).toBe(210);
+  await expect.poll(() => readStat(editForm, localizedText("Pagado", "Paid"))).toBe(depositRequired);
+  await expect.poll(() => readStat(editForm, localizedText("Saldo", "Balance"))).toBe(balanceAfterDeposit);
 
   // 12) Intento de sobrepago: pedir más que el saldo pendiente debe rechazarse
   // client-side, sin llegar a cobrar nada de más.
   await editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i).fill("999999");
   await editForm.getByRole("button", { name: localizedName("Cobro parcial", "Partial payment") }).click();
   await expect(page.getByText(localizedName("Ingresá un importe positivo que no supere el saldo pendiente.", "Enter a positive amount that does not exceed the pending balance."))).toBeVisible();
-  expect(await readStat(editForm, localizedText("Pagado", "Paid"))).toBe(90);
+  expect(await readStat(editForm, localizedText("Pagado", "Paid"))).toBe(depositRequired);
 
   // 9) Saldo final con un método DISTINTO al de la seña: transferencia + comprobante.
   await editForm.locator("label").filter({ hasText: localizedText("Medio de pago", "Payment method") }).locator("select").selectOption("bank_transfer");
-  await editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i).fill("210");
+  await editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i).fill(balanceAfterDeposit.toFixed(2));
   await editForm.getByLabel(localizedName("Imagen del comprobante", "Proof image")).setInputFiles({
     name: "comprobante.png",
     mimeType: "image/png",
@@ -198,7 +202,7 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
   await editForm.getByRole("button", { name: localizedName("Enviar comprobante", "Send proof") }).click();
   await expect(page.getByText(localizedName("Comprobante enviado para aprobación", "Proof sent for approval"))).toBeVisible();
   // Bank transfer does not touch the balance until approved.
-  expect(await readStat(editForm, localizedText("Pagado", "Paid"))).toBe(90);
+  expect(await readStat(editForm, localizedText("Pagado", "Paid"))).toBe(depositRequired);
   await expect(editForm.getByText(localizedText("· pendiente", "· pending"))).toBeVisible();
 
   // 4) Aprobación del comprobante -> ahora sí se aplica al saldo, con el método
@@ -250,13 +254,19 @@ test("owner registers the entered deposit amount with confirmation and keeps the
   await ensureCashSessionOpen(page);
   const { reservationRow } = await createReservation(page, guestLastName, suffix, 68, 71);
   const { editForm } = await openPaymentsPanel(reservationRow, page);
-  expect(await readStat(editForm, localizedText("Seña requerida", "Deposit required"))).toBe(90);
+  const total = await readStat(editForm, localizedText("Total", "Total"));
+  expect(total).toBe(300);
+  const depositRequired = await readStat(editForm, localizedText("Seña requerida", "Deposit required"));
+  expect(depositRequired).toBeGreaterThan(2);
+  const enteredDeposit = Math.min(51, Math.floor(depositRequired / 2));
+  const remainingDeposit = Number((depositRequired - enteredDeposit).toFixed(2));
+  const remainingBalance = Number((total - depositRequired).toFixed(2));
 
   const amountInput = editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i);
   const depositButton = editForm.getByRole("button", { name: localizedText("Registrar Seña", "Register deposit") });
-  await expect(depositButton).toContainText("90");
-  await amountInput.fill("51");
-  await expect(depositButton).toContainText("51");
+  await expect.poll(async () => parseMoney(await depositButton.innerText())).toBe(depositRequired);
+  await amountInput.fill(String(enteredDeposit));
+  await expect.poll(async () => parseMoney(await depositButton.innerText())).toBe(enteredDeposit);
 
   const paymentRequests: string[] = [];
   page.on("request", (request) => {
@@ -280,29 +290,30 @@ test("owner registers the entered deposit amount with confirmation and keeps the
     transaction_type: string;
   }>;
   const registeredDeposit = await manualDepositPayload;
-  expect(registeredDeposit.amount).toBe(51);
+  expect(registeredDeposit.amount).toBe(enteredDeposit);
   expect(registeredDeposit.transaction_type).toBe("deposit");
-  expect(confirmationMessage).toContain("90");
-  expect(confirmationMessage).toContain("51");
+  const confirmedAmounts = [...confirmationMessage.matchAll(/\d[\d.,]*/g)].map(([value]) => parseMoney(value));
+  expect(confirmedAmounts).toContain(depositRequired);
+  expect(confirmedAmounts).toContain(enteredDeposit);
   await expect(page.getByText(localizedName("Se registró la Seña", "Deposit registered"))).toBeVisible();
-  await expect.poll(() => readStat(editForm, localizedText("Pagado", "Paid"))).toBe(51);
-  await expect.poll(() => readStat(editForm, localizedText("Saldo", "Balance"))).toBe(249);
+  await expect.poll(() => readStat(editForm, localizedText("Pagado", "Paid"))).toBe(enteredDeposit);
+  await expect.poll(() => readStat(editForm, localizedText("Saldo", "Balance"))).toBe(Number((total - enteredDeposit).toFixed(2)));
 
   // An amount above the remaining balance is rejected before any payment request.
   await amountInput.fill("999999");
   await depositButton.click();
   await expect(page.getByText(localizedName("Ingresá un importe positivo que no supere el saldo pendiente.", "Enter a positive amount that does not exceed the pending balance."))).toBeVisible();
   expect(paymentRequests).toHaveLength(1);
-  expect(await readStat(editForm, localizedText("Pagado", "Paid"))).toBe(51);
+  expect(await readStat(editForm, localizedText("Pagado", "Paid"))).toBe(enteredDeposit);
 
   // Declining the confirmation must also leave the ledger untouched.
   await amountInput.fill("20");
   page.once("dialog", async (dialog) => dialog.dismiss());
   await depositButton.click();
   expect(paymentRequests).toHaveLength(1);
-  expect(await readStat(editForm, localizedText("Pagado", "Paid"))).toBe(51);
+  expect(await readStat(editForm, localizedText("Pagado", "Paid"))).toBe(enteredDeposit);
 
-  // Clearing the field uses the remaining deposit amount (90 - 51) by default.
+  // Clearing the field uses the remaining configured deposit amount by default.
   await amountInput.fill("");
   const remainingDepositRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
@@ -313,11 +324,11 @@ test("owner registers the entered deposit amount with confirmation and keeps the
     amount: number;
     transaction_type: string;
   };
-  expect(defaultDeposit.amount).toBe(39);
+  expect(defaultDeposit.amount).toBeCloseTo(remainingDeposit, 2);
   expect(defaultDeposit.transaction_type).toBe("deposit");
   await expect(page.getByText(localizedName("Se registró la Seña", "Deposit registered"))).toBeVisible();
-  await expect.poll(() => readStat(editForm, localizedText("Pagado", "Paid"))).toBe(90);
-  await expect.poll(() => readStat(editForm, localizedText("Saldo", "Balance"))).toBe(210);
+  await expect.poll(() => readStat(editForm, localizedText("Pagado", "Paid"))).toBe(depositRequired);
+  await expect.poll(() => readStat(editForm, localizedText("Saldo", "Balance"))).toBe(remainingBalance);
 });
 
 test("owner rejects a transfer proof with a reason and the proof cannot be approved afterwards", async ({ page }) => {

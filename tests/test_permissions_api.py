@@ -436,9 +436,9 @@ def test_permission_administration_reads_require_mfa_and_share_a_read_only_ticke
             response = client.get(path, headers=headers)
             assert response.status_code == 200, f"{path}: {response.text}"
             if path == paths[-1]:
-                # One read authorizes the admin; the second builds the preview.
-                # The old route performed a third, duplicate details read.
-                assert details_reads - reads_before == 2
+                    # The admin guard uses the selective resolver; only the
+                    # preview response needs the full permission details.
+                    assert details_reads - reads_before == 1
 
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
         denied = client.get("/api/permissions/catalog", headers=headers)

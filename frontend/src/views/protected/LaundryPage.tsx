@@ -127,6 +127,8 @@ export function LaundryPage() {
   const [mobileTab, setMobileTab] = useState<LaundryMobileTab>("available");
   const showSection = (tab: LaundryMobileTab) => isDesktop || mobileTab === tab;
   const remitoFormVisible = isDesktop || mobileTab === "remito";
+  const vendorSectionVisible = isDesktop || showSection("vendors");
+  const remitoHistoryVisible = isDesktop || showSection("history");
 
   const [message, setMessage] = useState<string | null>(null);
   const [mutationErrors, setMutationErrors] = useState<Record<string, string>>({});
@@ -178,7 +180,7 @@ export function LaundryPage() {
   const openingCountSummaryQuery = useQuery({
     queryKey: ["linen-summary", session.hotelId, "opening-count-grid"],
     queryFn: () => getLinenSummary({}, session),
-    enabled: enabled && manageVendors,
+    enabled: enabled && manageVendors && vendorSectionVisible,
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const remitosQuery = useQuery({
@@ -190,7 +192,7 @@ export function LaundryPage() {
   const missingFollowUpsQuery = useQuery({
     queryKey: ["laundry-missing-follow-ups", session.hotelId],
     queryFn: () => listLaundryMissingFollowUps(session),
-    enabled: enabled && manageVendors,
+    enabled: enabled && manageVendors && vendorSectionVisible,
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
 
@@ -229,7 +231,7 @@ export function LaundryPage() {
   const pricesQuery = useQuery({
     queryKey: ["laundry-vendor-prices", session.hotelId, selectedVendorId],
     queryFn: () => listLaundryVendorPrices(selectedVendorId as number, session),
-    enabled: enabled && manageVendors && selectedVendorId !== null,
+    enabled: enabled && manageVendors && vendorSectionVisible && selectedVendorId !== null,
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const selectedVendorPrices = useMemo(() => pricesQuery.data ?? [], [pricesQuery.data]);
@@ -275,7 +277,9 @@ export function LaundryPage() {
     queries: vendors.map((vendor) => ({
       queryKey: ["laundry-vendor-balance", session.hotelId, vendor.id],
       queryFn: () => getLaundryVendorBalance(vendor.id, session),
-      enabled,
+      // On mobile, the full per-vendor balance panel only exists in History.
+      // The Remito tab needs just the currently selected vendor's balance.
+      enabled: enabled && (remitoHistoryVisible || (remitoFormVisible && remitoVendorId === vendor.id)),
       staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
     }))
   });

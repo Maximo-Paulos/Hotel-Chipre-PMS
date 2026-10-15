@@ -353,3 +353,64 @@ contained no HTTP 5xx responses. This is an exact-code local startup and
 workflow check, but it covers one synthetic hotel and two journeys. It does
 not certify 50 hotels, 400 concurrent employees, reservation optimization at
 scale, or provider network behavior.
+
+### PostgreSQL high-cardinality analytics exports — 2026-10-15
+
+This run used the disposable local PostgreSQL 16 container
+`codex-pms-efficiency-pg16-20261015`, bound to `127.0.0.1:55432` and limited to
+0.5 CPU / 512 MiB. The API/export Python process ran on the host without the
+container limit. The database contained 25,000 synthetic reservations and
+250,000 company-night facts for one hotel and one company. Seed time was
+277.195 seconds under the database CPU limit. This is a high-cardinality
+single-tenant probe, not a multi-hotel or company-skew benchmark.
+
+| Export | Rows/nights | Output bytes | Wall time | SQL statements | Python tracemalloc peak | Process max RSS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| CSV | 250,000 | 120,934,936 | 30.965 s | 5 | 4.85 MiB | 168.55 MiB |
+| XLSX | 250,000 | 69,708,998 | 88.48 s | 20 | 13.21 MiB | 180.97 MiB |
+
+Both outputs were read in bounded ORM/rendering batches and discarded after
+hash verification; CSV SHA-256 was
+`1fb16894e83504f0cc74a036168f014af7e4672c560f91245fee5fed0cd2b656`, and XLSX
+SHA-256 was
+`d710d0559ce87a028bab8d9a05b35624e5387edfdcd6ce36d3fa44560bcf01cc`. XLSX
+opened as a valid ZIP workbook with eight sheets. RSS includes the Python
+process/import baseline; `tracemalloc` measures Python allocations, not total
+resident memory. The XLSX process used about 98% of one host CPU while
+PostgreSQL stayed below 1% in spot samples and around 197 MiB of its 512 MiB
+limit. This points to XML/ZIP serialization as the dominant bottleneck in this
+run, not the database. It is a finding for this workload, not a general CPU
+capacity claim.
+
+The company-detail query was checked after the seed with:
+
+```sql
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT reservation_id, stay_date, channel_code, revenue_gross_ars
+FROM fact_reservation_daily
+WHERE hotel_id = 981100
+  AND company_id = 1
+  AND stay_date >= DATE '2024-02-01'
+  AND stay_date < DATE '2024-03-01';
+```
+
+It returned 20,010 rows in 2.571 ms with 580 shared-buffer hits and used
+`ix_fact_reservation_daily_hotel_date`; the planner filtered `company_id`
+after the date-index scan. The composite
+`ix_fact_reservation_daily_hotel_company_date` was not selected because every
+synthetic fact belonged to the same company. No index was added from this
+sample. A query plan with representative company cardinality/skew remains
+`needs-verification` before changing company-oriented indexes.
+
+The migrations also passed fresh upgrade, repeated upgrade, one-step
+downgrade/re-upgrade, and a PostgreSQL fact-refresh regression that persisted
+`channel_code='company'`. The schema previously accepted `company` on
+reservations but not in the separate analytics fact enum; migration
+`20261018_fact_company_channel_enum` repairs that mismatch.
+
+Measurement code snapshot: `dfe043ff3ef7f57d04785ac661c037dd80a4508f4b14aadc0561b9899afc582d`
+(1,131 source files using the same deterministic hash procedure in the audit
+report). The benchmark harness and generated files were temporary; only the
+source regression and recorded measurements are retained. This does not
+certify production storage, transfer cost, multi-instance job recovery, JSON
+detail payload memory, or provider capacity.

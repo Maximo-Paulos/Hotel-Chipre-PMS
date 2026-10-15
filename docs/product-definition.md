@@ -160,7 +160,7 @@ For each module, state what the **platform** provides and what each **hotel** co
 
 | Module | Platform provides | Hotel configures |
 |---|---|---|
-| Reservations | Data model, lifecycle, audit | Reservation types enabled, deposit %, cancellation rules |
+| Reservations | Data model, lifecycle, audit | Reservation types enabled, duration-based deposit rules, cancellation rules |
 | Rooms & categories | Structure, state machine | Their rooms, categories, capacities, base tariffs |
 | Guests | PII fields, companions | — (no platform-level config) |
 | Check-in / out | Flow + audit | Required legal fields (per jurisdiction, TODO) |
@@ -241,7 +241,7 @@ TODO(owner): hosted OpenAI-compatible endpoint vs local model per deployment. Pe
 
 ## 8. Business rules & policy bounds
 
-- 8.1 Deposit / cancellation — platform enforces bounds (min/max %); hotel chooses within. TODO(owner) bounds.
+- 8.1 Deposit / cancellation — the hotel configures ordered stay-duration bands. Each band requires either a percentage of the reservation total or a number of nights; a deposit is not permission to check in. Individual/direct reservations require the full balance before check-in. Deferred company billing is controlled by the company account setting.
 - 8.2 Overbooking — platform stance (allow / forbid / flag). TODO(owner).
 - 8.3 Room-move authority — platform rule (owner only / front desk with log / any). TODO(owner).
 - 8.4 Manual-review triggers — platform-fixed list; not tenant-tunable. TODO(owner) confirm.
@@ -266,6 +266,15 @@ TODO(owner):
 - Eligibility rules (window, deposits vs post-check-in, non-refundable products).
 - Voucher rules (expiry, partial redemption, transferability).
 - Whether hotels can customize the three-path order of preference or platform enforces gateway-first.
+
+### 8.8 Confirmed hotel operating rules (2026-10-15)
+
+- A hotel can combine deposit bands, for example 30% for a one-night stay and one night's value for longer stays. Pricing uses the applicable dated nightly prices when available; explicit negotiated totals without a nightly breakdown use an even per-night allocation.
+- Direct/non-deferred reservations cannot check in until the full reservation amount is paid. The deposit secures the reservation only.
+- A company configured for deferred billing can check in and check out with an outstanding balance. Reserved nights and actually used nights are recorded separately; the hotel's company settlement and decision to bill reserved or used nights remain manual.
+- Extensions are available to direct and company reservations. Direct extensions may leave the additional amount outstanding. Deferred company extensions are recorded to the company account.
+- A physical move of a company guest from a double to a triple room preserves the contracted category and base tariff; a configured extra-person/night charge is tracked separately. Individual room/category re-pricing follows the selected operational rule.
+- `reservation:read` may read the reservation balance and payment history. Registering payments, refunds, or cash movements remains protected by their action permissions.
 
 ---
 
@@ -407,4 +416,8 @@ Platform terms:
 | 2026-04-16 | owner | P-B answered: tier shape (low/mid/high per dimension), 14-day trial, no free-forever, demo status for sales/internal only, prices deferred. |
 | 2026-04-16 | owner | P-A revision: platform supports 1–80 rooms (primary commercial target stays small-to-mid). |
 | 2026-04-16 | owner | P-B revision: OTAs + MP + PayPal + manual reservation are common to all tiers. Stripe gates `pro`/`ultra`. Card brands handled via Stripe, not modeled as separate integrations. Owner-hotel access = internal comped subscription / admin override, not public coupon. Refund handling moved out of tier differentiation into §8.7 with three paths (gateway / voucher / manual). |
+| 2026-10-15 | owner + Codex | Confirmed configurable deposit bands, full-payment direct check-in, deferred-company settlement, reserved/used nights, extension balances and company physical-room pricing rules; see §8.8 and TECH-0150–TECH-0152. |
+| 2026-10-15 | Codex | Added local remediation backlog for analytics query budgets, export resource bounds, atomic AI quotas, no-show rounding and trial/comped transitions; see TECH-0153–TECH-0157. No-show, export range and subscription-expiry semantics remain owner decisions. |
+| 2026-10-15 | Codex | Applied two query-shape fixes: one-capability guards use selective fresh permission reads, and guest list/search no longer hydrates unused reservations/tags; see TECH-0158–TECH-0159. |
+| 2026-10-18 | Owner + Codex | Exportaciones conservan el rango histórico completo sin corte por antigüedad. Se aplicaron consultas frontend diferidas/agrupadas para búsqueda global, tarifas, lavandería móvil y recuperación entre pestañas; TECH-0154 y TECH-0160–TECH-0162 documentan límites pendientes y aceptación. |
 | TODO(owner) | | |

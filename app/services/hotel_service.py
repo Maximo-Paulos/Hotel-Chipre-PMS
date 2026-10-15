@@ -20,18 +20,28 @@ def ensure_plans_seeded(db: Session):
         ("pro", "Pro", 40),
         ("ultra", "Ultra", 80),
     ]
+    plans_by_code = {
+        plan.code: plan
+        for plan in db.query(SubscriptionPlan)
+        .filter(SubscriptionPlan.code.in_([code for code, _, _ in defaults] + ["standard"]))
+        .all()
+    }
     for code, name, limit in defaults:
-        exists = db.query(SubscriptionPlan).filter(SubscriptionPlan.code == code).first()
-        if exists:
-            exists.name = name
-            exists.room_limit = limit
+        plan = plans_by_code.get(code)
+        if plan:
+            if plan.name != name:
+                plan.name = name
+            if plan.room_limit != limit:
+                plan.room_limit = limit
             continue
         db.add(SubscriptionPlan(code=code, name=name, room_limit=limit))
 
-    standard = db.query(SubscriptionPlan).filter(SubscriptionPlan.code == "standard").first()
+    standard = plans_by_code.get("standard")
     if standard:
-        standard.name = "Standard (legacy)"
-        standard.room_limit = 40
+        if standard.name != "Standard (legacy)":
+            standard.name = "Standard (legacy)"
+        if standard.room_limit != 40:
+            standard.room_limit = 40
     db.flush()
 
 

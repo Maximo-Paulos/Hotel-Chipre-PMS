@@ -192,6 +192,8 @@ def _to_read(
         max(0, float(r.total_amount or 0) - float(r.amount_paid or 0)),
     )
     result.nights = getattr(r, "nights", (r.check_out_date - r.check_in_date).days)
+    result.reserved_nights = int(getattr(r, "reserved_nights", result.nights) or result.nights)
+    result.used_nights = getattr(r, "used_nights", None)
     is_deferred = company_billing_deferred
     if is_deferred is None:
         is_deferred = (
@@ -1695,10 +1697,9 @@ def extend_stay(
         r.settlement_status == "deferred" or company_uses_deferred_settlement
     )
 
-    if payload.payment_action == "company_account":
-        if r.company_id is None:
-            require_all_permissions(PERMISSION_COMPANY_MANAGE)(request, db, context)
-    else:
+    if payload.payment_action == "company_account" and r.company_id is None:
+        require_all_permissions(PERMISSION_COMPANY_MANAGE)(request, db, context)
+    elif payload.payment_action not in {"company_account", "pending_balance"}:
         # Preserve the dependency's all-or-nothing permission and step-up
         # handling for every action that creates or requests a payment.
         require_all_permissions(
@@ -1808,7 +1809,10 @@ def preview_stay_extension(
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
     """Return a server-priced, read-only extension quote for direct stays."""
-    require_all_permissions(PERMISSION_RESERVATION_CHARGE, PERMISSION_CASH_OPERATE)(request, db, context)
+    # A preview exposes the amount to be collected. Reservation readers may
+    # see financial details, but cash movement permissions are not needed
+    # until an extension actually records or requests payment.
+    require_all_permissions(PERMISSION_RESERVATION_READ)(request, db, context)
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if reservation is None:
         raise HTTPException(status_code=404, detail="No se encontró la reserva.")

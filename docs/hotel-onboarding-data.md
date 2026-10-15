@@ -53,7 +53,7 @@ TODO(owner) confirm additional steps the AI assistant should walk the hotel thro
 - Invited users via invitation flow (`app/api/invitations.py`).
 
 ### 3.4 Policies (required, within platform bounds)
-- Default deposit % (platform default: `DEFAULT_DEPOSIT_PERCENT=30.0`).
+- Deposit rules by stay-duration band: every band uses either a percentage of the reservation total or a number of nights; the final band is open-ended. Legacy `deposit_percentage` remains the fallback for existing hotels without rule data.
 - Cancellation policy.
 - Overbooking stance (if platform allows per-tenant choice — TODO(owner)).
 - Room-move authority mapping to local roles (within platform rule).
@@ -101,6 +101,13 @@ TODO(owner) confirm additional steps the AI assistant should walk the hotel thro
 | Legal check-in fields schema | platform-managed | Hotel can only fill values |
 
 TODO(owner) finalize every `yes/no` decision and enforcement strategy.
+
+### 4.1 Stay and company settlement data
+
+- Every reservation stores `reserved_nights`, synchronized with its current arrival/departure dates, and `used_nights`, captured on checkout in the hotel's timezone.
+- Company deferred-billing configuration determines whether check-in/check-out can proceed with an unpaid balance. The PMS records the reservation and used-night counts but does not decide whether the company is billed for reserved or used nights; that reconciliation remains manual.
+- Company room moves to a larger physical room preserve the contracted room category and base tariff. Any configured extra-person nightly charge is recorded separately.
+- Direct extensions may be recorded with the added amount left outstanding. Deferred company extensions stay on the company account.
 
 ## 5. Data the AI assistant collects but does NOT own
 

@@ -12,6 +12,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -251,23 +252,11 @@ def _validate_checkin_window_and_payment(db: Session, reservation: Reservation, 
         if company.payment_deferred:
             return
 
-    config = db.get(HotelConfiguration, hotel_id)
-    policy = getattr(config, "checkin_payment_policy", "total") if config else "total"
-    if policy not in {"deposit", "total", "free"}:
-        raise CheckInError("No se puede realizar el check-in: la política de pago del hotel no es válida.")
-    if policy == "free":
-        return
-
     paid = Decimal(str(paid_amount_with_legacy_fallback(db, hotel_id, reservation)))
-    if policy == "total":
-        required = Decimal(str(reservation.total_amount or 0))
-        requirement_name = "el importe total de la reserva"
-    else:
-        required = Decimal(str(reservation.deposit_amount or 0))
-        requirement_name = "la seña configurada"
+    required = Decimal(str(reservation.total_amount or 0))
     if paid + Decimal("0.01") < required:
         raise CheckInError(
-            f"No se puede realizar el check-in: primero debe abonarse {requirement_name}. "
+            "No se puede realizar el check-in: primero debe abonarse el importe total de la reserva. "
             f"Importe requerido: ${required:.2f}; abonado: ${paid:.2f}."
         )
 
@@ -474,7 +463,25 @@ def perform_checkout(
     except ReservationError as e:
         raise CheckInError(str(e))
 
-    reservation.actual_check_out = datetime.now(timezone.utc)
+    checkout_at = datetime.now(timezone.utc)
+    reservation.actual_check_out = checkout_at
+    config = db.get(HotelConfiguration, hotel_id)
+    timezone_name = config.hotel_timezone if config else "UTC"
+    try:
+        hotel_timezone = ZoneInfo(timezone_name)
+    except (TypeError, ValueError, ZoneInfoNotFoundError):
+        hotel_timezone = ZoneInfo("UTC")
+
+    actual_check_in = reservation.actual_check_in
+    if actual_check_in is None:
+        actual_check_in = datetime.combine(reservation.check_in_date, datetime.min.time(), tzinfo=hotel_timezone)
+    elif actual_check_in.tzinfo is None:
+        # PostgreSQL's legacy timestamp column is timezone-naive but stores UTC.
+        actual_check_in = actual_check_in.replace(tzinfo=timezone.utc)
+    reservation.used_nights = max(
+        0,
+        (checkout_at.astimezone(hotel_timezone).date() - actual_check_in.astimezone(hotel_timezone).date()).days,
+    )
     
     # Mark room for cleaning
     if reservation.room_id is not None:

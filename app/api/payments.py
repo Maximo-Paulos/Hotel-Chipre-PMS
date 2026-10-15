@@ -25,6 +25,7 @@ from app.services.payment_receipt_email_service import (
 )
 from app.services.permission_service import (
     PERMISSION_CASH_OPERATE,
+    PERMISSION_RESERVATION_READ,
     PERMISSION_PAYMENT_RECEIPT_EMAIL,
     PERMISSION_CASH_RECORD_PRIOR_RECEIPT,
     PERMISSION_PAYMENT_REFUND,
@@ -144,7 +145,7 @@ def make_payment(
 def financial_summary(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
 ):
     try:
         return get_reservation_financial_summary(db, context.hotel_id, reservation_id)

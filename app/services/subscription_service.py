@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.config import get_settings
 from app.models.subscription import (
@@ -90,71 +90,80 @@ def _parse_value(raw: str | None, value_type: str) -> Any:
     return raw
 
 
-def _upsert_plan_entitlement(
-    db: Session,
-    plan_id: int,
-    code: str,
-    value: Any,
-    value_type: str | None = None,
-    description: str | None = None,
-):
-    """Idempotent helper to add/update a plan entitlement row."""
-    existing = (
-        db.query(SubscriptionEntitlement)
-        .filter(SubscriptionEntitlement.plan_id == plan_id, SubscriptionEntitlement.code == code)
-        .first()
-    )
-    serialized, kind = _serialize_value(value, value_type)
-    if existing:
-        existing.value = serialized
-        existing.value_type = kind
-        if description:
-            existing.description = description
-        return existing
-    ent = SubscriptionEntitlement(
-        plan_id=plan_id,
-        code=code,
-        value=serialized,
-        value_type=kind,
-        description=description,
-    )
-    db.add(ent)
-    return ent
-
-
 def ensure_entitlements_seeded(db: Session):
     """
     Seed entitlement rows for known plans.
     Always keeps room entitlement aligned with plan.room_limit.
     """
     ensure_plans_seeded(db)
-    for plan in db.query(SubscriptionPlan).all():
-        # Room cap derived from plan limit (and later from overrides)
-        _upsert_plan_entitlement(
-            db,
-            plan.id,
-            "rooms.max_active",
+    plans = db.query(SubscriptionPlan).all()
+    if not plans:
+        db.flush()
+        return
+
+    desired_by_key: dict[tuple[int, str], tuple[Any, str, str | None]] = {}
+    for plan in plans:
+        desired_by_key[(plan.id, "rooms.max_active")] = (
             plan.room_limit,
             "int",
             "Cantidad máxima de habitaciones activas permitidas por plan.",
         )
-        defaults = DEFAULT_ENTITLEMENTS.get(plan.code, {})
-        for code, val in defaults.items():
-            _upsert_plan_entitlement(db, plan.id, code, val)
+        for code, value in DEFAULT_ENTITLEMENTS.get(plan.code, {}).items():
+            desired_by_key[(plan.id, code)] = (value, _infer_type(value), None)
+
+    existing_rows = (
+        db.query(SubscriptionEntitlement)
+        .filter(
+            SubscriptionEntitlement.plan_id.in_([plan.id for plan in plans]),
+            SubscriptionEntitlement.code.in_({code for _, code in desired_by_key}),
+        )
+        .all()
+    )
+    existing_by_key = {(row.plan_id, row.code): row for row in existing_rows}
+    for key, (value, value_type, description) in desired_by_key.items():
+        serialized, kind = _serialize_value(value, value_type)
+        existing = existing_by_key.get(key)
+        if existing is None:
+            db.add(
+                SubscriptionEntitlement(
+                    plan_id=key[0],
+                    code=key[1],
+                    value=serialized,
+                    value_type=kind,
+                    description=description,
+                )
+            )
+            continue
+        if existing.value != serialized:
+            existing.value = serialized
+        if existing.value_type != kind:
+            existing.value_type = kind
+        if description and existing.description != description:
+            existing.description = description
     db.flush()
 
 
 def ensure_subscription(db: Session, hotel_id: int) -> HotelSubscription:
     """Ensure a subscription record exists; create starter active if missing and seed entitlements."""
     ensure_entitlements_seeded(db)
-    sub = db.query(HotelSubscription).filter(HotelSubscription.hotel_id == hotel_id).first()
+    sub = (
+        db.query(HotelSubscription)
+        .options(joinedload(HotelSubscription.plan).joinedload(SubscriptionPlan.entitlements))
+        .filter(HotelSubscription.hotel_id == hotel_id)
+        .first()
+    )
     if sub:
         return sub
 
     # Route new subscription creation through the v2 service so the canonical
     # row and the legacy compatibility projection are created together.
     ensure_subscription_seed(db, hotel_id, plan_code="starter", status_value="active")
-    sub = db.query(HotelSubscription).filter(HotelSubscription.hotel_id == hotel_id).first()
+    sub = (
+        db.query(HotelSubscription)
+        .options(joinedload(HotelSubscription.plan).joinedload(SubscriptionPlan.entitlements))
+        .filter(HotelSubscription.hotel_id == hotel_id)
+        .first()
+    )
     if sub is None:
         raise RuntimeError("No se pudo inicializar la suscripción del hotel")
     db.flush()
@@ -177,10 +186,12 @@ def _collect_plan_entitlements(plan: SubscriptionPlan) -> dict[str, dict[str, An
     return entitlements
 
 
-def get_entitlements(db: Session, hotel_id: int) -> dict[str, dict[str, Any]]:
-    """Return merged entitlements (plan + hotel overrides + room override)."""
-    sub = ensure_subscription(db, hotel_id)
-    plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == sub.plan_id).first()
+def _get_entitlements_for_subscription(
+    db: Session,
+    hotel_id: int,
+    sub: HotelSubscription,
+) -> dict[str, dict[str, Any]]:
+    plan = sub.plan
     if not plan:
         return {}
 
@@ -205,6 +216,12 @@ def get_entitlements(db: Session, hotel_id: int) -> dict[str, dict[str, Any]]:
             "description": "Override aplicado por hotel",
         }
     return entitlements
+
+
+def get_entitlements(db: Session, hotel_id: int) -> dict[str, dict[str, Any]]:
+    """Return merged entitlements (plan + hotel overrides + room override)."""
+    sub = ensure_subscription(db, hotel_id)
+    return _get_entitlements_for_subscription(db, hotel_id, sub)
 
 
 def get_effective_room_limit(db: Session, hotel_id: int) -> int:
@@ -377,7 +394,7 @@ def delete_entitlement_override(db: Session, hotel_id: int, code: str):
 
 def entitlements_payload(db: Session, hotel_id: int) -> dict:
     sub = ensure_subscription(db, hotel_id)
-    entitlements = get_entitlements(db, hotel_id)
+    entitlements = _get_entitlements_for_subscription(db, hotel_id, sub)
     ent_list = [
         {"code": code, "value": data.get("value"), "source": data.get("source", "plan")}
         for code, data in sorted(entitlements.items())

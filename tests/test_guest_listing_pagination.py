@@ -7,14 +7,14 @@ never leaks another hotel's guests -- the exact bug class the plan calls out
 for every other tenant-scoped list.
 """
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
-from app.models.guest import Guest
+from app.models.guest import Guest, GuestCompanion
 from app.models.hotel_config import HotelConfiguration
 
 HOTEL_A = 7501
@@ -158,12 +158,33 @@ def test_guest_search_is_partial_ranked_and_searches_phone_without_cross_tenant_
             phone="+549115551234",
         )
         db.add_all([exact, partial, other_hotel])
+        db.flush()
+        db.add(
+            GuestCompanion(
+                guest_id=exact.id,
+                first_name="Acompañante",
+                last_name="Sintético",
+            )
+        )
         db.commit()
 
         fastapi_app.dependency_overrides[get_auth_context] = _auth_for(HOTEL_A)
-        response = client.get("/api/guests/", params={"search": "5551234", "limit": 1})
+        list_sql: list[str] = []
+
+        def capture_list_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+            if statement.lstrip().lower().startswith("select"):
+                list_sql.append(statement.lower())
+
+        event.listen(engine, "before_cursor_execute", capture_list_sql)
+        try:
+            response = client.get("/api/guests/", params={"search": "5551234", "limit": 1})
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_list_sql)
         assert response.status_code == 200
         assert [guest["id"] for guest in response.json()] == [exact.id]
+        assert response.json()[0]["companions"][0]["first_name"] == "Acompañante"
+        assert any("from guest_companions" in statement for statement in list_sql)
+        assert not any("from reservations" in statement or "from guest_tags" in statement for statement in list_sql)
 
         response = client.get("/api/guests/", params={"search": "115551234", "limit": 20})
         assert response.status_code == 200

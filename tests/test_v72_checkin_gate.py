@@ -1,20 +1,20 @@
 """
 V72 §7.1 — Check-in Payment Gate Tests.
 
-Requirement: check-in defaults to full payment but can be configured for deposit or no upfront payment.
+Requirement: direct check-in requires full payment; deferred company accounts are handled separately.
 
 These tests are COMPLEMENTARY to tests/test_checkin.py.
 They focus on explicit payment-gate scenarios not covered there:
   - full-payment default blocks check-in after only the configured deposit
   - total policy blocks a deposit-only payment
-  - free policy permits check-in without upfront payment
+  - legacy free/deposit policy values never bypass full-payment check-in
   - arrival date is enforced
   - validate_guest_for_checkin document/terms checks as separate cases
   - Checkout room status side-effects
   - Cancelled reservation blocked at check-in
 """
 import pytest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func
 
 from app.models.reservation import Reservation, ReservationStatusEnum
@@ -103,11 +103,11 @@ def _pay_full(db, reservation, hotel_id=1):
 
 
 # ---------------------------------------------------------------------------
-# Hotel payment policy: full payment is the default; deposit/free remain configurable.
+# Hotel payment policy: direct check-in always requires full payment.
 # ---------------------------------------------------------------------------
 
 class TestPaymentGateDepositPaid:
-    """Check-in must follow the explicit per-hotel payment policy."""
+    """A legacy per-hotel setting cannot bypass the full-payment rule."""
 
     def test_default_full_payment_policy_blocks_checkin_until_full_payment(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config
@@ -161,7 +161,7 @@ class TestPaymentGateDepositPaid:
         db.refresh(res)
         assert perform_checkin(db, res.id).status == ReservationStatusEnum.CHECKED_IN
 
-    def test_free_policy_allows_checkin_without_upfront_payment(
+    def test_legacy_free_policy_still_blocks_checkin_without_full_payment(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config
     ):
         hotel_config.checkin_payment_policy = "free"
@@ -169,9 +169,10 @@ class TestPaymentGateDepositPaid:
         res = _make_reservation(db, sample_guest, sample_categories)
 
         assert res.status == ReservationStatusEnum.PENDING
-        assert perform_checkin(db, res.id).status == ReservationStatusEnum.CHECKED_IN
+        with pytest.raises(CheckInError, match="importe total de la reserva"):
+            perform_checkin(db, res.id)
 
-    def test_free_policy_still_blocks_unconfirmed_legacy_ota_prepayment(
+    def test_unconfirmed_legacy_ota_prepayment_still_blocks_checkin(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config
     ):
         hotel_config.checkin_payment_policy = "free"
@@ -459,6 +460,35 @@ class TestCheckoutGate:
                                   check_in=date(2027, 10, 1), check_out=date(2027, 10, 3))
         result = perform_checkout(db, res.id)
         assert result.actual_check_out is not None
+
+    def test_checkout_records_reserved_and_actually_used_nights_in_hotel_timezone(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch
+    ):
+        res = self._full_checkin(
+            db,
+            sample_guest,
+            sample_rooms,
+            sample_categories,
+            hotel_config,
+            check_in=date(2027, 9, 1),
+            check_out=date(2027, 9, 5),
+        )
+        res.actual_check_in = datetime(2027, 9, 1, 16, tzinfo=timezone.utc)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                value = cls(2027, 9, 2, 23, tzinfo=timezone.utc)
+                return value.astimezone(tz) if tz else value
+
+        monkeypatch.setattr(checkin_service, "datetime", FixedDateTime)
+        result = perform_checkout(db, res.id)
+
+        assert result.reserved_nights == 4
+        assert result.used_nights == 1
+        api_result = __import__("app.api.reservations", fromlist=["_to_read"])._to_read(result, db=db)
+        assert api_result.reserved_nights == 4
+        assert api_result.used_nights == 1
 
     def test_checkout_marks_room_for_cleaning(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config

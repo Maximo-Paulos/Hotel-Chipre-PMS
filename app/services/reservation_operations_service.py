@@ -44,7 +44,12 @@ from app.schemas.payment_link import PaymentLinkCreate
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.schemas.transaction import PaymentRequest
 from app.services.payment_link_service import PaymentLinkError, create_link
-from app.services.payment_service import MANUAL_REFERENCE_METHODS, PaymentError, process_payment
+from app.services.payment_service import (
+    MANUAL_REFERENCE_METHODS,
+    PaymentError,
+    process_payment,
+    sync_reservation_financial_status,
+)
 from app.services.permission_service import (
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_RESERVATION_MOVE_CAPACITY,
@@ -1041,6 +1046,8 @@ def extend_reservation_stay(
             raise ReservationOperationsError("La extensión a cuenta debe usar la tarifa vigente")
         if immediate_payment is not None or payment_link is not None:
             raise ReservationOperationsError("La extensión a cuenta no admite datos de cobro")
+    elif payment_action == "pending_balance" and (immediate_payment is not None or payment_link is not None):
+        raise ReservationOperationsError("La extensión con saldo pendiente no admite datos de cobro")
 
     lock_reservation_version(
         db,
@@ -1088,7 +1095,7 @@ def extend_reservation_stay(
             hotel_id=hotel_id,
             new_checkout_date=new_checkout_date,
             pricing_mode=pricing_mode,
-            company=deferred_company,
+            company=company if company is not None and not is_deferred_company_reservation else None,
         )
         if amount <= Decimal("0.00"):
             raise ReservationOperationsError("La extension debe tener importe positivo")
@@ -1120,6 +1127,8 @@ def extend_reservation_stay(
             raise ReservationOperationsError("El link de pago debe pertenecer a esta reserva")
         if Decimal(str(payment_link.requested_amount)) < amount:
             raise ReservationOperationsError("El link de pago debe cubrir el importe de la extension")
+    elif payment_action == "pending_balance":
+        pass
     elif payment_action != "company_account":
         raise ReservationOperationsError("Accion de pago de extension invalida")
 
@@ -1132,6 +1141,13 @@ def extend_reservation_stay(
         reservation.net_amount = (Decimal(str(reservation.net_amount or 0)) + amount).quantize(Decimal("0.01"))
     reservation.notes = ((reservation.notes or "") + f"\n[EXTENSION] {notes or f'Extended to {new_checkout_date}'}").strip()
     reservation.version = (reservation.version or 0) + 1
+    if payment_action != "company_account" and original_status == ReservationStatusEnum.FULLY_PAID:
+        sync_reservation_financial_status(
+            db,
+            reservation,
+            hotel_id=hotel_id,
+            reason_code="stay_extension_balance",
+        )
 
     transaction = None
     link = None
@@ -1152,6 +1168,8 @@ def extend_reservation_stay(
                 reservation.status = ReservationStatusEnum.CHECKED_IN
         elif payment_action == "payment_link":
             link = create_link(db, hotel_id, payment_link)
+        elif payment_action == "pending_balance":
+            pass
         else:  # defensive for direct service callers bypassing request validation
             raise ReservationOperationsError("Accion de pago de extension invalida")
     except (PaymentError, PaymentLinkError) as exc:

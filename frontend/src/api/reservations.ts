@@ -35,6 +35,8 @@ export type Reservation = {
   group_id?: number | null;
   check_in_date: string;
   check_out_date: string;
+  reserved_nights?: number;
+  used_nights?: number | null;
   actual_check_in?: string | null;
   actual_check_out?: string | null;
   total_amount: number | null;
@@ -656,7 +658,7 @@ export type ReservationExtensionPayload = {
   new_checkout_date: string;
   client_version: number;
   pricing_mode: "current_rate";
-  payment_action: "immediate_payment" | "payment_link" | "company_account";
+  payment_action: "immediate_payment" | "payment_link" | "company_account" | "pending_balance";
   immediate_payment?: PaymentRequest;
   payment_link?: PaymentLinkCreatePayload;
   notes?: string;

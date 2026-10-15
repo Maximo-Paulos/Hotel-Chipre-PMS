@@ -1,6 +1,9 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+from sqlalchemy import event
+
 from app.models.reservation import (
     Reservation,
     ReservationGuestSegmentEnum,
@@ -16,7 +19,7 @@ from app.services.analytics_facts import refresh_fact_reservation_daily, refresh
 from app.services.analytics_service import build_home_payload
 
 
-def test_home_payload_reuses_reservation_facts_for_breakdowns(
+def test_home_payload_aggregates_without_hydrating_reservation_facts(
     db, hotel_config, sample_guest, sample_categories, sample_rooms, monkeypatch
 ):
     date_from = date(2026, 5, 1)
@@ -49,26 +52,37 @@ def test_home_payload_reuses_reservation_facts_for_breakdowns(
     refresh_fact_reservation_daily(db, hotel_id=hotel_config.id, date_from=date_from, date_to=date_to)
     refresh_fact_room_occupancy_daily(db, hotel_id=hotel_config.id, date_from=date_from, date_to=date_to)
 
-    loaded_fact_windows = []
     original_loader = analytics_service._load_reservation_facts
+    fact_queries = []
 
-    def track_fact_load(session, hotel_id, loaded_from, loaded_to):
-        loaded_fact_windows.append((hotel_id, loaded_from, loaded_to))
-        return original_loader(session, hotel_id, loaded_from, loaded_to)
+    def capture_fact_query(_connection, _cursor, statement, _parameters, _context, _executemany):
+        if "from fact_reservation_daily" in statement.lower():
+            fact_queries.append(statement.lower())
 
     with monkeypatch.context() as patch_context:
-        patch_context.setattr(analytics_service, "_load_reservation_facts", track_fact_load)
-        payload = build_home_payload(
-            db,
-            hotel_id=hotel_config.id,
-            date_from=date_from,
-            date_to=date_to,
-            compare_previous=False,
-            compare_yoy=False,
-            currency_display="ARS",
+        patch_context.setattr(
+            analytics_service,
+            "_load_reservation_facts",
+            lambda *_args, **_kwargs: pytest.fail("home analytics must aggregate reservation facts in SQL"),
         )
+        event.listen(db.get_bind(), "before_cursor_execute", capture_fact_query)
+        try:
+            payload = build_home_payload(
+                db,
+                hotel_id=hotel_config.id,
+                date_from=date_from,
+                date_to=date_to,
+                compare_previous=False,
+                compare_yoy=False,
+                currency_display="ARS",
+            )
+        finally:
+            event.remove(db.get_bind(), "before_cursor_execute", capture_fact_query)
 
-    assert loaded_fact_windows == [(hotel_config.id, date_from, date_to)]
+    assert len(fact_queries) == 3
+    assert any("sum(" in query for query in fact_queries)
+    assert sum("group by" in query for query in fact_queries) == 2
+    assert all("select fact_reservation_daily.id, fact_reservation_daily.hotel_id" not in query for query in fact_queries)
     facts = original_loader(db, hotel_config.id, date_from, date_to)
 
     assert payload["data"]["top_channels"] == analytics_service.build_channels_breakdown(

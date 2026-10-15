@@ -10,6 +10,9 @@ from app.schemas.analytics_insights import AnalyticsAIChatRead, AnalyticsAIChatR
 from app.services.analytics_ai_providers import AnalyticsAIRequest, get_analytics_ai_provider
 from app.services.analytics_service import (
     AI_MONTHLY_QUOTA_FALLBACK,
+    _analytics_window,
+    _load_reservation_facts,
+    _load_room_facts,
     build_channels_payload,
     build_home_payload,
     build_operations_payload,
@@ -17,7 +20,7 @@ from app.services.analytics_service import (
     build_segments_payload,
     build_category_detail_payload,
     get_ai_config,
-    increment_ai_usage,
+    reserve_ai_usage,
 )
 
 
@@ -66,44 +69,55 @@ def _request_payload(db: Session, *, hotel_id: int, code: Literal["home", "anoma
             currency_display=payload.currency_display,
         )
     if code == "anomalies":
-        home_payload = build_home_payload(
+        resolved_window = _analytics_window(
             db,
-            hotel_id=hotel_id,
+            hotel_id,
             date_from=payload.date_from,
             date_to=payload.date_to,
             compare_previous=payload.compare_previous,
             compare_yoy=payload.compare_yoy,
-            currency_display=payload.currency_display,
+        )
+        reservation_facts = _load_reservation_facts(
+            db, hotel_id, resolved_window.date_from, resolved_window.date_to
+        )
+        room_facts = _load_room_facts(db, hotel_id, resolved_window.date_from, resolved_window.date_to)
+        shared_window = {
+            "date_from": payload.date_from,
+            "date_to": payload.date_to,
+            "compare_previous": payload.compare_previous,
+            "compare_yoy": payload.compare_yoy,
+            "currency_display": payload.currency_display,
+            "resolved_window": resolved_window,
+            "reservation_facts": reservation_facts,
+        }
+        home_payload = build_home_payload(
+            db,
+            hotel_id=hotel_id,
+            **shared_window,
+            room_facts=room_facts,
         )
         operations_payload = build_operations_payload(
             db,
             hotel_id=hotel_id,
-            date_from=payload.date_from,
-            date_to=payload.date_to,
-            compare_previous=payload.compare_previous,
-            compare_yoy=payload.compare_yoy,
-            currency_display=payload.currency_display,
+            **shared_window,
         )
         channels_payload = build_channels_payload(
             db,
             hotel_id=hotel_id,
-            date_from=payload.date_from,
-            date_to=payload.date_to,
-            compare_previous=payload.compare_previous,
-            compare_yoy=payload.compare_yoy,
-            currency_display=payload.currency_display,
+            **shared_window,
         )
         segments_payload = build_segments_payload(
             db,
             hotel_id=hotel_id,
-            date_from=payload.date_from,
-            date_to=payload.date_to,
-            compare_previous=payload.compare_previous,
-            compare_yoy=payload.compare_yoy,
-            currency_display=payload.currency_display,
+            **shared_window,
         )
+        home_data = dict(home_payload.get("data", {}))
+        # Channels and segments are already provided in dedicated sections;
+        # remove their duplicate copies to reduce the serialized AI context.
+        home_data.pop("top_channels", None)
+        home_data.pop("segments", None)
         return {
-            "home": home_payload.get("data", {}),
+            "home": home_data,
             "operations": operations_payload.get("data", {}),
             "channels": channels_payload.get("data", {}),
             "segments": segments_payload.get("data", {}),
@@ -317,10 +331,10 @@ def _build_insight(
 ) -> AnalyticsInsightRead:
     config = get_ai_config(db, hotel_id)
     runtime = _runtime_status()
-    context = _request_payload(db, hotel_id=hotel_id, code=insight_code, payload=payload)
     runtime_healthy = bool(runtime.get("status") == "ready" or runtime.get("reachable"))
 
     if not config.analytics_ai_enabled or not runtime_healthy:
+        context = _request_payload(db, hotel_id=hotel_id, code=insight_code, payload=payload)
         summary, warnings, recommendations = _fallback_insight_summary(insight_code, context)
         return AnalyticsInsightRead(
             hotel_id=hotel_id,
@@ -341,7 +355,18 @@ def _build_insight(
             data={"context": context, "runtime": runtime, "fallback": True},
         )
 
-    usage_row = increment_ai_usage(db, hotel_id)
+    if (config.quota_remaining or 0) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Se alcanzó el límite mensual de solicitudes de IA.",
+        )
+
+    context = _request_payload(db, hotel_id=hotel_id, code=insight_code, payload=payload)
+    usage_row = reserve_ai_usage(db, hotel_id, quota_monthly=config.quota_monthly or AI_MONTHLY_QUOTA_FALLBACK)
+    quota_used = int(usage_row.calls_used)
+    # Release the row lock and pooled connection before waiting on a provider.
+    # The quota reservation is durable even if inference later fails.
+    db.commit()
     try:
         provider = get_analytics_ai_provider()
         ai_result = provider.generate_insight(
@@ -361,8 +386,8 @@ def _build_insight(
             runtime_healthy=True,
             effective_model=config.effective_model,
             quota_monthly=config.quota_monthly or AI_MONTHLY_QUOTA_FALLBACK,
-            quota_used=usage_row.calls_used,
-            quota_remaining=max((config.quota_remaining or 0) - 1, 0),
+            quota_used=quota_used,
+            quota_remaining=max((config.quota_monthly or AI_MONTHLY_QUOTA_FALLBACK) - quota_used, 0),
             generated_at=_now(),
             summary=ai_result.summary,
             warnings=ai_result.warnings,
@@ -382,8 +407,8 @@ def _build_insight(
             runtime_healthy=True,
             effective_model=config.effective_model,
             quota_monthly=config.quota_monthly or AI_MONTHLY_QUOTA_FALLBACK,
-            quota_used=usage_row.calls_used,
-            quota_remaining=max((config.quota_remaining or 0) - 1, 0),
+            quota_used=quota_used,
+            quota_remaining=max((config.quota_monthly or AI_MONTHLY_QUOTA_FALLBACK) - quota_used, 0),
             generated_at=_now(),
             summary=summary,
             warnings=warnings,
@@ -415,8 +440,16 @@ def build_analytics_chat_answer(db: Session, *, hotel_id: int, payload: Analytic
             detail="La IA todavía no está conectada. Configurá el proveedor de IA para usar el asistente.",
         )
 
+    if (config.quota_remaining or 0) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Se alcanzó el límite mensual de solicitudes de IA.",
+        )
+
     context = _chat_context(db, hotel_id=hotel_id, payload=payload)
-    usage_row = increment_ai_usage(db, hotel_id)
+    reserve_ai_usage(db, hotel_id, quota_monthly=config.quota_monthly or AI_MONTHLY_QUOTA_FALLBACK)
+    # Do not hold a database connection during the potentially slow provider call.
+    db.commit()
     try:
         provider = get_analytics_ai_provider()
         ai_result = provider.generate_chat_answer(

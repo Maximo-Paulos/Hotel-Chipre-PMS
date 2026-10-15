@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -44,11 +44,12 @@ from app.services.analytics_exports import (
     create_xlsx_export_job,
     expire_export_job_if_needed,
     generate_xlsx_export_job,
-    get_export_bytes,
+    get_export_file,
     get_export_job_or_404,
     get_export_job_read,
+    iter_export_file_chunks,
+    iter_render_export_csv,
     list_export_jobs,
-    render_export_csv,
     render_export_png,
 )
 from app.services.analytics_insights import (
@@ -386,6 +387,13 @@ def export_analytics_png(
     _authorize_sensitive_company_export(request, db, context, payload)
     require_analytics_plan(db, context.hotel_id, "pro")
     content = render_export_png(db, hotel_id=context.hotel_id, request=payload)
+    if not isinstance(content, bytes):
+        filename = f"analytics-{context.hotel_id}-{payload.entity_code}.zip"
+        return StreamingResponse(
+            content=iter_export_file_chunks(content),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
     filename = f"analytics-{context.hotel_id}-{payload.entity_code}.png"
     return Response(
         content=content,
@@ -403,10 +411,9 @@ def export_analytics_csv(
 ):
     _authorize_sensitive_company_export(request, db, context, payload)
     require_analytics_plan(db, context.hotel_id, "pro")
-    content = render_export_csv(db, hotel_id=context.hotel_id, request=payload)
     filename = f"analytics-{context.hotel_id}-{payload.entity_code}.csv"
-    return Response(
-        content=content,
+    return StreamingResponse(
+        content=iter_render_export_csv(db, hotel_id=context.hotel_id, request=payload),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -424,7 +431,21 @@ def export_analytics_xlsx(
     require_analytics_plan(db, context.hotel_id, "ultra")
     job = create_xlsx_export_job(db, hotel_id=context.hotel_id, user_id=context.user_id or 0, request=payload)
     db.commit()
-    background_tasks.add_task(generate_xlsx_export_job, job.id, context.hotel_id)
+    queue = getattr(request.app.state, "analytics_export_queue", None)
+    loop = getattr(request.app.state, "analytics_export_loop", None)
+    enqueued = False
+    if queue is not None and loop is not None and not loop.is_closed():
+        try:
+            loop.call_soon_threadsafe(queue.put_nowait, (job.id, context.hotel_id))
+            enqueued = True
+        except RuntimeError:
+            # Lifespan may be shutting down; keep the committed job durable and
+            # let the next startup recover it rather than failing the request.
+            pass
+    if not enqueued:
+        # Supports test/embedded apps that mount this router without the main
+        # lifespan. The production app always uses its single sequential worker.
+        background_tasks.add_task(generate_xlsx_export_job, job.id, context.hotel_id)
     return get_export_job_read(db, hotel_id=context.hotel_id, job_id=job.id)
 
 
@@ -480,11 +501,14 @@ def download_analytics_export(
         raise HTTPException(status_code=409, detail="Export no finalizado")
     if not job.file_path:
         raise HTTPException(status_code=404, detail="Archivo de export no encontrado")
-    file_bytes = get_export_bytes(job)
-    return Response(
-        content=file_bytes,
+    file_obj = get_export_file(job)
+    headers = {"Content-Disposition": f'attachment; filename="{job.id}.xlsx"'}
+    if job.file_size_bytes is not None:
+        headers["Content-Length"] = str(job.file_size_bytes)
+    return StreamingResponse(
+        content=iter_export_file_chunks(file_obj),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{job.id}.xlsx"'},
+        headers=headers,
     )
 
 

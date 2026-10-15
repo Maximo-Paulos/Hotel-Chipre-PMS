@@ -34,6 +34,7 @@ from app.services.subscription_entitlements import (
 )
 from app.services.subscription_service import (
     delete_entitlement_override,
+    entitlements_payload,
     ensure_subscription,
     set_entitlement_override,
     set_subscription_plan,
@@ -493,6 +494,36 @@ def test_room_limit_override_updates_v2_and_legacy_projection(client):
         assert legacy.room_limit_override == 15
     finally:
         db.close()
+
+
+def test_entitlements_payload_uses_a_bounded_number_of_catalog_reads(client):
+    """A settings read should not issue one entitlement query per plan/code."""
+    _, SessionLocal = client
+    with SessionLocal() as db:
+        _ensure_hotel(db, hotel_id=89)
+        ensure_subscription(db, hotel_id=89)
+        db.commit()
+
+    engine = SessionLocal.kw["bind"]
+    catalog_selects: list[str] = []
+
+    def _count_catalog_selects(connection, cursor, statement, parameters, context, executemany):
+        normalized = statement.lstrip().lower()
+        if normalized.startswith("select") and any(
+            table in normalized
+            for table in ("subscription_plans", "subscription_entitlements", "hotel_subscriptions")
+        ):
+            catalog_selects.append(statement)
+
+    event.listen(engine, "before_cursor_execute", _count_catalog_selects)
+    try:
+        with SessionLocal() as db:
+            payload = entitlements_payload(db, hotel_id=89)
+            assert payload["plan"] == "starter"
+    finally:
+        event.remove(engine, "before_cursor_execute", _count_catalog_selects)
+
+    assert len(catalog_selects) <= 6
 
 
 def test_ensure_subscription_rebuilds_a_missing_legacy_projection(db, hotel_config):

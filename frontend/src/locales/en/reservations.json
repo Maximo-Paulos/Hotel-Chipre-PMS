@@ -12,6 +12,9 @@
       "roomNumber": "Room #{{id}}",
       "noRoomAssigned": "No room assigned",
       "category": "Category",
+      "reservedNights": "Nights reserved",
+      "usedNights": "Nights used",
+      "pendingCheckout": "pending checkout",
       "informationUnavailable": "Information unavailable"
     },
     "guests": {
@@ -96,6 +99,8 @@
       "hint": "The server calculates the rate and checks availability again when you confirm.",
       "newCheckoutDate": "New checkout date",
       "paymentAction": "How to collect for the extension",
+      "pendingBalance": "Leave balance outstanding",
+      "pendingBalanceHint": "The extension is added to the total and can be collected later.",
       "paymentLink": "Create a payment request",
       "immediatePayment": "Record an in-person payment",
       "recipientEmail": "Email for the payment request",
@@ -117,6 +122,7 @@
       "paymentDescription": "Stay extension through {{date}}",
       "paymentLinkTitle": "Reservation {{code}} extension",
       "paymentLinkCreated": "Extension applied and payment request created.",
+      "balanceLeftPending": "Extension applied. The balance remains outstanding.",
       "paymentLinkLocalOnly": "Request saved locally; it cannot be paid and was not sent to the guest.",
       "openPaymentLink": "Open payment link",
       "paymentRegistered": "Extension applied and in-person payment recorded.",

@@ -1,4 +1,4 @@
-"""Minimal object-storage abstraction: put/get/delete bytes by key.
+"""Minimal object-storage abstraction for bytes and seekable-file transfers.
 
 Why this exists: payment-proof images and analytics .xlsx exports used to
 live as a Postgres LargeBinary column and a local filesystem path
@@ -28,8 +28,11 @@ from dataclasses import dataclass
 from datetime import timedelta
 import hashlib
 import hmac
+import io
 import time
 from pathlib import Path
+from tempfile import NamedTemporaryFile
+from typing import BinaryIO
 from urllib.parse import quote
 
 from app.config import get_settings
@@ -52,8 +55,20 @@ class ObjectStorage(ABC):
     @abstractmethod
     def put_bytes(self, key: str, data: bytes, *, content_type: str | None = None) -> None: ...
 
+    def put_file(self, key: str, file_obj: BinaryIO, *, byte_size: int, content_type: str | None = None) -> None:
+        """Upload a seekable file without changing existing bytes-based callers."""
+        file_obj.seek(0)
+        data = file_obj.read()
+        if len(data) != byte_size:
+            raise ObjectStorageError("upload file size changed while reading")
+        self.put_bytes(key, data, content_type=content_type)
+
     @abstractmethod
     def get_bytes(self, key: str) -> bytes: ...
+
+    def open_read(self, key: str) -> BinaryIO:
+        """Open an object for reading; storage adapters should stream where possible."""
+        return io.BytesIO(self.get_bytes(key))
 
     @abstractmethod
     def delete(self, key: str) -> None: ...
@@ -63,7 +78,6 @@ class ObjectStorage(ABC):
 
     @abstractmethod
     def get_signed_url(self, key: str, *, expires_seconds: int = 300) -> str: ...
-
 
 def _safe_relative_path(key: str) -> Path:
     """Reject any key that could escape the storage root (no `..`, no leading `/`)."""
@@ -95,10 +109,37 @@ class LocalObjectStorage(ObjectStorage):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
 
+    def put_file(self, key: str, file_obj: BinaryIO, *, byte_size: int, content_type: str | None = None) -> None:
+        path = self._path_for(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        file_obj.seek(0)
+        written = 0
+        temporary_path = None
+        try:
+            with NamedTemporaryFile(mode="wb", dir=path.parent, prefix=f".{path.name}.", delete=False) as destination:
+                temporary_path = Path(destination.name)
+                while chunk := file_obj.read(64 * 1024):
+                    destination.write(chunk)
+                    written += len(chunk)
+            if written != byte_size:
+                raise ObjectStorageError("upload file size changed while reading")
+            temporary_path.replace(path)
+            temporary_path = None
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+
     def get_bytes(self, key: str) -> bytes:
         path = self._path_for(key)
         try:
             return path.read_bytes()
+        except FileNotFoundError as exc:
+            raise ObjectStorageError(f"Object not found: {key}") from exc
+
+    def open_read(self, key: str) -> BinaryIO:
+        path = self._path_for(key)
+        try:
+            return path.open("rb")
         except FileNotFoundError as exc:
             raise ObjectStorageError(f"Object not found: {key}") from exc
 
@@ -112,10 +153,15 @@ class LocalObjectStorage(ObjectStorage):
     def stat(self, key: str) -> ObjectStat:
         path = self._path_for(key)
         try:
-            data = path.read_bytes()
+            digest = hashlib.sha256()
+            byte_size = 0
+            with path.open("rb") as source:
+                while chunk := source.read(64 * 1024):
+                    digest.update(chunk)
+                    byte_size += len(chunk)
         except FileNotFoundError as exc:
             raise ObjectStorageError(f"Object not found: {key}") from exc
-        return ObjectStat(byte_size=len(data), sha256_hex=hashlib.sha256(data).hexdigest())
+        return ObjectStat(byte_size=byte_size, sha256_hex=digest.hexdigest())
 
     def get_signed_url(self, key: str, *, expires_seconds: int = 300) -> str:
         if not 1 <= expires_seconds <= 900:
@@ -156,6 +202,9 @@ class S3ObjectStorage(ObjectStorage):
     def put_bytes(self, key: str, data: bytes, *, content_type: str | None = None) -> None:
         raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
 
+    def put_file(self, key: str, file_obj: BinaryIO, *, byte_size: int, content_type: str | None = None) -> None:
+        raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
+
     def get_bytes(self, key: str) -> bytes:
         raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
 
@@ -166,6 +215,9 @@ class S3ObjectStorage(ObjectStorage):
         raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
 
     def get_signed_url(self, key: str, *, expires_seconds: int = 300) -> str:
+        raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
+
+    def open_read(self, key: str) -> BinaryIO:
         raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
 
 
@@ -198,9 +250,28 @@ class GCSObjectStorage(ObjectStorage):
         except Exception as exc:
             raise ObjectStorageError("GCS upload failed") from exc
 
+    def put_file(self, key: str, file_obj: BinaryIO, *, byte_size: int, content_type: str | None = None) -> None:
+        try:
+            file_obj.seek(0)
+            self._get_bucket().blob(_safe_relative_path(key).as_posix()).upload_from_file(
+                file_obj, rewind=True, size=byte_size, content_type=content_type
+            )
+        except ObjectStorageError:
+            raise
+        except Exception as exc:
+            raise ObjectStorageError("GCS upload failed") from exc
+
     def get_bytes(self, key: str) -> bytes:
         try:
             return self._get_bucket().blob(_safe_relative_path(key).as_posix()).download_as_bytes()
+        except ObjectStorageError:
+            raise
+        except Exception as exc:
+            raise ObjectStorageError("GCS download failed") from exc
+
+    def open_read(self, key: str) -> BinaryIO:
+        try:
+            return self._get_bucket().blob(_safe_relative_path(key).as_posix()).open("rb")
         except ObjectStorageError:
             raise
         except Exception as exc:

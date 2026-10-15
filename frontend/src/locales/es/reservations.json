@@ -12,6 +12,9 @@
       "roomNumber": "Habitación #{{id}}",
       "noRoomAssigned": "Sin habitación asignada",
       "category": "Categoría",
+      "reservedNights": "Noches reservadas",
+      "usedNights": "Noches utilizadas",
+      "pendingCheckout": "pendiente del check-out",
       "informationUnavailable": "Información no disponible"
     },
     "guests": {
@@ -96,6 +99,8 @@
       "hint": "La tarifa se calcula en el servidor y la disponibilidad se vuelve a comprobar al confirmar.",
       "newCheckoutDate": "Nueva fecha de salida",
       "paymentAction": "Cómo cobrar la extensión",
+      "pendingBalance": "Dejar saldo pendiente",
+      "pendingBalanceHint": "La extensión se agrega al total y queda pendiente para cobrarla después.",
       "paymentLink": "Crear solicitud de pago",
       "immediatePayment": "Registrar pago presencial",
       "recipientEmail": "Correo para la solicitud de pago",
@@ -117,6 +122,7 @@
       "paymentDescription": "Extensión de estadía hasta {{date}}",
       "paymentLinkTitle": "Extensión de reserva {{code}}",
       "paymentLinkCreated": "Extensión aplicada y solicitud de pago creada.",
+      "balanceLeftPending": "Extensión aplicada. El saldo quedó pendiente de cobro.",
       "paymentLinkLocalOnly": "Solicitud guardada localmente; no se puede pagar ni se envió al huésped.",
       "openPaymentLink": "Abrir link de pago",
       "paymentRegistered": "Extensión aplicada y pago presencial registrado.",
