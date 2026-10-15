@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -16,11 +16,21 @@ function guestFullName(guest?: { first_name: string; last_name: string } | null,
 export function ReservationGlobalSearch() {
   const { t } = useTranslation("appshell");
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [showResults, setShowResults] = useState(false);
   const { openReservation } = useReservationDrawer();
 
-  const searchQuery = useReservations({ search: query });
-  const results = query.trim().length >= 2 ? searchQuery.data ?? [] : [];
+  const normalizedQuery = query.trim();
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(normalizedQuery), 250);
+    return () => window.clearTimeout(timer);
+  }, [normalizedQuery]);
+
+  const searchQuery = useReservations({ search: debouncedQuery });
+  const isSearchPending = normalizedQuery.length >= 2 && normalizedQuery !== debouncedQuery;
+  const results = normalizedQuery === debouncedQuery && debouncedQuery.length >= 2
+    ? searchQuery.data ?? []
+    : [];
 
   const handleSelect = (id: number) => {
     openReservation(id);
@@ -49,7 +59,7 @@ export function ReservationGlobalSearch() {
             data-testid="reservation-search-results"
             className="absolute left-0 top-full z-30 mt-1 w-80 max-w-[90vw] rounded-lg border border-slate-200 bg-white shadow-lg"
           >
-            {searchQuery.isFetching ? (
+            {isSearchPending || searchQuery.isFetching ? (
               <p className="px-3 py-2 text-sm text-slate-500">Buscando...</p>
             ) : results.length === 0 ? (
               <p className="px-3 py-2 text-sm text-slate-500">Sin reservas para "{query}".</p>

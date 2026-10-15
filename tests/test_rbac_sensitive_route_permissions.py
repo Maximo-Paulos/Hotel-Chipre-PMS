@@ -1173,13 +1173,12 @@ def test_reservation_extension_requires_update_charge_and_cash_permissions_indep
         _close(db, engine)
 
 
-def test_extension_preview_checks_financial_permissions_before_reservation_lookup():
+def test_extension_preview_checks_reservation_read_before_reservation_lookup():
     client, db, engine, _auth, reservation, _stock_item = _client()
     try:
-        for permission in ("reservation:charge", "cash:operate"):
-            set_user_override(
-                db, 1, 20, "receptionist", permission, False, actor_user_id=10
-            )
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:read", False, actor_user_id=10
+        )
         db.commit()
         params = {"new_checkout_date": (date.today() + timedelta(days=3)).isoformat()}
 

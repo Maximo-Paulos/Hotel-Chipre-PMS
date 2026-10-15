@@ -48118,6 +48118,20 @@
             "minimum": 0.0,
             "title": "Deposit Percentage"
           },
+          "deposit_policy_rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DepositPolicyRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposit Policy Rules"
+          },
           "free_cancellation_hours": {
             "type": "integer",
             "maximum": 168.0,
@@ -48138,6 +48152,44 @@
           "cancellation_penalty_percentage"
         ],
         "title": "DepositPolicyPayload"
+      },
+      "DepositPolicyRule": {
+        "properties": {
+          "max_nights": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 3650.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Nights"
+          },
+          "calculation": {
+            "type": "string",
+            "enum": [
+              "percentage",
+              "nights"
+            ],
+            "title": "Calculation"
+          },
+          "value": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "calculation",
+          "value"
+        ],
+        "title": "DepositPolicyRule",
+        "description": "Rule applies through ``max_nights``; ``None`` means no upper bound.\n\nRules are ordered by their upper bound. The first rule starts at night one,\nand every later rule starts the night after the preceding bound."
       },
       "DocumentTypeEnum": {
         "type": "string",
@@ -51579,6 +51631,20 @@
             "type": "number",
             "title": "Deposit Percentage"
           },
+          "deposit_policy_rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DepositPolicyRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposit Policy Rules"
+          },
           "deposit_policy_configured": {
             "type": "boolean",
             "title": "Deposit Policy Configured"
@@ -51905,6 +51971,20 @@
             ],
             "title": "Deposit Percentage"
           },
+          "deposit_policy_rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DepositPolicyRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposit Policy Rules"
+          },
           "deposit_policy_configured": {
             "anyOf": [
               {
@@ -51921,10 +52001,9 @@
               {
                 "type": "string",
                 "enum": [
-                  "deposit",
-                  "total",
-                  "free"
-                ]
+                  "total"
+                ],
+                "const": "total"
               },
               {
                 "type": "null"
@@ -64245,7 +64324,8 @@
             "enum": [
               "immediate_payment",
               "payment_link",
-              "company_account"
+              "company_account",
+              "pending_balance"
             ],
             "title": "Payment Action",
             "default": "payment_link"
@@ -65478,6 +65558,22 @@
             "type": "string",
             "format": "date",
             "title": "Check Out Date"
+          },
+          "reserved_nights": {
+            "type": "integer",
+            "title": "Reserved Nights",
+            "default": 0
+          },
+          "used_nights": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used Nights"
           },
           "actual_check_in": {
             "anyOf": [

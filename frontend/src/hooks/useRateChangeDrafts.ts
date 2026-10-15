@@ -8,7 +8,7 @@ import {
   type RateChangeDraftInput
 } from "../api/rateChangeDrafts";
 import { hasValidSession } from "../api/client";
-import { invalidateQueriesInBackground, refreshAfterMutation } from "../api/queryInvalidation";
+import { invalidateQueriesInBackground } from "../api/queryInvalidation";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
@@ -24,25 +24,29 @@ export function useRateChangeDrafts(categoryId: number | null) {
     staleTime: 10_000
   });
 
-  const invalidate = () => {
+  const invalidateDrafts = () => {
     invalidateQueriesInBackground(queryClient, { queryKey: ["rate-change-drafts", session.hotelId ?? null, categoryId] });
+  };
+
+  const invalidateConfirmedRates = () => {
+    invalidateDrafts();
     invalidateQueriesInBackground(queryClient, { queryKey: ["category-daily-rates", session.hotelId ?? null, categoryId] });
     invalidateQueriesInBackground(queryClient, { queryKey: ["rate-calendar", session.hotelId ?? null, categoryId] });
-    void refreshAfterMutation(queryClient, session.hotelId, ["rooms", "settings", "reservations", "analytics"])
-      .catch(() => undefined);
+    invalidateQueriesInBackground(queryClient, { queryKey: ["price-periods", session.hotelId ?? null, categoryId] });
+    invalidateQueriesInBackground(queryClient, { queryKey: ["reservation-quote", session.hotelId ?? null, categoryId] });
   };
 
   const create = useGuardedMutation({
     mutationFn: (payload: RateChangeDraftInput) => createRateChangeDraft(payload, session),
-    onSuccess: invalidate
+    onSuccess: invalidateDrafts
   });
   const confirm = useGuardedMutation({
     mutationFn: ({ id, version }: { id: number; version: number }) => confirmRateChangeDraft(id, version, session),
-    onSuccess: invalidate
+    onSuccess: invalidateConfirmedRates
   });
   const cancel = useGuardedMutation({
     mutationFn: ({ id, version }: { id: number; version: number }) => cancelRateChangeDraft(id, version, session),
-    onSuccess: invalidate
+    onSuccess: invalidateDrafts
   });
 
   return { draftsQuery, create, confirm, cancel };

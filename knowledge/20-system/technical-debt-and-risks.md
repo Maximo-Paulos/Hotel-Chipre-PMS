@@ -10,5 +10,6 @@
 | Registro owner depende de email manual. | confirmed | Bootstrap humano único con buzón dedicado; no automatizar acceso al correo. |
 | QA cloud aún no tiene evidencia baseline en este commit. | needs-verification | Crear/validar cuentas y previews aislados antes de activar gate de merge. |
 | Cobertura de permiso por las cinco personas requiere recorrido visible. | needs-verification | Ejecutar catálogo completo en cada tarea funcional. |
+| La recuperación XLSX cubre una instancia local; no permite escalar entre procesos/hosts. | confirmed | El worker secuencial recupera `PENDING`/`RUNNING` no vencidos al iniciar si la base y `OBJECT_STORAGE_LOCAL_DIR` persisten. Antes de usar varias instancias, agregar almacenamiento compartido y coordinación sólo con evidencia de carga; no sumar Redis/worker/DB blobs por intuición. |
 
 No se elimina una fila por conveniencia: cada riesgo se cierra con evidencia, decisión o aceptación explícita.

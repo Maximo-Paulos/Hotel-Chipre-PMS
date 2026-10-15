@@ -1,7 +1,7 @@
 import pytest
 
 from app.services.csv_export_safety import spreadsheet_safe_row, spreadsheet_safe_value
-from app.services.analytics_exports import _rows_to_csv_bytes
+from app.services.analytics_exports import _iter_csv_chunks, _rows_to_csv_bytes
 
 
 @pytest.mark.parametrize(
@@ -48,3 +48,13 @@ def test_analytics_csv_quotes_formula_like_user_controlled_text():
         [["section", "key", "value"], ["company", "notes", "=HYPERLINK(\"https://evil.test\")"]]
     )
     assert b"'=HYPERLINK" in csv_bytes
+
+
+def test_streamed_csv_chunks_match_legacy_encoding_for_all_rows():
+    rows = [["section", "key", "value"]]
+    rows.extend([["facts", str(index), f"=value-{index}" if index % 7 == 0 else f"value-{index}"] for index in range(1_000)])
+
+    chunks = list(_iter_csv_chunks(iter(rows), batch_rows=31))
+
+    assert len(chunks) > 1
+    assert b"".join(chunks) == _rows_to_csv_bytes(rows)

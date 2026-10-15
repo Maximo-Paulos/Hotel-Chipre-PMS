@@ -178,7 +178,7 @@ const paymentMethodValues: PaymentMethod[] = [
 ];
 const manualPaymentMethods: PaymentMethod[] = ["credit_card", "debit_card", "bank_transfer"];
 type ExtensionManualPaymentMethod = Extract<PaymentMethod, "cash" | "credit_card" | "debit_card" | "bank_transfer">;
-type IndividualExtensionPaymentAction = "payment_link" | "immediate_payment";
+type IndividualExtensionPaymentAction = "payment_link" | "immediate_payment" | "pending_balance";
 
 function guestFullName(
   t: TFunction,
@@ -458,6 +458,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     reservation.settlement_status === "deferred" &&
     canApplyCompanyExtension
   );
+  const canCollectExtension = hasPermission("reservation:charge") && hasPermission("cash:operate");
   const canExtendIndividualReservation = Boolean(
     reservation &&
     !reservation.company_id &&
@@ -469,10 +470,11 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     !operations?.ota_link &&
     !deferredCompanyBilling &&
     (reservation.status === "checked_in" || reservation.status === "fully_paid") &&
-    hasPermission("reservation:update") &&
-    hasPermission("reservation:charge") &&
-    hasPermission("cash:operate")
+    hasPermission("reservation:update")
   );
+  useEffect(() => {
+    if (!canCollectExtension) setIndividualExtensionPaymentAction("pending_balance");
+  }, [canCollectExtension]);
   const candidateCompanyChargeDates: string[] = [];
   if (reservation?.check_in_date && reservation.check_out_date) {
     const current = new Date(`${reservation.check_in_date}T00:00:00Z`);
@@ -736,7 +738,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
         }),
         ...(manualReference ? { manual_reference: manualReference } : {})
       };
-    } else {
+    } else if (individualExtensionPaymentAction === "payment_link") {
       const recipientEmail = individualExtensionRecipientEmail.trim();
       if (!isValidPaymentEmail(recipientEmail)) {
         setActionError(t("drawer.individualExtension.recipientEmailInvalid"));
@@ -770,6 +772,8 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
           payable: result.payment_link.payable
         } : null);
         setActionMessage(t("drawer.individualExtension.paymentLinkCreated"));
+      } else if (individualExtensionPaymentAction === "pending_balance") {
+        setActionMessage(t("drawer.individualExtension.balanceLeftPending"));
       } else {
         setActionMessage(t("drawer.individualExtension.paymentRegistered"));
       }
@@ -949,6 +953,11 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                     : t("drawer.stay.noRoomAssigned")}{" "}
                   · {t("drawer.stay.category")}{" "}
                   {reservation.category_name ?? t("drawer.stay.informationUnavailable")}
+                </p>
+                <p className="mt-2 text-xs text-slate-600">
+                  {t("drawer.stay.reservedNights")}: {reservation.reserved_nights ?? reservation.nights ?? 0}
+                  <span className="mx-2">·</span>
+                  {t("drawer.stay.usedNights")}: {reservation.used_nights ?? t("drawer.stay.pendingCheckout")}
                 </p>
               </section>
 
@@ -1171,8 +1180,13 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       aria-label={t("drawer.individualExtension.paymentAction")}
                       className="w-full rounded-lg border border-cyan-200 bg-white px-2 py-1.5 text-sm"
                     >
-                      <option value="payment_link">{t("drawer.individualExtension.paymentLink")}</option>
-                      <option value="immediate_payment">{t("drawer.individualExtension.immediatePayment")}</option>
+                      <option value="pending_balance">{t("drawer.individualExtension.pendingBalance")}</option>
+                      {canCollectExtension ? (
+                        <>
+                          <option value="payment_link">{t("drawer.individualExtension.paymentLink")}</option>
+                          <option value="immediate_payment">{t("drawer.individualExtension.immediatePayment")}</option>
+                        </>
+                      ) : null}
                     </select>
                   </label>
                   {individualExtensionPaymentAction === "payment_link" ? (
@@ -1192,7 +1206,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                         className="w-full rounded-lg border border-cyan-200 bg-white px-2 py-1.5 text-sm"
                       />
                     </label>
-                  ) : (
+                  ) : individualExtensionPaymentAction === "immediate_payment" ? (
                     <>
                       <label className="mt-2 block space-y-1 text-xs">
                         <span className="text-slate-700">{t("drawer.individualExtension.paymentMethod")}</span>
@@ -1231,6 +1245,10 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       ) : null}
                       <p className="mt-2 text-xs text-cyan-950">{t("drawer.individualExtension.immediatePaymentHint")}</p>
                     </>
+                  ) : (
+                    <p className="mt-2 rounded-md bg-white px-3 py-2 text-xs text-cyan-950">
+                      {t("drawer.individualExtension.pendingBalanceHint")}
+                    </p>
                   )}
                   <button
                     type="button"

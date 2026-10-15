@@ -337,3 +337,46 @@ def test_no_future_conflict_extends_normally(db, sample_guest, sample_rooms):
     assert current.check_out_date == date(2028, 1, 6)
     assert float(result.extension_amount) == pytest.approx(200.0)
     assert db.query(RoomMovementGroup).count() == 0
+
+
+@pytest.mark.parametrize(
+    ("status", "amount_paid", "expected_status"),
+    [
+        (ReservationStatusEnum.CHECKED_IN, 200.0, ReservationStatusEnum.CHECKED_IN),
+        (ReservationStatusEnum.FULLY_PAID, 300.0, ReservationStatusEnum.DEPOSIT_PAID),
+    ],
+)
+def test_direct_extension_can_leave_balance_pending_without_a_payment(
+    db, sample_guest, sample_rooms, status, amount_paid, expected_status
+):
+    reservation = _reservation(
+        db,
+        code=f"EXT-PENDING-{status.value}",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 3, 1),
+        check_out=date(2028, 3, 4),
+        total_amount=300.0,
+        amount_paid=amount_paid,
+        status=status,
+    )
+
+    result = extend_reservation_stay(
+        db,
+        reservation=reservation,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2028, 3, 6),
+        client_version=reservation.version or 0,
+        pricing_mode="original_average",
+        payment_action="pending_balance",
+    )
+
+    assert result.success is True
+    assert float(result.extension_amount) == pytest.approx(200.0)
+    assert reservation.check_out_date == date(2028, 3, 6)
+    assert reservation.reserved_nights == 5
+    assert reservation.total_amount == 500
+    assert reservation.status == expected_status
+    assert result.transaction is None
+    assert result.payment_link is None
+    assert db.query(Transaction).filter(Transaction.reservation_id == reservation.id).count() == 0

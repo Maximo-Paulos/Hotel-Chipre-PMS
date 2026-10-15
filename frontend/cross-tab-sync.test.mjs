@@ -167,6 +167,7 @@ test("Gemma writes map to the assistant domain instead of waking analytics queri
   const { domainsForPath } = await loadCrossTabSync(context);
 
   assert.deepEqual(domainsForPath("/api/gemma/chat/message"), ["assistant"]);
+  assert.deepEqual(domainsForPath("/api/rate-change-drafts/12/confirm"), ["rooms"]);
 });
 
 test("matching request origins suppress local SSE and cross-tab duplicates only once", async (context) => {

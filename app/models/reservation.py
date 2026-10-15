@@ -9,7 +9,7 @@ from sqlalchemy import (
     Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime, Date, Boolean,
     CheckConstraint, ForeignKeyConstraint, UniqueConstraint, Index, Table
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from datetime import datetime, timezone
 
 from app.database import Base
@@ -198,6 +198,10 @@ class Reservation(Base):
     # Dates
     check_in_date = Column(Date, nullable=False)
     check_out_date = Column(Date, nullable=False)
+    # Durable count of nights currently reserved; extensions/date edits sync it.
+    reserved_nights = Column(Integer, nullable=False, default=1, server_default="1")
+    # Captured at checkout using the hotel's local calendar.
+    used_nights = Column(Integer, nullable=True)
     actual_check_in = Column(DateTime, nullable=True)
     actual_check_out = Column(DateTime, nullable=True)
     pre_check_in_at = Column(DateTime, nullable=True)   # v72 §7.2: timestamp of pre-finalization
@@ -476,6 +480,16 @@ class Reservation(Base):
     def nights(self) -> int:
         """Number of nights for the stay."""
         return (self.check_out_date - self.check_in_date).days
+
+    @validates("check_in_date", "check_out_date")
+    def _sync_reserved_nights(self, key: str, value):
+        other_key = "check_out_date" if key == "check_in_date" else "check_in_date"
+        other_value = getattr(self, other_key, None)
+        if value is not None and other_value is not None:
+            check_in = value if key == "check_in_date" else other_value
+            check_out = value if key == "check_out_date" else other_value
+            self.reserved_nights = max(1, (check_out - check_in).days)
+        return value
 
     def can_transition_to(self, new_status: ReservationStatusEnum) -> bool:
         """Check if a state transition is valid."""

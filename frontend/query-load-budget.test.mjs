@@ -90,6 +90,42 @@ test("reservation creation refreshes only related views without waiting for the 
   assert.match(createOtaMutation ?? "", /onSuccess: \(\) =>\s*\{\s*void invalidateCreatedReservation\(\)\.catch\(\(\) => undefined\);\s*\}/);
 });
 
+test("global reservation search debounces keystrokes and never shows results for an unfinished term", async () => {
+  const search = await source("./src/components/ReservationGlobalSearch.tsx");
+
+  assert.match(search, /setTimeout\(\(\) => setDebouncedQuery\(normalizedQuery\), 250\)/);
+  assert.match(search, /clearTimeout\(timer\)/);
+  assert.match(search, /useReservations\(\{ search: debouncedQuery \}\)/);
+  assert.match(search, /normalizedQuery === debouncedQuery && debouncedQuery\.length >= 2/);
+  assert.match(search, /isSearchPending \|\| searchQuery\.isFetching/);
+});
+
+test("rate changes invalidate only rate drafts, rates, and quotes for the selected category", async () => {
+  const [hook, keys, sync] = await Promise.all([
+    source("./src/hooks/useRateChangeDrafts.ts"),
+    source("./src/api/queryKeys.ts"),
+    source("./src/sync/crossTabSync.ts")
+  ]);
+
+  assert.match(hook, /const invalidateDrafts = \(\) =>/);
+  assert.match(hook, /const invalidateConfirmedRates = \(\) =>/);
+  assert.match(hook, /queryKey: \["rate-calendar", session\.hotelId \?\? null, categoryId\]/);
+  assert.match(hook, /queryKey: \["category-daily-rates", session\.hotelId \?\? null, categoryId\]/);
+  assert.match(hook, /queryKey: \["price-periods", session\.hotelId \?\? null, categoryId\]/);
+  assert.match(hook, /queryKey: \["reservation-quote", session\.hotelId \?\? null, categoryId\]/);
+  assert.doesNotMatch(hook, /refreshAfterMutation|"settings", "reservations", "analytics"/);
+  assert.match(keys, /"rate-change-drafts": 1/);
+  assert.match(keys, /rooms: \[[\s\S]*?"rate-change-drafts"/);
+  assert.match(sync, /if \(normalized\.includes\("rate-change-drafts"\)\) return \["rooms"\]/);
+});
+
+test("mobile laundry defers hidden administrative and per-vendor balance queries", async () => {
+  const laundry = await source("./src/views/protected/LaundryPage.tsx");
+
+  assert.match(laundry, /enabled: enabled && manageVendors && vendorSectionVisible/);
+  assert.match(laundry, /enabled: enabled && \(remitoHistoryVisible \|\| \(remitoFormVisible && remitoVendorId === vendor\.id\)\)/);
+});
+
 test("slow-changing reference data uses a five-minute cache window", async () => {
   const [policy, rooms, permissions] = await Promise.all([
     source("./src/api/queryPolicy.ts"),
@@ -195,6 +231,7 @@ test("realtime recovery does not invalidate every domain on a first connection",
 
   assert.match(sync, /REALTIME_EVENT_DEBOUNCE_MS = 1_000/);
   assert.match(sync, /CROSS_TAB_INVALIDATION_DEBOUNCE_MS = 100/);
+  assert.match(sync, /createVisibleDomainRefreshQueue\(queryClient, hotelId, CROSS_TAB_INVALIDATION_DEBOUNCE_MS\)/);
   assert.match(sync, /void refreshDomains\(queryClient, hotelId, domains\)/);
   assert.doesNotMatch(sync, /invalidateDomainQueries/);
   assert.match(sync, /recoveryDomainsForCursor\(currentCursor, payload\)/);

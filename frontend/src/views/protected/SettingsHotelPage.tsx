@@ -28,6 +28,7 @@ import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 import { moveBlockedReason, requiredMovePermission } from "../../utils/roomMove";
+import { DepositPolicyRulesEditor } from "../../components/DepositPolicyRulesEditor";
 
 import { TaxPoliciesCard } from "./TaxPoliciesCard";
 
@@ -320,11 +321,15 @@ export function SettingsHotelPage() {
       ...prev,
       [key]: value,
       ...(key === "deposit_percentage" ||
+      key === "deposit_policy_rules" ||
       key === "free_cancellation_hours" ||
       key === "cancellation_penalty_percentage"
         ? { deposit_policy_configured: false }
         : {})
     }));
+  const depositPolicyRules = form.deposit_policy_rules?.length
+    ? form.deposit_policy_rules
+    : [{ max_nights: null, calculation: "percentage" as const, value: Number(form.deposit_percentage ?? 30) }];
   const handleRoomEditField = (field: "room_number" | "floor" | "category_id" | "notes", value: unknown) => {
     setRoomEdit((current) => ({ ...current, [field]: value }));
     collaborativeRoom.setField(field, value);
@@ -503,25 +508,10 @@ export function SettingsHotelPage() {
                 <option value="en">English</option>
               </select>
             </label>
-            <label className="text-sm font-semibold text-slate-700">
-              Depósito (%)
-              <input type="number" min={0} max={100} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.deposit_percentage ?? 0} onChange={(e) => handleChange("deposit_percentage", parseFloat(e.target.value || "0"))} />
-            </label>
-            <label className="text-sm font-semibold text-slate-700">
-              Requisito de pago para el check-in
-              <select
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                value={form.checkin_payment_policy ?? "total"}
-                onChange={(e) => handleChange("checkin_payment_policy", e.target.value as HotelConfig["checkin_payment_policy"])}
-              >
-                <option value="total">Estadía completamente pagada (predeterminado)</option>
-                <option value="deposit">Seña configurada</option>
-                <option value="free">Sin requisito de pago al ingresar</option>
-              </select>
-              <span className="mt-1 block text-xs font-normal text-slate-500">
-                El saldo operativo sigue controlándose al hacer el check-out.
-              </span>
-            </label>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              <p className="font-semibold">Ingreso a la habitación</p>
+              <p className="mt-1 text-xs">Las reservas particulares requieren el pago total antes del check-in. Las cuentas diferidas se autorizan por empresa.</p>
+            </div>
             <label className="text-sm font-semibold text-slate-700">
               Cancelación gratis (horas)
               <input type="number" min={0} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.free_cancellation_hours ?? 0} onChange={(e) => handleChange("free_cancellation_hours", parseInt(e.target.value || "0", 10))} />
@@ -561,6 +551,13 @@ export function SettingsHotelPage() {
               Jurisdicción
               <input maxLength={3} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase" value={form.jurisdiction_code ?? "AR"} onChange={(e) => handleChange("jurisdiction_code", e.target.value.toUpperCase())} />
             </label>
+          </div>
+          <div className="mt-4 rounded-xl border border-slate-200 p-4">
+            <DepositPolicyRulesEditor
+              rules={depositPolicyRules}
+              onChange={(rules) => handleChange("deposit_policy_rules", rules)}
+              testId="settings-deposit-policy-rules"
+            />
           </div>
 
           {canManageFiscalProfile && (

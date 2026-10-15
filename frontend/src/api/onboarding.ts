@@ -1,4 +1,5 @@
 import { apiFetch, type SessionLike } from "./client";
+import type { DepositPolicyRules } from "./depositPolicy";
 
 export type OnboardingProviderSetup = {
   enabled: boolean;
@@ -77,6 +78,7 @@ export type HotelIdentityPayload = {
 
 export type DepositPolicyPayload = {
   deposit_percentage: number;
+  deposit_policy_rules: DepositPolicyRules;
   free_cancellation_hours: number;
   cancellation_penalty_percentage: number;
 };

@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-10-12T22:23:07.896754+00:00
-Commit: `7e0daf928027d69f425f5c1b91b4920621320d05`
+Generado: 2026-10-15T20:14:16.308894+00:00
+Commit: `ef0aa41f0efd7cfdebf42918700add640adbcbf6`
 
 ```text
-20261017_analytics_fact_refresh_queue (head)
+20261018_fact_company_channel_enum (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

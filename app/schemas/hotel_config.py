@@ -8,6 +8,7 @@ import re
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.schemas.deposit_policy import DepositPolicyRule, validate_deposit_policy_rules
 from app.services.fx_service import OTHER_CURRENCIES
 from app.services.timezones import normalize_timezone
 
@@ -31,6 +32,7 @@ def _normalize_currency(value: str) -> str:
 class HotelConfigRead(BaseModel):
     id: int
     deposit_percentage: float
+    deposit_policy_rules: Optional[List[DepositPolicyRule]] = None
     deposit_policy_configured: bool
     checkin_payment_policy: Literal["deposit", "total", "free"]
     enable_full_payment: bool
@@ -79,8 +81,9 @@ class HotelConfigRead(BaseModel):
 
 class HotelConfigUpdate(BaseModel):
     deposit_percentage: Optional[float] = Field(default=None, ge=0, le=100)
+    deposit_policy_rules: Optional[List[DepositPolicyRule]] = None
     deposit_policy_configured: Optional[bool] = None
-    checkin_payment_policy: Optional[Literal["deposit", "total", "free"]] = None
+    checkin_payment_policy: Optional[Literal["total"]] = None
     enable_full_payment: Optional[bool] = None
     enable_deposit_payment: Optional[bool] = None
     enable_cash: Optional[bool] = None
@@ -126,7 +129,14 @@ class HotelConfigUpdate(BaseModel):
     def reject_null_checkin_payment_policy(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             raise ValueError("checkin_payment_policy cannot be null")
+        if value != "total":
+            raise ValueError("El check-in requiere el pago completo; las cuentas empresa diferidas se gestionan por empresa")
         return value
+
+    @field_validator("deposit_policy_rules")
+    @classmethod
+    def validate_deposit_rules(cls, value: Optional[List[DepositPolicyRule]]):
+        return validate_deposit_policy_rules(value)
 
     @field_validator("hotel_timezone")
     @classmethod

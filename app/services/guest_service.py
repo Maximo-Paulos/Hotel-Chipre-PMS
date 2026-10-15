@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 from sqlalchemy import case, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, noload
 
 from app.decorators.audit_hooks import audited_change
 from app.models.audit_log import AuditActionEnum
@@ -189,7 +189,11 @@ def search_guests(
     term = (search or "").strip()
     safe_skip = max(int(skip or 0), 0)
     safe_limit = max(1, min(int(limit or 20), _MAX_GUEST_SEARCH_LIMIT))
-    query = db.query(Guest).filter(Guest.hotel_id == hotel_id)
+    query = (
+        db.query(Guest)
+        .options(noload(Guest.reservations), noload(Guest.tags))
+        .filter(Guest.hotel_id == hotel_id)
+    )
     order_by = (
         [Guest.id.asc()]
         if default_order_by_id

@@ -424,6 +424,8 @@ Priority: `P1`
 
 **Required:** índices por queries reales comenzando por hotel cuando corresponda; evitar N+1; selects/payloads acotados; cursor pagination; pool; transacciones cortas; locks; `EXPLAIN ANALYZE BUFFERS`; read models/materialized views; cache versionada e invalidación; p95/p99, locks y crecimiento observables.
 
+**Evidencia local 2026-10-15:** el ledger, simulación HTTP de 5–500 usuarios y decisiones de capacidad están en [la auditoría local](audits/auditoria-eficiencia-capacidad-y-reglas-operativas-2026-10-15.md). Las correcciones de polling, agregaciones, payloads y optimizador ya existen en el checkout. No se agregan índices sin query plans; PostgreSQL sigue siendo la fuente de verdad; no hay evidencia que justifique Redis o una base extra. La verificación contra proveedor queda `needs-verification` porque esta ejecución está restringida a local.
+
 ---
 
 ### TECH-0070 — Audit log del hotel
@@ -465,6 +467,183 @@ Priority: `P2`
 Depends on: `TECH-0080`
 
 **Metrics:** nacionalidades, huéspedes recurrentes, ocupación, ADR, RevPAR, estadía media, revenue/margen, categoría, canal, cancelaciones/no-show y comparaciones. Todo tenant-scoped, definiciones y freshness visibles.
+
+---
+
+### TECH-0150 — Reglas de seña por duración y check-in
+
+Status: `VERIFY`
+Priority: `P1`
+
+**Goal:** el hotel configura señas comprensibles por cantidad de noches y el PMS no confunde una seña con habilitación de ingreso.
+
+**Required:** bandas ordenadas por duración con cierre abierto; cálculo configurable por porcentaje del total o cantidad de noches; preservar settings legacy; invalidar confirmación de política cuando se edita; exigir el pago total al check-in de reservas directas/no diferidas; permitir la excepción sólo para empresa configurada con pago diferido.
+
+**Acceptance:** tests de esquema, cálculo con tarifas variables, persistencia de configuración y gate directo/diferido; UI compartida por onboarding y Settings; migración comprobada localmente.
+
+---
+
+### TECH-0151 — Noches reservadas, utilizadas y liquidación de empresa
+
+Status: `VERIFY`
+Priority: `P1`
+
+**Goal:** distinguir compromiso de reserva de ocupación real sin automatizar decisiones de facturación corporativa.
+
+**Required:** almacenar/backfill `reserved_nights`; registrar `used_nights` al checkout usando la zona horaria del hotel; reflejar ambos valores en lecturas de reservas; conservar la salida de empresa con saldo pendiente; dejar al operador decidir manualmente si liquida noches reservadas o utilizadas.
+
+**Acceptance:** migración comprobada en base vacía aislada; extensiones actualizan noches reservadas; checkout refleja noches usadas; no hay automatización de cobro por diferencia.
+
+---
+
+### TECH-0152 — Extensiones pendientes y visibilidad financiera
+Status: `VERIFY`
+Priority: `P1`
+Depends on: `TECH-0063`, `TECH-0150`, `TECH-0151`
+
+**Goal:** extender una estancia sin forzar el cobro inmediato y mantener claras las condiciones comerciales de empresa y habitación física.
+
+**Required:** permitir saldo pendiente al extender una reserva directa; mantener las extensiones corporativas diferidas en cuenta empresa; preservar categoría y tarifa contratadas en el cambio físico de doble a triple para empresa; registrar sólo el adicional por huésped/noche según configuración; permitir `reservation:read` ver saldo e historial sin otorgar permiso de caja.
+
+**Acceptance:** extensión mantiene la reserva y recalcula total/saldo/noches en una transacción; controles de permisos positivos/negativos; la habitación física no altera tarifa/categoría contractual de empresa; resumen financiero disponible sin `cash:operate` y denegado sin `reservation:read`.
+
+---
+
+### TECH-0153 — Reducir lecturas y serialización redundante de Analytics
+
+Status: `VERIFY`
+Priority: `P1`
+Depends on: `TECH-0063`, `TECH-0081`
+
+**Goal:** mantener los reportes multi-tenant en PostgreSQL con una lectura por conjunto de hechos reutilizado, proyectar sólo las columnas necesarias y evitar reconstruir el mismo catálogo en cada respuesta.
+
+**Required:** una consulta de hechos de reservas por ventana en el contexto combinado de anomalías; reutilizarla entre inicio, operaciones, canales y segmentos; filtrar el detalle por habitación; no cargar relaciones ORM que el reporte no usa; limitar las lecturas de planes/entitlements a un número constante y verificable.
+
+**Acceptance:** pruebas verifican tenant, filtros y cantidad máxima de SELECT; `EXPLAIN (ANALYZE, BUFFERS)` en PostgreSQL local con volumen representativo; preservar payload y frescura. No agregar índices sin plan o latencia que lo justifique.
+
+**Evidencia de implementación local:** anomalías ejecuta una lectura de `FactReservationDaily` y una de `FactRoomOccupancyDaily`; el detalle de habitación filtra `room_id`; el payload de entitlements usa como máximo seis SELECT en los catálogos cubiertos por la prueba.
+
+---
+
+### TECH-0154 — Presupuesto y recuperación de exportaciones analíticas
+
+Status: `IN_PROGRESS`
+Priority: `P1`
+Depends on: `TECH-0063`, `TECH-0081`
+
+**Goal:** que una exportación grande no ocupe memoria/CPU sin límite ni quede perdida después de reiniciar el proceso.
+
+**Implemented:** claims tenant-scoped e idempotentes para jobs XLSX, fechas efectivas persistidas, serialización de comparación/XML segura, fallo sin mutar jobs de otro hotel y limpieza SQL limitada a archivos vencidos del hotel en turno. CSV escribe la respuesta por bloques; XLSX genera XML fila a fila y reparte tablas en hojas de hasta 1.048.576 filas; PNG usa páginas en un ZIP temporal cuando supera 250 filas exportables. Ninguna modalidad recorta el rango histórico.
+
+**Owner decision — 2026-10-15:** no imponer una ventana histórica máxima ni descartar datos por antigüedad en CSV, PNG o XLSX. El rango solicitado se conserva completo. Esta decisión no fija por sí sola un máximo de filas, bytes o memoria.
+
+**Implemented locally:** el lifespan inicia un único worker secuencial XLSX dentro del proceso API; los nuevos jobs se envían a esa cola, y al iniciar se reencolan los jobs XLSX no vencidos `PENDING` o `RUNNING` por contexto tenant. Una terminación abrupta puede recuperarse si la base y `OBJECT_STORAGE_LOCAL_DIR` sobreviven al reinicio. No se agregó un servicio, dependencia ni cola externa.
+
+**Open:** los endpoints JSON analíticos conservan arrays completos por contrato y todavía pueden materializar conjuntos grandes. La recuperación sólo cubre una instancia local con almacenamiento persistente local; varias instancias/hosts requieren almacenamiento compartido y coordinación antes de escalar horizontalmente. La medición local de exportación PostgreSQL cubre 25.000 reservas y 250.000 noches sintéticas en un hotel y una empresa; no prueba una distribución multi-hotel/multiempresa ni capacidad de proveedor.
+
+**Acceptance:** cualquier límite técnico debe rechazarse de forma visible antes de materializar datos y nunca truncar silenciosamente. Probar memoria y CPU con cardinalidad grande; hacer el trabajo recuperable e idempotente tras reinicio.
+
+---
+
+### TECH-0155 — Cuota mensual de Analytics AI
+
+Status: `VERIFY`
+Priority: `P1`
+Depends on: `TECH-0063`
+
+**Goal:** impedir que requests concurrentes excedan la cuota del hotel y no reservar conexiones SQL durante la inferencia.
+
+**Required:** GET de configuración sin escrituras; reserva de unidades atómica, tenant-scoped y limitada por cuota; devolver HTTP 429 al agotarse; confirmar la reserva y liberar la conexión antes de invocar el proveedor.
+
+**Acceptance:** tests locales prueban lectura sin fila, cuota agotada y no invocación del proveedor; concurrencia de dos reservas sobre PostgreSQL local prueba que sólo se admite el límite disponible. No usar proveedor de IA externo en tests.
+
+---
+
+### TECH-0156 — Criterio financiero de no-show y redondeo analítico
+
+Status: `BLOCKED`
+Priority: `P1`
+
+**Open decision:** confirmar qué noches e importes cuentan como reservados, usados y facturables para no-show y cómo repartir centavos por noche. El código actual conserva el snapshot contable y las reglas de no-show existentes; no cambiar hechos históricos ni reportes hasta fijar el criterio del hotel.
+
+---
+
+### TECH-0157 — Transición de trial y comped subscription
+
+Status: `BLOCKED`
+Priority: `P1`
+
+**Open decision:** confirmar si el primer GET posterior al vencimiento puede persistir la suspensión/evento o si la transición debe ejecutarse por un job explícito; confirmar el efecto de vencimiento para suscripciones comped. No cambiar el contrato actual de comped sin decisión del dueño.
+
+---
+
+### TECH-0158 — Resolver autorización por capacidad solicitada
+
+Status: `VERIFY`
+Priority: `P1`
+Depends on: `TECH-0000`, `TECH-0063`
+
+**Goal:** evitar construir la matriz completa de permisos para guards que validan una sola capacidad, manteniendo lectura fresca de cambios y revocaciones.
+
+**Implemented:** `resolve()` delega al resolver selectivo `resolve_many()`; no se agregó caché de permisos. La consulta juntada busca sólo la capacidad y sus denegaciones legacy relacionadas, con precedencia de invariant, user override, hotel override y default.
+
+**Acceptance:** paridad con `get_effective_permission_details`, una consulta después del seed de permisos y pruebas de cambios tenant-scoped/revocación en la siguiente lectura.
+
+---
+
+### TECH-0159 — Evitar hidratar historial al listar huéspedes
+
+Status: `VERIFY`
+Priority: `P1`
+Depends on: `TECH-0063`
+
+**Goal:** hacer que el costo de una búsqueda/lista de huésped dependa del límite solicitado y de los campos de respuesta, no de sus estancias históricas.
+
+**Implemented:** el loader de búsqueda omite reservas y tags que `GuestRead` no devuelve; conserva los acompañantes que sí forman parte del contrato y mantiene el filtro por hotel.
+
+**Acceptance:** prueba API con `limit=1` confirma tenant, campos de respuesta y ausencia de SELECT a reservas/tags; validar el perfil de query en PostgreSQL local antes de escalar.
+
+---
+
+### TECH-0160 — Debounce de búsqueda global de reservas
+
+Status: `VERIFY`
+Priority: `P2`
+Depends on: `TECH-0063`
+
+**Goal:** no enviar una consulta por cada carácter al buscar una reserva desde el shell.
+
+**Implemented:** la búsqueda normaliza el texto, espera 250 ms, usa el `AbortSignal` del query y oculta resultados de términos anteriores mientras la búsqueda nueva está pendiente.
+
+**Acceptance:** prueba frontend confirma debounce, cancelación de temporizador y ausencia de resultados obsoletos; typecheck, lint y build pasan.
+
+---
+
+### TECH-0161 — Invalidación precisa para cambios de tarifa
+
+Status: `VERIFY`
+Priority: `P2`
+Depends on: `TECH-0063`
+
+**Goal:** cambios de tarifas no deben releer caja, analytics, configuración ni listas de reservas que no dependen de la operación.
+
+**Implemented:** alta/cancelación de borrador actualiza su lista; confirmar invalida borradores, períodos, calendario/tarifas diarias y cotizaciones de la categoría afectada. La sincronización entre pestañas agrupa el evento bajo el dominio de habitaciones.
+
+**Acceptance:** test frontend verifica los query keys tenant-scoped y por categoría; eventos de otra operación mantienen su mapeo existente.
+
+---
+
+### TECH-0162 — Diferir lecturas móviles ocultas y recuperación entre pestañas
+
+Status: `VERIFY`
+Priority: `P2`
+Depends on: `TECH-0063`
+
+**Goal:** evitar lecturas de balances y secciones administrativas de lavandería que no están visibles en móvil, y evitar refetch en pestañas ocultas.
+
+**Implemented:** balances por lavadero sólo se activan en Historial, en escritorio o para el lavadero seleccionado en el formulario de remito; paneles administrativos móviles se consultan al entrar a Lavaderos. BroadcastChannel y fallback storage mantienen dominios pendientes y los reconcilian al volver a mostrar la pestaña.
+
+**Acceptance:** typecheck, lint y pruebas de caché/eventos; validar manualmente el cambio de pestañas móvil y desktop.
 
 ---
 
@@ -707,6 +886,7 @@ El agente puede preparar IaC, runbooks, checklists y comandos seguros, pero debe
 | Matriz RBAC y permiso temporal TOTP | TECH-0040–0041 |
 | Planes, límites, descuentos y bonificaciones | TECH-0050–0051 |
 | Búsqueda, tarifas, optimizer y performance | TECH-0060–0063 |
+| Señas, noches usadas, extensiones y liquidación de empresa | TECH-0150–0152 |
 | Auditoría y panel Master SaaS | TECH-0070–0071 |
 | Data Warehouse, Data Marts y BigQuery | TECH-0080–0082 |
 | PWA, iOS/Android/Face ID y desktop | TECH-0090–0092 |

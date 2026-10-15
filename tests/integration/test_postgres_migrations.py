@@ -93,6 +93,14 @@ def test_fresh_postgres_migrations_upgrade_is_idempotent_and_current_head_round_
             "analytics refresh queue must have forced row-level security and a hotel policy"
         )
 
+        with engine.connect() as connection:
+            company_channel = connection.execute(
+                text("SELECT 'company'::fact_reservation_daily_channel_code_enum::text")
+            ).scalar_one()
+        assert company_channel == "company", (
+            "analytics fact channel enum must accept corporate reservations"
+        )
+
         second = _run_alembic(dsn, "upgrade", "head")
         assert second.returncode == 0, f"repeat upgrade failed:\n{second.stdout}\n{second.stderr}"
 

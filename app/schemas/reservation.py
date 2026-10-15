@@ -117,6 +117,8 @@ class ReservationRead(BaseModel):
     tax_policy_id: Optional[int] = None
     check_in_date: date
     check_out_date: date
+    reserved_nights: int = 0
+    used_nights: Optional[int] = None
     actual_check_in: Optional[datetime]
     actual_check_out: Optional[datetime]
     # Deferred-company lodging is invoiced outside the PMS, so amount fields
@@ -303,13 +305,15 @@ class ReservationExtensionRequest(BaseModel):
     new_checkout_date: date
     client_version: int
     pricing_mode: str = Field(default="current_rate", pattern="^(current_rate|original_average)$")
-    payment_action: Literal["immediate_payment", "payment_link", "company_account"] = "payment_link"
+    payment_action: Literal["immediate_payment", "payment_link", "company_account", "pending_balance"] = "payment_link"
     immediate_payment: Optional[PaymentRequest] = None
     payment_link: Optional[PaymentLinkCreate] = None
     notes: Optional[str] = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
     def validate_company_account_extension(self):
+        if self.payment_action == "pending_balance" and (self.immediate_payment is not None or self.payment_link is not None):
+            raise ValueError("La extensión con saldo pendiente no admite datos de cobro")
         if self.payment_action == "company_account":
             if self.immediate_payment is not None or self.payment_link is not None:
                 raise ValueError("La extensión a cuenta empresa no admite datos de cobro")

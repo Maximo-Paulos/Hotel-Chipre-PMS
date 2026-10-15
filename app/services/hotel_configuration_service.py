@@ -8,8 +8,15 @@ from app.models.hotel_config import HotelConfiguration
 
 def apply_configuration_update(config: HotelConfiguration, values: Mapping[str, object]) -> None:
     """Apply a validated Settings payload to one hotel configuration row."""
+    values = dict(values)
+    if "deposit_policy_rules" in values and values["deposit_policy_rules"] is not None:
+        values["deposit_policy_rules"] = [
+            rule.model_dump() if hasattr(rule, "model_dump") else dict(rule)
+            for rule in values["deposit_policy_rules"]
+        ]
     policy_fields = (
         "deposit_percentage",
+        "deposit_policy_rules",
         "free_cancellation_hours",
         "cancellation_penalty_percentage",
     )
@@ -37,11 +44,19 @@ def set_identity(config: HotelConfiguration, *, name: str, timezone: str, curren
     )
 
 
-def set_deposit_policy(config: HotelConfiguration, *, deposit_percentage: float, free_cancellation_hours: int, cancellation_penalty_percentage: float) -> None:
+def set_deposit_policy(
+    config: HotelConfiguration,
+    *,
+    deposit_percentage: float,
+    free_cancellation_hours: int,
+    cancellation_penalty_percentage: float,
+    deposit_policy_rules: list[dict] | None = None,
+) -> None:
     apply_configuration_update(
         config,
         {
             "deposit_percentage": deposit_percentage,
+            "deposit_policy_rules": deposit_policy_rules,
             "deposit_policy_configured": True,
             "free_cancellation_hours": free_cancellation_hours,
             "cancellation_penalty_percentage": cancellation_penalty_percentage,

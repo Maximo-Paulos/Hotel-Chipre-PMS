@@ -32,6 +32,9 @@ class HotelConfiguration(Base):
 
     # Financial policies
     deposit_percentage = Column(Float, nullable=False, default=30.0)  # % of total required as deposit
+    # Ordered duration bands; null retains the legacy percentage behavior.
+    # PostgreSQL remains authoritative; this JSON is small, hotel-owned config.
+    deposit_policy_rules = Column(JSON, nullable=True)
     # Defaults are not hotel decisions; reservations stay blocked until an
     # owner explicitly confirms the deposit and cancellation rules.
     deposit_policy_configured = Column(

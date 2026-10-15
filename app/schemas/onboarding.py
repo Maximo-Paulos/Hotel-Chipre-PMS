@@ -6,6 +6,7 @@ from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.room import RoomCategoryCreate
+from app.schemas.deposit_policy import DepositPolicyRule, validate_deposit_policy_rules
 from app.services.timezones import normalize_timezone
 
 
@@ -49,8 +50,14 @@ class HotelIdentityPayload(BaseModel):
 
 class DepositPolicyPayload(BaseModel):
     deposit_percentage: float = Field(..., ge=0, le=100)
+    deposit_policy_rules: Optional[List[DepositPolicyRule]] = None
     free_cancellation_hours: int = Field(..., ge=0, le=168)
     cancellation_penalty_percentage: float = Field(..., ge=0, le=100)
+
+    @field_validator("deposit_policy_rules")
+    @classmethod
+    def validate_rules(cls, value: Optional[List[DepositPolicyRule]]):
+        return validate_deposit_policy_rules(value)
 
 
 class ProviderSetupPayload(BaseModel):

@@ -7,6 +7,7 @@ import { ApiError, apiFetch } from "../../../api/client";
 import { useSubscriptionStatus } from "../../../hooks/useSubscription";
 import { useRooms } from "../../../hooks/useRooms";
 import { formatMoney } from "../../../utils/currency";
+import { formatAnalyticsTableValue } from "../../../utils/analyticsValue";
 import { StatCard } from "../../../components/StatCard";
 import { useSession } from "../../../state/session";
 import { refreshAfterMutation, refreshRoomState } from "../../../api/queryInvalidation";
@@ -350,35 +351,7 @@ const tableValue = (
   key = "",
   row?: Record<string, unknown>,
   unavailableCurrencyLabel = "No disponible"
-): string => {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "boolean") return value ? "Sí" : "No";
-  // Money arrives as "678000.00" under *_ars / *_usd keys.
-  const currency = /_(ars|usd)$/.exec(key)?.[1];
-  if (currency && value !== "" && Number.isFinite(Number(value))) {
-    const requestedCurrency = currency.toUpperCase();
-    const unavailableCurrencies = Array.isArray(row?.unavailable_currencies)
-      ? row.unavailable_currencies.map((item) => String(item).toUpperCase())
-      : [];
-    if (unavailableCurrencies.includes(requestedCurrency)) {
-      return unavailableCurrencyLabel;
-    }
-    const sourceCurrency = typeof row?.source_currency === "string" ? row.source_currency.toUpperCase() : null;
-    const fxRate = Number(row?.fx_rate_snapshot);
-    if (
-      (sourceCurrency !== requestedCurrency || !sourceCurrency) &&
-      (!Number.isFinite(fxRate) || fxRate <= 0)
-    ) {
-      return unavailableCurrencyLabel;
-    }
-    return formatMoney(Number(value), requestedCurrency);
-  }
-  if (typeof value === "number") return String(value);
-  if (typeof value === "string") return VALUE_LABELS[key]?.[value] ?? value;
-  if (Array.isArray(value)) return `${value.length} items`;
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-};
+): string => formatAnalyticsTableValue(value, key, row, unavailableCurrencyLabel, VALUE_LABELS);
 
 const sectionLabel = (key: string) =>
   FIELD_LABELS[key] ??
@@ -1266,6 +1239,7 @@ export function RoomStateEventsPage() {
                 <option value="">Seleccioná una habitación</option>
                 {(roomsQuery.data ?? []).map((room) => <option key={room.id} value={room.id}>Habitación {room.room_number}</option>)}
               </select>
+              {roomsQuery.isError && <span className="text-xs text-rose-700" role="alert">No se pudieron cargar las habitaciones. Reintentá la consulta.</span>}
             </label>
             <label className="grid gap-1 text-sm">
               <span className="text-slate-600">Tipo</span>
@@ -1315,13 +1289,18 @@ export function RoomStateEventsPage() {
           <button
             type="button"
             onClick={() => void handleCreateRoomStateEvent()}
+              disabled={createMutation.isPending || !form.room_id}
             className="mt-4 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           >
-            Crear evento
+            {createMutation.isPending ? "Guardando…" : "Crear evento"}
           </button>
+            {createMutation.isError && <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">No se pudo crear el evento. Revisá los datos e intentá nuevamente.</p>}
         </div>
 
         <div className="space-y-3">
+          {eventsQuery.isLoading && <p className="text-sm text-slate-600" role="status">Cargando eventos…</p>}
+          {eventsQuery.isError && <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">No se pudieron cargar los eventos. <button type="button" className="font-semibold underline" onClick={() => void eventsQuery.refetch()}>Reintentar</button></p>}
+          {closeMutation.isError && <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">No se pudo cerrar el evento. Intentá nuevamente.</p>}
           {events.map((event) => (
             <div key={event.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1337,9 +1316,10 @@ export function RoomStateEventsPage() {
                     <button
                       type="button"
                       onClick={() => void handleCloseRoomStateEvent(event.id)}
+                      disabled={closeMutation.isPending}
                       className="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700"
                     >
-                      Cerrar
+                      {closeMutation.isPending ? "Cerrando…" : "Cerrar"}
                     </button>
                   )}
                 </div>
@@ -1353,7 +1333,7 @@ export function RoomStateEventsPage() {
               </div>
             </div>
           ))}
-          {events.length === 0 && <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Sin eventos cargados.</div>}
+          {!eventsQuery.isLoading && !eventsQuery.isError && events.length === 0 && <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Sin eventos cargados.</div>}
         </div>
       </div>
     </PageShell>

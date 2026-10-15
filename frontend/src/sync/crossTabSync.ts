@@ -202,6 +202,7 @@ export const finishLocalDomainMutation = (
 
 export const domainsForPath = (path: string): SyncDomain[] => {
   const normalized = path.toLowerCase();
+  if (normalized.includes("rate-change-drafts")) return ["rooms"];
   if (normalized.includes("gemma")) return ["assistant"];
   if (normalized.includes("analytics")) return ["analytics"];
   if (normalized.includes("room-state-events")) return ["rooms", "reservations", "analytics"];
@@ -311,66 +312,10 @@ const notifyIfRelevant = (
   scheduleRefresh(message.domain);
 };
 
-const startCrossTabSubscription = (queryClient: QueryClient, hotelId: number) => {
-  if (typeof window === "undefined") return () => undefined;
-  const pendingDomains = new Set<SyncDomain>();
-  let refreshTimer: number | null = null;
-  const scheduleRefresh = (domain: SyncDomain) => {
-    pendingDomains.add(domain);
-    if (refreshTimer !== null) return;
-    refreshTimer = window.setTimeout(() => {
-      const domains = Array.from(pendingDomains);
-      pendingDomains.clear();
-      refreshTimer = null;
-      void refreshDomains(queryClient, hotelId, domains);
-    }, CROSS_TAB_INVALIDATION_DEBOUNCE_MS);
-  };
-  const onStorage = (event: StorageEvent) => {
-    if (event.key !== STORAGE_KEY || !event.newValue) return;
-    try {
-      notifyIfRelevant(hotelId, scheduleRefresh, JSON.parse(event.newValue));
-    } catch {
-      /* ignore malformed cross-tab messages */
-    }
-  };
-  window.addEventListener("storage", onStorage);
-  const onLocalOriginRecovery = (event: Event) => {
-    const detail = (event as CustomEvent<{ hotelId?: unknown; domains?: unknown }>).detail;
-    if (normalizeHotelId(detail?.hotelId) !== hotelId || !Array.isArray(detail?.domains)) return;
-    detail.domains.forEach((domain) => {
-      if (typeof domain === "string" && Object.prototype.hasOwnProperty.call(DOMAIN_QUERY_PREFIXES, domain)) {
-        scheduleRefresh(domain as SyncDomain);
-      }
-    });
-  };
-  window.addEventListener(LOCAL_ORIGIN_REFRESH_EVENT, onLocalOriginRecovery);
-  const onChannelMessage = (event: MessageEvent) => notifyIfRelevant(hotelId, scheduleRefresh, event.data);
-  try {
-    if (typeof BroadcastChannel !== "undefined") {
-      channel ??= new BroadcastChannel(CHANNEL_NAME);
-      channel.addEventListener("message", onChannelMessage);
-    }
-  } catch {
-    /* storage listener remains available */
-  }
-  return () => {
-    if (refreshTimer !== null) window.clearTimeout(refreshTimer);
-    pendingDomains.clear();
-    window.removeEventListener("storage", onStorage);
-    window.removeEventListener(LOCAL_ORIGIN_REFRESH_EVENT, onLocalOriginRecovery);
-    try {
-      channel?.removeEventListener("message", onChannelMessage);
-    } catch {
-      /* ignore channel cleanup errors */
-    }
-  };
-};
-
-/** Coalesce cross-tab broadcasts and SSE events into one tenant-scoped refresh. */
-export const createDomainRefreshScheduler = (
+const createVisibleDomainRefreshQueue = (
   queryClient: QueryClient,
   hotelId: number,
-  debounceMs = REALTIME_EVENT_DEBOUNCE_MS
+  debounceMs: number
 ) => {
   const pendingDomains = new Set<SyncDomain>();
   let timer: number | null = null;
@@ -410,6 +355,59 @@ export const createDomainRefreshScheduler = (
       if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibilityChange);
     }
   };
+};
+
+const startCrossTabSubscription = (queryClient: QueryClient, hotelId: number) => {
+  if (typeof window === "undefined") return () => undefined;
+  const refreshQueue = createVisibleDomainRefreshQueue(queryClient, hotelId, CROSS_TAB_INVALIDATION_DEBOUNCE_MS);
+  const scheduleRefresh = refreshQueue.schedule;
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== STORAGE_KEY || !event.newValue) return;
+    try {
+      notifyIfRelevant(hotelId, scheduleRefresh, JSON.parse(event.newValue));
+    } catch {
+      /* ignore malformed cross-tab messages */
+    }
+  };
+  window.addEventListener("storage", onStorage);
+  const onLocalOriginRecovery = (event: Event) => {
+    const detail = (event as CustomEvent<{ hotelId?: unknown; domains?: unknown }>).detail;
+    if (normalizeHotelId(detail?.hotelId) !== hotelId || !Array.isArray(detail?.domains)) return;
+    detail.domains.forEach((domain) => {
+      if (typeof domain === "string" && Object.prototype.hasOwnProperty.call(DOMAIN_QUERY_PREFIXES, domain)) {
+        scheduleRefresh(domain as SyncDomain);
+      }
+    });
+  };
+  window.addEventListener(LOCAL_ORIGIN_REFRESH_EVENT, onLocalOriginRecovery);
+  const onChannelMessage = (event: MessageEvent) => notifyIfRelevant(hotelId, scheduleRefresh, event.data);
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      channel ??= new BroadcastChannel(CHANNEL_NAME);
+      channel.addEventListener("message", onChannelMessage);
+    }
+  } catch {
+    /* storage listener remains available */
+  }
+  return () => {
+    refreshQueue.close();
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(LOCAL_ORIGIN_REFRESH_EVENT, onLocalOriginRecovery);
+    try {
+      channel?.removeEventListener("message", onChannelMessage);
+    } catch {
+      /* ignore channel cleanup errors */
+    }
+  };
+};
+
+/** Coalesce cross-tab broadcasts and SSE events into one tenant-scoped refresh. */
+export const createDomainRefreshScheduler = (
+  queryClient: QueryClient,
+  hotelId: number,
+  debounceMs = REALTIME_EVENT_DEBOUNCE_MS
+) => {
+  return createVisibleDomainRefreshQueue(queryClient, hotelId, debounceMs);
 };
 
 const parseSseFrames = (buffer: string, onEvent: (event: ServerEvent) => void) => {

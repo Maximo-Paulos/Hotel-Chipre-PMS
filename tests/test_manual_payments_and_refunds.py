@@ -183,6 +183,20 @@ def test_receipt_endpoint_respects_cash_operation_denial(client_with_db):
     assert response.status_code == 403, response.text
 
 
+def test_financial_summary_is_readable_without_cash_operation(client_with_db):
+    client, db, _ctx = client_with_db
+    reservation = _reservation(db, 1, "FINANCIAL-SUMMARY-READ-PERMISSION")
+    paid = _manual_payment(client, reservation.id, reference="POS-FINANCIAL-SUMMARY-READ")
+    assert paid.status_code == 201, paid.text
+
+    set_override(db, 1, "receptionist", PERMISSION_CASH_OPERATE, False, user_id=1)
+    db.commit()
+
+    response = client.get(f"/api/payments/summary/{reservation.id}")
+    assert response.status_code == 200, response.text
+    assert response.json()["transactions"]
+
+
 def test_refund_requires_manager_permission_and_one_use_step_up(client_with_db):
     client, db, ctx = client_with_db
     reservation = _reservation(db, 1, "MANUAL-REFUND-1")

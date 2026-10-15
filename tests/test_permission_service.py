@@ -59,6 +59,7 @@ from app.services.permission_service import (
     can_role_hold_permission,
     ensure_permission_matrix_seeded,
     get_matrix,
+    get_effective_permission_details,
     resolve,
     resolve_many,
     seed_default_permissions,
@@ -464,8 +465,8 @@ def test_resolve_seeds_the_matrix_once_per_engine_not_per_call(db):
 
     (~120 rows inserted/repaired + a full RolePermissionDefault scan + 2 flushes,
     every single authenticated request). Two consecutive resolve() calls on the
-    same engine must seed at most once; the second call should cost ~2 queries
-    (override lookup + default lookup), not re-run the whole seed.
+    same engine must seed at most once; the second call must use one selective
+    joined read rather than re-running the full seed or materializing all details.
     """
     _seed_hotel(db, 1)
     engine = db.get_bind()
@@ -491,8 +492,44 @@ def test_resolve_seeds_the_matrix_once_per_engine_not_per_call(db):
     # tables + a full RolePermissionDefault scan), so it costs more than a
     # plain override/default lookup.
     assert first_call_queries > 2
-    # The second call must not repeat the seed: only override + default lookups.
-    assert second_call_queries <= 2
+    # The second call must not repeat the seed or materialize the whole
+    # permission matrix: a single joined read resolves this capability.
+    assert second_call_queries == 1
+
+
+def test_resolve_matches_full_details_with_one_selective_permission_query(db):
+    _seed_hotel(db, 1)
+    seed_default_permissions(db)
+    ensure_permission_matrix_seeded(db)
+    db.add(
+        HotelPermissionOverride(
+            hotel_id=1,
+            role="receptionist",
+            permission_code=PERMISSION_GUEST_UPDATE,
+            allowed=False,
+        )
+    )
+    db.flush()
+    expected = bool(
+        get_effective_permission_details(db, 1, "receptionist")[PERMISSION_GUEST_UPDATE]["allowed"]
+    )
+
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def _capture_query(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement.lower())
+
+    event.listen(engine, "before_cursor_execute", _capture_query)
+    try:
+        actual = resolve(db, 1, "receptionist", PERMISSION_GUEST_UPDATE)
+    finally:
+        event.remove(engine, "before_cursor_execute", _capture_query)
+
+    selects = [statement for statement in statements if statement.lstrip().startswith("select")]
+    assert actual is expected is False
+    assert len(selects) == 1
+    assert "permissions.code in" in selects[0]
 
 
 def test_permission_seed_is_safe_when_two_requests_initialize_it_concurrently(tmp_path):

@@ -695,18 +695,11 @@ def cleanup_expired_exports(self, database_url: Optional[str] = None):
                 jobs = (
                     db.query(AnalyticsExportJob)
                     .filter(AnalyticsExportJob.file_path.isnot(None))
+                    .filter(AnalyticsExportJob.hotel_id == hotel_id)
+                    .filter(AnalyticsExportJob.expires_at <= now)
                     .all()
                 )
                 for job in jobs:
-                    expires_at = job.expires_at
-                    if expires_at is None:
-                        continue
-                    if expires_at.tzinfo is None:
-                        expires_at = expires_at.replace(tzinfo=timezone.utc)
-                    else:
-                        expires_at = expires_at.astimezone(timezone.utc)
-                    if expires_at > now:
-                        continue
                     if job.status != AnalyticsExportStatusEnum.EXPIRED:
                         job.status = AnalyticsExportStatusEnum.EXPIRED
                         expired_ids.append(job.id)

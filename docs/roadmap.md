@@ -21,6 +21,20 @@ This repository is currently in the pilot-to-public transition described in `doc
    - Runbook and operator docs.
    - Observability, backup/restore, deployment hardening.
    - Final security/config review.
+4. Close the operational and capacity work already in the master development spec.
+   - TECH-0150: duration-based deposit rules and full-payment check-in gate.
+   - TECH-0151: reserved versus used nights with manual company settlement.
+   - TECH-0152: pending-balance extensions, company account handling and read-only financial visibility.
+   - TECH-0153: share fact reads, narrow room-detail queries and bound subscription entitlement query counts.
+   - TECH-0154: preserve the owner-approved unlimited historical export range while making large exports memory-bounded and recovering stale XLSX jobs; tenant-safe claims, SQL-filtered cleanup and idempotency fixes are implemented.
+   - TECH-0155: enforce monthly AI quotas atomically without keeping database connections open during inference.
+   - TECH-0156–0157: confirm no-show/rounding and trial/comped-expiration semantics before changing historical financial or subscription behavior.
+   - TECH-0158: use the fresh selective permission resolver for one-capability request guards without adding authorization cache.
+   - TECH-0159: avoid hydrating guest stay history and tags in list/search responses while retaining companions.
+   - TECH-0160: debounce global reservation search and avoid showing stale results.
+   - TECH-0161: scope rate-change invalidation to the affected category and its quote data.
+   - TECH-0162: defer hidden mobile laundry queries and cross-tab refreshes until a tab is visible.
+   - TECH-0063: repeat local capacity runs from [the audit report](audits/auditoria-eficiencia-capacidad-y-reglas-operativas-2026-10-15.md); add services only when CPU, memory, p95 or database evidence crosses the listed thresholds.
 
 ## Practical rule
 - Do not expand into new product areas until the pilot core is stable.

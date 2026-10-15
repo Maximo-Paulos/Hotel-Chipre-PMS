@@ -1247,7 +1247,13 @@ def resolve(
     user_id: int | None = None,
 ) -> bool:
     canonical = canonical_permission_code(permission_code)
-    return bool(get_effective_permission_details(db, hotel_id, role, user_id=user_id).get(canonical, {}).get("allowed"))
+    return resolve_many(
+        db,
+        hotel_id,
+        role,
+        (canonical,),
+        user_id=user_id,
+    ).get(canonical, False)
 
 
 def resolve_many(
