@@ -1,0 +1,35 @@
+# S21: recortar minutos de CI sin tocar los jobs (O3/O5).
+# Reemplaza el bloque `on:` de .github/workflows/pr-validation.yml por este y agrega `concurrency`.
+#
+# OJO con `paths-ignore`: si la rama exige estos checks como *required*, un PR que solo toca
+# docs queda con los checks en "Pending" y no se puede mergear. En ese caso usar el filtro
+# dentro del job (dorny/paths-filter) y dejar un job final que siempre corra.
+name: PR Validation
+
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "knowledge/**"
+      - "qa/**"
+      - ".graphify/**"
+      - "**/*.md"
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# En cada job sin tope: timeout-minutes: 20   (backend / frontend; e2e ya tiene 30)
+# Caché del navegador de Playwright (job e2e), antes de `npx playwright install`:
+#   - uses: actions/cache@v4
+#     with:
+#       path: ~/.cache/ms-playwright
+#       key: pw-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+#
+# render.yaml: desplegar solo cuando cambia lo que corre.
+#   services:
+#     - type: web
+#       name: hotel-chipre-pms-api
+#       autoDeploy: true
+#       buildFilter:
+#         paths: [app/**, alembic/**, requirements.txt, runtime.txt]

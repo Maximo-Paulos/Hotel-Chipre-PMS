@@ -93,7 +93,7 @@ La segunda pasada leyó **cada archivo** de `app/` (71 modelos, 137 servicios, 6
 
 ### 0.3 Frontend, migraciones y operación (lectura completa de las capas restantes)
 
-La tercera pasada leyó los 239 archivos de `frontend/src` (siete partes: [`frontend-notes/`](frontend-notes/)), las 173 migraciones ([`migration-notes-a.md`](migration-notes-a.md), [`migration-notes-b.md`](migration-notes-b.md)) y los 119 archivos de CI/despliegue/scripts/QA ([`ops-notes.md`](ops-notes.md)). Lo que no se pudo confirmar se marca. **Leyenda:** ✔ confirmado contra el código o reproducido (por mí o por un segundo lector; ver [`verificacion-manual.md`](frontend-notes/verificacion-manual.md)) · ◐ leído con evidencia de `archivo:línea`, sin segunda verificación · ○ inferido o dependiente de datos de producción. Donde una nota decía algo que la verificación desmintió, está corregido aquí.
+La tercera pasada leyó los 239 archivos de `frontend/src` (siete partes: [`frontend-notes/`](frontend-notes/)), las 173 migraciones ([`migration-notes-a.md`](migration-notes-a.md), [`migration-notes-b.md`](migration-notes-b.md)) y los 119 archivos de CI/despliegue/scripts/QA ([`ops-notes.md`](ops-notes.md)). Lo que no se pudo confirmar se marca. **Leyenda:** ✔ confirmado contra el código o reproducido (por mí o por un segundo lector; ver [`verificacion-manual.md`](frontend-notes/verificacion-manual.md)) · ◐ leído con evidencia de `archivo:línea`, sin segunda verificación · ○ inferido o dependiente de datos de producción. Donde una nota decía algo que la verificación desmintió, está corregido aquí. Cambios concretos para los hallazgos nuevos: [`SOLUCIONES.md`](SOLUCIONES.md) S19–S24 (S19 y S20 con código probado).
 
 **Frontend (F)**
 

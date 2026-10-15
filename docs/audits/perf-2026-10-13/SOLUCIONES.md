@@ -183,14 +183,83 @@ requirements-celery.txt   # celery, redis   (solo si se reactiva)
 
 ---
 
+## F. Hallazgos de la tercera pasada (§ 0.3 del informe): datos, operación y frontend
+
+### S19 · Búsqueda de la clave de API pública compatible con RLS (M4) — *Probado (SQL)*
+
+**Causa:** `hotel_api_keys` tiene RLS `FORCE` (`alembic/versions/20260820_missing_tenant_rls.py:24-26,53-56`) con política `hotel_id = NULLIF(current_setting('app.hotel_id'),'')::int`, pero `verify_key` (`app/services/hotel_api_key_service.py:69`) busca por `key_hash` **antes** de fijar `app.hotel_id` (`app/dependencies/api_key_auth.py:35-70`; el comentario afirma que esa búsqueda "queda fuera de RLS", y la política no lo permite). Con un rol `NOBYPASSRLS`: 0 filas → todas las claves dan 401. Con `BYPASSRLS`: la RLS no protege nada. Reproducido.
+
+**Cambio:** [`solutions/api_key_lookup_under_rls.sql`](solutions/api_key_lookup_under_rls.sql) crea `hotel_chipre_private.lookup_api_key(hash)` (`SECURITY DEFINER`, `search_path` fijo, `REVOKE … FROM PUBLIC`, devuelve solo esa fila) y el índice único sobre `key_hash` que hoy falta (M3). `verify_key` pasa a `SELECT * FROM hotel_chipre_private.lookup_api_key(:h)` y luego `set_tenant_hotel_context`. La política de la tabla no se toca.
+
+**Cómo se comprobó:** `PGHOST=127.0.0.1 PGPORT=5440 PGUSER=pgtest PGPASSWORD=pgtest bash solutions/test_api_key_lookup.sh` → consulta directa sin contexto 0 filas (el bug), `lookup_api_key(hash)` 1, hash inexistente 0, `SELECT *` sin contexto sigue en 0 (aislamiento intacto). **Falta** decidir el rol dueño de la función (necesita `BYPASSRLS`; en Supabase `postgres` lo tiene, `needs-verification`) y probarlo con el rol real de `DATABASE_URL`.
+
+### S20 · Copia de seguridad lógica y restauración probada (O7) — *Probado (SQL local)*
+
+**Causa:** no hay backup ni restauración programados en el repo; el plan gratuito no incluye PITR.
+
+**Cambio:** [`solutions/backup_restore_drill.sh`](solutions/backup_restore_drill.sh): `pg_dump -Fc` → restaura en una **base nueva y descartable** → compara el conteo de filas de **todas** las tablas de `public` → borra la base de prueba → falla (código ≠ 0) si algo difiere; opcionalmente cifra con `age` antes de subir. Corre semanal desde un workflow programado de GitHub Actions (`on: schedule`) con `SRC_URL` = conexión directa de Supabase (no el pooler 6543) y sube el `.age` a un bucket gratuito (R2/B2). Un backup que nunca se restauró no cuenta.
+
+**Cómo se comprobó:** contra el PostgreSQL local, 2 tablas / 2.005 filas → `DRILL OK`; con un `pg_dump` que inserta una fila después del volcado → `DIFIERE hotels: origen=6 restaurado=5` y `DRILL FALLO` (el drill sí puede fallar). **Falta:** probarlo contra Supabase real (límite de conexiones y de tamaño) y medir el tiempo con los datos del piloto.
+
+### S21 · Minutos de CI y despliegues innecesarios (O3, O5) — *Diseño (YAML validado)*
+
+**Cambio:** [`solutions/ci_concurrency_snippet.yml`](solutions/ci_concurrency_snippet.yml): `concurrency` con `cancel-in-progress` por PR (un push nuevo cancela los jobs ya obsoletos), `paths-ignore` para `docs/`, `knowledge/`, `qa/`, `.graphify/` y `*.md`, `timeout-minutes` en los jobs sin tope, caché de `~/.cache/ms-playwright`, y `buildFilter` en `render.yaml` para que solo `app/`, `alembic/`, `requirements.txt` y `runtime.txt` disparen despliegue. Quitar (o pasar a `workflow_dispatch`) `build-and-push.yml`: construye 2 imágenes por merge y nadie las consume. **Advertencia:** `paths-ignore` bloquea el merge si esos checks son *required* en la rama; en ese caso filtrar dentro del job.
+
+**Ahorro:** con 63 de 132 commits sin tocar código de ejecución y ≈ 29–35 min por push (e2e 16,1 min medido; resto estimado), lo evitable es del orden de la mitad de los minutos. No se midió en CI real.
+
+### S22 · Arranque del frontend: de 9–10 requests a 2–3 antes de la primera consulta (F2) — *Diseño*
+
+**Cambio** (los tres en `frontend/src`, sin tocar el backend):
+1. `hooks/usePermissions.ts:16-22`: sembrar con lo que el refresh/login ya trajo.
+```ts
+const seeded = session.permissions && session.role
+  ? { hotel_id: session.hotelId!, role: session.role, permissions: session.permissions }
+  : undefined;
+const query = useQuery<EffectivePermissionsResponse>({
+  queryKey: effectivePermissionsKey(session.hotelId, session.userId),
+  queryFn: () => fetchEffectivePermissions(session),
+  enabled: hasValidSession(session),
+  staleTime: 5 * 60 * 1000,
+  initialData: seeded,
+  initialDataUpdatedAt: seeded ? Date.now() : undefined, // cuenta como "fresco" por staleTime
+});
+```
+2. El idioma de interfaz ya llega en `hotel-config`: eliminar `useHotelInterfaceLanguage` para quien tiene `hotel_settings:read` (y devolver `interface_language` en la respuesta del refresh para el resto; hoy `GET /api/config/interface-language` = 1 request + 1 `SELECT` por carga de página).
+3. `GET /api/events/recovery` y `/api/events/stream` hoy son secuenciales (`crossTabSync.ts:589-592`): lanzarlos en paralelo o fusionar el recovery en el primer mensaje del stream.
+
+**Efecto esperado:** quita 2 de las 6–7 lecturas (permisos, idioma) y 1 viaje secuencial; el refresh sigue bloqueando el render para quien ya tenía sesión (F2), por eso no es el cambio de mayor retorno por sí solo. No se ejecutó ni se midió.
+
+### S23 · Datos de otra persona tras cerrar sesión (F5) — *Diseño trivial*
+
+`SessionProvider` ya está dentro de `QueryClientProvider` (`main.tsx:47-57`), así que `logout` (`state/session.tsx:218-229`) puede vaciar la caché:
+```ts
+const queryClient = useQueryClient();
+const logout = useCallback(() => {
+  /* … igual que hoy … */
+  setClientSession(null);
+  setSession(EMPTY_SESSION);
+  setRestoredSession(false);
+  queryClient.clear();               // ← nuevo: ninguna consulta del usuario anterior sobrevive
+}, [session, queryClient]);
+```
+Hacer lo mismo en `handleUnauthorized` (`api/client.ts`, la salida por 401) y agregar `session.userId` a las claves de caché con datos personales (`["notification-inbox", …]`, `["notification-preferences", …]`, `["reservations", …]`). Test: iniciar sesión como A, abrir `/reservas`, cerrar sesión, iniciar como B y comprobar que no se pinta ninguna fila de A antes de la respuesta de B.
+
+### S24 · `PricingPage` no debe poder vaciar los planes (F6) — *Diseño trivial*
+
+Backend: `schemas/marketing.py:84-85` → `plans: list[PlanIn] = Field(..., min_length=1)` (un `plans: []` pasa a 422). Frontend: `PricingPage.tsx:57-93` deshabilita "Publicar precios" mientras el `GET` esté cargando o haya fallado, y cambia `key={plan.code || index}` por un id estable (hoy pierde el foco al tipear el código). Test: `PUT` con `plans: []` → 422 y los planes siguen.
+
+---
+
 ## Orden recomendado
 
 | Orden | Solución | Esfuerzo | Efecto |
 |---|---|---|---|
-| 1 | S1, S2, S3, S4, S5 (§ A) | 1–3 días | Evita pérdida de datos y fuga de credenciales/documentos |
+| 1 | S1, S2, S3, S4, S5 (§ A), S19, S24 | 1–3 días | Evita pérdida de datos, fuga de credenciales/documentos, claves de API caídas por RLS y el borrado de planes |
+| 1-bis | S20 (backup + restauración probada), S21 (CI/despliegue), S23 | horas | Red de seguridad antes del primer dato real; −½ de minutos de CI; sin datos del usuario anterior en recepción compartida |
 | 2 | S6 | minutos | Evita el 500 tras un corte de conexión |
 | 3 | S8 con su test de presupuesto | 3–5 días | Memoria −50 %, ×3–×5 de capacidad con reportes |
 | 4 | S7, S15, S16, S17 | 2–4 días | De 9 a ~4 sentencias por request |
 | 5 | S9 con prueba de paridad | 3–5 días | Reportes de 2,9 s a ~150 ms |
 | 6 | S10, S11, S12, S13, S14 | 2–3 días | Sin crecimiento no acotado, sin cron de pago, sin bloqueos del bucle |
 | 7 | S18 y migración de frontend a Cloudflare Pages | 1–2 días | −65 % de dependencias; plan gratuito válido en licencia |
+| 8 | S22 y el resto de F1–F16 (§ 0.3 del informe) | 3–5 días | De 9–10 requests de arranque a 2–3; listas con ventana de fechas; sin fan-out de `analytics` |
