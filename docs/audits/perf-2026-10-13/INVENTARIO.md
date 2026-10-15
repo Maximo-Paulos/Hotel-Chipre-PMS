@@ -5,6 +5,25 @@ Generado con AST (backend) y `wc -l` (frontend) sobre el commit `ef0aa41`. Cober
 Columnas backend: LOC = líneas del archivo; fn = funciones/métodos; db = sitios de acceso a DB (`db.query/get/execute…`); N+1 = llamadas a DB dentro de bucles (heurístico); `.all()` s/lím = `.all()` sin `.limit()`; commits = `commit()` totales.
 
 
+## Dónde está la lectura de cada archivo
+
+Este inventario es la tabla de **métricas** (AST y `wc -l`). La **lectura** de cada archivo, con sus hallazgos, está en:
+
+| Zona | Archivos | Notas de lectura |
+|---|---:|---|
+| `app/` (modelos, servicios, API, esquemas, tareas, adaptadores, panel master, middleware, scripts) | 375 | [`LECTURA-COMPLETA.md`](LECTURA-COMPLETA.md) (incluye la tabla final de verificación empírica) |
+| `frontend/src/` — reservas | parte 1 | [`frontend-notes/part-1.md`](frontend-notes/part-1.md) |
+| `frontend/src/` — páginas grandes, `api/` y hooks de huéspedes/caja/stock/lavandería | parte 2 | [`frontend-notes/part-2.md`](frontend-notes/part-2.md) |
+| `frontend/src/` — tarifas, asistente, operación, reportes, ajustes | parte 3 | [`frontend-notes/part-3.md`](frontend-notes/part-3.md) |
+| `frontend/src/` — onboarding, vistas públicas, panel master, marketing, estilos | parte 4 | [`frontend-notes/part-4.md`](frontend-notes/part-4.md) |
+| `frontend/src/api/*` y `hooks/*` (cliente HTTP, evento→query, SSE) | parte 5 | [`frontend-notes/part-5.md`](frontend-notes/part-5.md) |
+| `frontend/src/locales/*`, `i18n.ts`, `main.tsx` | parte 6 | [`frontend-notes/part-6.md`](frontend-notes/part-6.md) |
+| `frontend/src/` — shell, router, sesión, `crossTabSync`, componentes compartidos, `package.json`, `vite.config` | parte 7 | [`frontend-notes/part-7.md`](frontend-notes/part-7.md) |
+| `alembic/versions/` (173 migraciones, orden de aplicación) | 85 + 88 | [`migration-notes-a.md`](migration-notes-a.md), [`migration-notes-b.md`](migration-notes-b.md) |
+| CI/CD, `render.yaml`, Dockerfiles, `scripts/`, `agent-ops/`, `qa/`, dependencias | 119 | [`ops-notes.md`](ops-notes.md) |
+
+Lo que se verificó por segunda vez (y las correcciones) está en [`frontend-notes/verificacion-manual.md`](frontend-notes/verificacion-manual.md) y en las líneas `CORREGIDO (verificación)` de las notas. La síntesis, con la leyenda ✔/◐/○, es [`REPORT.md` § 0.3](REPORT.md).
+
 ## app/  (4 archivos, 1956 LOC)
 
 | archivo | LOC | fn | db | N+1 | `.all()` s/lím | commits |
