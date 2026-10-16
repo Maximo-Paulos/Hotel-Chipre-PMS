@@ -205,7 +205,7 @@ requirements-celery.txt   # celery, redis   (solo si se reactiva)
 
 **Cambio:** [`solutions/ci_concurrency_snippet.yml`](solutions/ci_concurrency_snippet.yml): `concurrency` con `cancel-in-progress` por PR (un push nuevo cancela los jobs ya obsoletos), `paths-ignore` para `docs/`, `knowledge/`, `qa/`, `.graphify/` y `*.md`, `timeout-minutes` en los jobs sin tope, caché de `~/.cache/ms-playwright`, y `buildFilter` en `render.yaml` para que solo `app/`, `alembic/`, `requirements.txt` y `runtime.txt` disparen despliegue. Quitar (o pasar a `workflow_dispatch`) `build-and-push.yml`: construye 2 imágenes por merge y nadie las consume. **Advertencia:** `paths-ignore` bloquea el merge si esos checks son *required* en la rama; en ese caso filtrar dentro del job.
 
-**Ahorro:** con 63 de 111 commits no-merge (57 %) sin tocar código de ejecución y ≈ 29–35 min por push (e2e 16,1 min medido; resto estimado), lo evitable es del orden de la mitad de los minutos. No se midió en CI real.
+**Ahorro:** con 63 de 111 commits no-merge (57 %) sin tocar código de ejecución y ≈ 44 min facturables por push (29,5 min de pared; medido en la cabeza `02102f9`: backend 29 min 31 s, E2E 12 min 38 s, frontend 1 min 38 s), lo evitable es del orden de la mitad de los minutos (`paths-ignore`) más todo lo que cancela `concurrency` en pushes consecutivos. Falta repetir la medición en 3–5 corridas para fijar un presupuesto.
 
 ### S22 · Arranque del frontend: menos requests antes de la primera consulta (F2) — *Diseño*
 
@@ -242,7 +242,7 @@ const logout = useCallback(() => {
   queryClient.clear();               // ← nuevo: ninguna consulta del usuario anterior sobrevive
 }, [session, queryClient]);
 ```
-Hacer lo mismo en `handleUnauthorized` (`api/client.ts`, la salida por 401) y agregar `session.userId` a las claves de caché con datos personales (`["notification-inbox", …]`, `["notification-preferences", …]`, `["reservations", …]`). Test: iniciar sesión como A, abrir `/reservas`, cerrar sesión, iniciar como B y comprobar que no se pinta ninguna fila de A antes de la respuesta de B.
+La salida por `401` no lo necesita: `handleUnauthorized` hace `window.location.assign`, que descarta la memoria del navegador; el riesgo es solo del logout voluntario (`UserBadge.tsx:23-26`, `SettingsSecurityPage.tsx:73`, `SettingsSessionsPage.tsx:31`, `AcceptInvitationPage.tsx:321`). Agregar `session.userId` (que es el email, `session.tsx:155`) a las claves de caché con datos personales (`["notification-inbox", …]`, `["notification-preferences", …]`, `["reservations", …]`). Test: iniciar sesión como A, abrir `/reservas`, cerrar sesión, iniciar como B y comprobar que no se pinta ninguna fila de A antes de la respuesta de B.
 
 ### S24 · `PricingPage` no debe poder vaciar los planes (F6) — *Diseño trivial*
 
@@ -262,4 +262,4 @@ Backend: `schemas/marketing.py:84-85` → `plans: list[PlanIn] = Field(..., min_
 | 5 | S9 con prueba de paridad | 3–5 días | Reportes de 2,9 s a ~150 ms |
 | 6 | S10, S11, S12, S13, S14 | 2–3 días | Sin crecimiento no acotado, sin cron de pago, sin bloqueos del bucle |
 | 7 | S18 y migración de frontend a Cloudflare Pages | 1–2 días | −65 % de dependencias; plan gratuito válido en licencia |
-| 8 | S22 y el resto de F1–F16 (§ 0.3 del informe) | 3–5 días | De 9 requests de arranque a 7 (a ≈ 4 con un `GET` de arranque único); listas con ventana de fechas; sin fan-out de `analytics` |
+| 8 | S22 y el resto de F1–F17 (§ 0.3 del informe) | 3–5 días | De 9 requests de arranque a 7 (a ≈ 4 con un `GET` de arranque único); listas con ventana de fechas; sin fan-out de `analytics` |
