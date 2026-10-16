@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from pydantic import TypeAdapter, ValidationError
-from pydantic.networks import EmailStr
 from sqlalchemy.orm import Session
 
 from app.services.row_locks import lock_query
@@ -21,6 +19,10 @@ from app.services.hotel_outbound_email_service import (
     HotelOutboundEmailError,
     HotelOutboundSendResult,
     send_hotel_email,
+)
+from app.utils.reservation_email_validation import (
+    is_local_synthetic_reservation_email,
+    normalize_reservation_email,
 )
 
 
@@ -39,8 +41,8 @@ def _clean_email(value: str | None) -> str:
     if not candidate:
         raise ReservationCommunicationError("La reserva no tiene un email de huésped disponible")
     try:
-        return str(TypeAdapter(EmailStr).validate_python(candidate))
-    except ValidationError as exc:
+        return normalize_reservation_email(candidate)
+    except ValueError as exc:
         raise ReservationCommunicationError("El email del huésped no tiene un formato válido") from exc
 
 
@@ -177,6 +179,14 @@ def send_reservation_email(
     )
     db.add(delivery)
     db.flush()
+
+    # The reserved .test domain is accepted for local scenarios, but must never
+    # cross the provider boundary, even if a local environment is misconfigured.
+    if is_local_synthetic_reservation_email(guest_email):
+        delivery.status = ReservationEmailStatusEnum.FAILED
+        delivery.last_error = "Dirección sintética local; no se envió ningún correo"
+        db.flush()
+        return ReservationEmailSendOutcome(delivery)
 
     try:
         result: HotelOutboundSendResult = sender(

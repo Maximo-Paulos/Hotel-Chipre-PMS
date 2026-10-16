@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, Field, field_validator
+
+from app.utils.reservation_email_validation import normalize_reservation_email
 
 
 class ReservationEmailKind(str, Enum):
@@ -20,8 +22,16 @@ class ReservationEmailStatus(str, Enum):
 
 class ReservationEmailSendRequest(BaseModel):
     kind: ReservationEmailKind = ReservationEmailKind.CONFIRMATION
-    recipient_email: EmailStr | None = None
+    recipient_email: str | None = Field(
+        default=None,
+        json_schema_extra={"format": "email"},
+    )
     resend: bool = False
+
+    @field_validator("recipient_email")
+    @classmethod
+    def _validate_recipient_email(cls, value: str | None) -> str | None:
+        return normalize_reservation_email(value) if value is not None else None
 
 
 class ReservationEmailDeliveryRead(BaseModel):
@@ -29,7 +39,7 @@ class ReservationEmailDeliveryRead(BaseModel):
     reservation_id: int
     kind: ReservationEmailKind
     status: ReservationEmailStatus
-    recipient_email: EmailStr
+    recipient_email: str = Field(json_schema_extra={"format": "email"})
     subject: str
     provider_message_id: str | None = None
     attempt_count: int
@@ -41,6 +51,11 @@ class ReservationEmailDeliveryRead(BaseModel):
     accepted_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("recipient_email")
+    @classmethod
+    def _validate_recipient_email(cls, value: str) -> str:
+        return normalize_reservation_email(value)
 
 
 class ReservationEmailSendResponse(BaseModel):

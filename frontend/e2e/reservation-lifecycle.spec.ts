@@ -147,9 +147,9 @@ test("owner is told when the browser blocks the reservation voucher window", asy
   });
   await reservationRow.getByRole("button", { name: "Ficha", exact: true }).click();
 
-  const details = page.locator("div.fixed").filter({ has: page.getByRole("button", { name: "Exportar voucher PDF", exact: true }) });
+  const details = page.locator("div.fixed").filter({ has: page.getByRole("button", { name: "Imprimir / guardar voucher PDF", exact: true }) });
   await expect(details).toBeVisible();
-  const exportVoucherButton = details.getByRole("button", { name: "Exportar voucher PDF", exact: true });
+  const exportVoucherButton = details.getByRole("button", { name: "Imprimir / guardar voucher PDF", exact: true });
   await expect(exportVoucherButton).toBeDisabled();
   releaseOperationsSummary();
   await expect(exportVoucherButton).toBeEnabled({ timeout: 20_000 });

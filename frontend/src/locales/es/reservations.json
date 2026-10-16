@@ -927,7 +927,7 @@
       "eyebrow": "Ficha",
       "title": "Reserva {{code}}",
       "subtitle": "{{guest}} - Cat {{category}} - {{room}}",
-      "exportVoucher": "Exportar voucher PDF",
+      "exportVoucher": "Imprimir / guardar voucher PDF",
       "communicationEyebrow": "Comunicación",
       "communicationTitle": "Enviar información al huésped",
       "communicationHint": "El estado refleja la respuesta del proveedor; aceptado no significa entregado.",

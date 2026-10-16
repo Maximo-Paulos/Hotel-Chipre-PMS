@@ -1,26 +1,26 @@
 # Resumen Graphify
 
-Generado: 2026-10-15T21:09:48.028025+00:00
-Commit: `46969e1930518e4b9afb4bf1919357fc541474ab`
+Generado: 2026-10-16T19:58:14.602871+00:00
+Commit: `56a22308d894c33c459605e9d8fa6ae49bb582e3`
 
 `graphify summary .graphify/graph.json`:
 ```text
 Graphify First-Hop Summary
-Graph: 15131 nodes, 45151 edges, 655 communities, density 0.0004, average degree 5.968, undirected
+Graph: 15151 nodes, 45458 edges, 662 communities, density 0.0004, average degree 6.0007, undirected
 
 Top hubs:
-  1. Reservation (degree 550, community 17 Community 17, app/models/reservation.py)
-  2. HotelConfiguration (degree 525, community 8 Community 8, app/models/hotel_config.py)
-  3. ReservationStatusEnum (degree 442, community 52 Community 52, app/models/reservation.py)
+  1. Reservation (degree 551, community 4 Community 4, app/models/reservation.py)
+  2. HotelConfiguration (degree 525, community 7 Community 7, app/models/hotel_config.py)
+  3. ReservationStatusEnum (degree 442, community 7 Community 7, app/models/reservation.py)
   4. Base (degree 431, community 9 Community 9, app/database.py)
-  5. Room (degree 404, community 41 Community 41, app/models/room.py)
+  5. Room (degree 404, community 7 Community 7, app/models/room.py)
 
 Key communities:
-  1. Community 0 - Community 0: 294 nodes, 374 internal edges, density 0.0087; top nodes: ef0aa41 Merge PR #125: week-two remediation [skip render], 9e4b357 Reduce PMS request load and complete simulation remediation, 150ca64 Reduce PMS request load and keep analytics facts fresh
-  2. Community 1 - Community 1: 262 nodes, 417 internal edges, density 0.0122; top nodes: config.py, 8d88259 Merge pull request #29 from Maximo-Paulos/codex/fix/full-functional-qa, f1644f3 feat(security): fail-closed external effects, RBAC narrowing, QA catalog v2
-  3. Community 2 - Community 2: 242 nodes, 305 internal edges, density 0.0105; top nodes: bf4a21f Fix day 0 and day 1 hotel simulation findings, 0ddeb59 Fix day 2 hotel simulation findings (#114), 9a75a8e Merge pull request #99 from Maximo-Paulos/feature/operational-audit-cash-daily
-  4. Community 3 - Community 3: 228 nodes, 1169 internal edges, density 0.0452; top nodes: ReservationSourceEnum, Transaction, TransactionTypeEnum
-  5. Community 4 - Community 4: 213 nodes, 375 internal edges, density 0.0166; top nodes: ed918c6 Make the whole app one visual system and fix what the e2e journeys exposed, e752208 Merge pull request #115 from Maximo-Paulos/fix/day2-runtime-followup, business-journey.spec.ts
+  1. Community 0 - Community 0: 323 nodes, 495 internal edges, density 0.0095; top nodes: d908400 Merge pull request #107 from Maximo-Paulos/fix/hotel-sim-day0-day1, bf4a21f Fix day 0 and day 1 hotel simulation findings, e752208 Merge pull request #115 from Maximo-Paulos/fix/day2-runtime-followup
+  2. Community 1 - Community 1: 284 nodes, 385 internal edges, density 0.0096; top nodes: ef0aa41 Merge PR #125: week-two remediation [skip render], 9e4b357 Reduce PMS request load and complete simulation remediation, d96fa51 Fix week two hotel simulation failures
+  3. Community 2 - Community 2: 231 nodes, 967 internal edges, density 0.0364; top nodes: feature/secure-auth-marketing-release-20260926, codex/production-render-qa, codex/public-site-inquiries
+  4. Community 3 - Community 3: 221 nodes, 1467 internal edges, density 0.0603; top nodes: RoomCategory, RoomStatusEnum, Company
+  5. Community 4 - Community 4: 212 nodes, 901 internal edges, density 0.0403; top nodes: Reservation, Transaction, TransactionTypeEnum
 
 Next best action: Start with get_neighbors on "Reservation", then use query_graph for the user's specific question.
 ```

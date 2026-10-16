@@ -41,6 +41,7 @@ test("seleccionar huésped al instante, revisar su tarjeta de datos y respetar g
   page
 }) => {
   const suffix = `${Date.now()}`;
+  const guestFirstName = "Alex";
   const guestLastName = `Buscador ${suffix}`;
   const guestEmail = `buscador.${suffix}@example.test`;
   const guestPhone = `11${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 100).toString().padStart(2, "0")}`;
@@ -67,7 +68,7 @@ test("seleccionar huésped al instante, revisar su tarjeta de datos y respetar g
   const firstForm = page.locator("form").filter({ hasText: "Datos de la reserva" });
   await expect(firstForm).toBeVisible();
   await firstForm.getByRole("button", { name: "¿No lo encontrás? Crear huésped nuevo", exact: true }).click();
-  await firstForm.getByPlaceholder("Nombre").fill("Huésped");
+  await firstForm.getByPlaceholder("Nombre").fill(guestFirstName);
   await firstForm.getByPlaceholder("Apellido").fill(guestLastName);
   await firstForm.getByPlaceholder("Email").fill(guestEmail);
   await firstForm.getByPlaceholder("Teléfono").fill(guestPhone);
@@ -87,14 +88,15 @@ test("seleccionar huésped al instante, revisar su tarjeta de datos y respetar g
   await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cerrar", exact: true }).last().click();
 
-  // 2) Open a new reservation and search for that guest by (partial) name.
+  // 2) Open a new reservation and search by full name. The API matches each
+  // term against one field, so the UI must combine first- and last-name hits.
   await page.getByRole("button", { name: "Crear reserva", exact: true }).click();
   const form = page.locator("form").filter({ hasText: "Datos de la reserva" });
   await expect(form).toBeVisible();
 
   const searchInput = form.getByPlaceholder("Buscar por nombre, documento o email");
   await expect(searchInput).toBeVisible();
-  await searchInput.fill("Buscador");
+  await searchInput.fill(`${guestFirstName} ${guestLastName}`);
 
   const results = form.getByTestId("guest-search-results");
   await expect(results).toBeVisible({ timeout: 5_000 });

@@ -1,12 +1,26 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+from pydantic import ValidationError
+
+from app.config import get_settings
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.reservation_communication import ReservationEmailKindEnum, ReservationEmailStatusEnum
+from app.models.reservation_communication import (
+    ReservationEmailKindEnum,
+    ReservationEmailStatusEnum,
+)
 from app.models.room import RoomCategory
-from app.services.hotel_outbound_email_service import HotelOutboundEmailError, HotelOutboundSendResult
+from app.schemas.reservation_communication import (
+    ReservationEmailDeliveryRead,
+    ReservationEmailSendRequest,
+)
+from app.services.hotel_outbound_email_service import (
+    HotelOutboundEmailError,
+    HotelOutboundSendResult,
+)
 from app.services.reservation_communication_service import (
     ReservationCommunicationError,
     list_reservation_email_deliveries,
@@ -166,3 +180,112 @@ def test_invalid_recipient_is_rejected_before_provider(db):
     else:
         raise AssertionError("an absent recipient must be rejected")
     assert called is False
+
+
+def test_local_example_test_address_is_accepted_but_never_forwarded(db, monkeypatch):
+    monkeypatch.delenv("TESTING", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("EMAIL_PROVIDER", "null")
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "false")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "false")
+    get_settings.cache_clear()
+
+    payload = ReservationEmailSendRequest(recipient_email="Guest+Sim@EXAMPLE.TEST")
+    assert payload.recipient_email == "Guest+Sim@example.test"
+
+    reservation = _reservation(db, guest_email="guest@example.test")
+    calls = []
+
+    def sender(*args, **kwargs):
+        calls.append(kwargs)
+        return HotelOutboundSendResult(channel="gmail_hotel", sender_email="hotel@example.com")
+
+    outcome = send_reservation_email(
+        db,
+        hotel_id=1,
+        reservation_id=reservation.id,
+        kind="confirmation",
+        requested_by_user_id=None,
+        sender=sender,
+    )
+
+    assert outcome.delivery.status == ReservationEmailStatusEnum.FAILED
+    assert outcome.delivery.last_error == "Dirección sintética local; no se envió ningún correo"
+    assert calls == []
+    validated_delivery = ReservationEmailDeliveryRead.model_validate(outcome.delivery)
+    assert validated_delivery.recipient_email == "guest@example.test"
+
+
+def test_production_rejects_example_test_recipient(db, monkeypatch):
+    monkeypatch.delenv("TESTING", raising=False)
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv("EMAIL_PROVIDER", "null")
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "false")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "false")
+    get_settings.cache_clear()
+
+    with pytest.raises(ValidationError):
+        ReservationEmailSendRequest(recipient_email="guest@example.test")
+
+    reservation = _reservation(db, guest_email="guest@example.test")
+    calls = []
+    with pytest.raises(ReservationCommunicationError, match="formato válido"):
+        send_reservation_email(
+            db,
+            hotel_id=1,
+            reservation_id=reservation.id,
+            kind="confirmation",
+            requested_by_user_id=None,
+            sender=lambda *args, **kwargs: calls.append(kwargs),
+        )
+    assert calls == []
+
+
+def test_synthetic_email_does_not_expand_reservation_tenant_scope(db, monkeypatch):
+    monkeypatch.delenv("TESTING", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("EMAIL_PROVIDER", "null")
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "false")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "false")
+    get_settings.cache_clear()
+
+    reservation = _reservation(db, guest_email="guest@example.test")
+    calls = []
+    with pytest.raises(ReservationCommunicationError, match="Reserva no encontrada"):
+        send_reservation_email(
+            db,
+            hotel_id=2,
+            reservation_id=reservation.id,
+            kind="confirmation",
+            requested_by_user_id=None,
+            sender=lambda *args, **kwargs: calls.append(kwargs),
+        )
+    assert calls == []
+
+
+def test_test_mode_never_sends_example_test_even_if_provider_flags_are_enabled(db, monkeypatch):
+    monkeypatch.setenv("TESTING", "1")
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
+
+    reservation = _reservation(db, guest_email="guest@example.test")
+    calls = []
+    outcome = send_reservation_email(
+        db,
+        hotel_id=1,
+        reservation_id=reservation.id,
+        kind="confirmation",
+        requested_by_user_id=None,
+        sender=lambda *args, **kwargs: calls.append(kwargs),
+    )
+
+    assert outcome.delivery.status == ReservationEmailStatusEnum.FAILED
+    assert "no se envió" in outcome.delivery.last_error
+    assert calls == []

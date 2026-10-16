@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { hasValidSession } from "../api/client";
-import { listGuests, type Guest, type GuestPayload } from "../api/guests";
+import { hasValidSession, type SessionLike } from "../api/client";
+import { listGuests, searchGuests, type Guest, type GuestPayload } from "../api/guests";
 import { useGuest, useGuestCreate } from "../hooks/useGuests";
 import { useEffectivePermissions } from "../hooks/usePermissions";
 import { useSession } from "../state/session";
@@ -58,7 +58,32 @@ type GuestQuickCreatePanelProps = {
 
 const GUEST_SEARCH_MIN_LENGTH = 2;
 const GUEST_SEARCH_LIMIT = 8;
+const GUEST_SEARCH_CANDIDATE_LIMIT = 200;
 const GUEST_SEARCH_DEBOUNCE_MS = 300;
+
+async function searchGuestRecords(query: string, session: SessionLike): Promise<Guest[]> {
+  const terms = query.trim().split(/\s+/).filter(Boolean);
+  // Keep request fanout bounded even if an operator pastes arbitrary text.
+  if (terms.length <= 1) {
+    return searchGuests(terms[0] ?? query, GUEST_SEARCH_LIMIT, session);
+  }
+  if (terms.length > 5) return searchGuests(query.trim(), GUEST_SEARCH_LIMIT, session);
+
+  // The API matches a query against each name field independently. Intersect
+  // per-word results so a full name such as "Alex Prueba" can match first and
+  // last name fields without broadening the search to guests matching only
+  // one part of the name.
+  const resultsByTerm = await Promise.all(
+    terms.map((term) => searchGuests(term, GUEST_SEARCH_CANDIDATE_LIMIT, session))
+  );
+  const orderedResults = [...resultsByTerm].sort((left, right) => left.length - right.length);
+  const candidateResults = orderedResults[0] ?? [];
+  const remainingIds = orderedResults.slice(1).map((results) => new Set(results.map((guest) => guest.id)));
+
+  return candidateResults
+    .filter((guest) => remainingIds.every((guestIds) => guestIds.has(guest.id)))
+    .slice(0, GUEST_SEARCH_LIMIT);
+}
 
 const guestFullName = (guest: Pick<Guest, "first_name" | "last_name">) =>
   `${guest.first_name} ${guest.last_name}`.trim();
@@ -174,7 +199,7 @@ export default function GuestQuickCreatePanel({
 
   const searchQuery = useQuery({
     queryKey: ["guest-search", session.hotelId, debouncedQuery],
-    queryFn: () => listGuests({ search: debouncedQuery, limit: GUEST_SEARCH_LIMIT }, session),
+    queryFn: () => searchGuestRecords(debouncedQuery, session),
     enabled: searchEnabled,
     staleTime: 30 * 1000
   });

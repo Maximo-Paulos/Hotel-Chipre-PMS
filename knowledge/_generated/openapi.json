@@ -64215,13 +64215,13 @@
           "recipient_email": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "email"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "format": "email",
             "title": "Recipient Email"
           },
           "resend": {

@@ -546,6 +546,7 @@
       "app/tasks/report_tasks.py",
       "app/tasks/run_no_show_sweep.py",
       "app/tasks/run_scheduled_hotel_jobs.py",
+      "app/utils/reservation_email_validation.py",
       "frontend/action-step-up-client.test.mjs",
       "frontend/analytics-value.test.mjs",
       "frontend/android/app/build.gradle",
@@ -1589,10 +1590,10 @@
     ],
     "video": []
   },
-  "total_files": 1580,
-  "total_words": 2213686,
+  "total_files": 1581,
+  "total_words": 2214468,
   "needs_graph": true,
-  "warning": "Large corpus: 1580 files · ~2,213,686 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1581 files · ~2,214,468 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1613,8 +1614,9 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "46969e1930518e4b9afb4bf1919357fc541474ab",
+    "source_hash": "56a22308d894c33c459605e9d8fa6ae49bb582e3",
     "branches": [
+      "fix/local-simulation-workflows",
       "main",
       "refactor/pms-efficiency-remediation"
     ],
@@ -1627,9 +1629,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "46969e1930518e4b9afb4bf1919357fc541474ab",
+    "head": "56a22308d894c33c459605e9d8fa6ae49bb582e3",
     "candidate_count": null,
-    "included_count": 1580,
+    "included_count": 1581,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 15,

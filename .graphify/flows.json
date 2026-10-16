@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-15T21:09:44.003Z",
+  "generatedAt": "2026-10-16T19:54:37.046Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -25679,6 +25679,28 @@
       "warnings": []
     },
     {
+      "id": "flow:utils_reservation_email_validation_is_local_synthetic_reservation_email",
+      "name": "is_local_synthetic_reservation_email",
+      "entryPoint": "utils_reservation_email_validation_is_local_synthetic_reservation_email",
+      "entryPointId": "utils_reservation_email_validation_is_local_synthetic_reservation_email",
+      "path": [
+        "utils_reservation_email_validation_is_local_synthetic_reservation_email",
+        "utils_reservation_email_validation_is_example_test_address"
+      ],
+      "qualifiedPath": [
+        "utils_reservation_email_validation_is_local_synthetic_reservation_email",
+        "utils_reservation_email_validation_is_example_test_address"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/utils/reservation_email_validation.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:app_config_is_test_mode",
       "name": "is_test_mode",
       "entryPoint": "app_config_is_test_mode",
@@ -26594,6 +26616,30 @@
       "fileCount": 1,
       "files": [
         "frontend/src/config/publicUrls.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:utils_reservation_email_validation_normalize_reservation_email",
+      "name": "normalize_reservation_email",
+      "entryPoint": "utils_reservation_email_validation_normalize_reservation_email",
+      "entryPointId": "utils_reservation_email_validation_normalize_reservation_email",
+      "path": [
+        "utils_reservation_email_validation_normalize_reservation_email",
+        "utils_reservation_email_validation_is_example_test_address",
+        "utils_reservation_email_validation_local_synthetic_email_addresses_enabled"
+      ],
+      "qualifiedPath": [
+        "utils_reservation_email_validation_normalize_reservation_email",
+        "utils_reservation_email_validation_is_example_test_address",
+        "utils_reservation_email_validation_local_synthetic_email_addresses_enabled"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/utils/reservation_email_validation.py"
       ],
       "criticality": 0.16,
       "warnings": []
