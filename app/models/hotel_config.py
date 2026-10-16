@@ -25,6 +25,14 @@ class HotelConfiguration(Base):
             "AND manual_rate_min_adjustment_pct <= manual_rate_max_adjustment_pct)",
             name="ck_hotel_configuration_manual_rate_bounds",
         ),
+        CheckConstraint(
+            "fx_usd_to_ars_rate_side IN ('compra', 'venta')",
+            name="ck_hotel_configuration_fx_usd_to_ars_rate_side",
+        ),
+        CheckConstraint(
+            "fx_ars_to_usd_rate_side IN ('compra', 'venta')",
+            name="ck_hotel_configuration_fx_ars_to_usd_rate_side",
+        ),
     )
 
     # hotel_id is the primary key; no auto-assigned default to avoid implicit singletons
@@ -96,6 +104,15 @@ class HotelConfiguration(Base):
     # FxPolicy source/side fields cannot override it. Existing hotels keep official.
     fx_conversion_rate_type = Column(
         String(20), nullable=False, default="oficial", server_default=text("'oficial'")
+    )
+    # Select the DolarAPI side for each conversion direction. These defaults
+    # preserve the user-confirmed local behavior while keeping direction
+    # choices independently configurable by the hotel owner.
+    fx_usd_to_ars_rate_side = Column(
+        String(10), nullable=False, default="venta", server_default=text("'venta'")
+    )
+    fx_ars_to_usd_rate_side = Column(
+        String(10), nullable=False, default="venta", server_default=text("'venta'")
     )
     # Quotes exposed for operator comparison. Selection never rewrites a
     # reservation's stored price or FX snapshot.

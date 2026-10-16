@@ -74,7 +74,12 @@ def update_configuration(
         for field in manual_rate_fields
         if field in update_data and update_data[field] != getattr(config, field)
     }
-    fx_fields = ("fx_conversion_rate_type", "fx_display_rate_types")
+    fx_fields = (
+        "fx_conversion_rate_type",
+        "fx_display_rate_types",
+        "fx_usd_to_ars_rate_side",
+        "fx_ars_to_usd_rate_side",
+    )
     fx_before = {field: getattr(config, field) for field in fx_fields}
     fiscal_before = {field: getattr(config, field) for field in fiscal_fields}
     changed_fx_fields = {

@@ -92,6 +92,9 @@ def test_config_defaults_include_permissions(ctx):
     body = r.json()
     assert "allow_revenue_manager" not in body
     assert "allow_revenue_receptionist" not in body
+    assert body["fx_conversion_rate_type"] == "oficial"
+    assert body["fx_usd_to_ars_rate_side"] == "venta"
+    assert body["fx_ars_to_usd_rate_side"] == "venta"
 
 
 def test_manual_rate_permissions_keep_owner_policy_separate_from_bounded_entry(ctx):
@@ -237,7 +240,10 @@ def test_co_owner_can_change_fx_market_after_step_up(ctx):
         )
 
     fastapi_app.dependency_overrides[get_auth_context_target()] = co_owner_context
-    payload = {"fx_conversion_rate_type": "blue"}
+    payload = {
+        "fx_conversion_rate_type": "blue",
+        "fx_ars_to_usd_rate_side": "compra",
+    }
     challenge = client.patch("/api/config/", json=payload)
     assert challenge.status_code == 428
     assert challenge.json()["detail"]["permission_code"] == PERMISSION_SETTINGS_FX_MANAGE
@@ -257,12 +263,57 @@ def test_co_owner_can_change_fx_market_after_step_up(ctx):
     )
     assert response.status_code == 200, response.text
     assert response.json()["fx_conversion_rate_type"] == "blue"
+    assert response.json()["fx_ars_to_usd_rate_side"] == "compra"
+
+
+def test_fx_conversion_sides_are_owner_configurable_and_audited(ctx):
+    client, db = ctx
+    payload = {"fx_usd_to_ars_rate_side": "compra"}
+    challenge = client.patch("/api/config/", json=payload)
+    assert challenge.status_code == 428
+    assert challenge.json()["detail"]["permission_code"] == PERMISSION_SETTINGS_FX_MANAGE
+    ticket = create_action_step_up_ticket(
+        user_id=1,
+        hotel_id=1,
+        token_version=0,
+        permission_code=PERMISSION_SETTINGS_FX_MANAGE,
+        method="PATCH",
+        path="/api/config/",
+    )
+
+    response = client.patch(
+        "/api/config/",
+        json=payload,
+        headers={"X-Action-Step-Up-Ticket": ticket},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["fx_usd_to_ars_rate_side"] == "compra"
+    assert response.json()["fx_ars_to_usd_rate_side"] == "venta"
+    assert response.json()["fx_conversion_rate_type"] == "oficial"
+
+    read_response = client.get("/api/config/")
+    assert read_response.status_code == 200
+    assert read_response.json()["fx_usd_to_ars_rate_side"] == "compra"
+
+    log = (
+        db.query(AuditLog)
+        .filter(AuditLog.hotel_id == 1, AuditLog.table_name == "hotel_configuration")
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+    assert log is not None
+    assert json.loads(log.payload_before) == {"fx_usd_to_ars_rate_side": "venta"}
+    assert json.loads(log.payload_after) == {"fx_usd_to_ars_rate_side": "compra"}
 
 
 @pytest.mark.parametrize(
     "payload",
     [
         {"fx_conversion_rate_type": "tarjeta"},
+        {"fx_usd_to_ars_rate_side": "medio"},
+        {"fx_ars_to_usd_rate_side": "medio"},
+        {"fx_usd_to_ars_rate_side": None},
+        {"fx_ars_to_usd_rate_side": None},
         {"fx_display_rate_types": []},
         {"fx_display_rate_types": ["oficial", "oficial"]},
         {"fx_display_rate_types": ["cripto"]},

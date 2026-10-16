@@ -66,6 +66,8 @@ class HotelConfigRead(BaseModel):
     manual_rate_max_adjustment_pct: Optional[Decimal] = None
     default_currency: str
     fx_conversion_rate_type: Literal["oficial", "blue"] = "oficial"
+    fx_usd_to_ars_rate_side: Literal["compra", "venta"] = "venta"
+    fx_ars_to_usd_rate_side: Literal["compra", "venta"] = "venta"
     fx_display_rate_types: List[Literal["oficial", "blue"]] = Field(default_factory=lambda: ["oficial"])
     languages: List[str]
     jurisdiction_code: str
@@ -115,6 +117,8 @@ class HotelConfigUpdate(BaseModel):
     manual_rate_max_adjustment_pct: Optional[Decimal] = Field(default=None, max_digits=7, decimal_places=2)
     default_currency: Optional[str] = None
     fx_conversion_rate_type: Optional[Literal["oficial", "blue"]] = None
+    fx_usd_to_ars_rate_side: Optional[Literal["compra", "venta"]] = None
+    fx_ars_to_usd_rate_side: Optional[Literal["compra", "venta"]] = None
     fx_display_rate_types: Optional[List[Literal["oficial", "blue"]]] = Field(default=None, min_length=1, max_length=2)
     languages: Optional[List[str]] = None
     jurisdiction_code: Optional[str] = Field(default=None, min_length=2, max_length=3)
@@ -164,6 +168,13 @@ class HotelConfigUpdate(BaseModel):
             raise ValueError("fx_display_rate_types no puede repetir cotizaciones")
         # Stable order makes responses and the settings control predictable.
         return [rate_type for rate_type in ("oficial", "blue") if rate_type in value]
+
+    @field_validator("fx_usd_to_ars_rate_side", "fx_ars_to_usd_rate_side")
+    @classmethod
+    def reject_null_fx_conversion_rate_side(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            raise ValueError("La opción de cotización cambiaria no puede ser nula")
+        return value
 
     @field_validator("interface_language")
     @classmethod

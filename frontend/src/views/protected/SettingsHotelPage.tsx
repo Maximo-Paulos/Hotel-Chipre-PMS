@@ -662,7 +662,7 @@ export function SettingsHotelPage() {
             <section className="rounded-lg border border-slate-200 p-4">
               <h3 className="text-sm font-semibold text-slate-800">Cotizaciones y conversiones</h3>
               <p className="mt-1 text-xs text-slate-600">
-                Solo se usan mercados oficial y blue, sin dólar tarjeta, MEP, CCL ni otras variantes. El mercado elegido rige para todas las monedas: USD usa la cotización directa de DolarAPI; EUR, BRL, CLP y UYU usan su cotización oficial directa, o un equivalente blue derivado de la relación USD blue/oficial, identificado como estimado. Los pares se convierten vía ARS con venta para la moneda de origen y compra para la de destino, aplicando el spread de la política FX. Si falta una cotización fresca, el cálculo se detiene sin cambiar de mercado.
+                Solo se usan mercados oficial y blue, sin dólar tarjeta, MEP, CCL ni otras variantes. El mercado elegido rige para todas las monedas: USD usa la cotización directa de DolarAPI; EUR, BRL, CLP y UYU usan su cotización oficial directa, o un equivalente blue derivado de la relación USD blue/oficial, identificado como estimado. Los pagos se conservan en la moneda recibida; cuando hace falta convertir, el sistema usa el lado configurado para ese sentido y aplica el spread de la política FX. Si falta una cotización fresca, el cálculo se detiene sin cambiar de mercado.
               </p>
               <p className="mt-1 text-xs text-slate-600">Cambiar estas preferencias requiere MFA reciente.</p>
               <div className="mt-3 grid gap-4 lg:grid-cols-2">
@@ -677,6 +677,46 @@ export function SettingsHotelPage() {
                     <option value="blue">Blue para todas las monedas</option>
                   </select>
                 </label>
+                <fieldset className="lg:col-span-2" data-testid="fx-rate-side-settings">
+                  <legend className="text-sm font-semibold text-slate-700">Compra o venta según el sentido de conversión</legend>
+                  <p className="mt-1 text-xs font-normal text-slate-600">
+                    Elegí qué cotización se usa en cada dirección. Venta queda seleccionada como valor predeterminado para ambas.
+                  </p>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    <label className="text-sm font-semibold text-slate-700">
+                      Al convertir de USD a ARS
+                      <select
+                        aria-label="Tipo al convertir de USD a ARS"
+                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                        value={form.fx_usd_to_ars_rate_side ?? "venta"}
+                        onChange={(event) => handleChange("fx_usd_to_ars_rate_side", event.target.value as "compra" | "venta")}
+                        data-testid="fx-usd-to-ars-rate-side"
+                      >
+                        <option value="compra">Compra</option>
+                        <option value="venta">Venta</option>
+                      </select>
+                      <span className="mt-1 block text-xs font-normal text-slate-500">
+                        Cotización del USD que se aplica al pasar un importe de dólares a pesos.
+                      </span>
+                    </label>
+                    <label className="text-sm font-semibold text-slate-700">
+                      Al convertir de ARS a USD
+                      <select
+                        aria-label="Tipo al convertir de ARS a USD"
+                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                        value={form.fx_ars_to_usd_rate_side ?? "venta"}
+                        onChange={(event) => handleChange("fx_ars_to_usd_rate_side", event.target.value as "compra" | "venta")}
+                        data-testid="fx-ars-to-usd-rate-side"
+                      >
+                        <option value="compra">Compra</option>
+                        <option value="venta">Venta</option>
+                      </select>
+                      <span className="mt-1 block text-xs font-normal text-slate-500">
+                        Cotización del USD que se aplica al pasar un importe de pesos a dólares.
+                      </span>
+                    </label>
+                  </div>
+                </fieldset>
                 <fieldset>
                   <legend className="text-sm font-semibold text-slate-700">Mercados visibles en cotizaciones</legend>
                   <div className="mt-1 grid gap-2 sm:grid-cols-2">
@@ -758,7 +798,7 @@ export function SettingsHotelPage() {
                 )}
               </div>
               <p className="mt-2 text-xs text-slate-500">
-                Las tarifas y reservas ya creadas conservan sus importes. El mercado elegido gobierna todas las conversiones; las cotizaciones blue de EUR, BRL, CLP y UYU son equivalentes derivadas de la relación blue/oficial del USD. Las políticas FX aportan el spread y la dirección determina compra o venta.
+                Las tarifas y reservas ya creadas conservan sus importes. El mercado elegido gobierna todas las conversiones; las cotizaciones blue de EUR, BRL, CLP y UYU son equivalentes derivadas de la relación blue/oficial del USD. Las políticas FX aportan el spread y los selectores anteriores definen Compra o Venta para cada dirección.
               </p>
             </section>
           )}

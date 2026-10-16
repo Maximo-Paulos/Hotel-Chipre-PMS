@@ -240,8 +240,8 @@
     "hash": "2f4d3301efa1ff084b908282dc6016e7"
   },
   "app/api/config.py": {
-    "mtime": 1791849255857.114,
-    "hash": "d13fecfe2d2091f7cb696dff32ce7aa6"
+    "mtime": 1792183430321.1526,
+    "hash": "14e6d8424ade6e930ab4b0df8ddf7ae4"
   },
   "app/api/connections.py": {
     "mtime": 1783103274875.5076,
@@ -524,8 +524,8 @@
     "hash": "cce7f6597ba1f752e55eed1e42e5ec08"
   },
   "app/models/hotel_config.py": {
-    "mtime": 1792100439482.8037,
-    "hash": "f450ff072419f40216cfc108ce3a3115"
+    "mtime": 1792183423658.1619,
+    "hash": "1a3e7dce23a262082f8971a459014fca"
   },
   "app/models/hotel_membership.py": {
     "mtime": 1790286208532.4243,
@@ -692,8 +692,8 @@
     "hash": "677c64b5783d6466d025137434798d90"
   },
   "app/schemas/hotel_config.py": {
-    "mtime": 1792100439483.3354,
-    "hash": "7d482b9a02f29f5994ff47f78852d44a"
+    "mtime": 1792183427656.4966,
+    "hash": "3f6195e015510f0243eed443f825f9c6"
   },
   "app/schemas/integration.py": {
     "mtime": 1783103274883.6697,
@@ -992,8 +992,8 @@
     "hash": "fc4863ba92a075b87bf17fdd2456733d"
   },
   "app/services/pricing_policy_service.py": {
-    "mtime": 1791849255882.4585,
-    "hash": "bb3949b6dba426fa66d40a9d0b978e4a"
+    "mtime": 1792183428616.8723,
+    "hash": "3d580f7e78a4ef4c08404877b688dfb1"
   },
   "app/services/pricing_service.py": {
     "mtime": 1791849255883.703,
@@ -1132,8 +1132,8 @@
     "hash": "0558269c4d3043c7858428700a4dd204"
   },
   "frontend/src/api/config.ts": {
-    "mtime": 1792100439490.8972,
-    "hash": "ac2fdd063871ccf1731404f052f48cde"
+    "mtime": 1792183463873.5732,
+    "hash": "d0ed8773df338366feee61ce88c5cd0c"
   },
   "frontend/src/api/email.ts": {
     "mtime": 1783103274904.3967,
@@ -1444,8 +1444,8 @@
     "hash": "6431bf533dcb709c8b30522253005645"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1791849255922.128,
-    "hash": "1e952b5b8fe921bd36c5a0c6c87d82dd"
+    "mtime": 1792183463878.5771,
+    "hash": "f23e332ccae130af5a8050c105c03997"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1791849255922.4275,
@@ -1464,8 +1464,8 @@
     "hash": "2830aabaf375e7b32e57a679c8f19c12"
   },
   "frontend/src/views/protected/SettingsHotelPage.tsx": {
-    "mtime": 1792100439497.074,
-    "hash": "e2c15441abbc76786ad26213359810ba"
+    "mtime": 1792183463876.6094,
+    "hash": "cb8f4df442260599f22c517a9c32392e"
   },
   "frontend/src/views/protected/SettingsPermissionsPage.tsx": {
     "mtime": 1791849255923.219,
@@ -1748,8 +1748,8 @@
     "hash": "5e0d8b78410e2dcaa5a1aa8564db56cc"
   },
   "tests/test_config_permissions.py": {
-    "mtime": 1792100439503.0715,
-    "hash": "d6371b2a2935d3f3fdd321dc3ba86a18"
+    "mtime": 1792183449626.1123,
+    "hash": "433967e20f0c440b550ba73c4600f3e5"
   },
   "tests/test_connections.py": {
     "mtime": 1783103275005.2117,
@@ -1904,8 +1904,8 @@
     "hash": "809e0f5107efcd7f48d0ad7288c82058"
   },
   "tests/test_payment_service.py": {
-    "mtime": 1791849255947.879,
-    "hash": "c5d5a7499dbb4d69b67fc79f235097cf"
+    "mtime": 1792183502091.379,
+    "hash": "183e11e0e03f3ccec126f0fe267be10d"
   },
   "tests/test_payment_webhook_service.py": {
     "mtime": 1791849255948.1643,
@@ -1924,8 +1924,8 @@
     "hash": "c81ca583740deb2ce59a482f80fa4831"
   },
   "tests/test_pricing_policy_service.py": {
-    "mtime": 1791849255950.3096,
-    "hash": "920f8c3b9d7f1159d069e37bdacb85f1"
+    "mtime": 1792183461683.9265,
+    "hash": "0f00bbf7c125756313b4ba96996a068c"
   },
   "tests/test_public_booking_api.py": {
     "mtime": 1789061001943.3293,
@@ -2096,119 +2096,119 @@
     "hash": "13c075762304f5bf61c5183f56910cf4"
   },
   ".claude/agents/architecture-reviewer.md": {
-    "mtime": 1791675150318.5837,
+    "mtime": 1784817309002.621,
     "hash": "0e3741f5fd317621c4b4e6dadfdbdbc5"
   },
   ".claude/agents/backend-engineer.md": {
-    "mtime": 1791675150318.7102,
+    "mtime": 1784817309002.802,
     "hash": "d9ecf606f106908cfbe99848159b83fb"
   },
   ".claude/agents/database-migrations.md": {
-    "mtime": 1791675150319.0134,
+    "mtime": 1784817309003.167,
     "hash": "fb17089c4f89250c4e25a71bf1bfc07c"
   },
   ".claude/agents/docs-writer.md": {
-    "mtime": 1791675150319.1145,
+    "mtime": 1784817309003.4148,
     "hash": "9b948346884c2dfde996c7663a85d97b"
   },
   ".claude/agents/frontend-engineer.md": {
-    "mtime": 1791675150319.1704,
+    "mtime": 1784817309003.5347,
     "hash": "54ea36eb497d6ad7ff54a0fbaa7f113e"
   },
   ".claude/agents/performance-analyst.md": {
-    "mtime": 1791675150319.608,
+    "mtime": 1784817309004.1116,
     "hash": "d9fcdafa1e751ed6041b32c791ee8554"
   },
   ".claude/agents/qa-testing.md": {
-    "mtime": 1791675150319.7236,
+    "mtime": 1784817309004.3528,
     "hash": "503a0453b0d5ddd90183c7461218c732"
   },
   ".claude/agents/security-auditor.md": {
-    "mtime": 1791675150319.825,
+    "mtime": 1784817309004.585,
     "hash": "46c9b4b5a2e5608a22877d1be8b991ef"
   },
   ".codex_prompts/d1.txt": {
-    "mtime": 1791675150325.1921,
+    "mtime": 1783103274869.4485,
     "hash": "51da59e8e6fd7817b82d5aef4136a88e"
   },
   ".codex_prompts/d2.txt": {
-    "mtime": 1791675150325.2454,
+    "mtime": 1783103274869.5015,
     "hash": "e4728e544694b957d3eb65361f5cbb09"
   },
   ".codex_prompts/d3.txt": {
-    "mtime": 1791675150325.2944,
+    "mtime": 1783103274869.5464,
     "hash": "56506cee96f5a86385f52eda3033bd29"
   },
   ".codex_prompts/e2e.txt": {
-    "mtime": 1791675150325.3457,
+    "mtime": 1783103274869.602,
     "hash": "758c3b6cc09ae41d809740ad0c1b5230"
   },
   ".codex_prompts/fe-a.txt": {
-    "mtime": 1791675150325.395,
+    "mtime": 1783103274869.6475,
     "hash": "5a1b536006066e832270c63fb85897b3"
   },
   ".codex_prompts/fe-b.txt": {
-    "mtime": 1791675150325.4578,
+    "mtime": 1783103274869.7034,
     "hash": "6f450f11836495579f5e7f97ed978d5d"
   },
   ".codex_prompts/fe-c.txt": {
-    "mtime": 1791675150325.5276,
+    "mtime": 1783103274869.756,
     "hash": "92ea55c380c950f53f2da2b64c6de2fa"
   },
   ".codex_prompts/matrix.txt": {
-    "mtime": 1791675150325.5945,
+    "mtime": 1783103274869.8093,
     "hash": "b7e6daac319d31ff0f53ea8d3c312c75"
   },
   ".codex_prompts/perf.txt": {
-    "mtime": 1791675150325.6604,
+    "mtime": 1783103274869.8557,
     "hash": "15b3d6770098b010807524dc006dd808"
   },
   ".codex_prompts/s02.txt": {
-    "mtime": 1791675150325.7249,
+    "mtime": 1783103274869.902,
     "hash": "28bdd32a90829d4b017d8b2fb6cfb251"
   },
   ".codex_prompts/s03.txt": {
-    "mtime": 1791675150325.7915,
+    "mtime": 1783103274869.9468,
     "hash": "ff70a87ad8e54f3bcf188597b9ecd1b6"
   },
   ".codex_prompts/s04.txt": {
-    "mtime": 1791675150325.8582,
+    "mtime": 1783103274869.991,
     "hash": "cba2bb9740eecf48c75fd2a506ea6da4"
   },
   ".codex_prompts/s05.txt": {
-    "mtime": 1791675150325.9268,
+    "mtime": 1783103274870.0388,
     "hash": "ad3d6794321c8df917bd907930e5812b"
   },
   ".codex_prompts/s06.txt": {
-    "mtime": 1791675150326.0085,
+    "mtime": 1783103274870.091,
     "hash": "7b16815c5ba2f1ebe722de64a96b4ab1"
   },
   ".codex_prompts/s08.txt": {
-    "mtime": 1791675150326.08,
+    "mtime": 1783103274870.1416,
     "hash": "b9501f34a05a406e938605124646b028"
   },
   ".codex_prompts/s09.txt": {
-    "mtime": 1791675150326.1653,
+    "mtime": 1783103274870.1929,
     "hash": "f344ea8c350bc0ef1a8b02355808b1ec"
   },
   ".codex_prompts/s10.txt": {
-    "mtime": 1791675150326.3042,
+    "mtime": 1783103274870.2354,
     "hash": "0c05b4a8bec691e13b1ce47709367c29"
   },
   ".codex_prompts/s11.txt": {
-    "mtime": 1791675150326.5042,
+    "mtime": 1783103274870.2844,
     "hash": "d40185b2e428a5a282ddbb4470561d59"
   },
   ".codex_prompts/s12.txt": {
-    "mtime": 1791675150326.5784,
+    "mtime": 1783103274870.3413,
     "hash": "22648c4abec837a8b13d1eadffa033cf"
   },
   ".github/workflows/build-and-push.yml": {
-    "mtime": 1791675150327.428,
+    "mtime": 1787360063236.6458,
     "hash": "c5cf55fd0b730c5179d460b18d33654e"
   },
   ".github/workflows/pr-validation.yml": {
-    "mtime": 1791675150327.5032,
+    "mtime": 1791849255848.4978,
     "hash": "8ef15b917f405749653a0359837b2835"
   },
   "AGENTS.md": {
@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1792100439497.9148,
-    "hash": "a42197b365b603e5f35028ac86698116"
+    "mtime": 1792180694642.0825,
+    "hash": "33902ae83db494a7262e0544f5f897cb"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1792100439498.059,
-    "hash": "442dc7d346c5c3c94195368edff5703c"
+    "mtime": 1792180693960.4526,
+    "hash": "89140e22158089b6f1761b71b3a37131"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1792100439498.3586,
-    "hash": "4860c0232471d38b744db4c39ad7b8fb"
+    "mtime": 1792180694629.278,
+    "hash": "1a940c3e856bf19b8211398ba4eccc6f"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1792100439498.4863,
-    "hash": "e58abe119461ad044bda675b8197bf19"
+    "mtime": 1792180693973.4487,
+    "hash": "0a7260e28cbb2cf9dae9b3f22763f8f9"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1792100439498.6257,
-    "hash": "cc50050c68d96bdefb5dfa2fe77a1311"
+    "mtime": 1792180694616.3286,
+    "hash": "53f7ccfb11e00dff92c38a2ba6cd35ab"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1792100439498.8018,
-    "hash": "8c852c1ef30ec12d136ec2e05cda82c3"
+    "mtime": 1792180694160.4583,
+    "hash": "d86abba4e79cb09d5ad06766ef10c7e3"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -2876,368 +2876,368 @@
     "hash": "588fb14e8c7e9de54b6ccc316488e5e3"
   },
   ".githooks/pre-commit": {
-    "mtime": 1791675150327.2744,
+    "mtime": 1784398283657.9128,
     "hash": "b0e1dc60969ccd5590d47ca33bfec963"
   },
   ".agents/skills/agent-setup-maintenance/SKILL.md": {
-    "mtime": 1791675150312.3901,
+    "mtime": 1784398283642.3325,
     "hash": "7f2bc46168bc8fdeb6fc3d4b9111ac17"
   },
   ".agents/skills/agent-setup-maintenance/agents/openai.yaml": {
-    "mtime": 1791675150312.4934,
+    "mtime": 1784398283642.5366,
     "hash": "967cc804617e0c6daf9d6c7a10b429dd"
   },
   ".agents/skills/cloud-user-qa/SKILL.md": {
-    "mtime": 1791675150312.865,
+    "mtime": 1791849255846.8452,
     "hash": "78e68f7386e3788b82ec93105c4d356a"
   },
   ".agents/skills/cloud-user-qa/agents/openai.yaml": {
-    "mtime": 1791675150313.0403,
+    "mtime": 1784398283642.8386,
     "hash": "16edeff38c514d364477c4f7aeb21532"
   },
   ".agents/skills/data-visualization-review/SKILL.md": {
-    "mtime": 1791675150313.285,
+    "mtime": 1784398283643.003,
     "hash": "62e2a84a1bc6e8b8a9057dbe3d27d17d"
   },
   ".agents/skills/data-visualization-review/agents/openai.yaml": {
-    "mtime": 1791675150313.4568,
+    "mtime": 1784398283643.1606,
     "hash": "6bb9a290c5f1ca22cd45dc74a233fbc6"
   },
   ".agents/skills/deploy-preview-check/SKILL.md": {
-    "mtime": 1791675150313.5505,
+    "mtime": 1784398283643.3237,
     "hash": "26741e1bdc585eb15ce227d6350412c3"
   },
   ".agents/skills/deploy-preview-check/agents/openai.yaml": {
-    "mtime": 1791675150313.7231,
+    "mtime": 1784398283643.487,
     "hash": "9c09b9e7d1e31d25383e03d43df00004"
   },
   ".agents/skills/dev-up/SKILL.md": {
-    "mtime": 1791675150313.9783,
+    "mtime": 1789674252512.4434,
     "hash": "d01e498577d0a42aef6f05fdb5682797"
   },
   ".agents/skills/geo-local-seo/SKILL.md": {
-    "mtime": 1791675150314.0632,
+    "mtime": 1784398283643.793,
     "hash": "f4086f1839ebd3d8ff6aa761b451266b"
   },
   ".agents/skills/geo-local-seo/agents/openai.yaml": {
-    "mtime": 1791675150314.2122,
+    "mtime": 1784398283643.9397,
     "hash": "a7a4ee77dd6da8981773eb2ae686b5af"
   },
   ".agents/skills/geo-market-expansion/SKILL.md": {
-    "mtime": 1791675150314.2886,
+    "mtime": 1784398283644.086,
     "hash": "1ba813def89bdd26e0e501da3ae4f4be"
   },
   ".agents/skills/geo-market-expansion/agents/openai.yaml": {
-    "mtime": 1791675150314.4612,
+    "mtime": 1784398283644.2273,
     "hash": "4a3802b6ad3354acdb57f69706e6772b"
   },
   ".agents/skills/graphify-load-context/SKILL.md": {
-    "mtime": 1791675150314.639,
+    "mtime": 1784398283644.3684,
     "hash": "837f1d137040339a77ce4afc9cb44d91"
   },
   ".agents/skills/graphify-load-context/agents/openai.yaml": {
-    "mtime": 1791675150315.0076,
+    "mtime": 1784398283644.508,
     "hash": "6e92cc5d9e88e22c370a3a40e20c62e6"
   },
   ".agents/skills/graphify-read/SKILL.md": {
-    "mtime": 1791675150315.1772,
+    "mtime": 1791849255847.0925,
     "hash": "93eaff240ba760e7a58369ec602a21df"
   },
   ".agents/skills/graphify-read/agents/openai.yaml": {
-    "mtime": 1791675150315.3438,
+    "mtime": 1784398283644.795,
     "hash": "eb155a1a8e1aa45a671a4507c736f6b7"
   },
   ".agents/skills/graphify-write/SKILL.md": {
-    "mtime": 1791675150315.4214,
+    "mtime": 1791849255847.3735,
     "hash": "720d5e5ead4eed1979606befbf315dc7"
   },
   ".agents/skills/graphify-write/agents/openai.yaml": {
-    "mtime": 1791675150315.6602,
+    "mtime": 1784398283645.0718,
     "hash": "fd786dd876b32162a80ffef4897bbe6d"
   },
   ".agents/skills/incident-triage/SKILL.md": {
-    "mtime": 1791675150315.7375,
+    "mtime": 1784398283645.2085,
     "hash": "e8232fcae72793a1c70659cc6d25f034"
   },
   ".agents/skills/incident-triage/agents/openai.yaml": {
-    "mtime": 1791675150315.9087,
+    "mtime": 1784398283645.342,
     "hash": "2401b878bced3e59222d60a75ab15379"
   },
   ".agents/skills/new-migration/SKILL.md": {
-    "mtime": 1791675150315.9963,
+    "mtime": 1784817331516.179,
     "hash": "1bcdd99c2cb3569a63526ae2c493d3f7"
   },
   ".agents/skills/obsidian-load-context/SKILL.md": {
-    "mtime": 1791675150316.1858,
+    "mtime": 1784398283645.6125,
     "hash": "c50670fe8d18a5aa9e195eada79372ba"
   },
   ".agents/skills/obsidian-load-context/agents/openai.yaml": {
-    "mtime": 1791675150316.351,
+    "mtime": 1784398283645.748,
     "hash": "5a44b291a63b65f4316dbb59d42dc6ae"
   },
   ".agents/skills/obsidian-read/SKILL.md": {
-    "mtime": 1791675150316.435,
+    "mtime": 1784398283645.881,
     "hash": "9470db7fda22e6d964a607fc5ee70090"
   },
   ".agents/skills/obsidian-read/agents/openai.yaml": {
-    "mtime": 1791675150316.5112,
+    "mtime": 1784398283646.012,
     "hash": "49210ca9dc1a3e2dc7659d0e9c805e31"
   },
   ".agents/skills/obsidian-write/SKILL.md": {
-    "mtime": 1791675150316.678,
+    "mtime": 1784398283646.15,
     "hash": "503e5069808b768535a56804ad700c4f"
   },
   ".agents/skills/obsidian-write/agents/openai.yaml": {
-    "mtime": 1791675150316.752,
+    "mtime": 1784398283646.2812,
     "hash": "32c48a2dd7379797c8ba4d096459915e"
   },
   ".agents/skills/product-ceo-review/SKILL.md": {
-    "mtime": 1791675150316.8445,
+    "mtime": 1784398283646.4133,
     "hash": "88fae2a6d3e1d9d4c598611685acf8c2"
   },
   ".agents/skills/product-ceo-review/agents/openai.yaml": {
-    "mtime": 1791675150317.0269,
+    "mtime": 1784398283646.5547,
     "hash": "638c5975d1325000228d3391a597df79"
   },
   ".agents/skills/qa-persona-bootstrap/SKILL.md": {
-    "mtime": 1791675150317.1094,
+    "mtime": 1784398283646.71,
     "hash": "8ffb83de9489ffdfbc786ec142cea2cd"
   },
   ".agents/skills/qa-persona-bootstrap/agents/openai.yaml": {
-    "mtime": 1791675150317.1821,
+    "mtime": 1784398283646.8628,
     "hash": "bdd2b69a7803613ec60e869562cdf3dd"
   },
   ".agents/skills/release-gate/SKILL.md": {
-    "mtime": 1791675150317.3643,
+    "mtime": 1784398283647.028,
     "hash": "3c19144a1a25364f0cafef71eba4e5fe"
   },
   ".agents/skills/release-gate/agents/openai.yaml": {
-    "mtime": 1791675150317.4412,
+    "mtime": 1784398283647.2017,
     "hash": "c61c9bc51a06623481ad199db2ceed4a"
   },
   ".agents/skills/secure-integration-review/SKILL.md": {
-    "mtime": 1791675150317.9607,
+    "mtime": 1784398283647.3608,
     "hash": "850e46270104bd6bd1492c55c901e350"
   },
   ".agents/skills/secure-integration-review/agents/openai.yaml": {
-    "mtime": 1791675150318.0435,
+    "mtime": 1784398283647.5073,
     "hash": "1462dbf4e00ea39db479341556a170db"
   },
   ".agents/skills/ux-ui-audit/SKILL.md": {
-    "mtime": 1791675150318.216,
+    "mtime": 1784398283647.6824,
     "hash": "0f2359a751e2ab26ef41d243e5887ede"
   },
   ".agents/skills/ux-ui-audit/agents/openai.yaml": {
-    "mtime": 1791675150318.2983,
+    "mtime": 1784398283647.8218,
     "hash": "f88f2e0fc4b94cb53ef8d5ac709de4d6"
   },
   ".agents/skills/validate-all/SKILL.md": {
-    "mtime": 1791675150318.4756,
+    "mtime": 1789674055082.7175,
     "hash": "21357c99870c148f6950d0b3769e3369"
   },
   ".claude/agents/cloud-qa-user.md": {
-    "mtime": 1791675150318.7734,
+    "mtime": 1784817309002.928,
     "hash": "25376628e28d4a0f2729404eb80533f6"
   },
   ".claude/agents/data-visualization.md": {
-    "mtime": 1791675150318.952,
+    "mtime": 1784817309003.0469,
     "hash": "dcb14acb57a63d784c3f63291c848515"
   },
   ".claude/agents/devops-containers.md": {
-    "mtime": 1791675150319.064,
+    "mtime": 1784817309003.2935,
     "hash": "a23f66cd18a7a37479095ca336985940"
   },
   ".claude/agents/geo-local-seo.md": {
-    "mtime": 1791675150319.2263,
+    "mtime": 1784817309003.6985,
     "hash": "4d2cebbe5f90d4bfb358d5139f7c2d0f"
   },
   ".claude/agents/geo-market-expansion.md": {
-    "mtime": 1791675150319.4243,
+    "mtime": 1784817309003.8582,
     "hash": "285b124eec2cc1e0dee0effdbb7c8488"
   },
   ".claude/agents/knowledge-graph-curator.md": {
-    "mtime": 1791675150319.4758,
+    "mtime": 1784817309003.9893,
     "hash": "b7e872144d1a41f44a20bd114ec4d3c4"
   },
   ".claude/agents/product-ceo.md": {
-    "mtime": 1791675150319.6697,
+    "mtime": 1784817309004.2317,
     "hash": "76a9671b04bb6eb2cb8b06de2797e745"
   },
   ".claude/agents/release-governor.md": {
-    "mtime": 1791675150319.776,
+    "mtime": 1784817309004.4695,
     "hash": "39aa2d54b0764935d1a3aebe7f76816b"
   },
   ".claude/agents/ux-ui-auditor.md": {
-    "mtime": 1791675150319.9558,
+    "mtime": 1784817309004.7227,
     "hash": "ef35735d034a51a2252fec9bb768a97b"
   },
   ".claude/skills/agent-setup-maintenance/SKILL.md": {
-    "mtime": 1791675150320.161,
+    "mtime": 1784398283642.3325,
     "hash": "7f2bc46168bc8fdeb6fc3d4b9111ac17"
   },
   ".claude/skills/agent-setup-maintenance/agents/openai.yaml": {
-    "mtime": 1791675150320.2356,
+    "mtime": 1784398283642.5366,
     "hash": "967cc804617e0c6daf9d6c7a10b429dd"
   },
   ".claude/skills/cloud-user-qa/SKILL.md": {
-    "mtime": 1791675150320.3098,
+    "mtime": 1791849255847.5513,
     "hash": "78e68f7386e3788b82ec93105c4d356a"
   },
   ".claude/skills/cloud-user-qa/agents/openai.yaml": {
-    "mtime": 1791675150320.3862,
+    "mtime": 1784398283642.8386,
     "hash": "16edeff38c514d364477c4f7aeb21532"
   },
   ".claude/skills/data-visualization-review/SKILL.md": {
-    "mtime": 1791675150320.4617,
+    "mtime": 1784398283643.003,
     "hash": "62e2a84a1bc6e8b8a9057dbe3d27d17d"
   },
   ".claude/skills/data-visualization-review/agents/openai.yaml": {
-    "mtime": 1791675150320.538,
+    "mtime": 1784398283643.1606,
     "hash": "6bb9a290c5f1ca22cd45dc74a233fbc6"
   },
   ".claude/skills/deploy-preview-check/SKILL.md": {
-    "mtime": 1791675150320.6147,
+    "mtime": 1784398283643.3237,
     "hash": "26741e1bdc585eb15ce227d6350412c3"
   },
   ".claude/skills/deploy-preview-check/agents/openai.yaml": {
-    "mtime": 1791675150320.692,
+    "mtime": 1784398283643.487,
     "hash": "9c09b9e7d1e31d25383e03d43df00004"
   },
   ".claude/skills/dev-up/SKILL.md": {
-    "mtime": 1791675150320.77,
+    "mtime": 1789674252512.4434,
     "hash": "d01e498577d0a42aef6f05fdb5682797"
   },
   ".claude/skills/geo-local-seo/SKILL.md": {
-    "mtime": 1791675150320.8547,
+    "mtime": 1784398283643.793,
     "hash": "f4086f1839ebd3d8ff6aa761b451266b"
   },
   ".claude/skills/geo-local-seo/agents/openai.yaml": {
-    "mtime": 1791675150320.9268,
+    "mtime": 1784398283643.9397,
     "hash": "a7a4ee77dd6da8981773eb2ae686b5af"
   },
   ".claude/skills/geo-market-expansion/SKILL.md": {
-    "mtime": 1791675150321.0076,
+    "mtime": 1784398283644.086,
     "hash": "1ba813def89bdd26e0e501da3ae4f4be"
   },
   ".claude/skills/geo-market-expansion/agents/openai.yaml": {
-    "mtime": 1791675150321.079,
+    "mtime": 1784398283644.2273,
     "hash": "4a3802b6ad3354acdb57f69706e6772b"
   },
   ".claude/skills/graphify-load-context/SKILL.md": {
-    "mtime": 1791675150321.1533,
+    "mtime": 1784398283644.3684,
     "hash": "837f1d137040339a77ce4afc9cb44d91"
   },
   ".claude/skills/graphify-load-context/agents/openai.yaml": {
-    "mtime": 1791675150321.2244,
+    "mtime": 1784398283644.508,
     "hash": "6e92cc5d9e88e22c370a3a40e20c62e6"
   },
   ".claude/skills/graphify-read/SKILL.md": {
-    "mtime": 1791675150321.3008,
+    "mtime": 1791849255847.7397,
     "hash": "93eaff240ba760e7a58369ec602a21df"
   },
   ".claude/skills/graphify-read/agents/openai.yaml": {
-    "mtime": 1791675150321.3733,
+    "mtime": 1784398283644.795,
     "hash": "eb155a1a8e1aa45a671a4507c736f6b7"
   },
   ".claude/skills/graphify-write/SKILL.md": {
-    "mtime": 1791675150321.4507,
+    "mtime": 1791849255847.8325,
     "hash": "720d5e5ead4eed1979606befbf315dc7"
   },
   ".claude/skills/graphify-write/agents/openai.yaml": {
-    "mtime": 1791675150321.5222,
+    "mtime": 1784398283645.0718,
     "hash": "fd786dd876b32162a80ffef4897bbe6d"
   },
   ".claude/skills/incident-triage/SKILL.md": {
-    "mtime": 1791675150321.599,
+    "mtime": 1784398283645.2085,
     "hash": "e8232fcae72793a1c70659cc6d25f034"
   },
   ".claude/skills/incident-triage/agents/openai.yaml": {
-    "mtime": 1791675150321.6711,
+    "mtime": 1784398283645.342,
     "hash": "2401b878bced3e59222d60a75ab15379"
   },
   ".claude/skills/new-migration/SKILL.md": {
-    "mtime": 1791675150321.7478,
+    "mtime": 1784817331516.179,
     "hash": "1bcdd99c2cb3569a63526ae2c493d3f7"
   },
   ".claude/skills/obsidian-load-context/SKILL.md": {
-    "mtime": 1791675150321.9148,
+    "mtime": 1784398283645.6125,
     "hash": "c50670fe8d18a5aa9e195eada79372ba"
   },
   ".claude/skills/obsidian-load-context/agents/openai.yaml": {
-    "mtime": 1791675150321.9893,
+    "mtime": 1784398283645.748,
     "hash": "5a44b291a63b65f4316dbb59d42dc6ae"
   },
   ".claude/skills/obsidian-read/SKILL.md": {
-    "mtime": 1791675150322.0715,
+    "mtime": 1784398283645.881,
     "hash": "9470db7fda22e6d964a607fc5ee70090"
   },
   ".claude/skills/obsidian-read/agents/openai.yaml": {
-    "mtime": 1791675150322.1443,
+    "mtime": 1784398283646.012,
     "hash": "49210ca9dc1a3e2dc7659d0e9c805e31"
   },
   ".claude/skills/obsidian-write/SKILL.md": {
-    "mtime": 1791675150322.2256,
+    "mtime": 1784398283646.15,
     "hash": "503e5069808b768535a56804ad700c4f"
   },
   ".claude/skills/obsidian-write/agents/openai.yaml": {
-    "mtime": 1791675150322.2961,
+    "mtime": 1784398283646.2812,
     "hash": "32c48a2dd7379797c8ba4d096459915e"
   },
   ".claude/skills/product-ceo-review/SKILL.md": {
-    "mtime": 1791675150322.375,
+    "mtime": 1784398283646.4133,
     "hash": "88fae2a6d3e1d9d4c598611685acf8c2"
   },
   ".claude/skills/product-ceo-review/agents/openai.yaml": {
-    "mtime": 1791675150322.4524,
+    "mtime": 1784398283646.5547,
     "hash": "638c5975d1325000228d3391a597df79"
   },
   ".claude/skills/qa-persona-bootstrap/SKILL.md": {
-    "mtime": 1791675150322.527,
+    "mtime": 1784398283646.71,
     "hash": "8ffb83de9489ffdfbc786ec142cea2cd"
   },
   ".claude/skills/qa-persona-bootstrap/agents/openai.yaml": {
-    "mtime": 1791675150322.6,
+    "mtime": 1784398283646.8628,
     "hash": "bdd2b69a7803613ec60e869562cdf3dd"
   },
   ".claude/skills/release-gate/SKILL.md": {
-    "mtime": 1791675150322.673,
+    "mtime": 1784398283647.028,
     "hash": "3c19144a1a25364f0cafef71eba4e5fe"
   },
   ".claude/skills/release-gate/agents/openai.yaml": {
-    "mtime": 1791675150322.7524,
+    "mtime": 1784398283647.2017,
     "hash": "c61c9bc51a06623481ad199db2ceed4a"
   },
   ".claude/skills/secure-integration-review/SKILL.md": {
-    "mtime": 1791675150322.9963,
+    "mtime": 1784398283647.3608,
     "hash": "850e46270104bd6bd1492c55c901e350"
   },
   ".claude/skills/secure-integration-review/agents/openai.yaml": {
-    "mtime": 1791675150323.075,
+    "mtime": 1784398283647.5073,
     "hash": "1462dbf4e00ea39db479341556a170db"
   },
   ".claude/skills/ux-ui-audit/SKILL.md": {
-    "mtime": 1791675150323.1487,
+    "mtime": 1784398283647.6824,
     "hash": "0f2359a751e2ab26ef41d243e5887ede"
   },
   ".claude/skills/ux-ui-audit/agents/openai.yaml": {
-    "mtime": 1791675150323.224,
+    "mtime": 1784398283647.8218,
     "hash": "f88f2e0fc4b94cb53ef8d5ac709de4d6"
   },
   ".claude/skills/validate-all/SKILL.md": {
-    "mtime": 1791675150323.3025,
+    "mtime": 1789674055082.7175,
     "hash": "21357c99870c148f6950d0b3769e3369"
   },
   ".github/workflows/preview-qa.yml": {
-    "mtime": 1791675150327.5732,
+    "mtime": 1784816939139.239,
     "hash": "a5db00a785715735373e036c50a4cfa7"
   },
   ".github/workflows/release-gate.yml": {
-    "mtime": 1791675150327.6562,
+    "mtime": 1791849255848.7588,
     "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1791775309386.3535,
-    "hash": "449ef70b848b1fd6e14234a6c4e5a352"
+    "mtime": 1792183263048.102,
+    "hash": "a6dc9f002d8ad1ae9eccf66afaddb48f"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784517879747.6167,
@@ -3368,31 +3368,31 @@
     "hash": "51e567e09b31e73480c5c5758b37ad9e"
   },
   ".agents/skills/scale-data-architecture/SKILL.md": {
-    "mtime": 1791675150317.5347,
+    "mtime": 1787360058440.9148,
     "hash": "89b2edce0efaa2ea6c280c5d3e92da37"
   },
   ".agents/skills/scale-data-architecture/agents/openai.yaml": {
-    "mtime": 1791675150317.713,
+    "mtime": 1787360058440.9995,
     "hash": "3f19a2e230b5e82f46a7c990a069dad2"
   },
   ".claude/agents/data-architecture-specialist.md": {
-    "mtime": 1791675150318.8313,
+    "mtime": 1787360058441.2659,
     "hash": "c7a5b78381b8855ce88b853b56376705"
   },
   ".claude/skills/scale-data-architecture/SKILL.md": {
-    "mtime": 1791675150322.844,
+    "mtime": 1787360058440.9148,
     "hash": "89b2edce0efaa2ea6c280c5d3e92da37"
   },
   ".claude/skills/scale-data-architecture/agents/openai.yaml": {
-    "mtime": 1791675150322.92,
+    "mtime": 1787360058440.9995,
     "hash": "3f19a2e230b5e82f46a7c990a069dad2"
   },
   ".github/workflows/trusted-release-gate.yml": {
-    "mtime": 1791675150328.04,
+    "mtime": 1791849255848.9924,
     "hash": "638aed49f9d59e3157be921f6fc62a28"
   },
   ".github/workflows/verify-preview-providers.yml": {
-    "mtime": 1791675150328.1155,
+    "mtime": 1784533063050.5632,
     "hash": "19751bdd0abb4802c14eaf5bc1ae0d3f"
   },
   "app/services/analytics_freshness.py": {
@@ -3564,8 +3564,8 @@
     "hash": "03ba1788322e3f6538624b30be7380fd"
   },
   "frontend/e2e/settings-hotel.spec.ts": {
-    "mtime": 1792100439490.5117,
-    "hash": "7045974592c84f145d4b8ccdc5de7fb3"
+    "mtime": 1792183590842.431,
+    "hash": "c1d22655cb5d9a85eb161de2e721a11f"
   },
   "frontend/e2e/housekeeping-laundry-journey.spec.ts": {
     "mtime": 1791849255896.2266,
@@ -4612,7 +4612,7 @@
     "hash": "5833186f454658746aecf18237842072"
   },
   ".superpowers/sdd/mobile-first-operations-implementation/task-1a-report.md": {
-    "mtime": 1791675150332.3953,
+    "mtime": 1787360063261.8818,
     "hash": "ba7407f156b9b08c598a9c44b4e77531"
   },
   "alembic/versions/20260820_user_sessions.py": {
@@ -4916,11 +4916,11 @@
     "hash": "ebbb2aa3b2d32673780b1e73639f2f25"
   },
   ".agents/skills/new-permission/SKILL.md": {
-    "mtime": 1791675150316.1094,
+    "mtime": 1788109406405.121,
     "hash": "8f7289123368dadf9b94df48a80d243b"
   },
   ".claude/skills/new-permission/SKILL.md": {
-    "mtime": 1791675150321.8364,
+    "mtime": 1788109406405.121,
     "hash": "8f7289123368dadf9b94df48a80d243b"
   },
   "alembic/versions/20260830_room_move_tiers.py": {
@@ -5164,59 +5164,59 @@
     "hash": "27b01eac7f58324707c831a8ff459f76"
   },
   ".superpowers/sdd/TECH-0140-plan/progress.md": {
-    "mtime": 1791675150331.035,
+    "mtime": 1789061001890.34,
     "hash": "13a52ca1b268c12f3c5d34a0fa8c4781"
   },
   ".superpowers/sdd/TECH-0140-plan/task-0-report.md": {
-    "mtime": 1791675150331.0945,
+    "mtime": 1789061001890.4385,
     "hash": "ffb06943f44f53c6623eb4bd52a229e9"
   },
   ".superpowers/sdd/TECH-0140-plan/task-1-report.md": {
-    "mtime": 1791675150331.149,
+    "mtime": 1789061001890.5222,
     "hash": "7c433745935d61fe11aeb922891371ce"
   },
   ".superpowers/sdd/TECH-0140-plan/task-10-report.md": {
-    "mtime": 1791675150331.1958,
+    "mtime": 1789061001890.5989,
     "hash": "aa9d8caa81548f4a869a2bf369dff3b4"
   },
   ".superpowers/sdd/TECH-0140-plan/task-11-report.md": {
-    "mtime": 1791675150331.3264,
+    "mtime": 1789061001890.6726,
     "hash": "66af8641080b9c6a90b75bb2e7ff8616"
   },
   ".superpowers/sdd/TECH-0140-plan/task-12-report.md": {
-    "mtime": 1791675150331.453,
+    "mtime": 1789061001890.7485,
     "hash": "74f074998ff91fbb40605f77c8ce229d"
   },
   ".superpowers/sdd/TECH-0140-plan/task-13-report.md": {
-    "mtime": 1791675150331.648,
+    "mtime": 1789061001890.8213,
     "hash": "50ba8b12c829a12370f775428b13e0c7"
   },
   ".superpowers/sdd/TECH-0140-plan/task-3-report.md": {
-    "mtime": 1791675150331.6958,
+    "mtime": 1789061001890.913,
     "hash": "daecd9a7932b480b81ba3b455a6150fc"
   },
   ".superpowers/sdd/TECH-0140-plan/task-4-report.md": {
-    "mtime": 1791675150331.7444,
+    "mtime": 1789061001890.9988,
     "hash": "af8d478e12df1811215ad3714910c6cd"
   },
   ".superpowers/sdd/TECH-0140-plan/task-5-report.md": {
-    "mtime": 1791675150331.7922,
+    "mtime": 1789061001891.074,
     "hash": "e4eae11599e1d3008a7535c6948b1e37"
   },
   ".superpowers/sdd/TECH-0140-plan/task-6-report.md": {
-    "mtime": 1791675150331.9187,
+    "mtime": 1789061001891.1443,
     "hash": "902d3652f10ca5c90e6a2c1393770728"
   },
   ".superpowers/sdd/TECH-0140-plan/task-7-report.md": {
-    "mtime": 1791675150331.9653,
+    "mtime": 1789061001891.22,
     "hash": "c2c1f13b317915424259b177743853fe"
   },
   ".superpowers/sdd/TECH-0140-plan/task-8-report.md": {
-    "mtime": 1791675150332.0857,
+    "mtime": 1789061001891.2957,
     "hash": "aaa5f555c067891bc06b0a670ee4b930"
   },
   ".superpowers/sdd/TECH-0140-plan/task-9-report.md": {
-    "mtime": 1791675150332.207,
+    "mtime": 1789061001891.3718,
     "hash": "074969d35bfa36f44b75fca4e63e6203"
   },
   "docs/frontend-i18n.md": {
@@ -5912,8 +5912,8 @@
     "hash": "68e4164506043544f3856e430848e67a"
   },
   "docs/specs/pagos-y-conexiones/01-estado-actual.md": {
-    "mtime": 1791849255891.6433,
-    "hash": "139b6368a7407feb0f0f4f93f7096ec2"
+    "mtime": 1792183820253.1343,
+    "hash": "7ad60063a01c673853a4871d3146574f"
   },
   "docs/specs/pagos-y-conexiones/02-proveedores-de-cobro.md": {
     "mtime": 1790564640676.8445,
@@ -6296,8 +6296,8 @@
     "hash": "2d7b3dd2506785a8fbbe7ca8b8919ed6"
   },
   "frontend/src/api/fxRates.ts": {
-    "mtime": 1791849255905.9524,
-    "hash": "431db32565209f8475e84bdbd2934703"
+    "mtime": 1792183463875.7512,
+    "hash": "d2437daee28b60cff52468dc47da94b5"
   },
   "tests/test_cash_adjustment_permission.py": {
     "mtime": 1791849255938.1243,
@@ -6898,5 +6898,13 @@
   "app/utils/reservation_email_validation.py": {
     "mtime": 1792179131557.8518,
     "hash": "99a378ed1fa7850284d9746e7f70bb41"
+  },
+  "alembic/versions/20261016_fx_conversion_rate_sides.py": {
+    "mtime": 1792183535751.6985,
+    "hash": "8124a3637569d1a074ed8b41cbea1f1e"
+  },
+  "tests/test_fx_conversion_rate_sides_migration.py": {
+    "mtime": 1792183535752.1284,
+    "hash": "c1806a6b225a490951b75f9e63de041e"
   }
 }

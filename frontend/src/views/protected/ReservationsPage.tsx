@@ -1555,6 +1555,16 @@ export function ReservationsPage() {
   const paymentFxRate = paymentTenderCurrency === paymentReservationCurrency
     ? 1
     : Number(paymentFxQuoteQuery.data?.rate ?? 0);
+  const paymentFxUsdQuote = paymentFxQuoteQuery.data?.quote_details?.source_quote?.currency === "USD"
+    ? paymentFxQuoteQuery.data.quote_details.source_quote
+    : paymentFxQuoteQuery.data?.quote_details?.target_quote?.currency === "USD"
+      ? paymentFxQuoteQuery.data.quote_details.target_quote
+      : null;
+  const paymentFxUsdSide = paymentFxUsdQuote?.side === "compra"
+    ? "Compra"
+    : paymentFxUsdQuote?.side === "venta"
+      ? "Venta"
+      : null;
   const paymentFxReady = Number.isFinite(paymentFxRate) && paymentFxRate > 0;
   const hasMatchingCashSession = Boolean(
     collectedBefore ||
@@ -4517,6 +4527,7 @@ export function ReservationsPage() {
                           <div className="rounded border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950" data-testid="payment-fx-quote">
                             <p className="font-semibold">
                               DolarAPI · {paymentFxQuoteQuery.data.configured_market === "blue" ? "Blue" : "Oficial"} · 1 {editingCurrencyCode} = {paymentFxRate.toLocaleString("es-AR", { maximumFractionDigits: 6 })} {paymentTenderCurrency}
+                              {paymentFxUsdSide ? ` · USD ${paymentFxUsdSide}` : ""}
                               {paymentFxQuoteQuery.data.quote_details?.source_quote?.is_derived_blue || paymentFxQuoteQuery.data.quote_details?.target_quote?.is_derived_blue ? " · equivalente blue derivado" : ""}
                             </p>
                             <p className="mt-1">

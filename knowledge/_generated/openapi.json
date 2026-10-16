@@ -51850,6 +51850,24 @@
             "title": "Fx Conversion Rate Type",
             "default": "oficial"
           },
+          "fx_usd_to_ars_rate_side": {
+            "type": "string",
+            "enum": [
+              "compra",
+              "venta"
+            ],
+            "title": "Fx Usd To Ars Rate Side",
+            "default": "venta"
+          },
+          "fx_ars_to_usd_rate_side": {
+            "type": "string",
+            "enum": [
+              "compra",
+              "venta"
+            ],
+            "title": "Fx Ars To Usd Rate Side",
+            "default": "venta"
+          },
           "fx_display_rate_types": {
             "items": {
               "type": "string",
@@ -52356,6 +52374,36 @@
               }
             ],
             "title": "Fx Conversion Rate Type"
+          },
+          "fx_usd_to_ars_rate_side": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "compra",
+                  "venta"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Usd To Ars Rate Side"
+          },
+          "fx_ars_to_usd_rate_side": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "compra",
+                  "venta"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Ars To Usd Rate Side"
           },
           "fx_display_rate_types": {
             "anyOf": [

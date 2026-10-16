@@ -378,16 +378,27 @@ def test_all_supported_fx_pairs_use_directional_quotes_via_ars(
         provider_code=None,
     )
 
-    source_ars = 1.0 if from_currency == "ARS" else _FX_TEST_RATES[from_currency]["venta"]
-    target_ars = 1.0 if to_currency == "ARS" else _FX_TEST_RATES[to_currency]["compra"]
+    config = db.get(HotelConfiguration, 51)
+    source_side = (
+        getattr(config, "fx_usd_to_ars_rate_side", "venta") or "venta"
+        if from_currency == "USD"
+        else ("venta" if from_currency != "ARS" else None)
+    )
+    target_side = (
+        getattr(config, "fx_ars_to_usd_rate_side", "venta") or "venta"
+        if to_currency == "USD"
+        else ("compra" if to_currency != "ARS" else None)
+    )
+    source_ars = 1.0 if from_currency == "ARS" else _FX_TEST_RATES[from_currency][source_side]
+    target_ars = 1.0 if to_currency == "ARS" else _FX_TEST_RATES[to_currency][target_side]
     expected_rate = source_ars / target_ars * 1.05
     assert effective_rate == pytest.approx(expected_rate, rel=1e-6)
     assert amount == pytest.approx(round(100.0 * expected_rate, 2))
     assert details["path"] == "via_ars"
     assert details["configured_usd_market"] == "oficial"
     assert details["usd_market"] == ("oficial" if "USD" in {from_currency, to_currency} else None)
-    assert details["source_side"] == (None if from_currency == "ARS" else "venta")
-    assert details["target_side"] == (None if to_currency == "ARS" else "compra")
+    assert details["source_side"] == source_side
+    assert details["target_side"] == target_side
     if from_currency == "USD":
         assert details["source_quote"]["usd_market"] == "oficial"
     elif from_currency != "ARS":
@@ -396,6 +407,106 @@ def test_all_supported_fx_pairs_use_directional_quotes_via_ars(
         assert details["target_quote"]["usd_market"] == "oficial"
     elif to_currency != "ARS":
         assert details["target_quote"]["direct_currency_market"] == "oficial"
+
+
+def test_usd_conversion_uses_configured_side_per_direction_and_records_provenance(db, monkeypatch):
+    _seed_pricing_foundation(db)
+    config = db.get(HotelConfiguration, 51)
+    policy = db.query(FxPolicy).filter(FxPolicy.hotel_id == 51).one()
+    policy.spread_pct = 0.0
+    assert getattr(config, "fx_usd_to_ars_rate_side", "venta") == "venta"
+    assert getattr(config, "fx_ars_to_usd_rate_side", "venta") == "venta"
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    def conversion_quote(currency, market="oficial"):
+        assert currency == "USD"
+        return {
+            "moneda": "USD",
+            "casa": market,
+            "compra": 1485.0,
+            "venta": 1535.0,
+            "fechaActualizacion": now,
+        }
+
+    monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", conversion_quote)
+
+    usd_to_ars, usd_to_ars_rate, usd_to_ars_details = pricing_policy_service._convert_amount(
+        db,
+        hotel_id=51,
+        amount=20.0,
+        from_currency="USD",
+        to_currency="ARS",
+        fx_policy_id=None,
+        provider_code=None,
+    )
+    assert usd_to_ars == 30700.0
+    assert usd_to_ars_rate == 1535.0
+    assert usd_to_ars_details["source_side"] == "venta"
+    assert usd_to_ars_details["source_quote"]["side"] == "venta"
+    assert usd_to_ars_details["source_quote"]["ars_per_unit"] == 1535.0
+
+    ars_to_usd, ars_to_usd_rate, ars_to_usd_details = pricing_policy_service._convert_amount(
+        db,
+        hotel_id=51,
+        amount=30700.0,
+        from_currency="ARS",
+        to_currency="USD",
+        fx_policy_id=None,
+        provider_code=None,
+    )
+    assert ars_to_usd == 20.0
+    assert ars_to_usd_rate == pytest.approx(1 / 1535.0)
+    assert ars_to_usd_details["target_side"] == "venta"
+    assert ars_to_usd_details["target_quote"]["side"] == "venta"
+    assert ars_to_usd_details["target_quote"]["ars_per_unit"] == 1535.0
+
+    config.fx_usd_to_ars_rate_side = "compra"
+    buy_usd_to_ars, buy_usd_to_ars_rate, buy_usd_to_ars_details = pricing_policy_service._convert_amount(
+        db,
+        hotel_id=51,
+        amount=20.0,
+        from_currency="USD",
+        to_currency="ARS",
+        fx_policy_id=None,
+        provider_code=None,
+    )
+    assert buy_usd_to_ars == 29700.0
+    assert buy_usd_to_ars_rate == 1485.0
+    assert buy_usd_to_ars_details["source_side"] == "compra"
+    assert buy_usd_to_ars_details["source_quote"]["side"] == "compra"
+    assert buy_usd_to_ars_details["source_quote"]["ars_per_unit"] == 1485.0
+
+    config.fx_ars_to_usd_rate_side = "compra"
+    buy_ars_to_usd, buy_ars_to_usd_rate, buy_ars_to_usd_details = pricing_policy_service._convert_amount(
+        db,
+        hotel_id=51,
+        amount=29700.0,
+        from_currency="ARS",
+        to_currency="USD",
+        fx_policy_id=None,
+        provider_code=None,
+    )
+    assert buy_ars_to_usd == 20.0
+    assert buy_ars_to_usd_rate == pytest.approx(1 / 1485.0)
+    assert buy_ars_to_usd_details["target_side"] == "compra"
+    assert buy_ars_to_usd_details["target_quote"]["side"] == "compra"
+    assert buy_ars_to_usd_details["target_quote"]["ars_per_unit"] == 1485.0
+
+    db.flush()
+    snapshots = (
+        db.query(FxRateSnapshot)
+        .filter(FxRateSnapshot.hotel_id == 51)
+        .order_by(FxRateSnapshot.id.asc())
+        .all()
+    )
+    assert [snapshot.selected_side for snapshot in snapshots] == [
+        "venta",
+        "venta",
+        "compra",
+        "compra",
+    ]
+    assert [snapshot.applied_rate for snapshot in snapshots] == [1535.0, 1535.0, 1485.0, 1485.0]
 
 
 def test_global_blue_market_dominates_fx_policy_source_and_side(db, monkeypatch):

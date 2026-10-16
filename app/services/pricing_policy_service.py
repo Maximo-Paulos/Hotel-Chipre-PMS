@@ -396,6 +396,23 @@ def _convert_amount(
         if configured_market not in {"oficial", "blue"}:
             raise PricingPolicyError("La cotización USD configurada no es válida")
 
+        # USD/ARS conversions use an owner-selected side for each direction.
+        # The quote is always expressed as ARS per unit of currency, so the
+        # source leg is multiplied by its rate and the target leg is divided
+        # by its rate. Non-USD currencies preserve the established hotel
+        # favorable rule: sell the source and buy the target.
+        usd_to_ars_side = str(
+            getattr(config, "fx_usd_to_ars_rate_side", "venta") or "venta"
+        ).strip().lower()
+        ars_to_usd_side = str(
+            getattr(config, "fx_ars_to_usd_rate_side", "venta") or "venta"
+        ).strip().lower()
+        source_side = usd_to_ars_side if from_code == "USD" else ("venta" if from_code != "ARS" else None)
+        target_side = ars_to_usd_side if to_code == "USD" else ("compra" if to_code != "ARS" else None)
+        for side in (source_side, target_side):
+            if side is not None and side not in {"compra", "venta"}:
+                raise PricingPolicyError("El lado de cotización FX configurado no es válido")
+
         selected_market = configured_market
 
         source_quote = _resolve_conversion_quote(
@@ -411,8 +428,8 @@ def _convert_amount(
             market=selected_market,
         ) if to_code != "ARS" else None
 
-        source_ars_per_unit = float(source_quote["venta"]) if source_quote else 1.0
-        target_ars_per_unit = float(target_quote["compra"]) if target_quote else 1.0
+        source_ars_per_unit = float(source_quote[source_side]) if source_quote and source_side else 1.0
+        target_ars_per_unit = float(target_quote[target_side]) if target_quote and target_side else 1.0
         if source_ars_per_unit <= 0 or target_ars_per_unit <= 0:
             raise PricingPolicyError("La cotización FX debe ser positiva")
         raw_rate = source_ars_per_unit / target_ars_per_unit
@@ -424,7 +441,7 @@ def _convert_amount(
                 currency=from_code,
                 market=selected_market,
                 quote=source_quote,
-                side="venta",
+                side=source_side,
             )
         if persist_snapshots and target_quote is not None:
             _record_conversion_snapshot(
@@ -433,7 +450,7 @@ def _convert_amount(
                 currency=to_code,
                 market=selected_market,
                 quote=target_quote,
-                side="compra",
+                side=target_side,
             )
 
         spread_pct = float(policy.spread_pct or 0.0) if policy else 0.0
@@ -454,16 +471,18 @@ def _convert_amount(
             "path": "via_ars",
             "from_currency": from_code,
             "to_currency": to_code,
-            "source_side": "venta" if from_code != "ARS" else None,
-            "target_side": "compra" if to_code != "ARS" else None,
+            "source_side": source_side,
+            "target_side": target_side,
+            "configured_usd_to_ars_rate_side": usd_to_ars_side,
+            "configured_ars_to_usd_rate_side": ars_to_usd_side,
             "source_ars_per_unit": source_ars_per_unit,
             "target_ars_per_unit": target_ars_per_unit,
             "spread_pct": spread_pct,
             "applied_rate": effective_rate,
             "source_updated_at": source_quote.get("_provider_updated_at") if source_quote else None,
             "target_updated_at": target_quote.get("_provider_updated_at") if target_quote else None,
-            "source_quote": _quote_provenance(source_quote, from_code, "venta", selected_market) if source_quote else None,
-            "target_quote": _quote_provenance(target_quote, to_code, "compra", selected_market) if target_quote else None,
+            "source_quote": _quote_provenance(source_quote, from_code, source_side, selected_market) if source_quote else None,
+            "target_quote": _quote_provenance(target_quote, to_code, target_side, selected_market) if target_quote else None,
         }
         return round(amount * effective_rate, 2), effective_rate, details
 

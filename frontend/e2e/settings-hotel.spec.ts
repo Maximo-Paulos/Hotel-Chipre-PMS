@@ -1,4 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
+
+import { completeStepUpPrompt, loginAsStepUpOwner } from "./support/step-up-owner";
 
 const credentials = {
   email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
@@ -60,4 +62,57 @@ test("owner can configure and persist a percentage rule for one night and one-ni
   await expect(savedRules.getByLabel("Tipo de seña de regla 2")).toHaveValue("nights");
   await expect(savedRules.getByLabel("Valor de seña de regla 2")).toHaveValue("1");
   await expect(confirmation).toBeChecked();
+});
+
+test("owner can configure and persist the FX quote side for each conversion direction", async ({ page }, testInfo: TestInfo) => {
+  const ownerSession = await loginAsStepUpOwner(page, "rate-policy", testInfo.project.name);
+  let lastTotpStep = ownerSession.lastTotpStep;
+  let settingsSaved = false;
+
+  try {
+    await page.goto("/settings/hotel");
+
+    const fxSettings = page.getByTestId("fx-rate-side-settings");
+    const usdToArs = fxSettings.getByLabel("Tipo al convertir de USD a ARS");
+    const arsToUsd = fxSettings.getByLabel("Tipo al convertir de ARS a USD");
+
+    await expect(usdToArs).toBeVisible();
+    await expect(arsToUsd).toBeVisible();
+    await expect(usdToArs).toHaveValue("venta");
+    await expect(arsToUsd).toHaveValue("venta");
+
+    await usdToArs.selectOption("compra");
+    await arsToUsd.selectOption("venta");
+    const updateResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/config/" && response.request().method() === "PATCH" && response.status() === 200;
+    });
+    await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Confirmá que sos vos" })).toBeVisible();
+    lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
+    const updateResponse = await updateResponsePromise;
+    expect(updateResponse.status()).toBe(200);
+    settingsSaved = true;
+    await expect(page.getByText("Cambios guardados.", { exact: true })).toBeVisible();
+
+    await page.reload();
+    const savedFxSettings = page.getByTestId("fx-rate-side-settings");
+    await expect(savedFxSettings.getByLabel("Tipo al convertir de USD a ARS")).toHaveValue("compra");
+    await expect(savedFxSettings.getByLabel("Tipo al convertir de ARS a USD")).toHaveValue("venta");
+  } finally {
+    if (settingsSaved) {
+      await page.goto("/settings/hotel");
+      const fxSettings = page.getByTestId("fx-rate-side-settings");
+      await fxSettings.getByLabel("Tipo al convertir de USD a ARS").selectOption("venta");
+      await fxSettings.getByLabel("Tipo al convertir de ARS a USD").selectOption("venta");
+      const restoreResponsePromise = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return url.pathname === "/api/config/" && response.request().method() === "PATCH" && response.status() === 200;
+      });
+      await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "Confirmá que sos vos" })).toBeVisible();
+      lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
+      await restoreResponsePromise;
+    }
+  }
 });

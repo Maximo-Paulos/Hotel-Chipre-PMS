@@ -24,6 +24,10 @@ Todo lo de este archivo es `confirmed` por lectura de código, salvo donde se in
 | Cierre diario por medio | Existe | `app/services/cash_daily_summary_service.py:457` (`by_payment_method`) | — |
 | Seña y no-show | Parcial | `hotel_configuration.deposit_percentage`, `enable_deposit_payment`, `free_cancellation_hours`, `cancellation_penalty_percentage`, `no_show_cutoff_hours`; `reservations.deposit_amount`, `no_show_policy_applied` | Hay política; no hay tarjeta en garantía ni cobro automático de no-show. |
 
+## Actualización de la rama local de simulación (2026-10-16)
+
+La configuración del hotel permite elegir `oficial` o `blue` como mercado de conversión y define por separado `fx_usd_to_ars_rate_side` y `fx_ars_to_usd_rate_side` (`compra` o `venta`). Ambas direcciones tienen `venta` como valor inicial. El cambio requiere MFA reciente y queda auditado. Los pagos conservan la moneda recibida; cuando la deuda del hotel usa otra moneda, el ledger guarda el monto acreditado, el importe recibido y la cotización aplicada. Los movimientos confirmados mantienen su snapshot histórico.
+
 ## Conexiones
 
 Catálogo sembrado en `app/services/integration_service.py:97` (`seed_catalog`). Pantalla: `frontend/src/views/protected/SettingsConnectionsPage.tsx`. Credenciales cifradas con Fernet (`encrypt_payload`/`decrypt_payload`).

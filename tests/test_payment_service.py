@@ -8,7 +8,7 @@ Tests the complete payment lifecycle including:
 - Edge cases (overpayment, disabled methods)
 """
 import pytest
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from app.models.cash_register import CashMovement, CashMovementTypeEnum, CashSession
@@ -29,6 +29,7 @@ from app.models.user import User
 from app.schemas.reservation import ReservationCreate
 from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
 from app.services.reservation_service import create_reservation, mark_reservation_no_show
+from app.services import pricing_policy_service
 from app.services import payment_service as payment_service_module
 from app.services.payment_service import (
     process_payment,
@@ -838,10 +839,23 @@ class TestPaymentEdgeCases:
             currency_code="USD",
         )
 
-        def quote(_db, *, amount, **_kwargs):
-            return amount * 0.001, 0.001, {"provider": "dolarapi.com", "configured_usd_market": "oficial"}
+        hotel_config.fx_conversion_rate_type = "oficial"
+        assert getattr(hotel_config, "fx_ars_to_usd_rate_side", "venta") == "venta"
+        now = datetime.now(timezone.utc).isoformat()
 
-        monkeypatch.setattr(payment_service_module, "_convert_amount", quote)
+        def provider_quote(currency, market="oficial"):
+            assert currency == "USD"
+            assert market == "oficial"
+            return {
+                "moneda": "USD",
+                "casa": "oficial",
+                "compra": 1485.0,
+                "venta": 1535.0,
+                "fechaActualizacion": now,
+            }
+
+        monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", provider_quote)
+        monkeypatch.setattr(payment_service_module, "_convert_amount", pricing_policy_service._convert_amount)
         payment_request = PaymentRequest(
             reservation_id=reservation.id,
             amount=0.10,
@@ -865,15 +879,17 @@ class TestPaymentEdgeCases:
 
         summary = get_reservation_financial_summary(db, hotel_config.id, reservation.id)
         assert transaction.currency == "ARS"
-        assert transaction.amount == 100
+        assert transaction.amount == 153.50
         assert transaction.tender_currency == "USD"
         assert transaction.tender_amount == Decimal("0.10")
         assert replay.id == transaction.id
-        assert transaction.fx_rate_snapshot == 0.001
-        assert reservation.amount_paid == 100
+        assert transaction.fx_rate_snapshot == pytest.approx(1 / 1535.0)
+        assert transaction.fx_quote_details["target_side"] == "venta"
+        assert transaction.fx_quote_details["target_quote"]["ars_per_unit"] == 1535.0
+        assert reservation.amount_paid == 153.50
         assert Decimal(str(summary["transactions"][0]["amount"])) == Decimal("0.10")
         assert summary["transactions"][0]["currency"] == "USD"
-        assert summary["transactions"][0]["applied_amount"] == 100
+        assert summary["transactions"][0]["applied_amount"] == 153.50
         assert summary["transactions"][0]["applied_currency"] == "ARS"
 
     def test_foreign_currency_refund_uses_original_rate_and_limits_tender_units(
