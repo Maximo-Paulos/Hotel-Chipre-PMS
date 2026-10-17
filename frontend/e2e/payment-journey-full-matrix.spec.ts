@@ -46,7 +46,7 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 20_000 });
 }
 
-async function ensureCashSessionOpen(page: Page) {
+async function ensureCashSessionOpen(page: Page, currencyCode = "ARS") {
   const sessionsResponsePromise = page.waitForResponse(
     (response) => response.url().includes("/api/cash-register/sessions") && response.request().method() === "GET"
   );
@@ -54,7 +54,7 @@ async function ensureCashSessionOpen(page: Page) {
   const sessionsResponse = await sessionsResponsePromise;
   const sessions = await sessionsResponse.json() as Array<{ status?: string; currency_code?: string }>;
   const hasOpenDefaultCurrencySession = sessions.some(
-    (session) => session.status === "open" && session.currency_code?.toUpperCase() === "ARS"
+    (session) => session.status === "open" && session.currency_code?.toUpperCase() === currencyCode
   );
   const openingForm = page
     .locator("form")
@@ -70,6 +70,7 @@ async function ensureCashSessionOpen(page: Page) {
     ).toBeDisabled();
   } else {
     await expect(openButton).toBeEnabled();
+    await openingForm.locator("label").filter({ hasText: localizedText("Moneda", "Currency") }).locator("select").selectOption(currencyCode);
     await openingForm.getByText(localizedName("Saldo inicial", "Opening balance")).locator("..").locator("input").fill("0");
     await openButton.click();
     await expect(page.getByText(localizedName("Caja abierta.", "Cash register opened."))).toBeVisible();
@@ -329,6 +330,73 @@ test("owner registers the entered deposit amount with confirmation and keeps the
   await expect(page.getByText(localizedName("Se registró la Seña", "Deposit registered"))).toBeVisible();
   await expect.poll(() => readStat(editForm, localizedText("Pagado", "Paid"))).toBe(depositRequired);
   await expect.poll(() => readStat(editForm, localizedText("Saldo", "Balance"))).toBe(remainingBalance);
+});
+
+test("cross-currency payment quotes received tender into the reservation currency", async ({ page }) => {
+  const suffix = `${Date.now()}fx`;
+  const guestLastName = `QA-Pay-FX ${suffix}`;
+  const quoteRequests: Array<{ from_currency?: string; to_currency?: string }> = [];
+
+  await page.route("**/api/fx/conversion-quote", async (route) => {
+    quoteRequests.push(route.request().postDataJSON() as { from_currency?: string; to_currency?: string });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      json: {
+        from_currency: "USD",
+        to_currency: "ARS",
+        rate: 1535,
+        provider: "dolarapi.com",
+        configured_market: "oficial",
+        quote_details: {
+          configured_usd_market: "oficial",
+          source_quote: { currency: "USD", side: "venta" },
+          target_quote: { currency: "ARS", side: null }
+        }
+      }
+    });
+  });
+  await page.route("**/api/payments", async (route) => {
+    const request = route.request();
+    if (request.method() !== "POST" || new URL(request.url()).pathname !== "/api/payments") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({ status: 201, contentType: "application/json", json: { id: 999 } });
+  });
+
+  await login(page);
+  await ensureCashSessionOpen(page, "USD");
+  const { reservationRow } = await createReservation(page, guestLastName, suffix, 72, 75);
+  const { editForm } = await openPaymentsPanel(reservationRow, page);
+  const currencySelect = editForm.getByTestId("payment-tender-currency");
+  await currencySelect.selectOption("USD");
+
+  const quotePanel = editForm.getByTestId("payment-fx-quote");
+  await expect(quotePanel).toBeVisible();
+  await expect(quotePanel).toContainText("1 USD = 1.535 ARS");
+  await expect(quotePanel).toContainText("USD Venta");
+  expect(quoteRequests).toContainEqual({ from_currency: "USD", to_currency: "ARS" });
+
+  const amountInput = editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i);
+  await amountInput.fill("10");
+  await expect(quotePanel).toContainText("15.350");
+
+  const balance = await readStat(editForm, localizedText("Saldo", "Balance"));
+  const expectedTenderAmount = Number((balance / 1535).toFixed(2));
+  await editForm.locator("label").filter({ hasText: localizedText("Medio de pago", "Payment method") }).locator("select").selectOption("cash");
+  const paymentRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/payments" && request.method() === "POST";
+  });
+  await editForm.getByRole("button", { name: localizedName("Pago total", "Full payment") }).click();
+  const submittedRequest = await paymentRequest;
+
+  expect(submittedRequest.postDataJSON()).toMatchObject({
+    amount: expectedTenderAmount,
+    currency: "USD",
+    transaction_type: "full_payment"
+  });
 });
 
 test("owner rejects a transfer proof with a reason and the proof cannot be approved afterwards", async ({ page }) => {

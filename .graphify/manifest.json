@@ -980,8 +980,8 @@
     "hash": "f2a0544cf50cffbe904e8f0a46cc962a"
   },
   "app/services/payment_service.py": {
-    "mtime": 1791849255881.5435,
-    "hash": "2113e012612bc5c62bfe0524a94bb16b"
+    "mtime": 1792202198538.461,
+    "hash": "40dc55845ca722776e29c8cf88314c2a"
   },
   "app/services/payment_webhook_service.py": {
     "mtime": 1791849255881.7874,
@@ -1444,8 +1444,8 @@
     "hash": "6431bf533dcb709c8b30522253005645"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1792183463878.5771,
-    "hash": "f23e332ccae130af5a8050c105c03997"
+    "mtime": 1792202172566.5437,
+    "hash": "0bd74fbb61a12b5c6dae76f3884b10c4"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1791849255922.4275,
@@ -1904,8 +1904,8 @@
     "hash": "809e0f5107efcd7f48d0ad7288c82058"
   },
   "tests/test_payment_service.py": {
-    "mtime": 1792183502091.379,
-    "hash": "183e11e0e03f3ccec126f0fe267be10d"
+    "mtime": 1792202142084.2297,
+    "hash": "e61961f5eb18038811411f8811e8cbfe"
   },
   "tests/test_payment_webhook_service.py": {
     "mtime": 1791849255948.1643,
@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1792185701135.3176,
-    "hash": "9c4768062ae1cdee60e040573a5ff0ae"
+    "mtime": 1792198140588.0188,
+    "hash": "9ca1a03f2697ceebf7a4612d27cb1a95"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1792185700480.312,
-    "hash": "a7388f1d07bf3b1641d9d87ef32c80aa"
+    "mtime": 1792198139924.2908,
+    "hash": "d5cfcaf8d4cb8e72a0ee768e4aac6a01"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1792185701123.6284,
-    "hash": "45c77aa39ef9325a810e714308efb568"
+    "mtime": 1792198140577.2117,
+    "hash": "66344949b2e5581c8196f788511a377b"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1792185700495.1118,
-    "hash": "b5a738cf0fc42c4f12d77b1478581254"
+    "mtime": 1792198139936.0225,
+    "hash": "1e6126767d21f8b8c496ea32ce61d102"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1792185701111.115,
-    "hash": "a33b2649dd7111c9ca83e7be9e3ba672"
+    "mtime": 1792198140566.0376,
+    "hash": "49927d90aa2d894bcb32d9ac39965eb1"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1792185700645.6396,
-    "hash": "288a52a8bce282e4489b61af51f4f757"
+    "mtime": 1792198140116.6936,
+    "hash": "a62a3eee49a430a51fd91d96681bdd6b"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -3604,8 +3604,8 @@
     "hash": "e2d0560e6f954b5f3f2b69bb1edd7bf6"
   },
   "frontend/e2e/payment-journey-full-matrix.spec.ts": {
-    "mtime": 1792100439490.322,
-    "hash": "f8b9f4a333e3cbf67c418f35d1be608d"
+    "mtime": 1792202199344.907,
+    "hash": "fda8caa3141ff6c7a579180478d8eb20"
   },
   "tests/test_mercadopago_webhook_endpoint.py": {
     "mtime": 1791849255944.5999,

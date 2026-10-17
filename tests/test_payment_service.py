@@ -781,28 +781,28 @@ class TestPaymentEdgeCases:
         assert summary["transactions"][0]["currency"] == "USD"
 
     @pytest.mark.parametrize(
-        ("reservation_currency", "tender_currency", "effective_rate", "unspread_rate", "tender_amount"),
+        ("reservation_currency", "tender_currency", "direct_rate", "tender_amount"),
         [
-            ("ARS", "USD", 0.00105, 0.001, Decimal("10.00")),
-            ("USD", "ARS", 1260.0, 1200.0, Decimal("12600.00")),
+            ("ARS", "USD", 1535.0, Decimal("10.00")),
+            ("USD", "ARS", 1 / 1485.0, Decimal("14850.00")),
         ],
     )
-    def test_foreign_payment_credit_uses_owner_favorable_directional_quote(
-        self, db, monkeypatch, reservation_currency, tender_currency, effective_rate, unspread_rate, tender_amount
+    def test_foreign_payment_credit_uses_direct_tender_to_reservation_quote(
+        self, db, monkeypatch, reservation_currency, tender_currency, direct_rate, tender_amount
     ):
         reservation = Reservation(currency_code=reservation_currency)
         quote_calls = []
         quote_details = {
             "provider": "dolarapi.com",
             "configured_usd_market": "oficial",
-            "source_side": "venta" if reservation_currency != "ARS" else None,
-            "target_side": "compra" if tender_currency != "ARS" else None,
+            "from_currency": tender_currency,
+            "to_currency": reservation_currency,
         }
 
         def quote(_db, *, amount, from_currency, to_currency, **_kwargs):
             quote_calls.append((from_currency, to_currency))
             assert amount == 1.0
-            return amount * effective_rate, effective_rate, quote_details
+            return amount * direct_rate, direct_rate, quote_details
 
         monkeypatch.setattr(payment_service_module, "_convert_amount", quote)
         applied_amount, applied_rate, details = _resolve_applied_payment_amount(
@@ -813,12 +813,10 @@ class TestPaymentEdgeCases:
             tender_currency=tender_currency,
         )
 
-        expected_credit = (tender_amount / Decimal(str(effective_rate))).quantize(Decimal("0.01"))
-        credit_without_owner_spread = (tender_amount / Decimal(str(unspread_rate))).quantize(Decimal("0.01"))
-        assert quote_calls == [(reservation_currency, tender_currency)]
-        assert applied_rate == effective_rate
+        expected_credit = (tender_amount * Decimal(str(direct_rate))).quantize(Decimal("0.01"))
+        assert quote_calls == [(tender_currency, reservation_currency)]
+        assert applied_rate == pytest.approx(1 / direct_rate)
         assert applied_amount == expected_credit
-        assert applied_amount < credit_without_owner_spread
         assert details == quote_details
 
     def test_payment_accepts_foreign_tender_and_credits_the_reservation_currency(
@@ -840,7 +838,12 @@ class TestPaymentEdgeCases:
         )
 
         hotel_config.fx_conversion_rate_type = "oficial"
-        assert getattr(hotel_config, "fx_ars_to_usd_rate_side", "venta") == "venta"
+        hotel_config.fx_usd_to_ars_rate_type = "oficial"
+        hotel_config.fx_usd_to_ars_rate_side = "compra"
+        hotel_config.fx_ars_to_usd_rate_type = "oficial"
+        hotel_config.fx_ars_to_usd_rate_side = "venta"
+        assert hotel_config.fx_usd_to_ars_rate_side == "compra"
+        assert hotel_config.fx_ars_to_usd_rate_side == "venta"
         now = datetime.now(timezone.utc).isoformat()
 
         def provider_quote(currency, market="oficial"):
@@ -879,17 +882,20 @@ class TestPaymentEdgeCases:
 
         summary = get_reservation_financial_summary(db, hotel_config.id, reservation.id)
         assert transaction.currency == "ARS"
-        assert transaction.amount == 153.50
+        assert transaction.amount == 148.50
         assert transaction.tender_currency == "USD"
         assert transaction.tender_amount == Decimal("0.10")
         assert replay.id == transaction.id
-        assert transaction.fx_rate_snapshot == pytest.approx(1 / 1535.0)
-        assert transaction.fx_quote_details["target_side"] == "venta"
-        assert transaction.fx_quote_details["target_quote"]["ars_per_unit"] == 1535.0
-        assert reservation.amount_paid == 153.50
+        assert transaction.fx_rate_snapshot == pytest.approx(1 / 1485.0)
+        assert transaction.fx_quote_details["from_currency"] == "USD"
+        assert transaction.fx_quote_details["to_currency"] == "ARS"
+        assert transaction.fx_quote_details["source_side"] == "compra"
+        assert transaction.fx_quote_details["source_quote"]["ars_per_unit"] == 1485.0
+        assert transaction.fx_quote_details["configured_ars_to_usd_rate_side"] == "venta"
+        assert reservation.amount_paid == 148.50
         assert Decimal(str(summary["transactions"][0]["amount"])) == Decimal("0.10")
         assert summary["transactions"][0]["currency"] == "USD"
-        assert summary["transactions"][0]["applied_amount"] == 153.50
+        assert summary["transactions"][0]["applied_amount"] == 148.50
         assert summary["transactions"][0]["applied_currency"] == "ARS"
 
     def test_foreign_currency_refund_uses_original_rate_and_limits_tender_units(
@@ -911,7 +917,7 @@ class TestPaymentEdgeCases:
         )
 
         def quote(_db, *, amount, **_kwargs):
-            return amount * 0.005, 0.005, {
+            return amount * 200.0, 200.0, {
                 "provider": "dolarapi.com",
                 "configured_usd_market": "blue",
                 "path": "via_ars",

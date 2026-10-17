@@ -7,6 +7,7 @@ Implements the booking cart flow:
   
 Coordinates with payment gateway adapters (MercadoPago, PayPal) and cash.
 """
+import math
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
@@ -215,7 +216,7 @@ def _resolve_applied_payment_amount(
     tender_currency: str,
     refund_source: Transaction | None = None,
 ) -> tuple[Decimal, float, dict | None]:
-    """Convert received tender into the reservation currency using one frozen rate."""
+    """Convert received tender to reservation currency and freeze its quote."""
     reservation_currency = (reservation.currency_code or "ARS").strip().upper()
     if tender_currency == reservation_currency:
         return tender_amount.quantize(Decimal("0.01")), 1.0, None
@@ -234,22 +235,26 @@ def _resolve_applied_payment_amount(
         return applied, tender_per_credit, details
 
     try:
-        _converted_one, tender_per_credit, details = _convert_amount(
+        _converted_one, tender_to_reservation_rate, details = _convert_amount(
             db,
             hotel_id=hotel_id,
             amount=1.0,
-            from_currency=reservation_currency,
-            to_currency=tender_currency,
+            from_currency=tender_currency,
+            to_currency=reservation_currency,
             fx_policy_id=None,
             provider_code=None,
         )
     except PricingPolicyError as exc:
         raise PaymentError(str(exc)) from exc
-    if tender_per_credit <= 0:
+    if not math.isfinite(tender_to_reservation_rate) or tender_to_reservation_rate <= 0:
         raise PaymentError("La cotización de conversión no es válida")
-    applied = (tender_amount / Decimal(str(tender_per_credit))).quantize(Decimal("0.01"))
+    direct_rate = Decimal(str(tender_to_reservation_rate))
+    applied = (tender_amount * direct_rate).quantize(Decimal("0.01"))
     if applied <= Decimal("0.00"):
         raise PaymentError("El importe recibido es demasiado bajo para acreditarse a la reserva")
+    # Keep the persisted snapshot contract used by receipts: tender currency
+    # units per one unit of reservation-currency credit.
+    tender_per_credit = float(Decimal("1") / direct_rate)
     return applied, tender_per_credit, details
 
 

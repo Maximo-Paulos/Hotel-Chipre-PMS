@@ -483,10 +483,10 @@ export function ReservationsPage() {
     paymentTenderCurrencyInput || paymentReservationCurrency
   );
   const paymentFxQuoteQuery = useQuery({
-    queryKey: ["payment-fx-quote", session.hotelId, paymentReservationCurrency, paymentTenderCurrency],
+    queryKey: ["payment-fx-quote", session.hotelId, paymentTenderCurrency, paymentReservationCurrency],
     queryFn: () => getFxConversionQuote(
-      paymentReservationCurrency as FxCurrencyCode,
       paymentTenderCurrency as FxCurrencyCode,
+      paymentReservationCurrency as FxCurrencyCode,
       session
     ),
     enabled: Boolean(
@@ -1844,14 +1844,14 @@ export function ReservationsPage() {
     proposedTotalDraft >= 0 &&
     isLargeTotalAdjustment(Number(editing.total_amount || 0), proposedTotalDraft)
   );
-  const tenderPerReservationUnit = paymentTenderCurrency === editingCurrencyCode
+  const reservationUnitsPerTenderUnit = paymentTenderCurrency === editingCurrencyCode
     ? 1
     : Number(paymentFxQuoteQuery.data?.rate ?? 0);
-  const conversionReady = Number.isFinite(tenderPerReservationUnit) && tenderPerReservationUnit > 0;
-  const convertReservationToTender = (amount: number, rate = tenderPerReservationUnit) =>
-    Number.isFinite(rate) && rate > 0 ? Number((amount * rate).toFixed(2)) : null;
-  const convertTenderToReservation = (amount: number, rate = tenderPerReservationUnit) =>
+  const conversionReady = Number.isFinite(reservationUnitsPerTenderUnit) && reservationUnitsPerTenderUnit > 0;
+  const convertReservationToTender = (amount: number, rate = reservationUnitsPerTenderUnit) =>
     Number.isFinite(rate) && rate > 0 ? Number((amount / rate).toFixed(2)) : null;
+  const convertTenderToReservation = (amount: number, rate = reservationUnitsPerTenderUnit) =>
+    Number.isFinite(rate) && rate > 0 ? Number((amount * rate).toFixed(2)) : null;
   const refreshPaymentFxRateForAction = async (): Promise<number | null> => {
     if (paymentTenderCurrency === editingCurrencyCode) return 1;
     try {
@@ -4526,7 +4526,7 @@ export function ReservationsPage() {
                         ) : (
                           <div className="rounded border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950" data-testid="payment-fx-quote">
                             <p className="font-semibold">
-                              DolarAPI · {paymentFxQuoteQuery.data.configured_market === "blue" ? "Blue" : "Oficial"} · 1 {editingCurrencyCode} = {paymentFxRate.toLocaleString("es-AR", { maximumFractionDigits: 6 })} {paymentTenderCurrency}
+                              DolarAPI · {paymentFxQuoteQuery.data.configured_market === "blue" ? "Blue" : "Oficial"} · 1 {paymentTenderCurrency} = {paymentFxRate.toLocaleString("es-AR", { maximumFractionDigits: 6 })} {editingCurrencyCode}
                               {paymentFxUsdSide ? ` · USD ${paymentFxUsdSide}` : ""}
                               {paymentFxQuoteQuery.data.quote_details?.source_quote?.is_derived_blue || paymentFxQuoteQuery.data.quote_details?.target_quote?.is_derived_blue ? " · equivalente blue derivado" : ""}
                             </p>
