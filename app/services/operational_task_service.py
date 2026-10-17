@@ -116,6 +116,14 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _validate_hotel_local_due_at(value: datetime | None) -> datetime | None:
+    if isinstance(value, datetime) and value.utcoffset() is not None:
+        raise OperationalTaskError(
+            "El vencimiento debe ser una fecha y hora local del hotel, sin zona horaria"
+        )
+    return value
+
+
 def _enum_value(value):
     return value.value if hasattr(value, "value") else value
 
@@ -293,6 +301,7 @@ def create_task(
     title = title.strip()
     if not title:
         raise OperationalTaskError("La tarea necesita un título")
+    due_at = _validate_hotel_local_due_at(due_at)
     _validate_links(
         db,
         hotel_id=hotel_id,
@@ -428,6 +437,7 @@ def update_task(
     task = _get_task(db, hotel_id, task_id, for_update=True)
     if task.version != client_version:
         raise TaskVersionConflict(task.id, task.version)
+    due_at = _validate_hotel_local_due_at(due_at)
     _validate_user_membership(db, hotel_id, actor_user_id)
     if assigned_to_user_id is not None:
         _validate_user_membership(db, hotel_id, assigned_to_user_id)

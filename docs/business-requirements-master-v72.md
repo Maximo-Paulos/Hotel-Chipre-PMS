@@ -2057,7 +2057,7 @@ El Sprint 1 se considera funcionalmente completo cuando permite:
 
 ### Q116. ¿Fuente de cotización?
 
-**Respuesta IA:** DolarAPI detrás de un servicio. El mercado configurable rige para todas las monedas y solo puede ser oficial o blue; el hotel puede mostrar uno o ambos. DolarAPI ofrece filas directas oficial/blue para USD y filas oficiales para EUR, BRL, CLP y UYU. Para la opción blue no USD, la app deriva un equivalente con la relación USD blue/oficial y lo etiqueta como estimado. En ningún par se usan dólar tarjeta, MEP, CCL, cripto, mayorista ni otras variantes. Fuentes: [Dólar oficial](https://dolarapi.com/docs/argentina/operations/get-dolar-oficial), [Dólar blue](https://dolarapi.com/docs/argentina/operations/get-dolar-blue) y [cotizaciones](https://dolarapi.com/docs/argentina/operations/get-cotizaciones).
+**Respuesta IA:** DolarAPI detrás de un servicio. Para USD, el hotel puede elegir Oficial o Blue y Compra o Venta por separado en cada sentido (USD→ARS y ARS→USD). El mercado de referencia global rige para conversiones con otras monedas. DolarAPI ofrece filas directas oficial/blue para USD y filas oficiales para EUR, BRL, CLP y UYU. Para la opción blue no USD, la app deriva un equivalente con la relación USD blue/oficial y lo etiqueta como estimado. En ningún par se usan dólar tarjeta, MEP, CCL, cripto, mayorista ni otras variantes. Fuentes: [Dólar oficial](https://dolarapi.com/docs/argentina/operations/get-dolar-oficial), [Dólar blue](https://dolarapi.com/docs/argentina/operations/get-dolar-blue) y [cotizaciones](https://dolarapi.com/docs/argentina/operations/get-cotizaciones).
 
 ### Q117. ¿Qué criterio favorece al hotel?
 

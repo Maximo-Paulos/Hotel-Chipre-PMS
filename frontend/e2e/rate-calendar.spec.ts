@@ -313,14 +313,26 @@ test("rate calendar page renders annual editor and integrated channel view", asy
     updated_at: string;
     confirmed_at?: string;
   };
-  type DraftCreate = {
+  type DailyRateDraftCreate = {
     category_id: number;
     draft_type?: "daily_rates";
     changes: Array<{ date: string; values: Record<string, number | null> }>;
   };
-  const draftRequests: DraftCreate[] = [];
+  type PricePeriodDraftCreate = {
+    category_id: number;
+    draft_type: "price_period";
+    period_operation: {
+      action: "create" | "update" | "delete";
+      period_id?: number;
+      values?: Record<string, unknown>;
+    };
+  };
+  type DraftCreate = DailyRateDraftCreate | PricePeriodDraftCreate;
+  const draftRequests: DailyRateDraftCreate[] = [];
+  const periodDraftRequests: PricePeriodDraftCreate[] = [];
   let nextDraftId = 500;
   let openDraft: MockDraft | null = null;
+  let openPeriodDraft: Record<string, unknown> | null = null;
 
   await page.route("https://fonts.googleapis.com/**", async (route) => {
     await route.fulfill({ status: 200, contentType: "text/css", body: "" });
@@ -338,6 +350,7 @@ test("rate calendar page renders annual editor and integrated channel view", asy
     // calendar payloads below are synthetic because this test covers their
     // richer OTA/channel rendering.
     if (
+      url.pathname.endsWith("/api/auth/providers") ||
       url.pathname.endsWith("/api/auth/login") ||
       url.pathname.endsWith("/api/auth/session/refresh") ||
       url.pathname.endsWith("/api/onboarding/status") ||
@@ -404,16 +417,56 @@ test("rate calendar page renders annual editor and integrated channel view", asy
     }
 
     if (url.pathname.endsWith("/api/rate-change-drafts") && request.method() === "GET") {
+      const drafts: unknown[] = [];
+      if (openDraft?.status === "draft") drafts.push(openDraft);
+      if (openPeriodDraft) drafts.push(openPeriodDraft);
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(openDraft?.status === "draft" ? [openDraft] : [])
+        body: JSON.stringify(drafts)
       });
       return;
     }
 
     if (url.pathname.endsWith("/api/rate-change-drafts") && request.method() === "POST") {
       const payload = request.postDataJSON() as DraftCreate;
+      if (payload.draft_type === "price_period") {
+        periodDraftRequests.push(payload);
+        const operation = payload.period_operation;
+        const values = operation.values ?? {};
+        if ("category_id" in values) {
+          await route.fulfill({
+            status: 422,
+            contentType: "application/json",
+            body: JSON.stringify({ detail: "category_id is not allowed in period values" })
+          });
+          return;
+        }
+        const now = new Date().toISOString();
+        const impact = { reservations_impacted: 0, reservation_nights: 0, dates_with_reservations: [] };
+        openPeriodDraft = {
+          id: ++nextDraftId,
+          hotel_id: 1,
+          category_id: payload.category_id,
+          draft_type: "price_period",
+          status: "draft",
+          version: 1,
+          changes: [],
+          period_operation: {
+            action: operation.action,
+            period_id: operation.period_id ?? null,
+            before: null,
+            after: operation.values ?? null,
+            effective_changes: []
+          },
+          impact,
+          impact_at_creation: impact,
+          created_at: now,
+          updated_at: now
+        };
+        await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(openPeriodDraft) });
+        return;
+      }
       draftRequests.push(payload);
       const now = new Date().toISOString();
       const changes = payload.changes.map((change) => {
@@ -529,6 +582,12 @@ test("rate calendar page renders annual editor and integrated channel view", asy
         contentType: "application/json",
         body: JSON.stringify({ created: 0, updated: 1 })
       });
+      return;
+    }
+
+    if (url.pathname.endsWith("/api/rates/periods") && request.method() === "GET") {
+      expect(url.searchParams.get("category_id")).toBe("7");
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
       return;
     }
 
@@ -655,4 +714,30 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   expect(draftRequests[2]?.changes).toEqual([{ date: "2026-05-08", values: { price_transfer: 45000 } }]);
   await page.getByRole("button", { name: "Confirmar tarifas", exact: true }).click();
   await expect.poll(() => openDraft?.status).toBe("confirmed");
+
+  const pricePeriodsSection = page.getByTestId("price-periods-section");
+  await pricePeriodsSection.getByLabel("Nombre").fill("Temporada de verano");
+  await pricePeriodsSection.getByLabel("Desde").fill("2026-12-20");
+  await pricePeriodsSection.getByLabel("Hasta").fill("2026-12-31");
+  await pricePeriodsSection.getByLabel("Precio por noche").fill("68000");
+  await pricePeriodsSection.getByRole("button", { name: "Preparar alta" }).click();
+  await expect.poll(() => periodDraftRequests.length).toBe(1);
+  expect(periodDraftRequests[0]).toEqual({
+    category_id: 7,
+    draft_type: "price_period",
+    period_operation: {
+      action: "create",
+      values: {
+        name: "Temporada de verano",
+        start_date: "2026-12-20",
+        end_date: "2026-12-31",
+        price_per_night: 68000,
+        priority: 0,
+        is_active: true
+      }
+    }
+  });
+  expect(periodDraftRequests[0]?.period_operation.values).not.toHaveProperty("category_id");
+  await expect(page.getByTestId("rate-change-draft-review")).toContainText("Temporada · alta");
+  await expect(page.getByTestId("rate-change-draft-review")).toContainText("Después: Temporada de verano · 2026-12-20 → 2026-12-31");
 });

@@ -14,6 +14,8 @@ export type HotelConfig = {
   check_out_time?: string | null;
   default_currency: string;
   fx_conversion_rate_type: "oficial" | "blue";
+  fx_usd_to_ars_rate_type: "oficial" | "blue";
+  fx_ars_to_usd_rate_type: "oficial" | "blue";
   fx_usd_to_ars_rate_side: "compra" | "venta";
   fx_ars_to_usd_rate_side: "compra" | "venta";
   fx_display_rate_types: Array<"oficial" | "blue">;

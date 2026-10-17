@@ -38,3 +38,28 @@ test("a room linked to an operational task survives saving and reload", async ({
   await page.reload();
   await expect(page.locator("article").filter({ hasText: title })).toContainText("Habitación 101");
 });
+
+test("an operational task keeps its hotel-local due time through the API round trip", async ({ page }) => {
+  const title = `QA local due task ${Date.now()}`;
+  await login(page);
+  await page.goto("/operacion/tareas");
+
+  const form = page.locator("form").filter({ hasText: "Agregar pendiente" });
+  await expect(form).toBeVisible();
+  await form.getByLabel("Título").fill(title);
+  await form.getByLabel("Vencimiento (hora del hotel, opcional)").fill("17/10/2026 09:00");
+
+  const createResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === "POST" && new URL(response.url()).pathname === "/api/operational-tasks"
+  );
+  await form.getByRole("button", { name: "Agregar", exact: true }).click();
+  const createResponse = await createResponsePromise;
+  expect(createResponse.status()).toBe(201);
+  expect(createResponse.request().postDataJSON().due_at).toBe("2026-10-17T09:00");
+  const created = await createResponse.json() as { due_at: string | null };
+  expect(created.due_at).toBe("2026-10-17T09:00:00");
+
+  const task = page.locator("article").filter({ hasText: title });
+  await expect(task).toContainText("Vence: 17/10/2026 09:00");
+  await expect(task).not.toContainText("12:00");
+});

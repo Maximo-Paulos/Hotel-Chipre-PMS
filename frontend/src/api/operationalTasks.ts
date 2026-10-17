@@ -18,6 +18,7 @@ export type OperationalTask = {
   confirmation_code?: string | null;
   room_block_id?: number | null;
   assigned_to_user_id?: number | null;
+  /** Hotel-local wall-clock date-time, serialized without a timezone offset. */
   due_at?: string | null;
   version: number;
   created_at: string;
@@ -71,6 +72,7 @@ export type OperationalTaskCreate = {
   reservation_id?: number | null;
   room_block_id?: number | null;
   assigned_to_user_id?: number | null;
+  /** Hotel-local wall-clock date-time, serialized without a timezone offset. */
   due_at?: string | null;
 };
 

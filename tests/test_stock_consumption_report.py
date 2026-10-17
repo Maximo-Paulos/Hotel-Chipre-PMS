@@ -174,6 +174,109 @@ def test_consumption_report_rejects_inverted_range(db):
         consumption_report(db, hotel_id=1, date_from=date(2026, 7, 26), date_to=date(2026, 7, 20), group_by="week")
 
 
+def test_consumption_report_uses_hotel_local_midnight_inclusive_start_exclusive_end(db):
+    _seed_hotels(db)
+    hotel = db.get(HotelConfiguration, 1)
+    hotel.hotel_timezone = "America/Argentina/Buenos_Aires"
+    item = create_stock_item(db, hotel_id=1, name="Jabon", sku=None, unit="unidad", min_quantity=None, active=True)
+    db.flush()
+
+    # Buenos Aires is UTC-3: 02:59:59Z is still Oct 16 locally, while 03:00Z
+    # is the inclusive start of Oct 17. The following local midnight is the
+    # exclusive end of Oct 17.
+    _movement(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        movement_type="out",
+        quantity="2.00",
+        created_at=datetime(2026, 10, 17, 2, 59, 59, 999999, tzinfo=timezone.utc),
+    )
+    _movement(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        movement_type="out",
+        quantity="3.00",
+        created_at=datetime(2026, 10, 17, 3, 0, tzinfo=timezone.utc),
+    )
+    _movement(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        movement_type="out",
+        quantity="5.00",
+        created_at=datetime(2026, 10, 18, 3, 0, tzinfo=timezone.utc),
+    )
+    db.commit()
+
+    report_17 = consumption_report(
+        db,
+        hotel_id=1,
+        date_from=date(2026, 10, 17),
+        date_to=date(2026, 10, 17),
+        group_by="week",
+    )
+    assert report_17["items"][0]["current_quantity"] == Decimal("3.00")
+    assert report_17["items"][0]["previous_quantity"] == Decimal("2.00")
+
+    report_16 = consumption_report(
+        db,
+        hotel_id=1,
+        date_from=date(2026, 10, 16),
+        date_to=date(2026, 10, 16),
+        group_by="week",
+    )
+    assert report_16["items"][0]["current_quantity"] == Decimal("2.00")
+
+
+def test_consumption_report_handles_dst_day_with_local_calendar_bounds(db):
+    _seed_hotels(db)
+    hotel = db.get(HotelConfiguration, 1)
+    hotel.hotel_timezone = "America/New_York"
+    item = create_stock_item(db, hotel_id=1, name="Toallas", sku=None, unit="unidad", min_quantity=None, active=True)
+    db.flush()
+
+    # On 2026-03-08, New York advances from UTC-5 to UTC-4. The local day
+    # therefore runs from 05:00Z to 04:00Z the next day (23 hours).
+    _movement(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        movement_type="out",
+        quantity="2.00",
+        created_at=datetime(2026, 3, 8, 4, 59, 59, 999999, tzinfo=timezone.utc),
+    )
+    _movement(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        movement_type="out",
+        quantity="3.00",
+        created_at=datetime(2026, 3, 8, 5, 0, tzinfo=timezone.utc),
+    )
+    _movement(
+        db,
+        hotel_id=1,
+        item_id=item.id,
+        movement_type="out",
+        quantity="5.00",
+        created_at=datetime(2026, 3, 9, 4, 0, tzinfo=timezone.utc),
+    )
+    db.commit()
+
+    report = consumption_report(
+        db,
+        hotel_id=1,
+        date_from=date(2026, 3, 8),
+        date_to=date(2026, 3, 8),
+        group_by="week",
+    )
+
+    assert report["items"][0]["current_quantity"] == Decimal("3.00")
+    assert report["items"][0]["previous_quantity"] == Decimal("2.00")
+
+
 # --- API-level: permission gating and tenant isolation ------------------
 
 

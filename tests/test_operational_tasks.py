@@ -1,7 +1,8 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import event
 
 from app.api.operational_tasks import (
@@ -21,7 +22,7 @@ from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.user import User
 from app.api.operational_tasks import get_operational_tasks
 from app.dependencies.auth import AuthContext
-from app.schemas.operational_tasks import OperationalTaskCreate, OperationalTaskUpdate
+from app.schemas.operational_tasks import OperationalTaskCreate, OperationalTaskRead, OperationalTaskUpdate
 from app.schemas.reservation import ReservationCreate
 from app.services.room_block_service import RoomBlockReleaseConflictError, resolve_block
 from app.services.operational_task_service import (
@@ -106,6 +107,39 @@ def test_task_lifecycle_history_and_stale_version(db, hotel_config, sample_rooms
     )
     assert task.resolved_by_user_id == manager.id
     assert len(task.events) == 3
+
+
+def test_task_due_at_round_trips_as_hotel_local_wall_clock(db, hotel_config):
+    manager = _user(db, "local-task-deadline@example.test")
+    context = AuthContext(
+        hotel_id=hotel_config.id,
+        user_id=manager.id,
+        user_email=manager.email,
+        user_role=ROLE_MANAGER,
+        is_verified=True,
+    )
+    local_due_at = datetime(2026, 10, 17, 9, 0)
+
+    created = create_operational_task(
+        OperationalTaskCreate(title="Vencimiento local", due_at=local_due_at),
+        db=db,
+        context=context,
+    )
+
+    assert created["due_at"] == local_due_at
+    assert created["due_at"].tzinfo is None
+    assert OperationalTaskRead.model_validate(created).model_dump(mode="json")["due_at"] == "2026-10-17T09:00:00"
+
+    with pytest.raises(ValidationError, match="sin zona horaria"):
+        OperationalTaskCreate(
+            title="No interpretar como UTC",
+            due_at=datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc),
+        )
+    with pytest.raises(ValidationError, match="sin zona horaria"):
+        OperationalTaskUpdate(
+            client_version=0,
+            due_at=datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc),
+        )
 
 
 def test_task_comment_appends_history_without_changing_task_status(db, hotel_config, sample_rooms):

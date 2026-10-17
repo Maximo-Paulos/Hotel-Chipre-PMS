@@ -119,7 +119,9 @@ class OperationalTask(Base):
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     assigned_to_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    due_at = Column(DateTime, nullable=True)
+    # Hotel-local wall-clock deadline, intentionally timezone-naive. It is not
+    # an instant in UTC; keep its calendar and clock components unchanged.
+    due_at = Column(DateTime(timezone=False), nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     resolved_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     resolved_at = Column(DateTime, nullable=True)

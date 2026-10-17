@@ -33,6 +33,14 @@ class HotelConfiguration(Base):
             "fx_ars_to_usd_rate_side IN ('compra', 'venta')",
             name="ck_hotel_configuration_fx_ars_to_usd_rate_side",
         ),
+        CheckConstraint(
+            "fx_usd_to_ars_rate_type IN ('oficial', 'blue')",
+            name="ck_hotel_configuration_fx_usd_to_ars_rate_type",
+        ),
+        CheckConstraint(
+            "fx_ars_to_usd_rate_type IN ('oficial', 'blue')",
+            name="ck_hotel_configuration_fx_ars_to_usd_rate_type",
+        ),
     )
 
     # hotel_id is the primary key; no auto-assigned default to avoid implicit singletons
@@ -100,9 +108,18 @@ class HotelConfiguration(Base):
     fiscal_point_of_sale = Column(Integer, nullable=True)
     hotel_timezone = Column(String(100), nullable=False, default="America/Argentina/Buenos_Aires")
     default_currency = Column(String(3), nullable=False, default="ARS")
-    # Global USD market source used in automatic currency conversions. Legacy
-    # FxPolicy source/side fields cannot override it. Existing hotels keep official.
+    # Global market reference for non-USD currencies. USD uses the selected
+    # market and Compra/Venta side for each conversion direction below.
     fx_conversion_rate_type = Column(
+        String(20), nullable=False, default="oficial", server_default=text("'oficial'")
+    )
+    # USD market sources are independently selectable for each conversion
+    # direction. The global market above remains the reference for other
+    # currencies and for legacy reporting.
+    fx_usd_to_ars_rate_type = Column(
+        String(20), nullable=False, default="oficial", server_default=text("'oficial'")
+    )
+    fx_ars_to_usd_rate_type = Column(
         String(20), nullable=False, default="oficial", server_default=text("'oficial'")
     )
     # Select the DolarAPI side for each conversion direction. These defaults

@@ -23,7 +23,17 @@ class OperationalTaskCreate(BaseModel):
     reservation_id: int | None = Field(default=None, gt=0)
     room_block_id: int | None = Field(default=None, gt=0)
     assigned_to_user_id: int | None = Field(default=None, gt=0)
-    due_at: datetime | None = None
+    due_at: datetime | None = Field(
+        default=None,
+        description="Fecha y hora de pared local del hotel; enviar sin Z ni desplazamiento UTC.",
+    )
+
+    @field_validator("due_at")
+    @classmethod
+    def due_at_is_hotel_local(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.utcoffset() is not None:
+            raise ValueError("El vencimiento debe ser una fecha y hora local del hotel, sin zona horaria")
+        return value
 
     @field_validator("title")
     @classmethod
@@ -41,8 +51,18 @@ class OperationalTaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=5000)
     assigned_to_user_id: int | None = Field(default=None, gt=0)
-    due_at: datetime | None = None
+    due_at: datetime | None = Field(
+        default=None,
+        description="Fecha y hora de pared local del hotel; enviar sin Z ni desplazamiento UTC.",
+    )
     comment: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("due_at")
+    @classmethod
+    def due_at_is_hotel_local(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.utcoffset() is not None:
+            raise ValueError("El vencimiento debe ser una fecha y hora local del hotel, sin zona horaria")
+        return value
 
     @field_validator("title", "comment")
     @classmethod
@@ -101,7 +121,10 @@ class OperationalTaskRead(BaseModel):
     confirmation_code: str | None = None
     room_block_id: int | None = None
     assigned_to_user_id: int | None = None
-    due_at: datetime | None = None
+    due_at: datetime | None = Field(
+        default=None,
+        description="Fecha y hora de pared local del hotel, devuelta sin Z ni desplazamiento UTC.",
+    )
     created_by_user_id: int | None = None
     created_by_name: str | None = None
     resolved_by_user_id: int | None = None

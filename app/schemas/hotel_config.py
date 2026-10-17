@@ -66,6 +66,8 @@ class HotelConfigRead(BaseModel):
     manual_rate_max_adjustment_pct: Optional[Decimal] = None
     default_currency: str
     fx_conversion_rate_type: Literal["oficial", "blue"] = "oficial"
+    fx_usd_to_ars_rate_type: Literal["oficial", "blue"] = "oficial"
+    fx_ars_to_usd_rate_type: Literal["oficial", "blue"] = "oficial"
     fx_usd_to_ars_rate_side: Literal["compra", "venta"] = "venta"
     fx_ars_to_usd_rate_side: Literal["compra", "venta"] = "venta"
     fx_display_rate_types: List[Literal["oficial", "blue"]] = Field(default_factory=lambda: ["oficial"])
@@ -117,6 +119,8 @@ class HotelConfigUpdate(BaseModel):
     manual_rate_max_adjustment_pct: Optional[Decimal] = Field(default=None, max_digits=7, decimal_places=2)
     default_currency: Optional[str] = None
     fx_conversion_rate_type: Optional[Literal["oficial", "blue"]] = None
+    fx_usd_to_ars_rate_type: Optional[Literal["oficial", "blue"]] = None
+    fx_ars_to_usd_rate_type: Optional[Literal["oficial", "blue"]] = None
     fx_usd_to_ars_rate_side: Optional[Literal["compra", "venta"]] = None
     fx_ars_to_usd_rate_side: Optional[Literal["compra", "venta"]] = None
     fx_display_rate_types: Optional[List[Literal["oficial", "blue"]]] = Field(default=None, min_length=1, max_length=2)
@@ -174,6 +178,13 @@ class HotelConfigUpdate(BaseModel):
     def reject_null_fx_conversion_rate_side(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             raise ValueError("La opción de cotización cambiaria no puede ser nula")
+        return value
+
+    @field_validator("fx_usd_to_ars_rate_type", "fx_ars_to_usd_rate_type")
+    @classmethod
+    def reject_null_fx_conversion_rate_type(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            raise ValueError("El mercado de cotización no puede ser nulo")
         return value
 
     @field_validator("interface_language")

@@ -26,7 +26,7 @@ Todo lo de este archivo es `confirmed` por lectura de código, salvo donde se in
 
 ## Actualización de la rama local de simulación (2026-10-16)
 
-La configuración del hotel permite elegir `oficial` o `blue` como mercado de conversión y define por separado `fx_usd_to_ars_rate_side` y `fx_ars_to_usd_rate_side` (`compra` o `venta`). Ambas direcciones tienen `venta` como valor inicial. El cambio requiere MFA reciente y queda auditado. Los pagos conservan la moneda recibida; cuando la deuda del hotel usa otra moneda, el ledger guarda el monto acreditado, el importe recibido y la cotización aplicada. Los movimientos confirmados mantienen su snapshot histórico.
+La configuración del hotel permite elegir por separado mercado (`oficial` o `blue`) y lado (`compra` o `venta`) para `USD→ARS` y `ARS→USD`; ambas direcciones inician en Oficial/Venta. La referencia global `fx_conversion_rate_type` se mantiene para las conversiones que usan otras monedas. El cambio requiere MFA reciente y queda auditado. Los reportes presentan los cobros separados por moneda y no convierten ni suman importes de monedas distintas; sólo se convierte al acreditar un pago en moneda diferente a la deuda. Los pagos conservan la moneda recibida y, si corresponde, el ledger guarda el monto acreditado, el importe recibido y la cotización aplicada. Los movimientos confirmados mantienen su snapshot histórico.
 
 ## Conexiones
 

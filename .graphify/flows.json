@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-16T20:53:06.546Z",
+  "generatedAt": "2026-10-17T00:48:46.607Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -7075,6 +7075,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_operational_task_service_create_task",
+      "name": "create_task",
+      "entryPoint": "services_operational_task_service_create_task",
+      "entryPointId": "services_operational_task_service_create_task",
+      "path": [
+        "services_operational_task_service_create_task",
+        "services_operational_task_service_append_event",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_validate_hotel_local_due_at",
+        "services_operational_task_service_validate_links",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_enum_value"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_create_task",
+        "services_operational_task_service_append_event",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_validate_hotel_local_due_at",
+        "services_operational_task_service_validate_links",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_enum_value"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.2771,
+      "warnings": []
+    },
+    {
       "id": "flow:services_cash_register_service_record_cash_payment_movement",
       "name": "record_cash_payment_movement",
       "entryPoint": "services_cash_register_service_record_cash_payment_movement",
@@ -7979,36 +8011,6 @@
       "fileCount": 1,
       "files": [
         "app/services/audit_log_service.py"
-      ],
-      "criticality": 0.2533,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_operational_task_service_create_task",
-      "name": "create_task",
-      "entryPoint": "services_operational_task_service_create_task",
-      "entryPointId": "services_operational_task_service_create_task",
-      "path": [
-        "services_operational_task_service_create_task",
-        "services_operational_task_service_append_event",
-        "services_operational_task_service_operationaltaskerror",
-        "services_operational_task_service_validate_links",
-        "services_operational_task_service_validate_user_membership",
-        "services_operational_task_service_enum_value"
-      ],
-      "qualifiedPath": [
-        "services_operational_task_service_create_task",
-        "services_operational_task_service_append_event",
-        "services_operational_task_service_operationaltaskerror",
-        "services_operational_task_service_validate_links",
-        "services_operational_task_service_validate_user_membership",
-        "services_operational_task_service_enum_value"
-      ],
-      "depth": 2,
-      "nodeCount": 6,
-      "fileCount": 1,
-      "files": [
-        "app/services/operational_task_service.py"
       ],
       "criticality": 0.2533,
       "warnings": []
@@ -10109,6 +10111,42 @@
       "warnings": []
     },
     {
+      "id": "flow:services_operational_task_service_update_task",
+      "name": "update_task",
+      "entryPoint": "services_operational_task_service_update_task",
+      "entryPointId": "services_operational_task_service_update_task",
+      "path": [
+        "services_operational_task_service_update_task",
+        "services_operational_task_service_append_event",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_now",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_taskversionconflict",
+        "services_operational_task_service_validate_hotel_local_due_at",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_enum_value"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_update_task",
+        "services_operational_task_service_append_event",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_now",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_taskversionconflict",
+        "services_operational_task_service_validate_hotel_local_due_at",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_enum_value"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.2256,
+      "warnings": []
+    },
+    {
       "id": "flow:services_operational_report_service_nightly_summary",
       "name": "nightly_summary",
       "entryPoint": "services_operational_report_service_nightly_summary",
@@ -12188,40 +12226,6 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_service.py"
-      ],
-      "criticality": 0.2012,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_operational_task_service_update_task",
-      "name": "update_task",
-      "entryPoint": "services_operational_task_service_update_task",
-      "entryPointId": "services_operational_task_service_update_task",
-      "path": [
-        "services_operational_task_service_update_task",
-        "services_operational_task_service_append_event",
-        "services_operational_task_service_get_task",
-        "services_operational_task_service_now",
-        "services_operational_task_service_operationaltaskerror",
-        "services_operational_task_service_taskversionconflict",
-        "services_operational_task_service_validate_user_membership",
-        "services_operational_task_service_enum_value"
-      ],
-      "qualifiedPath": [
-        "services_operational_task_service_update_task",
-        "services_operational_task_service_append_event",
-        "services_operational_task_service_get_task",
-        "services_operational_task_service_now",
-        "services_operational_task_service_operationaltaskerror",
-        "services_operational_task_service_taskversionconflict",
-        "services_operational_task_service_validate_user_membership",
-        "services_operational_task_service_enum_value"
-      ],
-      "depth": 2,
-      "nodeCount": 8,
-      "fileCount": 1,
-      "files": [
-        "app/services/operational_task_service.py"
       ],
       "criticality": 0.2012,
       "warnings": []
@@ -22618,15 +22622,17 @@
       "path": [
         "services_stock_service_consumption_report",
         "services_stock_service_consumption_totals_by_item",
+        "services_stock_service_hotel_timezone",
         "services_stock_service_stockerror"
       ],
       "qualifiedPath": [
         "services_stock_service_consumption_report",
         "services_stock_service_consumption_totals_by_item",
+        "services_stock_service_hotel_timezone",
         "services_stock_service_stockerror"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/services/stock_service.py"

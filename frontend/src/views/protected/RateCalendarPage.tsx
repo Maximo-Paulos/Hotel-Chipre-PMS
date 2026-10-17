@@ -158,8 +158,7 @@ export function RateCalendarPage() {
   const rateDraftBusy = rateDraftMutations.create.isPending || rateDraftMutations.confirm.isPending || rateDraftMutations.cancel.isPending;
   const editorDisabled = !canEditRates || Boolean(openDraft) || rateDraftBusy;
   const periodsQuery = usePricePeriods(categoryId);
-  const [periodForm, setPeriodForm] = useState<PricePeriodInput>({
-    category_id: categoryId ?? 0,
+  const [periodForm, setPeriodForm] = useState<Omit<PricePeriodInput, "category_id">>({
     name: "",
     start_date: dateFrom,
     end_date: dateTo,
@@ -216,7 +215,7 @@ export function RateCalendarPage() {
     setToDate(dateTo);
     setEditingPeriodId(null);
     setPeriodError(null);
-    setPeriodForm({ category_id: categoryId ?? 0, name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true });
+    setPeriodForm({ name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true });
   }, [dateFrom, dateTo, categoryId]);
 
   const handleSavePeriod = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -228,7 +227,7 @@ export function RateCalendarPage() {
     }
     setPeriodError(null);
     try {
-      const values = { ...periodForm, category_id: categoryId, name: periodForm.name.trim() };
+      const values = { ...periodForm, name: periodForm.name.trim() };
       await rateDraftMutations.create.mutateAsync({
         category_id: categoryId,
         draft_type: "price_period",
@@ -237,7 +236,7 @@ export function RateCalendarPage() {
           : { action: "update", period_id: editingPeriodId, values }
       });
       setEditingPeriodId(null);
-      setPeriodForm({ category_id: categoryId, name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true });
+      setPeriodForm({ name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true });
     } catch (error: unknown) {
       setPeriodError(error instanceof Error ? error.message : "No se pudo preparar el cambio de temporada.");
     }
@@ -261,7 +260,6 @@ export function RateCalendarPage() {
     setEditingPeriodId(period.id);
     setPeriodError(null);
     setPeriodForm({
-      category_id: period.category_id,
       name: period.name,
       start_date: period.start_date,
       end_date: period.end_date,
@@ -972,7 +970,7 @@ export function RateCalendarPage() {
               <label className={`${labelClass} flex-row items-center gap-2 self-end pb-3 normal-case tracking-normal`}><input type="checkbox" checked={periodForm.is_active} onChange={(event) => setPeriodForm((current) => ({ ...current, is_active: event.target.checked }))} disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /> Activa</label>
               {periodError && <div role="alert" className="flex items-start justify-between gap-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700 md:col-span-2 xl:col-span-6"><p>{periodError}</p><button type="button" aria-label="Cerrar error de temporada" onClick={() => setPeriodError(null)} className="shrink-0 font-semibold underline">Cerrar</button></div>}
               <div className="flex flex-wrap justify-end gap-2 md:col-span-2 xl:col-span-6">
-                {editingPeriodId !== null && <button type="button" className="self-end rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => { setEditingPeriodId(null); setPeriodError(null); setPeriodForm({ category_id: categoryId ?? 0, name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true }); }}>Descartar edición</button>}
+                {editingPeriodId !== null && <button type="button" className="self-end rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => { setEditingPeriodId(null); setPeriodError(null); setPeriodForm({ name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true }); }}>Descartar edición</button>}
                 <button type="submit" className="self-end rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy || !categoryId}>{rateDraftMutations.create.isPending ? "Preparando borrador..." : editingPeriodId === null ? "Preparar alta" : "Preparar edición"}</button>
               </div>
             </form>

@@ -509,10 +509,12 @@ def test_usd_conversion_uses_configured_side_per_direction_and_records_provenanc
     assert [snapshot.applied_rate for snapshot in snapshots] == [1535.0, 1535.0, 1485.0, 1485.0]
 
 
-def test_global_blue_market_dominates_fx_policy_source_and_side(db, monkeypatch):
+def test_usd_markets_are_directional_while_other_currencies_use_global_reference(db, monkeypatch):
     _seed_pricing_foundation(db)
     config = db.get(HotelConfiguration, 51)
     config.fx_conversion_rate_type = "blue"
+    config.fx_usd_to_ars_rate_type = "oficial"
+    config.fx_ars_to_usd_rate_type = "blue"
     policy = db.query(FxPolicy).filter(FxPolicy.hotel_id == 51).first()
     policy.preferred_source = "official"  # Legacy policy source cannot override hotel settings.
     policy.preferred_side = "buy"  # Legacy side does not override the directional rule.
@@ -550,7 +552,7 @@ def test_global_blue_market_dominates_fx_policy_source_and_side(db, monkeypatch)
         }
 
     monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", conversion_quote)
-    _, global_blue_rate, global_details = pricing_policy_service._convert_amount(
+    _, official_usd_to_ars_rate, usd_to_ars_details = pricing_policy_service._convert_amount(
         db,
         hotel_id=51,
         amount=1,
@@ -559,11 +561,26 @@ def test_global_blue_market_dominates_fx_policy_source_and_side(db, monkeypatch)
         fx_policy_id=None,
         provider_code=None,
     )
-    assert global_blue_rate == pytest.approx(1250.0 * 1.05)
-    assert global_details["configured_usd_market"] == "blue"
-    assert global_details["usd_market"] == "blue"
+    assert official_usd_to_ars_rate == pytest.approx(_FX_TEST_RATES["USD"]["venta"] * 1.05)
+    assert usd_to_ars_details["configured_usd_market"] == "oficial"
+    assert usd_to_ars_details["configured_cross_currency_market"] == "blue"
+    assert usd_to_ars_details["usd_market"] == "oficial"
+    assert usd_to_ars_details["source_quote"]["rate_type"] == "oficial"
 
-    _, policy_blue_rate, policy_details = pricing_policy_service._convert_amount(
+    _, blue_ars_to_usd_rate, ars_to_usd_details = pricing_policy_service._convert_amount(
+        db,
+        hotel_id=51,
+        amount=1250.0,
+        from_currency="ARS",
+        to_currency="USD",
+        fx_policy_id=None,
+        provider_code=None,
+    )
+    assert blue_ars_to_usd_rate == pytest.approx((1 / 1250.0) * 1.05)
+    assert ars_to_usd_details["configured_usd_market"] == "blue"
+    assert ars_to_usd_details["target_quote"]["market"] == "blue"
+
+    _, policy_usd_to_ars_rate, policy_details = pricing_policy_service._convert_amount(
         db,
         hotel_id=51,
         amount=1,
@@ -572,9 +589,9 @@ def test_global_blue_market_dominates_fx_policy_source_and_side(db, monkeypatch)
         fx_policy_id=policy.id,
         provider_code=None,
     )
-    assert policy_blue_rate == pytest.approx(1250.0 * 1.05)
-    assert policy_details["usd_market"] == "blue"
-    assert seen_markets == ["blue", "blue"]
+    assert policy_usd_to_ars_rate == pytest.approx(_FX_TEST_RATES["USD"]["venta"] * 1.05)
+    assert policy_details["usd_market"] == "oficial"
+    assert seen_markets[:3] == ["oficial", "blue", "oficial"]
 
     _, cross_rate, cross_details = pricing_policy_service._convert_amount(
         db,
@@ -586,10 +603,10 @@ def test_global_blue_market_dominates_fx_policy_source_and_side(db, monkeypatch)
         provider_code=None,
     )
     euro_blue_buy = _FX_TEST_RATES["EUR"]["compra"] * 1200.0 / _FX_TEST_RATES["USD"]["compra"]
-    assert cross_rate == pytest.approx(1250.0 / euro_blue_buy * 1.05)
-    assert cross_details["source_quote"]["market"] == "blue"
-    assert cross_details["source_quote"]["usd_market"] == "blue"
-    assert cross_details["source_quote"]["rate_type"] == "blue"
+    assert cross_rate == pytest.approx(_FX_TEST_RATES["USD"]["venta"] / euro_blue_buy * 1.05)
+    assert cross_details["source_quote"]["market"] == "oficial"
+    assert cross_details["source_quote"]["usd_market"] == "oficial"
+    assert cross_details["source_quote"]["rate_type"] == "oficial"
     assert cross_details["target_quote"]["market"] == "blue_derivado"
     assert cross_details["target_quote"]["conversion_market"] == "blue"
     assert cross_details["target_quote"]["is_derived_blue"] is True
@@ -604,6 +621,7 @@ def test_global_blue_market_dominates_fx_policy_source_and_side(db, monkeypatch)
         fx_policy_id=None,
         provider_code=None,
     )
+    assert direct_only_details["configured_cross_currency_market"] == "blue"
     assert direct_only_details["configured_usd_market"] == "blue"
     assert direct_only_details["usd_market"] is None
     assert direct_only_details["source_quote"]["market"] == "blue_derivado"
@@ -616,6 +634,7 @@ def test_missing_selected_blue_market_does_not_fall_back_to_official_snapshot(db
     _seed_pricing_foundation(db)
     config = db.get(HotelConfiguration, 51)
     config.fx_conversion_rate_type = "blue"
+    config.fx_usd_to_ars_rate_type = "blue"
     fresh_time = datetime.now(timezone.utc)
     db.add(
         FxRateSnapshot(

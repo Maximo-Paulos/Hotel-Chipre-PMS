@@ -395,6 +395,14 @@ def _convert_amount(
         configured_market = str(getattr(config, "fx_conversion_rate_type", "oficial") or "oficial").lower()
         if configured_market not in {"oficial", "blue"}:
             raise PricingPolicyError("La cotización USD configurada no es válida")
+        usd_to_ars_market = str(
+            getattr(config, "fx_usd_to_ars_rate_type", configured_market) or configured_market
+        ).strip().lower()
+        ars_to_usd_market = str(
+            getattr(config, "fx_ars_to_usd_rate_type", configured_market) or configured_market
+        ).strip().lower()
+        if usd_to_ars_market not in {"oficial", "blue"} or ars_to_usd_market not in {"oficial", "blue"}:
+            raise PricingPolicyError("El mercado de cotización USD configurado no es válido")
 
         # USD/ARS conversions use an owner-selected side for each direction.
         # The quote is always expressed as ARS per unit of currency, so the
@@ -413,19 +421,23 @@ def _convert_amount(
             if side is not None and side not in {"compra", "venta"}:
                 raise PricingPolicyError("El lado de cotización FX configurado no es válido")
 
-        selected_market = configured_market
+        source_market = usd_to_ars_market if from_code == "USD" else configured_market
+        target_market = ars_to_usd_market if to_code == "USD" else configured_market
+        selected_usd_market = (
+            source_market if from_code == "USD" else target_market if to_code == "USD" else configured_market
+        )
 
         source_quote = _resolve_conversion_quote(
             db,
             hotel_id=hotel_id,
             currency=from_code,
-            market=selected_market,
+            market=source_market,
         ) if from_code != "ARS" else None
         target_quote = _resolve_conversion_quote(
             db,
             hotel_id=hotel_id,
             currency=to_code,
-            market=selected_market,
+            market=target_market,
         ) if to_code != "ARS" else None
 
         source_ars_per_unit = float(source_quote[source_side]) if source_quote and source_side else 1.0
@@ -439,7 +451,7 @@ def _convert_amount(
                 db,
                 hotel_id=hotel_id,
                 currency=from_code,
-                market=selected_market,
+                market=source_market,
                 quote=source_quote,
                 side=source_side,
             )
@@ -448,7 +460,7 @@ def _convert_amount(
                 db,
                 hotel_id=hotel_id,
                 currency=to_code,
-                market=selected_market,
+                market=target_market,
                 quote=target_quote,
                 side=target_side,
             )
@@ -458,16 +470,20 @@ def _convert_amount(
             raise PricingPolicyError(
                 "El spread FX debe ser cero o mayor para conservar una cotización favorable al hotel."
             )
-        # The hotel's selected market governs every currency quote. Non-USD
-        # blue equivalents are derived in the provider adapter. FxPolicy still
-        # supplies spread; legacy source/side fields cannot override either.
+        # USD markets follow the selected conversion direction. The global
+        # market remains the reference for other currencies, whose blue
+        # equivalents are derived in the provider adapter. FxPolicy supplies
+        # only the spread; legacy source/side fields cannot override settings.
         effective_rate = raw_rate * (1 + (spread_pct / 100.0))
         if not math.isfinite(effective_rate) or effective_rate <= 0:
             raise PricingPolicyError("La tasa FX resultante no es válida")
         details = {
             "provider": "dolarapi.com",
-            "configured_usd_market": selected_market,
-            "usd_market": selected_market if "USD" in {from_code, to_code} else None,
+            "configured_usd_market": selected_usd_market,
+            "configured_cross_currency_market": configured_market,
+            "configured_usd_to_ars_market": usd_to_ars_market,
+            "configured_ars_to_usd_market": ars_to_usd_market,
+            "usd_market": selected_usd_market if "USD" in {from_code, to_code} else None,
             "path": "via_ars",
             "from_currency": from_code,
             "to_currency": to_code,
@@ -481,8 +497,8 @@ def _convert_amount(
             "applied_rate": effective_rate,
             "source_updated_at": source_quote.get("_provider_updated_at") if source_quote else None,
             "target_updated_at": target_quote.get("_provider_updated_at") if target_quote else None,
-            "source_quote": _quote_provenance(source_quote, from_code, source_side, selected_market) if source_quote else None,
-            "target_quote": _quote_provenance(target_quote, to_code, target_side, selected_market) if target_quote else None,
+            "source_quote": _quote_provenance(source_quote, from_code, source_side, source_market) if source_quote else None,
+            "target_quote": _quote_provenance(target_quote, to_code, target_side, target_market) if target_quote else None,
         }
         return round(amount * effective_rate, 2), effective_rate, details
 

@@ -77,6 +77,14 @@ const formatDate = (value?: string | null) => {
   return Number.isNaN(date.getTime()) ? "Fecha no disponible" : date.toLocaleString("es-AR");
 };
 
+const formatHotelLocalDueAt = (value?: string | null) => {
+  if (!value) return "Sin vencimiento";
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/.exec(value);
+  if (!match) return "Fecha no disponible";
+  const [, year, month, day, hour, minute] = match;
+  return `${day}/${month}/${year} ${hour}:${minute}`;
+};
+
 export function OperationalTasksPage() {
   const { session } = useSession();
   const queryClient = useQueryClient();
@@ -149,7 +157,7 @@ export function OperationalTasksPage() {
     description: form.description.trim() || null,
     room_id: selectedRoomId,
     room_block_id: form.room_block_id ? Number(form.room_block_id) : null,
-    due_at: form.due_at ? new Date(form.due_at).toISOString() : null
+    due_at: form.due_at || null
   });
 
   const refresh = () => {
@@ -409,7 +417,7 @@ export function OperationalTasksPage() {
             )}
             <LocalizedDateField
               id="operational-task-due-at"
-              label="Vencimiento (opcional)"
+              label="Vencimiento (hora del hotel, opcional)"
               value={form.due_at}
               onChange={(value) => setForm((current) => ({ ...current, due_at: value }))}
               mode="datetime-local"
@@ -477,7 +485,7 @@ export function OperationalTasksPage() {
                       <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">{statusLabels[task.status]}</span>
                       <span className="rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-800">{priorityLabels[task.priority]}</span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">{typeLabels[task.task_type]} · {task.room_number ? `Habitación ${task.room_number}` : "Sin habitación"} · Vence: {formatDate(task.due_at)}</p>
+                    <p className="mt-1 text-xs text-slate-500">{typeLabels[task.task_type]} · {task.room_number ? `Habitación ${task.room_number}` : "Sin habitación"} · Vence: {formatHotelLocalDueAt(task.due_at)}</p>
                     <p className="mt-1 text-xs text-slate-500">Creada por {task.created_by_name || "usuario interno"} · {formatDate(task.created_at)}</p>
                     {task.description && <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{task.description}</p>}
                     {session.baseRole === "housekeeping" && task.task_type === "general" && (

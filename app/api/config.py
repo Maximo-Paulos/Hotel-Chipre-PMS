@@ -77,6 +77,8 @@ def update_configuration(
     fx_fields = (
         "fx_conversion_rate_type",
         "fx_display_rate_types",
+        "fx_usd_to_ars_rate_type",
+        "fx_ars_to_usd_rate_type",
         "fx_usd_to_ars_rate_side",
         "fx_ars_to_usd_rate_side",
     )

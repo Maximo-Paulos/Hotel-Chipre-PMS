@@ -102,12 +102,17 @@ export type PromotionSimulateNight = {
 export type FxQuoteDetails = {
   provider: string;
   configured_usd_market: "oficial" | "blue";
+  configured_cross_currency_market?: "oficial" | "blue";
+  configured_usd_to_ars_market?: "oficial" | "blue";
+  configured_ars_to_usd_market?: "oficial" | "blue";
+  configured_usd_to_ars_rate_side?: "compra" | "venta";
+  configured_ars_to_usd_rate_side?: "compra" | "venta";
   usd_market: "oficial" | "blue" | null;
   path: "via_ars";
   from_currency: string;
   to_currency: string;
-  source_side: "venta" | null;
-  target_side: "compra" | null;
+  source_side: "compra" | "venta" | null;
+  target_side: "compra" | "venta" | null;
   source_ars_per_unit: number;
   target_ars_per_unit: number;
   spread_pct: number;
@@ -123,7 +128,7 @@ export type FxQuoteDetails = {
     direct_currency_market: string | null;
     is_derived_blue?: boolean;
     derivation_sources?: Record<string, unknown> | null;
-    side: "venta";
+    side: "compra" | "venta";
     ars_per_unit: number;
     provider_updated_at: string;
   } | null;
@@ -136,7 +141,7 @@ export type FxQuoteDetails = {
     direct_currency_market: string | null;
     is_derived_blue?: boolean;
     derivation_sources?: Record<string, unknown> | null;
-    side: "compra";
+    side: "compra" | "venta";
     ars_per_unit: number;
     provider_updated_at: string;
   } | null;

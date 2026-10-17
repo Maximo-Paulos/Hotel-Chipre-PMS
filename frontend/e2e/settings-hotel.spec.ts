@@ -64,7 +64,7 @@ test("owner can configure and persist a percentage rule for one night and one-ni
   await expect(confirmation).toBeChecked();
 });
 
-test("owner can configure and persist the FX quote side for each conversion direction", async ({ page }, testInfo: TestInfo) => {
+test("owner can configure and persist the FX market and side for each conversion direction", async ({ page }, testInfo: TestInfo) => {
   const ownerSession = await loginAsStepUpOwner(page, "rate-policy", testInfo.project.name);
   let lastTotpStep = ownerSession.lastTotpStep;
   let settingsSaved = false;
@@ -72,15 +72,21 @@ test("owner can configure and persist the FX quote side for each conversion dire
   try {
     await page.goto("/settings/hotel");
 
-    const fxSettings = page.getByTestId("fx-rate-side-settings");
+    const fxSettings = page.getByTestId("fx-direction-settings");
+    const usdToArsMarket = fxSettings.getByLabel("Mercado al convertir de USD a ARS");
+    const arsToUsdMarket = fxSettings.getByLabel("Mercado al convertir de ARS a USD");
     const usdToArs = fxSettings.getByLabel("Tipo al convertir de USD a ARS");
     const arsToUsd = fxSettings.getByLabel("Tipo al convertir de ARS a USD");
 
+    await expect(usdToArsMarket).toHaveValue("oficial");
+    await expect(arsToUsdMarket).toHaveValue("oficial");
     await expect(usdToArs).toBeVisible();
     await expect(arsToUsd).toBeVisible();
     await expect(usdToArs).toHaveValue("venta");
     await expect(arsToUsd).toHaveValue("venta");
 
+    await usdToArsMarket.selectOption("blue");
+    await arsToUsdMarket.selectOption("oficial");
     await usdToArs.selectOption("compra");
     await arsToUsd.selectOption("venta");
     const updateResponsePromise = page.waitForResponse((response) => {
@@ -96,13 +102,17 @@ test("owner can configure and persist the FX quote side for each conversion dire
     await expect(page.getByText("Cambios guardados.", { exact: true })).toBeVisible();
 
     await page.reload();
-    const savedFxSettings = page.getByTestId("fx-rate-side-settings");
+    const savedFxSettings = page.getByTestId("fx-direction-settings");
+    await expect(savedFxSettings.getByLabel("Mercado al convertir de USD a ARS")).toHaveValue("blue");
+    await expect(savedFxSettings.getByLabel("Mercado al convertir de ARS a USD")).toHaveValue("oficial");
     await expect(savedFxSettings.getByLabel("Tipo al convertir de USD a ARS")).toHaveValue("compra");
     await expect(savedFxSettings.getByLabel("Tipo al convertir de ARS a USD")).toHaveValue("venta");
   } finally {
     if (settingsSaved) {
       await page.goto("/settings/hotel");
-      const fxSettings = page.getByTestId("fx-rate-side-settings");
+      const fxSettings = page.getByTestId("fx-direction-settings");
+      await fxSettings.getByLabel("Mercado al convertir de USD a ARS").selectOption("oficial");
+      await fxSettings.getByLabel("Mercado al convertir de ARS a USD").selectOption("oficial");
       await fxSettings.getByLabel("Tipo al convertir de USD a ARS").selectOption("venta");
       await fxSettings.getByLabel("Tipo al convertir de ARS a USD").selectOption("venta");
       const restoreResponsePromise = page.waitForResponse((response) => {

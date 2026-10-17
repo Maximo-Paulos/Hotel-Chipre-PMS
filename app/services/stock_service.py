@@ -7,14 +7,17 @@ import logging
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from uuid import NAMESPACE_URL, uuid5
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditActionEnum
+from app.models.hotel_config import HotelConfiguration
 from app.models.stock import StockItem, StockLocation, StockMovement
 from app.services import audit_log_service
+from app.services.timezones import normalize_timezone
 
 
 logger = logging.getLogger(__name__)
@@ -572,10 +575,11 @@ def consumption_report(
     date_to: date,
     group_by: str,
 ) -> dict:
-    """Ordinary outbound stock (``out`` only) per item in [date_from,
-    date_to], plus the same-length period immediately before it so the
-    caller can show a variation % (D5 -- see plan Via D: detect anomalous
-    consumption, e.g. usage doubling with flat occupancy).
+    """Ordinary outbound stock (``out`` only) per item in the inclusive
+    hotel-local calendar range [date_from, date_to], plus the same-length
+    period immediately before it so the caller can show a variation % (D5 --
+    see plan Via D: detect anomalous consumption, e.g. usage doubling with
+    flat occupancy).
     """
     if group_by not in CONSUMPTION_GROUP_BY_VALUES:
         raise StockError("group_by must be 'week' or 'month'")
@@ -586,9 +590,20 @@ def consumption_report(
     previous_date_to = date_from - timedelta(days=1)
     previous_date_from = previous_date_to - timedelta(days=period_days - 1)
 
-    current_totals = _consumption_totals_by_item(db, hotel_id=hotel_id, date_from=date_from, date_to=date_to)
+    hotel_timezone = _hotel_timezone(db, hotel_id=hotel_id)
+    current_totals = _consumption_totals_by_item(
+        db,
+        hotel_id=hotel_id,
+        date_from=date_from,
+        date_to=date_to,
+        hotel_timezone=hotel_timezone,
+    )
     previous_totals = _consumption_totals_by_item(
-        db, hotel_id=hotel_id, date_from=previous_date_from, date_to=previous_date_to
+        db,
+        hotel_id=hotel_id,
+        date_from=previous_date_from,
+        date_to=previous_date_to,
+        hotel_timezone=hotel_timezone,
     )
 
     item_ids = set(current_totals) | set(previous_totals)
@@ -631,10 +646,22 @@ def consumption_report(
 
 
 def _consumption_totals_by_item(
-    db: Session, *, hotel_id: int, date_from: date, date_to: date
+    db: Session,
+    *,
+    hotel_id: int,
+    date_from: date,
+    date_to: date,
+    hotel_timezone: ZoneInfo,
 ) -> dict[int, Decimal]:
-    start = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
-    end = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=timezone.utc)
+    # Request dates are hotel-local calendar dates. Resolve both local
+    # midnights independently so DST days can be 23 or 25 hours long.
+    start = datetime.combine(date_from, time.min, tzinfo=hotel_timezone).astimezone(timezone.utc)
+    end = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=hotel_timezone).astimezone(timezone.utc)
+    # StockMovement.created_at is a timezone-naive DateTime column whose
+    # persisted values follow the app's UTC convention; compare naive UTC
+    # bounds so PostgreSQL does not reinterpret a timestamptz parameter.
+    start = start.replace(tzinfo=None)
+    end = end.replace(tzinfo=None)
     rows = (
         db.query(StockMovement.item_id, func.coalesce(func.sum(StockMovement.quantity), 0))
         .filter(
@@ -648,6 +675,21 @@ def _consumption_totals_by_item(
         .all()
     )
     return {item_id: Decimal(total).quantize(Decimal("0.01")) for item_id, total in rows}
+
+
+def _hotel_timezone(db: Session, *, hotel_id: int) -> ZoneInfo:
+    hotel = db.get(HotelConfiguration, hotel_id)
+    timezone_name = (hotel.hotel_timezone if hotel else None) or "UTC"
+    try:
+        return ZoneInfo(normalize_timezone(timezone_name))
+    except (AttributeError, ValueError, ZoneInfoNotFoundError):
+        # A missing or legacy-invalid setting must not make stock reports
+        # unavailable. UTC is the established fallback for hotel calendars.
+        logger.warning(
+            "stock.invalid_hotel_timezone",
+            extra={"hotel_id": hotel_id},
+        )
+        return ZoneInfo("UTC")
 
 
 def get_stock_item(db: Session, *, hotel_id: int, item_id: int) -> StockItem:
