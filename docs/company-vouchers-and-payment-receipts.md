@@ -2,17 +2,20 @@
 
 ## Cargar un voucher corporativo
 
-Abrí la reserva y usá la sección **Documentos de empresa** para seleccionar un
-PDF de hasta 5 MB. La carga se asocia a la empresa y a esa reserva, y requiere
-el permiso `company:manage`. El PMS mantiene los metadatos en su base existente
-y guarda el contenido en el almacenamiento privado de objetos configurado; no
-hace falta una base de datos separada. En local, el adaptador usa
+En **Empresas**, seleccioná la empresa y abrí **Vouchers y firmas**. El formulario
+pide el ID de una reserva, el tipo de documento y un PDF de hasta 5 MB; también
+permite indicar si requiere firma y agregar notas. La carga requiere el permiso
+`company:manage`. El backend valida que la reserva pertenezca al hotel activo y
+que esté vinculada a la empresa seleccionada. El PMS mantiene los metadatos en
+su base existente y guarda el contenido en el almacenamiento privado de objetos
+configurado; no hace falta una base de datos separada. En local, el adaptador usa
 `OBJECT_STORAGE_BACKEND=local` y `OBJECT_STORAGE_LOCAL_DIR` (por defecto,
 `./var/object-storage`).
 
-Los vouchers subidos desde esta sección quedan disponibles en la ficha de la
-reserva y para las validaciones de check-in de empresas. Cargar el archivo no
-registra aceptación de términos ni completa el check-in.
+Los vouchers quedan asociados a la reserva y la validación de check-in de
+empresas puede exigirlos. La pantalla actual los lista desde la ficha de
+**Empresas**; no hay una carga directa en el detalle de reserva. Cargar un
+archivo no registra aceptación de términos ni completa el check-in.
 
 ## Liquidar cargos nocturnos de empresa
 
