@@ -171,6 +171,75 @@ export type EffectivePermissionsResponse = {
   permissions: string[];
 };
 
+export type TemporaryActionGrant = {
+  id: number;
+  hotel_id: number;
+  requester_user_id: number;
+  approver_user_id: number | null;
+  permission_code: string;
+  resource_type: string;
+  resource_id: string;
+  reason: string;
+  status: "pending" | "approved" | "denied" | "used" | "expired" | "revoked" | string;
+  created_at: string;
+  approved_at: string | null;
+  used_at: string | null;
+  expires_at: string | null;
+};
+
+export type TemporaryActionGrantRequestPayload = {
+  permission_code: string;
+  resource_type: "reservation";
+  resource_id: number;
+  reason: string;
+};
+
+export type TemporaryActionGrantListResponse = {
+  hotel_id: number;
+  grants: TemporaryActionGrant[];
+};
+
+export type TemporaryActionGrantApproval = {
+  grant: TemporaryActionGrant;
+  token: string;
+};
+
+export const requestTemporaryActionGrant = (
+  payload: TemporaryActionGrantRequestPayload,
+  session?: SessionLike
+) =>
+  apiFetch<TemporaryActionGrant>("/api/permissions/temporary-grants/request", {
+    method: "POST",
+    data: payload,
+    session
+  });
+
+export const fetchActiveTemporaryActionGrants = (session?: SessionLike) =>
+  apiFetch<TemporaryActionGrantListResponse>("/api/permissions/temporary-grants/active", { session });
+
+export const approveTemporaryActionGrant = (
+  grantId: number,
+  payload: { totp_code?: string },
+  session?: SessionLike
+) =>
+  apiFetch<TemporaryActionGrantApproval>(`/api/permissions/temporary-grants/${grantId}/approve`, {
+    method: "POST",
+    data: payload,
+    session
+  });
+
+export const denyTemporaryActionGrant = (grantId: number, session?: SessionLike) =>
+  apiFetch<TemporaryActionGrant>(`/api/permissions/temporary-grants/${grantId}/deny`, {
+    method: "POST",
+    session
+  });
+
+export const revokeTemporaryActionGrant = (grantId: number, session?: SessionLike) =>
+  apiFetch<TemporaryActionGrant>(`/api/permissions/temporary-grants/${grantId}/revoke`, {
+    method: "POST",
+    session
+  });
+
 export const fetchEffectivePermissions = (session?: SessionLike) =>
   apiFetch<EffectivePermissionsResponse>("/api/permissions/effective", { session });
 

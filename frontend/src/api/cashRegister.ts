@@ -13,6 +13,8 @@ export type CashSession = {
   currency_code: string;
   opened_at: string;
   closed_at?: string | null;
+  business_opened_at?: string | null;
+  business_closed_at?: string | null;
   notes?: string | null;
 };
 
@@ -30,6 +32,7 @@ export type CashMovement = {
   amount: number;
   description?: string | null;
   recorded_at: string;
+  business_recorded_at?: string | null;
 };
 
 export type CashCloseReport = {
@@ -51,9 +54,11 @@ export type CashCloseReport = {
   successor_float_declared_by_user_id?: number | null;
   successor_float_declared_by_name?: string | null;
   successor_float_declared_at?: string | null;
+  business_successor_float_declared_at?: string | null;
   custody_handoff?: CashCustodyHandoff | null;
   notes?: string | null;
   closed_at: string;
+  business_closed_at?: string | null;
 };
 
 export type CashCustodyHandoff = {
@@ -66,6 +71,8 @@ export type CashCustodyHandoff = {
   status: "pending" | "confirmed";
   delivered_at: string;
   received_at?: string | null;
+  business_delivered_at?: string | null;
+  business_received_at?: string | null;
   notes?: string | null;
 };
 
@@ -153,6 +160,8 @@ export type CashDailySession = {
   currency_code: string;
   opened_at: string;
   closed_at?: string | null;
+  business_opened_at?: string | null;
+  business_closed_at?: string | null;
   opened_by_user_id?: number | null;
   closed_by_user_id?: number | null;
   opened_by_name?: string | null;

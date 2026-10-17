@@ -26,6 +26,7 @@ import {
 } from "../../api/permissions";
 import { ApiError, hasValidSession } from "../../api/client";
 import { InfoTip } from "../../components/InfoTip";
+import TemporaryGrantApprovalPanel from "../../components/TemporaryGrantApprovalPanel";
 import { listUsers } from "../../api/users";
 import type { AuthUser } from "../../api/auth";
 import { useSession } from "../../state/session";
@@ -757,7 +758,7 @@ export function SettingsPermissionsPage() {
     return <p className="text-sm text-slate-600">Iniciá sesión con un hotel activo para editar permisos.</p>;
   }
   if (!canManage) {
-    return <p className="text-sm text-slate-600">Solo el owner puede administrar permisos.</p>;
+    return <p className="text-sm text-slate-600">Solo el owner o co-owner pueden administrar permisos.</p>;
   }
 
   const loading = rolesQuery.isLoading || catalogQuery.isLoading || matrixQuery.isLoading || roleProfilesQuery.isLoading || visibilityQuery.isLoading;
@@ -779,6 +780,8 @@ export function SettingsPermissionsPage() {
       </div>
 
       <HotelRoleManagement rolesQuery={rolesQuery} />
+
+      <TemporaryGrantApprovalPanel users={usersQuery.data ?? []} />
 
       {message ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" role="alert">{message}</p> : null}
       {pendingPermissionEntries.length > 0 ? (

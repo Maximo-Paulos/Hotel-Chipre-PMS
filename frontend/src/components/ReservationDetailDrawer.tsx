@@ -52,6 +52,7 @@ import {
 
 import { GuestRestrictionBadge } from "./GuestRestrictionBadge";
 import ConfirmDialog from "./ConfirmDialog";
+import TemporaryCancelPermissionRequest from "./TemporaryCancelPermissionRequest";
 import { RestrictionOverrideModal } from "./RestrictionOverrideModal";
 
 type CheckinCaptureForm = {
@@ -306,7 +307,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const companyDocumentsQuery = useReservationCompanyDocuments(reservationQuery.data?.company_id ? reservationId ?? undefined : undefined);
   const companyDocumentMutations = useCompanyDocumentMutations(reservationQuery.data?.company_id ?? undefined);
   const markCompanyDocumentSignedMutation = useMarkCompanyDocumentSigned();
-  const { hasPermission } = useEffectivePermissions();
+  const { hasPermission, permissionsKnown } = useEffectivePermissions();
   const canManageCompanyCharges = hasPermission("company:manage");
   const companyNightlyRatesQuery = useCompanyNightlyRates(
     reservationQuery.data?.company_id ?? undefined,
@@ -330,6 +331,13 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const operations = operationsQuery.data;
   const summary = summaryQuery.data;
   const deferredCompanyBilling = isDeferredCompanyReservation(reservation);
+  const hasPaymentHistory = (summary?.completed_payments ?? 0) > 0;
+  const canCancelBase = hasPermission("reservation:cancel");
+  const canCancelPaid = !hasPaymentHistory || hasPermission("reservation:cancel_paid");
+  const canManageCompanyReservation = !reservation?.company_id || canManageCompanyCharges;
+  const cancellationRequirementsKnown = permissionsKnown && summaryQuery.isSuccess;
+  const canCancelAsCurrentRole = cancellationRequirementsKnown && canCancelBase && canCancelPaid && canManageCompanyReservation;
+  const canRequestTemporaryCancel = cancellationRequirementsKnown && !canCancelBase && !hasPaymentHistory && !reservation?.company_id;
 
   // Load and validate check-in data for every pre-arrival reservation state.
   // Payment eligibility is enforced by the backend's hotel policy; a balance
@@ -859,12 +867,13 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     }
   };
 
-  const runAction = async (label: string, action: () => Promise<unknown>, onSuccess: () => void) => {
+  const runAction = async (label: string, action: () => Promise<unknown>, onSuccess: () => void): Promise<boolean> => {
     setActionError(null);
     setActionMessage(null);
     try {
       await action();
       onSuccess();
+      return true;
     } catch (err) {
       setActionError(
         label === t("drawer.actions.labels.partialCheckIn")
@@ -873,6 +882,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
             ? err.message
             : t("drawer.errors.actionFailed", { label })
       );
+      return false;
     }
   };
 
@@ -2014,21 +2024,48 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                 >
                   {checkOutMutation.isPending ? t("drawer.actions.checkOutPending") : t("drawer.actions.checkOut")}
                 </button>
-                {(!reservation.company_id || canManageCompanyCharges) ? (
-                  <button
-                    type="button"
-                    disabled={!canCancelReservation(reservation.status) || cancelMutation.isPending}
-                    onClick={() =>
-                      void runAction(
-                        t("drawer.actions.labels.cancel"),
-                        () => cancelMutation.mutateAsync(reservation.id),
-                        () => setActionMessage(t("drawer.messages.cancelled"))
-                      )
-                    }
-                    className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {cancelMutation.isPending ? t("drawer.actions.cancelPending") : t("drawer.actions.cancel")}
-                  </button>
+                {canCancelReservation(reservation.status) ? (
+                  <div className="min-w-full space-y-2">
+                    {!cancellationRequirementsKnown ? (
+                      <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700" role="status">
+                        {t("drawer.cancellationPermission.checking")}
+                      </p>
+                    ) : canCancelAsCurrentRole ? (
+                      <button
+                        type="button"
+                        disabled={cancelMutation.isPending}
+                        onClick={() =>
+                          void runAction(
+                            t("drawer.actions.labels.cancel"),
+                            () => cancelMutation.mutateAsync(reservation.id),
+                            () => setActionMessage(t("drawer.messages.cancelled"))
+                          )
+                        }
+                        className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {cancelMutation.isPending ? t("drawer.actions.cancelPending") : t("drawer.actions.cancel")}
+                      </button>
+                    ) : canRequestTemporaryCancel ? (
+                      <TemporaryCancelPermissionRequest
+                        key={reservation.id}
+                        reservationId={reservation.id}
+                        isCancelling={cancelMutation.isPending}
+                        onCancelWithToken={(token) => runAction(
+                          t("drawer.actions.labels.cancel"),
+                          () => cancelMutation.mutateAsync({ id: reservation.id, temporaryGrantToken: token }),
+                          () => setActionMessage(t("drawer.messages.cancelled"))
+                        )}
+                      />
+                    ) : (
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950" role="alert">
+                        {reservation.company_id && !canManageCompanyCharges
+                          ? t("drawer.cancellationPermission.companyRestricted")
+                          : hasPaymentHistory && !hasPermission("reservation:cancel_paid")
+                            ? t("drawer.cancellationPermission.paidRestricted")
+                            : t("drawer.cancellationPermission.roleRestricted")}
+                      </p>
+                    )}
+                  </div>
                 ) : null}
               </section>
             </>

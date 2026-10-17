@@ -56,11 +56,24 @@ export type HotelInterfaceLanguage = {
   interface_language: "es" | "en";
 };
 
+export type BusinessClock = {
+  hotel_id: number;
+  business_date: string;
+  hotel_timezone: string;
+  simulation_enabled: boolean;
+};
+
 export const getHotelConfig = (session?: SessionLike) =>
   apiFetch<HotelConfig>("/api/config/", { session, method: "GET" });
 
 export const getHotelInterfaceLanguage = (session?: SessionLike) =>
   apiFetch<HotelInterfaceLanguage>("/api/config/interface-language", { session, method: "GET" });
+
+export const getBusinessClock = (session?: SessionLike) =>
+  apiFetch<BusinessClock>("/api/config/business-clock", { session, method: "GET" });
+
+export const advanceBusinessClock = (session?: SessionLike) =>
+  apiFetch<BusinessClock>("/api/config/business-clock/advance", { session, method: "POST" });
 
 export const updateHotelConfig = (payload: HotelConfigUpdate, session?: SessionLike) =>
   apiFetch<HotelConfig>("/api/config/", { session, method: "PATCH", data: payload });

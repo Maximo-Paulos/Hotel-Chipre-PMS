@@ -18,8 +18,9 @@ test("guest ledger export UI is rendered only for guest:export", () => {
   assert.match(page, /if \(!canExportGuestLedger \|\| ledgerExportInFlightRef\.current\) return/);
 });
 
-test("guest ledger date defaults use hotel timezone and send an inclusive end date", () => {
-  assert.match(page, /hotelTodayIso\(hotelConfigQuery\.data\?\.hotel_timezone\)/);
+test("guest ledger date defaults use the hotel business date and send an inclusive end date", () => {
+  assert.match(page, /const ledgerToday = businessDate/);
+  assert.match(page, /useBusinessDate\(\)/);
   assert.match(page, /addDaysIso\(ledgerToday, -29\)/);
   assert.match(page, /const toDateExclusive = addDaysIso\(effectiveLedgerThroughDate, 1\)/);
   assert.match(guestApi, /from_date: fromDate, to_date: toDateExclusive/);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -10,7 +10,8 @@ import { useRooms } from "../../hooks/useRooms";
 import { useSession } from "../../state/session";
 import { ROOM_MOVE_REASONS, moveBlockedReason } from "../../utils/roomMove";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
-import { addDaysIso, todayIso } from "../../hooks/useRateCalendar";
+import { addDaysIso } from "../../hooks/useRateCalendar";
+import { useBusinessDate } from "../../hooks/useBusinessClock";
 import { useOccupancyGrid, usePrefetchOccupancyGrid } from "../../hooks/useReservations";
 import { refreshReservationState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
@@ -23,12 +24,20 @@ function buildDayRange(from: string, count: number): string[] {
 
 export function OccupancyPlanningPage() {
   const { t, i18n } = useTranslation("reservations");
+  const businessDate = useBusinessDate();
   const navigate = useNavigate();
   const [sortMode, setSortMode] = useState<OccupancyRoomSortMode>("floor");
-  const [windowStart, setWindowStart] = useState(todayIso());
+  const [windowStart, setWindowStart] = useState(businessDate);
   const windowEnd = useMemo(() => addDaysIso(windowStart, WINDOW_DAYS), [windowStart]);
   const days = useMemo(() => buildDayRange(windowStart, WINDOW_DAYS), [windowStart]);
-  const today = todayIso();
+  const today = businessDate;
+  const previousBusinessDateRef = useRef(businessDate);
+  useEffect(() => {
+    const previousDate = previousBusinessDateRef.current;
+    if (previousDate === businessDate) return;
+    setWindowStart((current) => current === previousDate ? businessDate : current);
+    previousBusinessDateRef.current = businessDate;
+  }, [businessDate]);
   const rangeLabel = useMemo(
     () => new Intl.DateTimeFormat(i18n.language === "en" ? "en-US" : "es-AR", { day: "2-digit", month: "short", year: "numeric" }),
     [i18n.language]

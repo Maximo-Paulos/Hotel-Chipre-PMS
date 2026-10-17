@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 
 import {
@@ -33,11 +33,12 @@ import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useIsDesktopViewport } from "../../hooks/useIsDesktopViewport";
 import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useSession } from "../../state/session";
-import { formatHotelDateTime, startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
+import { formatHotelDateTime, startOfCurrentMonthIso, startOfCurrentWeekIso } from "../../utils/date";
 import { refreshStockState } from "../../api/queryInvalidation";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
+import { useBusinessDate } from "../../hooks/useBusinessClock";
 
 // Mobile task-based tabs (see the useIsDesktopViewport docstring for why this
 // is JS state, not a CSS breakpoint split): "movement" and "adjustment" both
@@ -111,6 +112,7 @@ const emptyTransferForm = {
 
 export function StockPage() {
   const { session } = useSession();
+  const businessDate = useBusinessDate();
   const hotelConfigQuery = useHotelConfig();
   const effectivePermissions = useEffectivePermissions();
   // PERMISSION_STOCK_ADJUST is owner/co_owner only (see
@@ -167,7 +169,19 @@ export function StockPage() {
   // D5 (Via D): "cuanto se consumio de cada item" por periodo, con variacion
   // % contra el periodo anterior de igual largo (calculado en el backend).
   const [consumptionGroupBy, setConsumptionGroupBy] = useState<StockConsumptionGroupBy>("week");
-  const [consumptionRange, setConsumptionRange] = useState(() => ({ from: startOfCurrentWeekIso(), to: todayIso() }));
+  const [consumptionRange, setConsumptionRange] = useState(() => ({
+    from: startOfCurrentWeekIso(businessDate),
+    to: businessDate
+  }));
+  const previousBusinessDateRef = useRef(businessDate);
+  useEffect(() => {
+    const previousDate = previousBusinessDateRef.current;
+    if (previousDate === businessDate) return;
+    setConsumptionRange((current) => current.from === startOfCurrentWeekIso(previousDate) && current.to === previousDate
+      ? { from: startOfCurrentWeekIso(businessDate), to: businessDate }
+      : current);
+    previousBusinessDateRef.current = businessDate;
+  }, [businessDate]);
   // Mobile "Historial" tab: the backend has no cursor/offset pagination for
   // GET /api/stock/movements (limit only, capped at 200 -- see app/api/stock.py),
   // so "Ver más" just raises the requested limit client-side.
@@ -1246,6 +1260,7 @@ export function StockPage() {
 
       <StockConsumptionReportSection
         range={consumptionRange}
+        businessDate={businessDate}
         onRangeChange={setConsumptionRange}
         groupBy={consumptionGroupBy}
         onGroupByChange={setConsumptionGroupBy}
@@ -1633,12 +1648,14 @@ function UnitCostField({
 // mismo layout de tarjeta/seccion, cambiando la tabla por-item.
 function StockConsumptionReportSection({
   range,
+  businessDate,
   onRangeChange,
   groupBy,
   onGroupByChange,
   query
 }: {
   range: { from: string; to: string };
+  businessDate: string;
   onRangeChange: (range: { from: string; to: string }) => void;
   groupBy: StockConsumptionGroupBy;
   onGroupByChange: (groupBy: StockConsumptionGroupBy) => void;
@@ -1668,7 +1685,7 @@ function StockConsumptionReportSection({
             type="button"
             onClick={() => {
               onGroupByChange("week");
-              onRangeChange({ from: startOfCurrentWeekIso(), to: todayIso() });
+              onRangeChange({ from: startOfCurrentWeekIso(businessDate), to: businessDate });
             }}
             className={`min-h-11 rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 ${
               groupBy === "week" ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-700"
@@ -1680,7 +1697,7 @@ function StockConsumptionReportSection({
             type="button"
             onClick={() => {
               onGroupByChange("month");
-              onRangeChange({ from: startOfCurrentMonthIso(), to: todayIso() });
+              onRangeChange({ from: startOfCurrentMonthIso(businessDate), to: businessDate });
             }}
             className={`min-h-11 rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50 ${
               groupBy === "month" ? "border-brand-300 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-700"

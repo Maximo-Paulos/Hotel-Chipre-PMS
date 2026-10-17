@@ -573,8 +573,12 @@ export const getReservationQuote = (params: ReservationQuoteParams, session?: Se
 export const updateReservation = (id: number, payload: ReservationUpdatePayload, session?: SessionLike) =>
   apiFetch<Reservation>(`/api/reservations/${id}`, { method: "PATCH", data: payload, session });
 
-export const cancelReservation = (id: number, session?: SessionLike) =>
-  apiFetch<Reservation>(`/api/reservations/${id}/cancel`, { method: "POST", session });
+export const cancelReservation = (id: number, session?: SessionLike, temporaryGrantToken?: string) =>
+  apiFetch<Reservation>(`/api/reservations/${id}/cancel`, {
+    method: "POST",
+    headers: temporaryGrantToken ? { "X-Temporary-Action-Grant": temporaryGrantToken } : undefined,
+    session
+  });
 
 export const markReservationNoShow = (id: number, payload: ReservationNoShowPayload, session?: SessionLike) =>
   apiFetch<Reservation>(`/api/reservations/${id}/noshow`, { method: "POST", data: payload, session });

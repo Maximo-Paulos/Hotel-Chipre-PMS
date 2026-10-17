@@ -30,12 +30,14 @@ def local_simulation_email(monkeypatch, tmp_path):
     for name, value in {
         "APP_ENV": "development",
         "EXTERNAL_EFFECTS_ENABLED": "false",
+        "CONNECTIONS_ENABLED": "false",
         "LOCAL_SIMULATION_CLOCK_ENABLED": "true",
         "LOCAL_SIMULATION_CLOCK_HOTEL_ID": "1",
         "DATABASE_URL": "sqlite:///:memory:",
         "DEV_EMAIL_OUTBOX_PATH": str(outbox),
     }.items():
         monkeypatch.setenv(name, value)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
     get_settings.cache_clear()
     yield outbox
     get_settings.cache_clear()
@@ -101,6 +103,8 @@ def test_receipt_email_sends_persisted_receipt_once_and_records_auditable_outcom
     reservation = _reservation(db, 1, "RECEIPT-EMAIL-1")
     guest = db.get(Guest, reservation.guest_id)
     guest.email = "guest@example.com"
+    guest.first_name = "Lucia"
+    guest.last_name = "Paredes"
     paid = _completed_payment(client, reservation.id)
     transaction = db.get(Transaction, paid["id"])
     transaction.gross_amount = 31.50
@@ -145,6 +149,8 @@ def test_receipt_email_sends_persisted_receipt_once_and_records_auditable_outcom
     assert calls[0]["hotel_id"] == 1
     assert calls[0]["to"] == "accounts@company.com"
     assert "RECEIPT-EMAIL-1" in calls[0]["subject"]
+    assert "Huésped: Lucia Paredes" in calls[0]["body"]
+    assert b"Lucia Paredes" in calls[0]["attachments"][0].content
     assert "Importe: 31.50 ARS" in calls[0]["body"]
     assert "POS-RECEIPT-MAIL-1" not in calls[0]["body"]
 
@@ -165,6 +171,9 @@ def test_receipt_pdf_download_has_safe_headers_and_email_reuses_exact_pdf_bytes(
 ):
     client, db, _ctx = client_with_db
     reservation = _reservation(db, 1, "RECEIPT-PDF-EMAIL-1")
+    guest = db.get(Guest, reservation.guest_id)
+    guest.first_name = "Sofia"
+    guest.last_name = "Rivas"
     paid = _completed_payment(client, reservation.id, reference="POS-RECEIPT-PDF-1")
     transaction_id = paid["id"]
     transaction = db.get(Transaction, transaction_id)
@@ -176,6 +185,10 @@ def test_receipt_pdf_download_has_safe_headers_and_email_reuses_exact_pdf_bytes(
     transaction.fx_rate_snapshot = 0.000651
     db.flush()
 
+    receipt = client.get(f"/api/payments/transactions/{transaction_id}/receipt")
+    assert receipt.status_code == 200, receipt.text
+    assert receipt.json()["guest_name"] == "Sofia Rivas"
+
     downloaded = client.get(f"/api/payments/transactions/{transaction_id}/receipt.pdf")
     assert downloaded.status_code == 200, downloaded.text
     assert downloaded.headers["content-type"].startswith("application/pdf")
@@ -185,6 +198,7 @@ def test_receipt_pdf_download_has_safe_headers_and_email_reuses_exact_pdf_bytes(
     assert downloaded.headers["x-content-type-options"] == "nosniff"
     assert downloaded.headers["cache-control"] == "private, no-store"
     assert downloaded.content.startswith(b"%PDF-")
+    assert b"Sofia Rivas" in downloaded.content
     assert b"Referencia manual:" in downloaded.content
     assert b"POS-RECEIPT-PDF-1" in downloaded.content
     assert b"Importe aplicado:" in downloaded.content

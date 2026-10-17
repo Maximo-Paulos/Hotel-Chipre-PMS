@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -544,7 +544,11 @@ def test_non_cash_payments_never_increase_physical_cash_in_the_open_session(db):
     assert len(list_movements(db, hotel_id=1, session_id=session.id)) == 1
 
 
-def test_close_counts_full_cash_then_records_successor_float_as_a_separate_action(db):
+def test_close_counts_full_cash_then_records_successor_float_as_a_separate_action(db, monkeypatch):
+    from app.services import cash_register_service
+
+    simulated_now = datetime(2026, 10, 19, 12, tzinfo=timezone.utc)
+    monkeypatch.setattr(cash_register_service, "hotel_business_now", lambda *_args, **_kwargs: simulated_now)
     _hotel(db, 1)
     _user(db, 10)
     session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("100000.00"))
@@ -577,6 +581,9 @@ def test_close_counts_full_cash_then_records_successor_float_as_a_separate_actio
     assert confirmed.successor_float_declared_amount == Decimal("10000.00")
     assert confirmed.successor_float_declared_by_user_id == 10
     assert confirmed.successor_float_declared_at is not None
+    db.flush()
+    db.refresh(confirmed)
+    assert confirmed.business_successor_float_declared_at == datetime(2026, 10, 19, 12)
     assert confirmed.custody_handoff.delivered_amount == Decimal("100000.00")
     assert report.custody_handoff.received_by_user_id == 10
     assert report.custody_handoff.received_at is not None
@@ -697,6 +704,83 @@ def test_session_summary_expected_balance_matches_arqueo(db):
     # Live summary must match the arqueo's computed expected balance exactly.
     assert summary["expected_balance"] == report.expected_balance
     assert report.difference == Decimal("0.00")
+
+
+def test_business_day_cash_uses_simulated_time_and_keeps_real_session_timestamps(db, monkeypatch):
+    from app.models.cash_register import CashMovement
+    from app.services import cash_register_service, payment_service
+    from app.services.cash_daily_summary_service import get_daily_summary
+    from app.services.cash_register_service import get_session_summary
+
+    hotel = _hotel(db, 1)
+    hotel.hotel_timezone = "UTC"
+    _user(db, 10)
+    reservation = _reservation(db, 1, "CASH-BUSINESS-DATE")
+    now = {"value": datetime(2026, 10, 18, 10, tzinfo=timezone.utc)}
+    business_now = lambda *_args, **_kwargs: now["value"]
+    monkeypatch.setattr(cash_register_service, "hotel_business_now", business_now)
+    monkeypatch.setattr(payment_service, "hotel_business_now", business_now)
+
+    session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("50.00"))
+    assert session.business_opened_at == datetime(2026, 10, 18, 10)
+    assert session.opened_at != session.business_opened_at
+
+    transaction = process_payment(
+        db,
+        PaymentRequest(
+            reservation_id=reservation.id,
+            amount=30.0,
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.DEPOSIT,
+        ),
+        hotel_id=1,
+        actor_user_id=10,
+    )
+    assert transaction.processed_at == datetime(2026, 10, 18, 10)
+    assert transaction.created_at != transaction.processed_at
+
+    add_movement(
+        db,
+        hotel_id=1,
+        session_id=session.id,
+        recorded_by_user_id=10,
+        movement_type=CashMovementTypeEnum.EXPENSE,
+        amount=Decimal("10.00"),
+    )
+    payment_movement = db.query(CashMovement).filter_by(transaction_id=transaction.id).one()
+    assert payment_movement.business_recorded_at == transaction.processed_at
+    assert payment_movement.recorded_at != payment_movement.business_recorded_at
+    assert get_session_summary(db, hotel_id=1, session_id=session.id)["expected_balance"] == Decimal("70.00")
+
+    first_day = get_daily_summary(db, hotel_id=1, report_date=date(2026, 10, 18), currency_code="ARS")
+    assert first_day["gross_collected"] == Decimal("30.00")
+    assert first_day["physical_cash"]["expense_total"] == Decimal("10.00")
+    assert first_day["physical_cash"]["expected_balance"] == Decimal("70.00")
+    assert first_day["sessions"][0]["opened_at"] != first_day["sessions"][0]["business_opened_at"]
+    assert first_day["sessions"][0]["business_opened_at"] == datetime(2026, 10, 18, 10, tzinfo=timezone.utc)
+
+    now["value"] = datetime(2026, 10, 19, 10, tzinfo=timezone.utc)
+    close_report = close_session(
+        db,
+        hotel_id=1,
+        session_id=session.id,
+        closed_by_user_id=10,
+        counted_balance=Decimal("70.00"),
+    )
+    db.refresh(session)
+    normalize_utc = lambda value: (
+        value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+    )
+    assert normalize_utc(session.closed_at) == normalize_utc(close_report.closed_at)
+    assert session.business_closed_at == datetime(2026, 10, 19, 10)
+    assert close_report.business_closed_at == session.business_closed_at
+    assert close_report.custody_handoff.business_delivered_at == session.business_closed_at
+    assert close_report.successor_session.business_opened_at == session.business_closed_at
+
+    closing_day = get_daily_summary(db, hotel_id=1, report_date=date(2026, 10, 19), currency_code="ARS")
+    assert closing_day["physical_cash"]["declared_balance"] == Decimal("70.00")
+    assert closing_day["physical_cash"]["custody_delivered_total"] == Decimal("70.00")
+    assert closing_day["sessions"][0]["business_closed_at"] == datetime(2026, 10, 19, 10, tzinfo=timezone.utc)
 
 
 def test_cash_payment_with_surcharge_posts_gross_amount_to_caja(db):

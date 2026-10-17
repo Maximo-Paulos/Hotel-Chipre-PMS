@@ -4,29 +4,13 @@ import { downloadRevenueReportCsv, type CurrencyAmount, type OperationalReservat
 import { ApiError } from "../../api/client";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
+import { useBusinessDate } from "../../hooks/useBusinessClock";
 import { useDailyOperationalReport, useOccupancyReport, useRevenueReport, useTodayArrivalCount } from "../../hooks/useReports";
-import { formatHotelDateTime, todayIso } from "../../utils/date";
+import { formatHotelDateTime } from "../../utils/date";
 import { useSession } from "../../state/session";
 
 const money = (value?: CurrencyAmount | null, currency = "ARS") =>
   Number(value ?? 0).toLocaleString("es-AR", { style: "currency", currency: currency.toUpperCase() });
-
-const hotelTodayIso = (timeZone?: string | null, serverDate?: string | null) => {
-  const serverLocalDate = serverDate && /^\d{4}-\d{2}-\d{2}$/.test(serverDate) ? serverDate : null;
-  if (!timeZone) return serverLocalDate ?? todayIso();
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).formatToParts(new Date());
-    const dateParts = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-    return `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
-  } catch {
-    return serverLocalDate ?? todayIso();
-  }
-};
 
 const shiftIsoDate = (isoDate: string, days: number) => {
   const date = new Date(`${isoDate}T00:00:00.000Z`);
@@ -74,10 +58,11 @@ export function ReportsPage() {
   const { hasPermission } = useEffectivePermissions();
   const hotelConfigQuery = useHotelConfig();
   const arrivalCountQuery = useTodayArrivalCount();
+  const businessDate = useBusinessDate(arrivalCountQuery.data?.report_date);
   const canViewFinancial = hasPermission("reports:financial:view");
   const [selectedReportDate, setSelectedReportDate] = useState("");
   const [pendingPaymentPage, setPendingPaymentPage] = useState(1);
-  const reportDate = selectedReportDate || hotelTodayIso(hotelConfigQuery.data?.hotel_timezone, arrivalCountQuery.data?.report_date);
+  const reportDate = selectedReportDate || businessDate;
   const weekPeriod = mondayToSunday(reportDate);
   const reportQuery = useDailyOperationalReport(reportDate, pendingPaymentPage);
   const occupancyQuery = useOccupancyReport(reportDate, reportDate);

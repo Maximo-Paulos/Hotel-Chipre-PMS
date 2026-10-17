@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useOperationalAudit } from "../../hooks/useOperationalAudit";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { useSession } from "../../state/session";
-import { formatHotelDateTime, todayIso } from "../../utils/date";
+import { formatHotelDateTime } from "../../utils/date";
+import { useBusinessDate } from "../../hooks/useBusinessClock";
 
 const PAGE_SIZE = 50;
 const PERMISSION_DETAIL_LABELS: Record<string, string> = {
@@ -31,14 +32,22 @@ function permissionChangeLines(details: Record<string, unknown>): string[] {
 export function OperationalAuditPage() {
   const { session } = useSession();
   const hotelConfigQuery = useHotelConfig();
+  const businessDate = useBusinessDate();
   const [from, setFrom] = useState("");
-  const [to, setTo] = useState(() => todayIso());
+  const [to, setTo] = useState(businessDate);
   const [category, setCategory] = useState("");
   const [reservationId, setReservationId] = useState("");
   const [roomId, setRoomId] = useState("");
   const [actorUserId, setActorUserId] = useState("");
   const [action, setAction] = useState("");
   const [offset, setOffset] = useState(0);
+  const previousBusinessDateRef = useRef(businessDate);
+  useEffect(() => {
+    const previousDate = previousBusinessDateRef.current;
+    if (previousDate === businessDate) return;
+    setTo((current) => current === previousDate ? businessDate : current);
+    previousBusinessDateRef.current = businessDate;
+  }, [businessDate]);
   const filters = useMemo(() => ({
     limit: PAGE_SIZE,
     offset,

@@ -266,6 +266,44 @@ def test_approved_grant_allows_only_denied_exact_booking_cancel_and_replay_is_de
     assert token not in retired.text
 
 
+def test_owner_can_view_and_revoke_active_grants_without_exposing_token(
+    temporary_grant_client,
+):
+    client, db, mfa_secret, override_auth = temporary_grant_client
+    reservation_id = _reservation_id(db)
+    _set_cancel_permission(db, False)
+    requested = _request(client, db, reservation_id)
+    approved = _approve(client, override_auth, mfa_secret, requested["id"])
+
+    active = client.get("/api/permissions/temporary-grants/active")
+    assert active.status_code == 200, active.text
+    assert [item["id"] for item in active.json()["grants"]] == [requested["id"]]
+    assert active.json()["grants"][0]["status"] == "approved"
+    assert approved["token"] not in active.text
+    assert "token_hash" not in active.text
+
+    revoked = client.post(f"/api/permissions/temporary-grants/{requested['id']}/revoke")
+    assert revoked.status_code == 200, revoked.text
+    assert revoked.json()["status"] == "revoked"
+    assert not _consume(db, approved["token"], reservation_id)
+
+
+def test_non_approver_cannot_read_or_revoke_active_grants(temporary_grant_client):
+    client, db, mfa_secret, override_auth = temporary_grant_client
+    reservation_id = _reservation_id(db)
+    _set_cancel_permission(db, False)
+    requested = _request(client, db, reservation_id)
+    _approve(client, override_auth, mfa_secret, requested["id"])
+    fastapi_app.dependency_overrides[get_auth_context] = override_auth(3, "manager")
+
+    active = client.get("/api/permissions/temporary-grants/active")
+    revoked = client.post(f"/api/permissions/temporary-grants/{requested['id']}/revoke")
+
+    assert active.status_code == 403
+    assert revoked.status_code == 403
+    assert db.get(TemporaryActionGrant, requested["id"]).status == TemporaryActionGrantStatusEnum.APPROVED
+
+
 def test_ordinary_permission_allows_cancel_without_consuming_supplied_grant(temporary_grant_client):
     client, db, mfa_secret, override_auth = temporary_grant_client
     reservation_id = _reservation_id(db)

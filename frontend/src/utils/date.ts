@@ -90,15 +90,15 @@ export const addDaysIso = (iso: string, days: number) => {
 
 // Range presets shared by period reports (laundry spend D3, stock
 // consumption D5) -- hotel-local, same reasoning as todayIso() above.
-export const startOfCurrentWeekIso = () => {
-  const now = new Date();
+export const startOfCurrentWeekIso = (referenceDate = todayIso()) => {
+  const now = new Date(`${referenceDate}T00:00:00`);
   const day = now.getDay();
   now.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
   return formatLocalIsoDate(now);
 };
 
-export const startOfCurrentMonthIso = () => {
-  const now = new Date();
+export const startOfCurrentMonthIso = (referenceDate = todayIso()) => {
+  const now = new Date(`${referenceDate}T00:00:00`);
   now.setDate(1);
   return formatLocalIsoDate(now);
 };

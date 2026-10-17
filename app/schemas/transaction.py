@@ -121,6 +121,7 @@ class PaymentReceiptRead(BaseModel):
     id: int
     reservation_id: int
     confirmation_code: str
+    guest_name: str
     hotel_name: str
     hotel_timezone: str
     amount: Decimal

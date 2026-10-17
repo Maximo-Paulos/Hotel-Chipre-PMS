@@ -31,8 +31,8 @@ import { useSession } from "../../state/session";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 import { refreshAfterMutation, refreshGuestState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
-import { useHotelConfig } from "../../hooks/useHotelConfig";
-import { addDaysIso, todayIso } from "../../utils/date";
+import { addDaysIso } from "../../utils/date";
+import { useBusinessDate } from "../../hooks/useBusinessClock";
 
 const DOCUMENT_TYPES = ["DNI", "PASSPORT", "CEDULA"] as const;
 
@@ -97,30 +97,11 @@ const formatDate = (value: string | null | undefined, t: TFunction) => {
 
 const isProhibidoTag = (tag: GuestTag) => tag.tag_type === "prohibido_alojar";
 
-const hotelTodayIso = (timeZone?: string | null) => {
-  if (!timeZone) return todayIso();
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).formatToParts(new Date());
-    const dateParts = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-    if (dateParts.year && dateParts.month && dateParts.day) {
-      return `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
-    }
-  } catch {
-    // An invalid or unavailable hotel timezone falls back to the shared local-date helper.
-  }
-  return todayIso();
-};
-
 export function GuestsPage() {
   const { t } = useTranslation("guests");
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
-  const hotelConfigQuery = useHotelConfig();
+  const businessDate = useBusinessDate();
   const canEditGuest = hasPermission("guest:update");
   const canExportGuestLedger = hasPermission("guest:export");
   const canManageTags = hasPermission("guest:tags_manage");
@@ -160,7 +141,7 @@ export function GuestsPage() {
   // No exact total from the backend (deliberate -- see api/guests.ts):
   // a full page is the only signal that a next page might exist.
   const hasNextPage = guests.length === GUEST_PAGE_SIZE;
-  const ledgerToday = hotelTodayIso(hotelConfigQuery.data?.hotel_timezone);
+  const ledgerToday = businessDate;
   const effectiveLedgerFromDate = ledgerFromDate ?? addDaysIso(ledgerToday, -29);
   const effectiveLedgerThroughDate = ledgerThroughDate ?? ledgerToday;
 

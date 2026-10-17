@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.models.company import Company
 from app.models.company_night_charge import CompanyNightCharge, CompanyNightChargePaymentAllocation
+from app.models.guest import Guest
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
 from app.models.operations import BillingAdjustment, ReservationStatusHistory
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
@@ -46,6 +47,7 @@ from app.services.company_night_charge_service import (
 )
 from app.services.fx_service import SUPPORTED_CONVERSION_CURRENCIES
 from app.services.pricing_policy_service import PricingPolicyError, _convert_amount
+from app.services.timezones import hotel_business_now, utc_naive
 
 
 class PaymentError(Exception):
@@ -643,13 +645,13 @@ def process_payment(
     # Bank transfers submitted without proof intentionally remain pending.
     if request.payment_method == PaymentMethodEnum.CASH or manual_confirmation:
         tx_status = TransactionStatusEnum.COMPLETED
-        processed_at = datetime.now(timezone.utc)
+        processed_at = utc_naive(hotel_business_now(db, resolved_hotel_id))
 
     # For gateway payments, use the provided response
     if gateway_response:
         if gateway_response.success:
             tx_status = TransactionStatusEnum.COMPLETED
-            processed_at = datetime.now(timezone.utc)
+            processed_at = utc_naive(hotel_business_now(db, resolved_hotel_id))
         else:
             tx_status = TransactionStatusEnum.FAILED
 
@@ -1293,16 +1295,28 @@ def get_payment_receipt_data(db: Session, hotel_id: Optional[int], transaction_i
         raise PaymentNotFoundError("No se encontró el pago confirmado.")
 
     reservation_row = (
-        db.query(Reservation.confirmation_code, Reservation.currency_code)
+        db.query(
+            Reservation.confirmation_code,
+            Reservation.currency_code,
+            Guest.first_name,
+            Guest.last_name,
+        )
+        .join(Guest, Guest.id == Reservation.guest_id)
         .filter(
             Reservation.id == transaction.reservation_id,
             Reservation.hotel_id == hotel_id,
+            Guest.hotel_id == hotel_id,
         )
         .first()
     )
     if reservation_row is None:
         raise PaymentNotFoundError("No se encontró el pago confirmado.")
-    reservation_code, reservation_currency = reservation_row
+    reservation_code, reservation_currency, guest_first_name, guest_last_name = reservation_row
+    guest_name = " ".join(
+        part.strip()
+        for part in (str(guest_first_name or ""), str(guest_last_name or ""))
+        if part.strip()
+    ) or "Huésped"
 
     hotel = db.get(HotelConfiguration, hotel_id)
     created_at = transaction.created_at
@@ -1315,6 +1329,7 @@ def get_payment_receipt_data(db: Session, hotel_id: Optional[int], transaction_i
         "id": transaction.id,
         "reservation_id": transaction.reservation_id,
         "confirmation_code": reservation_code,
+        "guest_name": guest_name,
         "hotel_name": hotel.hotel_name if hotel and hotel.hotel_name else "Mi Hotel",
         "hotel_timezone": hotel.hotel_timezone if hotel and hotel.hotel_timezone else "America/Argentina/Buenos_Aires",
         "amount": transaction.tender_amount if transaction.tender_amount is not None else transaction.amount,

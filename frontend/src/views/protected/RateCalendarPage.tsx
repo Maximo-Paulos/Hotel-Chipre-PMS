@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { RateCalendarGrid } from "../../components/RateCalendarGrid";
@@ -8,7 +8,6 @@ import type { RateChangeDraft, RateChangeValues } from "../../api/rateChangeDraf
 import { useCategories } from "../../hooks/useCategories";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import {
-  todayIso,
   useCategoryDailyRates,
   usePricePeriods,
   useRateCalendar,
@@ -16,6 +15,7 @@ import {
   type PricePeriodInput
 } from "../../hooks/useRateCalendar";
 import { useRateChangeDrafts } from "../../hooks/useRateChangeDrafts";
+import { useBusinessDate } from "../../hooks/useBusinessClock";
 
 const RANGE_LABEL = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short", year: "numeric" });
 
@@ -65,10 +65,9 @@ const formatRange = (from: string, to: string) =>
 
 const getIsoWeekday = (iso: string) => new Date(`${iso}T00:00:00`).getDay();
 
-const yearStart = (year: number) => {
-  const today = todayIso();
-  const currentYear = Number(today.slice(0, 4));
-  return year === currentYear ? today : `${year}-01-01`;
+const yearStart = (year: number, businessDate: string) => {
+  const currentYear = Number(businessDate.slice(0, 4));
+  return year === currentYear ? businessDate : `${year}-01-01`;
 };
 
 const yearEnd = (year: number) => `${year}-12-31`;
@@ -101,16 +100,24 @@ function Pill({ children, tone = "default" }: { children: React.ReactNode; tone?
 }
 
 export function RateCalendarPage() {
+  const businessDate = useBusinessDate();
   const { hasPermission } = useEffectivePermissions();
   const canEditRates = hasPermission("rates:update");
   const categoriesQuery = useCategories();
   const categories = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
   const [categoryId, setCategoryId] = useState<number | null>(null);
 
-  const currentYear = Number(todayIso().slice(0, 4));
+  const currentYear = Number(businessDate.slice(0, 4));
   const yearOptions = useMemo(() => [currentYear, currentYear + 1, currentYear + 2], [currentYear]);
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const dateFrom = useMemo(() => yearStart(selectedYear), [selectedYear]);
+  const previousBusinessYearRef = useRef(currentYear);
+  useEffect(() => {
+    const previousYear = previousBusinessYearRef.current;
+    if (previousYear === currentYear) return;
+    setSelectedYear((current) => current === previousYear ? currentYear : current);
+    previousBusinessYearRef.current = currentYear;
+  }, [currentYear]);
+  const dateFrom = useMemo(() => yearStart(selectedYear, businessDate), [businessDate, selectedYear]);
   const dateTo = useMemo(() => yearEnd(selectedYear), [selectedYear]);
 
   useEffect(() => {

@@ -31,6 +31,7 @@ import { moveBlockedReason, requiredMovePermission } from "../../utils/roomMove"
 import { DepositPolicyRulesEditor } from "../../components/DepositPolicyRulesEditor";
 
 import { TaxPoliciesCard } from "./TaxPoliciesCard";
+import { LocalBusinessClockCard } from "./LocalBusinessClockCard";
 
 const roomStatuses: RoomStatus[] = ["available", "occupied", "maintenance", "blocked", "cleaning"];
 
@@ -426,6 +427,7 @@ export function SettingsHotelPage() {
         <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Hotel</h1>
         <p className="text-sm text-slate-600">Hotel ID {session.hotelId}</p>
       </header>
+      <LocalBusinessClockCard ownerOnly={ownerOnly} />
       {error && <p className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
 
       {configQuery.isLoading ? (

@@ -19550,6 +19550,69 @@
         }
       }
     },
+    "/api/permissions/temporary-grants/active": {
+      "get": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Read Active Temporary Action Grants",
+        "operationId": "read_active_temporary_action_grants_api_permissions_temporary_grants_active_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/permissions/temporary-grants/{grant_id}/approve": {
       "post": {
         "tags": [
@@ -19640,6 +19703,79 @@
         ],
         "summary": "Deny Temporary Action Grant",
         "operationId": "deny_temporary_action_grant_api_permissions_temporary_grants__grant_id__deny_post",
+        "parameters": [
+          {
+            "name": "grant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Grant Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/permissions/temporary-grants/{grant_id}/revoke": {
+      "post": {
+        "tags": [
+          "Permissions"
+        ],
+        "summary": "Revoke Temporary Action Grant",
+        "operationId": "revoke_temporary_action_grant_api_permissions_temporary_grants__grant_id__revoke_post",
         "parameters": [
           {
             "name": "grant_id",
@@ -44774,6 +44910,18 @@
             ],
             "title": "Successor Float Declared At"
           },
+          "business_successor_float_declared_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Successor Float Declared At"
+          },
           "custody_handoff": {
             "anyOf": [
               {
@@ -44799,6 +44947,18 @@
             "type": "string",
             "format": "date-time",
             "title": "Closed At"
+          },
+          "business_closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Closed At"
           }
         },
         "type": "object",
@@ -44874,6 +45034,30 @@
               }
             ],
             "title": "Received At"
+          },
+          "business_delivered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Delivered At"
+          },
+          "business_received_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Received At"
           },
           "notes": {
             "anyOf": [
@@ -45362,6 +45546,30 @@
               }
             ],
             "title": "Closed At"
+          },
+          "business_opened_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Opened At"
+          },
+          "business_closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Closed At"
           },
           "opened_by_user_id": {
             "anyOf": [
@@ -46040,6 +46248,18 @@
             "type": "string",
             "format": "date-time",
             "title": "Recorded At"
+          },
+          "business_recorded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Recorded At"
           }
         },
         "type": "object",
@@ -46247,6 +46467,30 @@
               }
             ],
             "title": "Closed At"
+          },
+          "business_opened_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Opened At"
+          },
+          "business_closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Closed At"
           },
           "notes": {
             "anyOf": [
@@ -59138,6 +59382,10 @@
             "type": "string",
             "title": "Confirmation Code"
           },
+          "guest_name": {
+            "type": "string",
+            "title": "Guest Name"
+          },
           "hotel_name": {
             "type": "string",
             "title": "Hotel Name"
@@ -59237,6 +59485,7 @@
           "id",
           "reservation_id",
           "confirmation_code",
+          "guest_name",
           "hotel_name",
           "hotel_timezone",
           "amount",

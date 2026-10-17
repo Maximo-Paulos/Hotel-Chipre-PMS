@@ -7,11 +7,10 @@ import { usePendingReservationActions, useReservations } from "../../hooks/useRe
 import { useBookedValueReport, useOccupancyReport, useTodayArrivalCount } from "../../hooks/useReports";
 import { isDeferredCompanyReservation } from "../../api/reservations";
 import { usePendingCashCloseReports } from "../../hooks/useCashRegister";
-import { useHotelConfig } from "../../hooks/useHotelConfig";
+import { useBusinessDate } from "../../hooks/useBusinessClock";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { formatMoney } from "../../utils/currency";
-import { todayIso } from "../../utils/date";
 // Single source of truth for reservation status colors/labels (also used by
 // ReservationsPage, the detail drawer, the global search and the occupancy
 // grid). The dashboard used to keep its own copy with different colors and
@@ -29,24 +28,6 @@ const monthRangeIso = (base: Date) => {
     fromDate: `${year}-${pad(month)}-01`,
     toDate: `${year}-${pad(month)}-${pad(lastDay)}`
   };
-};
-
-const hotelTodayIso = (timeZone?: string | null, serverDate?: string | null) => {
-  if (timeZone) {
-    try {
-      const parts = new Intl.DateTimeFormat("en-US", {
-        timeZone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit"
-      }).formatToParts(new Date());
-      const dateParts = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-      return `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
-    } catch {
-      // Fall through to the hotel-local date supplied by the reports API.
-    }
-  }
-  return serverDate && /^\d{4}-\d{2}-\d{2}$/.test(serverDate) ? serverDate : todayIso();
 };
 
 type DashboardCard = {
@@ -67,9 +48,8 @@ const reservationGuestLabel = (
 
 export function DashboardPage() {
   const { t } = useTranslation("dashboard");
-  const hotelConfigQuery = useHotelConfig();
   const arrivalCountQuery = useTodayArrivalCount();
-  const today = hotelTodayIso(hotelConfigQuery.data?.hotel_timezone, arrivalCountQuery.data?.report_date);
+  const today = useBusinessDate(arrivalCountQuery.data?.report_date);
   // The reservation list supports dashboard activity and remains paginated.
   // Financial KPIs use the separate permission-protected server aggregate.
   const { fromDate: monthFrom, toDate: monthTo } = useMemo(() => monthRangeIso(new Date(`${today}T00:00:00`)), [today]);

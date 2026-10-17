@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from functools import lru_cache
+import ipaddress
 import os
 from typing import TYPE_CHECKING
 from sqlalchemy.engine import make_url
@@ -87,13 +88,15 @@ def local_today(timezone_name: str | None) -> date:
     return datetime.now(zone).date()
 
 
-def business_clock_enabled_for_hotel(hotel_id: int) -> bool:
+def business_clock_enabled_for_hotel(hotel_id: int, db: "Session | None" = None) -> bool:
     """Return whether the explicitly selected local synthetic hotel may use
     its persisted business date.
 
     Every condition is required. In particular, Settings' implicit
-    ``APP_ENV=development`` default does not enable time travel, nor does a
-    local flag have any effect when the configured database is PostgreSQL.
+    ``APP_ENV=development`` default does not enable time travel. PostgreSQL is
+    eligible only when an exact database name is explicitly allowlisted, its
+    configured and bound connections are loopback, and the session points to
+    that same database.
     """
     from app.config import get_settings
 
@@ -108,7 +111,10 @@ def business_clock_enabled_for_hotel(hotel_id: int) -> bool:
         or not settings.LOCAL_SIMULATION_CLOCK_ENABLED
         or "LOCAL_SIMULATION_CLOCK_ENABLED" not in fields_set
         or settings.LOCAL_SIMULATION_CLOCK_HOTEL_ID != hotel_id
+        or "EXTERNAL_EFFECTS_ENABLED" not in fields_set
         or settings.EXTERNAL_EFFECTS_ENABLED is not False
+        or "CONNECTIONS_ENABLED" not in fields_set
+        or settings.CONNECTIONS_ENABLED is not False
     ):
         return False
 
@@ -120,8 +126,46 @@ def business_clock_enabled_for_hotel(hotel_id: int) -> bool:
             return False
 
     try:
-        return make_url(settings.DATABASE_URL).get_backend_name() == "sqlite"
-    except (ArgumentError, TypeError, ValueError):
+        configured_url = make_url(settings.DATABASE_URL)
+        backend = configured_url.get_backend_name()
+        if backend == "sqlite":
+            return db is None or db.get_bind().dialect.name == "sqlite"
+        if backend != "postgresql":
+            return False
+
+        if "LOCAL_SIMULATION_CLOCK_POSTGRES_DATABASE" not in fields_set:
+            return False
+        database_allowlist = (settings.LOCAL_SIMULATION_CLOCK_POSTGRES_DATABASE or "").strip()
+        environment_hostaddr = os.getenv("PGHOSTADDR", "").strip()
+        if environment_hostaddr:
+            try:
+                if not ipaddress.ip_address(environment_hostaddr).is_loopback:
+                    return False
+            except ValueError:
+                return False
+        if (
+            not database_allowlist
+            or configured_url.database != database_allowlist
+            or configured_url.host not in {"127.0.0.1", "::1"}
+            or bool(configured_url.query)
+            or bool(os.getenv("PGSERVICE", "").strip())
+            or db is None
+        ):
+            return False
+
+        bound = db.get_bind()
+        bound_url = getattr(bound, "url", None)
+        if bound_url is None:
+            bound_url = getattr(getattr(bound, "engine", None), "url", None)
+        if bound.dialect.name != "postgresql" or bound_url is None:
+            return False
+        return (
+            bound_url.database == configured_url.database
+            and bound_url.host == configured_url.host
+            and bound_url.port == configured_url.port
+            and not bound_url.query
+        )
+    except (ArgumentError, AttributeError, TypeError, ValueError):
         return False
 
 
@@ -151,7 +195,7 @@ def hotel_today(db: "Session", hotel_id: int) -> date:
 
     config = db.get(HotelConfiguration, hotel_id)
     real_local_today = local_today(config.hotel_timezone if config else None)
-    if not business_clock_enabled_for_hotel(hotel_id):
+    if not business_clock_enabled_for_hotel(hotel_id, db):
         return real_local_today
 
     clock = db.get(HotelBusinessClock, hotel_id)
@@ -164,11 +208,11 @@ def hotel_business_now(db: "Session", hotel_id: int) -> datetime:
     Security, audit, session, invitation, token, and provider timestamps must
     use real UTC directly. Hotel actions use this clock so local simulations
     can move operational dates while retaining the current hotel-local time of
-    day. Outside the explicitly enabled local SQLite simulation, this is the
+    day. Outside the explicitly enabled local simulation, this is the
     real UTC timestamp.
     """
     real_now = datetime.now(timezone.utc)
-    if not business_clock_enabled_for_hotel(hotel_id):
+    if not business_clock_enabled_for_hotel(hotel_id, db):
         return real_now
 
     timezone_name = hotel_timezone_name(db, hotel_id)
@@ -184,3 +228,10 @@ def hotel_business_now(db: "Session", hotel_id: int) -> datetime:
         tzinfo=hotel_timezone,
     )
     return business_local_time.astimezone(timezone.utc)
+
+
+def utc_naive(value: datetime) -> datetime:
+    """Normalize UTC timestamps for legacy ``DateTime`` columns without TZ."""
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)

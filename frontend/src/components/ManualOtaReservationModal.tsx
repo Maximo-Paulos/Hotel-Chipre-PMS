@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { type Reservation } from "../api/reservations";
 import { useCategories } from "../hooks/useCategories";
@@ -7,7 +7,7 @@ import { useGuestCreate } from "../hooks/useGuests";
 import { useReservationMutations } from "../hooks/useReservations";
 import { useRooms } from "../hooks/useRooms";
 import { formatMoney, normalizeCurrencyCode } from "../utils/currency";
-import { addDaysIso, todayIso } from "../utils/date";
+import { addDaysIso } from "../utils/date";
 
 import GuestQuickCreatePanel, { emptyQuickGuestForm, hasQuickGuestFormData, type QuickGuestFormValues } from "./GuestQuickCreatePanel";
 import LocalizedDateField from "./LocalizedDateField";
@@ -24,8 +24,6 @@ const CHANNEL_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "other_ota", label: "Otra OTA" }
 ];
 const PAID_CURRENCY_OPTIONS = ["ARS", "USD", "EUR", "BRL", "CLP", "UYU"] as const;
-
-const tomorrowIso = () => addDaysIso(todayIso(), 1);
 
 type FormState = {
   category_id: string;
@@ -53,11 +51,11 @@ type FormState = {
   external_paid_reference: string;
 };
 
-const emptyFormState = (): FormState => ({
+const emptyFormState = (businessDate: string): FormState => ({
   category_id: "",
   room_id: "",
-  check_in_date: todayIso(),
-  check_out_date: tomorrowIso(),
+  check_in_date: businessDate,
+  check_out_date: addDaysIso(businessDate, 1),
   num_adults: "1",
   num_children: "0",
   arrival_time_hint: "",
@@ -74,9 +72,10 @@ const emptyFormState = (): FormState => ({
 type ManualOtaReservationModalProps = {
   open: boolean;
   onClose: () => void;
+  businessDate: string;
 };
 
-export default function ManualOtaReservationModal({ open, onClose }: ManualOtaReservationModalProps) {
+export default function ManualOtaReservationModal({ open, onClose, businessDate }: ManualOtaReservationModalProps) {
   const categoriesQuery = useCategories();
   const { roomsQuery } = useRooms();
   const { createManualOtaMutation } = useReservationMutations();
@@ -84,7 +83,8 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
 
   const [guestId, setGuestId] = useState("");
   const [guestForm, setGuestForm] = useState<QuickGuestFormValues>(emptyQuickGuestForm);
-  const [form, setForm] = useState<FormState>(emptyFormState);
+  const [form, setForm] = useState<FormState>(() => emptyFormState(businessDate));
+  const previousBusinessDateRef = useRef(businessDate);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Reservation | null>(null);
   const containerRef = useDialogA11y(open, () => {
@@ -92,6 +92,16 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
     reset();
     onClose();
   });
+
+  useEffect(() => {
+    const previousDate = previousBusinessDateRef.current;
+    if (previousDate === businessDate) return;
+    setForm((current) => current.check_in_date === previousDate
+      && current.check_out_date === addDaysIso(previousDate, 1)
+      ? { ...current, check_in_date: businessDate, check_out_date: addDaysIso(businessDate, 1) }
+      : current);
+    previousBusinessDateRef.current = businessDate;
+  }, [businessDate]);
 
   if (!open) return null;
 
@@ -102,7 +112,7 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
   const reset = () => {
     setGuestId("");
     setGuestForm(emptyQuickGuestForm());
-    setForm(emptyFormState());
+    setForm(emptyFormState(businessDate));
     setError(null);
     setCreated(null);
   };

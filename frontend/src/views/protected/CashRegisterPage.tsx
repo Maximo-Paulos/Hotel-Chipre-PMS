@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   downloadCashExpensesCsv,
@@ -27,7 +27,8 @@ import { useSession } from "../../state/session";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
 import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
-import { formatHotelDateTime, formatHotelTime, todayIso } from "../../utils/date";
+import { formatHotelDateTime, formatHotelTime } from "../../utils/date";
+import { useBusinessDate } from "../../hooks/useBusinessClock";
 import { cashExpenseValidationMessage } from "../../utils/cashExpenseValidation.mjs";
 
 const emptyMovementForm: CashMovementPayload = {
@@ -43,6 +44,7 @@ const money = (value?: number | string | null, currency = "ARS") =>
 export function CashRegisterPage() {
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
+  const businessDate = useBusinessDate();
   const hotelConfigQuery = useHotelConfig();
   const defaultCurrency = (hotelConfigQuery.data?.default_currency || "ARS").toUpperCase();
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
@@ -57,10 +59,10 @@ export function CashRegisterPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [cashActionErrors, setCashActionErrors] = useState<Record<string, string>>({});
   const [closeReport, setCloseReport] = useState<CashCloseReport | null>(null);
-  const [reportDate, setReportDate] = useState(() => todayIso());
+  const [reportDate, setReportDate] = useState(businessDate);
   const [reportCurrency, setReportCurrency] = useState("");
-  const [exportFromDate, setExportFromDate] = useState(() => todayIso());
-  const [exportToDate, setExportToDate] = useState(() => todayIso());
+  const [exportFromDate, setExportFromDate] = useState(businessDate);
+  const [exportToDate, setExportToDate] = useState(businessDate);
   const [exportingExpenses, setExportingExpenses] = useState(false);
   const [expenseCategory, setExpenseCategory] = useState("");
   const [expenseVendor, setExpenseVendor] = useState("");
@@ -69,6 +71,15 @@ export function CashRegisterPage() {
   const [expenseReceiptFilename, setExpenseReceiptFilename] = useState<string | null>(null);
   const [expenseValidationMessage, setExpenseValidationMessage] = useState<string | null>(null);
   const [expenseRejectionReasons, setExpenseRejectionReasons] = useState<Record<number, string>>({});
+  const previousBusinessDateRef = useRef(businessDate);
+  useEffect(() => {
+    const previousDate = previousBusinessDateRef.current;
+    if (previousDate === businessDate) return;
+    setReportDate((current) => current === previousDate ? businessDate : current);
+    setExportFromDate((current) => current === previousDate ? businessDate : current);
+    setExportToDate((current) => current === previousDate ? businessDate : current);
+    previousBusinessDateRef.current = businessDate;
+  }, [businessDate]);
 
   const setCashActionError = (key: string, error: unknown, fallback: string) => {
     setCashActionErrors((current) => ({
@@ -665,11 +676,11 @@ export function CashRegisterPage() {
                     <tr key={shift.session_id}>
                       <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-800">#{shift.session_id} · {cashSessionStatusLabel[shift.status] ?? shift.status}</td>
                       <td className="min-w-48 px-4 py-3 text-slate-600">
-                        <span className="block">{formatHotelDateTime(shift.opened_at, hotelTimeZone)}</span>
+                        <span className="block">{formatHotelDateTime(shift.business_opened_at ?? shift.opened_at, hotelTimeZone)}</span>
                         <span className="text-xs text-slate-500">{shift.opened_by_name ?? "Usuario no disponible"}</span>
                       </td>
                       <td className="min-w-48 px-4 py-3 text-slate-600">
-                        {shift.closed_at ? <><span className="block">{formatHotelDateTime(shift.closed_at, hotelTimeZone)}</span><span className="text-xs text-slate-500">{shift.closed_by_name ?? "Usuario no disponible"}</span></> : "En curso"}
+                        {(shift.business_closed_at ?? shift.closed_at) ? <><span className="block">{formatHotelDateTime(shift.business_closed_at ?? shift.closed_at, hotelTimeZone)}</span><span className="text-xs text-slate-500">{shift.closed_by_name ?? "Usuario no disponible"}</span></> : "En curso"}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">{money(shift.opening_balance, shift.currency_code)}</td>
                       <td className="whitespace-nowrap px-4 py-3 font-semibold">{money(shift.expected_balance, shift.currency_code)}</td>
@@ -926,7 +937,7 @@ export function CashRegisterPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="font-semibold text-slate-900">Caja #{session.id} · {session.currency_code}</p>
-                            <p className="text-xs text-slate-500">{formatHotelDateTime(session.opened_at, hotelTimeZone)}</p>
+                            <p className="text-xs text-slate-500">{formatHotelDateTime(session.business_opened_at ?? session.opened_at, hotelTimeZone)}</p>
                           </div>
                           <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${session.status === "open" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
                             {cashSessionStatusLabel[session.status] || session.status}
@@ -1211,7 +1222,7 @@ export function CashRegisterPage() {
                       <div>
                         <p className="font-semibold text-slate-900">{cashMovementTypeLabel[movement.movement_type]}</p>
                         <p className="text-xs text-slate-500">
-                          {movement.description || "Sin descripción"} - {formatHotelDateTime(movement.recorded_at, hotelTimeZone)}
+                          {movement.description || "Sin descripción"} - {formatHotelDateTime(movement.business_recorded_at ?? movement.recorded_at, hotelTimeZone)}
                         </p>
                       </div>
                       <p className="font-semibold text-slate-900">{money(movement.amount, currency)}</p>
@@ -1372,7 +1383,7 @@ export function CashRegisterPage() {
                 <Metric label="Diferencia" value={money(selectedSessionCloseReport.difference, closeReportCurrency)} />
               </div>
               <div className="border-t border-slate-200 pt-3 text-sm text-slate-600">
-                <p>Cerrada el {formatHotelDateTime(selectedSessionCloseReport.closed_at, hotelTimeZone)} por {selectedSessionCloseReport.closed_by_name ?? "Usuario no disponible"}.</p>
+                <p>Cerrada el {formatHotelDateTime(selectedSessionCloseReport.business_closed_at ?? selectedSessionCloseReport.closed_at, hotelTimeZone)} por {selectedSessionCloseReport.closed_by_name ?? "Usuario no disponible"}.</p>
                 <p className="mt-1">Notas de cierre: {selectedSessionCloseReport.notes?.trim() || "Sin notas"}</p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

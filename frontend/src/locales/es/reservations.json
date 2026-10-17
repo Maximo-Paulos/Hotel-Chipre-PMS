@@ -7,6 +7,12 @@
     "loadRetry": "Reintentar",
     "operationLoadError": "No se pudo cargar el resumen operativo.",
     "operationRetry": "Reintentar",
+    "cancellationPermission": {
+      "checking": "Verificando permisos y pagos antes de habilitar la cancelación…",
+      "companyRestricted": "Tu rol no puede cancelar reservas de empresa. La autorización temporal disponible no reemplaza el permiso permanente de gestión de empresas.",
+      "paidRestricted": "Esta reserva tiene pagos registrados y requiere además el permiso para cancelar reservas pagas. La autorización temporal disponible solo cubre cancelaciones sin pagos.",
+      "roleRestricted": "Tu rol no tiene permiso para cancelar esta reserva. Solicitá al owner que revise los permisos del rol o del usuario."
+    },
     "stay": {
       "title": "Estadía",
       "roomNumber": "Habitación #{{id}}",

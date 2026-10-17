@@ -421,3 +421,21 @@ def list_pending_grants_for_hotel(db: Session, hotel_id: int) -> list[TemporaryA
         .order_by(TemporaryActionGrant.created_at.asc(), TemporaryActionGrant.id.asc())
         .all()
     )
+
+
+def list_active_grants_for_hotel(db: Session, hotel_id: int) -> list[TemporaryActionGrant]:
+    """Return pending and unexpired approved grants for owner management."""
+    now = _utcnow()
+    return (
+        db.query(TemporaryActionGrant)
+        .filter(
+            TemporaryActionGrant.hotel_id == hotel_id,
+            (TemporaryActionGrant.status == TemporaryActionGrantStatusEnum.PENDING)
+            | (
+                (TemporaryActionGrant.status == TemporaryActionGrantStatusEnum.APPROVED)
+                & (TemporaryActionGrant.expires_at > now)
+            ),
+        )
+        .order_by(TemporaryActionGrant.created_at.asc(), TemporaryActionGrant.id.asc())
+        .all()
+    )

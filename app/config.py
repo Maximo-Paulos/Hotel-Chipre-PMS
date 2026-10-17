@@ -19,9 +19,12 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
 
     # The synthetic hotel business clock is intentionally opt-in and is
-    # additionally gated at runtime to development + SQLite + one hotel.
+    # additionally gated at runtime to development + one explicitly selected
+    # hotel. PostgreSQL requires a separate exact database allowlist and a
+    # loopback connection; it is intended only for isolated local simulations.
     LOCAL_SIMULATION_CLOCK_ENABLED: bool = False
     LOCAL_SIMULATION_CLOCK_HOTEL_ID: int | None = Field(default=None, ge=1)
+    LOCAL_SIMULATION_CLOCK_POSTGRES_DATABASE: str | None = None
 
     # Public app URL used in redirects/webhooks (backend)
     APP_BASE_URL: str = "http://127.0.0.1:8040"

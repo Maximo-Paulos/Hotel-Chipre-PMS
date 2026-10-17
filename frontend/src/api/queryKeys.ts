@@ -35,6 +35,7 @@ export const queryKeys = {
   stockItems: (hotelId: number | null) => ["stock-items", hotelId] as const,
   stockLocations: (hotelId: number | null) => ["stock-locations", hotelId] as const,
   hotelConfig: (hotelId: number | null) => ["hotel-config", hotelId] as const,
+  businessClock: (hotelId: number | null) => ["business-clock", hotelId] as const,
   hotelInterfaceLanguage: (hotelId: number | null, userId: string | null) => ["hotel-interface-language", hotelId, userId] as const,
   users: (hotelId: number | null) => ["users", hotelId] as const
 };
@@ -86,6 +87,7 @@ export const HOTEL_ID_INDEX_BY_QUERY_PREFIX: Readonly<Record<string, number>> = 
   "gemma-insights": 1,
   "gemma-runtime-status": 1,
   "hotel-config": 1,
+  "business-clock": 1,
   "hotel-interface-language": 1,
   integrations: 1,
   "daily-report-schedules": 1,

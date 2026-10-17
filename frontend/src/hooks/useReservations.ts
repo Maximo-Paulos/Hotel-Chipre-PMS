@@ -66,6 +66,10 @@ const occupancyGridKey = (hotelId: number | null, dateFrom: string, dateTo: stri
   dateTo
 ];
 
+type CancelReservationParams = number | { id: number; temporaryGrantToken?: string };
+const normalizeCancelReservationParams = (params: CancelReservationParams) =>
+  typeof params === "number" ? { id: params, temporaryGrantToken: undefined } : params;
+
 export function useReservations(filters: ReservationFilters) {
   const { session } = useSession();
   const searchFilterReady = filters.search === undefined || filters.search.trim().length >= 2;
@@ -234,10 +238,13 @@ export function useReservationMutations(filters?: ReservationFilters) {
   });
 
   const cancelMutation = useGuardedMutation({
-    mutationFn: (id: number) => cancelReservation(id, session),
+    mutationFn: (params: CancelReservationParams) => {
+      const { id, temporaryGrantToken } = normalizeCancelReservationParams(params);
+      return cancelReservation(id, session, temporaryGrantToken);
+    },
     // Cancellation changes the reservation projection and cancels its pending
     // payment links, but it does not create a cash movement.
-    onSuccess: async (_, reservationId) => invalidateReservationRecord(reservationId, {
+    onSuccess: async (_, params) => invalidateReservationRecord(normalizeCancelReservationParams(params).id, {
       includePaymentSummary: true,
       includePaymentLinks: true
     })

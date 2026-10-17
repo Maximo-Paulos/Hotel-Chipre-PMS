@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-17T17:46:28.037Z",
+  "generatedAt": "2026-10-17T21:12:43.861Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -3533,6 +3533,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_permissions_read_active_temporary_action_grants",
+      "name": "read_active_temporary_action_grants",
+      "entryPoint": "api_permissions_read_active_temporary_action_grants",
+      "entryPointId": "api_permissions_read_active_temporary_action_grants",
+      "path": [
+        "api_permissions_read_active_temporary_action_grants",
+        "api_permissions_temporary_grant_response"
+      ],
+      "qualifiedPath": [
+        "api_permissions_read_active_temporary_action_grants",
+        "api_permissions_temporary_grant_response"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:api_permissions_read_pending_temporary_action_grants",
       "name": "read_pending_temporary_action_grants",
       "entryPoint": "api_permissions_read_pending_temporary_action_grants",
@@ -3834,6 +3856,32 @@
       "fileCount": 1,
       "files": [
         "app/services/user_session_service.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_permissions_revoke_temporary_action_grant",
+      "name": "revoke_temporary_action_grant",
+      "entryPoint": "api_permissions_revoke_temporary_action_grant",
+      "entryPointId": "api_permissions_revoke_temporary_action_grant",
+      "path": [
+        "api_permissions_revoke_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "qualifiedPath": [
+        "api_permissions_revoke_temporary_action_grant",
+        "api_permissions_raise_temporary_grant_http_error",
+        "api_permissions_temporary_grant_actor",
+        "api_permissions_temporary_grant_response"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/permissions.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -4418,6 +4466,28 @@
       "fileCount": 1,
       "files": [
         "app/services/apple_auth_service.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:solutions_otp_hmac_verify_code",
+      "name": "verify_code",
+      "entryPoint": "solutions_otp_hmac_verify_code",
+      "entryPointId": "solutions_otp_hmac_verify_code",
+      "path": [
+        "solutions_otp_hmac_verify_code",
+        "solutions_otp_hmac_hash_code"
+      ],
+      "qualifiedPath": [
+        "solutions_otp_hmac_verify_code",
+        "solutions_otp_hmac_hash_code"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "docs/audits/perf-2026-10-13/solutions/otp_hmac.py"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -9025,6 +9095,30 @@
       "warnings": []
     },
     {
+      "id": "flow:scripts_loadtest_run",
+      "name": "run",
+      "entryPoint": "scripts_loadtest_run",
+      "entryPointId": "scripts_loadtest_run",
+      "path": [
+        "scripts_loadtest_run",
+        "scripts_loadtest_login",
+        "scripts_loadtest_vu"
+      ],
+      "qualifiedPath": [
+        "scripts_loadtest_run",
+        "scripts_loadtest_login",
+        "scripts_loadtest_vu"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "docs/audits/perf-2026-10-13/scripts/loadtest.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:app_main_security_headers",
       "name": "security_headers",
       "entryPoint": "app_main_security_headers",
@@ -10550,6 +10644,32 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
+      ],
+      "criticality": 0.2225,
+      "warnings": []
+    },
+    {
+      "id": "flow:components_temporarygrantapprovalpanel_temporarygrantapprovalpanel",
+      "name": "TemporaryGrantApprovalPanel",
+      "entryPoint": "components_temporarygrantapprovalpanel_temporarygrantapprovalpanel",
+      "entryPointId": "components_temporarygrantapprovalpanel_temporarygrantapprovalpanel",
+      "path": [
+        "components_temporarygrantapprovalpanel_temporarygrantapprovalpanel",
+        "components_temporarygrantapprovalpanel_datetime",
+        "components_temporarygrantapprovalpanel_errortext",
+        "components_temporarygrantapprovalpanel_grantsquerykey"
+      ],
+      "qualifiedPath": [
+        "components_temporarygrantapprovalpanel_temporarygrantapprovalpanel",
+        "components_temporarygrantapprovalpanel_datetime",
+        "components_temporarygrantapprovalpanel_errortext",
+        "components_temporarygrantapprovalpanel_grantsquerykey"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/components/TemporaryGrantApprovalPanel.tsx"
       ],
       "criticality": 0.2225,
       "warnings": []
@@ -19673,6 +19793,30 @@
       "warnings": []
     },
     {
+      "id": "flow:solutions_body_limit_middleware_bodylimitmiddleware_call",
+      "name": ".__call",
+      "entryPoint": "solutions_body_limit_middleware_bodylimitmiddleware_call",
+      "entryPointId": "solutions_body_limit_middleware_bodylimitmiddleware_call",
+      "path": [
+        "solutions_body_limit_middleware_bodylimitmiddleware_call",
+        "solutions_body_limit_middleware_bodylimitmiddleware_limit_for",
+        "solutions_body_limit_middleware_bodylimitmiddleware_reject"
+      ],
+      "qualifiedPath": [
+        "solutions_body_limit_middleware_bodylimitmiddleware_call",
+        "solutions_body_limit_middleware_bodylimitmiddleware_limit_for",
+        "solutions_body_limit_middleware_bodylimitmiddleware_reject"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "docs/audits/perf-2026-10-13/solutions/body_limit_middleware.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_manage_qa_baseline_lease_renderclient_init",
       "name": ".__init",
       "entryPoint": "agent_ops_manage_qa_baseline_lease_renderclient_init",
@@ -20727,6 +20871,32 @@
       "warnings": []
     },
     {
+      "id": "flow:scripts_ast_scan_funcscan_visit_call",
+      "name": ".visit_Call",
+      "entryPoint": "scripts_ast_scan_funcscan_visit_call",
+      "entryPointId": "scripts_ast_scan_funcscan_visit_call",
+      "path": [
+        "scripts_ast_scan_funcscan_visit_call",
+        "scripts_ast_scan_chain_names",
+        "scripts_ast_scan_is_db_call",
+        "scripts_ast_scan_root_name"
+      ],
+      "qualifiedPath": [
+        "scripts_ast_scan_funcscan_visit_call",
+        "scripts_ast_scan_chain_names",
+        "scripts_ast_scan_is_db_call",
+        "scripts_ast_scan_root_name"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "docs/audits/perf-2026-10-13/scripts/ast_scan.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:analytics_analyticspages_analyticsfreshness",
       "name": "AnalyticsFreshness",
       "entryPoint": "analytics_analyticspages_analyticsfreshness",
@@ -20924,6 +21094,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/GuestsPage.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:protected_localbusinessclockcard_localbusinessclockcard",
+      "name": "LocalBusinessClockCard",
+      "entryPoint": "protected_localbusinessclockcard_localbusinessclockcard",
+      "entryPointId": "protected_localbusinessclockcard_localbusinessclockcard",
+      "path": [
+        "protected_localbusinessclockcard_localbusinessclockcard",
+        "protected_localbusinessclockcard_formatbusinessdate"
+      ],
+      "qualifiedPath": [
+        "protected_localbusinessclockcard_localbusinessclockcard",
+        "protected_localbusinessclockcard_formatbusinessdate"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/LocalBusinessClockCard.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -25623,6 +25815,28 @@
       "warnings": []
     },
     {
+      "id": "flow:scripts_tcpcount_handle",
+      "name": "handle",
+      "entryPoint": "scripts_tcpcount_handle",
+      "entryPointId": "scripts_tcpcount_handle",
+      "path": [
+        "scripts_tcpcount_handle",
+        "scripts_tcpcount_pipe"
+      ],
+      "qualifiedPath": [
+        "scripts_tcpcount_handle",
+        "scripts_tcpcount_pipe"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "docs/audits/perf-2026-10-13/scripts/tcpcount.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:tests_conftest_hotel_config",
       "name": "hotel_config",
       "entryPoint": "tests_conftest_hotel_config",
@@ -25850,6 +26064,28 @@
       "fileCount": 1,
       "files": [
         "app/services/room_block_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_temporary_action_grant_service_list_active_grants_for_hotel",
+      "name": "list_active_grants_for_hotel",
+      "entryPoint": "services_temporary_action_grant_service_list_active_grants_for_hotel",
+      "entryPointId": "services_temporary_action_grant_service_list_active_grants_for_hotel",
+      "path": [
+        "services_temporary_action_grant_service_list_active_grants_for_hotel",
+        "services_temporary_action_grant_service_utcnow"
+      ],
+      "qualifiedPath": [
+        "services_temporary_action_grant_service_list_active_grants_for_hotel",
+        "services_temporary_action_grant_service_utcnow"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -26408,6 +26644,28 @@
       "fileCount": 1,
       "files": [
         "app/scripts/seed_demo.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:scripts_tcpcount_main",
+      "name": "main",
+      "entryPoint": "scripts_tcpcount_main",
+      "entryPointId": "scripts_tcpcount_main",
+      "path": [
+        "scripts_tcpcount_main",
+        "scripts_tcpcount_flush"
+      ],
+      "qualifiedPath": [
+        "scripts_tcpcount_main",
+        "scripts_tcpcount_flush"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "docs/audits/perf-2026-10-13/scripts/tcpcount.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -28413,6 +28671,28 @@
       "warnings": []
     },
     {
+      "id": "flow:scripts_ast_scan_scan_file",
+      "name": "scan_file",
+      "entryPoint": "scripts_ast_scan_scan_file",
+      "entryPointId": "scripts_ast_scan_scan_file",
+      "path": [
+        "scripts_ast_scan_scan_file",
+        "scripts_ast_scan_funcscan"
+      ],
+      "qualifiedPath": [
+        "scripts_ast_scan_scan_file",
+        "scripts_ast_scan_funcscan"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "docs/audits/perf-2026-10-13/scripts/ast_scan.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_guest_service_search_guests",
       "name": "search_guests",
       "entryPoint": "services_guest_service_search_guests",
@@ -28878,6 +29158,30 @@
       "fileCount": 1,
       "files": [
         "frontend/src/sync/crossTabSync.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:scripts_write_probe_step",
+      "name": "step",
+      "entryPoint": "scripts_write_probe_step",
+      "entryPointId": "scripts_write_probe_step",
+      "path": [
+        "scripts_write_probe_step",
+        "scripts_write_probe_outbox_count",
+        "scripts_write_probe_timing"
+      ],
+      "qualifiedPath": [
+        "scripts_write_probe_step",
+        "scripts_write_probe_outbox_count",
+        "scripts_write_probe_timing"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "docs/audits/perf-2026-10-13/scripts/write_probe.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -30338,6 +30642,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/hooks/useReports.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:hooks_usebusinessclock_usebusinessdate",
+      "name": "useBusinessDate",
+      "entryPoint": "hooks_usebusinessclock_usebusinessdate",
+      "entryPointId": "hooks_usebusinessclock_usebusinessdate",
+      "path": [
+        "hooks_usebusinessclock_usebusinessdate",
+        "hooks_usebusinessclock_usebusinessclock"
+      ],
+      "qualifiedPath": [
+        "hooks_usebusinessclock_usebusinessdate",
+        "hooks_usebusinessclock_usebusinessclock"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useBusinessClock.ts"
       ],
       "criticality": 0.16,
       "warnings": []

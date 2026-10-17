@@ -7,7 +7,6 @@ import re
 from datetime import datetime, timezone
 from decimal import Decimal
 from email_validator import EmailNotValidError, validate_email
-from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -78,11 +77,9 @@ def _local_simulation_enabled(db: Session, hotel_id: int) -> bool:
 
     fields_set = getattr(settings, "model_fields_set", set())
     try:
-        configured_database_is_sqlite = make_url(settings.DATABASE_URL).get_backend_name() == "sqlite"
-        actual_database_is_sqlite = db.get_bind().dialect.name == "sqlite"
+        actual_database_is_supported = db.get_bind().dialect.name in {"sqlite", "postgresql"}
     except Exception:
-        configured_database_is_sqlite = False
-        actual_database_is_sqlite = False
+        actual_database_is_supported = False
     enabled = (
         settings.APP_ENV == "development"
         and "APP_ENV" in fields_set
@@ -90,9 +87,8 @@ def _local_simulation_enabled(db: Session, hotel_id: int) -> bool:
         and "EXTERNAL_EFFECTS_ENABLED" in fields_set
         and "LOCAL_SIMULATION_CLOCK_ENABLED" in fields_set
         and settings.LOCAL_SIMULATION_CLOCK_HOTEL_ID == hotel_id
-        and business_clock_enabled_for_hotel(hotel_id)
-        and configured_database_is_sqlite
-        and actual_database_is_sqlite
+        and business_clock_enabled_for_hotel(hotel_id, db)
+        and actual_database_is_supported
     )
     if not enabled:
         raise PaymentReceiptEmailError(
@@ -120,6 +116,7 @@ def _receipt_email_content(receipt: dict) -> tuple[str, str]:
         str(receipt["hotel_name"]),
         title,
         f"Reserva: {receipt['confirmation_code']}",
+        f"Huésped: {receipt.get('guest_name') or 'Huésped'}",
         f"Movimiento: #{receipt['id']}",
         f"Fecha (UTC): {receipt['created_at'].astimezone(timezone.utc).isoformat()}",
         f"Estado: {getattr(receipt['status'], 'value', receipt['status'])}",

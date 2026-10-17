@@ -24,6 +24,7 @@ from app.models.cash_expense import CashExpense, CashExpenseStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.services.distributed_lock import with_distributed_lock
+from app.services.timezones import hotel_business_now, utc_naive
 
 
 class CashRegisterError(Exception):
@@ -88,6 +89,7 @@ def open_session(
         opened_by_user_id=opened_by_user_id,
         opening_balance=_money(opening_balance),
         currency_code=normalized_currency,
+        business_opened_at=utc_naive(hotel_business_now(db, hotel_id)),
         notes=notes,
     )
     db.add(session)
@@ -236,6 +238,7 @@ def add_movement(
     ):
         raise CashRegisterError("Las devoluciones a huéspedes deben registrarse mediante el flujo auditado de pagos")
 
+    transaction = None
     if transaction_id is not None:
         transaction = (
             db.query(Transaction)
@@ -267,6 +270,11 @@ def add_movement(
         recorded_by_user_id=recorded_by_user_id,
         movement_type=movement_type,
         amount=_money(amount),
+        business_recorded_at=utc_naive(
+            transaction.processed_at
+            if transaction is not None and transaction.processed_at is not None
+            else hotel_business_now(db, hotel_id)
+        ),
         description=description,
     )
     db.add(movement)
@@ -387,17 +395,31 @@ def _movement_sign(movement_type: CashMovementTypeEnum) -> Decimal:
     return Decimal("1")
 
 
-def _confirmed_cash_movements_total(db: Session, session: CashSession, closed_at: datetime) -> Decimal:
+def _confirmed_cash_movements_total(db: Session, session: CashSession, business_as_of: datetime) -> Decimal:
+    business_opened_at = session.business_opened_at or session.opened_at
     movements: Iterable[CashMovement] = (
         db.query(CashMovement)
         .filter(
             CashMovement.hotel_id == session.hotel_id,
             CashMovement.session_id == session.id,
-            CashMovement.recorded_at >= session.opened_at,
-            CashMovement.recorded_at <= closed_at,
+            CashMovement.business_recorded_at.is_not(None),
+            CashMovement.business_recorded_at >= business_opened_at,
+            CashMovement.business_recorded_at <= business_as_of,
         )
         .all()
     )
+    legacy_movements: Iterable[CashMovement] = (
+        db.query(CashMovement)
+        .filter(
+            CashMovement.hotel_id == session.hotel_id,
+            CashMovement.session_id == session.id,
+            CashMovement.business_recorded_at.is_(None),
+            CashMovement.recorded_at >= session.opened_at,
+            CashMovement.recorded_at <= business_as_of,
+        )
+        .all()
+    )
+    movements = [*movements, *legacy_movements]
 
     total = Decimal("0.00")
     transaction_ids = [movement.transaction_id for movement in movements if movement.transaction_id is not None]
@@ -439,7 +461,7 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
     if session is None:
         raise CashRegisterError("No se encontró la caja para este hotel")
 
-    as_of = datetime.now(timezone.utc)
+    as_of = utc_naive(hotel_business_now(db, hotel_id))
     movements = list_movements(db, hotel_id=hotel_id, session_id=session_id)
     income = sum((_money(m.amount) for m in movements if m.movement_type == CashMovementTypeEnum.INCOME), Decimal("0.00"))
     expense = sum((_money(m.amount) for m in movements if m.movement_type == CashMovementTypeEnum.EXPENSE), Decimal("0.00"))
@@ -540,13 +562,17 @@ def close_session(
         raise CashRegisterError("Resolvé los gastos pendientes antes de cerrar esta caja")
 
     closed_at = datetime.now(timezone.utc)
-    expected_balance = _money(session.opening_balance) + _confirmed_cash_movements_total(db, session, closed_at)
+    business_closed_at = utc_naive(hotel_business_now(db, hotel_id))
+    expected_balance = _money(session.opening_balance) + _confirmed_cash_movements_total(
+        db, session, business_closed_at
+    )
     declared_balance = _money(counted_balance)
     difference = _money(declared_balance - expected_balance)
     has_difference = difference != Decimal("0.00")
     difference_approved = bool(has_difference and approved_by_user_id is not None)
 
     session.closed_at = closed_at
+    session.business_closed_at = business_closed_at
     session.closed_by_user_id = closed_by_user_id
     session.status = (
         CashSessionStatusEnum.CLOSED
@@ -565,6 +591,7 @@ def close_session(
         approved_by_user_id=approved_by_user_id if difference_approved else None,
         notes=notes,
         closed_at=closed_at,
+        business_closed_at=business_closed_at,
     )
     db.add(report)
     db.flush()
@@ -574,6 +601,7 @@ def close_session(
         opened_by_user_id=closed_by_user_id,
         opening_balance=Decimal("0.00"),
         currency_code=session.currency_code,
+        business_opened_at=business_closed_at,
         notes=f"Caja sucesora de #{session.id}",
     )
     db.add(successor)
@@ -586,6 +614,7 @@ def close_session(
         delivered_amount=declared_balance,
         status=CashCustodyStatusEnum.PENDING,
         delivered_at=closed_at,
+        business_delivered_at=business_closed_at,
     )
     report.successor_session = successor
     report.custody_handoff = handoff
@@ -645,12 +674,15 @@ def confirm_cash_custody(
         raise CashRegisterError("La caja del turno siguiente no está abierta.")
 
     now = datetime.now(timezone.utc)
+    business_now = utc_naive(hotel_business_now(db, hotel_id))
     successor.opening_balance = amount
     report.successor_float_declared_amount = amount
     report.successor_float_declared_by_user_id = received_by_user_id
     report.successor_float_declared_at = now
+    report.business_successor_float_declared_at = business_now
     handoff.received_by_user_id = received_by_user_id
     handoff.received_at = now
+    handoff.business_received_at = business_now
     handoff.status = CashCustodyStatusEnum.CONFIRMED
     db.add_all(
         [

@@ -57,8 +57,10 @@ from app.services.temporary_action_grant_service import (
     TemporaryGrantStateError,
     approve_grant,
     deny_grant,
+    list_active_grants_for_hotel,
     list_pending_grants_for_hotel,
     request_grant,
+    revoke_grant,
 )
 
 router = APIRouter(prefix="/api/permissions", tags=["Permissions"])
@@ -748,6 +750,18 @@ def read_pending_temporary_action_grants(
     }
 
 
+@router.get("/temporary-grants/active")
+def read_active_temporary_action_grants(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_TEMPORARY_GRANTS_VIEW)),
+):
+    grants = list_active_grants_for_hotel(db, context.hotel_id)
+    return {
+        "hotel_id": context.hotel_id,
+        "grants": [_temporary_grant_response(grant) for grant in grants],
+    }
+
+
 @router.post("/temporary-grants/{grant_id}/approve")
 def approve_temporary_action_grant(
     payload: TemporaryActionGrantApproveRequest,
@@ -778,6 +792,22 @@ def deny_temporary_action_grant(
 ):
     try:
         grant = deny_grant(db, grant_id, _temporary_grant_actor(context))
+        db.commit()
+        db.refresh(grant)
+        return _temporary_grant_response(grant)
+    except TemporaryGrantError as exc:
+        db.rollback()
+        _raise_temporary_grant_http_error(exc)
+
+
+@router.post("/temporary-grants/{grant_id}/revoke")
+def revoke_temporary_action_grant(
+    grant_id: int = Path(gt=0),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_TEMPORARY_GRANTS_MANAGE)),
+):
+    try:
+        grant = revoke_grant(db, grant_id, _temporary_grant_actor(context))
         db.commit()
         db.refresh(grant)
         return _temporary_grant_response(grant)

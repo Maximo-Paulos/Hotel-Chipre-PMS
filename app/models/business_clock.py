@@ -10,8 +10,9 @@ class HotelBusinessClock(Base):
     """Persist the latest simulated business date for a single hotel.
 
     The row is inert unless the process is explicitly configured for local
-    development, SQLite, and this hotel id. `advanced_at` records real UTC
-    wall-clock time; the simulation changes dates only, never instants.
+    development, the explicitly allowlisted local database, and this hotel
+    id. `advanced_at` records real UTC wall-clock time; the simulation changes
+    dates only, never instants.
     """
 
     __tablename__ = "hotel_business_clock"

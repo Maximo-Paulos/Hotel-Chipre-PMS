@@ -84,6 +84,7 @@ import { usePaymentLinks, usePaymentLinkCancel, usePaymentLinkCreate } from "../
 import { usePaymentProofMutations, usePaymentProofs } from "../../hooks/usePaymentProofs";
 import { fetchPaymentProofImage } from "../../api/paymentProofs";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
+import { useBusinessDate } from "../../hooks/useBusinessClock";
 import { type HotelConfig } from "../../api/config";
 import { useRooms } from "../../hooks/useRooms";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
@@ -92,7 +93,7 @@ import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
 import { escapeHtml, resolveVoucherOperationalBalance } from "../../utils/escapeHtml";
 import { isLargeTotalAdjustment } from "../../utils/largeTotalAdjustment.mjs";
 import { canPrintPaymentReceipt } from "../../utils/paymentReceiptHtml";
-import { addDaysIso, formatHotelDateTime, formatLocalIsoDate, todayIso } from "../../utils/date";
+import { addDaysIso, formatHotelDateTime, formatLocalIsoDate } from "../../utils/date";
 import {
   canCancelReservation,
   canCheckInReservation,
@@ -258,6 +259,7 @@ export function ReservationsPage() {
     value ? t(`page.enums.${group}.${value}`, { defaultValue: t("page.enums.unknownValue") }) : t("page.enums.unknownValue");
   const sourceLabel = (value: string) => t(`page.form.sourceOptions.${value}`, { defaultValue: value });
   const { session } = useSession();
+  const businessDate = useBusinessDate();
   const { openReservation } = useReservationDrawer();
   const { hasPermission } = useEffectivePermissions();
   const canManageCompanyReservation = (reservation: Pick<Reservation, "company_id">) =>
@@ -317,8 +319,8 @@ export function ReservationsPage() {
     check_out_date: string;
   }>({
     category_id: "",
-    check_in_date: todayIso(),
-    check_out_date: addDaysIso(todayIso(), 1)
+    check_in_date: businessDate,
+    check_out_date: addDaysIso(businessDate, 1)
   });
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [allocationError, setAllocationError] = useState<string | null>(null);
@@ -348,9 +350,27 @@ export function ReservationsPage() {
   const [guestIdOpen, setGuestIdOpen] = useState<number | null>(null);
   const [allocationForm, setAllocationForm] = useState({
     apply: false,
-    horizon_start: todayIso(),
+    horizon_start: businessDate,
     horizon_end: ""
   });
+  const previousBusinessDateRef = useRef(businessDate);
+  useEffect(() => {
+    const previousDate = previousBusinessDateRef.current;
+    if (previousDate === businessDate) return;
+    setAvailabilityForm((current) => current.check_in_date === previousDate
+      ? {
+        ...current,
+        check_in_date: businessDate,
+        check_out_date: current.check_out_date === addDaysIso(previousDate, 1)
+          ? addDaysIso(businessDate, 1)
+          : current.check_out_date
+      }
+      : current);
+    setAllocationForm((current) => current.horizon_start === previousDate
+      ? { ...current, horizon_start: businessDate }
+      : current);
+    previousBusinessDateRef.current = businessDate;
+  }, [businessDate]);
   const toastTimeout = useRef<number | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const hasReceiptEmailDialog = receiptEmailAttempt !== null;
@@ -712,7 +732,7 @@ export function ReservationsPage() {
     setToast(null);
   };
 
-  const today = todayIso();
+  const today = businessDate;
   const totalRooms = roomsQuery.data?.length ?? 0;
   const moveRoomOptions = useMemo(() => {
     if (!detailsReservation) return [];
@@ -1881,8 +1901,10 @@ export function ReservationsPage() {
   );
   const requestedDepositPreview = paymentAmountInput.trim()
     ? Number(paymentAmountInput)
-    : convertReservationToTender(suggestedDepositAmount) ?? suggestedDepositAmount;
-  const depositAmountPreview = Number.isFinite(requestedDepositPreview) && requestedDepositPreview > 0
+    : convertReservationToTender(suggestedDepositAmount);
+  const depositAmountPreview = requestedDepositPreview !== null &&
+    Number.isFinite(requestedDepositPreview) &&
+    requestedDepositPreview > 0
     ? Number(requestedDepositPreview.toFixed(2))
     : null;
   const canApprovePaymentProof = hasPermission("payment:proof:review");
@@ -5016,7 +5038,11 @@ export function ReservationsPage() {
         </div>
       )}
 
-      <ManualOtaReservationModal open={otaFormOpen} onClose={() => setOtaFormOpen(false)} />
+      <ManualOtaReservationModal
+        open={otaFormOpen}
+        onClose={() => setOtaFormOpen(false)}
+        businessDate={businessDate}
+      />
 
       {restrictionOverridePrompt.phase !== "idle" ? (
         <RestrictionOverrideModal

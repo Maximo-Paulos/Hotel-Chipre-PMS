@@ -11,6 +11,7 @@
 - Production runtime validation already rejects weak placeholder secrets and invalid public URLs.
 - Auth uses bearer tokens plus hotel/user headers on protected API calls.
 - MFA enrollment is optional for hotel-user accounts and recommended. Accounts with active MFA must pass it at login and for configured sensitive-action step-ups; accounts without active MFA continue under their normal authentication, hotel membership, role, and permission checks.
+- Temporary permission grants are limited to a single reservation cancellation, require owner/co-owner approval, expire after 15 minutes, are consumed once, and can be revoked before use. The plaintext token is returned only to the approver once and must be conveyed directly to the requester; it is not sent by email or stored in audit details.
 - Master Admin remains a separate security boundary with its own MFA policy.
 - Webhook and integration flows use scoped credentials and secret checks.
 - Gemma keeps messages, insights, and actions scoped per hotel and user.

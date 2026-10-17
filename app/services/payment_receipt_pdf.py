@@ -69,6 +69,7 @@ def generate_payment_receipt_pdf(receipt: dict) -> bytes:
 
     rows = [
         ("Reserva", receipt["confirmation_code"]),
+        ("Huésped", receipt.get("guest_name") or "Huésped"),
         ("Movimiento", f"#{receipt['id']}"),
         ("Fecha", _local_created_at(receipt).strftime("%Y-%m-%d %H:%M:%S %Z")),
         ("Estado", state),

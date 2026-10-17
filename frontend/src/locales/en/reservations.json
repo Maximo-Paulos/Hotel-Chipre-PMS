@@ -7,6 +7,12 @@
     "loadRetry": "Retry",
     "operationLoadError": "Could not load the operational summary.",
     "operationRetry": "Retry",
+    "cancellationPermission": {
+      "checking": "Checking permissions and payments before enabling cancellation…",
+      "companyRestricted": "Your role cannot cancel company reservations. The available temporary authorization does not replace the permanent company-management permission.",
+      "paidRestricted": "This reservation has recorded payments and also requires permission to cancel paid reservations. The available temporary authorization only covers cancellations without payments.",
+      "roleRestricted": "Your role cannot cancel this reservation. Ask the owner to review the role or user permissions."
+    },
     "stay": {
       "title": "Stay",
       "roomNumber": "Room #{{id}}",

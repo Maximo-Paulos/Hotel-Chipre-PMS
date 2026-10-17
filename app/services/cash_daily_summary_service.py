@@ -11,7 +11,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.cash_register import (
@@ -146,20 +146,35 @@ def get_daily_summary(
         db.query(CashMovement)
         .filter(
             CashMovement.hotel_id == hotel_id,
-            CashMovement.recorded_at >= db_start,
-            CashMovement.recorded_at < db_end,
+            or_(
+                and_(
+                    CashMovement.business_recorded_at.is_not(None),
+                    CashMovement.business_recorded_at >= db_start,
+                    CashMovement.business_recorded_at < db_end,
+                ),
+                and_(
+                    CashMovement.business_recorded_at.is_(None),
+                    CashMovement.recorded_at >= db_start,
+                    CashMovement.recorded_at < db_end,
+                ),
+            ),
         )
-        .order_by(CashMovement.recorded_at.asc(), CashMovement.id.asc())
+        .order_by(
+            func.coalesce(CashMovement.business_recorded_at, CashMovement.recorded_at).asc(),
+            CashMovement.id.asc(),
+        )
         .all()
     )
+    session_opened_at = func.coalesce(CashSession.business_opened_at, CashSession.opened_at)
+    session_closed_at = func.coalesce(CashSession.business_closed_at, CashSession.closed_at)
     sessions = (
         db.query(CashSession)
         .filter(
             CashSession.hotel_id == hotel_id,
-            CashSession.opened_at < db_end,
-            (CashSession.closed_at.is_(None) | (CashSession.closed_at > db_start)),
+            session_opened_at < db_end,
+            (session_closed_at.is_(None) | (session_closed_at > db_start)),
         )
-        .order_by(CashSession.opened_at.asc(), CashSession.id.asc())
+        .order_by(session_opened_at.asc(), CashSession.id.asc())
         .all()
     )
     session_ids = [session.id for session in sessions]
@@ -168,9 +183,21 @@ def get_daily_summary(
         .filter(
             CashMovement.hotel_id == hotel_id,
             CashMovement.session_id.in_(session_ids),
-            CashMovement.recorded_at < db_start,
+            or_(
+                and_(
+                    CashMovement.business_recorded_at.is_not(None),
+                    CashMovement.business_recorded_at < db_start,
+                ),
+                and_(
+                    CashMovement.business_recorded_at.is_(None),
+                    CashMovement.recorded_at < db_start,
+                ),
+            ),
         )
-        .order_by(CashMovement.recorded_at.asc(), CashMovement.id.asc())
+        .order_by(
+            func.coalesce(CashMovement.business_recorded_at, CashMovement.recorded_at).asc(),
+            CashMovement.id.asc(),
+        )
         .all()
         if session_ids
         else []
@@ -359,7 +386,7 @@ def get_daily_summary(
                     "signed_amount": signed_amount,
                     "currency_code": movement_currency,
                     "movement_type": movement_type,
-                    "occurred_at": _utc(movement.recorded_at),
+                    "occurred_at": _utc(movement.business_recorded_at or movement.recorded_at),
                     "description": movement.description,
                 }
             )
@@ -403,9 +430,12 @@ def get_daily_summary(
         session.id
         for session in sessions
         if session_currencies.get(session.id) == report_currency
-        and _utc(session.opened_at) is not None
-        and _utc(session.opened_at) <= start
-        and (_utc(session.closed_at) is None or _utc(session.closed_at) > start)
+        and _utc(session.business_opened_at or session.opened_at) is not None
+        and _utc(session.business_opened_at or session.opened_at) <= start
+        and (
+            _utc(session.business_closed_at or session.closed_at) is None
+            or _utc(session.business_closed_at or session.closed_at) > start
+        )
     ]
     legacy_carry_by_successor = {
         successor_session_id: handoff
@@ -452,8 +482,8 @@ def get_daily_summary(
         if session_currencies.get(session.id) != report_currency:
             continue
         close_report = close_reports_by_session.get(session.id)
-        opened_at = _utc(session.opened_at)
-        closed_at = _utc(session.closed_at)
+        opened_at = _utc(session.business_opened_at or session.opened_at)
+        closed_at = _utc(session.business_closed_at or session.closed_at)
         session_opening_balance = _decimal(session.opening_balance)
         if opened_at is not None and opened_at <= start and (closed_at is None or closed_at > start):
             # Include prior movements on a session that was already open at
@@ -461,7 +491,12 @@ def get_daily_summary(
             # already represented by session.opening_balance.
             prior_handoff = legacy_carry_by_successor.get(session.id)
             if prior_handoff is not None:
-                acknowledged_at = _utc(prior_handoff.received_at or prior_handoff.delivered_at)
+                acknowledged_at = _utc(
+                    prior_handoff.business_received_at
+                    or prior_handoff.business_delivered_at
+                    or prior_handoff.received_at
+                    or prior_handoff.delivered_at
+                )
                 if acknowledged_at is not None and acknowledged_at <= start:
                     # Rows predating explicit float declarations used the
                     # confirmed full handoff as the successor opening. Keep
@@ -472,7 +507,11 @@ def get_daily_summary(
             opening_balance += session_opening_balance
         elif opened_at is not None and start <= opened_at < end:
             opening_balance += session_opening_balance
-        close_at = _utc(close_report.closed_at) if close_report is not None else None
+        close_at = (
+            _utc(close_report.business_closed_at or close_report.closed_at)
+            if close_report is not None
+            else None
+        )
         close_occurred_today = close_at is not None and start <= close_at < end
         if close_report is not None and close_occurred_today:
             declared = _decimal(close_report.declared_balance)
@@ -484,7 +523,11 @@ def get_daily_summary(
             difference = None
         if close_report is not None:
             handoff = close_report.custody_handoff
-            handoff_at = _utc(handoff.delivered_at) if handoff is not None else None
+            handoff_at = (
+                _utc(handoff.business_delivered_at or handoff.delivered_at)
+                if handoff is not None
+                else None
+            )
             if handoff_at is not None and start <= handoff_at < end:
                 # Closing removes the declared cash from the old drawer. The
                 # successor float is already included in opening_balance, so
@@ -500,6 +543,8 @@ def get_daily_summary(
                 "currency_code": session_currencies.get(session.id, report_currency),
                 "opened_at": _utc(session.opened_at),
                 "closed_at": _utc(session.closed_at),
+                "business_opened_at": _utc(session.business_opened_at),
+                "business_closed_at": _utc(session.business_closed_at),
                 "opened_by_user_id": session.opened_by_user_id,
                 "closed_by_user_id": session.closed_by_user_id,
                 "opened_by_name": actor_labels.get(session.opened_by_user_id) if session.opened_by_user_id else None,

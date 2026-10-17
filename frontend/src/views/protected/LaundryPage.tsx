@@ -48,7 +48,8 @@ import { useIsDesktopViewport } from "../../hooks/useIsDesktopViewport";
 import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useSession } from "../../state/session";
 import { formatMoney } from "../../utils/currency";
-import { startOfCurrentMonthIso, startOfCurrentWeekIso, todayIso } from "../../utils/date";
+import { startOfCurrentMonthIso, startOfCurrentWeekIso } from "../../utils/date";
+import { useBusinessDate } from "../../hooks/useBusinessClock";
 import { invalidateQueriesInBackground, refreshStockState } from "../../api/queryInvalidation";
 
 // Mobile task-based tabs -- desktop keeps showing every section at once
@@ -76,7 +77,7 @@ const formatLaundryQuantity = (value: string | number) =>
   new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(Number(value));
 
 const emptyVendorForm = { name: "", contact_phone: "", contact_email: "" };
-const emptyPriceForm = { linen_item_id: "", unit_price: "", effective_from: todayIso() };
+const emptyPriceForm = (businessDate: string) => ({ linen_item_id: "", unit_price: "", effective_from: businessDate });
 const emptyLinenItemForm = { name: "", unit: "unidad" };
 const emptyLinenLocationForm = { name: "" };
 const emptyMovementForm = { linen_item_id: "", location_id: "", movement_type: "in" as StockMovementType, quantity: "1", reason: "" };
@@ -88,19 +89,20 @@ const emptyLinenTransferForm = { linen_item_id: "", source_location_id: "", dest
 // or "0" means "nothing for this item in this direction", not an error.
 type RemitoQuantities = Record<number, { retiro: string; entrego: string; faltante: string }>;
 
-const emptyRemitoForm = () => ({
+const emptyRemitoForm = (businessDate: string) => ({
   vendor_id: "",
   house_location_id: "",
   // Auto-suggested from today's date (still editable) -- the paper slip
   // numbers vary per vendor and this field isn't globally unique server-side.
-  remito_number: todayIso().replace(/-/g, ""),
-  remito_date: todayIso(),
+  remito_number: businessDate.replace(/-/g, ""),
+  remito_date: businessDate,
   notes: ""
 });
 
 export function LaundryPage() {
   const { t, i18n } = useTranslation("common");
   const { session } = useSession();
+  const businessDate = useBusinessDate();
   const { hasPermission } = useEffectivePermissions();
   const queryClient = useQueryClient();
   const enabled = hasValidSession(session);
@@ -134,7 +136,7 @@ export function LaundryPage() {
   const [mutationErrors, setMutationErrors] = useState<Record<string, string>>({});
   const [selectedVendorId, setSelectedVendorId] = useState<number | null>(null);
   const [vendorForm, setVendorForm] = useState(emptyVendorForm);
-  const [priceForm, setPriceForm] = useState(emptyPriceForm);
+  const [priceForm, setPriceForm] = useState(() => emptyPriceForm(businessDate));
   const [linenItemForm, setLinenItemForm] = useState(emptyLinenItemForm);
   const [linenLocationForm, setLinenLocationForm] = useState(emptyLinenLocationForm);
   const [movementForm, setMovementForm] = useState(emptyMovementForm);
@@ -142,12 +144,28 @@ export function LaundryPage() {
   const linenTransferAttemptRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(null);
   const [openingCountReason, setOpeningCountReason] = useState("Conteo inicial");
   const [openingCountValues, setOpeningCountValues] = useState<Record<string, string>>({});
-  const [remitoForm, setRemitoForm] = useState(emptyRemitoForm);
+  const [remitoForm, setRemitoForm] = useState(() => emptyRemitoForm(businessDate));
   const [remitoQuantities, setRemitoQuantities] = useState<RemitoQuantities>({});
   const [remitoError, setRemitoError] = useState<string | null>(null);
   const [houseStockLocationId, setHouseStockLocationId] = useState<string>("");
-  const [spendRange, setSpendRange] = useState(() => ({ from: startOfCurrentMonthIso(), to: todayIso() }));
+  const [spendRange, setSpendRange] = useState(() => ({ from: startOfCurrentMonthIso(businessDate), to: businessDate }));
   const [settlementYear, setSettlementYear] = useState(() => new Date().getFullYear());
+  const previousBusinessDateRef = useRef(businessDate);
+  useEffect(() => {
+    const previousDate = previousBusinessDateRef.current;
+    if (previousDate === businessDate) return;
+    setPriceForm((current) => current.effective_from === previousDate
+      ? { ...current, effective_from: businessDate }
+      : current);
+    setRemitoForm((current) => current.remito_date === previousDate
+      && current.remito_number === previousDate.replace(/-/g, "")
+      ? { ...current, remito_number: businessDate.replace(/-/g, ""), remito_date: businessDate }
+      : current);
+    setSpendRange((current) => current.from === startOfCurrentMonthIso(previousDate) && current.to === previousDate
+      ? { from: startOfCurrentMonthIso(businessDate), to: businessDate }
+      : current);
+    previousBusinessDateRef.current = businessDate;
+  }, [businessDate]);
   const showMutationError = (key: string, error: unknown, fallback: string) => {
     setMutationErrors((current) => ({ ...current, [key]: error instanceof Error ? error.message : fallback }));
   };
@@ -524,7 +542,7 @@ export function LaundryPage() {
       ),
     onSuccess: async () => {
       if (selectedVendorId) await invalidatePrices(selectedVendorId);
-      setPriceForm(emptyPriceForm);
+      setPriceForm(emptyPriceForm(businessDate));
       setMessage("Precio guardado.");
     }
   });
@@ -638,7 +656,7 @@ export function LaundryPage() {
       // for that vendor+location that day, but re-selecting both before the
       // next remito is still friction -- only number/date/notes/quantities
       // are one-shot per remito and reset.
-      setRemitoForm((current) => ({ ...emptyRemitoForm(), vendor_id: current.vendor_id, house_location_id: current.house_location_id }));
+      setRemitoForm((current) => ({ ...emptyRemitoForm(businessDate), vendor_id: current.vendor_id, house_location_id: current.house_location_id }));
     }
   });
 
@@ -1480,14 +1498,14 @@ export function LaundryPage() {
             <div className="flex flex-wrap items-end gap-2">
               <button
                 type="button"
-                onClick={() => setSpendRange({ from: startOfCurrentWeekIso(), to: todayIso() })}
+                onClick={() => setSpendRange({ from: startOfCurrentWeekIso(businessDate), to: businessDate })}
                 className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Semana actual
               </button>
               <button
                 type="button"
-                onClick={() => setSpendRange({ from: startOfCurrentMonthIso(), to: todayIso() })}
+                onClick={() => setSpendRange({ from: startOfCurrentMonthIso(businessDate), to: businessDate })}
                 className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Mes actual

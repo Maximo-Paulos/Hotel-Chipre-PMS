@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatHotelDate, formatHotelTime } from "./date.ts";
+import { formatHotelDate, formatHotelTime, startOfCurrentMonthIso, startOfCurrentWeekIso } from "./date.ts";
 
 test("formats UTC timestamps in the hotel's local 24-hour clock", () => {
   assert.equal(
@@ -22,4 +22,9 @@ test("treats legacy naive backend timestamps as UTC", () => {
     formatHotelTime("2026-09-28T21:55:19", "America/Argentina/Buenos_Aires"),
     "18:55:19"
   );
+});
+
+test("builds report ranges from a supplied business date", () => {
+  assert.equal(startOfCurrentWeekIso("2026-10-18"), "2026-10-12");
+  assert.equal(startOfCurrentMonthIso("2026-10-18"), "2026-10-01");
 });

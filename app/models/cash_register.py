@@ -95,6 +95,10 @@ class CashSession(Base):
 
     opened_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     closed_at = Column(DateTime, nullable=True)
+    # Business dates can be simulated locally while opened_at/closed_at remain
+    # real timestamps for session audit and accountability.
+    business_opened_at = Column(DateTime, nullable=True)
+    business_closed_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
 
     movements = relationship(
@@ -160,6 +164,7 @@ class CashMovement(Base):
     amount = Column(Numeric(12, 2), nullable=False)
     description = Column(String(300), nullable=True)
     recorded_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    business_recorded_at = Column(DateTime, nullable=True)
 
     session = relationship("CashSession", back_populates="movements")
 
@@ -186,6 +191,12 @@ class CashMovement(Base):
             "hotel_id",
             "session_id",
             "recorded_at",
+            "id",
+        ),
+        Index(
+            "ix_cash_movements_hotel_business_recorded_at",
+            "hotel_id",
+            "business_recorded_at",
             "id",
         ),
         Index(
@@ -233,6 +244,7 @@ class CashCloseReport(Base):
 
     notes = Column(Text, nullable=True)
     closed_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    business_closed_at = Column(DateTime, nullable=True)
 
     successor_session_id = Column(Integer, nullable=True, unique=True)
     successor_float_declared_amount = Column(Numeric(12, 2), nullable=True)
@@ -246,6 +258,7 @@ class CashCloseReport(Base):
         nullable=True,
     )
     successor_float_declared_at = Column(DateTime, nullable=True)
+    business_successor_float_declared_at = Column(DateTime, nullable=True)
 
     session = relationship("CashSession", back_populates="close_report", foreign_keys=[session_id])
     successor_session = relationship("CashSession", foreign_keys=[successor_session_id], uselist=False)
@@ -330,6 +343,8 @@ class CashCustodyHandoff(Base):
     )
     delivered_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     received_at = Column(DateTime, nullable=True)
+    business_delivered_at = Column(DateTime, nullable=True)
+    business_received_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
 
     close_report = relationship("CashCloseReport", back_populates="custody_handoff")

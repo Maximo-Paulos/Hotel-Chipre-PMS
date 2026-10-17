@@ -30,6 +30,8 @@ class CashSessionRead(BaseModel):
     currency_code: str
     opened_at: UTCDateTime
     closed_at: Optional[UTCDateTime] = None
+    business_opened_at: Optional[UTCDateTime] = None
+    business_closed_at: Optional[UTCDateTime] = None
     notes: Optional[str] = None
 
     model_config = {"from_attributes": True}
@@ -57,6 +59,7 @@ class CashMovementRead(BaseModel):
     amount: Decimal
     description: Optional[str] = None
     recorded_at: UTCDateTime
+    business_recorded_at: Optional[UTCDateTime] = None
 
     model_config = {"from_attributes": True}
 
@@ -146,6 +149,8 @@ class CashDailySessionRead(BaseModel):
     currency_code: str
     opened_at: UTCDateTime
     closed_at: Optional[UTCDateTime] = None
+    business_opened_at: Optional[UTCDateTime] = None
+    business_closed_at: Optional[UTCDateTime] = None
     opened_by_user_id: Optional[int] = None
     closed_by_user_id: Optional[int] = None
     opened_by_name: Optional[str] = None
@@ -221,6 +226,8 @@ class CashCustodyHandoffRead(BaseModel):
     status: CashCustodyStatusEnum
     delivered_at: UTCDateTime
     received_at: Optional[UTCDateTime] = None
+    business_delivered_at: Optional[UTCDateTime] = None
+    business_received_at: Optional[UTCDateTime] = None
     notes: Optional[str] = None
 
     model_config = {"from_attributes": True}
@@ -245,9 +252,11 @@ class CashCloseReportRead(BaseModel):
     successor_float_declared_by_user_id: Optional[int] = None
     successor_float_declared_by_name: Optional[str] = None
     successor_float_declared_at: Optional[UTCDateTime] = None
+    business_successor_float_declared_at: Optional[UTCDateTime] = None
     custody_handoff: Optional[CashCustodyHandoffRead] = None
     notes: Optional[str] = None
     closed_at: UTCDateTime
+    business_closed_at: Optional[UTCDateTime] = None
 
     model_config = {"from_attributes": True}
 

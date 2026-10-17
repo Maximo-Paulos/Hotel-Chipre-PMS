@@ -31,6 +31,8 @@ def local_clock_enabled(monkeypatch, tmp_path):
     monkeypatch.setenv("LOCAL_SIMULATION_CLOCK_ENABLED", "true")
     monkeypatch.setenv("LOCAL_SIMULATION_CLOCK_HOTEL_ID", "1")
     monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "false")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "false")
+    monkeypatch.delenv("LOCAL_SIMULATION_CLOCK_POSTGRES_DATABASE", raising=False)
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
@@ -229,6 +231,64 @@ def test_business_clock_is_disabled_without_explicit_external_effects_configurat
     from app.services.timezones import business_clock_enabled_for_hotel
 
     assert business_clock_enabled_for_hotel(1) is False
+
+
+def test_postgres_business_clock_requires_exact_loopback_database_and_closed_connections(monkeypatch):
+    from sqlalchemy.engine import make_url
+
+    from app.services.timezones import business_clock_enabled_for_hotel
+
+    database_url = "postgresql+psycopg2://pms:pms@127.0.0.1:55433/hotel_pms"
+    settings = SimpleNamespace(
+        APP_ENV="development",
+        model_fields_set={
+            "APP_ENV",
+            "LOCAL_SIMULATION_CLOCK_ENABLED",
+            "LOCAL_SIMULATION_CLOCK_HOTEL_ID",
+            "LOCAL_SIMULATION_CLOCK_POSTGRES_DATABASE",
+            "EXTERNAL_EFFECTS_ENABLED",
+            "CONNECTIONS_ENABLED",
+        },
+        LOCAL_SIMULATION_CLOCK_ENABLED=True,
+        LOCAL_SIMULATION_CLOCK_HOTEL_ID=1,
+        LOCAL_SIMULATION_CLOCK_POSTGRES_DATABASE="hotel_pms",
+        EXTERNAL_EFFECTS_ENABLED=False,
+        CONNECTIONS_ENABLED=False,
+        DATABASE_URL=database_url,
+    )
+    bind = SimpleNamespace(
+        dialect=SimpleNamespace(name="postgresql"),
+        url=make_url(database_url),
+    )
+    db = SimpleNamespace(get_bind=lambda: bind)
+    monkeypatch.setattr("app.config.get_settings", lambda: settings)
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("PGHOSTADDR", raising=False)
+    monkeypatch.delenv("PGSERVICE", raising=False)
+
+    assert business_clock_enabled_for_hotel(1, db) is True
+    assert business_clock_enabled_for_hotel(2, db) is False
+
+    settings.LOCAL_SIMULATION_CLOCK_POSTGRES_DATABASE = "another_database"
+    assert business_clock_enabled_for_hotel(1, db) is False
+    settings.LOCAL_SIMULATION_CLOCK_POSTGRES_DATABASE = "hotel_pms"
+    settings.CONNECTIONS_ENABLED = True
+    assert business_clock_enabled_for_hotel(1, db) is False
+    settings.CONNECTIONS_ENABLED = False
+    settings.DATABASE_URL = "postgresql+psycopg2://pms:pms@example.com:55433/hotel_pms"
+    assert business_clock_enabled_for_hotel(1, db) is False
+    settings.DATABASE_URL = "postgresql+psycopg2://pms:pms@127.0.0.1:55433/hotel_pms?hostaddr=203.0.113.4"
+    assert business_clock_enabled_for_hotel(1, db) is False
+    settings.DATABASE_URL = database_url
+    bind.url = make_url("postgresql+psycopg2://pms:pms@127.0.0.1:55434/hotel_pms")
+    assert business_clock_enabled_for_hotel(1, db) is False
+    bind.url = make_url(database_url)
+    monkeypatch.setenv("PGHOSTADDR", "203.0.113.4")
+    assert business_clock_enabled_for_hotel(1, db) is False
+    monkeypatch.setenv("PGHOSTADDR", "127.0.0.1")
+    monkeypatch.setenv("PGSERVICE", "remote-host-service")
+    assert business_clock_enabled_for_hotel(1, db) is False
 
 
 def test_only_owner_can_advance_exactly_one_day_and_audit_uses_real_utc(

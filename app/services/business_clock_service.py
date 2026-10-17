@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
@@ -26,7 +27,7 @@ def get_business_clock(db: Session, hotel_id: int) -> dict:
         "hotel_id": hotel_id,
         "business_date": hotel_today(db, hotel_id),
         "hotel_timezone": hotel_timezone_name(db, hotel_id),
-        "simulation_enabled": business_clock_enabled_for_hotel(hotel_id),
+        "simulation_enabled": business_clock_enabled_for_hotel(hotel_id, db),
     }
 
 
@@ -38,18 +39,28 @@ def advance_business_clock(
 ) -> HotelBusinessClock:
     """Advance exactly one business day and append a real-time audit event.
 
-    SQLite's atomic upsert prevents concurrent local requests from overwriting
-    each other's day increment. On first use, the new date is tomorrow in the
-    hotel's timezone. Both the state mutation and audit row share the caller's
-    transaction.
+    SQLite and PostgreSQL atomic upserts prevent concurrent local requests
+    from overwriting each other's day increment. On first use, the new date is
+    tomorrow in the hotel's timezone. Both the state mutation and audit row
+    share the caller's transaction.
     """
-    if not business_clock_enabled_for_hotel(hotel_id):
+    if not business_clock_enabled_for_hotel(hotel_id, db):
         raise BusinessClockDisabledError
 
     current_date = hotel_today(db, hotel_id)
     next_date = current_date + timedelta(days=1)
     real_now = datetime.now(timezone.utc)
-    statement = sqlite_insert(HotelBusinessClock).values(
+    dialect = db.get_bind().dialect.name
+    if dialect == "sqlite":
+        insert = sqlite_insert
+        increment = func.date(HotelBusinessClock.business_date, "+1 day")
+    elif dialect == "postgresql":
+        insert = postgresql_insert
+        increment = HotelBusinessClock.business_date + 1
+    else:
+        raise BusinessClockDisabledError
+
+    statement = insert(HotelBusinessClock).values(
         hotel_id=hotel_id,
         business_date=next_date,
         advanced_at=real_now,
@@ -58,7 +69,7 @@ def advance_business_clock(
     statement = statement.on_conflict_do_update(
         index_elements=[HotelBusinessClock.hotel_id],
         set_={
-            "business_date": func.date(HotelBusinessClock.business_date, "+1 day"),
+            "business_date": increment,
             "advanced_at": real_now,
             "advanced_by_user_id": actor_user_id,
         },

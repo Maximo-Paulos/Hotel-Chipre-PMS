@@ -1,4 +1,4 @@
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -18,7 +18,7 @@ import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { roomStatusLabel, useRooms } from "../../hooks/useRooms";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useSession } from "../../state/session";
-import { todayIso } from "../../utils/date";
+import { useBusinessDate } from "../../hooks/useBusinessClock";
 import { isRoomBlockCurrentOrUpcoming } from "../../utils/roomBlockVisibility.mjs";
 import { addDaysIso } from "../../hooks/useRateCalendar";
 import { useOccupancyGrid } from "../../hooks/useReservations";
@@ -49,9 +49,9 @@ type BlockFormValues = {
   reason_note: string;
 };
 
-const emptyBlockForm = (): BlockFormValues => ({
+const emptyBlockForm = (businessDate: string): BlockFormValues => ({
   room_id: "",
-  starts_at: todayIso(),
+  starts_at: businessDate,
   ends_at: "",
   is_indefinite: false,
   reason_code: "maintenance",
@@ -67,6 +67,7 @@ export function RoomsPage() {
     inspected: t("housekeepingStatus.inspected")
   };
   const { session } = useSession();
+  const businessDate = useBusinessDate();
   const { hasPermission } = useEffectivePermissions();
   const isHousekeeping = session.baseRole === "housekeeping";
   const canManageRoomStatus = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
@@ -85,7 +86,7 @@ export function RoomsPage() {
     staleTime: 0
   });
   const { blocksQuery, createBlockMutation, resolveBlockMutation, extendBlockMutation } = useRoomBlocks({ enabled: canReadBlocks });
-  const today = todayIso();
+  const today = businessDate;
   // Keep the persisted physical status independent from future allocations,
   // while still showing the next/current reservation after a Planilla move.
   const occupancyQuery = useOccupancyGrid(today, addDaysIso(today, 92), showAssignments);
@@ -104,7 +105,16 @@ export function RoomsPage() {
   const [pendingBlockId, setPendingBlockId] = useState<number | null>(null);
   const [extendingBlockId, setExtendingBlockId] = useState<number | null>(null);
   const [extensionEndDate, setExtensionEndDate] = useState("");
-  const [blockForm, setBlockForm] = useState<BlockFormValues>(() => emptyBlockForm());
+  const [blockForm, setBlockForm] = useState<BlockFormValues>(() => emptyBlockForm(businessDate));
+  const previousBusinessDateRef = useRef(businessDate);
+  useEffect(() => {
+    const previousDate = previousBusinessDateRef.current;
+    if (previousDate === businessDate) return;
+    setBlockForm((current) => current.starts_at === previousDate
+      ? { ...current, starts_at: businessDate }
+      : current);
+    previousBusinessDateRef.current = businessDate;
+  }, [businessDate]);
   const [blockMessage, setBlockMessage] = useState<string | null>(null);
   const [blockErrors, setBlockErrors] = useState<Record<string, string>>({});
   const { data: subscription } = useSubscriptionStatus({ enabled: !isHousekeeping });
@@ -267,7 +277,7 @@ export function RoomsPage() {
 
     try {
       await createBlockMutation.mutateAsync(payload);
-      setBlockForm(emptyBlockForm());
+      setBlockForm(emptyBlockForm(businessDate));
       setBlockMessage(t("blocks.createSuccess"));
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
