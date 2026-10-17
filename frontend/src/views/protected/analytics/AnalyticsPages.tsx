@@ -12,6 +12,8 @@ import { StatCard } from "../../../components/StatCard";
 import { useSession } from "../../../state/session";
 import { refreshAfterMutation, refreshRoomState } from "../../../api/queryInvalidation";
 import { useGuardedMutation } from "../../../hooks/useGuardedMutation";
+import { useBusinessClock } from "../../../hooks/useBusinessClock";
+import { startOfCurrentMonthIso } from "../../../utils/date";
 
 type AnalyticsEnvelope = {
   hotel_id: number;
@@ -112,22 +114,16 @@ const localDateIso = (date = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
-const startOfCurrentLocalMonthIso = () => {
-  const date = new Date();
-  date.setDate(1);
-  return localDateIso(date);
-};
-
-const defaultAnalyticsFilters = (): AnalyticsFilterState => ({
-  date_from: startOfCurrentLocalMonthIso(),
-  date_to: localDateIso(),
+const defaultAnalyticsFilters = (businessDate = localDateIso()): AnalyticsFilterState => ({
+  date_from: startOfCurrentMonthIso(businessDate),
+  date_to: businessDate,
   currency_display: "ARS",
   compare_previous: true,
   compare_yoy: false
 });
 
-const parseAnalyticsFilters = (raw: string | null): AnalyticsFilterState => {
-  const defaults = defaultAnalyticsFilters();
+const parseAnalyticsFilters = (raw: string | null, businessDate = localDateIso()): AnalyticsFilterState => {
+  const defaults = defaultAnalyticsFilters(businessDate);
   if (!raw) return defaults;
   try {
     const parsed = JSON.parse(raw) as Partial<AnalyticsFilterState>;
@@ -148,23 +144,29 @@ const parseAnalyticsFilters = (raw: string | null): AnalyticsFilterState => {
 
 function usePersistedAnalyticsFilters(routeName: string) {
   const { session } = useSession();
+  const businessClockQuery = useBusinessClock();
+  const businessDate = businessClockQuery.data?.business_date ?? localDateIso();
+  const businessDateReady = !import.meta.env.DEV || businessClockQuery.isSuccess || businessClockQuery.isError;
   const storageKey = useMemo(() => analyticsFilterStorageKey(session.hotelId, routeName), [routeName, session.hotelId]);
+  const initializationKey = storageKey ? `${storageKey}:${businessDate}` : null;
   const [filters, setFilters] = useState<AnalyticsFilterState>(() => {
-    if (typeof window === "undefined") return defaultAnalyticsFilters();
-    return parseAnalyticsFilters(storageKey ? window.sessionStorage.getItem(storageKey) : null);
+    if (typeof window === "undefined") return defaultAnalyticsFilters(businessDate);
+    return parseAnalyticsFilters(storageKey ? window.sessionStorage.getItem(storageKey) : null, businessDate);
   });
+  const [initializedKey, setInitializedKey] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    setFilters(parseAnalyticsFilters(storageKey ? window.sessionStorage.getItem(storageKey) : null));
-  }, [storageKey]);
+    if (typeof window === "undefined" || !storageKey || !initializationKey || !businessDateReady) return;
+    setFilters(parseAnalyticsFilters(window.sessionStorage.getItem(storageKey), businessDate));
+    setInitializedKey(initializationKey);
+  }, [businessDate, businessDateReady, initializationKey, storageKey]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !storageKey) return;
+    if (typeof window === "undefined" || !storageKey || initializedKey !== initializationKey) return;
     window.sessionStorage.setItem(storageKey, JSON.stringify(filters));
-  }, [filters, storageKey]);
+  }, [filters, initializationKey, initializedKey, storageKey]);
 
-  return [filters, setFilters] as const;
+  return [filters, setFilters, !storageKey || initializedKey === initializationKey] as const;
 }
 
 function AnalyticsFilterBar({
@@ -367,12 +369,17 @@ function usePlan() {
 
 const planRankFor = (plan: string | null): number => (plan ? planRank[plan] ?? 0 : 0);
 
-function useAnalyticsQuery<T>(path: string, params: Record<string, string | number | boolean | null | undefined> = {}) {
+function useAnalyticsQuery<T>(
+  path: string,
+  params: Record<string, string | number | boolean | null | undefined> = {},
+  enabled = true
+) {
   const { session } = useSession();
   const query = useQuery({
     queryKey: ["analytics", session.hotelId, path, params],
     queryFn: async () => apiFetch<T>(`${path}${buildQuery(params)}`, { session }),
-    staleTime: 30_000
+    staleTime: 30_000,
+    enabled
   });
   return query;
 }
@@ -573,7 +580,7 @@ function ReportScreen({
   routeName: string;
   params?: Record<string, string | number | boolean | null | undefined>;
 }) {
-  const [filters, setFilters] = usePersistedAnalyticsFilters(routeName);
+  const [filters, setFilters, filtersReady] = usePersistedAnalyticsFilters(routeName);
   const queryParams = useMemo(
     () => ({
       ...params,
@@ -585,7 +592,7 @@ function ReportScreen({
     }),
     [filters, params]
   );
-  const query = useAnalyticsQuery<AnalyticsEnvelope>(path, queryParams);
+  const query = useAnalyticsQuery<AnalyticsEnvelope>(path, queryParams, filtersReady);
   const report = query.data;
   const errorMessage = analyticsErrorMessage(query.error);
   return (
@@ -654,11 +661,11 @@ function analyticsErrorMessage(error: unknown): string {
 }
 
 function StarterLandingScreen() {
-  const [filters, setFilters] = usePersistedAnalyticsFilters("starter");
+  const [filters, setFilters, filtersReady] = usePersistedAnalyticsFilters("starter");
   const query = useAnalyticsQuery<AnalyticsStarterSummary>("/api/analytics/starter-summary", {
     date_from: filters.date_from,
     date_to: filters.date_to
-  });
+  }, filtersReady);
   const cards = query.data?.data.cards ?? [];
   return (
     <PageShell
@@ -805,7 +812,7 @@ export function AnalyticsOperationsPage() {
 export function AnalyticsAIChatPage() {
   const { session } = useSession();
   const queryClient = useQueryClient();
-  const [filters, setFilters] = usePersistedAnalyticsFilters("ai-chat");
+  const [filters, setFilters, filtersReady] = usePersistedAnalyticsFilters("ai-chat");
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const statusQuery = useAnalyticsQuery<AnalyticsAIStatus>("/api/analytics/insights/status");
@@ -933,7 +940,7 @@ export function AnalyticsAIChatPage() {
               />
               <button
                 type="submit"
-                disabled={chatMutation.isPending || !message.trim()}
+                disabled={!filtersReady || chatMutation.isPending || !message.trim()}
                 className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {chatMutation.isPending ? "Enviando..." : "Enviar"}

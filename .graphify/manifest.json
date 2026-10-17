@@ -1500,8 +1500,8 @@
     "hash": "6f9ee9efe8e14809a92466437914f1e2"
   },
   "frontend/src/views/protected/analytics/AnalyticsPages.tsx": {
-    "mtime": 1792100439497.3433,
-    "hash": "10ee93ffb0d74f9c0afb49920f35a0d7"
+    "mtime": 1792272219865.5159,
+    "hash": "839f862cbdefcbe98355ef5b893a1d0a"
   },
   "frontend/src/views/public/AcceptInvitationPage.tsx": {
     "mtime": 1791849255925.5608,
@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1792266398749.2935,
-    "hash": "b7d730e7d5af83a57c33c4483ec43f09"
+    "mtime": 1792271586109.2192,
+    "hash": "a4c517afc050443bcfd06d52f50a04a1"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1792266398027.7256,
-    "hash": "482977954f67ef8cb78345e1e4f25539"
+    "mtime": 1792271585350.849,
+    "hash": "264330438e10415374f897e3837c4aa6"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1792266398736.9722,
-    "hash": "787243dbabfafff1e06ddbcad4a00623"
+    "mtime": 1792271586095.8865,
+    "hash": "f11cc0b639130394c2f0ac6187fa5584"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1792266398041.1943,
-    "hash": "cdbd37e23950677d7904027a2a780307"
+    "mtime": 1792271585365.2896,
+    "hash": "fae2b45f4f10c698190441eee8b923d4"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1792266398724.3083,
-    "hash": "1eed2706f16e6757436dda2f103f91cd"
+    "mtime": 1792271586082.4014,
+    "hash": "5fb3ed0de7c1b5ab83ca0fa13db35d12"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1792266398236.8552,
-    "hash": "af5ca0d46fa4eabb402043702f7d05d6"
+    "mtime": 1792271585568.9321,
+    "hash": "4b6492ffab10956cf3427112ec9ba898"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -7052,8 +7052,8 @@
     "hash": "a02d9fb7b7b66b7ede3d3ca15ef65d54"
   },
   "docs/audits/perf-2026-10-13/coverage-notes/tests3.md": {
-    "mtime": 1792259296354.1504,
-    "hash": "e4abf5fd8fb56ed5dcd591e9fbd002cd"
+    "mtime": 1792271695993.8647,
+    "hash": "fb5b8e6e7cb7419565d980a5e736f467"
   },
   "docs/audits/perf-2026-10-13/coverage-notes/tests4.md": {
     "mtime": 1792259296354.2915,
