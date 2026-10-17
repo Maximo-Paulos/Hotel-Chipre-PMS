@@ -31,7 +31,7 @@ from app.models.laundry_vendor import (
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.services import linen_service
-from app.services.timezones import hotel_today
+from app.services.timezones import hotel_business_now, hotel_today, utc_naive
 
 DIRECTIONS = {"outbound", "inbound"}
 QUARTER_MONTHS = {1: (1, 3), 2: (4, 6), 3: (7, 9), 4: (10, 12)}
@@ -289,6 +289,7 @@ def create_remito(
             remito_date=remito_date,
             notes=notes,
             created_by_user_id=actor_user_id,
+            created_at=utc_naive(hotel_business_now(db, hotel_id)),
         )
         db.add(remito)
         db.flush()
@@ -664,7 +665,7 @@ def mark_vendor_settlement_paid(
         db.add(settlement)
 
     settlement.paid = paid
-    settlement.paid_at = datetime.now(timezone.utc) if paid else None
+    settlement.paid_at = utc_naive(hotel_business_now(db, hotel_id)) if paid else None
     settlement.paid_by_user_id = actor_user_id if paid else None
     if notes is not None:
         settlement.notes = notes

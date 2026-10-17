@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-17T21:40:05.367Z",
+  "generatedAt": "2026-10-17T21:59:41.636Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -7179,38 +7179,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_operational_task_service_create_task",
-      "name": "create_task",
-      "entryPoint": "services_operational_task_service_create_task",
-      "entryPointId": "services_operational_task_service_create_task",
-      "path": [
-        "services_operational_task_service_create_task",
-        "services_operational_task_service_append_event",
-        "services_operational_task_service_operationaltaskerror",
-        "services_operational_task_service_validate_hotel_local_due_at",
-        "services_operational_task_service_validate_links",
-        "services_operational_task_service_validate_user_membership",
-        "services_operational_task_service_enum_value"
-      ],
-      "qualifiedPath": [
-        "services_operational_task_service_create_task",
-        "services_operational_task_service_append_event",
-        "services_operational_task_service_operationaltaskerror",
-        "services_operational_task_service_validate_hotel_local_due_at",
-        "services_operational_task_service_validate_links",
-        "services_operational_task_service_validate_user_membership",
-        "services_operational_task_service_enum_value"
-      ],
-      "depth": 2,
-      "nodeCount": 7,
-      "fileCount": 1,
-      "files": [
-        "app/services/operational_task_service.py"
-      ],
-      "criticality": 0.2771,
-      "warnings": []
-    },
-    {
       "id": "flow:services_cash_register_service_record_cash_payment_movement",
       "name": "record_cash_payment_movement",
       "entryPoint": "services_cash_register_service_record_cash_payment_movement",
@@ -7553,6 +7521,40 @@
         "scripts/agent_ops/provision_qa_bootstrap.py"
       ],
       "criticality": 0.2675,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_task_service_create_task",
+      "name": "create_task",
+      "entryPoint": "services_operational_task_service_create_task",
+      "entryPointId": "services_operational_task_service_create_task",
+      "path": [
+        "services_operational_task_service_create_task",
+        "services_operational_task_service_append_event",
+        "services_operational_task_service_now",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_validate_hotel_local_due_at",
+        "services_operational_task_service_validate_links",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_enum_value"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_create_task",
+        "services_operational_task_service_append_event",
+        "services_operational_task_service_now",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_validate_hotel_local_due_at",
+        "services_operational_task_service_validate_links",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_enum_value"
+      ],
+      "depth": 2,
+      "nodeCount": 8,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.2638,
       "warnings": []
     },
     {
@@ -8818,30 +8820,6 @@
       "fileCount": 1,
       "files": [
         "app/api/rate_change_drafts.py"
-      ],
-      "criticality": 0.2433,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_operational_task_service_create_handoff",
-      "name": "create_handoff",
-      "entryPoint": "services_operational_task_service_create_handoff",
-      "entryPointId": "services_operational_task_service_create_handoff",
-      "path": [
-        "services_operational_task_service_create_handoff",
-        "services_operational_task_service_operationaltaskerror",
-        "services_operational_task_service_validate_user_membership"
-      ],
-      "qualifiedPath": [
-        "services_operational_task_service_create_handoff",
-        "services_operational_task_service_operationaltaskerror",
-        "services_operational_task_service_validate_user_membership"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "app/services/operational_task_service.py"
       ],
       "criticality": 0.2433,
       "warnings": []
@@ -10733,6 +10711,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_operational_task_service_create_handoff",
+      "name": "create_handoff",
+      "entryPoint": "services_operational_task_service_create_handoff",
+      "entryPointId": "services_operational_task_service_create_handoff",
+      "path": [
+        "services_operational_task_service_create_handoff",
+        "services_operational_task_service_now",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_validate_user_membership"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_create_handoff",
+        "services_operational_task_service_now",
+        "services_operational_task_service_operationaltaskerror",
+        "services_operational_task_service_validate_user_membership"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.2225,
+      "warnings": []
+    },
+    {
       "id": "flow:api_reservations_create_new_reservation",
       "name": "create_new_reservation",
       "entryPoint": "api_reservations_create_new_reservation",
@@ -11593,36 +11597,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_operational_task_service_create_task_attachment",
-      "name": "create_task_attachment",
-      "entryPoint": "services_operational_task_service_create_task_attachment",
-      "entryPointId": "services_operational_task_service_create_task_attachment",
-      "path": [
-        "services_operational_task_service_create_task_attachment",
-        "services_operational_task_service_decode_task_photo",
-        "services_operational_task_service_get_task",
-        "services_operational_task_service_safe_task_photo_name",
-        "services_operational_task_service_validate_user_membership",
-        "services_operational_task_service_operationaltaskerror"
-      ],
-      "qualifiedPath": [
-        "services_operational_task_service_create_task_attachment",
-        "services_operational_task_service_decode_task_photo",
-        "services_operational_task_service_get_task",
-        "services_operational_task_service_safe_task_photo_name",
-        "services_operational_task_service_validate_user_membership",
-        "services_operational_task_service_operationaltaskerror"
-      ],
-      "depth": 2,
-      "nodeCount": 6,
-      "fileCount": 1,
-      "files": [
-        "app/services/operational_task_service.py"
-      ],
-      "criticality": 0.2117,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_warehouse_get_clickhouse_client",
       "name": "get_clickhouse_client",
       "entryPoint": "services_analytics_warehouse_get_clickhouse_client",
@@ -11990,6 +11964,38 @@
         "app/services/domain_events.py"
       ],
       "criticality": 0.2063,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_operational_task_service_create_task_attachment",
+      "name": "create_task_attachment",
+      "entryPoint": "services_operational_task_service_create_task_attachment",
+      "entryPointId": "services_operational_task_service_create_task_attachment",
+      "path": [
+        "services_operational_task_service_create_task_attachment",
+        "services_operational_task_service_decode_task_photo",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_now",
+        "services_operational_task_service_safe_task_photo_name",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "qualifiedPath": [
+        "services_operational_task_service_create_task_attachment",
+        "services_operational_task_service_decode_task_photo",
+        "services_operational_task_service_get_task",
+        "services_operational_task_service_now",
+        "services_operational_task_service_safe_task_photo_name",
+        "services_operational_task_service_validate_user_membership",
+        "services_operational_task_service_operationaltaskerror"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/operational_task_service.py"
+      ],
+      "criticality": 0.2057,
       "warnings": []
     },
     {

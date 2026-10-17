@@ -23,6 +23,7 @@ from app.models.audit_log import AuditActionEnum
 from app.models.linen import LinenItem, LinenLocation, LinenMovement, LinenParLevel
 from app.models.laundry_vendor import LaundryVendor
 from app.services import audit_log_service
+from app.services.timezones import hotel_business_now, utc_naive
 
 
 class LinenError(ValueError):
@@ -240,6 +241,7 @@ def register_movement(
         reason=reason,
         reservation_id=reservation_id,
         created_by_user_id=created_by_user_id,
+        created_at=utc_naive(hotel_business_now(db, hotel_id)),
         transfer_reference=transfer_reference,
     )
     db.add(movement)
@@ -453,6 +455,7 @@ def register_opening_counts(
             f"{item_by_id[item_id].name} — {location_by_id[location_id].name}"
         )
 
+    created_at = utc_naive(hotel_business_now(db, hotel_id))
     movements = [
         LinenMovement(
             hotel_id=hotel_id,
@@ -462,6 +465,7 @@ def register_opening_counts(
             quantity=quantity,
             reason=normalized_reason,
             created_by_user_id=created_by_user_id,
+            created_at=created_at,
         )
         for (item_id, location_id), quantity in sorted(count_by_pair.items())
     ]

@@ -3,11 +3,10 @@ Hotel-scoped laundry service.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.laundry import LaundryBatch, LaundryItem
+from app.services.timezones import hotel_business_now, hotel_today, utc_naive
 
 
 class LaundryError(ValueError):
@@ -30,11 +29,13 @@ def create_batch(
     notes: str | None = None,
     created_by_user_id: int | None = None,
 ) -> LaundryBatch:
+    now = utc_naive(hotel_business_now(db, hotel_id))
     batch = LaundryBatch(
         hotel_id=hotel_id,
         batch_code=_next_batch_code(db, hotel_id),
         notes=notes,
         created_by_user_id=created_by_user_id,
+        created_at=now,
     )
     db.add(batch)
     db.flush()
@@ -74,7 +75,7 @@ def transition_status(db: Session, *, hotel_id: int, batch_id: int, new_status: 
         raise LaundryError(f"Invalid laundry status transition: {current_status} -> {new_status}")
 
     batch.status = new_status
-    now = datetime.now(timezone.utc)
+    now = utc_naive(hotel_business_now(db, hotel_id))
     if new_status == "sent":
         batch.sent_at = now
     elif new_status == "received":
@@ -114,7 +115,7 @@ def _get_batch(db: Session, *, hotel_id: int, batch_id: int) -> LaundryBatch:
 
 
 def _next_batch_code(db: Session, hotel_id: int) -> str:
-    prefix = datetime.now(timezone.utc).strftime("L%Y%m%d")
+    prefix = f"L{hotel_today(db, hotel_id):%Y%m%d}"
     existing = (
         db.query(LaundryBatch.batch_code)
         .filter(LaundryBatch.hotel_id == hotel_id, LaundryBatch.batch_code.like(f"{prefix}-%"))

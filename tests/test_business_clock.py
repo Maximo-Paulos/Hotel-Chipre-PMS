@@ -375,3 +375,216 @@ def test_first_advance_initializes_from_hotel_today(
 
     assert response.status_code == 200, response.text
     assert response.json()["business_date"] == "2027-03-15"
+
+
+def _fix_operational_clock_time(monkeypatch):
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = cls(2026, 10, 17, 21, 30, 12, tzinfo=timezone.utc)
+            return value.astimezone(tz) if tz else value
+
+    monkeypatch.setattr("app.services.timezones.datetime", FixedDateTime)
+    return datetime(2041, 7, 8, 21, 30, 12)
+
+
+def test_stock_and_linen_ledger_timestamps_use_hotel_business_clock(
+    business_clock_api, local_clock_enabled, monkeypatch
+):
+    from decimal import Decimal
+
+    from app.models.laundry_vendor import LaundryRemitoLine
+    from app.models.linen import LinenMovement
+    from app.models.security_audit_log import SecurityAuditLog
+    from app.services.laundry_missing_followup_service import update_missing_follow_up
+    from app.services.linen_service import (
+        create_linen_item,
+        create_location as create_linen_location,
+        register_opening_counts,
+    )
+    from app.services.laundry_vendor_service import (
+        create_remito,
+        create_vendor,
+        mark_vendor_settlement_paid,
+        set_vendor_price,
+    )
+    from app.services.stock_service import create_location, create_stock_item, register_movement
+
+    _client, db, _context = business_clock_api
+    expected = _fix_operational_clock_time(monkeypatch)
+
+    stock_item = create_stock_item(
+        db,
+        hotel_id=1,
+        name="Detergente QA",
+        unit="litro",
+        min_quantity=None,
+    )
+    stock_location = create_location(db, hotel_id=1, name="Depósito QA")
+    stock_movement = register_movement(
+        db,
+        hotel_id=1,
+        item_id=stock_item.id,
+        location_id=stock_location.id,
+        movement_type="in",
+        quantity=Decimal("4"),
+        reason="Ingreso simulado",
+    )
+
+    linen_item = create_linen_item(db, hotel_id=1, name="Sábanas QA", unit="unidad")
+    linen_location = create_linen_location(db, hotel_id=1, name="Ropería QA")
+    linen_movement = register_opening_counts(
+        db,
+        hotel_id=1,
+        counts=[{"linen_item_id": linen_item.id, "location_id": linen_location.id, "quantity": Decimal("6")}],
+        reason="Conteo simulado",
+        created_by_user_id=None,
+    )[0]
+    vendor = create_vendor(db, hotel_id=1, name="Lavadero QA")
+    set_vendor_price(
+        db,
+        hotel_id=1,
+        vendor_id=vendor.id,
+        linen_item_id=linen_item.id,
+        unit_price=Decimal("12.50"),
+        effective_from=date(2041, 7, 8),
+    )
+    outbound = create_remito(
+        db,
+        hotel_id=1,
+        vendor_id=vendor.id,
+        direction="outbound",
+        remito_number="QA-20410708-01",
+        remito_date=datetime(2041, 7, 8, 10, 0),
+        house_location_id=linen_location.id,
+        lines=[{"linen_item_id": linen_item.id, "quantity": Decimal("2")}],
+    )
+    inbound = create_remito(
+        db,
+        hotel_id=1,
+        vendor_id=vendor.id,
+        direction="inbound",
+        remito_number="QA-20410708-02",
+        remito_date=datetime(2041, 7, 8, 15, 0),
+        house_location_id=linen_location.id,
+        lines=[
+            {
+                "linen_item_id": linen_item.id,
+                "quantity": Decimal("1"),
+                "missing_quantity": Decimal("1"),
+            }
+        ],
+    )
+    missing_line = db.query(LaundryRemitoLine).filter_by(remito_id=inbound.id).one()
+    update_missing_follow_up(
+        db=db,
+        hotel_id=1,
+        remito_line_id=missing_line.id,
+        changes={"follow_up_note": "Seguimiento en la fecha simulada"},
+        actor_user_id=None,
+    )
+    db.flush()
+    follow_up_audit = (
+        db.query(SecurityAuditLog)
+        .filter_by(hotel_id=1, action="laundry.missing_follow_up.updated", resource_id=str(missing_line.id))
+        .one()
+    )
+    settlement = mark_vendor_settlement_paid(
+        db,
+        hotel_id=1,
+        vendor_id=vendor.id,
+        period_start=date(2041, 7, 1),
+        paid=True,
+    )
+
+    assert stock_movement.created_at == expected
+    assert linen_movement.created_at == expected
+    assert outbound.created_at == expected
+    assert inbound.created_at == expected
+    assert missing_line.follow_up_updated_at == expected
+    assert settlement.paid_at == expected
+    assert follow_up_audit.created_at.year != expected.year
+    assert all(movement.created_at == expected for movement in db.query(LinenMovement).all())
+    assert stock_movement.created_at.tzinfo is None
+    assert linen_movement.created_at.tzinfo is None
+
+
+def test_laundry_batch_uses_business_date_for_timestamps_and_batch_code(
+    business_clock_api, local_clock_enabled, monkeypatch
+):
+    from app.services.laundry_service import create_batch, transition_status
+
+    _client, db, _context = business_clock_api
+    expected = _fix_operational_clock_time(monkeypatch)
+
+    batch = create_batch(db, hotel_id=1, notes="Retiro simulado")
+    sent = transition_status(db, hotel_id=1, batch_id=batch.id, new_status="sent")
+    received = transition_status(db, hotel_id=1, batch_id=batch.id, new_status="received")
+
+    assert batch.batch_code == "L20410708-0001"
+    assert batch.created_at == expected
+    assert sent.sent_at == expected
+    assert received.received_at == expected
+
+
+def test_task_events_and_shift_handoffs_use_business_clock(
+    business_clock_api, local_clock_enabled, monkeypatch
+):
+    from app.models.hotel_membership import HotelMembership
+    from app.models.operational_task import (
+        OperationalTaskPriorityEnum,
+        OperationalTaskStatusEnum,
+        OperationalTaskTypeEnum,
+    )
+    from app.models.user import User
+    from app.services.operational_task_service import acknowledge_handoff, create_handoff, create_task, update_task
+
+    _client, db, _context = business_clock_api
+    expected = _fix_operational_clock_time(monkeypatch)
+    user = db.query(User).filter_by(email="business-clock-owner@example.test").one()
+    db.add(HotelMembership(hotel_id=1, user_id=user.id, role="owner", status="active"))
+    db.flush()
+
+    task = create_task(
+        db,
+        hotel_id=1,
+        task_type=OperationalTaskTypeEnum.GENERAL,
+        priority=OperationalTaskPriorityEnum.MEDIUM,
+        title="Revisar depósito",
+        created_by_user_id=user.id,
+    )
+    assert task.created_at == expected
+    assert task.updated_at == expected
+    assert task.events[0].created_at == expected
+
+    task = update_task(
+        db,
+        hotel_id=1,
+        task_id=task.id,
+        actor_user_id=user.id,
+        client_version=task.version,
+        status=OperationalTaskStatusEnum.RESOLVED,
+        comment="Revisión completada",
+    )
+    assert task.resolved_at == expected
+    assert task.updated_at == expected
+    assert task.events[-1].created_at == expected
+
+    handoff = create_handoff(
+        db,
+        hotel_id=1,
+        delivered_by_user_id=user.id,
+        task_ids=[task.id],
+        notes="Pase simulado",
+    )
+    assert handoff.created_at == expected
+    assert handoff.delivered_at == expected
+
+    acknowledged = acknowledge_handoff(
+        db,
+        hotel_id=1,
+        handoff_id=handoff.id,
+        received_by_user_id=user.id,
+        client_version=handoff.version,
+    )
+    assert acknowledged.acknowledged_at == expected

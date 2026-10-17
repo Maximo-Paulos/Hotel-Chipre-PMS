@@ -17,7 +17,7 @@ from app.models.audit_log import AuditActionEnum
 from app.models.hotel_config import HotelConfiguration
 from app.models.stock import StockItem, StockLocation, StockMovement
 from app.services import audit_log_service
-from app.services.timezones import hotel_today, normalize_timezone
+from app.services.timezones import hotel_business_now, hotel_today, normalize_timezone, utc_naive
 
 
 logger = logging.getLogger(__name__)
@@ -257,6 +257,7 @@ def register_movement(
         reason=reason,
         reservation_id=reservation_id,
         created_by_user_id=created_by_user_id,
+        created_at=utc_naive(hotel_business_now(db, hotel_id)),
         idempotency_key=idempotency_key,
         transfer_reference=transfer_reference,
     )

@@ -6,10 +6,11 @@ import binascii
 import hashlib
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import and_, case, or_
 from sqlalchemy.orm import Session, noload
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.services.row_locks import lock_query
 from app.models.cash_register import CashCloseReport
@@ -32,6 +33,7 @@ from app.models.room import Room
 from app.models.room_block import RoomBlock
 from app.services.object_storage import get_object_storage
 from app.services.stored_object_service import register_uploaded_object
+from app.services.timezones import hotel_business_now, utc_naive
 
 
 class OperationalTaskError(ValueError):
@@ -112,8 +114,13 @@ _ALLOWED_TRANSITIONS: dict[OperationalTaskStatusEnum, set[OperationalTaskStatusE
 }
 
 
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
+def _now(db: Session, hotel_id: int) -> datetime:
+    """Timestamp an operational action on the hotel's business clock.
+
+    The stored columns are legacy timezone-naive UTC; security audit records
+    deliberately keep their independent real-UTC defaults.
+    """
+    return utc_naive(hotel_business_now(db, hotel_id))
 
 
 def _validate_hotel_local_due_at(value: datetime | None) -> datetime | None:
@@ -269,6 +276,7 @@ def _append_event(
     actor_user_id: int | None,
     from_status: OperationalTaskStatusEnum | str | None,
     to_status: OperationalTaskStatusEnum | str,
+    created_at: datetime,
     comment: str | None = None,
 ) -> OperationalTaskEvent:
     event = OperationalTaskEvent(
@@ -278,6 +286,7 @@ def _append_event(
         from_status=_enum_value(from_status) if from_status is not None else None,
         to_status=_enum_value(to_status),
         comment=comment,
+        created_at=created_at,
     )
     task.events.append(event)
     return event
@@ -312,6 +321,7 @@ def create_task(
     )
     _validate_user_membership(db, hotel_id, assigned_to_user_id)
     _validate_user_membership(db, hotel_id, created_by_user_id)
+    now = _now(db, hotel_id)
     task = OperationalTask(
         hotel_id=hotel_id,
         task_type=task_type,
@@ -326,6 +336,8 @@ def create_task(
         created_by_user_id=created_by_user_id,
         status=OperationalTaskStatusEnum.PENDING,
         version=0,
+        created_at=now,
+        updated_at=now,
     )
     db.add(task)
     db.flush()
@@ -335,6 +347,7 @@ def create_task(
         actor_user_id=created_by_user_id,
         from_status=None,
         to_status=OperationalTaskStatusEnum.PENDING,
+        created_at=now,
         comment="Tarea creada",
     )
     return task
@@ -442,6 +455,7 @@ def update_task(
     if assigned_to_user_id is not None:
         _validate_user_membership(db, hotel_id, assigned_to_user_id)
     old_status = task.status
+    now = _now(db, hotel_id)
     if status is not None:
         status = OperationalTaskStatusEnum(status)
         if status != old_status and status not in _ALLOWED_TRANSITIONS[old_status]:
@@ -449,7 +463,7 @@ def update_task(
         task.status = status
         if status == OperationalTaskStatusEnum.RESOLVED:
             task.resolved_by_user_id = actor_user_id
-            task.resolved_at = _now()
+            task.resolved_at = now
         elif old_status == OperationalTaskStatusEnum.RESOLVED:
             task.resolved_by_user_id = None
             task.resolved_at = None
@@ -467,7 +481,11 @@ def update_task(
     if due_at is not None:
         task.due_at = due_at
     task.version += 1
-    task.updated_at = _now()
+    task.updated_at = now
+    # Model-level onupdate is a real-wall-clock fallback. Mark the explicit
+    # operational value dirty even when the business clock has not advanced
+    # since the previous action (e.g. two actions in the same clock tick).
+    flag_modified(task, "updated_at")
     if status is not None and status != old_status:
         _append_event(
             db,
@@ -475,6 +493,7 @@ def update_task(
             actor_user_id=actor_user_id,
             from_status=old_status,
             to_status=status,
+            created_at=now,
             comment=comment,
         )
     elif comment:
@@ -484,6 +503,7 @@ def update_task(
             actor_user_id=actor_user_id,
             from_status=task.status,
             to_status=task.status,
+            created_at=now,
             comment=comment,
         )
     db.flush()
@@ -585,6 +605,7 @@ def create_handoff(
         )
         if report is None:
             raise OperationalTaskError("El cierre de caja no pertenece al hotel")
+    now = _now(db, hotel_id)
     handoff = ShiftHandoff(
         hotel_id=hotel_id,
         delivered_by_user_id=delivered_by_user_id,
@@ -592,6 +613,8 @@ def create_handoff(
         notes=notes.strip() if notes else None,
         status=ShiftHandoffStatusEnum.PENDING_ACKNOWLEDGEMENT,
         version=0,
+        delivered_at=now,
+        created_at=now,
     )
     handoff.tasks = tasks
     db.add(handoff)
@@ -628,8 +651,9 @@ def acknowledge_handoff(
     if handoff.status != ShiftHandoffStatusEnum.PENDING_ACKNOWLEDGEMENT:
         raise OperationalTaskError("Este pase de turno ya fue reconocido")
     _validate_user_membership(db, hotel_id, received_by_user_id)
+    now = _now(db, hotel_id)
     handoff.received_by_user_id = received_by_user_id
-    handoff.acknowledged_at = _now()
+    handoff.acknowledged_at = now
     handoff.status = ShiftHandoffStatusEnum.ACKNOWLEDGED
     handoff.version += 1
     db.flush()
@@ -745,6 +769,7 @@ def create_task_attachment(
             content_type=verified_type,
             byte_size=len(content),
             created_by_user_id=actor_user_id,
+            created_at=_now(db, hotel_id),
         )
         db.add(attachment)
         db.flush()

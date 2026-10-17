@@ -7,14 +7,13 @@ decide responsibility, value missing linen, or create financial movements.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session
 
 from app.models.laundry_vendor import LaundryRemito, LaundryRemitoLine, LaundryVendor
 from app.models.linen import LinenItem
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.row_locks import lock_query
+from app.services.timezones import hotel_business_now, utc_naive
 
 
 FOLLOW_UP_STATUSES = {"open", "contacted", "response_recorded", "closed"}
@@ -118,7 +117,7 @@ def update_missing_follow_up(
         for field, value in normalized_changes.items():
             setattr(line, field, value)
         line.follow_up_updated_by_user_id = actor_user_id
-        line.follow_up_updated_at = datetime.now(timezone.utc)
+        line.follow_up_updated_at = utc_naive(hotel_business_now(db, hotel_id))
         db.flush()
         db.add(
             SecurityAuditLog(

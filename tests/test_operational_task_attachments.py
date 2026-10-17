@@ -1,9 +1,11 @@
 import base64
 import hashlib
+from datetime import date, datetime, timezone
 
 import pytest
 
 from app.models.hotel_membership import HotelMembership
+from app.models.business_clock import HotelBusinessClock
 from app.models.operational_task import OperationalTaskPriorityEnum, OperationalTaskTypeEnum
 from app.models.user import User
 from app.services import operational_task_service, stored_object_service
@@ -92,3 +94,54 @@ def test_task_photo_is_private_tenant_scoped_and_integrity_checked(db, hotel_con
     storage.objects[next(iter(storage.objects))] = b"tampered image"
     with pytest.raises(OperationalTaskError, match="no está disponible"):
         task_attachment_content(db, hotel_id=hotel_config.id, task_id=task.id, attachment_id=attachment.id)
+
+
+def test_task_photo_timestamp_uses_local_business_date(db, hotel_config, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///local-business-clock-test.db")
+    monkeypatch.setenv("LOCAL_SIMULATION_CLOCK_ENABLED", "true")
+    monkeypatch.setenv("LOCAL_SIMULATION_CLOCK_HOTEL_ID", str(hotel_config.id))
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "false")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "false")
+    monkeypatch.delenv("LOCAL_SIMULATION_CLOCK_POSTGRES_DATABASE", raising=False)
+    get_settings.cache_clear()
+    try:
+        db.add(
+            HotelBusinessClock(
+                hotel_id=hotel_config.id,
+                business_date=date(2041, 7, 8),
+                advanced_at=datetime.now(timezone.utc),
+            )
+        )
+        db.flush()
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                value = cls(2026, 10, 17, 21, 30, 12, tzinfo=timezone.utc)
+                return value.astimezone(tz) if tz else value
+
+        monkeypatch.setattr("app.services.timezones.datetime", FixedDateTime)
+        storage = MemoryObjectStorage()
+        monkeypatch.setattr(stored_object_service, "get_object_storage", lambda: storage)
+        monkeypatch.setattr(operational_task_service, "get_object_storage", lambda: storage)
+        user, task = _create_task_context(db, hotel_config.id)
+        image = b"\x89PNG\r\n\x1a\n" + b"test-image-bytes"
+
+        attachment = create_task_attachment(
+            db,
+            hotel_id=hotel_config.id,
+            task_id=task.id,
+            actor_user_id=user.id,
+            file_name="room.png",
+            content_type="image/png",
+            content_base64=base64.b64encode(image).decode("ascii"),
+        )
+
+        assert attachment.created_at == datetime(2041, 7, 8, 21, 30, 12)
+        assert attachment.created_at.tzinfo is None
+    finally:
+        get_settings.cache_clear()
