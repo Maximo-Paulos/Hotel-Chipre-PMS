@@ -487,9 +487,96 @@ def test_company_night_payment_requires_exact_selected_nights_and_tracks_pending
     ) is None
 
 
-def test_overdue_company_night_charge_is_review_only_and_cannot_be_collected(
+def test_overdue_company_night_charge_remains_review_only_but_can_be_collected_in_original_currency(
     db, sample_guest, sample_rooms, sample_categories, hotel_config
 ):
+    hotel_config.enable_bank_transfer = True
+    company, reservation, today = _company_reservation(
+        db,
+        sample_guest=sample_guest,
+        sample_rooms=sample_rooms,
+        sample_categories=sample_categories,
+    )
+    summary = add_company_night_charges(
+        db,
+        hotel_id=1,
+        reservation_id=reservation.id,
+        stay_dates=[today - timedelta(days=2), today - timedelta(days=1)],
+        actor_user_id=None,
+    )
+    charges = summary.charges
+    charge_ids = [charge.id for charge in charges]
+
+    assert len(charges) == 2
+    assert [charge.amount for charge in charges] == [Decimal("75.00"), Decimal("75.00")]
+    assert all(charge.review_only is True for charge in charges)
+    create_company_nightly_surcharge_rate(
+        db,
+        hotel_id=1,
+        company_id=company.id,
+        effective_from=today,
+        amount=Decimal("100.00"),
+        actor_user_id=None,
+    )
+    refreshed = get_company_night_charges(db, hotel_id=1, reservation_id=reservation.id)
+    assert refreshed.nightly_surcharge_amount == Decimal("100.00")
+    assert [charge.amount for charge in refreshed.charges] == [Decimal("75.00"), Decimal("75.00")]
+    with pytest.raises(PaymentError, match="importe debe coincidir con las noches seleccionadas"):
+        process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=reservation.id,
+                amount=150.01,
+                currency="ARS",
+                payment_method=PaymentMethodEnum.BANK_TRANSFER,
+                transaction_type=TransactionTypeEnum.BALANCE_PAYMENT,
+                manual_reference="overdue-night-overpayment",
+                company_night_charge_ids=charge_ids,
+            ),
+            hotel_id=1,
+            idempotency_key="overdue-night-overpayment",
+            manual_confirmation=True,
+        )
+    assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 0
+
+    transaction = process_payment(
+        db,
+        PaymentRequest(
+            reservation_id=reservation.id,
+            amount=150.00,
+            currency="ARS",
+            payment_method=PaymentMethodEnum.BANK_TRANSFER,
+            transaction_type=TransactionTypeEnum.BALANCE_PAYMENT,
+            manual_reference="overdue-night-original-currency",
+            company_night_charge_ids=charge_ids,
+        ),
+        hotel_id=1,
+        idempotency_key="overdue-night-original-currency",
+        manual_confirmation=True,
+    )
+
+    assert transaction.status == TransactionStatusEnum.COMPLETED
+    assert transaction.tender_currency == "ARS"
+    assert transaction.currency == "ARS"
+    assert transaction.amount == Decimal("150.00")
+    allocations = db.query(CompanyNightChargePaymentAllocation).filter_by(
+        transaction_id=transaction.id,
+    ).order_by(CompanyNightChargePaymentAllocation.company_night_charge_id).all()
+    assert {row.company_night_charge_id: row.amount for row in allocations} == {
+        charge_id: Decimal("75.00") for charge_id in charge_ids
+    }
+    paid = get_company_night_charges(db, hotel_id=1, reservation_id=reservation.id)
+    assert all(charge.review_only is False for charge in paid.charges)
+    assert all(charge.paid_amount == Decimal("75.00") for charge in paid.charges)
+    assert all(charge.remaining_due == Decimal("0.00") for charge in paid.charges)
+
+
+def test_overdue_company_night_charge_rejects_current_fx_when_tender_currency_differs(
+    db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch
+):
+    from app.services import payment_service
+
+    hotel_config.enable_bank_transfer = True
     _company, reservation, today = _company_reservation(
         db,
         sample_guest=sample_guest,
@@ -505,16 +592,72 @@ def test_overdue_company_night_charge_is_review_only_and_cannot_be_collected(
     )
     charge = summary.charges[0]
 
-    assert charge.review_only is True
-    with pytest.raises(CompanyNightChargeError, match="vencidas quedan como revisión"):
-        prepare_company_night_charge_payment(
+    # Simulate a current-rate conversion that happens to produce the exact
+    # frozen ARS amount. The historical-charge guard must inspect tender currency.
+    monkeypatch.setattr(
+        payment_service,
+        "_resolve_applied_payment_amount",
+        lambda *args, **kwargs: (Decimal("75.00"), Decimal("1000.00"), {"quote": "current"}),
+    )
+    with pytest.raises(PaymentError, match="moneda original.*cotización histórica"):
+        process_payment(
             db,
+            PaymentRequest(
+                reservation_id=reservation.id,
+                amount=0.08,
+                currency="USD",
+                payment_method=PaymentMethodEnum.BANK_TRANSFER,
+                transaction_type=TransactionTypeEnum.BALANCE_PAYMENT,
+                manual_reference="overdue-night-foreign-currency",
+                company_night_charge_ids=[charge.id],
+            ),
             hotel_id=1,
-            reservation_id=reservation.id,
-            amount=Decimal("75.00"),
-            charge_ids=[charge.id],
-            idempotency_key="overdue-night-payment",
+            idempotency_key="overdue-night-foreign-currency",
+            manual_confirmation=True,
         )
+    assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 0
+    assert db.query(CompanyNightChargePaymentAllocation).filter_by(company_night_charge_id=charge.id).count() == 0
+
+
+def test_overdue_company_night_charge_rejects_currency_snapshot_mismatch(
+    db, sample_guest, sample_rooms, sample_categories, hotel_config
+):
+    hotel_config.enable_bank_transfer = True
+    _company, reservation, today = _company_reservation(
+        db,
+        sample_guest=sample_guest,
+        sample_rooms=sample_rooms,
+        sample_categories=sample_categories,
+    )
+    summary = add_company_night_charges(
+        db,
+        hotel_id=1,
+        reservation_id=reservation.id,
+        stay_dates=[today - timedelta(days=1)],
+        actor_user_id=None,
+    )
+    charge = db.query(CompanyNightCharge).filter_by(id=summary.charges[0].id).one()
+    charge.currency_code = "USD"
+    db.flush()
+
+    with pytest.raises(PaymentError, match="moneda original.*cotización histórica"):
+        process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=reservation.id,
+                amount=75.00,
+                currency="ARS",
+                payment_method=PaymentMethodEnum.BANK_TRANSFER,
+                transaction_type=TransactionTypeEnum.BALANCE_PAYMENT,
+                manual_reference="overdue-night-snapshot-mismatch",
+                company_night_charge_ids=[charge.id],
+            ),
+            hotel_id=1,
+            idempotency_key="overdue-night-snapshot-mismatch",
+            manual_confirmation=True,
+        )
+    assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 0
+    assert db.query(CompanyNightChargePaymentAllocation).filter_by(company_night_charge_id=charge.id).count() == 0
 
 
 def test_night_charges_are_limited_to_company_reservations_and_stay_dates(

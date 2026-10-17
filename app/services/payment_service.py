@@ -517,6 +517,7 @@ def process_payment(
                 hotel_id=resolved_hotel_id,
                 reservation_id=request.reservation_id,
                 amount=applied_amount,
+                payment_currency=transaction_currency,
                 charge_ids=request.company_night_charge_ids,
                 idempotency_key=idempotency_key,
             )

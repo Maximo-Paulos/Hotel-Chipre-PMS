@@ -796,6 +796,7 @@ def prepare_company_night_charge_payment(
     amount: Decimal,
     charge_ids: list[int],
     idempotency_key: str | None,
+    payment_currency: str | None = None,
 ) -> list[tuple[CompanyNightCharge, Decimal]] | None:
     """Lock and validate selected per-night dues before creating a payment.
 
@@ -869,9 +870,19 @@ def prepare_company_night_charge_payment(
     if not selected_ids.issubset(outstanding_ids):
         raise CompanyNightChargeError("La selección incluye una noche ajena a la reserva o ya pagada.")
     today = hotel_today(db, hotel_id)
-    selected_dates = {row.id: row.stay_date for row in rows}
-    if any(selected_dates[charge_id] < today for charge_id in selected_ids):
-        raise CompanyNightChargeError("Las noches vencidas quedan como revisión y no se cobran desde este flujo.")
+    rows_by_id = {row.id: row for row in rows}
+    overdue_ids = {charge_id for charge_id in selected_ids if rows_by_id[charge_id].stay_date < today}
+    if overdue_ids:
+        reservation_currency = (reservation.currency_code or "ARS").strip().upper()
+        tender_currency = (payment_currency or "").strip().upper()
+        if not tender_currency or tender_currency != reservation_currency or any(
+            (rows_by_id[charge_id].currency_code or "").strip().upper() != reservation_currency
+            for charge_id in overdue_ids
+        ):
+            raise CompanyNightChargeError(
+                "Las noches vencidas solo se cobran en la moneda original del cargo; "
+                "no hay una cotización histórica guardada para convertirlas."
+            )
     if selected_ids & pending_ids:
         raise CompanyNightChargeError("Ya hay un pago pendiente de confirmación para alguna noche seleccionada.")
     expected_amount = sum((due_by_id[item] for item in selected_ids), Decimal("0.00")).quantize(CENT)
@@ -879,7 +890,6 @@ def prepare_company_night_charge_payment(
         raise CompanyNightChargeError(
             f"El importe debe coincidir con las noches seleccionadas: ${expected_amount:.2f}."
         )
-    rows_by_id = {row.id: row for row in rows}
     return [(rows_by_id[item], due_by_id[item]) for item in sorted(selected_ids)]
 
 

@@ -14,6 +14,18 @@ Los vouchers subidos desde esta sección quedan disponibles en la ficha de la
 reserva y para las validaciones de check-in de empresas. Cargar el archivo no
 registra aceptación de términos ni completa el check-in.
 
+## Liquidar cargos nocturnos de empresa
+
+Los cargos por persona extra se calculan y guardan por noche. Un cambio
+posterior en la tarifa no vuelve a calcular cargos ya registrados; una
+corrección explícita usa el flujo auditado de ajustes. Las noches anteriores a
+la fecha de negocio permanecen marcadas para revisión mientras tengan saldo,
+pero se pueden cobrar desde el flujo normal por su importe pendiente guardado
+cuando la moneda del pago, la del cargo y la de la reserva coinciden. No se
+convierte un cargo histórico con una cotización actual: si las monedas difieren
+y no hay una cotización histórica persistida, el pago se rechaza sin crear una
+transacción ni una asignación.
+
 ## Descargar o enviar un comprobante de pago
 
 En los movimientos de pago de la reserva, **Descargar PDF** obtiene un
