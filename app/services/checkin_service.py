@@ -33,7 +33,7 @@ from app.models.company import Company
 from app.models.company_document import CompanyDocument, CompanyDocumentStatusEnum, CompanyDocumentTypeEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.financial_ledger import paid_amount_with_legacy_fallback
-from app.services.timezones import hotel_today
+from app.services.timezones import hotel_business_now, hotel_today
 from app.schemas.guest_restriction import GuestRestrictionOverrideRequest
 from app.services.guest_restriction_service import record_restriction_override, validate_no_active_restriction
 
@@ -337,7 +337,7 @@ def perform_checkin(
     except ReservationError as e:
         raise CheckInError(str(e))
 
-    reservation.actual_check_in = datetime.now(timezone.utc)
+    reservation.actual_check_in = hotel_business_now(db, hotel_id)
     # Mark room as occupied for housekeeping dashboard
     if reservation.room_id is not None:
         room = db.query(Room).filter(Room.id == reservation.room_id, Room.hotel_id == hotel_id).first()
@@ -396,7 +396,7 @@ def perform_partial_checkin(
     except ReservationError as e:
         raise CheckInError(str(e))
 
-    reservation.pre_check_in_at = datetime.now(timezone.utc)
+    reservation.pre_check_in_at = hotel_business_now(db, hotel_id)
     db.flush()
 
     return reservation
@@ -463,7 +463,7 @@ def perform_checkout(
     except ReservationError as e:
         raise CheckInError(str(e))
 
-    checkout_at = datetime.now(timezone.utc)
+    checkout_at = hotel_business_now(db, hotel_id)
     reservation.actual_check_out = checkout_at
     config = db.get(HotelConfiguration, hotel_id)
     timezone_name = config.hotel_timezone if config else "UTC"

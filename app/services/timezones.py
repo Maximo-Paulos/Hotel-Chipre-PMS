@@ -6,7 +6,7 @@ cached, process-local reference list for the app.
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from functools import lru_cache
 import os
 from typing import TYPE_CHECKING
@@ -155,3 +155,31 @@ def hotel_today(db: "Session", hotel_id: int) -> date:
 
     clock = db.get(HotelBusinessClock, hotel_id)
     return clock.business_date if clock is not None else real_local_today
+
+
+def hotel_business_now(db: "Session", hotel_id: int) -> datetime:
+    """Return an operational timestamp on the hotel's current business date.
+
+    Security, audit, session, invitation, token, and provider timestamps must
+    use real UTC directly. Hotel actions use this clock so local simulations
+    can move operational dates while retaining the current hotel-local time of
+    day. Outside the explicitly enabled local SQLite simulation, this is the
+    real UTC timestamp.
+    """
+    real_now = datetime.now(timezone.utc)
+    if not business_clock_enabled_for_hotel(hotel_id):
+        return real_now
+
+    timezone_name = hotel_timezone_name(db, hotel_id)
+    try:
+        hotel_timezone = ZoneInfo(normalize_timezone(timezone_name))
+    except (AttributeError, ValueError):
+        hotel_timezone = ZoneInfo("UTC")
+
+    local_wall_time = real_now.astimezone(hotel_timezone).timetz().replace(tzinfo=None)
+    business_local_time = datetime.combine(
+        hotel_today(db, hotel_id),
+        local_wall_time,
+        tzinfo=hotel_timezone,
+    )
+    return business_local_time.astimezone(timezone.utc)

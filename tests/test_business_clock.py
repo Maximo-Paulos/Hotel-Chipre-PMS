@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,7 +19,7 @@ from app.models.audit_log import AuditLog
 from app.models.business_clock import HotelBusinessClock
 from app.models.hotel_config import HotelConfiguration
 from app.models.user import User
-from app.services.timezones import hotel_today, local_today
+from app.services.timezones import hotel_business_now, hotel_today, local_today
 
 
 @pytest.fixture
@@ -134,6 +135,28 @@ def test_business_clock_read_is_available_to_members_and_scoped_to_selected_hote
         "hotel_timezone": "America/Montevideo",
         "simulation_enabled": False,
     }
+
+
+def test_hotel_business_now_uses_simulated_date_and_real_local_time_only_for_selected_hotel(
+    business_clock_api, local_clock_enabled, monkeypatch
+):
+    _client, db, _context = business_clock_api
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = cls(2026, 10, 17, 21, 30, 12, tzinfo=timezone.utc)
+            return value.astimezone(tz) if tz else value
+
+    monkeypatch.setattr("app.services.timezones.datetime", FixedDateTime)
+
+    selected_hotel_now = hotel_business_now(db, 1)
+    selected_hotel_local = selected_hotel_now.astimezone(ZoneInfo("America/Argentina/Buenos_Aires"))
+    assert selected_hotel_local.date() == date(2041, 7, 8)
+    assert selected_hotel_local.strftime("%H:%M:%S") == "18:30:12"
+
+    other_hotel_now = hotel_business_now(db, 2)
+    assert other_hotel_now == FixedDateTime(2026, 10, 17, 21, 30, 12, tzinfo=timezone.utc)
 
 
 def test_business_clock_read_requires_auth_context(business_clock_api):

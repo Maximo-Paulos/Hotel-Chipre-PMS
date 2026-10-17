@@ -14,7 +14,7 @@ They focus on explicit payment-gate scenarios not covered there:
   - Cancelled reservation blocked at check-in
 """
 import pytest
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import func
 
 from app.models.reservation import Reservation, ReservationStatusEnum
@@ -25,6 +25,7 @@ from app.services.reservation_service import create_reservation
 from app.services.payment_service import process_payment
 from app.services.checkin_service import (
     perform_checkin,
+    perform_partial_checkin,
     perform_checkout,
     validate_guest_for_checkin,
     CheckInError,
@@ -481,7 +482,11 @@ class TestCheckoutGate:
                 value = cls(2027, 9, 2, 23, tzinfo=timezone.utc)
                 return value.astimezone(tz) if tz else value
 
-        monkeypatch.setattr(checkin_service, "datetime", FixedDateTime)
+        monkeypatch.setattr(
+            checkin_service,
+            "hotel_business_now",
+            lambda _db, _hotel_id: FixedDateTime.now(timezone.utc),
+        )
         result = perform_checkout(db, res.id)
 
         assert result.reserved_nights == 4
@@ -489,6 +494,40 @@ class TestCheckoutGate:
         api_result = __import__("app.api.reservations", fromlist=["_to_read"])._to_read(result, db=db)
         assert api_result.reserved_nights == 4
         assert api_result.used_nights == 1
+
+    def test_checkin_and_checkout_use_simulated_business_dates_for_operational_timestamps(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch
+    ):
+        reservation = _make_reservation(
+            db,
+            sample_guest,
+            sample_categories,
+            check_in=date(2041, 7, 8),
+            check_out=date(2041, 7, 15),
+        )
+        _pay_full(db, reservation, hotel_id=hotel_config.id)
+
+        business_date = {"value": date(2041, 7, 8)}
+
+        def simulated_now(_db, _hotel_id):
+            return datetime.combine(
+                business_date["value"],
+                time(18, 0),
+                tzinfo=timezone.utc,
+            )
+
+        monkeypatch.setattr(checkin_service, "hotel_business_now", simulated_now)
+        pre_checked_in = perform_partial_checkin(db, reservation.id)
+        assert pre_checked_in.pre_check_in_at.date() == date(2041, 7, 8)
+
+        checked_in = perform_checkin(db, reservation.id)
+        assert checked_in.actual_check_in.date() == date(2041, 7, 8)
+
+        business_date["value"] = date(2041, 7, 13)
+        checked_out = perform_checkout(db, reservation.id)
+
+        assert checked_out.actual_check_out.date() == date(2041, 7, 13)
+        assert checked_out.used_nights == 5
 
     def test_checkout_marks_room_for_cleaning(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config
