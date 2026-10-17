@@ -1,4 +1,4 @@
-import { apiFetch, type SessionLike } from "./client";
+import { apiFetch, buildAuthHeaders, buildUrl, type SessionLike } from "./client";
 
 export type PaymentMethod = "cash" | "mercado_pago" | "paypal" | "credit_card" | "debit_card" | "bank_transfer";
 
@@ -99,8 +99,14 @@ export type PaymentReceiptEmailRequest = {
 
 export type PaymentReceiptEmailResponse = {
   transaction_id: number;
-  status: "sent";
+  status: "sent" | "captured";
+  delivery_mode: "provider" | "local_simulation";
   replayed: boolean;
+};
+
+export type PaymentReceiptPdfDownload = {
+  blob: Blob;
+  filename: string;
 };
 
 export const getPaymentSummary = (reservationId: number, session?: SessionLike) =>
@@ -108,6 +114,42 @@ export const getPaymentSummary = (reservationId: number, session?: SessionLike) 
 
 export const getPaymentReceiptData = (transactionId: number, session?: SessionLike) =>
   apiFetch<PaymentReceiptData>(`/api/payments/transactions/${transactionId}/receipt`, { session });
+
+export const downloadPaymentReceiptPdf = async (
+  transactionId: number,
+  session?: SessionLike
+): Promise<PaymentReceiptPdfDownload> => {
+  const response = await fetch(buildUrl(`/api/payments/transactions/${transactionId}/receipt.pdf`), {
+    headers: buildAuthHeaders(session),
+    credentials: "include"
+  });
+  if (!response.ok) throw new Error("No se pudo descargar el comprobante PDF.");
+
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0].trim().toLocaleLowerCase();
+  if (contentType !== "application/pdf") {
+    throw new Error("El servidor no devolvió un comprobante PDF válido.");
+  }
+
+  const contentDisposition = response.headers.get("content-disposition") ?? "";
+  const utf8Filename = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plainFilename = contentDisposition.match(/filename="?([^";]+)"?/i)?.[1];
+  let filename = `comprobante-pago-${transactionId}.pdf`;
+  if (utf8Filename) {
+    try {
+      filename = decodeURIComponent(utf8Filename);
+    } catch {
+      filename = `comprobante-pago-${transactionId}.pdf`;
+    }
+  } else if (plainFilename) {
+    filename = plainFilename;
+  }
+  filename = filename.replace(/[\\/\r\n\0]/g, "_").trim();
+  if (!filename || !filename.toLocaleLowerCase().endsWith(".pdf")) {
+    filename = `comprobante-pago-${transactionId}.pdf`;
+  }
+
+  return { blob: await response.blob(), filename };
+};
 
 export const newPaymentReceiptEmailIdempotencyKey = (transactionId: number) => {
   const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timezone
+from email import policy
+from email.parser import BytesParser
 
 import pytest
 
@@ -8,7 +11,11 @@ from app.config import get_settings
 from app.models.hotel_config import HotelConfiguration
 from app.models.integration import IntegrationCatalog, IntegrationConnection
 from app.schemas.payment_link_test import PaymentLinkTestCreate
-from app.services.hotel_outbound_email_service import HotelOutboundEmailError, send_hotel_email
+from app.services.hotel_outbound_email_service import (
+    HotelEmailAttachment,
+    HotelOutboundEmailError,
+    send_hotel_email,
+)
 from app.services.integration_service import GMAIL_SEND_SCOPE, encrypt_payload
 from app.services.payment_link_test_service import PaymentLinkTestError, create_mercadopago_payment_link_test
 
@@ -123,6 +130,45 @@ def test_send_hotel_email_uses_connected_gmail(db, monkeypatch):
     assert sent_payload['url'].endswith('/gmail/v1/users/me/messages/send')
     assert sent_payload['headers']['Authorization'] == 'Bearer gmail-access'
     assert 'raw' in sent_payload['json']
+
+
+def test_send_hotel_email_preserves_pdf_attachment_bytes_in_gmail_mime(db, monkeypatch):
+    _seed_gmail_connection(db)
+    monkeypatch.setattr(
+        'app.services.hotel_outbound_email_service.requests.get',
+        lambda *_args, **_kwargs: _Response(True, {'email': 'hotel@example.com', 'name': 'Hotel Demo'}),
+    )
+    sent_payload = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        sent_payload['json'] = json
+        return _Response(True, {'id': 'gmail-message-with-pdf'})
+
+    monkeypatch.setattr('app.services.hotel_outbound_email_service.requests.post', fake_post)
+    pdf_bytes = b"%PDF-1.7\nsynthetic receipt bytes\n%%EOF"
+    result = send_hotel_email(
+        db,
+        1,
+        to="accounts@example.com",
+        subject="Comprobante de pago",
+        body="Adjuntamos el comprobante.",
+        attachments=(
+            HotelEmailAttachment(
+                filename="comprobante-pago-7.pdf",
+                content_type="application/pdf",
+                content=pdf_bytes,
+            ),
+        ),
+    )
+
+    raw = sent_payload['json']['raw']
+    decoded = base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
+    message = BytesParser(policy=policy.default).parsebytes(decoded)
+    attachment, = message.iter_attachments()
+    assert result.provider_message_id == 'gmail-message-with-pdf'
+    assert attachment.get_content_type() == "application/pdf"
+    assert attachment.get_filename() == "comprobante-pago-7.pdf"
+    assert attachment.get_payload(decode=True) == pdf_bytes
 
 
 def test_payment_link_test_requires_hotel_gmail_connection(db):

@@ -170,6 +170,42 @@ test("company check-in records and applies a deferred extension without register
   await page.goto(`/dashboard?reserva=${reservation.id}`);
   const drawer = page.getByRole("dialog", { name: reservation.confirmation_code });
   await expect(drawer).toBeVisible();
+
+  const voucherFileName = `voucher-${suffix}.pdf`;
+  const documentsRefreshPromise = page.waitForResponse((response) =>
+    response.url().endsWith(`/api/company-documents/reservation/${reservation.id}`) &&
+    response.request().method() === "GET"
+  );
+  const voucherUploadResponsePromise = page.waitForResponse((response) =>
+    response.url().endsWith("/api/company-documents/upload") &&
+    response.request().method() === "POST"
+  );
+  await drawer.getByTestId("company-voucher-pdf-input").setInputFiles({
+    name: voucherFileName,
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4\n% Local E2E voucher fixture\n%%EOF")
+  });
+  await drawer.getByRole("button", { name: "Cargar voucher", exact: true }).click();
+  const voucherUploadResponse = await voucherUploadResponsePromise;
+  expect(voucherUploadResponse.ok()).toBeTruthy();
+  const uploadedVoucher = await voucherUploadResponse.json() as {
+    reservation_id: number;
+    company_id: number;
+    doc_type: string;
+    file_name: string;
+  };
+  expect(uploadedVoucher).toMatchObject({
+    reservation_id: reservation.id,
+    company_id: company.id,
+    doc_type: "voucher_pdf",
+    file_name: voucherFileName
+  });
+  await documentsRefreshPromise;
+  await expect(drawer.getByTestId("company-voucher-upload-feedback")).toHaveText(
+    "Voucher PDF cargado y documentos actualizados."
+  );
+  await expect(drawer.getByText(voucherFileName, { exact: true })).toBeVisible();
+
   await validationStarted;
 
   const checkInButton = drawer.getByRole("button", { name: "Confirmar check-in" });

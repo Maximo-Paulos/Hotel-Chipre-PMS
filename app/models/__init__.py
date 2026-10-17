@@ -20,6 +20,7 @@ from app.models.reservation_group_payment import (
 from app.models.transaction import Transaction, PaymentMethodEnum, TransactionStatusEnum
 from app.models.payment_receipt_email_delivery import PaymentReceiptEmailDelivery
 from app.models.hotel_config import HotelConfiguration
+from app.models.business_clock import HotelBusinessClock
 from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
 from app.models.hotel_role import HotelRole
 from app.models.action_step_up_ticket_use import ActionStepUpTicketUse
@@ -209,6 +210,7 @@ from app.models.analytics import (
 )
 
 __all__ = [
+    "HotelBusinessClock",
     "Room", "RoomCategory",
     "OperationalTask", "OperationalTaskEvent", "OperationalTaskAttachment", "OperationalTaskTypeEnum",
     "OperationalTaskStatusEnum", "OperationalTaskPriorityEnum", "ShiftHandoff",

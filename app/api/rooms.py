@@ -31,7 +31,7 @@ from app.schemas.room import (
 )
 from app.services.reservation_service import ReservationError, find_available_rooms
 from app.services.pricing_service import resolve_current_rates_for_categories, resolve_rate_calendar
-from app.services.timezones import local_today
+from app.services.timezones import hotel_today
 from app.dependencies.auth import AuthContext, require_permission
 from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.read_model_cache import get_cached_availability_payload, invalidate_hotel_operational_caches
@@ -149,7 +149,7 @@ def _attach_current_rate(db: Session, hotel_id: int, category: RoomCategory) -> 
     as a transient attribute so RoomCategoryRead serialises it. This keeps the rooms
     inventory view in sync with the Tarifas calendar and reservation pricing."""
     hotel_config = db.get(HotelConfiguration, hotel_id)
-    today = local_today(hotel_config.hotel_timezone if hotel_config else None)
+    today = hotel_today(db, hotel_id)
     resolution = resolve_rate_calendar(db, hotel_id, category.id, today, today)[0]
     category.current_rate = resolution["price"]
     category.current_rate_source = resolution["source"]
@@ -176,7 +176,7 @@ def list_categories(
     if context.operational_role == "housekeeping":
         return [RoomCategoryOperationalRead.model_validate(category) for category in categories]
     hotel_config = db.get(HotelConfiguration, context.hotel_id)
-    today = local_today(hotel_config.hotel_timezone if hotel_config else None)
+    today = hotel_today(db, context.hotel_id)
     rates_by_category = resolve_current_rates_for_categories(
         db,
         hotel_id=context.hotel_id,
@@ -304,7 +304,7 @@ def get_housekeeping_board(
 ):
     """Return a privacy-safe snapshot of today's room and cleaning workload."""
     hotel_config = db.get(HotelConfiguration, context.hotel_id)
-    today = local_today(hotel_config.hotel_timezone if hotel_config else None)
+    today = hotel_today(db, context.hotel_id)
     rooms = (
         db.query(Room, RoomCategory.name)
         .join(

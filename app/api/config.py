@@ -10,6 +10,7 @@ from app.database import get_db
 from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_permission
 from app.models.audit_log import AuditActionEnum
 from app.models.hotel_config import HotelConfiguration
+from app.schemas.business_clock import BusinessClockRead
 from app.schemas.hotel_config import HotelConfigRead, HotelConfigUpdate, HotelInterfaceLanguageRead
 from app.services.email_service import mailer
 from app.services.payment_service import get_hotel_config
@@ -19,10 +20,43 @@ from app.services.permission_service import (
     PERMISSION_SETTINGS_FX_MANAGE,
 )
 from app.services.hotel_configuration_service import apply_configuration_update
+from app.services.business_clock_service import (
+    BusinessClockDisabledError,
+    advance_business_clock,
+    get_business_clock,
+)
 from app.services import audit_log_service
 from app.services.permission_service import PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE
 
 router = APIRouter(prefix="/api/config", tags=["Hotel Configuration"])
+
+
+@router.get("/business-clock", response_model=BusinessClockRead)
+def read_business_clock(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
+    """Expose the effective business date to any authenticated hotel member."""
+    return get_business_clock(db, context.hotel_id)
+
+
+@router.post("/business-clock/advance", response_model=BusinessClockRead)
+def advance_business_clock_by_one_day(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_auth_context),
+):
+    """Advance one synthetic business day for the explicitly selected owner."""
+    if context.user_role != "owner" or context.user_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo el owner puede avanzar el día de negocio.")
+    try:
+        advance_business_clock(db, hotel_id=context.hotel_id, actor_user_id=context.user_id)
+    except BusinessClockDisabledError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El reloj de simulación local no está habilitado para este hotel.",
+        ) from exc
+    db.commit()
+    return get_business_clock(db, context.hotel_id)
 
 
 @router.get("/interface-language", response_model=HotelInterfaceLanguageRead)

@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     # Environment / runtime mode
     APP_ENV: str = "development"
 
+    # The synthetic hotel business clock is intentionally opt-in and is
+    # additionally gated at runtime to development + SQLite + one hotel.
+    LOCAL_SIMULATION_CLOCK_ENABLED: bool = False
+    LOCAL_SIMULATION_CLOCK_HOTEL_ID: int | None = Field(default=None, ge=1)
+
     # Public app URL used in redirects/webhooks (backend)
     APP_BASE_URL: str = "http://127.0.0.1:8040"
 

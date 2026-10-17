@@ -7,19 +7,21 @@ import re
 from datetime import datetime, timezone
 from decimal import Decimal
 from email_validator import EmailNotValidError, validate_email
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.models.guest import Guest
 from app.models.payment_receipt_email_delivery import PaymentReceiptEmailDelivery
-from app.models.reservation import Reservation
-from app.models.transaction import Transaction
 from app.services.hotel_outbound_email_service import (
+    HotelEmailAttachment,
+    capture_hotel_email,
     ensure_hotel_gmail_ready,
     send_hotel_email,
 )
 from app.services.payment_service import PaymentNotFoundError, get_payment_receipt_data
+from app.services.timezones import business_clock_enabled_for_hotel
+from app.services.payment_receipt_pdf import generate_payment_receipt_pdf
 
 
 class PaymentReceiptEmailError(Exception):
@@ -35,11 +37,16 @@ _EMAIL_PATTERN = re.compile(r"^[^\s,;<>]+@[^\s,;<>]+\.[^\s,;<>]+$")
 def _normalize_email(value: str) -> str:
     normalized = str(value or "").strip().lower()
     if not normalized or not _EMAIL_PATTERN.fullmatch(normalized):
-        raise PaymentReceiptEmailError(400, "Ingresá el email registrado del huésped.")
+        raise PaymentReceiptEmailError(400, "Ingresá una dirección de correo válida.")
     try:
-        return validate_email(normalized, check_deliverability=False).normalized.lower()
+        allow_reserved_test = normalized.rsplit("@", maxsplit=1)[-1].rstrip(".").endswith(".test")
+        return validate_email(
+            normalized,
+            check_deliverability=False,
+            test_environment=allow_reserved_test,
+        ).normalized.lower()
     except EmailNotValidError as exc:
-        raise PaymentReceiptEmailError(400, "Ingresá el email registrado del huésped.") from exc
+        raise PaymentReceiptEmailError(400, "Ingresá una dirección de correo válida.") from exc
 
 
 def _key_hash(value: str) -> str:
@@ -51,61 +58,53 @@ def _recipient_fingerprint(value: str) -> str:
     return hmac.new(secret, value.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def _load_receipt_and_registered_email(
+def _load_receipt(
     db: Session,
     *,
     hotel_id: int,
     transaction_id: int,
-    confirmed_email: str,
-) -> tuple[dict, str]:
-    transaction = (
-        db.query(Transaction)
-        .filter(Transaction.hotel_id == hotel_id, Transaction.id == transaction_id)
-        .first()
-    )
-    if transaction is None:
-        raise PaymentNotFoundError("No se encontró el pago confirmado.")
-
-    reservation = (
-        db.query(Reservation)
-        .filter(
-            Reservation.hotel_id == hotel_id,
-            Reservation.id == transaction.reservation_id,
-        )
-        .first()
-    )
-    if reservation is None:
-        raise PaymentNotFoundError("No se encontró el pago confirmado.")
-
-    guest = (
-        db.query(Guest)
-        .filter(
-            Guest.hotel_id == hotel_id,
-            Guest.id == reservation.guest_id,
-            Guest.deleted_at.is_(None),
-        )
-        .first()
-    )
-    if guest is None:
-        raise PaymentReceiptEmailError(409, "La reserva no tiene un email de huésped disponible.")
-
+) -> dict:
     try:
-        registered_email = _normalize_email(guest.email or "")
-    except PaymentReceiptEmailError as exc:
-        raise PaymentReceiptEmailError(409, "La reserva no tiene un email de huésped válido.") from exc
-    if not hmac.compare_digest(registered_email, confirmed_email):
-        raise PaymentReceiptEmailError(
-            409,
-            "El email confirmado no coincide con el email registrado del huésped.",
-        )
-
-    # This is the existing receipt source of truth and applies the completed /
-    # refunded transaction rule again under the same tenant scope.
-    try:
-        receipt = get_payment_receipt_data(db, hotel_id, transaction_id)
+        return get_payment_receipt_data(db, hotel_id, transaction_id)
     except PaymentNotFoundError:
         raise
-    return receipt, registered_email
+
+
+def _local_simulation_enabled(db: Session, hotel_id: int) -> bool:
+    """Identify the one local clock-enabled hotel, failing closed if misconfigured."""
+    settings = get_settings()
+    if settings.LOCAL_SIMULATION_CLOCK_ENABLED is not True:
+        return False
+
+    fields_set = getattr(settings, "model_fields_set", set())
+    try:
+        configured_database_is_sqlite = make_url(settings.DATABASE_URL).get_backend_name() == "sqlite"
+        actual_database_is_sqlite = db.get_bind().dialect.name == "sqlite"
+    except Exception:
+        configured_database_is_sqlite = False
+        actual_database_is_sqlite = False
+    enabled = (
+        settings.APP_ENV == "development"
+        and "APP_ENV" in fields_set
+        and settings.EXTERNAL_EFFECTS_ENABLED is False
+        and "EXTERNAL_EFFECTS_ENABLED" in fields_set
+        and "LOCAL_SIMULATION_CLOCK_ENABLED" in fields_set
+        and settings.LOCAL_SIMULATION_CLOCK_HOTEL_ID == hotel_id
+        and business_clock_enabled_for_hotel(hotel_id)
+        and configured_database_is_sqlite
+        and actual_database_is_sqlite
+    )
+    if not enabled:
+        raise PaymentReceiptEmailError(
+            503,
+            "La captura local de comprobantes no está habilitada para este entorno.",
+        )
+    return True
+
+
+def _is_reserved_test_recipient(value: str) -> bool:
+    domain = value.rsplit("@", maxsplit=1)[-1].rstrip(".").lower()
+    return domain.endswith(".test")
 
 
 def _format_money(value, currency: str) -> str:
@@ -165,14 +164,16 @@ def _existing_delivery(
         ):
             raise PaymentReceiptEmailError(409, "La clave de idempotencia ya fue usada con otros datos.")
         if existing.status == "sent":
+            local_capture = (existing.provider_message_id or "").startswith("local-simulation:")
             return {
                 "transaction_id": transaction_id,
-                "status": "sent",
+                "status": "captured" if local_capture else "sent",
+                "delivery_mode": "local_simulation" if local_capture else "provider",
                 "replayed": True,
             }
         raise PaymentReceiptEmailError(
             409,
-            "El resultado de un envío anterior no está confirmado. Revisá el correo enviado antes de volver a intentar.",
+            "El resultado de un intento anterior no está confirmado. Revisá el correo o la captura local antes de volver a intentar.",
         )
 
     pending = (
@@ -187,7 +188,7 @@ def _existing_delivery(
     if pending is not None:
         raise PaymentReceiptEmailError(
             409,
-            "Hay un envío previo sin resultado confirmado. Revisá el correo enviado antes de volver a intentar.",
+            "Hay un intento previo sin resultado confirmado. Revisá el correo o la captura local antes de volver a intentar.",
         )
     return None
 
@@ -201,7 +202,7 @@ def send_payment_receipt_email(
     recipient_email: str,
     idempotency_key: str,
 ) -> dict:
-    """Send one guest-confirmed receipt and persist a fail-closed outcome."""
+    """Send or capture one operator-addressed receipt with a fail-closed outcome."""
     if hotel_id is None or hotel_id <= 0:
         raise PaymentNotFoundError("No se encontró el pago confirmado.")
     if actor_user_id is None or actor_user_id <= 0:
@@ -210,16 +211,24 @@ def send_payment_receipt_email(
     if not 8 <= len(key) <= 100:
         raise PaymentReceiptEmailError(400, "La clave de idempotencia no es válida.")
     confirmed_email = _normalize_email(recipient_email)
+    local_simulation = _local_simulation_enabled(db, hotel_id)
+    if local_simulation and not _is_reserved_test_recipient(confirmed_email):
+        raise PaymentReceiptEmailError(
+            400,
+            "La simulación local solo permite destinatarios del dominio reservado .test.",
+        )
+    if not local_simulation and _is_reserved_test_recipient(confirmed_email):
+        raise PaymentReceiptEmailError(
+            400,
+            "Las direcciones .test solo se permiten en la simulación local aislada.",
+        )
     key_hash = _key_hash(key)
     recipient_hash = _recipient_fingerprint(confirmed_email)
 
-    # Even an idempotent replay is only available while the same transaction
-    # and registered guest contact still qualify for a receipt.
-    receipt, _registered_email = _load_receipt_and_registered_email(
+    receipt = _load_receipt(
         db,
         hotel_id=hotel_id,
         transaction_id=transaction_id,
-        confirmed_email=confirmed_email,
     )
     replay = _existing_delivery(
         db,
@@ -231,37 +240,38 @@ def send_payment_receipt_email(
     if replay is not None:
         return replay
 
-    # Validate the hotel Gmail connection before creating an attempt. A missing
-    # connection is a definite pre-send failure and leaves the key reusable.
-    try:
-        ensure_hotel_gmail_ready(db, hotel_id)
-    except Exception:
-        db.rollback()
-        raise PaymentReceiptEmailError(
-            503,
-            "El correo del hotel no está disponible para enviar el comprobante.",
-        ) from None
+    if not local_simulation:
+        # Validate Gmail before creating an attempt. A missing connection is a
+        # definite pre-send failure and leaves the key reusable.
+        try:
+            ensure_hotel_gmail_ready(db, hotel_id)
+        except Exception:
+            db.rollback()
+            raise PaymentReceiptEmailError(
+                503,
+                "El correo del hotel no está disponible para enviar el comprobante.",
+            ) from None
 
-    # Read fresh source values after the readiness check; the guest's registered
-    # email or transaction status could have changed during provider validation.
-    db.expire_all()
-    receipt, _registered_email = _load_receipt_and_registered_email(
-        db,
-        hotel_id=hotel_id,
-        transaction_id=transaction_id,
-        confirmed_email=confirmed_email,
-    )
-    replay = _existing_delivery(
-        db,
-        hotel_id=hotel_id,
-        transaction_id=transaction_id,
-        key_hash=key_hash,
-        recipient_fingerprint=recipient_hash,
-    )
-    if replay is not None:
-        return replay
+        # Re-read the receipt after the provider readiness check so a changed
+        # transaction status cannot cross the network boundary unnoticed.
+        db.expire_all()
+        receipt = _load_receipt(
+            db,
+            hotel_id=hotel_id,
+            transaction_id=transaction_id,
+        )
+        replay = _existing_delivery(
+            db,
+            hotel_id=hotel_id,
+            transaction_id=transaction_id,
+            key_hash=key_hash,
+            recipient_fingerprint=recipient_hash,
+        )
+        if replay is not None:
+            return replay
 
     subject, body = _receipt_email_content(receipt)
+    pdf_bytes = generate_payment_receipt_pdf(receipt)
     delivery = PaymentReceiptEmailDelivery(
         hotel_id=hotel_id,
         transaction_id=transaction_id,
@@ -287,17 +297,33 @@ def send_payment_receipt_email(
             return replay
         raise PaymentReceiptEmailError(
             409,
-            "Hay un envío previo sin resultado confirmado. Revisá el correo enviado antes de volver a intentar.",
+            "Hay un intento previo sin resultado confirmado. Revisá el correo o la captura local antes de volver a intentar.",
         ) from exc
 
     try:
-        send_result = send_hotel_email(
-            db,
-            hotel_id,
-            to=confirmed_email,
-            subject=subject,
-            body=body,
+        attachment = HotelEmailAttachment(
+            filename=f"comprobante-pago-{transaction_id}.pdf",
+            content_type="application/pdf",
+            content=pdf_bytes,
         )
+        if local_simulation:
+            send_result = capture_hotel_email(
+                db,
+                hotel_id,
+                to=confirmed_email,
+                subject=subject,
+                body=body,
+                attachments=(attachment,),
+            )
+        else:
+            send_result = send_hotel_email(
+                db,
+                hotel_id,
+                to=confirmed_email,
+                subject=subject,
+                body=body,
+                attachments=(attachment,),
+            )
     except Exception:
         # A transport exception can happen after Gmail accepted the message.
         # Persist an ambiguous outcome and require human review before retrying.
@@ -309,7 +335,7 @@ def send_payment_receipt_email(
             db.rollback()
         raise PaymentReceiptEmailError(
             503,
-            "No se pudo confirmar el resultado del envío. Revisá el correo enviado antes de volver a intentar.",
+            "No se pudo confirmar el resultado. Revisá el correo o la captura local antes de volver a intentar.",
         ) from None
 
     delivery.status = "sent"
@@ -323,11 +349,12 @@ def send_payment_receipt_email(
         db.rollback()
         raise PaymentReceiptEmailError(
             503,
-            "El correo se envió, pero no se pudo confirmar el registro. Revisá el correo antes de volver a intentar.",
+            "El resultado no se pudo confirmar en el registro. Revisá el correo o la captura local antes de volver a intentar.",
         ) from None
 
     return {
         "transaction_id": transaction_id,
-        "status": "sent",
+        "status": "captured" if local_simulation else "sent",
+        "delivery_mode": "local_simulation" if local_simulation else "provider",
         "replayed": False,
     }

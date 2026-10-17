@@ -79,7 +79,7 @@ const financialSummary = {
   completed_payments: 1
 };
 
-type ReceiptEmailResult = "sent" | "unknown";
+type ReceiptEmailResult = "sent" | "captured" | "failed" | "unknown";
 type InterceptedApiRequest = {
   method: string;
   path: string;
@@ -87,10 +87,15 @@ type InterceptedApiRequest = {
   idempotencyKey?: string;
 };
 
-async function installMocks(page: import("@playwright/test").Page, result: ReceiptEmailResult) {
+async function installMocks(
+  page: import("@playwright/test").Page,
+  results: ReceiptEmailResult | ReceiptEmailResult[]
+) {
   const appOrigin = new URL(process.env.E2E_BASE_URL || "http://127.0.0.1:5173").origin;
   const apiRequests: InterceptedApiRequest[] = [];
   const receiptRequests: InterceptedApiRequest[] = [];
+  const receiptPdfRequests: InterceptedApiRequest[] = [];
+  const receiptEmailResults = typeof results === "string" ? [results] : results;
   const unexpectedApiRequests: string[] = [];
   const blockedExternalRequests: string[] = [];
   const allowedApiPaths = new Set([
@@ -156,8 +161,10 @@ async function installMocks(page: import("@playwright/test").Page, result: Recei
       apiRequests.push(entry);
 
       const isReceiptSend = method === "POST" && path === `/api/payments/transactions/${transactionId}/receipt/email`;
+      const isReceiptPdfDownload = method === "GET" && path === `/api/payments/transactions/${transactionId}/receipt.pdf`;
       if (isReceiptSend) receiptRequests.push(entry);
-      if (!allowedApiPaths.has(pathForAllowlist) && !isReceiptSend) {
+      if (isReceiptPdfDownload) receiptPdfRequests.push(entry);
+      if (!allowedApiPaths.has(pathForAllowlist) && !isReceiptSend && !isReceiptPdfDownload) {
         unexpectedApiRequests.push(`${method} ${path}`);
       }
 
@@ -177,6 +184,23 @@ async function installMocks(page: import("@playwright/test").Page, result: Recei
             "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS"
           },
           body: JSON.stringify(body)
+        });
+        return;
+      }
+
+      if (isReceiptPdfDownload) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/pdf",
+          headers: {
+            "access-control-allow-origin": appOrigin,
+            "access-control-allow-credentials": "true",
+            "access-control-allow-headers": "authorization,content-type,x-hotel-id,x-user-id,x-csrf-token,idempotency-key",
+            "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+            "access-control-expose-headers": "Content-Disposition",
+            "content-disposition": `attachment; filename="payment-receipt-${transactionId}.pdf"`
+          },
+          body: "%PDF-1.4\n% Local E2E PDF fixture\n%%EOF"
         });
         return;
       }
@@ -296,8 +320,15 @@ async function installMocks(page: import("@playwright/test").Page, result: Recei
       } else if (path === "/api/operations/audit") {
         body = { hotel_id: 1, items: [], total: 0, limit: 50, offset: 0, has_more: false };
       } else if (isReceiptSend) {
+        const resultIndex = receiptRequests.length - 1;
+        const result = receiptEmailResults[Math.min(resultIndex, receiptEmailResults.length - 1)] ?? "unknown";
         if (result === "sent") {
-          body = { transaction_id: transactionId, status: "sent", replayed: false };
+          body = { transaction_id: transactionId, status: "sent", delivery_mode: "provider", replayed: false };
+        } else if (result === "captured") {
+          body = { transaction_id: transactionId, status: "captured", delivery_mode: "local_simulation", replayed: false };
+        } else if (result === "failed") {
+          status = 400;
+          body = { detail: "No se pudo enviar el correo indicado." };
         } else {
           status = 503;
           body = {
@@ -331,7 +362,7 @@ async function installMocks(page: import("@playwright/test").Page, result: Recei
     await route.abort();
   });
 
-  return { apiRequests, receiptRequests, unexpectedApiRequests, blockedExternalRequests };
+  return { apiRequests, receiptRequests, receiptPdfRequests, unexpectedApiRequests, blockedExternalRequests };
 }
 
 async function openReservationPaymentDetails(page: import("@playwright/test").Page) {
@@ -340,34 +371,68 @@ async function openReservationPaymentDetails(page: import("@playwright/test").Pa
   await expect(page.getByTestId(`payment-receipt-email-${transactionId}`)).toBeVisible();
 }
 
-test("requires explicit confirmation and sends one idempotent payment receipt email", async ({ page }) => {
-  const tracker = await installMocks(page, "sent");
+test("allows a recipient edit, creates a new idempotency key, and sends only after confirmation", async ({ page }) => {
+  const tracker = await installMocks(page, ["failed", "sent"]);
   await openReservationPaymentDetails(page);
 
   await page.getByTestId(`payment-receipt-email-${transactionId}`).click();
   const dialog = page.getByTestId("payment-receipt-email-dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Email registrado del huésped")).toHaveValue(registeredEmail);
+  const recipientInput = dialog.getByLabel("Email de destino");
+  await expect(recipientInput).toHaveValue(registeredEmail);
   expect(tracker.receiptRequests).toHaveLength(0);
 
+  const firstRecipient = "facturacion-uno@example.test";
+  await recipientInput.fill(firstRecipient);
   await dialog.getByTestId("payment-receipt-email-confirm").click();
-  await expect(dialog.getByRole("status")).toHaveText("Comprobante enviado al email registrado del huésped.");
+  await expect(dialog.getByRole("alert")).toHaveText("El servidor rechazó el envío. Revisá el destinatario y los permisos antes de volver a intentar manualmente.");
   expect(tracker.receiptRequests).toHaveLength(1);
-  expect(tracker.receiptRequests[0].body).toEqual({ recipient_email: registeredEmail });
-  expect(tracker.receiptRequests[0].idempotencyKey).toMatch(/^ui-payment-receipt-email-9021-/);
+  const firstIdempotencyKey = tracker.receiptRequests[0].idempotencyKey;
+  expect(tracker.receiptRequests[0].body).toEqual({ recipient_email: firstRecipient });
+
+  const secondRecipient = "facturacion-dos@example.test";
+  await recipientInput.fill(secondRecipient);
+  await dialog.getByTestId("payment-receipt-email-confirm").click();
+  await expect(dialog.getByRole("status")).toHaveText("El comprobante se envió al correo indicado.");
+  expect(tracker.receiptRequests).toHaveLength(2);
+  expect(tracker.receiptRequests[1].body).toEqual({ recipient_email: secondRecipient });
+  expect(tracker.receiptRequests[1].idempotencyKey).not.toBe(firstIdempotencyKey);
+  expect(tracker.receiptRequests[1].idempotencyKey).toMatch(/^ui-payment-receipt-email-9021-/);
+
+  await dialog.getByRole("button", { name: "Cerrar" }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId(`payment-receipt-download-${transactionId}`).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(`payment-receipt-${transactionId}.pdf`);
+  expect(tracker.receiptPdfRequests).toHaveLength(1);
+
+  await expect(dialog.getByTestId("payment-receipt-email-confirm")).toHaveCount(0);
   expect(
     tracker.apiRequests.filter((request) => request.method === "POST" && request.path.startsWith("/api/payments/") && !request.path.endsWith("/receipt/email"))
   ).toHaveLength(0);
 
-  await dialog.getByRole("button", { name: "Cerrar" }).click();
   await page.getByTestId(`payment-receipt-email-${transactionId}`).click();
   await expect(page.getByTestId("payment-receipt-email-confirm")).toHaveCount(0);
   await expect(page.getByTestId("payment-receipt-email-dialog").getByRole("status")).toHaveText(
-    "Comprobante enviado al email registrado del huésped."
+    "El comprobante se envió al correo indicado."
   );
-  expect(tracker.receiptRequests).toHaveLength(1);
+  expect(tracker.receiptRequests).toHaveLength(2);
   expect(tracker.unexpectedApiRequests).toEqual([]);
   expect(tracker.blockedExternalRequests.every((origin) => origin !== backendOrigin)).toBe(true);
+});
+
+test("reports local simulation capture without claiming that an email was sent", async ({ page }) => {
+  const tracker = await installMocks(page, "captured");
+  await openReservationPaymentDetails(page);
+  await page.getByTestId(`payment-receipt-email-${transactionId}`).click();
+  const dialog = page.getByTestId("payment-receipt-email-dialog");
+  await expect(dialog.getByLabel("Email de destino")).toHaveValue(registeredEmail);
+  await dialog.getByTestId("payment-receipt-email-confirm").click();
+  const capturedMessage = dialog.getByTestId("payment-receipt-email-captured");
+  await expect(capturedMessage).toContainText("No se envió ningún correo fuera de esta máquina.");
+  await expect(dialog.getByText("El comprobante se envió al correo indicado.", { exact: true })).toHaveCount(0);
+  expect(tracker.receiptRequests[0].body).toEqual({ recipient_email: registeredEmail });
+  expect(tracker.unexpectedApiRequests).toEqual([]);
 });
 
 test("shows an ambiguous result and never retries automatically", async ({ page }) => {
@@ -376,14 +441,15 @@ test("shows an ambiguous result and never retries automatically", async ({ page 
 
   await page.getByTestId(`payment-receipt-email-${transactionId}`).click();
   const dialog = page.getByTestId("payment-receipt-email-dialog");
-  await expect(dialog.getByLabel("Email registrado del huésped")).toHaveValue(registeredEmail);
+  await expect(dialog.getByLabel("Email de destino")).toHaveValue(registeredEmail);
   expect(tracker.receiptRequests).toHaveLength(0);
 
   await dialog.getByTestId("payment-receipt-email-confirm").click();
   await expect(dialog.getByRole("alert")).toHaveText(
-    "No se pudo confirmar el resultado del envío. Revisá el correo del hotel antes de volver a intentar. No vuelvas a enviarlo desde esta pantalla."
+    "No se pudo confirmar el resultado del envío. Consultá la actividad registrada antes de intentar de nuevo. No vuelvas a enviarlo desde esta pantalla."
   );
   await expect(page.getByTestId("payment-receipt-email-confirm")).toHaveCount(0);
+  await expect(dialog.getByLabel("Email de destino")).toHaveAttribute("readonly", "");
   await expect(page.getByTestId("payment-receipt-email-dialog").getByRole("button", { name: "Cerrar" })).toBeVisible();
   await dialog.getByRole("button", { name: "Cerrar" }).click();
   await page.getByTestId(`payment-receipt-email-${transactionId}`).click();

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-17T02:04:36.971Z",
+  "generatedAt": "2026-10-17T03:05:35.028Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -12699,42 +12699,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_receipt_email_service_send_payment_receipt_email",
-      "name": "send_payment_receipt_email",
-      "entryPoint": "services_payment_receipt_email_service_send_payment_receipt_email",
-      "entryPointId": "services_payment_receipt_email_service_send_payment_receipt_email",
-      "path": [
-        "services_payment_receipt_email_service_send_payment_receipt_email",
-        "services_payment_receipt_email_service_existing_delivery",
-        "services_payment_receipt_email_service_key_hash",
-        "services_payment_receipt_email_service_load_receipt_and_registered_email",
-        "services_payment_receipt_email_service_normalize_email",
-        "services_payment_receipt_email_service_paymentreceiptemailerror",
-        "services_payment_receipt_email_service_receipt_email_content",
-        "services_payment_receipt_email_service_recipient_fingerprint",
-        "services_payment_receipt_email_service_format_money"
-      ],
-      "qualifiedPath": [
-        "services_payment_receipt_email_service_send_payment_receipt_email",
-        "services_payment_receipt_email_service_existing_delivery",
-        "services_payment_receipt_email_service_key_hash",
-        "services_payment_receipt_email_service_load_receipt_and_registered_email",
-        "services_payment_receipt_email_service_normalize_email",
-        "services_payment_receipt_email_service_paymentreceiptemailerror",
-        "services_payment_receipt_email_service_receipt_email_content",
-        "services_payment_receipt_email_service_recipient_fingerprint",
-        "services_payment_receipt_email_service_format_money"
-      ],
-      "depth": 2,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_receipt_email_service.py"
-      ],
-      "criticality": 0.1978,
-      "warnings": []
-    },
-    {
       "id": "flow:services_cash_expense_service_create_cash_expense",
       "name": "create_cash_expense",
       "entryPoint": "services_cash_expense_service_create_cash_expense",
@@ -13455,6 +13419,48 @@
       "warnings": []
     },
     {
+      "id": "flow:services_payment_receipt_email_service_send_payment_receipt_email",
+      "name": "send_payment_receipt_email",
+      "entryPoint": "services_payment_receipt_email_service_send_payment_receipt_email",
+      "entryPointId": "services_payment_receipt_email_service_send_payment_receipt_email",
+      "path": [
+        "services_payment_receipt_email_service_send_payment_receipt_email",
+        "services_payment_receipt_email_service_existing_delivery",
+        "services_payment_receipt_email_service_is_reserved_test_recipient",
+        "services_payment_receipt_email_service_key_hash",
+        "services_payment_receipt_email_service_load_receipt",
+        "services_payment_receipt_email_service_load_receipt_and_registered_email",
+        "services_payment_receipt_email_service_local_simulation_enabled",
+        "services_payment_receipt_email_service_normalize_email",
+        "services_payment_receipt_email_service_paymentreceiptemailerror",
+        "services_payment_receipt_email_service_receipt_email_content",
+        "services_payment_receipt_email_service_recipient_fingerprint",
+        "services_payment_receipt_email_service_format_money"
+      ],
+      "qualifiedPath": [
+        "services_payment_receipt_email_service_send_payment_receipt_email",
+        "services_payment_receipt_email_service_existing_delivery",
+        "services_payment_receipt_email_service_is_reserved_test_recipient",
+        "services_payment_receipt_email_service_key_hash",
+        "services_payment_receipt_email_service_load_receipt",
+        "services_payment_receipt_email_service_load_receipt_and_registered_email",
+        "services_payment_receipt_email_service_local_simulation_enabled",
+        "services_payment_receipt_email_service_normalize_email",
+        "services_payment_receipt_email_service_paymentreceiptemailerror",
+        "services_payment_receipt_email_service_receipt_email_content",
+        "services_payment_receipt_email_service_recipient_fingerprint",
+        "services_payment_receipt_email_service_format_money"
+      ],
+      "depth": 2,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_receipt_email_service.py"
+      ],
+      "criticality": 0.1908,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_service_build_channels_payload",
       "name": "build_channels_payload",
       "entryPoint": "services_analytics_service_build_channels_payload",
@@ -13845,6 +13851,7 @@
       "entryPointId": "services_timezones_hotel_today",
       "path": [
         "services_timezones_hotel_today",
+        "services_timezones_business_clock_enabled_for_hotel",
         "services_timezones_local_today",
         "services_timezones_normalize_timezone",
         "services_timezones_is_valid_timezone",
@@ -13852,13 +13859,14 @@
       ],
       "qualifiedPath": [
         "services_timezones_hotel_today",
+        "services_timezones_business_clock_enabled_for_hotel",
         "services_timezones_local_today",
         "services_timezones_normalize_timezone",
         "services_timezones_is_valid_timezone",
         "services_timezones_get_timezone_catalog"
       ],
       "depth": 4,
-      "nodeCount": 5,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "app/services/timezones.py"
@@ -14822,6 +14830,32 @@
       "fileCount": 1,
       "files": [
         "app/services/subscription_entitlements.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_timezones_hotel_timezone_name",
+      "name": "hotel_timezone_name",
+      "entryPoint": "services_timezones_hotel_timezone_name",
+      "entryPointId": "services_timezones_hotel_timezone_name",
+      "path": [
+        "services_timezones_hotel_timezone_name",
+        "services_timezones_normalize_timezone",
+        "services_timezones_is_valid_timezone",
+        "services_timezones_get_timezone_catalog"
+      ],
+      "qualifiedPath": [
+        "services_timezones_hotel_timezone_name",
+        "services_timezones_normalize_timezone",
+        "services_timezones_is_valid_timezone",
+        "services_timezones_get_timezone_catalog"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/timezones.py"
       ],
       "criticality": 0.18,
       "warnings": []
@@ -18427,6 +18461,7 @@
         "services_hotel_outbound_email_service_ensure_hotel_gmail_ready",
         "services_hotel_outbound_email_service_hoteloutboundemailerror",
         "services_hotel_outbound_email_service_hoteloutboundsendresult",
+        "services_hotel_outbound_email_service_build_email_message",
         "services_hotel_outbound_email_service_hoteloutboundidentity"
       ],
       "qualifiedPath": [
@@ -18435,10 +18470,11 @@
         "services_hotel_outbound_email_service_ensure_hotel_gmail_ready",
         "services_hotel_outbound_email_service_hoteloutboundemailerror",
         "services_hotel_outbound_email_service_hoteloutboundsendresult",
+        "services_hotel_outbound_email_service_build_email_message",
         "services_hotel_outbound_email_service_hoteloutboundidentity"
       ],
       "depth": 2,
-      "nodeCount": 6,
+      "nodeCount": 7,
       "fileCount": 1,
       "files": [
         "app/services/hotel_outbound_email_service.py"
@@ -21096,15 +21132,17 @@
       "path": [
         "protected_reservationspage_reservationspage",
         "protected_reservationspage_diffnights",
+        "protected_reservationspage_isvalidreceiptemail",
         "protected_reservationspage_reservationguestlabel"
       ],
       "qualifiedPath": [
         "protected_reservationspage_reservationspage",
         "protected_reservationspage_diffnights",
+        "protected_reservationspage_isvalidreceiptemail",
         "protected_reservationspage_reservationguestlabel"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/ReservationsPage.tsx"
@@ -22228,6 +22266,34 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_warehouse.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_hotel_outbound_email_service_capture_hotel_email",
+      "name": "capture_hotel_email",
+      "entryPoint": "services_hotel_outbound_email_service_capture_hotel_email",
+      "entryPointId": "services_hotel_outbound_email_service_capture_hotel_email",
+      "path": [
+        "services_hotel_outbound_email_service_capture_hotel_email",
+        "services_hotel_outbound_email_service_build_email_message",
+        "services_hotel_outbound_email_service_dev_outbox_path",
+        "services_hotel_outbound_email_service_hoteloutboundemailerror",
+        "services_hotel_outbound_email_service_hoteloutboundsendresult"
+      ],
+      "qualifiedPath": [
+        "services_hotel_outbound_email_service_capture_hotel_email",
+        "services_hotel_outbound_email_service_build_email_message",
+        "services_hotel_outbound_email_service_dev_outbox_path",
+        "services_hotel_outbound_email_service_hoteloutboundemailerror",
+        "services_hotel_outbound_email_service_hoteloutboundsendresult"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/hotel_outbound_email_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -24596,6 +24662,34 @@
       "fileCount": 1,
       "files": [
         "app/services/whatsapp_booking_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_receipt_pdf_generate_payment_receipt_pdf",
+      "name": "generate_payment_receipt_pdf",
+      "entryPoint": "services_payment_receipt_pdf_generate_payment_receipt_pdf",
+      "entryPointId": "services_payment_receipt_pdf_generate_payment_receipt_pdf",
+      "path": [
+        "services_payment_receipt_pdf_generate_payment_receipt_pdf",
+        "services_payment_receipt_pdf_amount",
+        "services_payment_receipt_pdf_local_created_at",
+        "services_payment_receipt_pdf_pdf_text",
+        "services_payment_receipt_pdf_rate"
+      ],
+      "qualifiedPath": [
+        "services_payment_receipt_pdf_generate_payment_receipt_pdf",
+        "services_payment_receipt_pdf_amount",
+        "services_payment_receipt_pdf_local_created_at",
+        "services_payment_receipt_pdf_pdf_text",
+        "services_payment_receipt_pdf_rate"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_receipt_pdf.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -29982,6 +30076,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20261015_company_nightly_rate_history.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20261017_local_business_clock_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20261017_local_business_clock_upgrade",
+      "entryPointId": "versions_20261017_local_business_clock_upgrade",
+      "path": [
+        "versions_20261017_local_business_clock_upgrade",
+        "versions_20261017_local_business_clock_existing_table_matches"
+      ],
+      "qualifiedPath": [
+        "versions_20261017_local_business_clock_upgrade",
+        "versions_20261017_local_business_clock_existing_table_matches"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261017_local_business_clock.py"
       ],
       "criticality": 0.16,
       "warnings": []

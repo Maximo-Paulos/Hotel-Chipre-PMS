@@ -31,6 +31,7 @@ from app.models.laundry_vendor import (
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.services import linen_service
+from app.services.timezones import hotel_today
 
 DIRECTIONS = {"outbound", "inbound"}
 QUARTER_MONTHS = {1: (1, 3), 2: (4, 6), 3: (7, 9), 4: (10, 12)}
@@ -123,7 +124,7 @@ def set_vendor_price(
 
     if unit_price < 0:
         raise LaundryVendorError("El precio unitario no puede ser negativo.")
-    effective_from = effective_from or date.today()
+    effective_from = effective_from or hotel_today(db, hotel_id)
     _get_vendor(db, hotel_id=hotel_id, vendor_id=vendor_id)
     linen_service.get_linen_item(db, hotel_id=hotel_id, item_id=linen_item_id)
 

@@ -15,7 +15,7 @@ from app.models.reservation import Reservation, ReservationSourceEnum, Reservati
 from app.models.room import Room, RoomCategory
 from app.services.room_service import active_rooms
 from app.services.reservation_service import active_reservations
-from app.services.timezones import local_today
+from app.services.timezones import hotel_today
 
 
 # §13 calendar cell states (derived, no persistence).
@@ -279,7 +279,7 @@ def get_daily_calendar(
     for rule in inventory_rules:
         inventory_by_key[(rule.provider_id, rule.stay_date)].append(rule)
 
-    today = local_today(hotel_config.hotel_timezone if hotel_config else None)
+    today = hotel_today(db, hotel_id)
     days: list[dict] = []
     current_date = date_from
     while current_date <= date_to:

@@ -1,16 +1,15 @@
 """
 FastAPI routes for Payments.
 """
-from typing import Literal
-
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
+from email_validator import EmailNotValidError, validate_email
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, authorize_permission, require_all_permissions, require_permission
 from app.schemas.reservation_operations import ReservationFinancialSummaryRead
-from app.schemas.transaction import PaymentReceiptRead, PaymentRequest, TransactionRead
+from app.schemas.transaction import PaymentReceiptEmailRead, PaymentReceiptRead, PaymentRequest, TransactionRead
 from app.services.payment_service import (
     process_payment,
     get_reservation_financial_summary,
@@ -23,6 +22,7 @@ from app.services.payment_receipt_email_service import (
     PaymentReceiptEmailError,
     send_payment_receipt_email,
 )
+from app.services.payment_receipt_pdf import generate_payment_receipt_pdf
 from app.services.permission_service import (
     PERMISSION_CASH_OPERATE,
     PERMISSION_RESERVATION_READ,
@@ -40,20 +40,25 @@ EXTERNAL_GATEWAY_METHODS = frozenset(
 
 
 class PaymentReceiptEmailRequest(BaseModel):
-    """The operator must confirm the registered guest email before sending."""
+    """A hotel operator explicitly enters the destination for this receipt."""
 
-    recipient_email: EmailStr = Field(..., max_length=200)
+    recipient_email: str = Field(..., min_length=3, max_length=254)
 
     @field_validator("recipient_email", mode="before")
     @classmethod
     def trim_recipient_email(cls, value):
-        return value.strip() if isinstance(value, str) else value
-
-
-class PaymentReceiptEmailRead(BaseModel):
-    transaction_id: int
-    status: Literal["sent"]
-    replayed: bool
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip()
+        allow_reserved_test = normalized.rsplit("@", maxsplit=1)[-1].rstrip(".").lower().endswith(".test")
+        try:
+            return validate_email(
+                normalized,
+                check_deliverability=False,
+                test_environment=allow_reserved_test,
+            ).normalized
+        except EmailNotValidError as exc:
+            raise ValueError("Ingresá una dirección de correo válida.") from exc
 
 
 @router.post("", response_model=TransactionRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)
@@ -168,6 +173,29 @@ def payment_receipt_data(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.get("/transactions/{transaction_id}/receipt.pdf", include_in_schema=True)
+def download_payment_receipt_pdf(
+    transaction_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+):
+    """Download a PDF generated from the persisted, tenant-scoped receipt."""
+    try:
+        receipt = get_payment_receipt_data(db, context.hotel_id, transaction_id)
+        content = generate_payment_receipt_pdf(receipt)
+    except PaymentNotFoundError as e:
+        raise HTTPException(status_code=404, detail="No se encontró el pago confirmado.") from e
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="comprobante-pago-{transaction_id}.pdf"',
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+        },
+    )
+
+
 @router.post(
     "/transactions/{transaction_id}/receipt/email",
     response_model=PaymentReceiptEmailRead,
@@ -182,7 +210,7 @@ def email_payment_receipt(
         require_all_permissions(PERMISSION_CASH_OPERATE, PERMISSION_PAYMENT_RECEIPT_EMAIL)
     ),
 ):
-    """Send a persisted receipt only to the reservation guest's confirmed email."""
+    """Send or locally capture the persisted receipt for the operator-entered email."""
     try:
         return send_payment_receipt_email(
             db,

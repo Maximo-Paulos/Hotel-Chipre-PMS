@@ -17,7 +17,7 @@ from app.models.audit_log import AuditActionEnum
 from app.models.hotel_config import HotelConfiguration
 from app.models.stock import StockItem, StockLocation, StockMovement
 from app.services import audit_log_service
-from app.services.timezones import normalize_timezone
+from app.services.timezones import hotel_today, normalize_timezone
 
 
 logger = logging.getLogger(__name__)
@@ -180,7 +180,7 @@ def _notify_if_low_stock(db: Session, *, hotel_id: int, item: StockItem) -> None
 
         severity = NotificationSeverityEnum.CRITICAL if balance <= 0 else NotificationSeverityEnum.WARNING
         event_type = "stock.out_of_stock" if balance <= 0 else "stock.low"
-        today = datetime.now(timezone.utc).date().isoformat()
+        today = hotel_today(db, hotel_id).isoformat()
         enqueue_notifications_for_event(
             db,
             hotel_id=hotel_id,

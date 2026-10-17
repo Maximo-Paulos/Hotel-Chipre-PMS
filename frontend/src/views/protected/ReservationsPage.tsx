@@ -58,8 +58,8 @@ import { useRestrictionOverridePrompt } from "../../hooks/useRestrictionOverride
 import { useReservationDrawer } from "../../hooks/useReservationDrawer";
 import { checkRoomAvailability, type RoomAvailabilityResponse } from "../../api/rooms";
 import {
+  downloadPaymentReceiptPdf,
   emailPaymentReceipt,
-  getPaymentReceiptData,
   newPaymentReceiptEmailIdempotencyKey,
   type PaymentMethod,
   type PaymentRequest,
@@ -91,7 +91,7 @@ import { useSession } from "../../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
 import { escapeHtml, resolveVoucherOperationalBalance } from "../../utils/escapeHtml";
 import { isLargeTotalAdjustment } from "../../utils/largeTotalAdjustment.mjs";
-import { buildPaymentReceiptHtml, canPrintPaymentReceipt } from "../../utils/paymentReceiptHtml";
+import { canPrintPaymentReceipt } from "../../utils/paymentReceiptHtml";
 import { addDaysIso, formatHotelDateTime, formatLocalIsoDate, todayIso } from "../../utils/date";
 import {
   canCancelReservation,
@@ -136,8 +136,11 @@ type PaymentReceiptEmailAttempt = {
   transactionId: number;
   recipientEmail: string;
   idempotencyKey: string;
-  status: "confirm" | "sending" | "sent" | "failed" | "unknown";
+  status: "confirm" | "sending" | "sent" | "captured" | "failed" | "unknown";
+  deliveryMode?: "provider" | "local_simulation";
 };
+
+const isValidReceiptEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
 const PAYMENT_CURRENCIES: FxCurrencyCode[] = ["ARS", "USD", "EUR", "BRL", "CLP", "UYU"];
 
@@ -325,6 +328,7 @@ export function ReservationsPage() {
   const [pageActionError, setPageActionError] = useState<string | null>(null);
   const [communicationRecipient, setCommunicationRecipient] = useState("");
   const [receiptEmailAttempt, setReceiptEmailAttempt] = useState<PaymentReceiptEmailAttempt | null>(null);
+  const [receiptDownloadTransactionId, setReceiptDownloadTransactionId] = useState<number | null>(null);
   const receiptEmailAttemptsRef = useRef(new Map<number, PaymentReceiptEmailAttempt>());
   const receiptEmailDialogRef = useRef<HTMLDivElement | null>(null);
   const receiptEmailTitleRef = useRef<HTMLHeadingElement | null>(null);
@@ -2476,111 +2480,28 @@ export function ReservationsPage() {
     win.close();
   };
 
-  const printPaymentReceipt = async (transaction: PaymentSummary["transactions"][number]) => {
+  const downloadPaymentReceipt = async (transaction: PaymentSummary["transactions"][number]) => {
     if (!detailsReservation || !canPrintPaymentReceipt(transaction.status, canOperateCash)) return;
+    if (receiptDownloadTransactionId !== null) return;
 
-    // Open synchronously from the click so browser popup protection still permits the async fetch.
-    const win = window.open("", "_blank");
-    if (!win) {
-      showToast("error", t("page.details.receipt.popupBlocked"));
-      return;
-    }
-    win.opener = null;
-    win.document.write("<!doctype html><meta charset=\"utf-8\"><title>Hotels-PMS</title><p>" + escapeHtml(t("page.details.receipt.loading")) + "</p>");
-    win.document.close();
-
+    setReceiptDownloadTransactionId(transaction.id);
     try {
-      // The server rechecks permission, hotel scope and payment status and returns only persisted receipt fields.
-      const receiptData = await getPaymentReceiptData(transaction.id, session);
-      if (!canPrintPaymentReceipt(receiptData.status, canOperateCash)) {
-        win.close();
-        showToast("error", t("page.details.receipt.unavailable"));
-        return;
-      }
-      const amount = Number(receiptData.amount);
-      const grossAmount = Number(receiptData.gross_amount ?? receiptData.amount);
-      const surchargeAmount = Number(receiptData.fee_amount ?? 0);
-      if (![amount, grossAmount, surchargeAmount].every(Number.isFinite)) {
-        win.close();
-        showToast("error", t("page.details.receipt.invalidAmount"));
-        return;
-      }
-
-      const language = t("page.details.receipt.language") as "en" | "es";
-      const locale = language === "en" ? "en-US" : "es-AR";
-      const createdAt = new Date(receiptData.created_at);
-      let receiptDate = receiptData.created_at;
-      if (!Number.isNaN(createdAt.getTime())) {
-        try {
-          receiptDate = new Intl.DateTimeFormat(locale, {
-            dateStyle: "medium",
-            timeStyle: "short",
-            hourCycle: "h23",
-            timeZone: receiptData.hotel_timezone
-          }).format(createdAt);
-        } catch {
-          receiptDate = new Intl.DateTimeFormat(locale, {
-          dateStyle: "medium",
-            timeStyle: "short",
-            hourCycle: "h23"
-          }).format(createdAt);
-        }
-      }
-
-      const isRefund = receiptData.type === "refund";
-      const hasSurcharge = !isRefund && Math.abs(surchargeAmount) > 0.01;
-      const appliedCurrency = receiptData.applied_currency || receiptData.currency;
-      const hasFxConversion = appliedCurrency !== receiptData.currency
-        && Number.isFinite(Number(receiptData.fx_rate_snapshot))
-        && Number(receiptData.fx_rate_snapshot) > 0;
-      const amountToShow = isRefund ? Math.abs(amount) : Math.abs(grossAmount);
-      const receiptHtml = buildPaymentReceiptHtml({
-        language,
-        title: t("page.details.receipt.documentTitle", { id: receiptData.id }),
-        heading: isRefund ? t("page.details.receipt.refundHeading") : t("page.details.receipt.heading"),
-        internalNotice: t("page.details.receipt.internalNotice"),
-        hotelLabel: t("page.details.receipt.hotelLabel"),
-        hotelName: receiptData.hotel_name,
-        operationLabel: t("page.details.receipt.operationLabel"),
-        operationId: receiptData.id,
-        reservationLabel: t("page.details.receipt.reservationLabel"),
-        reservationCode: receiptData.confirmation_code,
-        dateLabel: t("page.details.receipt.dateLabel"),
-        date: receiptDate,
-        movementLabel: t("page.details.receipt.movementLabel"),
-        movement: t("page.details.receipt.types." + receiptData.type, { defaultValue: receiptData.type }),
-        paymentMethodLabel: t("page.details.receipt.paymentMethodLabel"),
-        paymentMethod: t("drawer.payment.methods." + receiptData.method, { defaultValue: receiptData.method }),
-        statusLabel: t("page.details.receipt.statusLabel"),
-        status: t("page.details.receipt.statuses." + receiptData.status, { defaultValue: receiptData.status }),
-        appliedAmountLabel: hasSurcharge || hasFxConversion ? t("page.details.receipt.appliedAmountLabel") : undefined,
-        appliedAmount: hasSurcharge || hasFxConversion
-          ? formatMoney(Math.abs(Number(receiptData.applied_amount ?? amount)), appliedCurrency)
-          : null,
-        fxRateLabel: hasFxConversion ? t("page.details.receipt.fxRateLabel") : undefined,
-        fxRate: hasFxConversion
-          ? `1 ${appliedCurrency} = ${Number(receiptData.fx_rate_snapshot).toLocaleString(language === "es" ? "es-AR" : "en-US", { maximumFractionDigits: 6 })} ${receiptData.currency}`
-          : null,
-        surchargeLabel: hasSurcharge ? t("page.details.receipt.surchargeLabel") : undefined,
-        surcharge: hasSurcharge ? formatMoney(Math.abs(surchargeAmount), receiptData.currency) : null,
-        amountLabel: isRefund ? t("page.details.receipt.refundAmountLabel") : t("page.details.receipt.amountLabel"),
-        amount: formatMoney(amountToShow, receiptData.currency),
-        referenceLabel: t("page.details.receipt.referenceLabel"),
-        manualReference: receiptData.manual_reference,
-        refundOfLabel: t("page.details.receipt.refundOfLabel"),
-        refundOfTransactionId: receiptData.refund_of_transaction_id
-      });
-
-      if (win.closed) return;
-      win.document.open();
-      win.document.write(receiptHtml);
-      win.document.close();
-      win.focus();
-      win.onafterprint = () => win.close();
-      win.setTimeout(() => win.print(), 100);
+      const { blob, filename } = await downloadPaymentReceiptPdf(transaction.id, session);
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      link.rel = "noopener";
+      link.hidden = true;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+      showToast("success", t("page.details.receipt.downloadStarted"));
     } catch {
-      if (!win.closed) win.close();
-      showToast("error", t("page.details.receipt.unavailable"));
+      showToast("error", t("page.details.receipt.downloadFailed"));
+    } finally {
+      setReceiptDownloadTransactionId(null);
     }
   };
 
@@ -2590,7 +2511,7 @@ export function ReservationsPage() {
     const recipientEmail = detailsGuest?.email?.trim() ?? "";
     const previousAttempt = receiptEmailAttemptsRef.current.get(transactionId);
     const previousOutcomeBlocksNewAttempt = previousAttempt &&
-      ["sending", "sent", "unknown"].includes(previousAttempt.status);
+      ["sending", "sent", "captured", "unknown"].includes(previousAttempt.status);
     const attempt = previousOutcomeBlocksNewAttempt ||
       (previousAttempt && previousAttempt.recipientEmail === recipientEmail)
       ? previousAttempt
@@ -2605,7 +2526,7 @@ export function ReservationsPage() {
             transactionId,
             recipientEmail: "",
             idempotencyKey: "",
-            status: "failed" as const
+            status: "confirm" as const
           };
     receiptEmailAttemptsRef.current.set(transactionId, attempt);
     receiptEmailAttemptRef.current = attempt;
@@ -2619,11 +2540,32 @@ export function ReservationsPage() {
     window.requestAnimationFrame(() => receiptEmailTriggerRef.current?.focus());
   };
 
+  const updateReceiptEmailRecipient = (recipientEmail: string) => {
+    const currentAttempt = receiptEmailAttemptRef.current;
+    if (!currentAttempt || !["confirm", "failed"].includes(currentAttempt.status)) return;
+    if (recipientEmail === currentAttempt.recipientEmail) return;
+
+    const updatedAttempt: PaymentReceiptEmailAttempt = {
+      ...currentAttempt,
+      recipientEmail,
+      // A changed recipient is a new email intent and must never reuse the
+      // idempotency key from the previous address.
+      idempotencyKey: recipientEmail.trim()
+        ? newPaymentReceiptEmailIdempotencyKey(currentAttempt.transactionId)
+        : "",
+      status: "confirm",
+      deliveryMode: undefined
+    };
+    receiptEmailAttemptsRef.current.set(updatedAttempt.transactionId, updatedAttempt);
+    receiptEmailAttemptRef.current = updatedAttempt;
+    setReceiptEmailAttempt(updatedAttempt);
+  };
+
   const sendReceiptEmail = async () => {
     const currentAttempt = receiptEmailAttemptRef.current;
     if (
       !currentAttempt ||
-      !currentAttempt.recipientEmail ||
+      !isValidReceiptEmail(currentAttempt.recipientEmail) ||
       !currentAttempt.idempotencyKey ||
       !["confirm", "failed"].includes(currentAttempt.status)
     ) {
@@ -2636,13 +2578,25 @@ export function ReservationsPage() {
     window.requestAnimationFrame(() => receiptEmailTitleRef.current?.focus());
 
     try {
-      await emailPaymentReceipt(
+      const response = await emailPaymentReceipt(
         sendingAttempt.transactionId,
-        { recipient_email: sendingAttempt.recipientEmail },
+        { recipient_email: sendingAttempt.recipientEmail.trim() },
         session,
         sendingAttempt.idempotencyKey
       );
-      const sentAttempt: PaymentReceiptEmailAttempt = { ...sendingAttempt, status: "sent" };
+      if (
+        !response ||
+        !["sent", "captured"].includes(response.status) ||
+        !["provider", "local_simulation"].includes(response.delivery_mode)
+      ) {
+        throw new Error("The email result could not be confirmed.");
+      }
+      const wasCaptured = response.status === "captured" || response.delivery_mode === "local_simulation";
+      const sentAttempt: PaymentReceiptEmailAttempt = {
+        ...sendingAttempt,
+        status: wasCaptured ? "captured" : "sent",
+        deliveryMode: response.delivery_mode
+      };
       receiptEmailAttemptsRef.current.set(sentAttempt.transactionId, sentAttempt);
       receiptEmailAttemptRef.current = sentAttempt;
       setReceiptEmailAttempt(sentAttempt);
@@ -5763,10 +5717,14 @@ export function ReservationsPage() {
                                 type="button"
                                 data-testid={"payment-receipt-download-" + tx.id}
                                 aria-label={t("page.details.receipt.downloadAria", { id: tx.id })}
-                                onClick={() => void printPaymentReceipt(tx)}
+                                onClick={() => void downloadPaymentReceipt(tx)}
+                                disabled={receiptDownloadTransactionId !== null}
+                                aria-busy={receiptDownloadTransactionId === tx.id}
                                 className="rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
                               >
-                                {t("page.details.receipt.download")}
+                                {receiptDownloadTransactionId === tx.id
+                                  ? t("page.details.receipt.downloading")
+                                  : t("page.details.receipt.download")}
                               </button>
                               {canEmailPaymentReceipt ? (
                                 <button
@@ -6064,16 +6022,24 @@ export function ReservationsPage() {
               <input
                 id="payment-receipt-email-recipient"
                 type="email"
-                readOnly
-                aria-readonly="true"
+                autoComplete="email"
+                required
+                readOnly={!(["confirm", "failed"].includes(receiptEmailAttempt.status))}
+                aria-invalid={Boolean(receiptEmailAttempt.recipientEmail) && !isValidReceiptEmail(receiptEmailAttempt.recipientEmail)}
                 value={receiptEmailAttempt.recipientEmail}
+                onChange={(event) => updateReceiptEmailRecipient(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800"
               />
             </div>
 
-            {!receiptEmailAttempt.recipientEmail ? (
+            {!receiptEmailAttempt.recipientEmail.trim() ? (
               <p className="mt-3 text-sm text-amber-800" role="alert">
                 {t("page.details.receipt.missingEmail")}
+              </p>
+            ) : null}
+            {receiptEmailAttempt.recipientEmail.trim() && !isValidReceiptEmail(receiptEmailAttempt.recipientEmail) ? (
+              <p className="mt-3 text-sm text-rose-800" role="alert">
+                {t("page.details.receipt.invalidEmail")}
               </p>
             ) : null}
             {receiptEmailAttempt.status === "sending" ? (
@@ -6084,6 +6050,11 @@ export function ReservationsPage() {
             {receiptEmailAttempt.status === "sent" ? (
               <p className="mt-3 text-sm text-emerald-800" role="status" aria-live="polite">
                 {t("page.details.receipt.sent")}
+              </p>
+            ) : null}
+            {receiptEmailAttempt.status === "captured" ? (
+              <p className="mt-3 text-sm text-amber-900" role="status" aria-live="polite" data-testid="payment-receipt-email-captured">
+                {t("page.details.receipt.captured")}
               </p>
             ) : null}
             {receiptEmailAttempt.status === "failed" && receiptEmailAttempt.recipientEmail ? (
@@ -6105,7 +6076,7 @@ export function ReservationsPage() {
                 disabled={receiptEmailAttempt.status === "sending"}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {receiptEmailAttempt.status === "sent" || receiptEmailAttempt.status === "unknown"
+                {receiptEmailAttempt.status === "sent" || receiptEmailAttempt.status === "captured" || receiptEmailAttempt.status === "unknown"
                   ? t("page.details.receipt.close")
                   : t("page.details.receipt.cancel")}
               </button>
@@ -6114,7 +6085,7 @@ export function ReservationsPage() {
                   type="button"
                   data-testid="payment-receipt-email-confirm"
                   onClick={() => void sendReceiptEmail()}
-                  disabled={!receiptEmailAttempt.recipientEmail}
+                  disabled={!isValidReceiptEmail(receiptEmailAttempt.recipientEmail)}
                   className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {receiptEmailAttempt.status === "failed"

@@ -21,6 +21,13 @@ Instalado fuera del sistema para no depender de admin:
 
 PATH persistido en `~/.zshrc`. **No instalable sin admin**: Docker (no hace falta — deploy es Render/Vercel).
 
+Para avanzar fechas de un hotel sintético en una simulación local, ver
+[`docs/local-business-clock.md`](local-business-clock.md). El reloj requiere
+opt-in explícito y SQLite; queda desactivado por defecto.
+
+Para cargar vouchers de empresa, descargar comprobantes o revisar el envío
+local de recibos PDF, ver [`docs/company-vouchers-and-payment-receipts.md`](company-vouchers-and-payment-receipts.md).
+
 ## 2. Claude Code — plugins (user scope, `~/.claude/`)
 Instalados desde sus marketplaces oficiales con `claude plugin install`:
 

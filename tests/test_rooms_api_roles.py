@@ -155,7 +155,7 @@ def test_room_category_rates_are_batched_and_keep_daily_period_and_base_preceden
     test_client, app, hotel_id, base_category_id, db = client
     app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "receptionist")
     today = date(2026, 10, 5)
-    monkeypatch.setattr(rooms_api, "local_today", lambda _timezone: today)
+    monkeypatch.setattr(rooms_api, "hotel_today", lambda _db, _hotel_id: today)
 
     daily_category = RoomCategory(
         hotel_id=hotel_id,

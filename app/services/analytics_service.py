@@ -47,7 +47,7 @@ from app.services.analytics_facts import (
 from app.services.reservation_service import active_reservations
 from app.services.room_service import active_rooms
 from app.services.subscription_entitlements import get_subscription_snapshot
-from app.services.timezones import normalize_timezone
+from app.services.timezones import hotel_today, normalize_timezone
 
 MONEY_QUANTUM = Decimal("0.01")
 PLAN_ORDER = {"starter": 0, "pro": 1, "ultra": 2}
@@ -143,7 +143,7 @@ def _utc_date_range(db: Session, hotel_id: int, date_from: date | None, date_to:
 
     hotel = db.get(HotelConfiguration, hotel_id)
     timezone_name = normalize_timezone(hotel.hotel_timezone if hotel and hotel.hotel_timezone else get_settings().HOTEL_TIMEZONE)
-    today = datetime.now(ZoneInfo(timezone_name)).date()
+    today = hotel_today(db, hotel_id)
     default_from = today.replace(day=1)
     return DateWindow(
         date_from=default_from,

@@ -29,6 +29,7 @@ email-validator==2.1.0.post1
 cryptography==50.0.1
 pyotp==2.10.0
 Pillow==12.3.0
+fpdf2==2.8.8
 # Transitive pins: protobuf (via ortools) and pyOpenSSL (via paypalrestsdk)
 # are pinned so a fresh resolve cannot fall back to versions with known CVEs.
 protobuf==5.29.6

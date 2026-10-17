@@ -7894,13 +7894,86 @@
         }
       }
     },
+    "/api/payments/transactions/{transaction_id}/receipt.pdf": {
+      "get": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Download Payment Receipt Pdf",
+        "description": "Download a PDF generated from the persisted, tenant-scoped receipt.",
+        "operationId": "download_payment_receipt_pdf_api_payments_transactions__transaction_id__receipt_pdf_get",
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Transaction Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/payments/transactions/{transaction_id}/receipt/email": {
       "post": {
         "tags": [
           "Payments"
         ],
         "summary": "Email Payment Receipt",
-        "description": "Send a persisted receipt only to the reservation guest's confirmed email.",
+        "description": "Send or locally capture the persisted receipt for the operator-entered email.",
         "operationId": "email_payment_receipt_api_payments_transactions__transaction_id__receipt_email_post",
         "parameters": [
           {
@@ -8530,6 +8603,138 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config/business-clock": {
+      "get": {
+        "tags": [
+          "Hotel Configuration"
+        ],
+        "summary": "Read Business Clock",
+        "description": "Expose the effective business date to any authenticated hotel member.",
+        "operationId": "read_business_clock_api_config_business_clock_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessClockRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config/business-clock/advance": {
+      "post": {
+        "tags": [
+          "Hotel Configuration"
+        ],
+        "summary": "Advance Business Clock By One Day",
+        "description": "Advance one synthetic business day for the explicitly selected owner.",
+        "operationId": "advance_business_clock_by_one_day_api_config_business_clock_advance_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessClockRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -44394,6 +44599,36 @@
         ],
         "title": "BulkRateOut"
       },
+      "BusinessClockRead": {
+        "properties": {
+          "hotel_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Hotel Id"
+          },
+          "business_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Business Date"
+          },
+          "hotel_timezone": {
+            "type": "string",
+            "title": "Hotel Timezone"
+          },
+          "simulation_enabled": {
+            "type": "boolean",
+            "title": "Simulation Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hotel_id",
+          "business_date",
+          "hotel_timezone",
+          "simulation_enabled"
+        ],
+        "title": "BusinessClockRead"
+      },
       "CashCloseReportRead": {
         "properties": {
           "id": {
@@ -58845,10 +59080,18 @@
           "status": {
             "type": "string",
             "enum": [
-              "sent"
+              "sent",
+              "captured"
             ],
-            "const": "sent",
             "title": "Status"
+          },
+          "delivery_mode": {
+            "type": "string",
+            "enum": [
+              "provider",
+              "local_simulation"
+            ],
+            "title": "Delivery Mode"
           },
           "replayed": {
             "type": "boolean",
@@ -58859,16 +59102,18 @@
         "required": [
           "transaction_id",
           "status",
+          "delivery_mode",
           "replayed"
         ],
-        "title": "PaymentReceiptEmailRead"
+        "title": "PaymentReceiptEmailRead",
+        "description": "Auditable outcome of provider delivery or isolated local capture."
       },
       "PaymentReceiptEmailRequest": {
         "properties": {
           "recipient_email": {
             "type": "string",
-            "maxLength": 200,
-            "format": "email",
+            "maxLength": 254,
+            "minLength": 3,
             "title": "Recipient Email"
           }
         },
@@ -58877,7 +59122,7 @@
           "recipient_email"
         ],
         "title": "PaymentReceiptEmailRequest",
-        "description": "The operator must confirm the registered guest email before sending."
+        "description": "A hotel operator explicitly enters the destination for this receipt."
       },
       "PaymentReceiptRead": {
         "properties": {

@@ -23,7 +23,7 @@ from app.services.operational_report_service import (
     paid_amounts_by_reservation,
 )
 from app.services.reservation_service import deferred_company_reservation_ids
-from app.services.timezones import normalize_timezone
+from app.services.timezones import hotel_today, normalize_timezone
 from app.services.analytics_contracts import split_amount_evenly
 
 
@@ -192,7 +192,7 @@ def build_financial_report(
     hotel = db.get(HotelConfiguration, hotel_id)
     timezone_name = normalize_timezone((hotel.hotel_timezone if hotel else None) or "UTC")
     utc_start, utc_end = _hotel_bounds(start_date, end_date, timezone_name)
-    current_date = datetime.now(ZoneInfo(timezone_name)).date()
+    current_date = hotel_today(db, hotel_id)
 
     transaction_date_filter = or_(
         and_(

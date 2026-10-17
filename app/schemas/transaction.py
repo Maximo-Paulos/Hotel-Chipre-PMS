@@ -2,7 +2,7 @@
 Pydantic schemas for Transaction / Payments.
 """
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Optional
+from typing import Literal, Optional
 from datetime import date
 from decimal import Decimal
 from app.models.transaction import PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
@@ -136,6 +136,15 @@ class PaymentReceiptRead(BaseModel):
     manual_reference: Optional[str] = None
     refund_of_transaction_id: Optional[int] = None
     created_at: UTCDateTime
+
+
+class PaymentReceiptEmailRead(BaseModel):
+    """Auditable outcome of provider delivery or isolated local capture."""
+
+    transaction_id: int
+    status: Literal["sent", "captured"]
+    delivery_mode: Literal["provider", "local_simulation"]
+    replayed: bool
 
 
 class PaymentGatewayResponse(BaseModel):

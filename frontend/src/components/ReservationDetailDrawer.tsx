@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { type TFunction } from "i18next";
@@ -30,7 +30,12 @@ import {
 } from "../hooks/useReservations";
 import { useGuest } from "../hooks/useGuests";
 import { useCompanyNightCharges } from "../hooks/useCompanyNightCharges";
-import { useCompanyNightlyRates, useMarkCompanyDocumentSigned, useReservationCompanyDocuments } from "../hooks/useCompanies";
+import {
+  useCompanyDocumentMutations,
+  useCompanyNightlyRates,
+  useMarkCompanyDocumentSigned,
+  useReservationCompanyDocuments
+} from "../hooks/useCompanies";
 import { useEffectivePermissions } from "../hooks/usePermissions";
 import { usePaymentMutation, usePaymentSummary } from "../hooks/usePayments";
 import { useRestrictionOverridePrompt } from "../hooks/useRestrictionOverridePrompt";
@@ -72,6 +77,8 @@ const emptyCaptureForm: CheckinCaptureForm = {
   occupation: "",
   terms_accepted: false
 };
+
+const MAX_COMPANY_VOUCHER_PDF_BYTES = 5 * 1024 * 1024;
 
 const checkinValidationErrorKeys: Record<string, string> = {
   "First name is required": "drawer.checkinCapture.requiredFields.firstName",
@@ -247,11 +254,17 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const [selectedCompanyCorrectionIds, setSelectedCompanyCorrectionIds] = useState<number[]>([]);
   const [companyCorrectionAmounts, setCompanyCorrectionAmounts] = useState<Record<number, string>>({});
   const [companyCorrectionReason, setCompanyCorrectionReason] = useState("");
+  const [companyVoucherFile, setCompanyVoucherFile] = useState<File | null>(null);
+  const [companyVoucherFeedback, setCompanyVoucherFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+  const companyVoucherFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setActionError(null);
     setActionMessage(null);
     setCaptureForm(emptyCaptureForm);
+    setCompanyVoucherFile(null);
+    setCompanyVoucherFeedback(null);
+    if (companyVoucherFileInputRef.current) companyVoucherFileInputRef.current.value = "";
   }, [reservationId]);
 
   const reservationQuery = useReservation(reservationId ?? undefined);
@@ -291,6 +304,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     onSuccess: refreshCompanyNightCharges
   });
   const companyDocumentsQuery = useReservationCompanyDocuments(reservationQuery.data?.company_id ? reservationId ?? undefined : undefined);
+  const companyDocumentMutations = useCompanyDocumentMutations(reservationQuery.data?.company_id ?? undefined);
   const markCompanyDocumentSignedMutation = useMarkCompanyDocumentSigned();
   const { hasPermission } = useEffectivePermissions();
   const canManageCompanyCharges = hasPermission("company:manage");
@@ -578,6 +592,67 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     } catch (err) {
       documentTab.close();
       setActionError(err instanceof Error ? err.message : t("drawer.companyDocuments.openFailed"));
+    }
+  };
+
+  const handleCompanyVoucherFileChange = (file: File | null) => {
+    setCompanyVoucherFeedback(null);
+    if (!file) {
+      setCompanyVoucherFile(null);
+      return;
+    }
+
+    const hasPdfName = file.name.toLocaleLowerCase().endsWith(".pdf");
+    const hasCompatibleMimeType = !file.type || file.type === "application/pdf";
+    if (!hasPdfName || !hasCompatibleMimeType) {
+      setCompanyVoucherFile(null);
+      if (companyVoucherFileInputRef.current) companyVoucherFileInputRef.current.value = "";
+      setCompanyVoucherFeedback({ kind: "error", message: t("drawer.companyDocuments.pdfOnly") });
+      return;
+    }
+    if (file.size <= 0 || file.size > MAX_COMPANY_VOUCHER_PDF_BYTES) {
+      setCompanyVoucherFile(null);
+      if (companyVoucherFileInputRef.current) companyVoucherFileInputRef.current.value = "";
+      setCompanyVoucherFeedback({ kind: "error", message: t("drawer.companyDocuments.pdfSizeInvalid") });
+      return;
+    }
+
+    setCompanyVoucherFile(file);
+  };
+
+  const handleUploadCompanyVoucher = async () => {
+    if (!reservationId || !reservation?.company_id || !canManageCompanyCharges) return;
+    if (!companyVoucherFile) {
+      setCompanyVoucherFeedback({ kind: "error", message: t("drawer.companyDocuments.fileRequired") });
+      return;
+    }
+
+    const file = companyVoucherFile;
+    setCompanyVoucherFeedback(null);
+    try {
+      const contentBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error || new Error("Could not read the PDF."));
+        reader.readAsDataURL(file);
+      });
+      await companyDocumentMutations.uploadDocumentMutation.mutateAsync({
+        reservation_id: reservationId,
+        company_id: reservation.company_id,
+        doc_type: "voucher_pdf",
+        file_name: file.name,
+        content_base64: contentBase64,
+        requires_signature: false
+      });
+      setCompanyVoucherFile(null);
+      if (companyVoucherFileInputRef.current) companyVoucherFileInputRef.current.value = "";
+
+      const refreshedDocuments = await companyDocumentsQuery.refetch();
+      setCompanyVoucherFeedback(refreshedDocuments.isError
+        ? { kind: "error", message: t("drawer.companyDocuments.uploadedRefreshFailed") }
+        : { kind: "success", message: t("drawer.companyDocuments.uploaded") });
+    } catch {
+      setCompanyVoucherFeedback({ kind: "error", message: t("drawer.companyDocuments.uploadFailed") });
     }
   };
 
@@ -1073,6 +1148,46 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       ))}
                     </ul>
                   )}
+                  {canManageCompanyCharges ? (
+                    <div className="mt-3 border-t border-indigo-100 pt-3">
+                      <label htmlFor="company-voucher-pdf" className="block text-xs font-semibold text-slate-700">
+                        {t("drawer.companyDocuments.uploadLabel")}
+                      </label>
+                      <input
+                        ref={companyVoucherFileInputRef}
+                        id="company-voucher-pdf"
+                        data-testid="company-voucher-pdf-input"
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        onChange={(event) => handleCompanyVoucherFileChange(event.target.files?.[0] ?? null)}
+                        disabled={companyDocumentMutations.uploadDocumentMutation.isPending}
+                        className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-xs text-slate-700 file:mr-2 file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:font-semibold"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">{t("drawer.companyDocuments.uploadHint")}</p>
+                      {companyVoucherFeedback ? (
+                        <p
+                          className={`mt-2 text-xs ${companyVoucherFeedback.kind === "error" ? "text-rose-700" : "text-emerald-700"}`}
+                          role={companyVoucherFeedback.kind === "error" ? "alert" : "status"}
+                          aria-live={companyVoucherFeedback.kind === "error" ? "assertive" : "polite"}
+                          data-testid="company-voucher-upload-feedback"
+                        >
+                          {companyVoucherFeedback.message}
+                        </p>
+                      ) : null}
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => void handleUploadCompanyVoucher()}
+                          disabled={!companyVoucherFile || companyDocumentMutations.uploadDocumentMutation.isPending}
+                          className="rounded-md bg-indigo-700 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {companyDocumentMutations.uploadDocumentMutation.isPending
+                            ? t("drawer.companyDocuments.uploading")
+                            : t("drawer.companyDocuments.upload")}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
 

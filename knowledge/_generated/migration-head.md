@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-10-17T02:04:40.957002+00:00
-Commit: `6022c36f40285209de120e78905ea486ec7a10c0`
+Generado: 2026-10-17T03:05:39.307747+00:00
+Commit: `f399380b0fdafc98ee5a91bc848d0983e9249b3a`
 
 ```text
-20261016_fx_direction_markets (head)
+20261017_local_business_clock (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

@@ -244,8 +244,7 @@ def _hotel_today_and_timezone(db: Session, hotel_id: int) -> tuple[date, ZoneInf
             hotel_id,
         )
         hotel_timezone = ZoneInfo("UTC")
-    local_today = datetime.now(hotel_timezone).date()
-    return local_today, hotel_timezone
+    return hotel_today(db, hotel_id), hotel_timezone
 
 
 def visible_reservations(db: Session, context: "AuthContext"):
@@ -954,7 +953,7 @@ def _daily_rate_pricing_result(
         find_applicable_promotions_for_nights,
     )
 
-    booking_date = datetime.now(timezone.utc).date()
+    booking_date = hotel_today(db, hotel_id)
     breakdown = []
     promotions_applied_all: list[dict] = []
     rate_rows = resolve_rate_calendar(

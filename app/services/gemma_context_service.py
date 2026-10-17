@@ -13,7 +13,7 @@ from app.models.operations import RoomMoveEvent
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room
 from app.services.allocation_policy_service import get_active_policy_settings
-from app.services.timezones import local_today
+from app.services.timezones import hotel_today
 from app.services.reservation_action_service import list_pending_reservation_actions
 from app.services.reservation_service import active_reservations
 from app.services.room_service import active_rooms
@@ -39,7 +39,7 @@ def build_gemma_hotel_context(
     if hotel is None:
         raise ValueError(f"Hotel {hotel_id} not found")
 
-    today = local_today(hotel.hotel_timezone)
+    today = hotel_today(db, hotel_id)
     lookback_start = today - timedelta(days=lookback_days)
     horizon_end = today + timedelta(days=horizon_days)
 
