@@ -3,6 +3,12 @@ const roomCategoriesKey = (hotelId: number | null) => ["room-categories", hotelI
 
 export const queryKeys = {
   rooms: (hotelId: number | null) => ["rooms", hotelId] as const,
+  roomAvailability: (
+    hotelId: number | null,
+    categoryId: number | null,
+    checkInDate: string,
+    checkOutDate: string
+  ) => ["room-availability", hotelId, categoryId, checkInDate, checkOutDate] as const,
   housekeepingBoard: (hotelId: number | null) => ["housekeeping-board", hotelId] as const,
   roomCategories: roomCategoriesKey,
   apiKeys: (hotelId: number | null) => ["api-keys", hotelId] as const,
@@ -125,6 +131,7 @@ export const HOTEL_ID_INDEX_BY_QUERY_PREFIX: Readonly<Record<string, number>> = 
   reservations: 1,
   "reports": 2,
   "room-blocks": 1,
+  "room-availability": 1,
   "room-categories": 1,
   "room-movement-groups": 1,
   "room-state-events": 1,
@@ -180,6 +187,7 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
     "reservations",
     "reservation",
     "reservation-quote",
+    "room-availability",
     "reservation-operations",
     "reservation-pending-actions",
     "payment-summary",
@@ -188,6 +196,7 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
   ],
   rooms: [
     "rooms",
+    "room-availability",
     "housekeeping-board",
     "room-categories",
     "room-blocks",

@@ -10,6 +10,7 @@ import {
 const RESERVATION_QUERY_PREFIXES = new Set([
   "reservations",
   "reservation",
+  "room-availability",
   "reservation-operations",
   "reservation-pending-actions",
   "occupancy-grid",
@@ -41,7 +42,7 @@ const GUEST_QUERY_PREFIXES = new Set([
   "guest-restrictions",
   "guest-checkin-validation"
 ]);
-const ROOM_QUERY_PREFIXES = new Set(["rooms", "housekeeping-board", "room-state-events"]);
+const ROOM_QUERY_PREFIXES = new Set(["rooms", "room-availability", "housekeeping-board", "room-state-events"]);
 type ReservationRecordRefreshOptions = {
   includePaymentSummary?: boolean;
   includePaymentLinks?: boolean;
@@ -183,7 +184,7 @@ export const refreshReservationCreatedState = (
   return refreshHotelQueriesByPrefix(
     queryClient,
     hotelId,
-    new Set(["reservations", "reservation-pending-actions", "occupancy-grid"]),
+    new Set(["reservations", "reservation-pending-actions", "occupancy-grid", "room-availability"]),
     false
   );
 };

@@ -158,6 +158,84 @@ test("owner can revoke OTA recording for receptionist and the UI hides the entry
   }
 });
 
+test("el selector OTA limita habitaciones por categoría y fechas, y limpia la asignación al cambiar el rango", async ({
+  page
+}) => {
+  const checkIn = localIsoDate(300);
+  const checkOut = localIsoDate(302);
+  const changedCheckOut = localIsoDate(303);
+
+  await login(page);
+  await page.goto("/reservas");
+  const rooms = await page.evaluate(async () => {
+    const response = await fetch("/api/rooms/");
+    if (!response.ok) throw new Error(`No se pudieron consultar las habitaciones: ${response.status}`);
+    return response.json();
+  }) as Array<{
+    id: number;
+    category_id: number;
+  }>;
+
+  await page.getByTestId("open-manual-ota").click();
+  const form = page.getByTestId("manual-ota-modal").locator("form");
+  const categorySelect = form.locator("label").filter({ hasText: "Categoría" }).locator("select");
+  const categoryOption = categorySelect.locator("option").nth(1);
+  const categoryId = Number(await categoryOption.getAttribute("value"));
+  const roomsInCategory = rooms.filter((room) => room.category_id === categoryId);
+  expect(roomsInCategory.length).toBeGreaterThan(1);
+
+  await form.getByLabel("Check-in", { exact: true }).fill(checkIn);
+  await form.getByLabel("Check-out", { exact: true }).fill(checkOut);
+
+  const assignedRoomId = roomsInCategory[0].id;
+  const requestedRanges: string[] = [];
+  await page.route("**/api/rooms/availability?**", async (route) => {
+    const url = new URL(route.request().url());
+    requestedRanges.push(`${url.searchParams.get("check_in_date")}..${url.searchParams.get("check_out_date")}`);
+    const noAvailabilityForChangedRange = url.searchParams.get("check_out_date") === changedCheckOut;
+    const availableRoomIds = noAvailabilityForChangedRange ? [] : [assignedRoomId];
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      json: { status: "ok", count: availableRoomIds.length, available_rooms: availableRoomIds }
+    });
+  });
+
+  const firstAvailabilityResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/rooms/availability" && response.ok()
+  );
+  await categorySelect.selectOption(String(categoryId));
+  await firstAvailabilityResponse;
+
+  const roomSelect = form.locator("#manual-ota-room");
+  const availabilityStatus = page.getByTestId("manual-ota-room-availability");
+  await expect(availabilityStatus).toHaveText("1 habitación disponible para esas fechas.");
+  await expect(roomSelect.locator("option")).toHaveCount(2);
+  await expect(roomSelect.locator(`option[value="${assignedRoomId}"]`)).toHaveCount(1);
+  const excludedRoomId = roomsInCategory.find((room) => room.id !== assignedRoomId)?.id;
+  expect(excludedRoomId).toBeDefined();
+  await expect(roomSelect.locator(`option[value="${excludedRoomId}"]`)).toHaveCount(0);
+
+  await roomSelect.selectOption(String(assignedRoomId));
+  await expect(roomSelect).toHaveValue(String(assignedRoomId));
+  const changedAvailabilityResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/rooms/availability"
+      && new URL(response.url()).searchParams.get("check_out_date") === changedCheckOut
+      && response.ok()
+  );
+  await form.getByLabel("Check-out", { exact: true }).fill(changedCheckOut);
+  await expect(roomSelect).toHaveValue("");
+  await changedAvailabilityResponse;
+  expect(requestedRanges).toContain(`${checkIn}..${changedCheckOut}`);
+  await expect(availabilityStatus).toHaveText(
+    "No hay habitaciones libres para esas fechas. Podés guardar la reserva sin asignar y revisarla manualmente."
+  );
+  await expect(roomSelect.locator("option")).toHaveCount(1);
+
+  await form.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(page.getByTestId("manual-ota-modal")).toBeHidden();
+});
+
 test("cargar reserva de Booking en USD, ver conversion y reenviar el mismo ID externo actualiza en vez de duplicar", async ({
   page
 }) => {

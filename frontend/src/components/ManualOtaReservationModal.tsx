@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
+import { checkRoomAvailability, type RoomAvailabilityResponse } from "../api/rooms";
+import { hasValidSession } from "../api/client";
+import { queryKeys } from "../api/queryKeys";
 import { type Reservation } from "../api/reservations";
 import { useCategories } from "../hooks/useCategories";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useGuestCreate } from "../hooks/useGuests";
 import { useReservationMutations } from "../hooks/useReservations";
 import { useRooms } from "../hooks/useRooms";
+import { useSession } from "../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../utils/currency";
 import { addDaysIso } from "../utils/date";
 
@@ -78,6 +83,7 @@ type ManualOtaReservationModalProps = {
 export default function ManualOtaReservationModal({ open, onClose, businessDate }: ManualOtaReservationModalProps) {
   const categoriesQuery = useCategories();
   const { roomsQuery } = useRooms();
+  const { session } = useSession();
   const { createManualOtaMutation } = useReservationMutations();
   const guestMutation = useGuestCreate();
 
@@ -98,16 +104,66 @@ export default function ManualOtaReservationModal({ open, onClose, businessDate 
     if (previousDate === businessDate) return;
     setForm((current) => current.check_in_date === previousDate
       && current.check_out_date === addDaysIso(previousDate, 1)
-      ? { ...current, check_in_date: businessDate, check_out_date: addDaysIso(businessDate, 1) }
+      ? { ...current, room_id: "", check_in_date: businessDate, check_out_date: addDaysIso(businessDate, 1) }
       : current);
     previousBusinessDateRef.current = businessDate;
   }, [businessDate]);
 
-  if (!open) return null;
+  const categoryId = Number(form.category_id);
+  const hasValidStayDates = Boolean(
+    form.check_in_date && form.check_out_date && form.check_out_date > form.check_in_date
+  );
+  const canCheckAvailability = Boolean(
+    hasValidSession(session) && categoryId > 0 && hasValidStayDates
+  );
+  const roomAvailabilityQuery = useQuery<RoomAvailabilityResponse>({
+    queryKey: queryKeys.roomAvailability(
+      session.hotelId,
+      categoryId > 0 ? categoryId : null,
+      form.check_in_date,
+      form.check_out_date
+    ),
+    queryFn: () => checkRoomAvailability({
+      category_id: categoryId,
+      check_in_date: form.check_in_date,
+      check_out_date: form.check_out_date
+    }, session),
+    enabled: open && canCheckAvailability,
+    staleTime: 0
+  });
+  const currentAvailableRoomIds = useMemo(
+    () => new Set(roomAvailabilityQuery.data?.status === "ok" ? roomAvailabilityQuery.data.available_rooms : []),
+    [roomAvailabilityQuery.data]
+  );
+  const availabilityReady = Boolean(
+    canCheckAvailability && roomAvailabilityQuery.data?.status === "ok" &&
+    !roomAvailabilityQuery.isFetching && !roomAvailabilityQuery.isError && roomsQuery.data
+  );
+  const availableRooms = availabilityReady
+    ? (roomsQuery.data ?? []).filter((room) =>
+      room.category_id === categoryId && currentAvailableRoomIds.has(room.id)
+    )
+    : [];
+  const roomOptionsLoading = Boolean(
+    canCheckAvailability && (roomAvailabilityQuery.isFetching || roomsQuery.isLoading)
+  );
+  const roomOptionsError = Boolean(roomAvailabilityQuery.isError || roomsQuery.isError);
+  const roomSelectDisabled = !canCheckAvailability || roomOptionsLoading || roomOptionsError || availableRooms.length === 0;
+  const roomAvailabilityMessage = !form.category_id || !hasValidStayDates
+    ? "Elegí una categoría y un rango de fechas válido para consultar habitaciones."
+    : roomOptionsError
+      ? "No pudimos consultar la disponibilidad. Podés dejar la reserva sin asignar o reintentar."
+      : roomOptionsLoading
+        ? "Consultando habitaciones disponibles…"
+        : availableRooms.length === 0
+          ? "No hay habitaciones libres para esas fechas. Podés guardar la reserva sin asignar y revisarla manualmente."
+          : `${availableRooms.length} ${availableRooms.length === 1 ? "habitación disponible" : "habitaciones disponibles"} para esas fechas.`;
 
-  const availableRooms = form.category_id
-    ? (roomsQuery.data ?? []).filter((room) => String(room.category_id) === form.category_id)
-    : roomsQuery.data ?? [];
+  useEffect(() => {
+    if (!form.room_id || !availabilityReady) return;
+    if (currentAvailableRoomIds.has(Number(form.room_id))) return;
+    setForm((current) => current.room_id === form.room_id ? { ...current, room_id: "" } : current);
+  }, [availabilityReady, currentAvailableRoomIds, form.room_id]);
 
   const reset = () => {
     setGuestId("");
@@ -158,6 +214,14 @@ export default function ManualOtaReservationModal({ open, onClose, businessDate 
     }
     if (!form.check_in_date || !form.check_out_date || form.check_out_date <= form.check_in_date) {
       setError("La fecha de salida debe ser posterior al ingreso.");
+      return;
+    }
+    if (form.room_id && !availabilityReady) {
+      setError("Esperá a que se confirme la disponibilidad de la habitación antes de guardar.");
+      return;
+    }
+    if (form.room_id && !availableRooms.some((room) => room.id === Number(form.room_id))) {
+      setError("La habitación dejó de estar disponible para esas fechas. Elegí otra o guardá la reserva sin asignar.");
       return;
     }
     if (!form.external_id.trim()) {
@@ -218,6 +282,8 @@ export default function ManualOtaReservationModal({ open, onClose, businessDate 
       setError(err instanceof Error ? err.message : "No se pudo guardar la reserva de OTA");
     }
   };
+
+  if (!open) return null;
 
   return (
     <div
@@ -345,11 +411,16 @@ export default function ManualOtaReservationModal({ open, onClose, businessDate 
                   ))}
                 </select>
               </label>
-              <label className="text-xs font-semibold text-slate-600">
-                Habitación (opcional)
+              <div>
+                <label htmlFor="manual-ota-room" className="text-xs font-semibold text-slate-600">
+                  Habitación (opcional)
+                </label>
                 <select
+                  id="manual-ota-room"
                   value={form.room_id}
                   onChange={(e) => setForm((prev) => ({ ...prev, room_id: e.target.value }))}
+                  disabled={roomSelectDisabled}
+                  aria-describedby="manual-ota-room-availability"
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 shadow-sm"
                 >
                   <option value="">Sin asignar</option>
@@ -359,7 +430,39 @@ export default function ManualOtaReservationModal({ open, onClose, businessDate 
                     </option>
                   ))}
                 </select>
-              </label>
+                <span
+                  id="manual-ota-room-availability"
+                  data-testid="manual-ota-room-availability"
+                  className="mt-1 block font-normal text-slate-500"
+                  role={roomOptionsError ? "alert" : "status"}
+                  aria-live="polite"
+                >
+                  {roomAvailabilityMessage}
+                </span>
+                {roomOptionsError && (
+                  <div className="mt-1 flex flex-wrap gap-3 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void roomsQuery.refetch();
+                        if (canCheckAvailability) void roomAvailabilityQuery.refetch();
+                      }}
+                      className="font-semibold text-sky-700 underline underline-offset-2"
+                    >
+                      Reintentar
+                    </button>
+                    {form.room_id && (
+                      <button
+                        type="button"
+                        onClick={() => setForm((current) => ({ ...current, room_id: "" }))}
+                        className="font-semibold text-slate-700 underline underline-offset-2"
+                      >
+                        Quitar asignación
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -390,7 +493,7 @@ export default function ManualOtaReservationModal({ open, onClose, businessDate 
                 id="manual-ota-check-in"
                 label="Check-in"
                 value={form.check_in_date}
-                onChange={(value) => setForm((prev) => ({ ...prev, check_in_date: value }))}
+                onChange={(value) => setForm((prev) => ({ ...prev, room_id: "", check_in_date: value }))}
                 className="w-full"
                 labelClassName="text-xs font-semibold text-slate-600"
                 inputClassName="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-800 shadow-sm"
@@ -402,7 +505,7 @@ export default function ManualOtaReservationModal({ open, onClose, businessDate 
                 id="manual-ota-check-out"
                 label="Check-out"
                 value={form.check_out_date}
-                onChange={(value) => setForm((prev) => ({ ...prev, check_out_date: value }))}
+                onChange={(value) => setForm((prev) => ({ ...prev, room_id: "", check_out_date: value }))}
                 className="w-full"
                 labelClassName="text-xs font-semibold text-slate-600"
                 inputClassName="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-800 shadow-sm"
