@@ -102,6 +102,10 @@ ADDITIVE_RLS_TABLE_CONTRACT = (
         ("analytics_fact_refresh_jobs",),
     ),
     (
+        "20261017_local_business_clock.py",
+        ("hotel_business_clock",),
+    ),
+    (
         "20261016_payment_receipt_email_delivery.py",
         ("payment_receipt_email_deliveries",),
     ),
@@ -344,6 +348,7 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "company_night_charges",
         "company_night_charge_payment_allocations",
         "analytics_fact_refresh_jobs",
+        "hotel_business_clock",
     }
     assert set(migration.TENANT_TABLES) == expected
     assert "hotel_memberships" not in migration.TENANT_TABLES
@@ -401,6 +406,31 @@ def test_user_override_rls_round_trip_records_valid_postgresql_ddl(monkeypatch):
         check_pos, drop_before_disable, no_force_pos, disable_pos,
     ]
     assert positions == sorted(positions)
+
+
+def test_local_business_clock_adoption_still_installs_postgresql_rls(monkeypatch):
+    path = Path(__file__).parents[1] / "alembic" / "versions" / "20261017_local_business_clock.py"
+    spec = importlib.util.spec_from_file_location("local_business_clock_migration", path)
+    assert spec and spec.loader
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    output = StringIO()
+    dialect = postgresql.dialect()
+    context = MigrationContext.configure(
+        dialect=dialect,
+        opts={"as_sql": True, "output_buffer": output},
+    )
+    monkeypatch.setattr(migration, "op", Operations(context))
+    monkeypatch.setattr(migration, "_existing_table_matches", lambda _bind: True)
+
+    migration.upgrade()
+    ddl = output.getvalue()
+
+    assert 'ALTER TABLE "hotel_business_clock" ENABLE ROW LEVEL SECURITY' in ddl
+    assert 'ALTER TABLE "hotel_business_clock" FORCE ROW LEVEL SECURITY' in ddl
+    assert 'CREATE POLICY "tenant_isolation_hotel_business_clock"' in ddl
+    assert "current_setting('app.hotel_id', true)" in ddl
 
 
 def test_rls_migration_keeps_api_key_bootstrap_exception_explicit():

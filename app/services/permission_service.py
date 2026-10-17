@@ -498,7 +498,7 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_PAYMENT_RECEIPT_EMAIL: (
         "payments", "Send a payment receipt by email",
-        "Permite enviar el comprobante de un pago confirmado al email registrado del huésped. Requiere confirmación explícita del operador y, si la cuenta tiene MFA activado, MFA reciente.",
+        "Permite enviar el comprobante de un pago confirmado a una dirección ingresada por el operador. Requiere confirmación explícita del operador y, si la cuenta tiene MFA activado, MFA reciente.",
     ),
     PERMISSION_CASH_APPROVE_DIFFERENCE: (
         "cash", "Approve cash close differences",

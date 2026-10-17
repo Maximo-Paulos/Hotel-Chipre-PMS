@@ -4,12 +4,13 @@ El reloj de negocio permite avanzar de a un día a la vez para un hotel sintéti
 
 ## Activación
 
-La función queda apagada por defecto. Para habilitarla, configurá en el entorno local las cuatro condiciones siguientes:
+La función queda apagada por defecto. Para habilitarla, configurá en el entorno local las cinco condiciones siguientes:
 
 - `APP_ENV=development` explícito.
 - `LOCAL_SIMULATION_CLOCK_ENABLED=true`.
 - `LOCAL_SIMULATION_CLOCK_HOTEL_ID=<id del hotel sintético>`.
 - `DATABASE_URL` con dialecto SQLite.
+- `EXTERNAL_EFFECTS_ENABLED=false` explícito.
 
 Si una condición no coincide, `hotel_today(db, hotel_id)` usa la fecha actual del hotel y el endpoint de avance no modifica datos. La coincidencia del id hace que un segundo hotel del mismo proceso conserve su fecha normal.
 
@@ -21,4 +22,4 @@ Las fechas implícitas usadas por calendario de tarifas, tarifa vigente de habit
 
 La hora real UTC sigue controlando MFA, sesiones, invitaciones y sus vencimientos, tokens, auditoría, login, expiraciones, reintentos de proveedores, eventos/outbox y marcas de tiempo de pagos, correos y operaciones. La tabla del reloj guarda `advanced_at` en hora real, y el evento de auditoría conserva su timestamp real. Los datos `created_at`/`updated_at` siguen siendo instantes reales.
 
-La migración `20261017_local_business_clock` agrega la tabla si falta. Si el arranque local ya la creó con `Base.metadata.create_all`, valida su esquema y conserva cualquier fecha simulada existente. El downgrade elimina la tabla solo cuando no contiene estado; si hay una fecha guardada, falla para evitar perderla. No requiere backfill ni cambia otros datos existentes.
+La migración `20261017_local_business_clock` agrega la tabla si falta. Si el arranque local ya la creó con `Base.metadata.create_all`, valida su esquema, instala igualmente RLS por `hotel_id` en PostgreSQL y conserva cualquier fecha simulada existente. SQLite local no usa RLS. El downgrade elimina la tabla solo cuando no contiene estado; si hay una fecha guardada, falla para evitar perderla. No requiere backfill ni cambia otros datos existentes.

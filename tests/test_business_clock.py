@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime, timezone
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -29,6 +30,7 @@ def local_clock_enabled(monkeypatch, tmp_path):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'clock-gate-only.db'}")
     monkeypatch.setenv("LOCAL_SIMULATION_CLOCK_ENABLED", "true")
     monkeypatch.setenv("LOCAL_SIMULATION_CLOCK_HOTEL_ID", "1")
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "false")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
@@ -194,6 +196,39 @@ def test_disabled_or_production_clock_uses_real_hotel_date_and_cannot_advance(
     denied = client.post("/api/config/business-clock/advance")
     assert denied.status_code == 404
     assert db.query(HotelBusinessClock).filter_by(hotel_id=1).one().business_date == before_dates
+
+
+def test_business_clock_is_disabled_when_external_effects_are_enabled(
+    business_clock_api, local_clock_enabled, monkeypatch
+):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    get_settings.cache_clear()
+    client, db, _context = business_clock_api
+
+    response = client.get("/api/config/business-clock")
+    assert response.status_code == 200, response.text
+    assert response.json()["simulation_enabled"] is False
+
+    before_date = db.query(HotelBusinessClock).filter_by(hotel_id=1).one().business_date
+    denied = client.post("/api/config/business-clock/advance")
+    assert denied.status_code == 404
+    assert db.query(HotelBusinessClock).filter_by(hotel_id=1).one().business_date == before_date
+
+
+def test_business_clock_is_disabled_without_explicit_external_effects_configuration(monkeypatch):
+    settings = SimpleNamespace(
+        APP_ENV="development",
+        model_fields_set={"APP_ENV", "LOCAL_SIMULATION_CLOCK_ENABLED"},
+        LOCAL_SIMULATION_CLOCK_ENABLED=True,
+        LOCAL_SIMULATION_CLOCK_HOTEL_ID=1,
+        EXTERNAL_EFFECTS_ENABLED=None,
+        DATABASE_URL="sqlite:///local.db",
+    )
+    monkeypatch.setattr("app.config.get_settings", lambda: settings)
+
+    from app.services.timezones import business_clock_enabled_for_hotel
+
+    assert business_clock_enabled_for_hotel(1) is False
 
 
 def test_only_owner_can_advance_exactly_one_day_and_audit_uses_real_utc(

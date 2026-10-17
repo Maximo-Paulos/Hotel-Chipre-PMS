@@ -308,19 +308,22 @@ class TestCloseSession:
         assert report.difference == Decimal("0.00")
         assert session.status == CashSessionStatusEnum.CLOSED
 
-    def test_close_session_with_approved_difference_closes_session(self, db: Session):
+    def test_unenrolled_owner_can_approve_cash_difference_without_mfa(self, db: Session):
         from app.api.cash_register import _require_cash_difference_approval_when_requested
-        from starlette.requests import Request
 
         session = _open_cash_session(db, opening_balance=Decimal("100.00"))
         ctx = _auth_context(role="owner", permissions={PERMISSION_CASH_APPROVE_DIFFERENCE})
         payload = CashSessionClose(counted_balance=Decimal("99.00"), approve_difference=True)
-        request = Request({"type": "http", "method": "POST", "path": f"/api/cash-register/sessions/{session.id}/close", "headers": []})
+        request = _http_request(f"/api/cash-register/sessions/{session.id}/close")
 
-        with pytest.raises(HTTPException) as exc_info:
-            _require_cash_difference_approval_when_requested(request, payload, db=db, context=ctx)
+        authorized = _require_cash_difference_approval_when_requested(
+            request,
+            payload,
+            db=db,
+            context=ctx,
+        )
 
-        assert exc_info.value.status_code == 428
+        assert authorized is ctx
         db.refresh(session)
         assert session.status == CashSessionStatusEnum.OPEN
 

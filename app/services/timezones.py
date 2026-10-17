@@ -108,6 +108,7 @@ def business_clock_enabled_for_hotel(hotel_id: int) -> bool:
         or not settings.LOCAL_SIMULATION_CLOCK_ENABLED
         or "LOCAL_SIMULATION_CLOCK_ENABLED" not in fields_set
         or settings.LOCAL_SIMULATION_CLOCK_HOTEL_ID != hotel_id
+        or settings.EXTERNAL_EFFECTS_ENABLED is not False
     ):
         return False
 
