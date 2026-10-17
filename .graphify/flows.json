@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-17T03:36:53.515Z",
+  "generatedAt": "2026-10-17T05:19:27.129Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -570,6 +570,7 @@
         "dependencies_auth_require_action_step_up",
         "dependencies_auth_matching_action_step_up_ticket",
         "dependencies_auth_raise_step_up_required",
+        "dependencies_auth_requires_mfa_step_up",
         "dependencies_auth_step_up_ticket_action",
         "dependencies_auth_action_step_up_tickets",
         "dependencies_auth_matching_specific_step_up_ticket"
@@ -579,12 +580,13 @@
         "dependencies_auth_require_action_step_up",
         "dependencies_auth_matching_action_step_up_ticket",
         "dependencies_auth_raise_step_up_required",
+        "dependencies_auth_requires_mfa_step_up",
         "dependencies_auth_step_up_ticket_action",
         "dependencies_auth_action_step_up_tickets",
         "dependencies_auth_matching_specific_step_up_ticket"
       ],
       "depth": 3,
-      "nodeCount": 7,
+      "nodeCount": 8,
       "fileCount": 1,
       "files": [
         "app/dependencies/auth.py"
@@ -1173,6 +1175,7 @@
         "dependencies_auth_require_action_step_up",
         "dependencies_auth_matching_action_step_up_ticket",
         "dependencies_auth_raise_step_up_required",
+        "dependencies_auth_requires_mfa_step_up",
         "dependencies_auth_step_up_ticket_action",
         "dependencies_auth_matching_specific_step_up_ticket"
       ],
@@ -1182,11 +1185,12 @@
         "dependencies_auth_require_action_step_up",
         "dependencies_auth_matching_action_step_up_ticket",
         "dependencies_auth_raise_step_up_required",
+        "dependencies_auth_requires_mfa_step_up",
         "dependencies_auth_step_up_ticket_action",
         "dependencies_auth_matching_specific_step_up_ticket"
       ],
       "depth": 3,
-      "nodeCount": 7,
+      "nodeCount": 8,
       "fileCount": 1,
       "files": [
         "app/dependencies/auth.py"
@@ -3648,6 +3652,7 @@
         "dependencies_auth_action_step_up_tickets",
         "dependencies_auth_matching_specific_step_up_ticket",
         "dependencies_auth_raise_step_up_required",
+        "dependencies_auth_requires_mfa_step_up",
         "dependencies_auth_step_up_ticket_action"
       ],
       "qualifiedPath": [
@@ -3655,10 +3660,11 @@
         "dependencies_auth_action_step_up_tickets",
         "dependencies_auth_matching_specific_step_up_ticket",
         "dependencies_auth_raise_step_up_required",
+        "dependencies_auth_requires_mfa_step_up",
         "dependencies_auth_step_up_ticket_action"
       ],
       "depth": 1,
-      "nodeCount": 5,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "app/dependencies/auth.py"
@@ -13845,36 +13851,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_timezones_hotel_today",
-      "name": "hotel_today",
-      "entryPoint": "services_timezones_hotel_today",
-      "entryPointId": "services_timezones_hotel_today",
-      "path": [
-        "services_timezones_hotel_today",
-        "services_timezones_business_clock_enabled_for_hotel",
-        "services_timezones_local_today",
-        "services_timezones_normalize_timezone",
-        "services_timezones_is_valid_timezone",
-        "services_timezones_get_timezone_catalog"
-      ],
-      "qualifiedPath": [
-        "services_timezones_hotel_today",
-        "services_timezones_business_clock_enabled_for_hotel",
-        "services_timezones_local_today",
-        "services_timezones_normalize_timezone",
-        "services_timezones_is_valid_timezone",
-        "services_timezones_get_timezone_catalog"
-      ],
-      "depth": 4,
-      "nodeCount": 6,
-      "fileCount": 1,
-      "files": [
-        "app/services/timezones.py"
-      ],
-      "criticality": 0.19,
-      "warnings": []
-    },
-    {
       "id": "flow:services_audit_timeline_service_list_audit_timeline",
       "name": "list_audit_timeline",
       "entryPoint": "services_audit_timeline_service_list_audit_timeline",
@@ -14835,24 +14811,32 @@
       "warnings": []
     },
     {
-      "id": "flow:services_timezones_hotel_timezone_name",
-      "name": "hotel_timezone_name",
-      "entryPoint": "services_timezones_hotel_timezone_name",
-      "entryPointId": "services_timezones_hotel_timezone_name",
+      "id": "flow:services_timezones_hotel_business_now",
+      "name": "hotel_business_now",
+      "entryPoint": "services_timezones_hotel_business_now",
+      "entryPointId": "services_timezones_hotel_business_now",
       "path": [
+        "services_timezones_hotel_business_now",
+        "services_timezones_business_clock_enabled_for_hotel",
         "services_timezones_hotel_timezone_name",
+        "services_timezones_hotel_today",
         "services_timezones_normalize_timezone",
+        "services_timezones_local_today",
         "services_timezones_is_valid_timezone",
         "services_timezones_get_timezone_catalog"
       ],
       "qualifiedPath": [
+        "services_timezones_hotel_business_now",
+        "services_timezones_business_clock_enabled_for_hotel",
         "services_timezones_hotel_timezone_name",
+        "services_timezones_hotel_today",
         "services_timezones_normalize_timezone",
+        "services_timezones_local_today",
         "services_timezones_is_valid_timezone",
         "services_timezones_get_timezone_catalog"
       ],
       "depth": 3,
-      "nodeCount": 4,
+      "nodeCount": 8,
       "fileCount": 1,
       "files": [
         "app/services/timezones.py"

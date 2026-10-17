@@ -10,6 +10,7 @@ import pytest
 
 from app.models.guest import Guest
 from app.models.payment_receipt_email_delivery import PaymentReceiptEmailDelivery
+from app.models.user_mfa import UserMfaSecret
 from app.models.transaction import (
     PaymentMethodEnum,
     Transaction,
@@ -402,6 +403,8 @@ def test_receipt_email_denied_permission_does_not_call_gmail(client_with_db, mon
 
 def test_receipt_email_requires_action_bound_mfa_before_provider_call(client_with_db, monkeypatch):
     client, db, _ctx = client_with_db
+    db.add(UserMfaSecret(user_id=1, encrypted_secret="unused-test-ciphertext", status="active"))
+    db.flush()
     reservation = _reservation(db, 1, "RECEIPT-EMAIL-STEP-UP")
     db.get(Guest, reservation.guest_id).email = "guest@example.com"
     paid = _completed_payment(client, reservation.id)

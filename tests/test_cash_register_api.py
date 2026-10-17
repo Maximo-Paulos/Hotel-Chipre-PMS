@@ -23,6 +23,7 @@ from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.models.user_mfa import UserMfaSecret
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.action_step_up_service import create_action_step_up_ticket
 from app.services.permission_service import (
@@ -58,6 +59,11 @@ def client_with_db():
                 password_hash="test-hash",
                 is_active=True,
                 is_verified=True,
+            ),
+            UserMfaSecret(
+                user_id=50,
+                encrypted_secret="unused-test-ciphertext",
+                status="active",
             ),
             HotelMembership(hotel_id=1, user_id=50, role="receptionist", status="active", alias="Recepción QA"),
         ]

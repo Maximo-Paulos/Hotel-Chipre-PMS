@@ -12,6 +12,8 @@ from app.database import Base
 import app.models  # noqa
 from app.models.hotel_config import HotelConfiguration
 from app.models.audit_log import AuditLog
+from app.models.user import User
+from app.models.user_mfa import UserMfaSecret
 from app.dependencies.auth import AuthContext
 from app.services.action_step_up_service import create_action_step_up_ticket
 from app.services.permission_service import (
@@ -65,7 +67,21 @@ def client_with_db():
 def ctx(client_with_db):
     client, db = client_with_db
     cfg = HotelConfiguration(id=1)
-    db.add(cfg)
+    owner = User(
+        id=1,
+        email="config-owner@test.example",
+        password_hash="synthetic-test-hash",
+        is_active=True,
+        is_verified=True,
+        role="owner",
+    )
+    db.add_all(
+        [
+            cfg,
+            owner,
+            UserMfaSecret(user_id=1, encrypted_secret="unused-test-ciphertext", status="active"),
+        ]
+    )
     db.commit()
 
     def override_auth_context():
@@ -229,7 +245,19 @@ def test_fx_market_configuration_is_audited_and_accepts_both_display_quotes(ctx)
 
 
 def test_co_owner_can_change_fx_market_after_step_up(ctx):
-    client, _db = ctx
+    client, db = ctx
+    db.add(
+        User(
+            id=11,
+            email="config-co-owner@test.example",
+            password_hash="synthetic-test-hash",
+            is_active=True,
+            is_verified=True,
+            role="co_owner",
+        )
+    )
+    db.add(UserMfaSecret(user_id=11, encrypted_secret="unused-test-ciphertext", status="active"))
+    db.commit()
 
     def co_owner_context():
         return AuthContext(

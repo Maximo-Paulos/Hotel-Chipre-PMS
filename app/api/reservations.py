@@ -479,8 +479,8 @@ def create_or_update_manual_ota(
         )
     if data.amount_paid is not None:
         # Any explicit edit (including reducing a previous OTA credit) changes
-        # financial history, so require the separate manager-level, MFA-bound
-        # capability before acquiring the reservation lock below.
+        # financial history, so require the separate manager-level capability
+        # and MFA step-up when the account has MFA enabled.
         authorize_permission(request, db, context, PERMISSION_OTA_PAYMENT_CONFIRM)
     existing = lock_query(
         db.query(Reservation)

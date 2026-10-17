@@ -15,6 +15,7 @@ from app.models.hotel_membership import HotelMembership
 from app.models.invitation import StaffInvitation
 from app.models.permission import UserPermissionOverride
 from app.models.user import User
+from app.models.user_mfa import UserMfaSecret
 from app.services.invitation_service import issue_invitation
 from app.services.security import hash_password
 from app.services.permission_service import PERMISSION_SETTINGS_USERS_MANAGE
@@ -72,6 +73,7 @@ def test_alias_roster_is_minimal_hotel_scoped_and_includes_active_and_invited_me
     db.add_all([HotelConfiguration(id=31, hotel_name="One"), HotelConfiguration(id=32, hotel_name="Two")])
     db.add_all([owner, active, invited, foreign])
     db.flush()
+    db.add(UserMfaSecret(user_id=owner.id, encrypted_secret="unused-test-ciphertext", status="active"))
     db.add_all(
         [
             HotelMembership(hotel_id=31, user_id=owner.id, role="owner", status="active"),

@@ -10,6 +10,8 @@
 ## Current security controls in the repo
 - Production runtime validation already rejects weak placeholder secrets and invalid public URLs.
 - Auth uses bearer tokens plus hotel/user headers on protected API calls.
+- MFA enrollment is optional for hotel-user accounts and recommended. Accounts with active MFA must pass it at login and for configured sensitive-action step-ups; accounts without active MFA continue under their normal authentication, hotel membership, role, and permission checks.
+- Master Admin remains a separate security boundary with its own MFA policy.
 - Webhook and integration flows use scoped credentials and secret checks.
 - Gemma keeps messages, insights, and actions scoped per hotel and user.
 - Demo-only endpoints are separated from normal runtime behavior.

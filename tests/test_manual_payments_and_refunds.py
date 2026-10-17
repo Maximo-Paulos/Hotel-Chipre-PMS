@@ -6,6 +6,7 @@ import importlib
 import pytest
 
 from app.models.hotel_config import HotelConfiguration
+from app.models.user_mfa import UserMfaSecret
 from app.models.reservation import ReservationSourceEnum, ReservationStatusEnum
 from app.models.transaction import (
     PaymentMethodEnum,
@@ -22,6 +23,11 @@ from app.services.permission_service import (
     set_override,
 )
 from tests.test_payment_links_api import _reservation, client_with_db
+
+
+def _enable_test_mfa(db, user_id: int = 1) -> None:
+    db.add(UserMfaSecret(user_id=user_id, encrypted_secret="unused-test-ciphertext", status="active"))
+    db.flush()
 
 
 def _manual_payment(
@@ -199,6 +205,7 @@ def test_financial_summary_is_readable_without_cash_operation(client_with_db):
 
 def test_refund_requires_manager_permission_and_one_use_step_up(client_with_db):
     client, db, ctx = client_with_db
+    _enable_test_mfa(db)
     reservation = _reservation(db, 1, "MANUAL-REFUND-1")
     paid = _manual_payment(client, reservation.id, reference="POS-482902")
     assert paid.status_code == 201, paid.text
@@ -309,6 +316,7 @@ def test_refund_cannot_exceed_original_payment_by_one_cent(client_with_db):
 
 def test_cancelling_paid_reservation_requires_manager_step_up_without_auto_refund(client_with_db):
     client, db, ctx = client_with_db
+    _enable_test_mfa(db)
     reservation = _reservation(db, 1, "PAID-CANCEL-1")
     db.add(
         Transaction(
@@ -354,6 +362,7 @@ def test_cancelling_paid_reservation_requires_manager_step_up_without_auto_refun
 )
 def test_both_cancel_routes_protect_legacy_paid_reservations(client_with_db, cancel_path):
     client, db, ctx = client_with_db
+    _enable_test_mfa(db)
     reservation = _reservation(db, 1, f"LEGACY-PAID-CANCEL-{cancel_path.split('/')[2]}")
     reservation.status = ReservationStatusEnum.DEPOSIT_PAID
     reservation.amount_paid = 30

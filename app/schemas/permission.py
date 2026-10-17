@@ -103,7 +103,6 @@ class TemporaryActionGrantRequest(BaseModel):
 
 
 class TemporaryActionGrantApproveRequest(BaseModel):
-    # Required because this implementation only permits approval by accounts
-    # with active MFA. The shared MFA helper also accepts one unused recovery
-    # code, preserving the account-level recovery contract.
-    totp_code: str = Field(min_length=1, max_length=128)
+    # Active MFA accounts must provide a TOTP or unused recovery code. Accounts
+    # without MFA may approve under their normal hotel role and permission.
+    totp_code: str | None = Field(default=None, min_length=1, max_length=128)

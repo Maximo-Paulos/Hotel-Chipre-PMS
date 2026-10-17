@@ -529,10 +529,17 @@ def test_deny_does_not_populate_approver_field(temporary_grant_client):
     assert db.get(TemporaryActionGrant, requested["id"]).approver_user_id is None
 
 
-def test_invalid_totp_and_owner_without_mfa_reject_approval(temporary_grant_client):
+def test_active_mfa_requires_totp_but_accounts_without_mfa_can_approve(temporary_grant_client):
     client, db, _mfa_secret, override_auth = temporary_grant_client
     requested = _request(client, db)
     fastapi_app.dependency_overrides[get_auth_context] = override_auth(2, "owner")
+    missing_totp = client.post(
+        f"/api/permissions/temporary-grants/{requested['id']}/approve",
+        json={},
+    )
+    assert missing_totp.status_code == 403
+    assert db.get(TemporaryActionGrant, requested["id"]).status == TemporaryActionGrantStatusEnum.PENDING
+
     invalid_totp = client.post(
         f"/api/permissions/temporary-grants/{requested['id']}/approve",
         json={"totp_code": "000000"},
@@ -544,10 +551,10 @@ def test_invalid_totp_and_owner_without_mfa_reject_approval(temporary_grant_clie
     fastapi_app.dependency_overrides[get_auth_context] = override_auth(5, "owner")
     no_mfa = client.post(
         f"/api/permissions/temporary-grants/{requested_without_mfa['id']}/approve",
-        json={"totp_code": "123456"},
+        json={},
     )
-    assert no_mfa.status_code == 403
-    assert db.get(TemporaryActionGrant, requested_without_mfa["id"]).status == TemporaryActionGrantStatusEnum.PENDING
+    assert no_mfa.status_code == 200, no_mfa.text
+    assert no_mfa.json()["grant"]["status"] == "approved"
 
 
 def test_grant_approval_uses_the_shared_account_totp_attempt_budget(

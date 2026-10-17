@@ -303,7 +303,7 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
             ) : (
               <div className="mt-5 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
                 <p className="text-sm leading-6 text-indigo-950">
-                  {t("stepUp.mfaRequired")}
+                  {t("stepUp.mfaInactive")}
                 </p>
                 <button
                   type="button"
@@ -316,7 +316,7 @@ export function ActionStepUpProvider({ children }: { children: ReactNode }) {
                   className="mt-3 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                   data-testid="step-up-activate-mfa"
                 >
-                  {t("stepUp.activateMfa")}
+                  {t("stepUp.configureMfaOptional")}
                 </button>
                 <button
                   type="button"

@@ -205,7 +205,7 @@ export function MfaSettingsCard({ session, returnTo, onContinue }: Props) {
       <div className="max-w-3xl">
         <h2 id="mfa-settings-title" className="text-lg font-semibold text-slate-900">Verificación en 2 pasos</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Protegé permisos y operaciones sensibles con una app autenticadora y códigos de recuperación.
+          Es opcional y recomendado. Si lo activás, vas a ingresar un código al iniciar sesión y al confirmar acciones sensibles. Si no lo activás, podés usar la app según los permisos de tu rol sin códigos MFA.
         </p>
       </div>
 
@@ -330,7 +330,7 @@ export function MfaSettingsCard({ session, returnTo, onContinue }: Props) {
         </>
       ) : (
         <div className="mt-4">
-          <p className="text-sm text-slate-700">Todavía no configuraste un autenticador. Activá la verificación para usar permisos y operaciones que requieren un segundo factor.</p>
+          <p className="text-sm text-slate-700">Todavía no configuraste un autenticador. Es opcional y recomendado: al activarlo, vas a usar códigos adicionales para iniciar sesión y confirmar acciones sensibles.</p>
           {!userQuery.isLoading && !authProvidersQuery.isLoading && !userCanReauthenticate && (
             <p role="alert" className="mt-2 text-sm text-rose-700">
               {authProvidersQuery.data?.google?.enabled === true

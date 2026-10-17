@@ -13,6 +13,7 @@ from app.models.audit_log import AuditLog
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.user import User
+from app.models.user_mfa import UserMfaSecret
 from app.services.invitation_service import issue_invitation
 from app.services.security import hash_password
 from app.services.action_step_up_service import create_action_step_up_ticket
@@ -65,6 +66,7 @@ def test_pending_invitation_list_is_scoped_redacted_and_owner_can_recover_legacy
         ]
     )
     db.flush()
+    db.add(UserMfaSecret(user_id=owner.id, encrypted_secret="unused-test-ciphertext", status="active"))
     db.add_all(
         [
             HotelMembership(hotel_id=61, user_id=owner.id, role="owner", status="active", is_primary_owner=True),

@@ -490,7 +490,7 @@ export function SettingsPermissionsPage() {
   const { session } = useSession();
   const qc = useQueryClient();
   // Owners and co-owners share this tenant-scoped administration surface;
-  // backend authorization and action-bound MFA step-up remain authoritative.
+  // backend authorization and optional, account-bound MFA step-up remain authoritative.
   const canManage = session.baseRole === "owner" || session.baseRole === "co_owner";
   const enabled = hasValidSession(session) && canManage;
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -786,7 +786,7 @@ export function SettingsPermissionsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="font-semibold text-amber-950">Cambios pendientes ({pendingPermissionEntries.length})</h2>
-              <p className="text-xs text-amber-900">Se guardarán juntos con una sola verificación MFA. Si una versión cambió, no se aplicará ningún cambio del lote.</p>
+              <p className="text-xs text-amber-900">Se guardarán juntos. Si tu cuenta tiene MFA activado, confirmarás con un solo código. Si una versión cambió, no se aplicará ningún cambio del lote.</p>
             </div>
             <div className="flex gap-2">
               <button

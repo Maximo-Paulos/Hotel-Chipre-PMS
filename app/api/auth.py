@@ -310,7 +310,7 @@ def _build_login_response(
     requested_hotel_id: int | None = None,
     pending_google_identity: dict[str, str] | None = None,
 ) -> AuthResponse | MfaChallengeResponse:
-    """Return a session only after the required account MFA factor succeeds."""
+    """Return a session, challenging for MFA only when the account has it active."""
     if mfa_service.get_active_mfa_secret(db, user.id):
         challenge_payload: dict[str, object] = {
             "purpose": "mfa_login",

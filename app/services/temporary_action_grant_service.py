@@ -18,7 +18,7 @@ from app.models.temporary_action_grant import (
     TemporaryActionGrant,
     TemporaryActionGrantStatusEnum,
 )
-from app.services.mfa_service import consume_mfa_code
+from app.services.mfa_service import consume_mfa_code, get_active_mfa_secret
 from app.services.mfa_attempt_service import check_mfa_attempt, reset_mfa_attempts
 from app.services.permission_service import (
     PERMISSION_DEFINITIONS,
@@ -58,7 +58,7 @@ class TemporaryGrantStateError(TemporaryGrantError):
 
 
 class TemporaryGrantMfaError(TemporaryGrantError):
-    """Approval requires an active MFA factor and a valid one-time code."""
+    """An MFA-enabled approver must provide a valid one-time code."""
 
 
 class TemporaryGrantRateLimitError(TemporaryGrantError):
@@ -207,23 +207,25 @@ def approve_grant(
     db: Session,
     grant_id: int,
     approver: TemporaryGrantActor,
-    totp_code: str,
+    totp_code: str | None = None,
 ) -> tuple[TemporaryActionGrant, str]:
     """Approve a pending grant and return its plaintext token exactly once.
 
-    MFA is mandatory for owner/co_owner approval. ``consume_mfa_code`` accepts
-    either the current TOTP or an unused recovery code, preserving the account
-    MFA service's replay protection and single-use semantics.
+    Approvers with active MFA must provide a valid TOTP or unused recovery
+    code. Accounts without an active factor are not forced to enroll; hotel
+    membership, approver role, permission checks, and the audited grant
+    lifecycle still apply.
     """
     grant = _grant_for_actor(db, grant_id, approver)
     _require_approver(db, approver)
     if grant.status != TemporaryActionGrantStatusEnum.PENDING:
         raise TemporaryGrantStateError("El grant no esta pendiente")
-    if not check_mfa_attempt(db, "temporary_grant_approval", approver.user_id):
-        raise TemporaryGrantRateLimitError("Demasiados intentos. Espera unos minutos.")
-    if not consume_mfa_code(db, approver.user_id, (totp_code or "").strip()):
-        raise TemporaryGrantMfaError("El aprobador requiere MFA activo y un codigo valido")
-    reset_mfa_attempts(db, "temporary_grant_approval", approver.user_id)
+    if get_active_mfa_secret(db, approver.user_id) is not None:
+        if not check_mfa_attempt(db, "temporary_grant_approval", approver.user_id):
+            raise TemporaryGrantRateLimitError("Demasiados intentos. Espera unos minutos.")
+        if not consume_mfa_code(db, approver.user_id, (totp_code or "").strip()):
+            raise TemporaryGrantMfaError("El aprobador tiene MFA activo y debe ingresar un codigo valido")
+        reset_mfa_attempts(db, "temporary_grant_approval", approver.user_id)
 
     now = _utcnow()
     plaintext_token = secrets.token_urlsafe(32)

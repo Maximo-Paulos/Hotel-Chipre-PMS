@@ -236,6 +236,20 @@ def _step_up_ticket_action(ticket: str, request: Request, context: AuthContext, 
     )
 
 
+def _requires_mfa_step_up(db: Session, context: AuthContext) -> bool:
+    """Require action step-up only for accounts that opted into MFA.
+
+    Missing user identity keeps the guard closed. Normal hotel accounts without
+    an active factor continue to rely on the existing authentication and
+    permission checks without being forced to enroll in MFA.
+    """
+    if context.user_id is None:
+        return True
+    from app.services.mfa_service import get_active_mfa_secret
+
+    return get_active_mfa_secret(db, context.user_id) is not None
+
+
 def _require_action_step_up(
     db: Session,
     request: Request,
@@ -246,7 +260,7 @@ def _require_action_step_up(
     from app.services.permission_service import canonical_permission_code
 
     canonical = canonical_permission_code(permission_code)
-    if not permission_requires_step_up(db, canonical):
+    if not permission_requires_step_up(db, canonical) or not _requires_mfa_step_up(db, context):
         return
     ticket = _matching_action_step_up_ticket(request, context, canonical)
     if ticket is None or not consume_action_step_up_tickets(
@@ -271,6 +285,8 @@ def _require_all_action_step_ups(
     actions = []
     used_tickets: set[str] = set()
     step_up_permissions = permissions_requiring_step_up(db, permissions)
+    if not step_up_permissions or not _requires_mfa_step_up(db, context):
+        return
     for permission in permissions:
         canonical = canonical_permission_code(permission)
         if canonical not in step_up_permissions:
@@ -466,6 +482,8 @@ def require_any_permission(*permissions: str):
         from app.services.action_step_up_service import permissions_requiring_step_up
 
         step_up_permissions = permissions_requiring_step_up(db, tuple(granted_permissions))
+        if not step_up_permissions or not _requires_mfa_step_up(db, context):
+            return context
         if any(canonical_permission_code(permission) not in step_up_permissions for permission in granted_permissions):
             return context
         matching = None
@@ -496,7 +514,7 @@ def require_permission_administrator(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_auth_context),
 ) -> AuthContext:
-    """Require the owner or co-owner RBAC capability plus fresh step-up proof."""
+    """Require the owner or co-owner RBAC capability and MFA step-up when enabled."""
 
     if not context.is_verified:
         raise HTTPException(

@@ -278,7 +278,7 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_GUEST_EXPORT: (
         "guests", "Export guest ledger data",
-        "Permite exportar el libro de huéspedes dentro del alcance del hotel. Requiere MFA reciente porque incluye datos personales. No permite editar perfiles ni modificar el historial exportado.",
+        "Permite exportar el libro de huéspedes dentro del alcance del hotel. Si la cuenta tiene MFA activado, requiere MFA reciente porque incluye datos personales. No permite editar perfiles ni modificar el historial exportado.",
     ),
     PERMISSION_RESERVATION_READ: (
         "reservations", "Read reservations",
@@ -286,7 +286,7 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_RESERVATION_EXPORT: (
         "reservations", "Export reservation data",
-        "Permite descargar un CSV acotado al hotel con reservas y nombres de huéspedes, sin documentos ni datos de contacto. Requiere MFA reciente.",
+        "Permite descargar un CSV acotado al hotel con reservas y nombres de huéspedes, sin documentos ni datos de contacto. Si la cuenta tiene MFA activado, requiere MFA reciente.",
     ),
     PERMISSION_RESERVATION_CREATE: (
         "reservations", "Create reservations",
@@ -310,7 +310,7 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_RESERVATION_CANCEL_PAID: (
         "reservations", "Cancel reservations with completed payments",
-        "Permite cancelar una reserva con historial de pagos completados. Requiere MFA reciente y el permiso habitual de cancelación.",
+        "Permite cancelar una reserva con historial de pagos completados. Requiere el permiso habitual de cancelación y, si la cuenta tiene MFA activado, MFA reciente.",
     ),
     PERMISSION_RESERVATION_DELETE: (
         "reservations", "Delete eligible bookings",
@@ -350,11 +350,11 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE: (
         "rates", "Configure the permitted manual reservation rate range",
-        "Permite al owner configurar el rango porcentual aplicado a las tarifas manuales de reservas directas. Cada cambio requiere verificación en dos pasos. No permite crear reservas ni fijar precios.",
+        "Permite al owner configurar el rango porcentual aplicado a las tarifas manuales de reservas directas. Si la cuenta tiene MFA activado, cada cambio requiere verificación en dos pasos. No permite crear reservas ni fijar precios.",
     ),
     PERMISSION_RESERVATION_OTA_RECORD: (
         "reservations", "Record OTA reservations and reported prices",
-        "Permite cargar o actualizar una reserva recibida de Booking, Expedia, Despegar u otra OTA con el precio informado por ese canal. No permite fijar tarifas manuales en reservas directas ni confirmar prepagos de la OTA; eso requiere 'Confirmar prepago de OTA' y MFA.",
+        "Permite cargar o actualizar una reserva recibida de Booking, Expedia, Despegar u otra OTA con el precio informado por ese canal. No permite fijar tarifas manuales en reservas directas ni confirmar prepagos de la OTA; eso requiere 'Confirmar prepago de OTA' y, si la cuenta tiene MFA activado, MFA reciente.",
     ),
     PERMISSION_RESERVATION_PROHIBITION_OVERRIDE: (
         "guests", "Override a lodging prohibition with reason",
@@ -474,7 +474,7 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_CASH_ADJUSTMENT_MANAGE: (
         "cash", "Manage manual cash balance adjustments",
-        "Permite registrar ajustes manuales que cambian el saldo esperado de caja. Requiere también cash:operate y MFA reciente; no habilita ingresos ni egresos manuales.",
+        "Permite registrar ajustes manuales que cambian el saldo esperado de caja. Requiere también cash:operate y, si la cuenta tiene MFA activado, MFA reciente; no habilita ingresos ni egresos manuales.",
     ),
     PERMISSION_CASH_EXPENSE: (
         "cash", "Record manual cash expenses",
@@ -482,7 +482,7 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_CASH_EXPENSE_APPROVE: (
         "cash", "Approve manual cash expenses",
-        "Permite aprobar gastos manuales pendientes de caja. Solo Dueño, Codueña y Gerencia pueden usarlo y cada aprobación requiere MFA reciente.",
+        "Permite aprobar gastos manuales pendientes de caja. Solo Dueño, Codueña y Gerencia pueden usarlo y, si la cuenta tiene MFA activado, cada aprobación requiere MFA reciente.",
     ),
     PERMISSION_CASH_RECORD_PRIOR_RECEIPT: (
         "cash", "Record cash collected before using the system",
@@ -490,23 +490,23 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_PAYMENT_REFUND: (
         "payments", "Issue reservation refunds",
-        "Permite devolver un cobro registrado. Requiere MFA reciente además del permiso para operar cobros.",
+        "Permite devolver un cobro registrado. Además del permiso para operar cobros, si la cuenta tiene MFA activado requiere MFA reciente.",
     ),
     PERMISSION_OTA_PAYMENT_CONFIRM: (
         "payments", "Confirm an external OTA prepayment",
-        "Permite confirmar un importe pagado en una OTA con referencia verificable. Requiere MFA reciente y no registra dinero recibido en la caja del hotel.",
+        "Permite confirmar un importe pagado en una OTA con referencia verificable. Si la cuenta tiene MFA activado, requiere MFA reciente. No registra dinero recibido en la caja del hotel.",
     ),
     PERMISSION_PAYMENT_RECEIPT_EMAIL: (
         "payments", "Send a payment receipt by email",
-        "Permite enviar el comprobante de un pago confirmado al email registrado del huésped. Requiere MFA reciente y confirmación explícita del operador.",
+        "Permite enviar el comprobante de un pago confirmado al email registrado del huésped. Requiere confirmación explícita del operador y, si la cuenta tiene MFA activado, MFA reciente.",
     ),
     PERMISSION_CASH_APPROVE_DIFFERENCE: (
         "cash", "Approve cash close differences",
-        "Permite a owner y co-owner aprobar diferencias al cerrar caja. Cada aprobación requiere MFA reciente y un ticket de un solo uso ligado a la sesión, el permiso y la ruta. No permite operar sesiones ni registrar movimientos por sí solo.",
+        "Permite a owner y co-owner aprobar diferencias al cerrar caja. Si la cuenta tiene MFA activado, cada aprobación requiere MFA reciente y un ticket de un solo uso ligado a la sesión, el permiso y la ruta. No permite operar sesiones ni registrar movimientos por sí solo.",
     ),
     PERMISSION_CASH_CUSTODY_RECEIVE: (
         "cash", "Confirm cash custody receipt",
-        "Permite a owner y co-owner confirmar la recepción de una custodia de caja. Requiere MFA reciente y no permite aprobar otras diferencias ni operar sesiones.",
+        "Permite a owner y co-owner confirmar la recepción de una custodia de caja. Si la cuenta tiene MFA activado, requiere MFA reciente. No permite aprobar otras diferencias ni operar sesiones.",
     ),
     PERMISSION_OPERATIONAL_TASK_READ: (
         "operations", "Read shared operational tasks",
@@ -618,7 +618,7 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_SETTINGS_FX_MANAGE: (
         "settings", "Manage currency conversion market",
-        "Permite elegir dólar oficial o blue para cotizaciones USD y las monedas visibles. Está limitado a Dueña/Codueña y cada cambio requiere MFA reciente.",
+        "Permite elegir dólar oficial o blue para cotizaciones USD y las monedas visibles. Está limitado a Dueña/Codueña y, si la cuenta tiene MFA activado, cada cambio requiere MFA reciente.",
     ),
     PERMISSION_SETTINGS_NOTIFICATIONS_VIEW: (
         "settings", "Read notifications",
@@ -654,7 +654,7 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     ),
     PERMISSION_TEMPORARY_GRANTS_MANAGE: (
         "security", "Approve or deny temporary action grants",
-        "Permite aprobar o denegar solicitudes temporales de permisos. La aprobación además requiere MFA y el grant queda ligado a la acción y al recurso exactos.",
+        "Permite aprobar o denegar solicitudes temporales de permisos. Si la cuenta tiene MFA activado, la aprobación además requiere MFA. El grant queda ligado a la acción y al recurso exactos.",
     ),
     PERMISSION_WHATSAPP_INBOX_VIEW: (
         "whatsapp", "Read the WhatsApp inbox",

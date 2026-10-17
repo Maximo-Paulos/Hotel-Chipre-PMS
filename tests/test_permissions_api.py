@@ -108,6 +108,19 @@ def _client_with_db():
         [
             HotelConfiguration(id=1, subscription_active=True),
             HotelConfiguration(id=2, subscription_active=True),
+            User(
+                id=10,
+                email="permission-owner@test.example",
+                password_hash="synthetic-test-hash",
+                is_active=True,
+                is_verified=True,
+                role="owner",
+            ),
+            UserMfaSecret(
+                user_id=10,
+                encrypted_secret="unused-test-ciphertext",
+                status="active",
+            ),
         ]
     )
     db.flush()
@@ -517,6 +530,23 @@ def test_permission_override_can_deny_receptionist_guest_edit():
 
 def test_permission_override_batch_uses_one_ticket_and_audits_each_cell_atomically():
     client, db, engine = _client_with_db()
+    db.add(
+        User(
+            id=99,
+            email="batch-owner@test.example",
+            password_hash="synthetic-test-hash",
+            is_active=True,
+            is_verified=True,
+            role="owner",
+        )
+    )
+    db.add(
+        UserMfaSecret(
+            user_id=99,
+            encrypted_secret="unused-test-ciphertext",
+            status="active",
+        )
+    )
     db.add(
         User(
             id=20,
@@ -998,8 +1028,8 @@ def _seed_permission_restore_state(db, restore_kind: str) -> str:
     ensure_permission_matrix_seeded(db)
     secret = pyotp.random_base32()
     permission_code = canonical_permission_code(PERMISSION_GUEST_EDIT)
-    db.add_all(
-        [
+    if db.get(User, 10) is None:
+        db.add(
             User(
                 id=10,
                 email="owner@test.com",
@@ -1007,14 +1037,21 @@ def _seed_permission_restore_state(db, restore_kind: str) -> str:
                 is_active=True,
                 is_verified=True,
                 role="owner",
-            ),
+            )
+        )
+    mfa_secret = db.query(UserMfaSecret).filter_by(user_id=10).one_or_none()
+    if mfa_secret is None:
+        db.add(
             UserMfaSecret(
                 user_id=10,
                 encrypted_secret=encrypt_totp_secret(secret),
                 status="active",
-            ),
-        ]
-    )
+            )
+        )
+    else:
+        mfa_secret.encrypted_secret = encrypt_totp_secret(secret)
+        mfa_secret.status = "active"
+        mfa_secret.last_used_step = None
     if restore_kind == "role":
         db.add(
             HotelPermissionOverride(

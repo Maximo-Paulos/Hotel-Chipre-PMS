@@ -71267,16 +71267,20 @@
       "TemporaryActionGrantApproveRequest": {
         "properties": {
           "totp_code": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Totp Code"
           }
         },
         "type": "object",
-        "required": [
-          "totp_code"
-        ],
         "title": "TemporaryActionGrantApproveRequest"
       },
       "TemporaryActionGrantRequest": {

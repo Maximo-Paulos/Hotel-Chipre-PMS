@@ -664,7 +664,7 @@ export function SettingsHotelPage() {
               <p className="mt-1 text-xs text-slate-600">
                 Solo se usan mercados oficial y blue, sin dólar tarjeta, MEP, CCL ni otras variantes. Para USD elegí mercado y Compra/Venta por separado en cada sentido. La referencia global aplica a EUR, BRL, CLP y UYU: usa su cotización oficial directa o un equivalente blue derivado de la relación USD blue/oficial, identificado como estimado. Los pagos se conservan en la moneda recibida; si hace falta convertir, también se aplica el spread de la política FX. Si falta una cotización fresca, el cálculo se detiene sin cambiar de mercado.
               </p>
-              <p className="mt-1 text-xs text-slate-600">Cambiar estas preferencias requiere MFA reciente.</p>
+              <p className="mt-1 text-xs text-slate-600">Si tu cuenta tiene MFA activado, necesitás una verificación reciente para cambiar estas preferencias.</p>
               <div className="mt-3 grid gap-4 lg:grid-cols-2">
                 <label className="text-sm font-semibold text-slate-700">
                   Mercado de referencia para otras monedas

@@ -298,7 +298,7 @@ def test_cash_custody_confirmation_requires_a_fresh_action_bound_mfa_ticket(step
 
 @pytest.mark.parametrize("mismatch", ["user", "hotel", "permission", "method", "path", "token_version"])
 def test_ticket_is_bound_to_user_hotel_permission_method_path_and_token_version(step_up_client, mismatch):
-    client, _db, secret, current = step_up_client
+    client, db, secret, current = step_up_client
     ticket_permission = (
         PERMISSION_HOTEL_SECURITY_MANAGE if mismatch == "permission" else PERMISSION_PERMISSION_MANAGE
     )
@@ -319,6 +319,26 @@ def test_ticket_is_bound_to_user_hotel_permission_method_path_and_token_version(
         "token_version": {"token_version": 4},
     }
     if mismatch in context_changes:
+        if mismatch == "user":
+            db.add(
+                User(
+                    id=USER_ID + 1,
+                    email="other-owner@example.test",
+                    password_hash="unused-test-hash",
+                    is_active=True,
+                    is_verified=True,
+                    role="owner",
+                    token_version=3,
+                )
+            )
+            db.add(
+                UserMfaSecret(
+                    user_id=USER_ID + 1,
+                    encrypted_secret="unused-test-ciphertext",
+                    status="active",
+                )
+            )
+            db.commit()
         current["context"] = replace(current["context"], **context_changes[mismatch])
 
     response = client.get(
@@ -367,6 +387,22 @@ def test_step_up_requires_active_mfa_and_a_valid_non_replayed_totp(step_up_clien
     assert accepted.status_code == 200, accepted.text
     replayed = _issue_ticket(client, secret, code=code)
     assert replayed.status_code == 401
+
+
+def test_accounts_without_mfa_can_use_sensitive_routes_under_normal_permissions(step_up_client):
+    client, db, _secret, _current = step_up_client
+    db.query(UserMfaSecret).filter_by(user_id=USER_ID).delete(synchronize_session=False)
+    db.commit()
+
+    responses = [
+        client.get(ACTION_PATH),
+        client.get("/api/test/all-sensitive"),
+        client.get("/api/test/any-sensitive"),
+        client.get("/api/test/permission-admin"),
+        client.post("/api/test/permission-admin"),
+    ]
+
+    assert [response.status_code for response in responses] == [200, 200, 200, 200, 200]
 
 
 def test_step_up_code_guesses_use_existing_persistent_rate_limit(step_up_client):
@@ -507,7 +543,7 @@ def test_permission_administrator_allows_owner_and_co_owner_and_requires_step_up
 
 
 def test_permission_admin_read_scope_is_reusable_only_for_owner_rbac_reads(step_up_client):
-    client, _db, secret, current = step_up_client
+    client, db, secret, current = step_up_client
     code = _code_at(secret)
     issued = _issue_ticket(
         client,
@@ -532,6 +568,25 @@ def test_permission_admin_read_scope_is_reusable_only_for_owner_rbac_reads(step_
     cross_hotel = client.get("/api/permissions/matrix", headers=headers)
     assert cross_hotel.status_code == 428
 
+    db.add(
+        User(
+            id=USER_ID + 1,
+            email="other-owner@example.test",
+            password_hash="unused-test-hash",
+            is_active=True,
+            is_verified=True,
+            role="owner",
+            token_version=3,
+        )
+    )
+    db.add(
+        UserMfaSecret(
+            user_id=USER_ID + 1,
+            encrypted_secret="unused-test-ciphertext",
+            status="active",
+        )
+    )
+    db.commit()
     current["context"] = _auth_context()
     current["context"] = replace(current["context"], user_id=USER_ID + 1)
     cross_user = client.get("/api/permissions/matrix", headers=headers)

@@ -520,7 +520,7 @@ export default function ManualOtaReservationModal({ open, onClose }: ManualOtaRe
                 />
               </label>
               <p className="text-xs text-slate-500 md:col-span-2">
-                Confirmar un prepago requiere autorización de responsable y MFA. Se registra como pago externo, no como efectivo recibido por el hotel.
+                Confirmar un prepago requiere autorización de responsable y, si la cuenta tiene MFA activado, una verificación reciente. Se registra como pago externo, no como efectivo recibido por el hotel.
               </p>
             </div>
 
