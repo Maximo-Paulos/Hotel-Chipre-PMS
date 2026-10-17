@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 
 import app.database as db_module
 from app.config import get_settings
@@ -21,15 +22,47 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/health", tags=["health"])
 
 
-def _postgres_healthcheck() -> dict[str, Any]:
+def _database_healthcheck() -> dict[str, Any]:
+    dialect = None
     try:
         factory = db_module.get_session_factory()
         with factory() as db:
+            dialect = db.get_bind().dialect.name
             db.execute(text("SELECT 1"))
-        return {"status": "ok", "enabled": True, "connected": True, "error": None}
+        return {
+            "status": "ok",
+            "enabled": True,
+            "connected": True,
+            "dialect": dialect,
+            "error": None,
+        }
     except Exception as exc:  # pragma: no cover - defensive runtime fallback
-        logger.warning("postgres.healthcheck_failed", extra={"error_type": type(exc).__name__})
-        return {"status": "error", "enabled": True, "connected": False, "error": "PostgreSQL healthcheck failed"}
+        if dialect is None:
+            try:
+                dialect = make_url(get_settings().DATABASE_URL).get_backend_name()
+            except Exception:
+                dialect = None
+        logger.warning("database.healthcheck_failed", extra={"error_type": type(exc).__name__})
+        return {
+            "status": "error",
+            "enabled": True,
+            "connected": False,
+            "dialect": dialect,
+            "error": "Database healthcheck failed",
+        }
+
+
+def _postgres_healthcheck(database_payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Expose PostgreSQL health only when PostgreSQL is the active database."""
+    database = database_payload or _database_healthcheck()
+    if database.get("dialect") == "postgresql":
+        return database
+    return {
+        "status": "not_applicable",
+        "enabled": False,
+        "connected": False,
+        "error": None,
+    }
 
 
 def _redis_healthcheck() -> dict[str, Any]:
@@ -83,7 +116,10 @@ def _redis_healthcheck() -> dict[str, Any]:
         }
 
 
-def _critical_lock_readiness(redis_payload: dict[str, Any]) -> dict[str, Any]:
+def _critical_lock_readiness(
+    redis_payload: dict[str, Any],
+    database_dialect: str | None,
+) -> dict[str, Any]:
     settings = get_settings()
     if not settings.DISTRIBUTED_LOCK_ENABLED:
         return {
@@ -92,17 +128,31 @@ def _critical_lock_readiness(redis_payload: dict[str, Any]) -> dict[str, Any]:
             "mechanism": "none",
         }
     if settings.DISTRIBUTED_LOCK_BACKEND == "postgresql":
+        if database_dialect == "postgresql":
+            return {
+                "status": "ok",
+                "safe": True,
+                "mechanism": "postgres_advisory_xact_lock",
+            }
+        required = bool(settings.DISTRIBUTED_LOCK_REQUIRED)
         return {
-            "status": "ok",
-            "safe": True,
-            "mechanism": "postgres_advisory_xact_lock",
+            "status": "error" if required else "degraded",
+            "safe": not required,
+            "mechanism": "none",
         }
     if redis_payload.get("connected"):
         return {"status": "ok", "safe": True, "mechanism": "redis"}
-    # distributed_lock.py uses a transaction-scoped PostgreSQL advisory lock
-    # when Redis is unavailable. PostgreSQL is checked by the same readiness
-    # response, so this is safe but explicitly degraded.
-    return {"status": "degraded", "safe": True, "mechanism": "postgres_advisory_xact_lock"}
+    # A PostgreSQL advisory lock is the supported fallback only when the
+    # active database dialect is PostgreSQL. SQLite's optional-lock profile
+    # remains available but must not claim distributed serialization.
+    if database_dialect == "postgresql":
+        return {"status": "degraded", "safe": True, "mechanism": "postgres_advisory_xact_lock"}
+    required = bool(settings.DISTRIBUTED_LOCK_REQUIRED)
+    return {
+        "status": "error" if required else "degraded",
+        "safe": not required,
+        "mechanism": "none",
+    }
 
 
 @router.get("/live")
@@ -115,10 +165,11 @@ def live_healthcheck() -> dict[str, Any]:
 def ready_healthcheck() -> JSONResponse:
     """Report whether the API can safely accept critical writes."""
     settings = get_settings()
-    postgres = _postgres_healthcheck()
+    database = _database_healthcheck()
+    postgres = _postgres_healthcheck(database)
     redis = _redis_healthcheck()
-    critical_lock = _critical_lock_readiness(redis)
-    ready = postgres.get("connected") is True and critical_lock["safe"]
+    critical_lock = _critical_lock_readiness(redis, database.get("dialect"))
+    ready = database.get("connected") is True and critical_lock["safe"]
     optional_redis_capability_enabled = bool(
         redis.get("cache_enabled")
         or redis.get("realtime_events_enabled")
@@ -131,6 +182,7 @@ def ready_healthcheck() -> JSONResponse:
     payload = {
         "status": "ok" if ready else "error",
         "ready": ready,
+        "database": database,
         "postgres": postgres,
         "redis": redis,
         "critical_lock": critical_lock,
@@ -170,8 +222,10 @@ def _clickhouse_healthcheck() -> dict[str, Any]:
 
 @router.get("/datastores")
 def datastores_healthcheck() -> dict[str, Any]:
+    database = _database_healthcheck()
     return {
-        "postgres": _postgres_healthcheck(),
+        "database": database,
+        "postgres": _postgres_healthcheck(database),
         "redis": _redis_healthcheck(),
         "clickhouse": _clickhouse_healthcheck(),
         "mongo": mongo_healthcheck(),

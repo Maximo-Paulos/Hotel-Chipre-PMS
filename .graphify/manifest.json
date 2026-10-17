@@ -272,8 +272,8 @@
     "hash": "f932113cd8634743003755c45c190d29"
   },
   "app/api/health.py": {
-    "mtime": 1791849255858.039,
-    "hash": "941dba9a5d6d45cc8b22b199f9e0fc2e"
+    "mtime": 1792216377149.4788,
+    "hash": "c93b1219d9e13b0f8334082fce72b4d4"
   },
   "app/api/hotel_api_keys.py": {
     "mtime": 1783103274876.0564,
@@ -1756,8 +1756,8 @@
     "hash": "47a88f453e1cb159870e0d83992e5fff"
   },
   "tests/test_datastores_health.py": {
-    "mtime": 1791849255940.6277,
-    "hash": "b5f1c2eb26b74092085b86caf3e760c2"
+    "mtime": 1792216540141.8555,
+    "hash": "2498300928ce3f83f3fa466d3afdfca9"
   },
   "tests/test_demo_mode.py": {
     "mtime": 1790480999189.5452,
@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1792214182308.2852,
-    "hash": "87f2178224ef9342067411bc0578da4b"
+    "mtime": 1792216504092.108,
+    "hash": "05a5e0fc82e4406025836492b801357c"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1792214181557.1377,
-    "hash": "055beb42b037d347c10d11e2901e0a6f"
+    "mtime": 1792216503384.245,
+    "hash": "8a5a65181a68e7e8e742ae5b8634c66d"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1792214182296.7786,
-    "hash": "3e3a2f2372a9ea974e7baf3100a891df"
+    "mtime": 1792216504080.2615,
+    "hash": "061f7b6f08b85e8b31a159e12ab5f1cb"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1792214181569.3538,
-    "hash": "7a1e43825bb54333cb44a6d0b3680898"
+    "mtime": 1792216503397.5613,
+    "hash": "25deb4e65ad87b6d7837bb1846251f59"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1792214182284.8794,
-    "hash": "6620ee5aacc5590530c81fa672b6414c"
+    "mtime": 1792216504067.997,
+    "hash": "78939b2a5040ca0f3a3170a130b36f57"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1792214181754.1426,
-    "hash": "f01e6b197b3a7bd890cc45e9a491e693"
+    "mtime": 1792216503588.7993,
+    "hash": "b274207291ab753e06c5e71fcdbf3460"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,

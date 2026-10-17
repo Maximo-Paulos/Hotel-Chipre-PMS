@@ -70,7 +70,7 @@ def test_clickhouse_health_does_not_connect_when_provider_traffic_is_disabled(mo
     }
 
 
-def test_datastores_health_endpoint_reports_postgres_and_disabled_nosql(monkeypatch: pytest.MonkeyPatch):
+def test_datastores_health_endpoint_reports_active_sqlite_and_disabled_postgres(monkeypatch: pytest.MonkeyPatch):
     import app.main as main_module
 
     engine = create_engine(
@@ -98,8 +98,11 @@ def test_datastores_health_endpoint_reports_postgres_and_disabled_nosql(monkeypa
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["postgres"]["status"] == "ok"
-    assert payload["postgres"]["connected"] is True
+    assert payload["database"]["status"] == "ok"
+    assert payload["database"]["connected"] is True
+    assert payload["database"]["dialect"] == "sqlite"
+    assert payload["postgres"]["status"] == "not_applicable"
+    assert payload["postgres"]["connected"] is False
 
     for store in ("redis", "mongo", "cassandra", "neo4j"):
         assert payload[store]["status"] == "disabled"
@@ -148,7 +151,7 @@ def test_sql_only_profile_does_not_attempt_redis_and_reports_postgres_backends(m
 
     monkeypatch.setattr(health_module, "get_sync_redis_client", unexpected_redis_client)
     payload = health_module._redis_healthcheck()
-    lock = health_module._critical_lock_readiness(payload)
+    lock = health_module._critical_lock_readiness(payload, "postgresql")
 
     assert payload["status"] == "disabled"
     assert payload["enabled"] is False
@@ -161,7 +164,36 @@ def test_sql_only_profile_does_not_attempt_redis_and_reports_postgres_backends(m
     }
 
 
-def test_postgres_healthcheck_does_not_return_or_log_connection_error(monkeypatch: pytest.MonkeyPatch, caplog):
+@pytest.mark.parametrize(
+    ("required", "expected_status", "expected_safe"),
+    [(False, "degraded", True), (True, "error", False)],
+)
+def test_sqlite_does_not_report_postgres_advisory_lock_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    required: bool,
+    expected_status: str,
+    expected_safe: bool,
+):
+    import app.api.health as health_module
+
+    monkeypatch.setenv("DISTRIBUTED_LOCK_ENABLED", "true")
+    monkeypatch.setenv("DISTRIBUTED_LOCK_REQUIRED", str(required).lower())
+    monkeypatch.setenv("DISTRIBUTED_LOCK_BACKEND", "redis")
+    get_settings.cache_clear()
+
+    lock = health_module._critical_lock_readiness(
+        {"status": "error", "connected": False},
+        "sqlite",
+    )
+
+    assert lock == {
+        "status": expected_status,
+        "safe": expected_safe,
+        "mechanism": "none",
+    }
+
+
+def test_database_healthcheck_does_not_return_or_log_connection_error(monkeypatch: pytest.MonkeyPatch, caplog):
     secret_dsn = "postgresql://app:supersecret@db.example/hotel"
 
     def fail_to_create_session_factory():
@@ -171,10 +203,10 @@ def test_postgres_healthcheck_does_not_return_or_log_connection_error(monkeypatc
 
     with caplog.at_level("WARNING"):
         import app.api.health as health_module
-        result = health_module._postgres_healthcheck()
+        result = health_module._database_healthcheck()
 
     assert result["status"] == "error"
-    assert result["error"] == "PostgreSQL healthcheck failed"
+    assert result["error"] == "Database healthcheck failed"
     assert secret_dsn not in caplog.text
     assert secret_dsn not in str(result)
 
@@ -198,7 +230,11 @@ def test_read_model_cache_can_be_enabled_explicitly():
 def test_ready_healthcheck_reports_postgres_and_advisory_lock_fallback(monkeypatch: pytest.MonkeyPatch):
     import app.api.health as health_module
 
-    monkeypatch.setattr(health_module, "_postgres_healthcheck", lambda: {"status": "ok", "connected": True})
+    monkeypatch.setattr(
+        health_module,
+        "_database_healthcheck",
+        lambda: {"status": "ok", "connected": True, "dialect": "postgresql"},
+    )
     monkeypatch.setattr(health_module, "_redis_healthcheck", lambda: {"status": "error", "connected": False})
     monkeypatch.setenv("DISTRIBUTED_LOCK_ENABLED", "true")
     monkeypatch.setenv("DISTRIBUTED_LOCK_REQUIRED", "true")
@@ -211,6 +247,51 @@ def test_ready_healthcheck_reports_postgres_and_advisory_lock_fallback(monkeypat
     assert payload["optional_degraded"] is False
 
 
+def test_ready_healthcheck_reports_sqlite_without_postgres_lock_fallback(monkeypatch: pytest.MonkeyPatch):
+    import app.api.health as health_module
+
+    monkeypatch.setenv("DISTRIBUTED_LOCK_ENABLED", "true")
+    monkeypatch.setenv("DISTRIBUTED_LOCK_REQUIRED", "false")
+    monkeypatch.setenv("DISTRIBUTED_LOCK_BACKEND", "redis")
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        health_module,
+        "_database_healthcheck",
+        lambda: {
+            "status": "ok",
+            "enabled": True,
+            "connected": True,
+            "dialect": "sqlite",
+            "error": None,
+        },
+    )
+    monkeypatch.setattr(
+        health_module,
+        "_redis_healthcheck",
+        lambda: {
+            "status": "error",
+            "connected": False,
+            "cache_enabled": False,
+            "distributed_locks_enabled": True,
+            "distributed_locks_required": False,
+            "realtime_events_enabled": False,
+        },
+    )
+
+    response = health_module.ready_healthcheck()
+    payload = json.loads(response.body)
+
+    assert response.status_code == 200
+    assert payload["database"]["dialect"] == "sqlite"
+    assert payload["postgres"]["status"] == "not_applicable"
+    assert payload["critical_lock"] == {
+        "status": "degraded",
+        "safe": True,
+        "mechanism": "none",
+    }
+    assert payload["optional_degraded"] is True
+
+
 def test_ready_healthcheck_reports_optional_redis_capability_degradation(monkeypatch: pytest.MonkeyPatch):
     import app.api.health as health_module
 
@@ -221,8 +302,8 @@ def test_ready_healthcheck_reports_optional_redis_capability_degradation(monkeyp
     get_settings.cache_clear()
     monkeypatch.setattr(
         health_module,
-        "_postgres_healthcheck",
-        lambda: {"status": "ok", "connected": True},
+        "_database_healthcheck",
+        lambda: {"status": "ok", "connected": True, "dialect": "postgresql"},
     )
     monkeypatch.setattr(
         health_module,

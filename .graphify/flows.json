@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-17T05:19:27.129Z",
+  "generatedAt": "2026-10-17T05:57:15.103Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -23216,17 +23216,19 @@
       "path": [
         "api_health_datastores_healthcheck",
         "api_health_clickhouse_healthcheck",
+        "api_health_database_healthcheck",
         "api_health_postgres_healthcheck",
         "api_health_redis_healthcheck"
       ],
       "qualifiedPath": [
         "api_health_datastores_healthcheck",
         "api_health_clickhouse_healthcheck",
+        "api_health_database_healthcheck",
         "api_health_postgres_healthcheck",
         "api_health_redis_healthcheck"
       ],
       "depth": 1,
-      "nodeCount": 4,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/api/health.py"
@@ -27154,17 +27156,19 @@
       "path": [
         "api_health_ready_healthcheck",
         "api_health_critical_lock_readiness",
+        "api_health_database_healthcheck",
         "api_health_postgres_healthcheck",
         "api_health_redis_healthcheck"
       ],
       "qualifiedPath": [
         "api_health_ready_healthcheck",
         "api_health_critical_lock_readiness",
+        "api_health_database_healthcheck",
         "api_health_postgres_healthcheck",
         "api_health_redis_healthcheck"
       ],
       "depth": 1,
-      "nodeCount": 4,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/api/health.py"
