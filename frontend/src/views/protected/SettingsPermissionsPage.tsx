@@ -73,6 +73,23 @@ type RolePermissionMap = PermissionMatrixResponse["matrix"];
 const draftPermissionKey = (scope: "role" | "user", target: string | number, code: string) => `${scope}:${target}:${code}`;
 
 const isReadPermission = (permission: PermissionCatalogItem) => /(?:^|[_:])(read|view)$/.test(permission.code);
+const normalizePermissionSearch = (value: string) =>
+  value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+
+const filterPermissions = (
+  permissions: PermissionCatalogItem[],
+  query: string,
+  description: (permission: PermissionCatalogItem) => string,
+  moduleLabel: (permission: PermissionCatalogItem) => string
+) => {
+  const normalizedQuery = normalizePermissionSearch(query.trim());
+  if (!normalizedQuery) return permissions;
+  return permissions.filter((permission) =>
+    normalizePermissionSearch(
+      `${permission.code} ${permission.module} ${moduleLabel(permission)} ${description(permission)}`
+    ).includes(normalizedQuery)
+  );
+};
 
 const sourceLabel: Record<string, string> = {
   default: "Default",
@@ -132,8 +149,12 @@ function PermissionTable({
   onVisibilityChange
 }: PermissionTableProps) {
   const { t, i18n } = useTranslation();
+  const [searchQuery, setSearchQuery] = useState("");
   const permissionDescription = (permission: PermissionCatalogItem) =>
     i18n.resolvedLanguage === "en" ? permission.description : permission.help_es || permission.description;
+  const permissionModuleLabel = (permission: PermissionCatalogItem) =>
+    t(`permissionModules.${permission.module}`, { defaultValue: permission.module.split("_").join(" ") });
+  const filteredPermissions = filterPermissions(permissions, searchQuery, permissionDescription, permissionModuleLabel);
   const windowsByRole = new Map(visibilityWindows.map((window) => [window.role, window]));
 
   const renderPermissionRow = (permission: PermissionCatalogItem) => (
@@ -209,11 +230,30 @@ function PermissionTable({
         Las filas de lectura controlan quién puede ver una sección. Las filas de acciones controlan qué puede modificar cada rol.
         Los permisos bloqueados son reglas de seguridad del sistema.
       </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <label htmlFor="permission-matrix-search" className="block w-full max-w-xl text-xs font-semibold text-slate-600">
+          {t("permissionSearch.matrixLabel")}
+          <input
+            id="permission-matrix-search"
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={t("permissionSearch.matrixPlaceholder")}
+            className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+          />
+        </label>
+        <span role="status" aria-live="polite" className="text-xs text-slate-500">
+          {t("permissionSearch.count", { visible: filteredPermissions.length, total: permissions.length })}
+        </span>
+      </div>
       {permissions.length === 0 ? <p className="text-sm text-slate-600">No hay permisos disponibles.</p> : null}
+      {permissions.length > 0 && filteredPermissions.length === 0 ? (
+        <p role="status" className="text-sm text-slate-600">{t("permissionSearch.noMatches")}</p>
+      ) : null}
       {permissions.length > 0 ? (
         <div className="space-y-3">
-          {Array.from(new Set(permissions.map((permission) => permission.module).sort((a, b) => a.localeCompare(b)))).map((module) => {
-            const modulePermissions = permissions.filter((permission) => permission.module === module);
+          {Array.from(new Set(filteredPermissions.map((permission) => permission.module).sort((a, b) => a.localeCompare(b)))).map((module) => {
+            const modulePermissions = filteredPermissions.filter((permission) => permission.module === module);
             const moduleReads = modulePermissions.filter(isReadPermission);
             const moduleActions = modulePermissions.filter((permission) => !isReadPermission(permission));
             return (
@@ -332,15 +372,19 @@ function UserOverridesPanel({
   onRestoreAll
 }: UserOverridesPanelProps) {
   const { t, i18n } = useTranslation();
+  const [searchQuery, setSearchQuery] = useState("");
   const permissionDescription = (permission: PermissionCatalogItem) =>
     i18n.resolvedLanguage === "en" ? permission.description : permission.help_es || permission.description;
+  const permissionModuleLabel = (permission: PermissionCatalogItem) =>
+    t(`permissionModules.${permission.module}`, { defaultValue: permission.module.split("_").join(" ") });
+  const filteredPermissions = filterPermissions(permissions, searchQuery, permissionDescription, permissionModuleLabel);
   const targetUsers = users.filter((user) => user.email !== currentEmail);
   const userRole = userQuery.data?.role ?? roleFromUser(selectedUser);
   const canEditSelectedRole = Boolean(userRole && isRoleEditable(userRole));
   const details = userQuery.data?.details ?? {};
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" data-testid="permissions-user-overrides">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-slate-800">Overrides por usuario</h2>
@@ -396,6 +440,22 @@ function UserOverridesPanel({
           ) : null}
           {userQuery.data && userRole ? (
             <div className="mt-4 overflow-x-auto">
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <label htmlFor="permission-user-overrides-search" className="block w-full max-w-xl text-xs font-semibold text-slate-600">
+                  {t("permissionSearch.userLabel")}
+                  <input
+                    id="permission-user-overrides-search"
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder={t("permissionSearch.userPlaceholder")}
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  />
+                </label>
+                <span role="status" aria-live="polite" className="text-xs text-slate-500">
+                  {t("permissionSearch.count", { visible: filteredPermissions.length, total: permissions.length })}
+                </span>
+              </div>
               <p className="mb-2 text-xs text-slate-500">
                 Rol actual: <strong className="text-slate-700">{roleName(userRole)}</strong>. “Valor del rol” incluye el default y cualquier override de rol vigente.
               </p>
@@ -408,7 +468,7 @@ function UserOverridesPanel({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {permissions.map((permission) => {
+                  {filteredPermissions.map((permission) => {
                     const roleCell = roleProfiles?.[userRole]?.[permission.code];
                     const detail = details[permission.code];
                     const targetUserId = userQuery.data?.user_id ?? selectedUserId;
@@ -472,6 +532,9 @@ function UserOverridesPanel({
                   })}
                 </tbody>
               </table>
+              {permissions.length > 0 && filteredPermissions.length === 0 ? (
+                <p role="status" className="mt-2 text-sm text-slate-600">{t("permissionSearch.noMatches")}</p>
+              ) : null}
             </div>
           ) : null}
         </>

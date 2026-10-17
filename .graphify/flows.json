@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-17T21:12:43.861Z",
+  "generatedAt": "2026-10-17T21:40:05.367Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1252,6 +1252,56 @@
       "fileCount": 1,
       "files": [
         "app/services/ota_service.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:protected_settingspermissionspage_permissiontable",
+      "name": "PermissionTable",
+      "entryPoint": "protected_settingspermissionspage_permissiontable",
+      "entryPointId": "protected_settingspermissionspage_permissiontable",
+      "path": [
+        "protected_settingspermissionspage_permissiontable",
+        "protected_settingspermissionspage_filterpermissions",
+        "protected_settingspermissionspage_normalizepermissionsearch"
+      ],
+      "qualifiedPath": [
+        "protected_settingspermissionspage_permissiontable",
+        "protected_settingspermissionspage_filterpermissions",
+        "protected_settingspermissionspage_normalizepermissionsearch"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/SettingsPermissionsPage.tsx"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:protected_settingspermissionspage_useroverridespanel",
+      "name": "UserOverridesPanel",
+      "entryPoint": "protected_settingspermissionspage_useroverridespanel",
+      "entryPointId": "protected_settingspermissionspage_useroverridespanel",
+      "path": [
+        "protected_settingspermissionspage_useroverridespanel",
+        "protected_settingspermissionspage_filterpermissions",
+        "protected_settingspermissionspage_rolefromuser",
+        "protected_settingspermissionspage_normalizepermissionsearch"
+      ],
+      "qualifiedPath": [
+        "protected_settingspermissionspage_useroverridespanel",
+        "protected_settingspermissionspage_filterpermissions",
+        "protected_settingspermissionspage_rolefromuser",
+        "protected_settingspermissionspage_normalizepermissionsearch"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/SettingsPermissionsPage.tsx"
       ],
       "criticality": 0.42,
       "warnings": []
@@ -2526,28 +2576,6 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/public/LoginPage.tsx"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
-      "id": "flow:protected_settingspermissionspage_useroverridespanel",
-      "name": "UserOverridesPanel",
-      "entryPoint": "protected_settingspermissionspage_useroverridespanel",
-      "entryPointId": "protected_settingspermissionspage_useroverridespanel",
-      "path": [
-        "protected_settingspermissionspage_useroverridespanel",
-        "protected_settingspermissionspage_rolefromuser"
-      ],
-      "qualifiedPath": [
-        "protected_settingspermissionspage_useroverridespanel",
-        "protected_settingspermissionspage_rolefromuser"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/SettingsPermissionsPage.tsx"
       ],
       "criticality": 0.41,
       "warnings": []
@@ -8621,54 +8649,6 @@
       "warnings": []
     },
     {
-      "id": "flow:analytics_analyticspages_analyticsaichatpage",
-      "name": "AnalyticsAIChatPage",
-      "entryPoint": "analytics_analyticspages_analyticsaichatpage",
-      "entryPointId": "analytics_analyticspages_analyticsaichatpage",
-      "path": [
-        "analytics_analyticspages_analyticsaichatpage",
-        "analytics_analyticspages_useanalyticsquery",
-        "analytics_analyticspages_usepersistedanalyticsfilters"
-      ],
-      "qualifiedPath": [
-        "analytics_analyticspages_analyticsaichatpage",
-        "analytics_analyticspages_useanalyticsquery",
-        "analytics_analyticspages_usepersistedanalyticsfilters"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
-      ],
-      "criticality": 0.2433,
-      "warnings": []
-    },
-    {
-      "id": "flow:analytics_analyticspages_starterlandingscreen",
-      "name": "StarterLandingScreen",
-      "entryPoint": "analytics_analyticspages_starterlandingscreen",
-      "entryPointId": "analytics_analyticspages_starterlandingscreen",
-      "path": [
-        "analytics_analyticspages_starterlandingscreen",
-        "analytics_analyticspages_useanalyticsquery",
-        "analytics_analyticspages_usepersistedanalyticsfilters"
-      ],
-      "qualifiedPath": [
-        "analytics_analyticspages_starterlandingscreen",
-        "analytics_analyticspages_useanalyticsquery",
-        "analytics_analyticspages_usepersistedanalyticsfilters"
-      ],
-      "depth": 1,
-      "nodeCount": 3,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
-      ],
-      "criticality": 0.2433,
-      "warnings": []
-    },
-    {
       "id": "flow:services_reservation_operations_service_add_reservation_charge",
       "name": "add_reservation_charge",
       "entryPoint": "services_reservation_operations_service_add_reservation_charge",
@@ -9659,6 +9639,58 @@
       "warnings": []
     },
     {
+      "id": "flow:analytics_analyticspages_analyticsaichatpage",
+      "name": "AnalyticsAIChatPage",
+      "entryPoint": "analytics_analyticspages_analyticsaichatpage",
+      "entryPointId": "analytics_analyticspages_analyticsaichatpage",
+      "path": [
+        "analytics_analyticspages_analyticsaichatpage",
+        "analytics_analyticspages_useanalyticsquery",
+        "analytics_analyticspages_usepersistedanalyticsfilters",
+        "analytics_analyticspages_localdateiso"
+      ],
+      "qualifiedPath": [
+        "analytics_analyticspages_analyticsaichatpage",
+        "analytics_analyticspages_useanalyticsquery",
+        "analytics_analyticspages_usepersistedanalyticsfilters",
+        "analytics_analyticspages_localdateiso"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
+      ],
+      "criticality": 0.2325,
+      "warnings": []
+    },
+    {
+      "id": "flow:analytics_analyticspages_starterlandingscreen",
+      "name": "StarterLandingScreen",
+      "entryPoint": "analytics_analyticspages_starterlandingscreen",
+      "entryPointId": "analytics_analyticspages_starterlandingscreen",
+      "path": [
+        "analytics_analyticspages_starterlandingscreen",
+        "analytics_analyticspages_useanalyticsquery",
+        "analytics_analyticspages_usepersistedanalyticsfilters",
+        "analytics_analyticspages_localdateiso"
+      ],
+      "qualifiedPath": [
+        "analytics_analyticspages_starterlandingscreen",
+        "analytics_analyticspages_useanalyticsquery",
+        "analytics_analyticspages_usepersistedanalyticsfilters",
+        "analytics_analyticspages_localdateiso"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
+      ],
+      "criticality": 0.2325,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_20260724_allocation_enum_values_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_20260724_allocation_enum_values_downgrade",
@@ -10623,32 +10655,6 @@
       "warnings": []
     },
     {
-      "id": "flow:analytics_analyticspages_reportscreen",
-      "name": "ReportScreen",
-      "entryPoint": "analytics_analyticspages_reportscreen",
-      "entryPointId": "analytics_analyticspages_reportscreen",
-      "path": [
-        "analytics_analyticspages_reportscreen",
-        "analytics_analyticspages_analyticserrormessage",
-        "analytics_analyticspages_useanalyticsquery",
-        "analytics_analyticspages_usepersistedanalyticsfilters"
-      ],
-      "qualifiedPath": [
-        "analytics_analyticspages_reportscreen",
-        "analytics_analyticspages_analyticserrormessage",
-        "analytics_analyticspages_useanalyticsquery",
-        "analytics_analyticspages_usepersistedanalyticsfilters"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
-      ],
-      "criticality": 0.2225,
-      "warnings": []
-    },
-    {
       "id": "flow:components_temporarygrantapprovalpanel_temporarygrantapprovalpanel",
       "name": "TemporaryGrantApprovalPanel",
       "entryPoint": "components_temporarygrantapprovalpanel_temporarygrantapprovalpanel",
@@ -10910,6 +10916,34 @@
         "scripts/scale/staged_realtime_load.py"
       ],
       "criticality": 0.2217,
+      "warnings": []
+    },
+    {
+      "id": "flow:analytics_analyticspages_reportscreen",
+      "name": "ReportScreen",
+      "entryPoint": "analytics_analyticspages_reportscreen",
+      "entryPointId": "analytics_analyticspages_reportscreen",
+      "path": [
+        "analytics_analyticspages_reportscreen",
+        "analytics_analyticspages_analyticserrormessage",
+        "analytics_analyticspages_useanalyticsquery",
+        "analytics_analyticspages_usepersistedanalyticsfilters",
+        "analytics_analyticspages_localdateiso"
+      ],
+      "qualifiedPath": [
+        "analytics_analyticspages_reportscreen",
+        "analytics_analyticspages_analyticserrormessage",
+        "analytics_analyticspages_useanalyticsquery",
+        "analytics_analyticspages_usepersistedanalyticsfilters",
+        "analytics_analyticspages_localdateiso"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
+      ],
+      "criticality": 0.22,
       "warnings": []
     },
     {

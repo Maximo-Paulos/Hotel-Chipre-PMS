@@ -1468,8 +1468,8 @@
     "hash": "55df73331e6e7f54e6f95f8cf43d44df"
   },
   "frontend/src/views/protected/SettingsPermissionsPage.tsx": {
-    "mtime": 1792271287844.822,
-    "hash": "214e8550cd2f968f5941c73583c1443f"
+    "mtime": 1792272945240.5386,
+    "hash": "09d22238c6072ca67ce950b9d9125137"
   },
   "frontend/src/views/protected/SettingsSecurityPage.tsx": {
     "mtime": 1791849255923.4512,
@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1792271586109.2192,
-    "hash": "a4c517afc050443bcfd06d52f50a04a1"
+    "mtime": 1792273079603.5916,
+    "hash": "f31a616051d95a285ed4e3bc45e6497f"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1792271585350.849,
-    "hash": "264330438e10415374f897e3837c4aa6"
+    "mtime": 1792273078845.3115,
+    "hash": "0e8dde71ad09f850350dcef527f8cb3a"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1792271586095.8865,
-    "hash": "f11cc0b639130394c2f0ac6187fa5584"
+    "mtime": 1792273079588.623,
+    "hash": "b98318e0f940ec8c8adc0f9709ceb791"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1792271585365.2896,
-    "hash": "fae2b45f4f10c698190441eee8b923d4"
+    "mtime": 1792273078859.0825,
+    "hash": "9f3cbed289881d81ee61552aa3210765"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1792271586082.4014,
-    "hash": "5fb3ed0de7c1b5ab83ca0fa13db35d12"
+    "mtime": 1792273079574.4766,
+    "hash": "eebe1cf24d5c10287a3bd7595f6428fa"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1792271585568.9321,
-    "hash": "4b6492ffab10956cf3427112ec9ba898"
+    "mtime": 1792273079064.7278,
+    "hash": "dc5fdf9a9dbb457cfa079c68767467df"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -5680,8 +5680,8 @@
     "hash": "ee14a18d672ebfc95bc953f065989fc2"
   },
   "frontend/e2e/settings-custom-role-permissions.spec.ts": {
-    "mtime": 1791849255901.8555,
-    "hash": "a02ab97c5d2a27361fbc7cc279e51170"
+    "mtime": 1792273105049.1392,
+    "hash": "e51255509f25129f0f449f0f3f394c6f"
   },
   "frontend/src/api/roles.ts": {
     "mtime": 1790286208535.2148,

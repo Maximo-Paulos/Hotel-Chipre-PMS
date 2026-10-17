@@ -52,6 +52,14 @@
     "stock": "Inventory",
     "whatsapp": "WhatsApp"
   },
+  "permissionSearch": {
+    "matrixLabel": "Search permissions in the matrix",
+    "matrixPlaceholder": "Name, module, or code; for example reservation:move",
+    "userLabel": "Search permissions for this person",
+    "userPlaceholder": "Name, module, or code",
+    "count": "Showing {{visible}} of {{total}} permissions",
+    "noMatches": "No permissions match this search."
+  },
   "hotelRoles": {
     "title": "Roles for this hotel",
     "description": "Custom roles belong to this hotel. Built-in roles retain their fixed security rules.",

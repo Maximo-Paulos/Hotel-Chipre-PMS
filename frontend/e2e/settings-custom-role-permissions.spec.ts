@@ -363,6 +363,35 @@ test("shows an active custom role by name and uses its code for permission and v
   });
 });
 
+test("searches role permissions and individual overrides by code or description", async ({ page }) => {
+  await installMocks(page);
+  await openPermissions(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  const matrix = page.getByTestId("permissions-matrix");
+  const matrixSearch = page.getByLabel("Buscar permiso en la matriz");
+  await expect(matrixSearch).toBeVisible();
+  await matrixSearch.fill("GUEST:READ");
+  await expect(matrix.getByTestId(`permission-toggle-manager-${permissionCode}`)).toBeVisible();
+  await expect(matrix.getByTestId(`permission-toggle-manager-${rateAdjustPermissionCode}`)).toHaveCount(0);
+  await expect(matrix).toContainText("Mostrando 1 de 4 permisos");
+
+  await matrixSearch.fill("reservas");
+  await expect(matrix.getByTestId(`permission-toggle-manager-${rateAdjustPermissionCode}`)).toBeVisible();
+  await expect(matrix.getByTestId(`permission-toggle-manager-${permissionCode}`)).toHaveCount(0);
+
+  await matrixSearch.fill("sin coincidencias");
+  await expect(matrix.getByRole("status").filter({ hasText: "No hay permisos que coincidan" })).toBeVisible();
+  await matrixSearch.fill("");
+  await expect(matrix.getByTestId(`permission-toggle-manager-${rateAdjustPermissionCode}`)).toBeVisible();
+
+  const userOverrides = page.getByTestId("permissions-user-overrides");
+  await page.getByLabel("Buscar permiso para esta persona").fill("cortesia");
+  await expect(userOverrides.getByTestId(`user-permission-toggle-${rateAdjustPermissionCode}`)).toBeVisible();
+  await expect(userOverrides.getByTestId(`user-permission-toggle-${permissionCode}`)).toHaveCount(0);
+  await expect(userOverrides).toContainText("Mostrando 1 de 4 permisos");
+});
+
 test("lets the hotel configure complimentary rate adjustments by role", async ({ page }) => {
   const { writes } = await installMocks(page);
   await openPermissions(page);
