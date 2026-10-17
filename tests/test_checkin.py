@@ -174,7 +174,7 @@ class TestCheckIn:
             requires_signature=True,
         )
 
-        with pytest.raises(CheckInError, match="requiere un documento firmado"):
+        with pytest.raises(CheckInError, match="todos los documentos que requieren firma"):
             perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
 
         set_signature_status(
@@ -186,6 +186,70 @@ class TestCheckIn:
         )
         checked_in = perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
         assert checked_in.status == ReservationStatusEnum.CHECKED_IN
+
+    def test_company_checkin_blocks_when_one_required_document_is_still_pending(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        company = Company(
+            hotel_id=hotel_config.id,
+            legal_name="Multiple Required Documents SA",
+            display_name="Multiple Required Documents",
+            payment_deferred=True,
+            requires_voucher=True,
+            requires_signature=True,
+        )
+        db.add(company)
+        db.flush()
+        reservation = create_reservation(
+            db,
+            ReservationCreate(
+                guest_id=sample_guest.id,
+                category_id=sample_categories[0].id,
+                room_id=sample_rooms[0].id,
+                company_id=company.id,
+                check_in_date=date(2026, 4, 1),
+                check_out_date=date(2026, 4, 3),
+            ),
+            hotel_id=hotel_config.id,
+        )
+        documents = []
+        for suffix in ("signed", "pending"):
+            stored_object = StoredObject(
+                hotel_id=hotel_config.id,
+                purpose="company_voucher",
+                object_key=f"company-vouchers/test/{suffix}.pdf",
+                backend="local",
+                content_type="application/pdf",
+                byte_size=8,
+                sha256_hex="0" * 64,
+                status=StoredObjectStatusEnum.READY.value,
+            )
+            db.add(stored_object)
+            db.flush()
+            documents.append(
+                create_document(
+                    db,
+                    hotel_id=hotel_config.id,
+                    user_id=None,
+                    reservation_id=reservation.id,
+                    company_id=company.id,
+                    doc_type=CompanyDocumentTypeEnum.VOUCHER_PDF,
+                    file_name=f"{suffix}.pdf",
+                    stored_object_id=stored_object.id,
+                    requires_signature=True,
+                )
+            )
+
+        set_signature_status(
+            db,
+            hotel_id=hotel_config.id,
+            user_id=None,
+            document_id=documents[0].id,
+            status=CompanyDocumentStatusEnum.SIGNED,
+        )
+
+        with pytest.raises(CheckInError, match="todos los documentos que requieren firma"):
+            perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
 
 
 class TestCheckOut:

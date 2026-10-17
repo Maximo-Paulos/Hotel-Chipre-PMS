@@ -832,8 +832,8 @@
     "hash": "e34a4aadc2281d2bff5cdbee1d6619f0"
   },
   "app/services/checkin_service.py": {
-    "mtime": 1792240082197.2908,
-    "hash": "fcb02eb214100fc5b6b3376f4babc77b"
+    "mtime": 1792260629362.236,
+    "hash": "399537e98fa2bc66edcaa4f1add3c85c"
   },
   "app/services/commercial_service.py": {
     "mtime": 1783103274886.8547,
@@ -1712,8 +1712,8 @@
     "hash": "7c728afb71ada9b5ef5e1a180bb673c8"
   },
   "tests/test_checkin.py": {
-    "mtime": 1791849255938.8171,
-    "hash": "e30bdb8a0fc47f9e62de64ad056496e3"
+    "mtime": 1792260641845.8708,
+    "hash": "caa85fc6f04e00f85a867f8792a275bf"
   },
   "tests/test_checkin_override_api.py": {
     "mtime": 1783103275004.5808,
@@ -2772,28 +2772,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1792257756858.313,
-    "hash": "01bba0cdfa35b5d951035a30e9c5ecb8"
+    "mtime": 1792259217210.3286,
+    "hash": "80bd0296bfc54bd2c6c89b308bc063f6"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1792257756158.9326,
-    "hash": "333137f73d00f9865f5755af75fbe109"
+    "mtime": 1792259216531.9912,
+    "hash": "e38d7bc866db8b380595a0a11a613842"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1792257756845.9556,
-    "hash": "7c82bf2b44b68da278d22fc0ce0a89e7"
+    "mtime": 1792259217198.8489,
+    "hash": "ff359f67f59b5de4a0ebc47ad5753eef"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1792257756171.974,
-    "hash": "bdb654bad3e4e1d2097d770791342674"
+    "mtime": 1792259216545.0208,
+    "hash": "f8e41260d041e19c85fcafb6cc749e4b"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1792257756833.2856,
-    "hash": "12afb98962c32aa28409c280879e4626"
+    "mtime": 1792259217186.474,
+    "hash": "ff2cc9666ae0b6eaa296c19a8374f681"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1792257756361.96,
-    "hash": "031de92f3ff9bd3b212df02f856fee8a"
+    "mtime": 1792259216704.814,
+    "hash": "eb4ccc38d958078645a78b1aff4c3a43"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -3236,8 +3236,8 @@
     "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1792209997858.3196,
-    "hash": "653f909b68fdb91b2876b99cd7e1b933"
+    "mtime": 1792259181093.8887,
+    "hash": "e0ade4c2c8c977a715f7d8999a8021d6"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784517879747.6167,
@@ -6950,5 +6950,173 @@
   "docs/local-business-clock.md": {
     "mtime": 1792259099645.2131,
     "hash": "b749ceba7efd2b06786812b487fc23e5"
+  },
+  "docs/audits/perf-2026-10-13/scripts/ast_scan.py": {
+    "mtime": 1792259296356.2449,
+    "hash": "d940bb94cc6164ba8969e2ef47cafcb3"
+  },
+  "docs/audits/perf-2026-10-13/scripts/audit_loss_repro.py": {
+    "mtime": 1792259296356.3032,
+    "hash": "e8516c3bb80b63610e3d9f9f2ea707ac"
+  },
+  "docs/audits/perf-2026-10-13/scripts/cpuprof.py": {
+    "mtime": 1792259296356.3557,
+    "hash": "25b8f90a17fe478d003aa2cda5c6be22"
+  },
+  "docs/audits/perf-2026-10-13/scripts/loadtest.py": {
+    "mtime": 1792259296356.4055,
+    "hash": "c04b1e40e1bce7d060fd522cf05a6ad1"
+  },
+  "docs/audits/perf-2026-10-13/scripts/measure_hot_paths.py": {
+    "mtime": 1792259296356.4585,
+    "hash": "d0ace06d994ede661a0af0ef58c1a8c3"
+  },
+  "docs/audits/perf-2026-10-13/scripts/scan_post_commit_audit.py": {
+    "mtime": 1792259296356.5132,
+    "hash": "612cfdb8916cf4af540dd2235b0d3df9"
+  },
+  "docs/audits/perf-2026-10-13/scripts/schema_audit.py": {
+    "mtime": 1792259296356.5708,
+    "hash": "bebc5a1f2f09a5a6bff5c67aa2897695"
+  },
+  "docs/audits/perf-2026-10-13/scripts/seed_profile.py": {
+    "mtime": 1792259296356.6404,
+    "hash": "3deb55856b36d72d6b07c69463827003"
+  },
+  "docs/audits/perf-2026-10-13/scripts/seed_scale.py": {
+    "mtime": 1792259296356.704,
+    "hash": "2d166dd5afdd614649023af1eaffd702"
+  },
+  "docs/audits/perf-2026-10-13/scripts/sweep_gets.py": {
+    "mtime": 1792259296356.7576,
+    "hash": "d0efd40869487bc7b4bc31cc7e8bc897"
+  },
+  "docs/audits/perf-2026-10-13/scripts/tcpcount.py": {
+    "mtime": 1792259296356.8103,
+    "hash": "f9f719fd02d28d94fcafe5549ef1eeaf"
+  },
+  "docs/audits/perf-2026-10-13/scripts/verify_misc_findings.py": {
+    "mtime": 1792259296356.8616,
+    "hash": "f997558bed4fd077428bc0efdc59381b"
+  },
+  "docs/audits/perf-2026-10-13/scripts/verify_public_booking_pii.py": {
+    "mtime": 1792259296356.9192,
+    "hash": "756af63fecbdd183ca12ac776561926a"
+  },
+  "docs/audits/perf-2026-10-13/scripts/write_probe.py": {
+    "mtime": 1792259296356.9758,
+    "hash": "3f3a07ffa5146f684867c440b8651790"
+  },
+  "docs/audits/perf-2026-10-13/solutions/api_key_lookup_under_rls.sql": {
+    "mtime": 1792259296357.0522,
+    "hash": "f62600c34d1101b8b26a955eef0b27c3"
+  },
+  "docs/audits/perf-2026-10-13/solutions/body_limit_middleware.py": {
+    "mtime": 1792259296357.1533,
+    "hash": "77a71638735a989af35c2472e9813a59"
+  },
+  "docs/audits/perf-2026-10-13/solutions/otp_hmac.py": {
+    "mtime": 1792259296357.269,
+    "hash": "77d1174c5daedfb98ce374aa94f2268b"
+  },
+  "docs/audits/perf-2026-10-13/solutions/retention_pg_cron.sql": {
+    "mtime": 1792259296357.3235,
+    "hash": "72b1ebd98e9dcb50202a4f9fbae4d3c1"
+  },
+  "docs/audits/perf-2026-10-13/INVENTARIO.md": {
+    "mtime": 1792259296352.267,
+    "hash": "f5fea29bb123dc65a7d89557ae705d1e"
+  },
+  "docs/audits/perf-2026-10-13/LECTURA-COMPLETA.md": {
+    "mtime": 1792259296352.717,
+    "hash": "cec0b2da1774d345df6ba9f4b5754c62"
+  },
+  "docs/audits/perf-2026-10-13/REPORT.md": {
+    "mtime": 1792259296352.9072,
+    "hash": "bfc4609f5424c49b57754acc10c336ac"
+  },
+  "docs/audits/perf-2026-10-13/SOLUCIONES.md": {
+    "mtime": 1792259296353.0125,
+    "hash": "3b11877d99b40281d66149b61ca6f432"
+  },
+  "docs/audits/perf-2026-10-13/coverage-notes/direct-reads.md": {
+    "mtime": 1792259296353.1318,
+    "hash": "ea148fda1c603731f5592a8a85c384fb"
+  },
+  "docs/audits/perf-2026-10-13/coverage-notes/tests1.md": {
+    "mtime": 1792259296353.5095,
+    "hash": "def4db979d163f8ad39d04fed8c172d2"
+  },
+  "docs/audits/perf-2026-10-13/coverage-notes/tests2.md": {
+    "mtime": 1792259296353.8933,
+    "hash": "a02d9fb7b7b66b7ede3d3ca15ef65d54"
+  },
+  "docs/audits/perf-2026-10-13/coverage-notes/tests3.md": {
+    "mtime": 1792259296354.1504,
+    "hash": "e4abf5fd8fb56ed5dcd591e9fbd002cd"
+  },
+  "docs/audits/perf-2026-10-13/coverage-notes/tests4.md": {
+    "mtime": 1792259296354.2915,
+    "hash": "f1db9231753aff8da1bedc7b3dd3c42f"
+  },
+  "docs/audits/perf-2026-10-13/frontend-notes/part-1.md": {
+    "mtime": 1792259296354.4246,
+    "hash": "d30dc6125220af44bc9bae8e808e65ce"
+  },
+  "docs/audits/perf-2026-10-13/frontend-notes/part-2.md": {
+    "mtime": 1792259296354.5369,
+    "hash": "6a3483c69743a294ea21ff00ede3eeec"
+  },
+  "docs/audits/perf-2026-10-13/frontend-notes/part-3.md": {
+    "mtime": 1792259296354.6943,
+    "hash": "4d768cd0d3e380c75b5396c4de9e2aee"
+  },
+  "docs/audits/perf-2026-10-13/frontend-notes/part-4.md": {
+    "mtime": 1792259296354.8184,
+    "hash": "e4868c05b84d0c330af96cbfd52a5668"
+  },
+  "docs/audits/perf-2026-10-13/frontend-notes/part-5.md": {
+    "mtime": 1792259296354.9614,
+    "hash": "bab001c4b94f9cac0a0142e0d8e9c5f3"
+  },
+  "docs/audits/perf-2026-10-13/frontend-notes/part-6.md": {
+    "mtime": 1792259296355.0642,
+    "hash": "052b53cdeb0eb9948dd14110994ce39b"
+  },
+  "docs/audits/perf-2026-10-13/frontend-notes/part-7.md": {
+    "mtime": 1792259296355.2012,
+    "hash": "bfde861778f745a4a5be3baaf8a47fea"
+  },
+  "docs/audits/perf-2026-10-13/frontend-notes/verificacion-manual.md": {
+    "mtime": 1792259296355.3003,
+    "hash": "a984cb3a3831b03a4bf4cf9359b5501c"
+  },
+  "docs/audits/perf-2026-10-13/measure_hot_paths.out.txt": {
+    "mtime": 1792259296355.37,
+    "hash": "e0db993f51bac8758ead1fa5425b0e9f"
+  },
+  "docs/audits/perf-2026-10-13/migration-notes-a.md": {
+    "mtime": 1792259296355.55,
+    "hash": "8aa15e598a0eab844c5c3f8862e172dd"
+  },
+  "docs/audits/perf-2026-10-13/migration-notes-b.md": {
+    "mtime": 1792259296355.755,
+    "hash": "3ca1296c36575b1c3084b0448ef0a637"
+  },
+  "docs/audits/perf-2026-10-13/ops-notes.md": {
+    "mtime": 1792259296355.9285,
+    "hash": "3a81e538a0f0e57400d97e77884e7feb"
+  },
+  "docs/audits/perf-2026-10-13/scripts/README.md": {
+    "mtime": 1792259296356.185,
+    "hash": "12bf1a375de4e3cad3f0c76d54eae59d"
+  },
+  "docs/audits/perf-2026-10-13/solutions/ci_concurrency_snippet.yml": {
+    "mtime": 1792259296357.2085,
+    "hash": "6694989ff822d9d37c19f8c6e7f1e661"
+  },
+  "docs/audits/perf-2026-10-13/verify_misc_findings.out.txt": {
+    "mtime": 1792259296357.474,
+    "hash": "f5308c72fe3bae2388f2561c3224b48b"
   }
 }

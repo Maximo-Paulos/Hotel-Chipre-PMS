@@ -238,13 +238,19 @@ def _validate_checkin_window_and_payment(db: Session, reservation: Reservation, 
             if voucher_exists is None:
                 raise CheckInError("No se puede realizar el check-in: esta empresa requiere que se cargue el comprobante de la reserva.")
         if company.requires_signature:
-            signed_document_exists = documents_query.filter(
-                CompanyDocument.status == CompanyDocumentStatusEnum.SIGNED,
+            signature_required_documents = documents_query.filter(
                 (CompanyDocument.doc_type == CompanyDocumentTypeEnum.SIGNATURE_REQUIRED)
                 | CompanyDocument.requires_signature.is_(True),
-            ).first()
-            if signed_document_exists is None:
+            )
+            if signature_required_documents.first() is None:
                 raise CheckInError("No se puede realizar el check-in: esta empresa requiere un documento firmado de la reserva.")
+            unsigned_required_document = signature_required_documents.filter(
+                CompanyDocument.status != CompanyDocumentStatusEnum.SIGNED,
+            ).first()
+            if unsigned_required_document is not None:
+                raise CheckInError(
+                    "No se puede realizar el check-in: todos los documentos que requieren firma deben estar firmados."
+                )
 
         # Invoice-after-stay is a per-company exception to the hotel's
         # full-payment default. Any nightly extras remain collectible and
