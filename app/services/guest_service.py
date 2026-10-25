@@ -317,7 +317,7 @@ def quick_profile(
     }
 
 
-@audited_change(table_name="guest_tags", action=AuditActionEnum.CREATE)
+@audited_change(table_name="guest_tags", action=AuditActionEnum.CREATE, required=True)
 def add_tag(
     db: Session,
     *,
@@ -352,7 +352,7 @@ def add_tag(
     return tag
 
 
-@audited_change(table_name="guest_tags", action=AuditActionEnum.STATUS_CHANGE)
+@audited_change(table_name="guest_tags", action=AuditActionEnum.STATUS_CHANGE, required=True)
 def resolve_tag(
     db: Session,
     *,
@@ -383,7 +383,7 @@ def resolve_tag(
     return tag
 
 
-@audited_change(table_name="guests", action=AuditActionEnum.UPDATE)
+@audited_change(table_name="guests", action=AuditActionEnum.UPDATE, required=True)
 def set_rating(
     db: Session,
     *,

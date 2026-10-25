@@ -5,6 +5,7 @@ import {
   createCompanyDocument,
   deactivateCompany,
   deleteCompanyDocument,
+  getCompanyHotelCurrency,
   listCompanies,
   listCompanyDocuments,
   listCompanyNightlyRates,
@@ -15,6 +16,7 @@ import {
   uploadCompanyDocument,
   markReservationCompanyDocumentSigned,
   type Company,
+  type CompanyHotelCurrency,
   type CompanyDocument,
   type CompanyDocumentPayload,
   type CompanyDocumentUploadPayload,
@@ -29,6 +31,7 @@ import { useSession } from "../state/session";
 import { useGuardedMutation } from "./useGuardedMutation";
 
 const companiesKey = (hotelId: number | null) => ["companies", hotelId];
+const companyHotelCurrencyKey = (hotelId: number | null) => ["company-hotel-currency", hotelId] as const;
 const companyDocumentsKey = (hotelId: number | null, companyId: number) => ["company-documents", hotelId, companyId];
 const reservationCompanyDocumentsKey = (hotelId: number | null, reservationId: number) => ["reservation-company-documents", hotelId, reservationId];
 const companyNightlyRatesKey = (hotelId: number | null, companyId: number) => ["company-nightly-rates", hotelId, companyId] as const;
@@ -38,6 +41,16 @@ export function useCompanies() {
   return useQuery<Company[]>({
     queryKey: companiesKey(session.hotelId),
     queryFn: () => listCompanies(session),
+    enabled: hasValidSession(session),
+    staleTime: 60 * 1000
+  });
+}
+
+export function useCompanyHotelCurrency() {
+  const { session } = useSession();
+  return useQuery<CompanyHotelCurrency>({
+    queryKey: companyHotelCurrencyKey(session.hotelId),
+    queryFn: () => getCompanyHotelCurrency(session),
     enabled: hasValidSession(session),
     staleTime: 60 * 1000
   });

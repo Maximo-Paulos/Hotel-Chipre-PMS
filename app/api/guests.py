@@ -106,10 +106,9 @@ def create_guest(
             db.add(companion)
             new_companions.append(companion)
 
-    db.commit()
-    db.refresh(guest)
+    db.flush()
     if created:
-        audit_log_service.safe_create_audit_log(
+        audit_log_service.create_required_audit_log(
             db,
             hotel_id=context.hotel_id,
             table_name="guests",
@@ -119,8 +118,7 @@ def create_guest(
             payload_after=audit_log_service.model_snapshot(guest),
         )
     for companion in new_companions:
-        db.refresh(companion)
-        audit_log_service.safe_create_audit_log(
+        audit_log_service.create_required_audit_log(
             db,
             hotel_id=context.hotel_id,
             table_name="guest_companions",
@@ -129,6 +127,10 @@ def create_guest(
             actor_user_id=context.user_id,
             payload_after=audit_log_service.model_snapshot(companion),
         )
+    db.commit()
+    db.refresh(guest)
+    for companion in new_companions:
+        db.refresh(companion)
     return guest
 
 

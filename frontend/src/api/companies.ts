@@ -51,6 +51,10 @@ export type CompanyOption = {
   payment_deferred: boolean;
 };
 
+export type CompanyHotelCurrency = {
+  default_currency: string;
+};
+
 export type CompanyNightlyRate = {
   id: number;
   company_id: number;
@@ -85,6 +89,9 @@ export const createCompanyNightlyRate = (
 
 export const listCompanyOptions = (session?: SessionLike) =>
   apiFetch<CompanyOption[]>("/api/companies/options", { session });
+
+export const getCompanyHotelCurrency = (session?: SessionLike) =>
+  apiFetch<CompanyHotelCurrency>("/api/companies/hotel-currency", { session });
 
 export type CompanyDocumentType =
   | "voucher_pdf"

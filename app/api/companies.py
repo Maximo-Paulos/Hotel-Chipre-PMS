@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.company import Company
+from app.models.hotel_config import HotelConfiguration
 from app.dependencies.auth import AuthContext, authorize_permission, require_all_permissions, require_permission
 from app.schemas.analytics_api import CompanyCreate, CompanyRead, CompanyUpdate
+from app.schemas.company_currency import CompanyHotelCurrencyRead
 from app.schemas.company_night_charge import (
     CompanyNightlySurchargeRateCreate,
     CompanyNightlySurchargeRateRead,
@@ -47,6 +49,23 @@ class CompanyOptionRead(BaseModel):
     legal_name: str
     is_active: bool
     payment_deferred: bool
+
+
+@router.get("/hotel-currency", response_model=CompanyHotelCurrencyRead)
+def get_company_hotel_currency(
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_COMPANY_VIEW)),
+):
+    """Return only the hotel's configured currency for company screens."""
+    require_analytics_plan(db, context.hotel_id, "pro")
+    currency = (
+        db.query(HotelConfiguration.default_currency)
+        .filter(HotelConfiguration.id == context.hotel_id)
+        .scalar()
+    )
+    if currency is None:
+        raise HTTPException(status_code=404, detail="Hotel configuration not found")
+    return {"default_currency": currency}
 
 
 @router.get("/options", response_model=list[CompanyOptionRead])

@@ -33,7 +33,7 @@ class WhatsAppMessageRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class WhatsAppConversationRead(BaseModel):
+class WhatsAppConversationSummaryRead(BaseModel):
     id: int
     hotel_id: int
     status: WhatsAppConversationStatusEnum
@@ -46,13 +46,18 @@ class WhatsAppConversationRead(BaseModel):
     last_inbound_at: datetime | None = None
     last_message_at: datetime | None = None
     contact: WhatsAppContactRead
-    messages: list[WhatsAppMessageRead] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
 
 class WhatsAppConversationListResponse(BaseModel):
-    items: list[WhatsAppConversationRead]
+    items: list[WhatsAppConversationSummaryRead]
+
+
+class WhatsAppMessagePageRead(BaseModel):
+    items: list[WhatsAppMessageRead]
+    has_more: bool
+    next_before_message_id: int | None = None
 
 
 class WhatsAppMessageCreate(BaseModel):

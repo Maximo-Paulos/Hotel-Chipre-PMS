@@ -131,8 +131,18 @@ def _load_entity(
     return query.one_or_none()
 
 
-def audited_change(table_name: str, action: AuditActionEnum | str) -> Callable[[F], F]:
-    """Record an AuditLog row for a successful entity mutation."""
+def audited_change(
+    table_name: str,
+    action: AuditActionEnum | str,
+    *,
+    required: bool = False,
+) -> Callable[[F], F]:
+    """Record an AuditLog row for a successful entity mutation.
+
+    Required hooks make the audit row part of the caller's transaction; the
+    default remains best-effort for operations that must survive an audit-store
+    outage.
+    """
 
     audit_action = action if isinstance(action, AuditActionEnum) else AuditActionEnum(action)
 
@@ -153,6 +163,10 @@ def audited_change(table_name: str, action: AuditActionEnum | str) -> Callable[[
                 entity_hotel_id = getattr(entity_arg, "hotel_id", None)
                 hotel_id = entity_hotel_id if isinstance(entity_hotel_id, int) else None
             record_id = _extract_record_id(bound, table_name)
+            if required and (db is None or hotel_id is None):
+                if db is not None:
+                    db.rollback()
+                raise RuntimeError("Required audit context unavailable")
             before_state = _entity_to_dict(
                 entity_arg or _load_entity(db, table_name=table_name, record_id=record_id, hotel_id=hotel_id)
             )
@@ -179,6 +193,10 @@ def audited_change(table_name: str, action: AuditActionEnum | str) -> Callable[[
                         "Skipping audit log for %s: missing db, hotel_id, or record_id",
                         func.__name__,
                     )
+                    if required:
+                        if db is not None:
+                            db.rollback()
+                        raise RuntimeError("Required audit record identity unavailable")
                     return result
 
                 with db.begin_nested():
@@ -212,6 +230,10 @@ def audited_change(table_name: str, action: AuditActionEnum | str) -> Callable[[
                     audit_action.value,
                     extra={"error_type": type(exc).__name__},
                 )
+                if required:
+                    if db is not None:
+                        db.rollback()
+                    raise
 
             return result
 

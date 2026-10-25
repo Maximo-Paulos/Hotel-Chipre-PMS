@@ -19,6 +19,7 @@ import {
   companyDocumentStatusLabel,
   companyDocumentTypeLabel,
   useCompanies,
+  useCompanyHotelCurrency,
   useCompanyDocumentMutations,
   useCompanyDocuments,
   useCompanyMutations
@@ -89,6 +90,7 @@ export function CompaniesPage() {
   const { session } = useSession();
   const { t, i18n } = useTranslation("companies");
   const hotelConfigQuery = useHotelConfig();
+  const companyHotelCurrencyQuery = useCompanyHotelCurrency();
   const queryClient = useQueryClient();
   const { hasPermission, hasAllPermissions, permissionsKnown } = useEffectivePermissions();
   const canManageCompanies = permissionsKnown && hasPermission("company:manage");
@@ -98,7 +100,7 @@ export function CompaniesPage() {
     "company:night_rate_manage"
   ]);
   const locale = interfaceLanguageToLocale(i18n.language);
-  const currencyCode = hotelConfigQuery.data?.default_currency;
+  const currencyCode = companyHotelCurrencyQuery.data?.default_currency;
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [isCreatingNewCompany, setIsCreatingNewCompany] = useState(false);
   const [companyForm, setCompanyForm] = useState<CompanyPayload>(emptyCompanyForm);

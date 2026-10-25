@@ -17,9 +17,10 @@ from app.schemas.whatsapp_crm import (
     WhatsAppChannelComplete,
     WhatsAppChannelStatusResponse,
     WhatsAppConversationListResponse,
-    WhatsAppConversationRead,
+    WhatsAppConversationSummaryRead,
     WhatsAppConversationStatusUpdate,
     WhatsAppMessageCreate,
+    WhatsAppMessagePageRead,
     WhatsAppMessageRead,
     WhatsAppNoteCreate,
 )
@@ -32,6 +33,7 @@ from app.services.permission_service import (
     PERMISSION_WHATSAPP_MESSAGE_SEND,
     PERMISSION_WHATSAPP_NOTE_MANAGE,
     PERMISSION_WHATSAPP_SETTINGS_MANAGE,
+    resolve,
 )
 from app.services.subscription_entitlements import get_subscription_snapshot, plan_has_feature
 from app.services.whatsapp_crm_service import (
@@ -40,6 +42,7 @@ from app.services.whatsapp_crm_service import (
     add_outbound_message,
     assign_conversation,
     complete_embedded_signup,
+    list_conversation_messages,
     list_conversations,
 )
 
@@ -51,6 +54,18 @@ def _require_plan(db: Session, hotel_id: int) -> None:
     snapshot = get_subscription_snapshot(db, hotel_id)
     if not plan_has_feature(snapshot, "whatsapp.crm"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="WhatsApp CRM requiere un plan Pro o Ultra")
+
+
+def _conversation_access_scope(db: Session, context: AuthContext) -> int | None:
+    """Return the only assignee visible to a user without inbox-wide access."""
+    can_read_all = resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        PERMISSION_WHATSAPP_INBOX_ALL,
+        user_id=context.user_id,
+    )
+    return None if can_read_all else context.user_id
 
 
 @router.get("/channel", response_model=WhatsAppChannelStatusResponse)
@@ -109,15 +124,47 @@ def inbox(
     context: AuthContext = Depends(require_permission(PERMISSION_WHATSAPP_INBOX_VIEW)),
 ):
     _require_plan(db, context.hotel_id)
-    from app.services.permission_service import resolve
-    can_read_all = resolve(db, context.hotel_id, context.user_role, PERMISSION_WHATSAPP_INBOX_ALL, user_id=context.user_id)
-    if (all_conversations or assigned_to_user_id is None) and not can_read_all:
-        assigned_to_user_id = context.user_id
+    access_scope_user_id = _conversation_access_scope(db, context)
+    if access_scope_user_id is not None:
+        assigned_to_user_id = access_scope_user_id
+    elif all_conversations:
+        assigned_to_user_id = None
     rows = list_conversations(
         db, hotel_id=context.hotel_id, status=conversation_status,
         assigned_to_user_id=assigned_to_user_id, limit=limit, offset=offset,
     )
     return WhatsAppConversationListResponse(items=rows)
+
+
+@router.get(
+    "/conversations/{conversation_id}/messages",
+    response_model=WhatsAppMessagePageRead,
+)
+def conversation_messages(
+    conversation_id: int,
+    before_message_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_WHATSAPP_INBOX_VIEW)),
+):
+    """Read a bounded, cursor-paginated page of a hotel's WhatsApp history."""
+    _require_plan(db, context.hotel_id)
+    try:
+        page = list_conversation_messages(
+            db,
+            hotel_id=context.hotel_id,
+            conversation_id=conversation_id,
+            assigned_to_user_id=_conversation_access_scope(db, context),
+            before_message_id=before_message_id,
+            limit=limit,
+        )
+    except WhatsAppCRMError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return WhatsAppMessagePageRead(
+        items=page.items,
+        has_more=page.has_more,
+        next_before_message_id=page.next_before_message_id,
+    )
 
 
 @router.post("/conversations/{conversation_id}/messages", response_model=WhatsAppMessageRead, status_code=status.HTTP_201_CREATED)
@@ -132,6 +179,7 @@ def send_message(
         message = add_outbound_message(
             db, hotel_id=context.hotel_id, conversation_id=conversation_id,
             text=payload.text, message_type=payload.message_type, actor_user_id=context.user_id,
+            assigned_to_user_id=_conversation_access_scope(db, context),
         )
         db.commit()
         db.refresh(message)
@@ -150,7 +198,14 @@ def create_note(
 ):
     _require_plan(db, context.hotel_id)
     try:
-        note = add_internal_note(db, hotel_id=context.hotel_id, conversation_id=conversation_id, author_user_id=context.user_id, body=payload.body)
+        note = add_internal_note(
+            db,
+            hotel_id=context.hotel_id,
+            conversation_id=conversation_id,
+            author_user_id=context.user_id,
+            body=payload.body,
+            assigned_to_user_id=_conversation_access_scope(db, context),
+        )
         db.commit()
         db.refresh(note)
         return {"id": note.id, "conversation_id": note.conversation_id, "body": note.body, "author_user_id": note.author_user_id, "created_at": note.created_at}
@@ -159,7 +214,10 @@ def create_note(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@router.post("/conversations/{conversation_id}/assignment")
+@router.post(
+    "/conversations/{conversation_id}/assignment",
+    response_model=WhatsAppConversationSummaryRead,
+)
 def update_assignment(
     conversation_id: int,
     payload: WhatsAppAssignmentUpdate,
@@ -171,16 +229,17 @@ def update_assignment(
         conversation = assign_conversation(
             db, hotel_id=context.hotel_id, conversation_id=conversation_id,
             assigned_to_user_id=payload.assigned_to_user_id, actor_user_id=context.user_id,
+            access_scope_user_id=_conversation_access_scope(db, context),
         )
+        response = WhatsAppConversationSummaryRead.model_validate(conversation)
         db.commit()
-        db.refresh(conversation)
-        return conversation
+        return response
     except WhatsAppCRMError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@router.post("/conversations/{conversation_id}/status", response_model=WhatsAppConversationRead)
+@router.post("/conversations/{conversation_id}/status", response_model=WhatsAppConversationSummaryRead)
 def update_status(
     conversation_id: int,
     payload: WhatsAppConversationStatusUpdate,
@@ -190,13 +249,19 @@ def update_status(
     _require_plan(db, context.hotel_id)
     try:
         from app.services.whatsapp_crm_service import _conversation, _event
-        conversation = _conversation(db, context.hotel_id, conversation_id)
+        conversation = _conversation(
+            db,
+            context.hotel_id,
+            conversation_id,
+            assigned_to_user_id=_conversation_access_scope(db, context),
+            for_update=True,
+        )
         conversation.status = payload.status
         conversation.human_active = payload.status != WhatsAppConversationStatusEnum.CLOSED
         _event(db, hotel_id=context.hotel_id, conversation_id=conversation.id, event_type="conversation.status_changed", actor_user_id=context.user_id, payload={"status": payload.status.value})
+        response = WhatsAppConversationSummaryRead.model_validate(conversation)
         db.commit()
-        db.refresh(conversation)
-        return conversation
+        return response
     except WhatsAppCRMError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

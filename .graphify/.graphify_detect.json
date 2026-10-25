@@ -156,6 +156,7 @@
       "alembic/versions/20261025_laundry_discrepancy_workflow.py",
       "alembic/versions/20261025_reservation_cancellation_review.py",
       "alembic/versions/20261025_stock_count_sessions.py",
+      "alembic/versions/20261025_wa_msg_cursor_idx.py",
       "alembic/versions/3942765e8560_merge_domain_event_migration_branches.py",
       "alembic/versions/3aaf546faec7_require_hotel_deposit_policy_.py",
       "alembic/versions/3bc5882f756d_add_role_visibility_windows.py",
@@ -383,6 +384,7 @@
       "app/schemas/checkin.py",
       "app/schemas/collaboration.py",
       "app/schemas/commercial.py",
+      "app/schemas/company_currency.py",
       "app/schemas/company_document.py",
       "app/schemas/company_night_charge.py",
       "app/schemas/company_reservation_terms.py",
@@ -1652,6 +1654,7 @@
       "memory/checkpoints/2026-10-24/20261024-042338-codex-serialize-check-in-with-room-blocks.md",
       "memory/checkpoints/2026-10-24/20261024-043439-architecture-reviewer-hotspots-estructurales-y-mutación-ota-de-reservas-alojadas.md",
       "memory/checkpoints/2026-10-25/20261025-165937-frontend-engineer-ui-de-discrepancias-de-lavandería.md",
+      "memory/checkpoints/2026-10-25/20261025-230330-security-auditor-read-only-security-review-main-af78e588.md",
       "qa/evidence/README.md",
       "qa/history/observations/shared-production-20260724.md",
       "qa/operational/README.md",
@@ -1764,10 +1767,10 @@
     ],
     "video": []
   },
-  "total_files": 1755,
-  "total_words": 2556575,
+  "total_files": 1758,
+  "total_words": 2558766,
   "needs_graph": true,
-  "warning": "Large corpus: 1755 files · ~2,556,575 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1758 files · ~2,558,766 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1788,10 +1791,9 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "563ddc01d4b71ee63fce3a7115e02e83600d2ec3",
+    "source_hash": "af78e5882bdd72a96a74e8aab68d53d17dbddd2e",
     "branches": [
-      "main",
-      "refactor/app-quality-audit"
+      "main"
     ],
     "max_commits": 200,
     "active_within_days": 30
@@ -1802,9 +1804,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "563ddc01d4b71ee63fce3a7115e02e83600d2ec3",
+    "head": "af78e5882bdd72a96a74e8aab68d53d17dbddd2e",
     "candidate_count": null,
-    "included_count": 1755,
+    "included_count": 1758,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 15,

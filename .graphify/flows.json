@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-24T17:06:12.372Z",
+  "generatedAt": "2026-10-25T23:42:51.941Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1795,6 +1795,32 @@
       "warnings": []
     },
     {
+      "id": "flow:tasks_allocation_tasks_process_recalculation_requests",
+      "name": "process_recalculation_requests",
+      "entryPoint": "tasks_allocation_tasks_process_recalculation_requests",
+      "entryPointId": "tasks_allocation_tasks_process_recalculation_requests",
+      "path": [
+        "tasks_allocation_tasks_process_recalculation_requests",
+        "tasks_allocation_tasks_process_hotel_request",
+        "tasks_allocation_tasks_session",
+        "tasks_allocation_tasks_claim_request"
+      ],
+      "qualifiedPath": [
+        "tasks_allocation_tasks_process_recalculation_requests",
+        "tasks_allocation_tasks_process_hotel_request",
+        "tasks_allocation_tasks_session",
+        "tasks_allocation_tasks_claim_request"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/tasks/allocation_tasks.py"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
       "id": "flow:master_admin_security_redact_master_admin_audit_metadata_json",
       "name": "redact_master_admin_audit_metadata_json",
       "entryPoint": "master_admin_security_redact_master_admin_audit_metadata_json",
@@ -3133,6 +3159,28 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20261025_stock_count_sessions_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20261025_stock_count_sessions_downgrade",
+      "entryPointId": "versions_20261025_stock_count_sessions_downgrade",
+      "path": [
+        "versions_20261025_stock_count_sessions_downgrade",
+        "versions_20261025_stock_count_sessions_remove_tenant_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261025_stock_count_sessions_downgrade",
+        "versions_20261025_stock_count_sessions_remove_tenant_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261025_stock_count_sessions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_62fddec52b79_repair_sqlite_reservation_status_enum_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_62fddec52b79_repair_sqlite_reservation_status_enum_downgrade",
@@ -4399,6 +4447,28 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20261025_stock_count_sessions_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20261025_stock_count_sessions_upgrade",
+      "entryPointId": "versions_20261025_stock_count_sessions_upgrade",
+      "path": [
+        "versions_20261025_stock_count_sessions_upgrade",
+        "versions_20261025_stock_count_sessions_install_tenant_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261025_stock_count_sessions_upgrade",
+        "versions_20261025_stock_count_sessions_install_tenant_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261025_stock_count_sessions.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_62fddec52b79_repair_sqlite_reservation_status_enum_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_62fddec52b79_repair_sqlite_reservation_status_enum_upgrade",
@@ -4881,6 +4951,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_allocation_trigger_service_request_reservation_created_allocation",
+      "name": "request_reservation_created_allocation",
+      "entryPoint": "services_allocation_trigger_service_request_reservation_created_allocation",
+      "entryPointId": "services_allocation_trigger_service_request_reservation_created_allocation",
+      "path": [
+        "services_allocation_trigger_service_request_reservation_created_allocation",
+        "services_allocation_trigger_service_request_allocation_proposal",
+        "services_allocation_trigger_service_reservation_overlaps_allocation_horizon",
+        "services_allocation_trigger_service_pending_proposal_query"
+      ],
+      "qualifiedPath": [
+        "services_allocation_trigger_service_request_reservation_created_allocation",
+        "services_allocation_trigger_service_request_allocation_proposal",
+        "services_allocation_trigger_service_reservation_overlaps_allocation_horizon",
+        "services_allocation_trigger_service_pending_proposal_query"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_trigger_service.py"
+      ],
+      "criticality": 0.3575,
+      "warnings": []
+    },
+    {
       "id": "flow:services_payment_link_service_resolve_signed_external_reference",
       "name": "resolve_signed_external_reference",
       "entryPoint": "services_payment_link_service_resolve_signed_external_reference",
@@ -5035,6 +5131,34 @@
       "warnings": []
     },
     {
+      "id": "flow:api_stock_get_stock_count_session_detail",
+      "name": "get_stock_count_session_detail",
+      "entryPoint": "api_stock_get_stock_count_session_detail",
+      "entryPointId": "api_stock_get_stock_count_session_detail",
+      "path": [
+        "api_stock_get_stock_count_session_detail",
+        "api_stock_stock_count_session_detail",
+        "api_stock_stock_count_line_read",
+        "api_stock_stockcountsessiondetailread",
+        "api_stock_stockcountlineread"
+      ],
+      "qualifiedPath": [
+        "api_stock_get_stock_count_session_detail",
+        "api_stock_stock_count_session_detail",
+        "api_stock_stock_count_line_read",
+        "api_stock_stockcountsessiondetailread",
+        "api_stock_stockcountlineread"
+      ],
+      "depth": 3,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/api/stock.py"
+      ],
+      "criticality": 0.33,
+      "warnings": []
+    },
+    {
       "id": "flow:api_subscription_delete_override",
       "name": "delete_override",
       "entryPoint": "api_subscription_delete_override",
@@ -5078,6 +5202,30 @@
       "fileCount": 1,
       "files": [
         "app/services/mfa_service.py"
+      ],
+      "criticality": 0.3267,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_stock_service_get_stock_count_session",
+      "name": "get_stock_count_session",
+      "entryPoint": "services_stock_service_get_stock_count_session",
+      "entryPointId": "services_stock_service_get_stock_count_session",
+      "path": [
+        "services_stock_service_get_stock_count_session",
+        "services_stock_service_stock_count_session_query",
+        "services_stock_service_stockerror"
+      ],
+      "qualifiedPath": [
+        "services_stock_service_get_stock_count_session",
+        "services_stock_service_stock_count_session_query",
+        "services_stock_service_stockerror"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/stock_service.py"
       ],
       "criticality": 0.3267,
       "warnings": []
@@ -5345,6 +5493,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_stock_service_cancel_stock_count_session",
+      "name": "cancel_stock_count_session",
+      "entryPoint": "services_stock_service_cancel_stock_count_session",
+      "entryPointId": "services_stock_service_cancel_stock_count_session",
+      "path": [
+        "services_stock_service_cancel_stock_count_session",
+        "services_stock_service_get_open_stock_count_session",
+        "services_stock_service_required_reason",
+        "services_stock_service_stockerror"
+      ],
+      "qualifiedPath": [
+        "services_stock_service_cancel_stock_count_session",
+        "services_stock_service_get_open_stock_count_session",
+        "services_stock_service_required_reason",
+        "services_stock_service_stockerror"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/stock_service.py"
+      ],
+      "criticality": 0.295,
+      "warnings": []
+    },
+    {
       "id": "flow:api_integrations_connect_integration",
       "name": "connect_integration",
       "entryPoint": "api_integrations_connect_integration",
@@ -5472,6 +5646,32 @@
       "fileCount": 1,
       "files": [
         "app/api/integrations.py"
+      ],
+      "criticality": 0.295,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_allocation_trigger_service_trigger_reoptimization_bg",
+      "name": "trigger_reoptimization_bg",
+      "entryPoint": "services_allocation_trigger_service_trigger_reoptimization_bg",
+      "entryPointId": "services_allocation_trigger_service_trigger_reoptimization_bg",
+      "path": [
+        "services_allocation_trigger_service_trigger_reoptimization_bg",
+        "services_allocation_trigger_service_request_allocation_proposal",
+        "services_allocation_trigger_service_run_reoptimization_once",
+        "services_allocation_trigger_service_pending_proposal_query"
+      ],
+      "qualifiedPath": [
+        "services_allocation_trigger_service_trigger_reoptimization_bg",
+        "services_allocation_trigger_service_request_allocation_proposal",
+        "services_allocation_trigger_service_run_reoptimization_once",
+        "services_allocation_trigger_service_pending_proposal_query"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_trigger_service.py"
       ],
       "criticality": 0.295,
       "warnings": []
@@ -5708,6 +5908,28 @@
       "fileCount": 1,
       "files": [
         "app/api/cash_register.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_checkin_checkin_guest",
+      "name": "checkin_guest",
+      "entryPoint": "api_checkin_checkin_guest",
+      "entryPointId": "api_checkin_checkin_guest",
+      "path": [
+        "api_checkin_checkin_guest",
+        "api_checkin_authorize_override"
+      ],
+      "qualifiedPath": [
+        "api_checkin_checkin_guest",
+        "api_checkin_authorize_override"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/checkin.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -6201,6 +6423,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_stock_service_list_stock_count_sessions",
+      "name": "list_stock_count_sessions",
+      "entryPoint": "services_stock_service_list_stock_count_sessions",
+      "entryPointId": "services_stock_service_list_stock_count_sessions",
+      "path": [
+        "services_stock_service_list_stock_count_sessions",
+        "services_stock_service_stockerror"
+      ],
+      "qualifiedPath": [
+        "services_stock_service_list_stock_count_sessions",
+        "services_stock_service_stockerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/stock_service.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:services_payment_link_test_service_mercadopago_connection_payload",
       "name": "mercadopago_connection_payload",
       "entryPoint": "services_payment_link_test_service_mercadopago_connection_payload",
@@ -6587,32 +6831,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_allocation_runtime_service_run_persisted_allocation",
-      "name": "run_persisted_allocation",
-      "entryPoint": "services_allocation_runtime_service_run_persisted_allocation",
-      "entryPointId": "services_allocation_runtime_service_run_persisted_allocation",
-      "path": [
-        "services_allocation_runtime_service_run_persisted_allocation",
-        "services_allocation_runtime_service_create_assignment_explanation",
-        "services_allocation_runtime_service_create_unassigned_explanation",
-        "services_allocation_runtime_service_persistedallocationresult"
-      ],
-      "qualifiedPath": [
-        "services_allocation_runtime_service_run_persisted_allocation",
-        "services_allocation_runtime_service_create_assignment_explanation",
-        "services_allocation_runtime_service_create_unassigned_explanation",
-        "services_allocation_runtime_service_persistedallocationresult"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/allocation_runtime_service.py"
-      ],
-      "criticality": 0.285,
-      "warnings": []
-    },
-    {
       "id": "flow:scripts_seed_f003_load_scenario_seed_f003_load_scenario",
       "name": "seed_f003_load_scenario",
       "entryPoint": "scripts_seed_f003_load_scenario_seed_f003_load_scenario",
@@ -6679,6 +6897,28 @@
       "warnings": []
     },
     {
+      "id": "flow:services_allocation_runtime_service_set_reservation_reassignment_lock",
+      "name": "set_reservation_reassignment_lock",
+      "entryPoint": "services_allocation_runtime_service_set_reservation_reassignment_lock",
+      "entryPointId": "services_allocation_runtime_service_set_reservation_reassignment_lock",
+      "path": [
+        "services_allocation_runtime_service_set_reservation_reassignment_lock",
+        "services_allocation_runtime_service_allocationruntimeerror"
+      ],
+      "qualifiedPath": [
+        "services_allocation_runtime_service_set_reservation_reassignment_lock",
+        "services_allocation_runtime_service_allocationruntimeerror"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_runtime_service.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:services_company_document_service_set_signature_status",
       "name": "set_signature_status",
       "entryPoint": "services_company_document_service_set_signature_status",
@@ -6718,28 +6958,6 @@
       "fileCount": 1,
       "files": [
         "app/services/operational_report_service.py"
-      ],
-      "criticality": 0.285,
-      "warnings": []
-    },
-    {
-      "id": "flow:api_whatsapp_crm_update_assignment",
-      "name": "update_assignment",
-      "entryPoint": "api_whatsapp_crm_update_assignment",
-      "entryPointId": "api_whatsapp_crm_update_assignment",
-      "path": [
-        "api_whatsapp_crm_update_assignment",
-        "api_whatsapp_crm_require_plan"
-      ],
-      "qualifiedPath": [
-        "api_whatsapp_crm_update_assignment",
-        "api_whatsapp_crm_require_plan"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/whatsapp_crm.py"
       ],
       "criticality": 0.285,
       "warnings": []
@@ -6868,6 +7086,34 @@
         "app/services/ota/adapters/booking.py"
       ],
       "criticality": 0.2836,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_stock_confirm_stock_count",
+      "name": "confirm_stock_count",
+      "entryPoint": "api_stock_confirm_stock_count",
+      "entryPointId": "api_stock_confirm_stock_count",
+      "path": [
+        "api_stock_confirm_stock_count",
+        "api_stock_stock_count_session_detail",
+        "api_stock_stock_count_line_read",
+        "api_stock_stockcountsessiondetailread",
+        "api_stock_stockcountlineread"
+      ],
+      "qualifiedPath": [
+        "api_stock_confirm_stock_count",
+        "api_stock_stock_count_session_detail",
+        "api_stock_stock_count_line_read",
+        "api_stock_stockcountsessiondetailread",
+        "api_stock_stockcountlineread"
+      ],
+      "depth": 3,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/api/stock.py"
+      ],
+      "criticality": 0.28,
       "warnings": []
     },
     {
@@ -8078,25 +8324,25 @@
       "warnings": []
     },
     {
-      "id": "flow:services_audit_log_service_create_audit_log",
-      "name": "create_audit_log",
-      "entryPoint": "services_audit_log_service_create_audit_log",
-      "entryPointId": "services_audit_log_service_create_audit_log",
+      "id": "flow:services_stock_service_create_stock_count_session",
+      "name": "create_stock_count_session",
+      "entryPoint": "services_stock_service_create_stock_count_session",
+      "entryPointId": "services_stock_service_create_stock_count_session",
       "path": [
-        "services_audit_log_service_create_audit_log",
-        "services_audit_log_service_payload_json",
-        "services_audit_log_service_sanitize_audit_payload"
+        "services_stock_service_create_stock_count_session",
+        "services_stock_service_required_reason",
+        "services_stock_service_stockerror"
       ],
       "qualifiedPath": [
-        "services_audit_log_service_create_audit_log",
-        "services_audit_log_service_payload_json",
-        "services_audit_log_service_sanitize_audit_payload"
+        "services_stock_service_create_stock_count_session",
+        "services_stock_service_required_reason",
+        "services_stock_service_stockerror"
       ],
       "depth": 2,
       "nodeCount": 3,
       "fileCount": 1,
       "files": [
-        "app/services/audit_log_service.py"
+        "app/services/stock_service.py"
       ],
       "criticality": 0.2533,
       "warnings": []
@@ -9039,6 +9285,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_whatsapp_crm_update_assignment",
+      "name": "update_assignment",
+      "entryPoint": "api_whatsapp_crm_update_assignment",
+      "entryPointId": "api_whatsapp_crm_update_assignment",
+      "path": [
+        "api_whatsapp_crm_update_assignment",
+        "api_whatsapp_crm_conversation_access_scope",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "qualifiedPath": [
+        "api_whatsapp_crm_update_assignment",
+        "api_whatsapp_crm_conversation_access_scope",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/whatsapp_crm.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_20260830_room_move_tiers_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_20260830_room_move_tiers_upgrade",
@@ -9159,6 +9429,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_audit_log_service_create_required_audit_log",
+      "name": "create_required_audit_log",
+      "entryPoint": "services_audit_log_service_create_required_audit_log",
+      "entryPointId": "services_audit_log_service_create_required_audit_log",
+      "path": [
+        "services_audit_log_service_create_required_audit_log",
+        "services_audit_log_service_create_audit_log",
+        "services_audit_log_service_payload_json",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "qualifiedPath": [
+        "services_audit_log_service_create_required_audit_log",
+        "services_audit_log_service_create_audit_log",
+        "services_audit_log_service_payload_json",
+        "services_audit_log_service_sanitize_audit_payload"
+      ],
+      "depth": 3,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/audit_log_service.py"
+      ],
+      "criticality": 0.2425,
+      "warnings": []
+    },
+    {
       "id": "flow:support_totp_nexttotpafter",
       "name": "nextTotpAfter",
       "entryPoint": "support_totp_nexttotpafter",
@@ -9180,48 +9476,6 @@
       "fileCount": 1,
       "files": [
         "frontend/e2e/support/totp.ts"
-      ],
-      "criticality": 0.2425,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_checkin_service_perform_checkin",
-      "name": "perform_checkin",
-      "entryPoint": "services_checkin_service_perform_checkin",
-      "entryPointId": "services_checkin_service_perform_checkin",
-      "path": [
-        "services_checkin_service_perform_checkin",
-        "services_checkin_service_apply_guest_patch_and_validate",
-        "services_checkin_service_checkinerror",
-        "services_checkin_service_guard_prohibido",
-        "services_checkin_service_load_ready_room_for_checkin",
-        "services_checkin_service_load_reservation",
-        "services_checkin_service_notify_reservation_event",
-        "services_checkin_service_validate_checkin_window_and_payment",
-        "services_checkin_service_validate_guest_for_checkin",
-        "services_checkin_service_checkinconflicterror",
-        "services_checkin_service_is_postgres_lock_not_available",
-        "services_checkin_service_resolve_jurisdiction_code"
-      ],
-      "qualifiedPath": [
-        "services_checkin_service_perform_checkin",
-        "services_checkin_service_apply_guest_patch_and_validate",
-        "services_checkin_service_checkinerror",
-        "services_checkin_service_guard_prohibido",
-        "services_checkin_service_load_ready_room_for_checkin",
-        "services_checkin_service_load_reservation",
-        "services_checkin_service_notify_reservation_event",
-        "services_checkin_service_validate_checkin_window_and_payment",
-        "services_checkin_service_validate_guest_for_checkin",
-        "services_checkin_service_checkinconflicterror",
-        "services_checkin_service_is_postgres_lock_not_available",
-        "services_checkin_service_resolve_jurisdiction_code"
-      ],
-      "depth": 3,
-      "nodeCount": 12,
-      "fileCount": 1,
-      "files": [
-        "app/services/checkin_service.py"
       ],
       "criticality": 0.2425,
       "warnings": []
@@ -9515,6 +9769,42 @@
       "warnings": []
     },
     {
+      "id": "flow:services_room_block_service_propose_room_block_reassignment",
+      "name": "propose_room_block_reassignment",
+      "entryPoint": "services_room_block_service_propose_room_block_reassignment",
+      "entryPointId": "services_room_block_service_propose_room_block_reassignment",
+      "path": [
+        "services_room_block_service_propose_room_block_reassignment",
+        "services_room_block_service_get_block_conflicting_reservation_ids",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_roomblockreservationconflicterror",
+        "services_room_block_service_overlapping_reservation_ids_for_block",
+        "services_room_block_service_room_has_active_block",
+        "services_room_block_service_roomblockalreadyexistserror",
+        "services_room_block_service_validate_range",
+        "services_room_block_service_room_block_overlap_filter"
+      ],
+      "qualifiedPath": [
+        "services_room_block_service_propose_room_block_reassignment",
+        "services_room_block_service_get_block_conflicting_reservation_ids",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_roomblockreservationconflicterror",
+        "services_room_block_service_overlapping_reservation_ids_for_block",
+        "services_room_block_service_room_has_active_block",
+        "services_room_block_service_roomblockalreadyexistserror",
+        "services_room_block_service_validate_range",
+        "services_room_block_service_room_block_overlap_filter"
+      ],
+      "depth": 3,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/room_block_service.py"
+      ],
+      "criticality": 0.2356,
+      "warnings": []
+    },
+    {
       "id": "flow:services_gemma_service_gemmaservice_suggest_policy_from_questionnaire",
       "name": ".suggest_policy_from_questionnaire",
       "entryPoint": "services_gemma_service_gemmaservice_suggest_policy_from_questionnaire",
@@ -9657,6 +9947,32 @@
       ],
       "qualifiedPath": [
         "api_reservations_cancel_reservation",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_to_read",
+        "api_reservations_can_view_guest_documents"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
+      ],
+      "criticality": 0.2325,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_reservations_decide_cancellation_review",
+      "name": "decide_cancellation_review",
+      "entryPoint": "api_reservations_decide_cancellation_review",
+      "entryPointId": "api_reservations_decide_cancellation_review",
+      "path": [
+        "api_reservations_decide_cancellation_review",
+        "api_reservations_authorize_company_reservation_management",
+        "api_reservations_to_read",
+        "api_reservations_can_view_guest_documents"
+      ],
+      "qualifiedPath": [
+        "api_reservations_decide_cancellation_review",
         "api_reservations_authorize_company_reservation_management",
         "api_reservations_to_read",
         "api_reservations_can_view_guest_documents"
@@ -9882,6 +10198,48 @@
       "fileCount": 1,
       "files": [
         "app/services/financial_ledger.py"
+      ],
+      "criticality": 0.2325,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_allocation_runtime_service_run_persisted_allocation",
+      "name": "run_persisted_allocation",
+      "entryPoint": "services_allocation_runtime_service_run_persisted_allocation",
+      "entryPointId": "services_allocation_runtime_service_run_persisted_allocation",
+      "path": [
+        "services_allocation_runtime_service_run_persisted_allocation",
+        "services_allocation_runtime_service_allocation_fx_configuration_snapshot",
+        "services_allocation_runtime_service_allocationruntimeerror",
+        "services_allocation_runtime_service_create_assignment_explanation",
+        "services_allocation_runtime_service_create_unassigned_explanation",
+        "services_allocation_runtime_service_load_json_dict",
+        "services_allocation_runtime_service_lock_and_validate_initial_assignments",
+        "services_allocation_runtime_service_persistedallocationresult",
+        "services_allocation_runtime_service_primary_objective_label",
+        "services_allocation_runtime_service_normalized_decimal",
+        "services_allocation_runtime_service_reservation_state_fingerprint",
+        "services_allocation_runtime_service_reservation_state_payload"
+      ],
+      "qualifiedPath": [
+        "services_allocation_runtime_service_run_persisted_allocation",
+        "services_allocation_runtime_service_allocation_fx_configuration_snapshot",
+        "services_allocation_runtime_service_allocationruntimeerror",
+        "services_allocation_runtime_service_create_assignment_explanation",
+        "services_allocation_runtime_service_create_unassigned_explanation",
+        "services_allocation_runtime_service_load_json_dict",
+        "services_allocation_runtime_service_lock_and_validate_initial_assignments",
+        "services_allocation_runtime_service_persistedallocationresult",
+        "services_allocation_runtime_service_primary_objective_label",
+        "services_allocation_runtime_service_normalized_decimal",
+        "services_allocation_runtime_service_reservation_state_fingerprint",
+        "services_allocation_runtime_service_reservation_state_payload"
+      ],
+      "depth": 2,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_runtime_service.py"
       ],
       "criticality": 0.2325,
       "warnings": []
@@ -10883,27 +11241,27 @@
       "warnings": []
     },
     {
-      "id": "flow:services_room_block_service_preview_block_conflicts",
-      "name": "preview_block_conflicts",
-      "entryPoint": "services_room_block_service_preview_block_conflicts",
-      "entryPointId": "services_room_block_service_preview_block_conflicts",
+      "id": "flow:services_reservation_cancellation_service_prepare_cancellation_request",
+      "name": "prepare_cancellation_request",
+      "entryPoint": "services_reservation_cancellation_service_prepare_cancellation_request",
+      "entryPointId": "services_reservation_cancellation_service_prepare_cancellation_request",
       "path": [
-        "services_room_block_service_preview_block_conflicts",
-        "services_room_block_service_protected_reservation_filter",
-        "services_room_block_service_roomblockerror",
-        "services_room_block_service_validate_range"
+        "services_reservation_cancellation_service_prepare_cancellation_request",
+        "services_reservation_cancellation_service_cancellationconfigurationrequired",
+        "services_reservation_cancellation_service_cancellationpreparation",
+        "services_reservation_cancellation_service_utc_now"
       ],
       "qualifiedPath": [
-        "services_room_block_service_preview_block_conflicts",
-        "services_room_block_service_protected_reservation_filter",
-        "services_room_block_service_roomblockerror",
-        "services_room_block_service_validate_range"
+        "services_reservation_cancellation_service_prepare_cancellation_request",
+        "services_reservation_cancellation_service_cancellationconfigurationrequired",
+        "services_reservation_cancellation_service_cancellationpreparation",
+        "services_reservation_cancellation_service_utc_now"
       ],
       "depth": 1,
       "nodeCount": 4,
       "fileCount": 1,
       "files": [
-        "app/services/room_block_service.py"
+        "app/services/reservation_cancellation_service.py"
       ],
       "criticality": 0.2225,
       "warnings": []
@@ -10961,6 +11319,48 @@
       "warnings": []
     },
     {
+      "id": "flow:services_stock_service_confirm_stock_count_session",
+      "name": "confirm_stock_count_session",
+      "entryPoint": "services_stock_service_confirm_stock_count_session",
+      "entryPointId": "services_stock_service_confirm_stock_count_session",
+      "path": [
+        "services_stock_service_confirm_stock_count_session",
+        "services_stock_service_register_movement",
+        "services_stock_service_required_reason",
+        "services_stock_service_stock_count_session_query",
+        "services_stock_service_stock_count_stale_items",
+        "services_stock_service_stockcountrecountrequired",
+        "services_stock_service_stockerror",
+        "services_stock_service_current_stock",
+        "services_stock_service_notify_if_low_stock",
+        "services_stock_service_return_matching_idempotent_movement",
+        "services_stock_service_get_item",
+        "services_stock_service_stockidempotencyconflict"
+      ],
+      "qualifiedPath": [
+        "services_stock_service_confirm_stock_count_session",
+        "services_stock_service_register_movement",
+        "services_stock_service_required_reason",
+        "services_stock_service_stock_count_session_query",
+        "services_stock_service_stock_count_stale_items",
+        "services_stock_service_stockcountrecountrequired",
+        "services_stock_service_stockerror",
+        "services_stock_service_current_stock",
+        "services_stock_service_notify_if_low_stock",
+        "services_stock_service_return_matching_idempotent_movement",
+        "services_stock_service_get_item",
+        "services_stock_service_stockidempotencyconflict"
+      ],
+      "depth": 3,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/services/stock_service.py"
+      ],
+      "criticality": 0.2217,
+      "warnings": []
+    },
+    {
       "id": "flow:scale_staged_realtime_load_main",
       "name": "main",
       "entryPoint": "scale_staged_realtime_load_main",
@@ -10986,6 +11386,60 @@
       "fileCount": 1,
       "files": [
         "scripts/scale/staged_realtime_load.py"
+      ],
+      "criticality": 0.2217,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_checkin_service_perform_checkin",
+      "name": "perform_checkin",
+      "entryPoint": "services_checkin_service_perform_checkin",
+      "entryPointId": "services_checkin_service_perform_checkin",
+      "path": [
+        "services_checkin_service_perform_checkin",
+        "services_checkin_service_apply_guest_patch_and_validate",
+        "services_checkin_service_checkinerror",
+        "services_checkin_service_guard_prohibido",
+        "services_checkin_service_load_ready_room_for_checkin",
+        "services_checkin_service_load_reservation",
+        "services_checkin_service_notify_reservation_event",
+        "services_checkin_service_perform_guest_checkin",
+        "services_checkin_service_validate_checkin_window_and_payment",
+        "services_checkin_service_validate_guest_for_checkin",
+        "services_checkin_service_checkinconflicterror",
+        "services_checkin_service_is_postgres_lock_not_available",
+        "services_checkin_service_checkin_status_policy",
+        "services_checkin_service_guest_arrival_summary",
+        "services_checkin_service_load_occupied_room_for_guest_arrival",
+        "services_checkin_service_reservation_guests",
+        "services_checkin_service_resolve_jurisdiction_code",
+        "services_checkin_service_arrival_projection"
+      ],
+      "qualifiedPath": [
+        "services_checkin_service_perform_checkin",
+        "services_checkin_service_apply_guest_patch_and_validate",
+        "services_checkin_service_checkinerror",
+        "services_checkin_service_guard_prohibido",
+        "services_checkin_service_load_ready_room_for_checkin",
+        "services_checkin_service_load_reservation",
+        "services_checkin_service_notify_reservation_event",
+        "services_checkin_service_perform_guest_checkin",
+        "services_checkin_service_validate_checkin_window_and_payment",
+        "services_checkin_service_validate_guest_for_checkin",
+        "services_checkin_service_checkinconflicterror",
+        "services_checkin_service_is_postgres_lock_not_available",
+        "services_checkin_service_checkin_status_policy",
+        "services_checkin_service_guest_arrival_summary",
+        "services_checkin_service_load_occupied_room_for_guest_arrival",
+        "services_checkin_service_reservation_guests",
+        "services_checkin_service_resolve_jurisdiction_code",
+        "services_checkin_service_arrival_projection"
+      ],
+      "depth": 3,
+      "nodeCount": 18,
+      "fileCount": 1,
+      "files": [
+        "app/services/checkin_service.py"
       ],
       "criticality": 0.2217,
       "warnings": []
@@ -11603,37 +12057,37 @@
       "warnings": []
     },
     {
-      "id": "flow:services_room_block_service_create_block",
-      "name": "create_block",
-      "entryPoint": "services_room_block_service_create_block",
-      "entryPointId": "services_room_block_service_create_block",
+      "id": "flow:services_reservation_cancellation_service_request_reservation_cancellation",
+      "name": "request_reservation_cancellation",
+      "entryPoint": "services_reservation_cancellation_service_request_reservation_cancellation",
+      "entryPointId": "services_reservation_cancellation_service_request_reservation_cancellation",
       "path": [
-        "services_room_block_service_create_block",
-        "services_room_block_service_invalidate_availability_cache",
-        "services_room_block_service_lock_room_for_block_mutation",
-        "services_room_block_service_protected_reservation_filter",
-        "services_room_block_service_protected_reservation_ids_for_block",
-        "services_room_block_service_protectedreservationconflicterror",
-        "services_room_block_service_raise_for_protected_reservations",
-        "services_room_block_service_roomblockerror",
-        "services_room_block_service_validate_range"
+        "services_reservation_cancellation_service_request_reservation_cancellation",
+        "services_reservation_cancellation_service_cancel_active_payment_links",
+        "services_reservation_cancellation_service_cancellationrequestresult",
+        "services_reservation_cancellation_service_cancellationreviewconflict",
+        "services_reservation_cancellation_service_currency",
+        "services_reservation_cancellation_service_decimal_or_none",
+        "services_reservation_cancellation_service_get_pending_cancellation_review",
+        "services_reservation_cancellation_service_outcome_for_review",
+        "services_reservation_cancellation_service_review_audit_payload"
       ],
       "qualifiedPath": [
-        "services_room_block_service_create_block",
-        "services_room_block_service_invalidate_availability_cache",
-        "services_room_block_service_lock_room_for_block_mutation",
-        "services_room_block_service_protected_reservation_filter",
-        "services_room_block_service_protected_reservation_ids_for_block",
-        "services_room_block_service_protectedreservationconflicterror",
-        "services_room_block_service_raise_for_protected_reservations",
-        "services_room_block_service_roomblockerror",
-        "services_room_block_service_validate_range"
+        "services_reservation_cancellation_service_request_reservation_cancellation",
+        "services_reservation_cancellation_service_cancel_active_payment_links",
+        "services_reservation_cancellation_service_cancellationrequestresult",
+        "services_reservation_cancellation_service_cancellationreviewconflict",
+        "services_reservation_cancellation_service_currency",
+        "services_reservation_cancellation_service_decimal_or_none",
+        "services_reservation_cancellation_service_get_pending_cancellation_review",
+        "services_reservation_cancellation_service_outcome_for_review",
+        "services_reservation_cancellation_service_review_audit_payload"
       ],
       "depth": 1,
       "nodeCount": 9,
       "fileCount": 1,
       "files": [
-        "app/services/room_block_service.py"
+        "app/services/reservation_cancellation_service.py"
       ],
       "criticality": 0.2156,
       "warnings": []
@@ -11849,6 +12303,36 @@
       "warnings": []
     },
     {
+      "id": "flow:services_stock_service_record_stock_count",
+      "name": "record_stock_count",
+      "entryPoint": "services_stock_service_record_stock_count",
+      "entryPointId": "services_stock_service_record_stock_count",
+      "path": [
+        "services_stock_service_record_stock_count",
+        "services_stock_service_current_stock",
+        "services_stock_service_get_open_stock_count_session",
+        "services_stock_service_normalize_stock_count_quantity",
+        "services_stock_service_stockerror",
+        "services_stock_service_get_item"
+      ],
+      "qualifiedPath": [
+        "services_stock_service_record_stock_count",
+        "services_stock_service_current_stock",
+        "services_stock_service_get_open_stock_count_session",
+        "services_stock_service_normalize_stock_count_quantity",
+        "services_stock_service_stockerror",
+        "services_stock_service_get_item"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/stock_service.py"
+      ],
+      "criticality": 0.2117,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_20260813_rbac_user_overrides_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_20260813_rbac_user_overrides_upgrade",
@@ -11924,6 +12408,56 @@
       "fileCount": 1,
       "files": [
         "app/api/collaboration.py"
+      ],
+      "criticality": 0.2113,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_room_block_service_create_block_with_allocation_plan",
+      "name": "create_block_with_allocation_plan",
+      "entryPoint": "services_room_block_service_create_block_with_allocation_plan",
+      "entryPointId": "services_room_block_service_create_block_with_allocation_plan",
+      "path": [
+        "services_room_block_service_create_block_with_allocation_plan",
+        "services_room_block_service_create_block",
+        "services_room_block_service_get_block_conflicting_reservation_ids",
+        "services_room_block_service_protected_reservation_ids_for_block",
+        "services_room_block_service_protectedreservationconflicterror",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_roomblockreservationconflicterror",
+        "services_room_block_service_validate_range",
+        "services_room_block_service_invalidate_availability_cache",
+        "services_room_block_service_lock_room_for_block_mutation",
+        "services_room_block_service_overlapping_reservation_ids_for_block",
+        "services_room_block_service_protected_reservation_filter",
+        "services_room_block_service_raise_for_protected_reservations",
+        "services_room_block_service_roomblockalreadyexistserror",
+        "services_room_block_service_room_has_active_block",
+        "services_room_block_service_room_block_overlap_filter"
+      ],
+      "qualifiedPath": [
+        "services_room_block_service_create_block_with_allocation_plan",
+        "services_room_block_service_create_block",
+        "services_room_block_service_get_block_conflicting_reservation_ids",
+        "services_room_block_service_protected_reservation_ids_for_block",
+        "services_room_block_service_protectedreservationconflicterror",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_roomblockreservationconflicterror",
+        "services_room_block_service_validate_range",
+        "services_room_block_service_invalidate_availability_cache",
+        "services_room_block_service_lock_room_for_block_mutation",
+        "services_room_block_service_overlapping_reservation_ids_for_block",
+        "services_room_block_service_protected_reservation_filter",
+        "services_room_block_service_raise_for_protected_reservations",
+        "services_room_block_service_roomblockalreadyexistserror",
+        "services_room_block_service_room_has_active_block",
+        "services_room_block_service_room_block_overlap_filter"
+      ],
+      "depth": 3,
+      "nodeCount": 16,
+      "fileCount": 1,
+      "files": [
+        "app/services/room_block_service.py"
       ],
       "criticality": 0.2113,
       "warnings": []
@@ -12042,6 +12576,34 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260926_legal_retention_holds.py"
+      ],
+      "criticality": 0.21,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_room_block_service_preview_block_conflicts",
+      "name": "preview_block_conflicts",
+      "entryPoint": "services_room_block_service_preview_block_conflicts",
+      "entryPointId": "services_room_block_service_preview_block_conflicts",
+      "path": [
+        "services_room_block_service_preview_block_conflicts",
+        "services_room_block_service_protected_reservation_filter",
+        "services_room_block_service_protected_reservation_ids_for_block",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_validate_range"
+      ],
+      "qualifiedPath": [
+        "services_room_block_service_preview_block_conflicts",
+        "services_room_block_service_protected_reservation_filter",
+        "services_room_block_service_protected_reservation_ids_for_block",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_validate_range"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/room_block_service.py"
       ],
       "criticality": 0.21,
       "warnings": []
@@ -12849,6 +13411,42 @@
       "warnings": []
     },
     {
+      "id": "flow:services_laundry_vendor_service_approve_discrepancy",
+      "name": "approve_discrepancy",
+      "entryPoint": "services_laundry_vendor_service_approve_discrepancy",
+      "entryPointId": "services_laundry_vendor_service_approve_discrepancy",
+      "path": [
+        "services_laundry_vendor_service_approve_discrepancy",
+        "services_laundry_vendor_service_action_replay",
+        "services_laundry_vendor_service_get_discrepancy",
+        "services_laundry_vendor_service_laundrydiscrepancyconflict",
+        "services_laundry_vendor_service_record_discrepancy_action",
+        "services_laundry_vendor_service_validate_action_input",
+        "services_laundry_vendor_service_laundrydiscrepancynotfound",
+        "services_laundry_vendor_service_audit_discrepancy",
+        "services_laundry_vendor_service_laundryvendorerror"
+      ],
+      "qualifiedPath": [
+        "services_laundry_vendor_service_approve_discrepancy",
+        "services_laundry_vendor_service_action_replay",
+        "services_laundry_vendor_service_get_discrepancy",
+        "services_laundry_vendor_service_laundrydiscrepancyconflict",
+        "services_laundry_vendor_service_record_discrepancy_action",
+        "services_laundry_vendor_service_validate_action_input",
+        "services_laundry_vendor_service_laundrydiscrepancynotfound",
+        "services_laundry_vendor_service_audit_discrepancy",
+        "services_laundry_vendor_service_laundryvendorerror"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/laundry_vendor_service.py"
+      ],
+      "criticality": 0.1978,
+      "warnings": []
+    },
+    {
       "id": "flow:services_financial_report_service_build_financial_report",
       "name": "build_financial_report",
       "entryPoint": "services_financial_report_service_build_financial_report",
@@ -12880,6 +13478,42 @@
       "fileCount": 1,
       "files": [
         "app/services/financial_report_service.py"
+      ],
+      "criticality": 0.1978,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_laundry_vendor_service_confirm_discrepancy_return_to_laundry",
+      "name": "confirm_discrepancy_return_to_laundry",
+      "entryPoint": "services_laundry_vendor_service_confirm_discrepancy_return_to_laundry",
+      "entryPointId": "services_laundry_vendor_service_confirm_discrepancy_return_to_laundry",
+      "path": [
+        "services_laundry_vendor_service_confirm_discrepancy_return_to_laundry",
+        "services_laundry_vendor_service_action_replay",
+        "services_laundry_vendor_service_get_discrepancy",
+        "services_laundry_vendor_service_laundrydiscrepancyconflict",
+        "services_laundry_vendor_service_record_discrepancy_action",
+        "services_laundry_vendor_service_validate_action_input",
+        "services_laundry_vendor_service_laundrydiscrepancynotfound",
+        "services_laundry_vendor_service_audit_discrepancy",
+        "services_laundry_vendor_service_laundryvendorerror"
+      ],
+      "qualifiedPath": [
+        "services_laundry_vendor_service_confirm_discrepancy_return_to_laundry",
+        "services_laundry_vendor_service_action_replay",
+        "services_laundry_vendor_service_get_discrepancy",
+        "services_laundry_vendor_service_laundrydiscrepancyconflict",
+        "services_laundry_vendor_service_record_discrepancy_action",
+        "services_laundry_vendor_service_validate_action_input",
+        "services_laundry_vendor_service_laundrydiscrepancynotfound",
+        "services_laundry_vendor_service_audit_discrepancy",
+        "services_laundry_vendor_service_laundryvendorerror"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/laundry_vendor_service.py"
       ],
       "criticality": 0.1978,
       "warnings": []
@@ -12988,6 +13622,132 @@
       "fileCount": 1,
       "files": [
         "scripts/agent_ops/check_qa_evidence.py"
+      ],
+      "criticality": 0.1978,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_service_process_payment",
+      "name": "process_payment",
+      "entryPoint": "services_payment_service_process_payment",
+      "entryPointId": "services_payment_service_process_payment",
+      "path": [
+        "services_payment_service_process_payment",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_cash_tender_breakdown",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_resolve_applied_payment_amount",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_resolve_reservation_hotel",
+        "services_payment_service_rounding_policy_for_hotel",
+        "services_payment_service_rounding_tender_amount",
+        "services_payment_service_same_idempotent_payment",
+        "services_payment_service_update_reservation_financials",
+        "services_payment_service_validate_payment_method_enabled",
+        "services_payment_service_verify_payment_quote_token",
+        "services_payment_service_payment_conversion_rate",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_get_hotel_config",
+        "services_payment_service_sync_reservation_financial_status"
+      ],
+      "qualifiedPath": [
+        "services_payment_service_process_payment",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_cash_tender_breakdown",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_resolve_applied_payment_amount",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_resolve_reservation_hotel",
+        "services_payment_service_rounding_policy_for_hotel",
+        "services_payment_service_rounding_tender_amount",
+        "services_payment_service_same_idempotent_payment",
+        "services_payment_service_update_reservation_financials",
+        "services_payment_service_validate_payment_method_enabled",
+        "services_payment_service_verify_payment_quote_token",
+        "services_payment_service_payment_conversion_rate",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_get_hotel_config",
+        "services_payment_service_sync_reservation_financial_status"
+      ],
+      "depth": 2,
+      "nodeCount": 18,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_service.py"
+      ],
+      "criticality": 0.1978,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_room_block_service_propose_room_block_extension_reassignment",
+      "name": "propose_room_block_extension_reassignment",
+      "entryPoint": "services_room_block_service_propose_room_block_extension_reassignment",
+      "entryPointId": "services_room_block_service_propose_room_block_extension_reassignment",
+      "path": [
+        "services_room_block_service_propose_room_block_extension_reassignment",
+        "services_room_block_service_get_block",
+        "services_room_block_service_overlapping_reservation_ids_for_block",
+        "services_room_block_service_preview_block_extension_for_block",
+        "services_room_block_service_protected_reservation_ids_for_block",
+        "services_room_block_service_protectedreservationconflicterror",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_roomblockextensionconflicterror",
+        "services_room_block_service_protected_reservation_filter"
+      ],
+      "qualifiedPath": [
+        "services_room_block_service_propose_room_block_extension_reassignment",
+        "services_room_block_service_get_block",
+        "services_room_block_service_overlapping_reservation_ids_for_block",
+        "services_room_block_service_preview_block_extension_for_block",
+        "services_room_block_service_protected_reservation_ids_for_block",
+        "services_room_block_service_protectedreservationconflicterror",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_roomblockextensionconflicterror",
+        "services_room_block_service_protected_reservation_filter"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/room_block_service.py"
+      ],
+      "criticality": 0.1978,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_laundry_vendor_service_resolve_discrepancy",
+      "name": "resolve_discrepancy",
+      "entryPoint": "services_laundry_vendor_service_resolve_discrepancy",
+      "entryPointId": "services_laundry_vendor_service_resolve_discrepancy",
+      "path": [
+        "services_laundry_vendor_service_resolve_discrepancy",
+        "services_laundry_vendor_service_action_replay",
+        "services_laundry_vendor_service_get_discrepancy",
+        "services_laundry_vendor_service_laundrydiscrepancyconflict",
+        "services_laundry_vendor_service_laundryvendorerror",
+        "services_laundry_vendor_service_record_discrepancy_action",
+        "services_laundry_vendor_service_validate_action_input",
+        "services_laundry_vendor_service_laundrydiscrepancynotfound",
+        "services_laundry_vendor_service_audit_discrepancy"
+      ],
+      "qualifiedPath": [
+        "services_laundry_vendor_service_resolve_discrepancy",
+        "services_laundry_vendor_service_action_replay",
+        "services_laundry_vendor_service_get_discrepancy",
+        "services_laundry_vendor_service_laundrydiscrepancyconflict",
+        "services_laundry_vendor_service_laundryvendorerror",
+        "services_laundry_vendor_service_record_discrepancy_action",
+        "services_laundry_vendor_service_validate_action_input",
+        "services_laundry_vendor_service_laundrydiscrepancynotfound",
+        "services_laundry_vendor_service_audit_discrepancy"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/laundry_vendor_service.py"
       ],
       "criticality": 0.1978,
       "warnings": []
@@ -13503,41 +14263,41 @@
       "warnings": []
     },
     {
-      "id": "flow:services_room_block_service_extend_block",
-      "name": "extend_block",
-      "entryPoint": "services_room_block_service_extend_block",
-      "entryPointId": "services_room_block_service_extend_block",
+      "id": "flow:services_allocation_runtime_service_accept_allocation_run",
+      "name": "accept_allocation_run",
+      "entryPoint": "services_allocation_runtime_service_accept_allocation_run",
+      "entryPointId": "services_allocation_runtime_service_accept_allocation_run",
       "path": [
-        "services_room_block_service_extend_block",
-        "services_room_block_service_invalidate_availability_cache",
-        "services_room_block_service_lock_room_then_block",
-        "services_room_block_service_preview_block_extension",
-        "services_room_block_service_preview_block_extension_for_block",
-        "services_room_block_service_roomblockerror",
-        "services_room_block_service_roomblockextensionconflicterror",
-        "services_room_block_service_lock_room_for_block_mutation",
-        "services_room_block_service_read_block_room_id",
-        "services_room_block_service_get_block",
-        "services_room_block_service_protected_reservation_filter"
+        "services_allocation_runtime_service_accept_allocation_run",
+        "services_allocation_runtime_service_active_policy_version_id_for_acceptance",
+        "services_allocation_runtime_service_allocation_fx_configuration_snapshot",
+        "services_allocation_runtime_service_allocationruntimeerror",
+        "services_allocation_runtime_service_get_allocation_run_details",
+        "services_allocation_runtime_service_load_json_dict",
+        "services_allocation_runtime_service_reservation_state_fingerprint",
+        "services_allocation_runtime_service_reservation_state_payload",
+        "services_allocation_runtime_service_validate_allocation_fx_snapshots",
+        "services_allocation_runtime_service_normalized_decimal",
+        "services_allocation_runtime_service_allocationrundetails"
       ],
       "qualifiedPath": [
-        "services_room_block_service_extend_block",
-        "services_room_block_service_invalidate_availability_cache",
-        "services_room_block_service_lock_room_then_block",
-        "services_room_block_service_preview_block_extension",
-        "services_room_block_service_preview_block_extension_for_block",
-        "services_room_block_service_roomblockerror",
-        "services_room_block_service_roomblockextensionconflicterror",
-        "services_room_block_service_lock_room_for_block_mutation",
-        "services_room_block_service_read_block_room_id",
-        "services_room_block_service_get_block",
-        "services_room_block_service_protected_reservation_filter"
+        "services_allocation_runtime_service_accept_allocation_run",
+        "services_allocation_runtime_service_active_policy_version_id_for_acceptance",
+        "services_allocation_runtime_service_allocation_fx_configuration_snapshot",
+        "services_allocation_runtime_service_allocationruntimeerror",
+        "services_allocation_runtime_service_get_allocation_run_details",
+        "services_allocation_runtime_service_load_json_dict",
+        "services_allocation_runtime_service_reservation_state_fingerprint",
+        "services_allocation_runtime_service_reservation_state_payload",
+        "services_allocation_runtime_service_validate_allocation_fx_snapshots",
+        "services_allocation_runtime_service_normalized_decimal",
+        "services_allocation_runtime_service_allocationrundetails"
       ],
       "depth": 2,
       "nodeCount": 11,
       "fileCount": 1,
       "files": [
-        "app/services/room_block_service.py"
+        "app/services/allocation_runtime_service.py"
       ],
       "criticality": 0.1927,
       "warnings": []
@@ -14425,53 +15185,51 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_service_process_payment",
-      "name": "process_payment",
-      "entryPoint": "services_payment_service_process_payment",
-      "entryPointId": "services_payment_service_process_payment",
+      "id": "flow:services_room_block_service_extend_block",
+      "name": "extend_block",
+      "entryPoint": "services_room_block_service_extend_block",
+      "entryPointId": "services_room_block_service_extend_block",
       "path": [
-        "services_payment_service_process_payment",
-        "services_payment_service_calculate_payment_surcharge",
-        "services_payment_service_cash_tender_breakdown",
-        "services_payment_service_paymenterror",
-        "services_payment_service_paymentnotfounderror",
-        "services_payment_service_resolve_applied_payment_amount",
-        "services_payment_service_resolve_payment_currency",
-        "services_payment_service_resolve_reservation_hotel",
-        "services_payment_service_rounding_policy_for_hotel",
-        "services_payment_service_rounding_tender_amount",
-        "services_payment_service_same_idempotent_payment",
-        "services_payment_service_update_reservation_financials",
-        "services_payment_service_validate_payment_method_enabled",
-        "services_payment_service_payment_method_value",
-        "services_payment_service_get_hotel_config",
-        "services_payment_service_sync_reservation_financial_status"
+        "services_room_block_service_extend_block",
+        "services_room_block_service_extend_block_with_allocation_plan",
+        "services_room_block_service_invalidate_availability_cache",
+        "services_room_block_service_lock_room_then_block",
+        "services_room_block_service_preview_block_extension",
+        "services_room_block_service_preview_block_extension_for_block",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_roomblockextensionconflicterror",
+        "services_room_block_service_load_json_dict",
+        "services_room_block_service_overlapping_reservation_ids_for_block",
+        "services_room_block_service_protected_reservation_ids_for_block",
+        "services_room_block_service_lock_room_for_block_mutation",
+        "services_room_block_service_read_block_room_id",
+        "services_room_block_service_get_block",
+        "services_room_block_service_protected_reservation_filter"
       ],
       "qualifiedPath": [
-        "services_payment_service_process_payment",
-        "services_payment_service_calculate_payment_surcharge",
-        "services_payment_service_cash_tender_breakdown",
-        "services_payment_service_paymenterror",
-        "services_payment_service_paymentnotfounderror",
-        "services_payment_service_resolve_applied_payment_amount",
-        "services_payment_service_resolve_payment_currency",
-        "services_payment_service_resolve_reservation_hotel",
-        "services_payment_service_rounding_policy_for_hotel",
-        "services_payment_service_rounding_tender_amount",
-        "services_payment_service_same_idempotent_payment",
-        "services_payment_service_update_reservation_financials",
-        "services_payment_service_validate_payment_method_enabled",
-        "services_payment_service_payment_method_value",
-        "services_payment_service_get_hotel_config",
-        "services_payment_service_sync_reservation_financial_status"
+        "services_room_block_service_extend_block",
+        "services_room_block_service_extend_block_with_allocation_plan",
+        "services_room_block_service_invalidate_availability_cache",
+        "services_room_block_service_lock_room_then_block",
+        "services_room_block_service_preview_block_extension",
+        "services_room_block_service_preview_block_extension_for_block",
+        "services_room_block_service_roomblockerror",
+        "services_room_block_service_roomblockextensionconflicterror",
+        "services_room_block_service_load_json_dict",
+        "services_room_block_service_overlapping_reservation_ids_for_block",
+        "services_room_block_service_protected_reservation_ids_for_block",
+        "services_room_block_service_lock_room_for_block_mutation",
+        "services_room_block_service_read_block_room_id",
+        "services_room_block_service_get_block",
+        "services_room_block_service_protected_reservation_filter"
       ],
       "depth": 2,
-      "nodeCount": 16,
+      "nodeCount": 15,
       "fileCount": 1,
       "files": [
-        "app/services/payment_service.py"
+        "app/services/room_block_service.py"
       ],
-      "criticality": 0.1856,
+      "criticality": 0.1867,
       "warnings": []
     },
     {
@@ -14983,6 +15741,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_laundry_vendor_service_create_remito",
+      "name": "create_remito",
+      "entryPoint": "services_laundry_vendor_service_create_remito",
+      "entryPointId": "services_laundry_vendor_service_create_remito",
+      "path": [
+        "services_laundry_vendor_service_create_remito",
+        "services_laundry_vendor_service_duplicatelaundryremitoerror",
+        "services_laundry_vendor_service_is_duplicate_remito_integrity_error",
+        "services_laundry_vendor_service_laundryvendorerror",
+        "services_laundry_vendor_service_match_shortage_receipt",
+        "services_laundry_vendor_service_record_discrepancy_action",
+        "services_laundry_vendor_service_audit_discrepancy"
+      ],
+      "qualifiedPath": [
+        "services_laundry_vendor_service_create_remito",
+        "services_laundry_vendor_service_duplicatelaundryremitoerror",
+        "services_laundry_vendor_service_is_duplicate_remito_integrity_error",
+        "services_laundry_vendor_service_laundryvendorerror",
+        "services_laundry_vendor_service_match_shortage_receipt",
+        "services_laundry_vendor_service_record_discrepancy_action",
+        "services_laundry_vendor_service_audit_discrepancy"
+      ],
+      "depth": 3,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/laundry_vendor_service.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
       "id": "flow:services_subscription_service_entitlements_payload",
       "name": "entitlements_payload",
       "entryPoint": "services_subscription_service_entitlements_payload",
@@ -15319,8 +16109,10 @@
         "services_payment_webhook_service_ingest_webhook",
         "services_payment_webhook_service_acquire_postgres_webhook_lock",
         "services_payment_webhook_service_completed_at",
+        "services_payment_webhook_service_duplicate_webhook_result",
         "services_payment_webhook_service_enqueue_completed_payment_failure_alert",
         "services_payment_webhook_service_ensure_completed_transaction",
+        "services_payment_webhook_service_existing_reconciliation_review_code",
         "services_payment_webhook_service_find_existing_event",
         "services_payment_webhook_service_insert_event",
         "services_payment_webhook_service_is_allowed_status_transition",
@@ -15328,19 +16120,23 @@
         "services_payment_webhook_service_payload_value",
         "services_payment_webhook_service_payment_response_projection",
         "services_payment_webhook_service_paymentwebhookerror",
+        "services_payment_webhook_service_record_payment_reconciliation_review",
         "services_payment_webhook_service_retryablepaymentwebhookerror",
         "services_payment_webhook_service_transaction_exists",
         "services_payment_webhook_service_safe_webhook_event_type",
         "services_payment_webhook_service_webhook_event_payload_projection",
         "services_payment_webhook_service_is_json_scalar",
+        "services_payment_webhook_service_enqueue_provider_payment_reconciliation_alert",
         "services_payment_webhook_service_normalize_webhook_identifier"
       ],
       "qualifiedPath": [
         "services_payment_webhook_service_ingest_webhook",
         "services_payment_webhook_service_acquire_postgres_webhook_lock",
         "services_payment_webhook_service_completed_at",
+        "services_payment_webhook_service_duplicate_webhook_result",
         "services_payment_webhook_service_enqueue_completed_payment_failure_alert",
         "services_payment_webhook_service_ensure_completed_transaction",
+        "services_payment_webhook_service_existing_reconciliation_review_code",
         "services_payment_webhook_service_find_existing_event",
         "services_payment_webhook_service_insert_event",
         "services_payment_webhook_service_is_allowed_status_transition",
@@ -15348,15 +16144,17 @@
         "services_payment_webhook_service_payload_value",
         "services_payment_webhook_service_payment_response_projection",
         "services_payment_webhook_service_paymentwebhookerror",
+        "services_payment_webhook_service_record_payment_reconciliation_review",
         "services_payment_webhook_service_retryablepaymentwebhookerror",
         "services_payment_webhook_service_transaction_exists",
         "services_payment_webhook_service_safe_webhook_event_type",
         "services_payment_webhook_service_webhook_event_payload_projection",
         "services_payment_webhook_service_is_json_scalar",
+        "services_payment_webhook_service_enqueue_provider_payment_reconciliation_alert",
         "services_payment_webhook_service_normalize_webhook_identifier"
       ],
       "depth": 3,
-      "nodeCount": 18,
+      "nodeCount": 22,
       "fileCount": 1,
       "files": [
         "app/services/payment_webhook_service.py"
@@ -16255,6 +17053,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_allocation_policy_accept_run",
+      "name": "accept_run",
+      "entryPoint": "api_allocation_policy_accept_run",
+      "entryPointId": "api_allocation_policy_accept_run",
+      "path": [
+        "api_allocation_policy_accept_run",
+        "api_allocation_policy_serialize_run_details",
+        "api_allocation_policy_load_json_dict"
+      ],
+      "qualifiedPath": [
+        "api_allocation_policy_accept_run",
+        "api_allocation_policy_serialize_run_details",
+        "api_allocation_policy_load_json_dict"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/allocation_policy.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:utils_date_adddaysiso",
       "name": "addDaysIso",
       "entryPoint": "utils_date_adddaysiso",
@@ -16425,6 +17247,36 @@
       "warnings": []
     },
     {
+      "id": "flow:services_linen_service_available_stock",
+      "name": "available_stock",
+      "entryPoint": "services_linen_service_available_stock",
+      "entryPointId": "services_linen_service_available_stock",
+      "path": [
+        "services_linen_service_available_stock",
+        "services_linen_service_apply_shortage_custody_overlay",
+        "services_linen_service_get_linen_item",
+        "services_linen_service_get_location",
+        "services_linen_service_linenerror",
+        "services_linen_service_linennotfounderror"
+      ],
+      "qualifiedPath": [
+        "services_linen_service_available_stock",
+        "services_linen_service_apply_shortage_custody_overlay",
+        "services_linen_service_get_linen_item",
+        "services_linen_service_get_location",
+        "services_linen_service_linenerror",
+        "services_linen_service_linennotfounderror"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/linen_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_contracts_backfill_channel_code",
       "name": "backfill_channel_code",
       "entryPoint": "services_analytics_contracts_backfill_channel_code",
@@ -16555,6 +17407,36 @@
       "warnings": []
     },
     {
+      "id": "flow:services_company_reservation_terms_build_company_terms_snapshot",
+      "name": "build_company_terms_snapshot",
+      "entryPoint": "services_company_reservation_terms_build_company_terms_snapshot",
+      "entryPointId": "services_company_reservation_terms_build_company_terms_snapshot",
+      "path": [
+        "services_company_reservation_terms_build_company_terms_snapshot",
+        "services_company_reservation_terms_company_terms_from_profile",
+        "services_company_reservation_terms_reservation_economics",
+        "services_company_reservation_terms_terms_fingerprint",
+        "services_company_reservation_terms_decimal_text",
+        "services_company_reservation_terms_parse_pricing_snapshot"
+      ],
+      "qualifiedPath": [
+        "services_company_reservation_terms_build_company_terms_snapshot",
+        "services_company_reservation_terms_company_terms_from_profile",
+        "services_company_reservation_terms_reservation_economics",
+        "services_company_reservation_terms_terms_fingerprint",
+        "services_company_reservation_terms_decimal_text",
+        "services_company_reservation_terms_parse_pricing_snapshot"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/company_reservation_terms.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_contracts_build_room_occupancy_nightly_fact",
       "name": "build_room_occupancy_nightly_fact",
       "entryPoint": "services_analytics_contracts_build_room_occupancy_nightly_fact",
@@ -16630,6 +17512,34 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_service_calculate_base_amount_before_surcharge",
+      "name": "calculate_base_amount_before_surcharge",
+      "entryPoint": "services_payment_service_calculate_base_amount_before_surcharge",
+      "entryPointId": "services_payment_service_calculate_base_amount_before_surcharge",
+      "path": [
+        "services_payment_service_calculate_base_amount_before_surcharge",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_payment_conversion_rate",
+        "services_payment_service_paymenterror"
+      ],
+      "qualifiedPath": [
+        "services_payment_service_calculate_base_amount_before_surcharge",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_payment_conversion_rate",
+        "services_payment_service_paymenterror"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -16874,6 +17784,30 @@
       "fileCount": 1,
       "files": [
         "app/api/invitations.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_jurisdiction_profile_compute_missing_guest_fields",
+      "name": "compute_missing_guest_fields",
+      "entryPoint": "services_jurisdiction_profile_compute_missing_guest_fields",
+      "entryPointId": "services_jurisdiction_profile_compute_missing_guest_fields",
+      "path": [
+        "services_jurisdiction_profile_compute_missing_guest_fields",
+        "services_jurisdiction_profile_get_profile",
+        "services_jurisdiction_profile_unsupportedjurisdictionerror"
+      ],
+      "qualifiedPath": [
+        "services_jurisdiction_profile_compute_missing_guest_fields",
+        "services_jurisdiction_profile_get_profile",
+        "services_jurisdiction_profile_unsupportedjurisdictionerror"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/jurisdiction_profile.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -17381,6 +18315,58 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20261024_atomic_payment_corrections_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20261024_atomic_payment_corrections_downgrade",
+      "entryPointId": "versions_20261024_atomic_payment_corrections_downgrade",
+      "path": [
+        "versions_20261024_atomic_payment_corrections_downgrade",
+        "versions_20261024_atomic_payment_corrections_assert_manual_reference_keys_unique",
+        "versions_20261024_atomic_payment_corrections_remove_tenant_rls",
+        "versions_20261024_atomic_payment_corrections_replace_manual_reference_index",
+        "versions_20261024_atomic_payment_corrections_manual_reference_index_exists"
+      ],
+      "qualifiedPath": [
+        "versions_20261024_atomic_payment_corrections_downgrade",
+        "versions_20261024_atomic_payment_corrections_assert_manual_reference_keys_unique",
+        "versions_20261024_atomic_payment_corrections_remove_tenant_rls",
+        "versions_20261024_atomic_payment_corrections_replace_manual_reference_index",
+        "versions_20261024_atomic_payment_corrections_manual_reference_index_exists"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261024_atomic_payment_corrections.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_company_reservation_terms_effective_company_terms",
+      "name": "effective_company_terms",
+      "entryPoint": "services_company_reservation_terms_effective_company_terms",
+      "entryPointId": "services_company_reservation_terms_effective_company_terms",
+      "path": [
+        "services_company_reservation_terms_effective_company_terms",
+        "services_company_reservation_terms_company_terms_from_profile",
+        "services_company_reservation_terms_decimal_text"
+      ],
+      "qualifiedPath": [
+        "services_company_reservation_terms_effective_company_terms",
+        "services_company_reservation_terms_company_terms_from_profile",
+        "services_company_reservation_terms_decimal_text"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/company_reservation_terms.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:api_ota_webhooks_expedia_webhook",
       "name": "expedia_webhook",
       "entryPoint": "api_ota_webhooks_expedia_webhook",
@@ -17801,6 +18787,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_company_reservation_terms_get_company_terms_review_state",
+      "name": "get_company_terms_review_state",
+      "entryPoint": "services_company_reservation_terms_get_company_terms_review_state",
+      "entryPointId": "services_company_reservation_terms_get_company_terms_review_state",
+      "path": [
+        "services_company_reservation_terms_get_company_terms_review_state",
+        "services_company_reservation_terms_company_terms_from_profile",
+        "services_company_reservation_terms_terms_fingerprint",
+        "services_company_reservation_terms_decimal_text"
+      ],
+      "qualifiedPath": [
+        "services_company_reservation_terms_get_company_terms_review_state",
+        "services_company_reservation_terms_company_terms_from_profile",
+        "services_company_reservation_terms_terms_fingerprint",
+        "services_company_reservation_terms_decimal_text"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/company_reservation_terms.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_fx_service_get_conversion_quote_sync",
       "name": "get_conversion_quote_sync",
       "entryPoint": "services_fx_service_get_conversion_quote_sync",
@@ -17985,16 +18997,18 @@
         "services_payment_service_get_payment_link_with_surcharge",
         "services_payment_service_calculate_payment_surcharge",
         "services_payment_service_paymenterror",
+        "services_payment_service_payment_conversion_rate",
         "services_payment_service_payment_method_value"
       ],
       "qualifiedPath": [
         "services_payment_service_get_payment_link_with_surcharge",
         "services_payment_service_calculate_payment_surcharge",
         "services_payment_service_paymenterror",
+        "services_payment_service_payment_conversion_rate",
         "services_payment_service_payment_method_value"
       ],
       "depth": 2,
-      "nodeCount": 4,
+      "nodeCount": 5,
       "fileCount": 1,
       "files": [
         "app/services/payment_service.py"
@@ -18361,6 +19375,7 @@
       "entryPointId": "services_linen_service_linen_summary",
       "path": [
         "services_linen_service_linen_summary",
+        "services_linen_service_apply_shortage_custody_overlay",
         "services_linen_service_get_location",
         "services_linen_service_list_linen_items",
         "services_linen_service_linenerror",
@@ -18368,13 +19383,14 @@
       ],
       "qualifiedPath": [
         "services_linen_service_linen_summary",
+        "services_linen_service_apply_shortage_custody_overlay",
         "services_linen_service_get_location",
         "services_linen_service_list_linen_items",
         "services_linen_service_linenerror",
         "services_linen_service_linennotfounderror"
       ],
       "depth": 2,
-      "nodeCount": 5,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "app/services/linen_service.py"
@@ -18402,6 +19418,36 @@
       "fileCount": 1,
       "files": [
         "app/services/company_night_charge_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_checkin_service_list_guest_arrivals",
+      "name": "list_guest_arrivals",
+      "entryPoint": "services_checkin_service_list_guest_arrivals",
+      "entryPointId": "services_checkin_service_list_guest_arrivals",
+      "path": [
+        "services_checkin_service_list_guest_arrivals",
+        "services_checkin_service_checkinerror",
+        "services_checkin_service_guest_arrival_summary",
+        "services_checkin_service_arrival_projection",
+        "services_checkin_service_checkin_status_policy",
+        "services_checkin_service_reservation_guests"
+      ],
+      "qualifiedPath": [
+        "services_checkin_service_list_guest_arrivals",
+        "services_checkin_service_checkinerror",
+        "services_checkin_service_guest_arrival_summary",
+        "services_checkin_service_arrival_projection",
+        "services_checkin_service_checkin_status_policy",
+        "services_checkin_service_reservation_guests"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/checkin_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -18633,6 +19679,58 @@
       "warnings": []
     },
     {
+      "id": "flow:api_room_blocks_preview_room_block_allocation",
+      "name": "preview_room_block_allocation",
+      "entryPoint": "api_room_blocks_preview_room_block_allocation",
+      "entryPointId": "api_room_blocks_preview_room_block_allocation",
+      "path": [
+        "api_room_blocks_preview_room_block_allocation",
+        "api_room_blocks_roomblockallocationpreviewread",
+        "api_room_blocks_serialize_allocation_run_details",
+        "api_room_blocks_json_dict"
+      ],
+      "qualifiedPath": [
+        "api_room_blocks_preview_room_block_allocation",
+        "api_room_blocks_roomblockallocationpreviewread",
+        "api_room_blocks_serialize_allocation_run_details",
+        "api_room_blocks_json_dict"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/room_blocks.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_room_blocks_preview_room_block_extension_allocation",
+      "name": "preview_room_block_extension_allocation",
+      "entryPoint": "api_room_blocks_preview_room_block_extension_allocation",
+      "entryPointId": "api_room_blocks_preview_room_block_extension_allocation",
+      "path": [
+        "api_room_blocks_preview_room_block_extension_allocation",
+        "api_room_blocks_roomblockextensionallocationpreviewread",
+        "api_room_blocks_serialize_allocation_run_details",
+        "api_room_blocks_json_dict"
+      ],
+      "qualifiedPath": [
+        "api_room_blocks_preview_room_block_extension_allocation",
+        "api_room_blocks_roomblockextensionallocationpreviewread",
+        "api_room_blocks_serialize_allocation_run_details",
+        "api_room_blocks_json_dict"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/api/room_blocks.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_notification_service_process_pending_outbox",
       "name": "process_pending_outbox",
       "entryPoint": "services_notification_service_process_pending_outbox",
@@ -18831,6 +19929,46 @@
       "warnings": []
     },
     {
+      "id": "flow:services_payment_service_quote_reservation_payment_surcharge",
+      "name": "quote_reservation_payment_surcharge",
+      "entryPoint": "services_payment_service_quote_reservation_payment_surcharge",
+      "entryPointId": "services_payment_service_quote_reservation_payment_surcharge",
+      "path": [
+        "services_payment_service_quote_reservation_payment_surcharge",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_payment_conversion_rate",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_resolve_applied_payment_amount",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_rounding_policy_for_hotel",
+        "services_payment_service_rounding_tender_amount",
+        "services_payment_service_get_hotel_config"
+      ],
+      "qualifiedPath": [
+        "services_payment_service_quote_reservation_payment_surcharge",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_payment_conversion_rate",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_resolve_applied_payment_amount",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_rounding_policy_for_hotel",
+        "services_payment_service_rounding_tender_amount",
+        "services_payment_service_get_hotel_config"
+      ],
+      "depth": 2,
+      "nodeCount": 11,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_promotion_service_reactivate_promotion",
       "name": "reactivate_promotion",
       "entryPoint": "services_promotion_service_reactivate_promotion",
@@ -18927,6 +20065,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_stock_record_stock_count_line",
+      "name": "record_stock_count_line",
+      "entryPoint": "api_stock_record_stock_count_line",
+      "entryPointId": "api_stock_record_stock_count_line",
+      "path": [
+        "api_stock_record_stock_count_line",
+        "api_stock_stock_count_line_read",
+        "api_stock_stockcountlineread"
+      ],
+      "qualifiedPath": [
+        "api_stock_record_stock_count_line",
+        "api_stock_stock_count_line_read",
+        "api_stock_stockcountlineread"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/stock.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
       "name": "refresh_mercadopago_payment_link_test_by_reference",
       "entryPoint": "services_payment_link_test_service_refresh_mercadopago_payment_link_test_by_reference",
@@ -18987,6 +20149,56 @@
       "warnings": []
     },
     {
+      "id": "flow:services_allocation_runtime_service_reject_allocation_run",
+      "name": "reject_allocation_run",
+      "entryPoint": "services_allocation_runtime_service_reject_allocation_run",
+      "entryPointId": "services_allocation_runtime_service_reject_allocation_run",
+      "path": [
+        "services_allocation_runtime_service_reject_allocation_run",
+        "services_allocation_runtime_service_allocationruntimeerror",
+        "services_allocation_runtime_service_get_allocation_run_details",
+        "services_allocation_runtime_service_allocationrundetails"
+      ],
+      "qualifiedPath": [
+        "services_allocation_runtime_service_reject_allocation_run",
+        "services_allocation_runtime_service_allocationruntimeerror",
+        "services_allocation_runtime_service_get_allocation_run_details",
+        "services_allocation_runtime_service_allocationrundetails"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_runtime_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_allocation_policy_reject_run",
+      "name": "reject_run",
+      "entryPoint": "api_allocation_policy_reject_run",
+      "entryPointId": "api_allocation_policy_reject_run",
+      "path": [
+        "api_allocation_policy_reject_run",
+        "api_allocation_policy_serialize_run_details",
+        "api_allocation_policy_load_json_dict"
+      ],
+      "qualifiedPath": [
+        "api_allocation_policy_reject_run",
+        "api_allocation_policy_serialize_run_details",
+        "api_allocation_policy_load_json_dict"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/allocation_policy.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_ota_manual_service_release_no_guarantee",
       "name": "release_no_guarantee",
       "entryPoint": "services_ota_manual_service_release_no_guarantee",
@@ -18998,7 +20210,9 @@
         "services_ota_manual_service_clean",
         "services_ota_manual_service_existing_user_id",
         "services_ota_manual_service_otamanualreservationerror",
-        "services_ota_manual_service_audit_waitlist_promotion"
+        "services_ota_manual_service_suggest_waitlist_promotion_after_release",
+        "services_ota_manual_service_audit_waitlist_promotion",
+        "services_ota_manual_service_audit_waitlist_suggestion"
       ],
       "qualifiedPath": [
         "services_ota_manual_service_release_no_guarantee",
@@ -19007,10 +20221,12 @@
         "services_ota_manual_service_clean",
         "services_ota_manual_service_existing_user_id",
         "services_ota_manual_service_otamanualreservationerror",
-        "services_ota_manual_service_audit_waitlist_promotion"
+        "services_ota_manual_service_suggest_waitlist_promotion_after_release",
+        "services_ota_manual_service_audit_waitlist_promotion",
+        "services_ota_manual_service_audit_waitlist_suggestion"
       ],
       "depth": 2,
-      "nodeCount": 7,
+      "nodeCount": 9,
       "fileCount": 1,
       "files": [
         "app/services/ota_manual_service.py"
@@ -19188,6 +20404,38 @@
       "fileCount": 1,
       "files": [
         "app/services/reservation_action_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_linen_service_retire_linen",
+      "name": "retire_linen",
+      "entryPoint": "services_linen_service_retire_linen",
+      "entryPointId": "services_linen_service_retire_linen",
+      "path": [
+        "services_linen_service_retire_linen",
+        "services_linen_service_current_stock",
+        "services_linen_service_get_location",
+        "services_linen_service_linenerror",
+        "services_linen_service_linenidempotencyconflict",
+        "services_linen_service_linennotfounderror",
+        "services_linen_service_get_linen_item"
+      ],
+      "qualifiedPath": [
+        "services_linen_service_retire_linen",
+        "services_linen_service_current_stock",
+        "services_linen_service_get_location",
+        "services_linen_service_linenerror",
+        "services_linen_service_linenidempotencyconflict",
+        "services_linen_service_linennotfounderror",
+        "services_linen_service_get_linen_item"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/linen_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -20063,6 +21311,36 @@
       "warnings": []
     },
     {
+      "id": "flow:services_waitlist_service_suggest_waitlist_promotions",
+      "name": "suggest_waitlist_promotions",
+      "entryPoint": "services_waitlist_service_suggest_waitlist_promotions",
+      "entryPointId": "services_waitlist_service_suggest_waitlist_promotions",
+      "path": [
+        "services_waitlist_service_suggest_waitlist_promotions",
+        "services_waitlist_service_list_waitlist_entries",
+        "services_waitlist_service_suggest_waitlist_promotion",
+        "services_waitlist_service_get_waitlist_entry",
+        "services_waitlist_service_waitlist_entry_fingerprint",
+        "services_waitlist_service_waitlisterror"
+      ],
+      "qualifiedPath": [
+        "services_waitlist_service_suggest_waitlist_promotions",
+        "services_waitlist_service_list_waitlist_entries",
+        "services_waitlist_service_suggest_waitlist_promotion",
+        "services_waitlist_service_get_waitlist_entry",
+        "services_waitlist_service_waitlist_entry_fingerprint",
+        "services_waitlist_service_waitlisterror"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/waitlist_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_operational_task_service_task_history",
       "name": "task_history",
       "entryPoint": "services_operational_task_service_task_history",
@@ -20324,6 +21602,34 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20260927_ota_credit_backfill.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20261024_atomic_payment_corrections_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20261024_atomic_payment_corrections_upgrade",
+      "entryPointId": "versions_20261024_atomic_payment_corrections_upgrade",
+      "path": [
+        "versions_20261024_atomic_payment_corrections_upgrade",
+        "versions_20261024_atomic_payment_corrections_assert_manual_reference_keys_unique",
+        "versions_20261024_atomic_payment_corrections_install_tenant_rls",
+        "versions_20261024_atomic_payment_corrections_replace_manual_reference_index",
+        "versions_20261024_atomic_payment_corrections_manual_reference_index_exists"
+      ],
+      "qualifiedPath": [
+        "versions_20261024_atomic_payment_corrections_upgrade",
+        "versions_20261024_atomic_payment_corrections_assert_manual_reference_keys_unique",
+        "versions_20261024_atomic_payment_corrections_install_tenant_rls",
+        "versions_20261024_atomic_payment_corrections_replace_manual_reference_index",
+        "versions_20261024_atomic_payment_corrections_manual_reference_index_exists"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261024_atomic_payment_corrections.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -21725,6 +23031,50 @@
       "warnings": []
     },
     {
+      "id": "flow:protected_allocationpage_allocationpage",
+      "name": "AllocationPage",
+      "entryPoint": "protected_allocationpage_allocationpage",
+      "entryPointId": "protected_allocationpage_allocationpage",
+      "path": [
+        "protected_allocationpage_allocationpage",
+        "protected_allocationpage_messagefor"
+      ],
+      "qualifiedPath": [
+        "protected_allocationpage_allocationpage",
+        "protected_allocationpage_messagefor"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/views/protected/AllocationPage.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:components_allocationproposalreview_allocationproposalreview",
+      "name": "AllocationProposalReview",
+      "entryPoint": "components_allocationproposalreview_allocationproposalreview",
+      "entryPointId": "components_allocationproposalreview_allocationproposalreview",
+      "path": [
+        "components_allocationproposalreview_allocationproposalreview",
+        "components_allocationproposalreview_allocationerrorkey"
+      ],
+      "qualifiedPath": [
+        "components_allocationproposalreview_allocationproposalreview",
+        "components_allocationproposalreview_allocationerrorkey"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/components/AllocationProposalReview.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:analytics_analyticspages_analyticsfreshness",
       "name": "AnalyticsFreshness",
       "entryPoint": "analytics_analyticspages_analyticsfreshness",
@@ -21968,6 +23318,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/LaundryPage.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:components_paymentquotesummary_paymentquotesummary",
+      "name": "PaymentQuoteSummary",
+      "entryPoint": "components_paymentquotesummary_paymentquotesummary",
+      "entryPointId": "components_paymentquotesummary_paymentquotesummary",
+      "path": [
+        "components_paymentquotesummary_paymentquotesummary",
+        "components_paymentquotesummary_detaillabel"
+      ],
+      "qualifiedPath": [
+        "components_paymentquotesummary_paymentquotesummary",
+        "components_paymentquotesummary_detaillabel"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/components/PaymentQuoteSummary.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -22978,17 +24350,21 @@
       "path": [
         "services_allocation_engine_build_slots_from_db",
         "services_allocation_engine_is_protected_reservation",
+        "services_allocation_engine_normalize_revenue_to_hotel_currency",
+        "services_allocation_engine_reservation_net_revenue_minor_units",
         "services_allocation_engine_reservationslot",
         "services_allocation_engine_roomslot"
       ],
       "qualifiedPath": [
         "services_allocation_engine_build_slots_from_db",
         "services_allocation_engine_is_protected_reservation",
+        "services_allocation_engine_normalize_revenue_to_hotel_currency",
+        "services_allocation_engine_reservation_net_revenue_minor_units",
         "services_allocation_engine_reservationslot",
         "services_allocation_engine_roomslot"
       ],
       "depth": 1,
-      "nodeCount": 4,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "app/services/allocation_engine.py"
@@ -23123,28 +24499,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_service_calculate_base_amount_before_surcharge",
-      "name": "calculate_base_amount_before_surcharge",
-      "entryPoint": "services_payment_service_calculate_base_amount_before_surcharge",
-      "entryPointId": "services_payment_service_calculate_base_amount_before_surcharge",
-      "path": [
-        "services_payment_service_calculate_base_amount_before_surcharge",
-        "services_payment_service_payment_method_value"
-      ],
-      "qualifiedPath": [
-        "services_payment_service_calculate_base_amount_before_surcharge",
-        "services_payment_service_payment_method_value"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_contracts_calculate_physical_room_nights_for_hotel",
       "name": "calculate_physical_room_nights_for_hotel",
       "entryPoint": "services_analytics_contracts_calculate_physical_room_nights_for_hotel",
@@ -23240,15 +24594,17 @@
       "path": [
         "services_waitlist_service_cancel_waitlist_entry",
         "services_waitlist_service_get_waitlist_entry",
+        "services_waitlist_service_lock_waitlist_entry",
         "services_waitlist_service_waitlisterror"
       ],
       "qualifiedPath": [
         "services_waitlist_service_cancel_waitlist_entry",
         "services_waitlist_service_get_waitlist_entry",
+        "services_waitlist_service_lock_waitlist_entry",
         "services_waitlist_service_waitlisterror"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/services/waitlist_service.py"
@@ -23623,28 +24979,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_jurisdiction_profile_compute_missing_guest_fields",
-      "name": "compute_missing_guest_fields",
-      "entryPoint": "services_jurisdiction_profile_compute_missing_guest_fields",
-      "entryPointId": "services_jurisdiction_profile_compute_missing_guest_fields",
-      "path": [
-        "services_jurisdiction_profile_compute_missing_guest_fields",
-        "services_jurisdiction_profile_get_profile"
-      ],
-      "qualifiedPath": [
-        "services_jurisdiction_profile_compute_missing_guest_fields",
-        "services_jurisdiction_profile_get_profile"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/jurisdiction_profile.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_cash_register_service_confirm_cash_custody",
       "name": "confirm_cash_custody",
       "entryPoint": "services_cash_register_service_confirm_cash_custody",
@@ -23756,6 +25090,30 @@
       "fileCount": 1,
       "files": [
         "app/services/stock_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_whatsapp_crm_conversation_messages",
+      "name": "conversation_messages",
+      "entryPoint": "api_whatsapp_crm_conversation_messages",
+      "entryPointId": "api_whatsapp_crm_conversation_messages",
+      "path": [
+        "api_whatsapp_crm_conversation_messages",
+        "api_whatsapp_crm_conversation_access_scope",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "qualifiedPath": [
+        "api_whatsapp_crm_conversation_messages",
+        "api_whatsapp_crm_conversation_access_scope",
+        "api_whatsapp_crm_require_plan"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/whatsapp_crm.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -23973,14 +25331,16 @@
       "entryPointId": "api_whatsapp_crm_create_note",
       "path": [
         "api_whatsapp_crm_create_note",
+        "api_whatsapp_crm_conversation_access_scope",
         "api_whatsapp_crm_require_plan"
       ],
       "qualifiedPath": [
         "api_whatsapp_crm_create_note",
+        "api_whatsapp_crm_conversation_access_scope",
         "api_whatsapp_crm_require_plan"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/whatsapp_crm.py"
@@ -24080,32 +25440,6 @@
       "fileCount": 1,
       "files": [
         "app/services/promotion_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_laundry_vendor_service_create_remito",
-      "name": "create_remito",
-      "entryPoint": "services_laundry_vendor_service_create_remito",
-      "entryPointId": "services_laundry_vendor_service_create_remito",
-      "path": [
-        "services_laundry_vendor_service_create_remito",
-        "services_laundry_vendor_service_duplicatelaundryremitoerror",
-        "services_laundry_vendor_service_is_duplicate_remito_integrity_error",
-        "services_laundry_vendor_service_laundryvendorerror"
-      ],
-      "qualifiedPath": [
-        "services_laundry_vendor_service_create_remito",
-        "services_laundry_vendor_service_duplicatelaundryremitoerror",
-        "services_laundry_vendor_service_is_duplicate_remito_integrity_error",
-        "services_laundry_vendor_service_laundryvendorerror"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/laundry_vendor_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -24326,6 +25660,28 @@
       "fileCount": 1,
       "files": [
         "app/api/payment_surcharges.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_reservations_decide_company_terms_review",
+      "name": "decide_company_terms_review",
+      "entryPoint": "api_reservations_decide_company_terms_review",
+      "entryPointId": "api_reservations_decide_company_terms_review",
+      "path": [
+        "api_reservations_decide_company_terms_review",
+        "api_reservations_company_terms_review_response"
+      ],
+      "qualifiedPath": [
+        "api_reservations_decide_company_terms_review",
+        "api_reservations_company_terms_review_response"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -25037,6 +26393,94 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20261025_company_reservation_terms_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20261025_company_reservation_terms_downgrade",
+      "entryPointId": "versions_20261025_company_reservation_terms_downgrade",
+      "path": [
+        "versions_20261025_company_reservation_terms_downgrade",
+        "versions_20261025_company_reservation_terms_remove_tenant_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261025_company_reservation_terms_downgrade",
+        "versions_20261025_company_reservation_terms_remove_tenant_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261025_company_reservation_terms.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20261025_guest_arrivals_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20261025_guest_arrivals_downgrade",
+      "entryPointId": "versions_20261025_guest_arrivals_downgrade",
+      "path": [
+        "versions_20261025_guest_arrivals_downgrade",
+        "versions_20261025_guest_arrivals_remove_tenant_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261025_guest_arrivals_downgrade",
+        "versions_20261025_guest_arrivals_remove_tenant_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261025_guest_arrivals.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20261025_laundry_discrepancy_workflow_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20261025_laundry_discrepancy_workflow_downgrade",
+      "entryPointId": "versions_20261025_laundry_discrepancy_workflow_downgrade",
+      "path": [
+        "versions_20261025_laundry_discrepancy_workflow_downgrade",
+        "versions_20261025_laundry_discrepancy_workflow_remove_tenant_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261025_laundry_discrepancy_workflow_downgrade",
+        "versions_20261025_laundry_discrepancy_workflow_remove_tenant_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261025_laundry_discrepancy_workflow.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20261025_reservation_cancellation_review_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20261025_reservation_cancellation_review_downgrade",
+      "entryPointId": "versions_20261025_reservation_cancellation_review_downgrade",
+      "path": [
+        "versions_20261025_reservation_cancellation_review_downgrade",
+        "versions_20261025_reservation_cancellation_review_remove_tenant_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261025_reservation_cancellation_review_downgrade",
+        "versions_20261025_reservation_cancellation_review_remove_tenant_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261025_reservation_cancellation_review.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_3bc5882f756d_add_role_visibility_windows_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_3bc5882f756d_add_role_visibility_windows_downgrade",
@@ -25259,6 +26703,36 @@
       "warnings": []
     },
     {
+      "id": "flow:services_cancellation_policy_service_evaluate_cancellation_policy",
+      "name": "evaluate_cancellation_policy",
+      "entryPoint": "services_cancellation_policy_service_evaluate_cancellation_policy",
+      "entryPointId": "services_cancellation_policy_service_evaluate_cancellation_policy",
+      "path": [
+        "services_cancellation_policy_service_evaluate_cancellation_policy",
+        "services_cancellation_policy_service_cancellationevaluation",
+        "services_cancellation_policy_service_currency",
+        "services_cancellation_policy_service_decimal_amount",
+        "services_cancellation_policy_service_parse_hotel_time",
+        "services_cancellation_policy_service_review"
+      ],
+      "qualifiedPath": [
+        "services_cancellation_policy_service_evaluate_cancellation_policy",
+        "services_cancellation_policy_service_cancellationevaluation",
+        "services_cancellation_policy_service_currency",
+        "services_cancellation_policy_service_decimal_amount",
+        "services_cancellation_policy_service_parse_hotel_time",
+        "services_cancellation_policy_service_review"
+      ],
+      "depth": 1,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/cancellation_policy_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_analytics_exports_expire_export_job_if_needed",
       "name": "expire_export_job_if_needed",
       "entryPoint": "services_analytics_exports_expire_export_job_if_needed",
@@ -25312,15 +26786,17 @@
       "path": [
         "services_waitlist_service_expire_waitlist_entry",
         "services_waitlist_service_get_waitlist_entry",
+        "services_waitlist_service_lock_waitlist_entry",
         "services_waitlist_service_waitlisterror"
       ],
       "qualifiedPath": [
         "services_waitlist_service_expire_waitlist_entry",
         "services_waitlist_service_get_waitlist_entry",
+        "services_waitlist_service_lock_waitlist_entry",
         "services_waitlist_service_waitlisterror"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/services/waitlist_service.py"
@@ -25924,6 +27400,30 @@
       "fileCount": 1,
       "files": [
         "app/services/company_document_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_company_reservation_terms_service_get_company_terms_review",
+      "name": "get_company_terms_review",
+      "entryPoint": "services_company_reservation_terms_service_get_company_terms_review",
+      "entryPointId": "services_company_reservation_terms_service_get_company_terms_review",
+      "path": [
+        "services_company_reservation_terms_service_get_company_terms_review",
+        "services_company_reservation_terms_service_companytermsreviewerror",
+        "services_company_reservation_terms_service_companytermsreviewnotfound"
+      ],
+      "qualifiedPath": [
+        "services_company_reservation_terms_service_get_company_terms_review",
+        "services_company_reservation_terms_service_companytermsreviewerror",
+        "services_company_reservation_terms_service_companytermsreviewnotfound"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/company_reservation_terms_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -26627,14 +28127,16 @@
       "entryPointId": "api_whatsapp_crm_inbox",
       "path": [
         "api_whatsapp_crm_inbox",
+        "api_whatsapp_crm_conversation_access_scope",
         "api_whatsapp_crm_require_plan"
       ],
       "qualifiedPath": [
         "api_whatsapp_crm_inbox",
+        "api_whatsapp_crm_conversation_access_scope",
         "api_whatsapp_crm_require_plan"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/whatsapp_crm.py"
@@ -26941,6 +28443,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_whatsapp_crm_service_list_conversation_messages",
+      "name": "list_conversation_messages",
+      "entryPoint": "services_whatsapp_crm_service_list_conversation_messages",
+      "entryPointId": "services_whatsapp_crm_service_list_conversation_messages",
+      "path": [
+        "services_whatsapp_crm_service_list_conversation_messages",
+        "services_whatsapp_crm_service_whatsappcrmerror",
+        "services_whatsapp_crm_service_whatsappmessagepage"
+      ],
+      "qualifiedPath": [
+        "services_whatsapp_crm_service_list_conversation_messages",
+        "services_whatsapp_crm_service_whatsappcrmerror",
+        "services_whatsapp_crm_service_whatsappmessagepage"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/whatsapp_crm_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:api_laundry_vendor_list_laundry_remitos",
       "name": "list_laundry_remitos",
       "entryPoint": "api_laundry_vendor_list_laundry_remitos",
@@ -26994,17 +28520,15 @@
       "path": [
         "services_housekeeping_checklist_service_list_open_checklists",
         "services_housekeeping_checklist_service_build_checklist_read",
-        "services_housekeeping_checklist_service_housekeepingchecklistnotfound",
-        "services_housekeeping_checklist_service_read_checklist"
+        "services_housekeeping_checklist_service_housekeepingchecklistnotfound"
       ],
       "qualifiedPath": [
         "services_housekeeping_checklist_service_list_open_checklists",
         "services_housekeeping_checklist_service_build_checklist_read",
-        "services_housekeeping_checklist_service_housekeepingchecklistnotfound",
-        "services_housekeeping_checklist_service_read_checklist"
+        "services_housekeeping_checklist_service_housekeepingchecklistnotfound"
       ],
       "depth": 1,
-      "nodeCount": 4,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/services/housekeeping_checklist_service.py"
@@ -28142,15 +29666,21 @@
       "path": [
         "services_waitlist_service_promote_from_waitlist",
         "services_waitlist_service_get_waitlist_entry",
+        "services_waitlist_service_lock_waitlist_entry",
+        "services_waitlist_service_suggest_waitlist_promotion",
+        "services_waitlist_service_waitlist_entry_fingerprint",
         "services_waitlist_service_waitlisterror"
       ],
       "qualifiedPath": [
         "services_waitlist_service_promote_from_waitlist",
         "services_waitlist_service_get_waitlist_entry",
+        "services_waitlist_service_lock_waitlist_entry",
+        "services_waitlist_service_suggest_waitlist_promotion",
+        "services_waitlist_service_waitlist_entry_fingerprint",
         "services_waitlist_service_waitlisterror"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 6,
       "fileCount": 1,
       "files": [
         "app/services/waitlist_service.py"
@@ -28226,6 +29756,28 @@
       "fileCount": 1,
       "files": [
         "app/api/cash_register.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_reservations_read_company_terms_review",
+      "name": "read_company_terms_review",
+      "entryPoint": "api_reservations_read_company_terms_review",
+      "entryPointId": "api_reservations_read_company_terms_review",
+      "path": [
+        "api_reservations_read_company_terms_review",
+        "api_reservations_company_terms_review_response"
+      ],
+      "qualifiedPath": [
+        "api_reservations_read_company_terms_review",
+        "api_reservations_company_terms_review_response"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/reservations.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -28975,6 +30527,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_reservation_cancellation_service_resolve_cancellation_review",
+      "name": "resolve_cancellation_review",
+      "entryPoint": "services_reservation_cancellation_service_resolve_cancellation_review",
+      "entryPointId": "services_reservation_cancellation_service_resolve_cancellation_review",
+      "path": [
+        "services_reservation_cancellation_service_resolve_cancellation_review",
+        "services_reservation_cancellation_service_cancel_active_payment_links",
+        "services_reservation_cancellation_service_cancellationreviewconflict",
+        "services_reservation_cancellation_service_cancellationreviewnotfound",
+        "services_reservation_cancellation_service_get_review_reservation",
+        "services_reservation_cancellation_service_review_audit_payload",
+        "services_reservation_cancellation_service_utc_now"
+      ],
+      "qualifiedPath": [
+        "services_reservation_cancellation_service_resolve_cancellation_review",
+        "services_reservation_cancellation_service_cancel_active_payment_links",
+        "services_reservation_cancellation_service_cancellationreviewconflict",
+        "services_reservation_cancellation_service_cancellationreviewnotfound",
+        "services_reservation_cancellation_service_get_review_reservation",
+        "services_reservation_cancellation_service_review_audit_payload",
+        "services_reservation_cancellation_service_utc_now"
+      ],
+      "depth": 1,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/reservation_cancellation_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_guest_restriction_service_resolve_guest_restriction",
       "name": "resolve_guest_restriction",
       "entryPoint": "services_guest_restriction_service_resolve_guest_restriction",
@@ -29189,6 +30773,32 @@
       "warnings": []
     },
     {
+      "id": "flow:services_company_reservation_terms_service_review_company_reservation_terms",
+      "name": "review_company_reservation_terms",
+      "entryPoint": "services_company_reservation_terms_service_review_company_reservation_terms",
+      "entryPointId": "services_company_reservation_terms_service_review_company_reservation_terms",
+      "path": [
+        "services_company_reservation_terms_service_review_company_reservation_terms",
+        "services_company_reservation_terms_service_companytermsreviewconflict",
+        "services_company_reservation_terms_service_companytermsreviewerror",
+        "services_company_reservation_terms_service_companytermsreviewnotfound"
+      ],
+      "qualifiedPath": [
+        "services_company_reservation_terms_service_review_company_reservation_terms",
+        "services_company_reservation_terms_service_companytermsreviewconflict",
+        "services_company_reservation_terms_service_companytermsreviewerror",
+        "services_company_reservation_terms_service_companytermsreviewnotfound"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/company_reservation_terms_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_allocation_policy_service_review_policy_suggestion",
       "name": "review_policy_suggestion",
       "entryPoint": "services_allocation_policy_service_review_policy_suggestion",
@@ -29258,28 +30868,6 @@
       "fileCount": 1,
       "files": [
         "app/services/hotel_api_key_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_room_block_service_room_has_active_block",
-      "name": "room_has_active_block",
-      "entryPoint": "services_room_block_service_room_has_active_block",
-      "entryPointId": "services_room_block_service_room_has_active_block",
-      "path": [
-        "services_room_block_service_room_has_active_block",
-        "services_room_block_service_room_block_overlap_filter"
-      ],
-      "qualifiedPath": [
-        "services_room_block_service_room_has_active_block",
-        "services_room_block_service_room_block_overlap_filter"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/room_block_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -29585,14 +31173,16 @@
       "entryPointId": "api_whatsapp_crm_send_message",
       "path": [
         "api_whatsapp_crm_send_message",
+        "api_whatsapp_crm_conversation_access_scope",
         "api_whatsapp_crm_require_plan"
       ],
       "qualifiedPath": [
         "api_whatsapp_crm_send_message",
+        "api_whatsapp_crm_conversation_access_scope",
         "api_whatsapp_crm_require_plan"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/whatsapp_crm.py"
@@ -30111,28 +31701,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_allocation_trigger_service_trigger_reoptimization_bg",
-      "name": "trigger_reoptimization_bg",
-      "entryPoint": "services_allocation_trigger_service_trigger_reoptimization_bg",
-      "entryPointId": "services_allocation_trigger_service_trigger_reoptimization_bg",
-      "path": [
-        "services_allocation_trigger_service_trigger_reoptimization_bg",
-        "services_allocation_trigger_service_run_reoptimization_once"
-      ],
-      "qualifiedPath": [
-        "services_allocation_trigger_service_trigger_reoptimization_bg",
-        "services_allocation_trigger_service_run_reoptimization_once"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/services/allocation_trigger_service.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:services_analytics_service_unsnooze_alert",
       "name": "unsnooze_alert",
       "entryPoint": "services_analytics_service_unsnooze_alert",
@@ -30415,14 +31983,16 @@
       "entryPointId": "api_whatsapp_crm_update_status",
       "path": [
         "api_whatsapp_crm_update_status",
+        "api_whatsapp_crm_conversation_access_scope",
         "api_whatsapp_crm_require_plan"
       ],
       "qualifiedPath": [
         "api_whatsapp_crm_update_status",
+        "api_whatsapp_crm_conversation_access_scope",
         "api_whatsapp_crm_require_plan"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/whatsapp_crm.py"
@@ -30438,15 +32008,17 @@
       "path": [
         "services_waitlist_service_update_waitlist_entry",
         "services_waitlist_service_get_waitlist_entry",
+        "services_waitlist_service_lock_waitlist_entry",
         "services_waitlist_service_waitlisterror"
       ],
       "qualifiedPath": [
         "services_waitlist_service_update_waitlist_entry",
         "services_waitlist_service_get_waitlist_entry",
+        "services_waitlist_service_lock_waitlist_entry",
         "services_waitlist_service_waitlisterror"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 4,
       "fileCount": 1,
       "files": [
         "app/services/waitlist_service.py"
@@ -31217,6 +32789,96 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20261025_company_reservation_terms_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20261025_company_reservation_terms_upgrade",
+      "entryPointId": "versions_20261025_company_reservation_terms_upgrade",
+      "path": [
+        "versions_20261025_company_reservation_terms_upgrade",
+        "versions_20261025_company_reservation_terms_install_tenant_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261025_company_reservation_terms_upgrade",
+        "versions_20261025_company_reservation_terms_install_tenant_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261025_company_reservation_terms.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20261025_guest_arrivals_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20261025_guest_arrivals_upgrade",
+      "entryPointId": "versions_20261025_guest_arrivals_upgrade",
+      "path": [
+        "versions_20261025_guest_arrivals_upgrade",
+        "versions_20261025_guest_arrivals_install_tenant_rls",
+        "versions_20261025_guest_arrivals_status_check"
+      ],
+      "qualifiedPath": [
+        "versions_20261025_guest_arrivals_upgrade",
+        "versions_20261025_guest_arrivals_install_tenant_rls",
+        "versions_20261025_guest_arrivals_status_check"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261025_guest_arrivals.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20261025_laundry_discrepancy_workflow_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20261025_laundry_discrepancy_workflow_upgrade",
+      "entryPointId": "versions_20261025_laundry_discrepancy_workflow_upgrade",
+      "path": [
+        "versions_20261025_laundry_discrepancy_workflow_upgrade",
+        "versions_20261025_laundry_discrepancy_workflow_install_tenant_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261025_laundry_discrepancy_workflow_upgrade",
+        "versions_20261025_laundry_discrepancy_workflow_install_tenant_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261025_laundry_discrepancy_workflow.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20261025_reservation_cancellation_review_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20261025_reservation_cancellation_review_upgrade",
+      "entryPointId": "versions_20261025_reservation_cancellation_review_upgrade",
+      "path": [
+        "versions_20261025_reservation_cancellation_review_upgrade",
+        "versions_20261025_reservation_cancellation_review_install_tenant_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261025_reservation_cancellation_review_upgrade",
+        "versions_20261025_reservation_cancellation_review_install_tenant_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261025_reservation_cancellation_review.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_3bc5882f756d_add_role_visibility_windows_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_3bc5882f756d_add_role_visibility_windows_upgrade",
@@ -31445,6 +33107,34 @@
       "warnings": []
     },
     {
+      "id": "flow:hooks_useallocationworkspace_useallocationworkspace",
+      "name": "useAllocationWorkspace",
+      "entryPoint": "hooks_useallocationworkspace_useallocationworkspace",
+      "entryPointId": "hooks_useallocationworkspace_useallocationworkspace",
+      "path": [
+        "hooks_useallocationworkspace_useallocationworkspace",
+        "hooks_useallocationworkspace_allocationlatestkey",
+        "hooks_useallocationworkspace_allocationpolicykey",
+        "hooks_useallocationworkspace_allocationreservationskey",
+        "hooks_useallocationworkspace_allocationroomskey"
+      ],
+      "qualifiedPath": [
+        "hooks_useallocationworkspace_useallocationworkspace",
+        "hooks_useallocationworkspace_allocationlatestkey",
+        "hooks_useallocationworkspace_allocationpolicykey",
+        "hooks_useallocationworkspace_allocationreservationskey",
+        "hooks_useallocationworkspace_allocationroomskey"
+      ],
+      "depth": 1,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useAllocationWorkspace.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:hooks_usereports_usebookedvaluereport",
       "name": "useBookedValueReport",
       "entryPoint": "hooks_usereports_usebookedvaluereport",
@@ -31588,6 +33278,28 @@
       "qualifiedPath": [
         "hooks_usecompanies_usecompanydocuments",
         "hooks_usecompanies_companydocumentskey"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/hooks/useCompanies.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:hooks_usecompanies_usecompanyhotelcurrency",
+      "name": "useCompanyHotelCurrency",
+      "entryPoint": "hooks_usecompanies_usecompanyhotelcurrency",
+      "entryPointId": "hooks_usecompanies_usecompanyhotelcurrency",
+      "path": [
+        "hooks_usecompanies_usecompanyhotelcurrency",
+        "hooks_usecompanies_companyhotelcurrencykey"
+      ],
+      "qualifiedPath": [
+        "hooks_usecompanies_usecompanyhotelcurrency",
+        "hooks_usecompanies_companyhotelcurrencykey"
       ],
       "depth": 1,
       "nodeCount": 2,

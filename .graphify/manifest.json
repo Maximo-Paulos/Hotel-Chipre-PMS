@@ -232,8 +232,8 @@
     "hash": "5181cd14236b6df3265859341b1ad930"
   },
   "app/api/companies.py": {
-    "mtime": 1791849255856.7751,
-    "hash": "7ae4d23c1099956511c37ca6ea924e64"
+    "mtime": 1792971000252.0376,
+    "hash": "c73f71a4259ca5a5223391a53777a8f2"
   },
   "app/api/company_documents.py": {
     "mtime": 1792943630351.125,
@@ -268,8 +268,8 @@
     "hash": "a7a347c54c6f2788d79b8d8d8f75565a"
   },
   "app/api/guests.py": {
-    "mtime": 1792829768325.7502,
-    "hash": "f6785b48d87a179c71b1237325e3302d"
+    "mtime": 1792971013698.4072,
+    "hash": "02f9cf9f0fda783ef743b3bffd466671"
   },
   "app/api/health.py": {
     "mtime": 1792240082194.1455,
@@ -336,8 +336,8 @@
     "hash": "b2b55268a4abbcb1343c378d83127ff3"
   },
   "app/api/reports.py": {
-    "mtime": 1792677438138.8728,
-    "hash": "ef85d915bdd58d0d4c2dfe4993269b20"
+    "mtime": 1792970985251.797,
+    "hash": "d322cdb96c4fb625369803f981976cf4"
   },
   "app/api/reservations.py": {
     "mtime": 1792965295319.5388,
@@ -408,8 +408,8 @@
     "hash": "b1daa37a2a0567c2c7a6cd280e3a59b2"
   },
   "app/decorators/audit_hooks.py": {
-    "mtime": 1787360063272.8452,
-    "hash": "e5eea5105cf1441e0f30be8a260c4a44"
+    "mtime": 1792971008240.2725,
+    "hash": "6c9913157b3106555dc07a18cb42d456"
   },
   "app/dependencies/__init__.py": {
     "mtime": 1783103274878.603,
@@ -820,8 +820,8 @@
     "hash": "6543dec113d97ec530fbe4aa6263cec1"
   },
   "app/services/audit_log_service.py": {
-    "mtime": 1791849255873.1912,
-    "hash": "80866210012241f970b6971c8440f514"
+    "mtime": 1792970998883.3494,
+    "hash": "dd20bc01dc4f23db462b898350e7918e"
   },
   "app/services/audit_projection.py": {
     "mtime": 1787360063276.4124,
@@ -896,8 +896,8 @@
     "hash": "ff8bb9885edb1d0d8f11cd4dbd1dfa2b"
   },
   "app/services/guest_service.py": {
-    "mtime": 1792830394131.333,
-    "hash": "9b82179ad519e387ed938c9233a24fc8"
+    "mtime": 1792971011384.504,
+    "hash": "88ed308ca9682a9665e2fe99442395c2"
   },
   "app/services/hotel_api_key_service.py": {
     "mtime": 1787360058500.898,
@@ -1128,8 +1128,8 @@
     "hash": "4077ba32bb52f1c323ebc53ca3f169b3"
   },
   "frontend/src/api/companies.ts": {
-    "mtime": 1791849255905.714,
-    "hash": "0558269c4d3043c7858428700a4dd204"
+    "mtime": 1792971007664.0603,
+    "hash": "51304380cc4c9065809972c1dcb5b186"
   },
   "frontend/src/api/config.ts": {
     "mtime": 1792948360181.2385,
@@ -1280,8 +1280,8 @@
     "hash": "a3c03a1424d128b64f6bf2ea0c48029b"
   },
   "frontend/src/hooks/useCompanies.ts": {
-    "mtime": 1791849255912.485,
-    "hash": "c7040a05499dfeab16687d160855f524"
+    "mtime": 1792971007666.795,
+    "hash": "4f9ecfa3cb709066edc3c9fcadf89424"
   },
   "frontend/src/hooks/useGemmaChat.ts": {
     "mtime": 1791849255912.6785,
@@ -1416,8 +1416,8 @@
     "hash": "30d8562e0d1b978a01d7f3bcad514692"
   },
   "frontend/src/views/protected/CompaniesPage.tsx": {
-    "mtime": 1792943488326.625,
-    "hash": "3957869e0fe6c170d464314403e87bc1"
+    "mtime": 1792971007667.2244,
+    "hash": "0ecd3ca4a3d56771faf993ebdafc9de9"
   },
   "frontend/src/views/protected/DashboardPage.tsx": {
     "mtime": 1792264773486.864,
@@ -3232,8 +3232,8 @@
     "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1792861555534.1213,
-    "hash": "0b384388a5c874e276808b736f65d2f3"
+    "mtime": 1792967330256.241,
+    "hash": "1b1e7315c2f519f1da5231d148186f32"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784517879747.6167,
@@ -5544,36 +5544,36 @@
     "hash": "1fc9038f296248ad8d182562a5034500"
   },
   "app/api/whatsapp_crm.py": {
-    "mtime": 1790469714858.2458,
-    "hash": "6d2c196e6b976e481675948d0843b282"
+    "mtime": 1792971410193.0168,
+    "hash": "b75e6cabc2b3487b0aa90173ae844c0b"
   },
   "app/api/whatsapp_meta_webhook.py": {
     "mtime": 1790438263707.6028,
     "hash": "9e4187351369bede7960e5512f8a0691"
   },
   "app/models/whatsapp_crm.py": {
-    "mtime": 1789162422010.5977,
-    "hash": "d3915b038d2ce60970f4380e23aef8e9"
+    "mtime": 1792971079353.4277,
+    "hash": "49292e8f93881400a6c6ea8109e5679c"
   },
   "app/schemas/whatsapp_crm.py": {
-    "mtime": 1790469699857.0964,
-    "hash": "789d01dc1c0df3d7ea834919c88bc065"
+    "mtime": 1792971644333.8713,
+    "hash": "539dd29bcebc7907d86027a98f26e6c8"
   },
   "app/services/whatsapp_crm_service.py": {
-    "mtime": 1789162422014.6206,
-    "hash": "d2aec27a7efe90c152b40d605a45898f"
+    "mtime": 1792971404819.3145,
+    "hash": "1a702929fb5958890eb0b346c13724ff"
   },
   "frontend/src/api/whatsapp.ts": {
-    "mtime": 1789162422014.8088,
-    "hash": "b0e5058c9a6c2b42f0a710a27e1ba426"
+    "mtime": 1792971033009.687,
+    "hash": "72a137d128bbc5e3e7927efe697bf10a"
   },
   "frontend/src/hooks/useWhatsappCRM.ts": {
-    "mtime": 1791849255915.1968,
-    "hash": "9ed5ed7f2347c4652fd3e176943e9f38"
+    "mtime": 1792971061092.0562,
+    "hash": "e618fa63de830148de865c4e317d40fc"
   },
   "frontend/src/views/protected/WhatsAppInboxPage.tsx": {
-    "mtime": 1789697823268.5745,
-    "hash": "8c8c08dfef1acc245c3a25673bb6b190"
+    "mtime": 1792971125684.013,
+    "hash": "78eb9ad120ffaa051c6566edf1f17544"
   },
   "tests/test_whatsapp_crm.py": {
     "mtime": 1789162422016.2798,
@@ -7144,12 +7144,12 @@
     "hash": "fc9bef29c672eea9235e183ea883ffb7"
   },
   "docs/audits/auditoria-thermos-antislop-escenarios-pms-2026-10-22.md": {
-    "mtime": 1792967200395.406,
-    "hash": "78eff37e3830867e8ae92ecebb8fa4b1"
+    "mtime": 1792968552736.3372,
+    "hash": "ae8ddf69ed9b2d029da3af399a07a5df"
   },
   "docs/research/ota-channel-connectivity-product-report-2026-10-20.md": {
-    "mtime": 1792500737179.9421,
-    "hash": "91a25883dd1f90eb6fefe7099f86ceba"
+    "mtime": 1792968552736.8613,
+    "hash": "6c3d0c5dd1a38e4e9e139c1af38b60f4"
   },
   "tests/test_payment_link_test_webhook.py": {
     "mtime": 1792691701641.521,
@@ -7308,8 +7308,8 @@
     "hash": "84db99b01d5601fda6dce29c499bca9c"
   },
   "app/schemas/housekeeping_checklist.py": {
-    "mtime": 1792795173769.6716,
-    "hash": "ec77fe5404132fd03a4cb8f4f2e374fb"
+    "mtime": 1792968552735.8357,
+    "hash": "2a664a0e0e4872da21e57381f8da1b06"
   },
   "app/services/housekeeping_checklist_policy.py": {
     "mtime": 1792795176778.9724,
@@ -7380,16 +7380,16 @@
     "hash": "e393bab345da95e78542d9802c946664"
   },
   "alembic/versions/20261024_atomic_payment_corrections.py": {
-    "mtime": 1792946269908.4717,
-    "hash": "373eb664c6d5ea8cdd1a3e9261b6f888"
+    "mtime": 1792968552735.3704,
+    "hash": "bf69030f66d95a1fe0958d4a0e9f8c67"
   },
   "app/models/payment_correction.py": {
-    "mtime": 1792855976962.178,
-    "hash": "8baa3f23787256146c8f2845786472f0"
+    "mtime": 1792968552735.5254,
+    "hash": "be08d1f524ed780f698751fc3f250e48"
   },
   "app/services/payment_correction_service.py": {
-    "mtime": 1792860923840.2698,
-    "hash": "a3175009036218a02520fbd094106164"
+    "mtime": 1792968552736.0754,
+    "hash": "323e761321378e39a7678a38912374b7"
   },
   "frontend/src/components/PaymentCorrectionDialog.tsx": {
     "mtime": 1792861488343.5337,
@@ -7594,5 +7594,17 @@
   "memory/checkpoints/2026-10-25/20261025-165937-frontend-engineer-ui-de-discrepancias-de-lavandería.md": {
     "mtime": 1792947577794.4307,
     "hash": "2e0415cfc024c5911d0649e27c62b190"
+  },
+  "alembic/versions/20261025_wa_msg_cursor_idx.py": {
+    "mtime": 1792971593825.817,
+    "hash": "0511c499e5b1909d08a887645c231245"
+  },
+  "app/schemas/company_currency.py": {
+    "mtime": 1792971007663.8403,
+    "hash": "708e2ae936a530c84726743e7c490b43"
+  },
+  "memory/checkpoints/2026-10-25/20261025-230330-security-auditor-read-only-security-review-main-af78e588.md": {
+    "mtime": 1792969410946.3994,
+    "hash": "fea3fd57a8162d51843e768c5d2c0e9d"
   }
 }

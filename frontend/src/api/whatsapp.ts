@@ -25,8 +25,15 @@ export type WhatsAppConversation = {
   last_inbound_at?: string | null;
   last_message_at?: string | null;
   contact: { id: number; normalized_phone: string; display_name?: string | null; guest_id?: number | null };
-  messages: WhatsAppMessage[];
 };
+
+export type WhatsAppMessagePage = {
+  items: WhatsAppMessage[];
+  has_more: boolean;
+  next_before_message_id: number | null;
+};
+
+export const WHATSAPP_MESSAGE_PAGE_SIZE = 50;
 
 export type WhatsAppChannelStatus = {
   status: string;
@@ -46,6 +53,19 @@ export const completeWhatsAppChannel = (payload: {
 
 export const fetchWhatsAppConversations = (session?: SessionLike) =>
   apiFetch<{ items: WhatsAppConversation[] }>("/api/whatsapp/conversations?all=true", { session });
+
+export const fetchWhatsAppMessages = (
+  conversationId: number,
+  beforeMessageId?: number,
+  session?: SessionLike,
+) => {
+  const params = new URLSearchParams({ limit: String(WHATSAPP_MESSAGE_PAGE_SIZE) });
+  if (beforeMessageId !== undefined) params.set("before_message_id", String(beforeMessageId));
+  return apiFetch<WhatsAppMessagePage>(
+    `/api/whatsapp/conversations/${conversationId}/messages?${params.toString()}`,
+    { session },
+  );
+};
 
 export const sendWhatsAppMessage = (conversationId: number, text: string, session?: SessionLike) =>
   apiFetch<WhatsAppMessage>(`/api/whatsapp/conversations/${conversationId}/messages`, {

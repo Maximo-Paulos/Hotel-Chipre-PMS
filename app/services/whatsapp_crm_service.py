@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, noload
 
 from app.models.whatsapp_crm import (
     WhatsAppChannel,
@@ -38,6 +38,13 @@ class InboundMessageResult:
     conversation: WhatsAppConversation
     message: WhatsAppMessage
     created: bool
+
+
+@dataclass(frozen=True)
+class WhatsAppMessagePage:
+    items: list[WhatsAppMessage]
+    has_more: bool
+    next_before_message_id: int | None
 
 
 def normalize_phone(value: str) -> str:
@@ -103,10 +110,33 @@ def _channel(db: Session, hotel_id: int, channel_id: int) -> WhatsAppChannel:
     return channel
 
 
-def _conversation(db: Session, hotel_id: int, conversation_id: int) -> WhatsAppConversation:
-    conversation = db.query(WhatsAppConversation).filter(
+def _conversation(
+    db: Session,
+    hotel_id: int,
+    conversation_id: int,
+    *,
+    assigned_to_user_id: int | None = None,
+    for_update: bool = False,
+) -> WhatsAppConversation:
+    query = db.query(WhatsAppConversation).options(
+        # Most operations need only conversation scalars. Keep the default
+        # select-in collections from hydrating an unbounded history during
+        # sends, notes, assignment changes, or webhook retries.
+        noload(WhatsAppConversation.messages),
+        noload(WhatsAppConversation.notes),
+        noload(WhatsAppConversation.events),
+        noload(WhatsAppConversation.channel),
+        joinedload(WhatsAppConversation.contact)
+        .noload(WhatsAppContact.conversations)
+        .noload(WhatsAppContact.channel),
+    ).filter(
         WhatsAppConversation.hotel_id == hotel_id, WhatsAppConversation.id == conversation_id,
-    ).one_or_none()
+    )
+    if for_update:
+        query = query.with_for_update(of=WhatsAppConversation)
+    if assigned_to_user_id is not None:
+        query = query.filter(WhatsAppConversation.assigned_to_user_id == assigned_to_user_id)
+    conversation = query.one_or_none()
     if conversation is None:
         raise WhatsAppCRMError("Conversación no encontrada")
     return conversation
@@ -142,7 +172,9 @@ def ingest_inbound_message(
     if not provider_message_id or len(provider_message_id) > 180:
         raise WhatsAppCRMError("Falta el identificador del mensaje de Meta")
     channel = _channel(db, hotel_id, channel_id)
-    existing = db.query(WhatsAppMessage).filter(
+    existing = db.query(WhatsAppMessage).options(
+        noload(WhatsAppMessage.conversation),
+    ).filter(
         WhatsAppMessage.hotel_id == hotel_id,
         WhatsAppMessage.provider_message_id == provider_message_id,
     ).one_or_none()
@@ -166,7 +198,13 @@ def ingest_inbound_message(
     elif display_name and not contact.display_name:
         contact.display_name = display_name
 
-    conversation = db.query(WhatsAppConversation).filter(
+    conversation = db.query(WhatsAppConversation).options(
+        noload(WhatsAppConversation.messages),
+        noload(WhatsAppConversation.notes),
+        noload(WhatsAppConversation.events),
+        noload(WhatsAppConversation.channel),
+        noload(WhatsAppConversation.contact),
+    ).filter(
         WhatsAppConversation.hotel_id == hotel_id,
         WhatsAppConversation.channel_id == channel.id,
         WhatsAppConversation.contact_id == contact.id,
@@ -231,10 +269,17 @@ def add_outbound_message(
     provider_message_id: str | None = None,
     status: WhatsAppMessageStatusEnum = WhatsAppMessageStatusEnum.QUEUED,
     message_type: str = "text",
+    assigned_to_user_id: int | None = None,
 ) -> WhatsAppMessage:
     if not str(text or "").strip():
         raise WhatsAppCRMError("El mensaje no puede estar vacío")
-    conversation = _conversation(db, hotel_id, conversation_id)
+    conversation = _conversation(
+        db,
+        hotel_id,
+        conversation_id,
+        assigned_to_user_id=assigned_to_user_id,
+        for_update=True,
+    )
     now = datetime.now(timezone.utc)
     message = WhatsAppMessage(
         hotel_id=hotel_id, conversation_id=conversation.id,
@@ -255,8 +300,22 @@ def add_outbound_message(
     return message
 
 
-def assign_conversation(db: Session, *, hotel_id: int, conversation_id: int, assigned_to_user_id: int | None, actor_user_id: int | None = None) -> WhatsAppConversation:
-    conversation = _conversation(db, hotel_id, conversation_id)
+def assign_conversation(
+    db: Session,
+    *,
+    hotel_id: int,
+    conversation_id: int,
+    assigned_to_user_id: int | None,
+    actor_user_id: int | None = None,
+    access_scope_user_id: int | None = None,
+) -> WhatsAppConversation:
+    conversation = _conversation(
+        db,
+        hotel_id,
+        conversation_id,
+        assigned_to_user_id=access_scope_user_id,
+        for_update=True,
+    )
     if assigned_to_user_id is not None:
         from app.models.hotel_membership import HotelMembership
         active = db.query(HotelMembership).filter(
@@ -273,8 +332,22 @@ def assign_conversation(db: Session, *, hotel_id: int, conversation_id: int, ass
     return conversation
 
 
-def add_internal_note(db: Session, *, hotel_id: int, conversation_id: int, author_user_id: int, body: str) -> WhatsAppConversationNote:
-    conversation = _conversation(db, hotel_id, conversation_id)
+def add_internal_note(
+    db: Session,
+    *,
+    hotel_id: int,
+    conversation_id: int,
+    author_user_id: int,
+    body: str,
+    assigned_to_user_id: int | None = None,
+) -> WhatsAppConversationNote:
+    conversation = _conversation(
+        db,
+        hotel_id,
+        conversation_id,
+        assigned_to_user_id=assigned_to_user_id,
+        for_update=True,
+    )
     normalized = str(body or "").strip()
     if not normalized or len(normalized) > 4000:
         raise WhatsAppCRMError("La nota debe tener entre 1 y 4000 caracteres")
@@ -286,9 +359,77 @@ def add_internal_note(db: Session, *, hotel_id: int, conversation_id: int, autho
 
 
 def list_conversations(db: Session, *, hotel_id: int, status: WhatsAppConversationStatusEnum | None = None, assigned_to_user_id: int | None = None, limit: int = 50, offset: int = 0) -> list[WhatsAppConversation]:
-    query = db.query(WhatsAppConversation).filter(WhatsAppConversation.hotel_id == hotel_id)
+    # Inbox summaries do not need any conversation/contact history. Override
+    # the model's selectin defaults so listing conversations stays bounded.
+    query = db.query(WhatsAppConversation).options(
+        noload(WhatsAppConversation.messages),
+        noload(WhatsAppConversation.notes),
+        noload(WhatsAppConversation.events),
+        noload(WhatsAppConversation.channel),
+        joinedload(WhatsAppConversation.contact)
+        .noload(WhatsAppContact.conversations)
+        .noload(WhatsAppContact.channel),
+    ).filter(WhatsAppConversation.hotel_id == hotel_id)
     if status is not None:
         query = query.filter(WhatsAppConversation.status == status)
     if assigned_to_user_id is not None:
         query = query.filter(WhatsAppConversation.assigned_to_user_id == assigned_to_user_id)
     return query.order_by(WhatsAppConversation.last_message_at.desc().nullslast(), WhatsAppConversation.id.desc()).offset(offset).limit(limit).all()
+
+
+def list_conversation_messages(
+    db: Session,
+    *,
+    hotel_id: int,
+    conversation_id: int,
+    assigned_to_user_id: int | None = None,
+    before_message_id: int | None = None,
+    limit: int = 50,
+) -> WhatsAppMessagePage:
+    """Return one chronological keyset page without hydrating full history.
+
+    Message IDs are allocated in insertion order, which is the stable ordering
+    used by the cursor and the `(hotel_id, conversation_id, id)` index.
+    """
+    if limit < 1 or limit > 100:
+        raise WhatsAppCRMError("El límite de mensajes debe estar entre 1 y 100")
+
+    conversation_query = db.query(WhatsAppConversation.id).filter(
+        WhatsAppConversation.hotel_id == hotel_id,
+        WhatsAppConversation.id == conversation_id,
+    ).with_for_update(read=True, of=WhatsAppConversation)
+    if assigned_to_user_id is not None:
+        conversation_query = conversation_query.filter(
+            WhatsAppConversation.assigned_to_user_id == assigned_to_user_id,
+        )
+    conversation_exists = conversation_query.one_or_none()
+    if conversation_exists is None:
+        raise WhatsAppCRMError("Conversación de WhatsApp no encontrada")
+
+    query = db.query(WhatsAppMessage).options(
+        # WhatsAppMessage.conversation is joined by default. Suppress it so
+        # that the conversation's selectin relationships cannot load history.
+        noload(WhatsAppMessage.conversation),
+    ).filter(
+        WhatsAppMessage.hotel_id == hotel_id,
+        WhatsAppMessage.conversation_id == conversation_id,
+    )
+    if before_message_id is not None:
+        cursor_exists = db.query(WhatsAppMessage.id).filter(
+            WhatsAppMessage.hotel_id == hotel_id,
+            WhatsAppMessage.conversation_id == conversation_id,
+            WhatsAppMessage.id == before_message_id,
+        ).one_or_none()
+        if cursor_exists is None:
+            raise WhatsAppCRMError("El cursor no pertenece a esta conversación")
+        query = query.filter(WhatsAppMessage.id < before_message_id)
+
+    descending_page = query.order_by(WhatsAppMessage.id.desc()).limit(limit + 1).all()
+    has_more = len(descending_page) > limit
+    items = list(reversed(descending_page[:limit]))
+    next_before_message_id = items[0].id if has_more and items else None
+    return WhatsAppMessagePage(
+        items=items,
+        has_more=has_more,
+        next_before_message_id=next_before_message_id,
+    )

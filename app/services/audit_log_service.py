@@ -108,6 +108,39 @@ def create_audit_log(
     return audit_log
 
 
+def create_required_audit_log(
+    db: Session,
+    *,
+    hotel_id: int,
+    table_name: str,
+    record_id: int,
+    action: AuditActionEnum | str,
+    actor_user_id: int | None = None,
+    payload_before: dict[str, Any] | str | None = None,
+    payload_after: dict[str, Any] | str | None = None,
+) -> AuditLog:
+    """Write an audit row in the caller's transaction or abort that transaction.
+
+    Use this only for mutations whose audit record is part of their persistence
+    contract. Other audit writes remain best-effort so an audit-table incident
+    cannot discard an otherwise valid business operation.
+    """
+    try:
+        return create_audit_log(
+            db,
+            hotel_id=hotel_id,
+            table_name=table_name,
+            record_id=record_id,
+            action=action,
+            actor_user_id=actor_user_id,
+            payload_before=payload_before,
+            payload_after=payload_after,
+        )
+    except Exception:
+        db.rollback()
+        raise
+
+
 def queue_audit_log(
     db: Session,
     *,

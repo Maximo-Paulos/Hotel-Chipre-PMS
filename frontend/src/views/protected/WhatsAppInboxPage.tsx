@@ -1,20 +1,55 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useWhatsAppCRM } from "../../hooks/useWhatsappCRM";
 
 export function WhatsAppInboxPage() {
-  const { channel, conversations, send, note, assign } = useWhatsAppCRM();
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const { channel, conversations, messages, send, note, assign } = useWhatsAppCRM(selectedId);
   const [draft, setDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [assignee, setAssignee] = useState("");
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const pendingScrollAdjustment = useRef<{
+    conversationId: number;
+    previousPageCount: number;
+    previousHeight: number;
+  } | null>(null);
   const items = useMemo(() => conversations.data?.items ?? [], [conversations.data?.items]);
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? items[0], [items, selectedId]);
+  const orderedMessages = useMemo(() => {
+    const uniqueMessages = new Map((messages.data?.pages ?? []).flatMap((page) => page.items).map((message) => [message.id, message]));
+    return [...uniqueMessages.values()].sort((first, second) => first.id - second.id);
+  }, [messages.data?.pages]);
   // An empty box means "unassign"; anything else has to be a real user id.
   const assigneeUserId = assignee.trim() ? Number(assignee.trim()) : null;
   const assigneeIsValid = assigneeUserId === null || Number.isInteger(assigneeUserId);
   const failed = send.error ?? note.error ?? assign.error;
   const sendError = failed instanceof Error ? failed.message : failed ? "No se pudo completar la acción." : null;
+
+  const loadOlderMessages = () => {
+    const container = messageListRef.current;
+    if (container && selected) {
+      pendingScrollAdjustment.current = {
+        conversationId: selected.id,
+        previousPageCount: messages.data?.pages.length ?? 0,
+        previousHeight: container.scrollHeight,
+      };
+    }
+    void messages.fetchNextPage();
+  };
+
+  useLayoutEffect(() => {
+    const container = messageListRef.current;
+    const pending = pendingScrollAdjustment.current;
+    if (!pending) return;
+    if (pending.conversationId !== selected?.id) {
+      pendingScrollAdjustment.current = null;
+      return;
+    }
+    if (!container || (messages.data?.pages.length ?? 0) <= pending.previousPageCount) return;
+    container.scrollTop += container.scrollHeight - pending.previousHeight;
+    pendingScrollAdjustment.current = null;
+  }, [messages.data?.pages.length, selected?.id]);
 
   if (channel.isLoading || conversations.isLoading) return <p>Cargando bandeja de WhatsApp...</p>;
   if (channel.isError || conversations.isError) return <p role="alert">No se pudo cargar WhatsApp. Verifica el plan y vuelve a intentar.</p>;
@@ -40,7 +75,52 @@ export function WhatsAppInboxPage() {
         <section className="flex flex-col rounded-xl border border-slate-200 bg-white p-4">
           {!selected ? <p className="text-sm text-slate-500">Selecciona una conversación.</p> : <>
             <div className="border-b border-slate-100 pb-3"><h2 className="font-semibold">{selected.contact.display_name || selected.contact.normalized_phone}</h2><p className="text-xs text-slate-500">Estado: {selected.status} · ventana: {selected.service_window_expires_at || "no informada"}</p></div>
-            <div className="flex-1 space-y-2 overflow-auto py-4">{selected.messages.map((message) => <div key={message.id} className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${message.direction === "outbound" ? "ml-auto bg-brand-50" : "bg-slate-100"}`}><p>{message.text || `[${message.message_type}]`}</p><p className="mt-1 text-[10px] text-slate-500">{message.status}</p></div>)}</div>
+            <div
+              ref={messageListRef}
+              role="region"
+              aria-label="Historial de mensajes"
+              aria-busy={messages.isFetchingNextPage}
+              tabIndex={0}
+              className="flex-1 space-y-2 overflow-auto py-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            >
+              {messages.hasNextPage ? (
+                <div className="pb-2 text-center">
+                  <button
+                    type="button"
+                    disabled={messages.isFetchingNextPage}
+                    onClick={loadOlderMessages}
+                    className="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 disabled:opacity-50"
+                  >
+                    {messages.isFetchingNextPage ? "Cargando mensajes anteriores…" : "Cargar mensajes anteriores"}
+                  </button>
+                </div>
+              ) : null}
+              {messages.isLoading ? <p role="status" className="text-center text-sm text-slate-500">Cargando mensajes…</p> : null}
+              {messages.isLoadingError ? (
+                <div role="alert" className="text-center text-sm text-red-700">
+                  <p>No se pudo cargar el historial de esta conversación.</p>
+                  <button type="button" onClick={() => void messages.refetch()} className="mt-1 font-semibold underline">Reintentar</button>
+                </div>
+              ) : null}
+              {messages.isFetchNextPageError ? (
+                <div role="alert" className="text-center text-sm text-red-700">
+                  <p>No se pudieron cargar los mensajes anteriores.</p>
+                  <button type="button" onClick={loadOlderMessages} className="mt-1 font-semibold underline">Reintentar</button>
+                </div>
+              ) : null}
+              {!messages.isLoading && !messages.isLoadingError && orderedMessages.length === 0 ? (
+                <p className="text-center text-sm text-slate-500">Todavía no hay mensajes en esta conversación.</p>
+              ) : null}
+              {orderedMessages.map((message) => (
+                <div key={message.id} className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${message.direction === "outbound" ? "ml-auto bg-brand-50" : "bg-slate-100"}`}>
+                  <p>{message.text || `[${message.message_type}]`}</p>
+                  <p className="mt-1 text-[10px] text-slate-500">{message.status}</p>
+                </div>
+              ))}
+              {messages.data && !messages.hasNextPage && orderedMessages.length > 0 ? (
+                <p className="py-2 text-center text-xs text-slate-500">Inicio de la conversación</p>
+              ) : null}
+            </div>
             <div className="space-y-2 border-t border-slate-100 pt-3">
               <div className="flex gap-2">
                 <input aria-label="Responder al huésped" className="min-w-0 flex-1 rounded border px-3 py-2 text-sm" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Responder al huésped" />

@@ -220,6 +220,7 @@ class WhatsAppMessage(Base):
         UniqueConstraint("hotel_id", "provider_message_id", name="uq_whatsapp_messages_provider_id"),
         UniqueConstraint("hotel_id", "id", name="uq_whatsapp_messages_hotel_id"),
         Index("ix_whatsapp_messages_conversation_created", "hotel_id", "conversation_id", "created_at"),
+        Index("ix_whatsapp_messages_hotel_conversation_id", "hotel_id", "conversation_id", "id"),
     )
 
 
