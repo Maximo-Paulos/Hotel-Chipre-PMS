@@ -142,7 +142,7 @@ test("H31: housekeeping sees a room blocked for maintenance", async ({ page }) =
 
   await login(page, personas[0], "/dashboard");
   await page.goto("/habitaciones");
-  const blockForm = page.locator("form").filter({ hasText: "Crear bloqueo" });
+  const blockForm = page.locator("form").filter({ hasText: "Calcular propuesta" });
   await blockForm.getByLabel("Habitación").selectOption({ label: "Hab. 305" });
   const startsOn = await blockForm.getByLabel("Desde").inputValue();
   const [year, month, day] = startsOn.split("-").map(Number);
@@ -150,7 +150,9 @@ test("H31: housekeeping sees a room blocked for maintenance", async ({ page }) =
   await blockForm.getByLabel("Hasta").fill(endsOn);
   await blockForm.getByLabel("Motivo").selectOption("maintenance");
   await blockForm.getByLabel("Detalle").fill("Validación H31 de mantenimiento activo");
-  await blockForm.getByRole("button", { name: "Crear bloqueo", exact: true }).click();
+  await blockForm.getByRole("button", { name: "Calcular propuesta", exact: true }).click();
+  await expect(blockForm.getByRole("button", { name: "Confirmar bloqueo y reasignaciones", exact: true })).toBeEnabled();
+  await blockForm.getByRole("button", { name: "Confirmar bloqueo y reasignaciones", exact: true }).click();
   await expect(page.getByText("Bloqueo creado.", { exact: true })).toBeVisible();
 
   await logout(page);

@@ -1,28 +1,34 @@
 """
 Tests for Reservation Service — booking creation, availability checks, state transitions.
 """
-import pytest
 import json
 from datetime import date, datetime, timezone
 from decimal import Decimal
+
+import pytest
 from sqlalchemy import event
 
 from app.models.daily_rate import DailyRate
 from app.models.fx_rate_snapshot import FxRateSnapshot
 from app.models.guest import DocumentTypeEnum, Guest
-from app.models.reservation import Reservation, ReservationChannelCodeEnum, ReservationSourceEnum, ReservationStatusEnum
-from app.models.room import Room
-from app.schemas.reservation import ReservationCreate
-from app.services.reservation_service import (
-    create_reservation,
-    check_room_availability,
-    find_available_rooms,
-    calculate_reservation_pricing,
-    transition_reservation_status,
-    ReservationError,
-    generate_confirmation_code,
+from app.models.reservation import (
+    Reservation,
+    ReservationChannelCodeEnum,
+    ReservationSourceEnum,
+    ReservationStatusEnum,
 )
+from app.models.room import Room, RoomStatusEnum
+from app.schemas.reservation import ReservationCreate
 from app.services import pricing_policy_service
+from app.services.reservation_service import (
+    ReservationError,
+    calculate_reservation_pricing,
+    check_room_availability,
+    create_reservation,
+    find_available_rooms,
+    generate_confirmation_code,
+    transition_reservation_status,
+)
 
 
 class TestConfirmationCode:
@@ -284,6 +290,21 @@ class TestReservationCreation:
         assert res.status == ReservationStatusEnum.PENDING
         assert res.room_id is not None  # Auto-assigned
         assert res.allocation_status == "assigned"
+        snapshot = res.cancellation_policy_snapshot
+        assert snapshot is not None
+        assert snapshot["source"] == "hotel_configuration"
+        assert snapshot["reservation_source"] == "direct"
+        assert snapshot["free_cancellation_hours"] == hotel_config.free_cancellation_hours
+        assert snapshot["penalty_type"] == "percentage"
+        assert snapshot["penalty_value"] == str(Decimal(str(hotel_config.cancellation_penalty_percentage)))
+        assert datetime.fromisoformat(snapshot["snapshot_at"]).tzinfo is not None
+
+        # Later edits affect future bookings; they must not rewrite this stay.
+        hotel_config.free_cancellation_hours = 0
+        hotel_config.cancellation_penalty_percentage = 100.0
+        db.flush()
+        db.expire(res, ["cancellation_policy_snapshot"])
+        assert res.cancellation_policy_snapshot == snapshot
 
     def test_create_reservation_does_not_load_room_history_for_category_lookups(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config
@@ -393,6 +414,65 @@ class TestReservationCreation:
         )
         res = create_reservation(db, data)
         assert res.room_id == room.id
+
+    @pytest.mark.parametrize(
+        ("room_status", "is_active", "deleted_at"),
+        [
+            (RoomStatusEnum.MAINTENANCE, True, None),
+            (RoomStatusEnum.BLOCKED, True, None),
+            (RoomStatusEnum.AVAILABLE, False, None),
+            (RoomStatusEnum.AVAILABLE, True, datetime(2026, 1, 1)),
+        ],
+    )
+    def test_create_reservation_rejects_explicit_ineligible_room(
+        self,
+        db,
+        sample_guest,
+        sample_rooms,
+        sample_categories,
+        hotel_config,
+        room_status,
+        is_active,
+        deleted_at,
+    ):
+        room = sample_rooms[5]
+        room.status = room_status
+        room.is_active = is_active
+        room.deleted_at = deleted_at
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            room_id=room.id,
+            check_in_date=date(2026, 5, 10),
+            check_out_date=date(2026, 5, 12),
+        )
+
+        with pytest.raises(ReservationError, match="no está disponible"):
+            create_reservation(db, data, hotel_id=hotel_config.id)
+
+    @pytest.mark.parametrize("room_status", [RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING])
+    def test_create_reservation_allows_room_status_supported_by_auto_assignment(
+        self,
+        db,
+        sample_guest,
+        sample_rooms,
+        sample_categories,
+        hotel_config,
+        room_status,
+    ):
+        room = sample_rooms[5]
+        room.status = room_status
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            room_id=room.id,
+            check_in_date=date(2026, 5, 10),
+            check_out_date=date(2026, 5, 12),
+        )
+
+        reservation = create_reservation(db, data, hotel_id=hotel_config.id)
+
+        assert reservation.room_id == room.id
 
     def test_create_reservation_invalid_guest(self, db, sample_rooms, sample_categories, hotel_config):
         """Should fail for non-existent guest."""
@@ -532,7 +612,13 @@ def test_create_reservation_uses_rate_plan_quote_when_commercial_context_is_prov
     sample_rooms,
     sample_guest,
 ):
-    from app.models.commercial import RatePlan, RatePlanPrice, SellableProduct, TaxPolicy, TaxRule
+    from app.models.commercial import (
+        RatePlan,
+        RatePlanPrice,
+        SellableProduct,
+        TaxPolicy,
+        TaxRule,
+    )
 
     product = SellableProduct(
         hotel_id=hotel_config.id,
@@ -551,10 +637,26 @@ def test_create_reservation_uses_rate_plan_quote_when_commercial_context_is_prov
         code="DIRECT-FLEX",
         name="Directa flexible",
         currency_code="ARS",
+        cancellation_model="flexible",
+        is_refundable=True,
+        free_cancellation_hours=48,
+        cancellation_penalty_type="percentage",
+        cancellation_penalty_value=50.0,
         is_active=True,
     )
     db.add(rate_plan)
     db.flush()
+
+    from app.services.reservation_service import _capture_cancellation_policy_snapshot
+
+    with pytest.raises(ReservationError, match="no pertenece al hotel activo"):
+        _capture_cancellation_policy_snapshot(
+            db,
+            hotel_id=hotel_config.id + 1,
+            rate_plan_id=rate_plan.id,
+            sellable_product_id=product.id,
+            reservation_source=ReservationSourceEnum.DIRECT,
+        )
 
     db.add(
         RatePlanPrice(
@@ -618,6 +720,33 @@ def test_create_reservation_uses_rate_plan_quote_when_commercial_context_is_prov
     assert res.total_amount == 290.4
     assert res.net_amount == 290.4
     assert res.currency_code == "ARS"
+    snapshot = res.cancellation_policy_snapshot
+    assert snapshot is not None
+    assert snapshot["source"] == "rate_plan"
+    assert snapshot["reservation_source"] == "direct"
+    assert snapshot["rate_plan_id"] == rate_plan.id
+    assert snapshot["rate_plan_name"] == "Directa flexible"
+    assert snapshot["rate_plan_code"] == "DIRECT-FLEX"
+    assert snapshot["cancellation_model"] == "flexible"
+    assert snapshot["is_refundable"] is True
+    assert snapshot["free_cancellation_hours"] == 48
+    assert snapshot["penalty_type"] == "percentage"
+    assert snapshot["penalty_value"] == "50.0"
+    assert snapshot["currency"] == "ARS"
+    captured_at = datetime.fromisoformat(snapshot["snapshot_at"])
+    assert captured_at.tzinfo is not None
+
+    # A later plan edit changes the live terms, not the booking-time record.
+    rate_plan.name = "Directa no reembolsable"
+    rate_plan.cancellation_model = "non_refundable"
+    rate_plan.is_refundable = False
+    rate_plan.free_cancellation_hours = 0
+    rate_plan.cancellation_penalty_type = "fixed"
+    rate_plan.cancellation_penalty_value = 100.0
+    rate_plan.currency_code = "USD"
+    db.flush()
+    db.expire(res, ["cancellation_policy_snapshot"])
+    assert res.cancellation_policy_snapshot == snapshot
 
 
 def test_create_reservation_uses_daily_rates_for_payment_method_and_custom_deposit(

@@ -125,6 +125,46 @@ def test_stock_movement_requires_positive_quantity(db):
         )
 
 
+def test_stock_movement_rejects_precision_beyond_persisted_scale(db):
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Jabon", unit="litro")
+
+    with pytest.raises(StockError, match="two decimal places"):
+        register_movement(
+            db,
+            hotel_id=1,
+            item_id=item.id,
+            location_id=None,
+            movement_type="in",
+            quantity=Decimal("10.001"),
+            reason=None,
+            reservation_id=None,
+            created_by_user_id=None,
+        )
+
+    assert current_stock(db, hotel_id=1, item_id=item.id) == Decimal("0.00")
+
+
+def test_stock_movement_rejects_quantity_beyond_persisted_precision(db):
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Jabon", unit="litro")
+
+    with pytest.raises(StockError, match=r"Numeric\(12, 2\) capacity"):
+        register_movement(
+            db,
+            hotel_id=1,
+            item_id=item.id,
+            location_id=None,
+            movement_type="in",
+            quantity=Decimal("10000000000.00"),
+            reason=None,
+            reservation_id=None,
+            created_by_user_id=None,
+        )
+
+    assert current_stock(db, hotel_id=1, item_id=item.id) == Decimal("0.00")
+
+
 def test_stock_outbound_cannot_make_quantity_negative(db):
     _seed_hotels(db)
     item = create_stock_item(
@@ -447,6 +487,57 @@ def test_register_movement_with_repeated_idempotency_key_returns_same_row_not_a_
     assert len(list_stock_movements(db, hotel_id=1, item_id=item.id, limit=20)) == 1
 
 
+@pytest.mark.parametrize(
+    "changed_payload",
+    [
+        {"item_id": "other_item"},
+        {"location_id": "other_location"},
+        {"movement_type": "out"},
+        {"quantity": Decimal("11.00")},
+        {"reason": "different reason"},
+        {"reservation_id": 999999},
+        {"transfer_reference": "different-transfer-reference"},
+    ],
+    ids=["item", "location", "type", "quantity", "reason", "reservation", "transfer-reference"],
+)
+def test_register_movement_reused_key_with_different_payload_conflicts(db, changed_payload):
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Sabanas", unit="unidad")
+    other_item = create_stock_item(db, hotel_id=1, name="Toallas", unit="unidad")
+    other_location = create_location(db, hotel_id=1, name="Piso 1")
+    db.commit()
+
+    payload = {
+        "hotel_id": 1,
+        "item_id": item.id,
+        "location_id": None,
+        "movement_type": "in",
+        "quantity": Decimal("10.00"),
+        "reason": "opening balance",
+        "reservation_id": None,
+        "created_by_user_id": None,
+        "idempotency_key": "payload-match-key",
+        "transfer_reference": None,
+    }
+    original = register_movement(db, **payload)
+    db.commit()
+
+    requested_payload = payload.copy()
+    for field, value in changed_payload.items():
+        if value == "other_item":
+            value = other_item.id
+        elif value == "other_location":
+            value = other_location.id
+        requested_payload[field] = value
+
+    with pytest.raises(StockIdempotencyConflict):
+        register_movement(db, **requested_payload)
+
+    assert current_stock(db, hotel_id=1, item_id=item.id) == Decimal("10.00")
+    assert len(list_stock_movements(db, hotel_id=1, limit=20)) == 1
+    assert original.id == list_stock_movements(db, hotel_id=1, limit=20)[0].id
+
+
 def test_register_movement_idempotency_key_is_scoped_per_hotel(db):
     """The same client-generated key from two different hotels must not
     collide -- each hotel gets its own movement."""
@@ -538,6 +629,46 @@ def test_register_movement_concurrent_retry_race_returns_the_winner_not_an_error
     assert loser.id == winner.id
     assert current_stock(db, hotel_id=1, item_id=item.id) == Decimal("10.00")
     assert len(list_stock_movements(db, hotel_id=1, item_id=item.id, limit=20)) == 1
+
+
+def test_register_movement_concurrent_retry_with_different_payload_conflicts(db, monkeypatch):
+    _seed_hotels(db)
+    item = create_stock_item(db, hotel_id=1, name="Sabanas", unit="unidad")
+    db.commit()
+
+    winner = register_movement(
+        db, hotel_id=1, item_id=item.id, location_id=None, movement_type="in",
+        quantity=Decimal("10.00"), reason="first attempt", reservation_id=None,
+        created_by_user_id=None, idempotency_key="race-conflict-key",
+    )
+    db.commit()
+
+    original_query = db.query
+
+    class _MissOnce:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def one_or_none(self):
+            return None
+
+    def _query_misses_first_stockmovement_lookup(*args, **kwargs):
+        if args and args[0] is StockMovement:
+            monkeypatch.setattr(db, "query", original_query)
+            return _MissOnce()
+        return original_query(*args, **kwargs)
+
+    monkeypatch.setattr(db, "query", _query_misses_first_stockmovement_lookup)
+
+    with pytest.raises(StockIdempotencyConflict):
+        register_movement(
+            db, hotel_id=1, item_id=item.id, location_id=None, movement_type="in",
+            quantity=Decimal("10.00"), reason="different concurrent payload", reservation_id=None,
+            created_by_user_id=None, idempotency_key="race-conflict-key",
+        )
+
+    assert winner.id == list_stock_movements(db, hotel_id=1, item_id=item.id, limit=20)[0].id
+    assert current_stock(db, hotel_id=1, item_id=item.id) == Decimal("10.00")
 
 
 def test_stock_summary_returns_every_active_item_balance_in_one_call_hotel_scoped(db):

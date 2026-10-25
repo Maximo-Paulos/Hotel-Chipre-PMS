@@ -402,7 +402,7 @@ export function OnboardingWizard() {
         {steps.map((step, idx) => (
           <Link
             key={step.path}
-            // ponytail: absolute path, not relative -- react-router-dom v7 made
+            // Use an absolute path; react-router-dom v7 made
             // v7_relativeSplatPath the default, so a relative `to` here now
             // resolves against the full "/onboarding/<current-step>" splat match
             // instead of the "/onboarding" base, stacking segments on every click

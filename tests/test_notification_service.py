@@ -3,7 +3,7 @@ filtering, preference filtering, retry/expiry, redaction, tenant isolation,
 and daily-report DST/timezone correctness."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -305,6 +305,103 @@ def test_push_channel_without_subscription_fails_immediately(db: Session):
     assert row.status == NotificationOutboxStatusEnum.FAILED
     assert row.attempt_count == 0
     assert row.last_error == "no_active_push_subscription"
+
+
+@pytest.mark.parametrize(
+    ("web_push_enabled", "external_connections_enabled"),
+    [(False, True), (True, False), (True, True)],
+    ids=["feature-disabled", "external-connections-disabled", "implementation-missing"],
+)
+def test_push_unavailable_fails_immediately_without_retry(
+    db: Session,
+    monkeypatch,
+    web_push_enabled: bool,
+    external_connections_enabled: bool,
+):
+    from app.models.notification import PushSubscription
+    from app.services import push_adapter as pa
+
+    _hotel(db, 1)
+    _member(db, hotel_id=1, user_id=10, role="owner")
+    subscription = PushSubscription(
+        hotel_id=1,
+        user_id=10,
+        endpoint="https://push.example/x",
+        p256dh="k",
+        auth="a",
+    )
+    row = NotificationOutbox(
+        hotel_id=1,
+        event_type="reservation.created",
+        dedupe_key="push-unavailable",
+        channel=NotificationChannelEnum.PUSH,
+        recipient_user_id=10,
+        title="t",
+    )
+    db.add_all([subscription, row])
+    db.flush()
+
+    monkeypatch.setattr(pa, "get_settings", lambda: SimpleNamespace(WEB_PUSH_ENABLED=web_push_enabled))
+
+    def _gate_external_connections(effect, settings):
+        if not external_connections_enabled:
+            raise pa.ExternalEffectsDisabled("external connections are disabled")
+
+    monkeypatch.setattr(pa, "require_external_connections", _gate_external_connections)
+
+    counts = svc.process_pending_outbox(db, now=datetime(2026, 1, 1, tzinfo=UTC))
+    db.flush()
+
+    assert counts["failed"] == 1
+    assert counts["retried"] == 0
+    assert row.status == NotificationOutboxStatusEnum.FAILED
+    assert row.attempt_count == 0
+    assert row.next_retry_at is None
+    assert row.last_error == "web_push_unavailable"
+    assert subscription.expired_at is None
+
+
+def test_push_transient_send_error_retries(db: Session, monkeypatch):
+    from app.models.notification import PushSubscription
+    from app.services import push_adapter as pa
+
+    _hotel(db, 1)
+    _member(db, hotel_id=1, user_id=10, role="owner")
+    db.add(
+        PushSubscription(
+            hotel_id=1,
+            user_id=10,
+            endpoint="https://push.example/x",
+            p256dh="k",
+            auth="a",
+        )
+    )
+    row = NotificationOutbox(
+        hotel_id=1,
+        event_type="reservation.created",
+        dedupe_key="push-transient",
+        channel=NotificationChannelEnum.PUSH,
+        recipient_user_id=10,
+        title="t",
+    )
+    db.add(row)
+    db.flush()
+
+    class _TransientAdapter(pa.WebPushAdapter):
+        def send(self, subscription, *, title, body, url=None):
+            raise pa.WebPushSendError("temporary provider failure")
+
+    monkeypatch.setattr(pa, "get_web_push_adapter", lambda: _TransientAdapter())
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    counts = svc.process_pending_outbox(db, now=now)
+    db.flush()
+
+    assert counts["retried"] == 1
+    assert counts["failed"] == 0
+    assert row.status == NotificationOutboxStatusEnum.PENDING
+    assert row.attempt_count == 1
+    assert row.next_retry_at == now + timedelta(minutes=5)
+    assert row.last_error == "temporary provider failure"
 
 
 def test_push_channel_expires_invalid_subscription_and_retries(db: Session):

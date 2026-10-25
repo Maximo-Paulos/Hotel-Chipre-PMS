@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     DateTime,
     Enum,
@@ -28,6 +29,13 @@ class ReservationGroupPaymentBatch(Base):
     idempotency_key = Column(String(100), nullable=False)
     request_hash = Column(String(64), nullable=False)
     received_amount = Column(Numeric(12, 2), nullable=False)
+    # Group allocations are stored in received_amount. gross_amount is the
+    # amount retained in the tender currency after configured surcharges.
+    gross_amount = Column(Numeric(12, 2), nullable=True)
+    # Optional group-level tender detail; existing batches remain NULL.
+    cash_received_amount = Column(Numeric(12, 2), nullable=True)
+    cash_change_amount = Column(Numeric(12, 2), nullable=True)
+    cash_tip_amount = Column(Numeric(12, 2), nullable=False, default=0, server_default="0")
     currency = Column(String(3), nullable=False)
     payment_method = Column(
         Enum(
@@ -44,6 +52,19 @@ class ReservationGroupPaymentBatch(Base):
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
+        CheckConstraint(
+            "(cash_received_amount IS NULL AND cash_change_amount IS NULL AND cash_tip_amount = 0) OR "
+            "(cash_received_amount IS NOT NULL AND cash_change_amount IS NOT NULL "
+            "AND cash_received_amount > 0 AND cash_change_amount >= 0 "
+            "AND cash_change_amount <= cash_received_amount "
+            "AND gross_amount IS NOT NULL AND gross_amount > 0 "
+            "AND cash_tip_amount >= 0 "
+            "AND cash_tip_amount <= cash_received_amount - gross_amount "
+            "AND ROUND(cash_change_amount, 2) = "
+            "ROUND(cash_received_amount - gross_amount - cash_tip_amount, 2) "
+            "AND payment_method = 'cash')",
+            name="ck_group_payment_batch_cash_received_change_consistent",
+        ),
         UniqueConstraint("hotel_id", "id", name="uq_reservation_group_payment_batches_hotel_id_id"),
         UniqueConstraint(
             "hotel_id", "idempotency_key", name="uq_reservation_group_payment_batches_idempotency"

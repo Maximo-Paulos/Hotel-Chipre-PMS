@@ -204,8 +204,8 @@
     "hash": "790ff78283ce08dac8c3345bbff08800"
   },
   "app/api/allocation_policy.py": {
-    "mtime": 1787360063266.2788,
-    "hash": "74aea55c58e91a4e06d6aba7f7229519"
+    "mtime": 1792945976529.3093,
+    "hash": "18896eccd9fd8a49fae29293a89856a3"
   },
   "app/api/analytics.py": {
     "mtime": 1792100439481.7065,
@@ -216,16 +216,16 @@
     "hash": "6344f802e70bbbcfdcf2b506e9631271"
   },
   "app/api/bookings.py": {
-    "mtime": 1791849255855.8162,
-    "hash": "9da345f26fc5348177a6957e8cced927"
+    "mtime": 1792948469127.6587,
+    "hash": "62ebc4c46f319d11ef9f673e0f8aefef"
   },
   "app/api/cash_register.py": {
-    "mtime": 1791849255856.0603,
-    "hash": "8db8bb1e0fa4f0e0d89654ed86431c6c"
+    "mtime": 1792819027780.1973,
+    "hash": "404af5db6ed76b95eb89b29253b7eecc"
   },
   "app/api/checkin.py": {
-    "mtime": 1791849255856.171,
-    "hash": "ec46b31d8943d137051b16b437969865"
+    "mtime": 1792948756168.755,
+    "hash": "7afc3314eaa427fa9797a8c6b31310d1"
   },
   "app/api/commercial.py": {
     "mtime": 1791849255856.5874,
@@ -236,12 +236,12 @@
     "hash": "7ae4d23c1099956511c37ca6ea924e64"
   },
   "app/api/company_documents.py": {
-    "mtime": 1791849255856.9622,
-    "hash": "2f4d3301efa1ff084b908282dc6016e7"
+    "mtime": 1792943630351.125,
+    "hash": "873afb74ab6da4473631f67f5986adbc"
   },
   "app/api/config.py": {
-    "mtime": 1792240082193.8857,
-    "hash": "9ceef590ca0bbc8293edffe87b0eba28"
+    "mtime": 1792965090143.5217,
+    "hash": "7c83acf7cbd05605601891fe2826c42e"
   },
   "app/api/connections.py": {
     "mtime": 1783103274875.5076,
@@ -268,8 +268,8 @@
     "hash": "a7a347c54c6f2788d79b8d8d8f75565a"
   },
   "app/api/guests.py": {
-    "mtime": 1791849255857.9277,
-    "hash": "f932113cd8634743003755c45c190d29"
+    "mtime": 1792829768325.7502,
+    "hash": "f6785b48d87a179c71b1237325e3302d"
   },
   "app/api/health.py": {
     "mtime": 1792240082194.1455,
@@ -280,8 +280,8 @@
     "hash": "5757631e0cf74f486827981198109650"
   },
   "app/api/integrations.py": {
-    "mtime": 1790475924459.6843,
-    "hash": "29251c0196f6425c87f05b6c639aa2b3"
+    "mtime": 1792794167946.6716,
+    "hash": "ea5d6c26777bf5d5d3abe499d68a975c"
   },
   "app/api/invitations.py": {
     "mtime": 1791849255858.2598,
@@ -292,32 +292,32 @@
     "hash": "22d266449242cc36af0b831974893de6"
   },
   "app/api/movement_groups.py": {
-    "mtime": 1791849255859.003,
-    "hash": "797d373580c3beb8717f71f6e0854818"
+    "mtime": 1792800877367.3286,
+    "hash": "751861991d0f36d54cba20ac3bae9ee3"
   },
   "app/api/onboarding.py": {
     "mtime": 1791849255859.2937,
     "hash": "079cdbfaee53305affda2cbddd9425d9"
   },
   "app/api/ota_webhooks.py": {
-    "mtime": 1790438263704.5708,
-    "hash": "4eb67dfee669255444fd111d7470099b"
+    "mtime": 1792695977514.1716,
+    "hash": "006bfc3c348fc5bd431d2d2d0e685979"
   },
   "app/api/payment_link_tests.py": {
-    "mtime": 1791849255859.6992,
-    "hash": "434dd702a2a27c36ba61330aef25dfc1"
+    "mtime": 1792691387388.4587,
+    "hash": "d5f78cecd5cfda8fd0da3e091d447f6e"
   },
   "app/api/payment_links.py": {
-    "mtime": 1790438263706.627,
-    "hash": "1ab53c178405e7adbcac340a5b920212"
+    "mtime": 1792812711432.6252,
+    "hash": "dfb402d9bb76876fd245341a3c694652"
   },
   "app/api/payment_surcharges.py": {
-    "mtime": 1791849255859.7988,
-    "hash": "bfd1c86da0ba53a3553b477d409cee11"
+    "mtime": 1792944388776.657,
+    "hash": "ca5123fb9bf0842ba08006fc7619ad9b"
   },
   "app/api/payments.py": {
-    "mtime": 1792240082194.2698,
-    "hash": "8d838d2d1af39fa08a340890c2f207d3"
+    "mtime": 1792855996936.31,
+    "hash": "665cd2c816a5391a974c7e039d430d22"
   },
   "app/api/permissions.py": {
     "mtime": 1792271192818.05,
@@ -336,32 +336,32 @@
     "hash": "b2b55268a4abbcb1343c378d83127ff3"
   },
   "app/api/reports.py": {
-    "mtime": 1791849255860.4666,
-    "hash": "2169b583c58c673bf689c32dbc3181ba"
+    "mtime": 1792677438138.8728,
+    "hash": "ef85d915bdd58d0d4c2dfe4993269b20"
   },
   "app/api/reservations.py": {
-    "mtime": 1792240082194.6594,
-    "hash": "2c1255bf23f6256e431f0a343d3f6623"
+    "mtime": 1792965295319.5388,
+    "hash": "7ec72887e4754837a58e4984ca931339"
   },
   "app/api/room_blocks.py": {
-    "mtime": 1791849255862.1948,
-    "hash": "98c861d3512c320a167d6345e52c365d"
+    "mtime": 1792946092388.9824,
+    "hash": "288c1ed8adb29f770c18390288342a29"
   },
   "app/api/room_movement_groups.py": {
-    "mtime": 1791849255862.385,
-    "hash": "d7d5b74f38152f23454ce59b4aae8ea6"
+    "mtime": 1792800877367.9275,
+    "hash": "8b75cbbf541ddf3911313dc170ea0f90"
   },
   "app/api/room_state_events.py": {
     "mtime": 1787360058493.529,
     "hash": "26db1c95e5b7102d6c59fbf1f2629908"
   },
   "app/api/rooms.py": {
-    "mtime": 1792240082194.7917,
-    "hash": "91e434ca2b64dd05a789498a614b389f"
+    "mtime": 1792967220702.08,
+    "hash": "24e5da3338f2b207246f0d60da5bb720"
   },
   "app/api/stock.py": {
-    "mtime": 1791849255862.8035,
-    "hash": "aace073069e26a87d4f4815223118003"
+    "mtime": 1792948680171.3123,
+    "hash": "27a7a9903e8962b9670392d3f5d0d6a9"
   },
   "app/api/subscription.py": {
     "mtime": 1791849255862.9841,
@@ -372,16 +372,16 @@
     "hash": "36f61a2fed0f0c9c79c10ab64d607268"
   },
   "app/api/waitlist.py": {
-    "mtime": 1788047068325.3516,
-    "hash": "e02bead910ac047212aadd5381975886"
+    "mtime": 1792965225893.139,
+    "hash": "ebfda551a99e549b6e4f0b6eaea51166"
   },
   "app/api/whatsapp_hooks.py": {
     "mtime": 1789061001900.6885,
     "hash": "b613008c907585f15c32fa8303b43574"
   },
   "app/config.py": {
-    "mtime": 1792262228612.7346,
-    "hash": "e8d6bad33dd636741f71b4abf8dfaa55"
+    "mtime": 1792816292041.397,
+    "hash": "ece21464b1a0ee38b25e9f6d2fa66189"
   },
   "app/database.py": {
     "mtime": 1791849255863.5693,
@@ -424,8 +424,8 @@
     "hash": "bcf554e111ec89c47d83670bfda6a2fa"
   },
   "app/main.py": {
-    "mtime": 1792100439482.5898,
-    "hash": "4bf5ac8beb13aee7f4236dce811318f8"
+    "mtime": 1792819172035.3464,
+    "hash": "f5e31648bf7dacf208c83ea5a76002b4"
   },
   "app/master_admin/__init__.py": {
     "mtime": 1783103274878.9458,
@@ -468,16 +468,16 @@
     "hash": "32efcd594111b4e78aa7307e9b8aca73"
   },
   "app/models/__init__.py": {
-    "mtime": 1792240082195.4934,
-    "hash": "1072e532209dd45f602de4435ea0c61f"
+    "mtime": 1792949669775.174,
+    "hash": "2e0cfff0faacff47cfd36273d9d2f6c4"
   },
   "app/models/ai_assistant.py": {
     "mtime": 1783103274879.7097,
     "hash": "8b3d248eaf343bc926bd4210cf07c521"
   },
   "app/models/allocation.py": {
-    "mtime": 1789673526495.565,
-    "hash": "6a3c24cf13adac631285911ae3deb059"
+    "mtime": 1792965371800.6328,
+    "hash": "62dd1d6eb6bba60db4d03e4863725caa"
   },
   "app/models/analytics.py": {
     "mtime": 1791849255864.8945,
@@ -488,8 +488,8 @@
     "hash": "0d8f0ea7b57759b07258db2ed2d8a46f"
   },
   "app/models/cash_register.py": {
-    "mtime": 1792268470868.5867,
-    "hash": "7aa15b195ee42327b2328e81b1d4ff99"
+    "mtime": 1792861052563.1155,
+    "hash": "bc4d813447eeb4ca79ce3961d0b14e44"
   },
   "app/models/commercial.py": {
     "mtime": 1789673526496.3118,
@@ -524,8 +524,8 @@
     "hash": "cce7f6597ba1f752e55eed1e42e5ec08"
   },
   "app/models/hotel_config.py": {
-    "mtime": 1792240082195.667,
-    "hash": "4f02fefd6d30a2af2092198a1f5dfd94"
+    "mtime": 1792949657213.154,
+    "hash": "d59df8cfedef1410143316c587cf989e"
   },
   "app/models/hotel_membership.py": {
     "mtime": 1790286208532.4243,
@@ -548,16 +548,16 @@
     "hash": "74beeab41892f38ccca04a86e99b86d5"
   },
   "app/models/ota.py": {
-    "mtime": 1783103274880.8792,
-    "hash": "cc3c2eaa9eb3fd7f2e6cf9ab0a1cdada"
+    "mtime": 1792683136607.7512,
+    "hash": "0746a555f8af9be025edc5de401978bb"
   },
   "app/models/ota_core.py": {
     "mtime": 1789673526496.2104,
     "hash": "e08d17f506251da3fadab949f053a125"
   },
   "app/models/payment.py": {
-    "mtime": 1787360063274.5525,
-    "hash": "69acbd9c1d358b9adcadca3ff92a9c9d"
+    "mtime": 1792696060432.07,
+    "hash": "7193038d7e4883283b3bfa204f7b26da"
   },
   "app/models/payment_link_test.py": {
     "mtime": 1783103274881.1504,
@@ -588,8 +588,8 @@
     "hash": "f7ea267c87b9f3f71f836948a2472136"
   },
   "app/models/reservation.py": {
-    "mtime": 1792100439483.0212,
-    "hash": "9ce79d0e9f3a985aaaeafd95f485953c"
+    "mtime": 1792949657212.577,
+    "hash": "d4dbbe599038faed19f34e78d73786d8"
   },
   "app/models/room.py": {
     "mtime": 1791849255866.6404,
@@ -604,8 +604,8 @@
     "hash": "264b74ea8cd83eee5193b8401807fcae"
   },
   "app/models/stock.py": {
-    "mtime": 1791849255866.885,
-    "hash": "0732684eeaa92b48f751c3afcdfd442c"
+    "mtime": 1792948020709.6284,
+    "hash": "60219150150cc2f134af4b59fa7de736"
   },
   "app/models/subscription.py": {
     "mtime": 1789673526496.5688,
@@ -616,8 +616,8 @@
     "hash": "45fb083269b60c1bf8bf1e38ce2bede4"
   },
   "app/models/transaction.py": {
-    "mtime": 1792268470868.2903,
-    "hash": "48fc3383605dccf9577416561ac1c565"
+    "mtime": 1792855581747.1506,
+    "hash": "8d66fee1e15bdf97ce2b1dbc7a84b6b9"
   },
   "app/models/user.py": {
     "mtime": 1790261017410.0042,
@@ -636,8 +636,8 @@
     "hash": "d16c55a35f751d803867515a91e0deb3"
   },
   "app/schemas/allocation_policy.py": {
-    "mtime": 1783103274882.4697,
-    "hash": "6833ad0526dbfd372d2348487a330c26"
+    "mtime": 1792945555932.1604,
+    "hash": "73778296121e74ddc87308c94307c689"
   },
   "app/schemas/analytics.py": {
     "mtime": 1791849255867.2295,
@@ -660,8 +660,8 @@
     "hash": "9fb981fbaf22b39fce710c6076312c77"
   },
   "app/schemas/cash_register.py": {
-    "mtime": 1792268718282.5117,
-    "hash": "5c774d5872af1286053091689303fbfc"
+    "mtime": 1792860968625.8748,
+    "hash": "bf5b694b31119dd3e93b86e2afa78fdc"
   },
   "app/schemas/commercial.py": {
     "mtime": 1791849255867.926,
@@ -692,8 +692,8 @@
     "hash": "677c64b5783d6466d025137434798d90"
   },
   "app/schemas/hotel_config.py": {
-    "mtime": 1792240082196.0408,
-    "hash": "e31d7455dec474f53b035b83c908a9ee"
+    "mtime": 1792949657213.5972,
+    "hash": "37ca2c3f4a8a7a64388951432cd53c69"
   },
   "app/schemas/integration.py": {
     "mtime": 1783103274883.6697,
@@ -704,16 +704,16 @@
     "hash": "6b804cb0a03ac92a2d39f6d91a276ae3"
   },
   "app/schemas/onboarding.py": {
-    "mtime": 1792100439483.4995,
-    "hash": "80d704f72b96a6cf62d65a71397f5708"
+    "mtime": 1792942573276.0828,
+    "hash": "8330afd39c72fb9aca4dcd93ff1e293c"
   },
   "app/schemas/ota_manual.py": {
     "mtime": 1791849255868.8896,
     "hash": "424a87ac9175da5e373c43fde0dd174d"
   },
   "app/schemas/payment_link.py": {
-    "mtime": 1787360058497.3933,
-    "hash": "9c2196a2f5ebb9bbdaeb9e57a067d38e"
+    "mtime": 1792695837730.6926,
+    "hash": "d2dad7c88d7c8389b91d6e479ab2dc5d"
   },
   "app/schemas/payment_link_test.py": {
     "mtime": 1783103274884.0994,
@@ -728,16 +728,16 @@
     "hash": "61dfbd8c76b9f6d3272cb8ea3624ce32"
   },
   "app/schemas/reservation.py": {
-    "mtime": 1792100439483.729,
-    "hash": "600198f469126c5b39b6a918874fc723"
+    "mtime": 1792944670920.2852,
+    "hash": "64ee0ded9479bb589d8eab8219b2c846"
   },
   "app/schemas/reservation_operations.py": {
-    "mtime": 1791849255869.672,
-    "hash": "9964997509845c38451d54e1e8ebcfa8"
+    "mtime": 1792855976964.7073,
+    "hash": "fc6a0e78315395c91b1e48e52741b925"
   },
   "app/schemas/room.py": {
-    "mtime": 1791849255869.9387,
-    "hash": "db823647af87f968798794427bc21e4b"
+    "mtime": 1792967220701.503,
+    "hash": "36350a1652480a55c96ea8c9d328529e"
   },
   "app/schemas/room_movement_group.py": {
     "mtime": 1783103274884.5933,
@@ -748,12 +748,12 @@
     "hash": "b40a7989e2a823a224c91789f3559108"
   },
   "app/schemas/transaction.py": {
-    "mtime": 1792266302725.913,
-    "hash": "3c9292de52d7689a56e17dc5c2aee774"
+    "mtime": 1792944388776.6475,
+    "hash": "4f30741412066bdd009bf68722234cd2"
   },
   "app/schemas/waitlist.py": {
-    "mtime": 1783103274884.8352,
-    "hash": "48d97f835b4369271279359e7229ff16"
+    "mtime": 1792965274736.955,
+    "hash": "1342bf13b9474ee3716e485c1fe659f0"
   },
   "app/schemas/whatsapp_hooks.py": {
     "mtime": 1789061001906.4133,
@@ -780,20 +780,20 @@
     "hash": "9c5d000f789b0650f5663b362f6ae61b"
   },
   "app/services/allocation_engine.py": {
-    "mtime": 1791849255870.8958,
-    "hash": "10675845340a78bc52d91e0f39b60a4f"
+    "mtime": 1792948987862.7844,
+    "hash": "5a77d0f9ca79545b55d11727fea646e4"
   },
   "app/services/allocation_learning_service.py": {
     "mtime": 1783103274885.521,
     "hash": "b41a5fe5a3e72536d850f005a2901e23"
   },
   "app/services/allocation_policy_service.py": {
-    "mtime": 1788117706917.6572,
-    "hash": "a9272c205861ddbd1f650968d8bddaa8"
+    "mtime": 1792945976528.5051,
+    "hash": "1609e84afef87bd33077acd81fc3b4f6"
   },
   "app/services/allocation_runtime_service.py": {
-    "mtime": 1791849255871.1934,
-    "hash": "72da14059312c881988f2edde17eed7d"
+    "mtime": 1792966105047.8254,
+    "hash": "f247a39acec58e3e29f22ec6bbc9196d"
   },
   "app/services/analytics_ai_providers.py": {
     "mtime": 1791849255871.5496,
@@ -804,8 +804,8 @@
     "hash": "a174b8dd5ce4b16472a78841e0b15f15"
   },
   "app/services/analytics_exports.py": {
-    "mtime": 1792100439483.973,
-    "hash": "5efd17f96c8dac2b630a3a68471008d4"
+    "mtime": 1792828669979.3533,
+    "hash": "6c4184a0d5c62ba446abc1e183c3f6b5"
   },
   "app/services/analytics_facts.py": {
     "mtime": 1791849255872.3682,
@@ -816,8 +816,8 @@
     "hash": "c7ee95d65a867f14ab136b95ae7bbbe7"
   },
   "app/services/analytics_service.py": {
-    "mtime": 1792240082196.6462,
-    "hash": "e9f437f45c4de939b7c1850b690a144c"
+    "mtime": 1792824757540.0977,
+    "hash": "6543dec113d97ec530fbe4aa6263cec1"
   },
   "app/services/audit_log_service.py": {
     "mtime": 1791849255873.1912,
@@ -828,12 +828,12 @@
     "hash": "58572edc3e9450f92bc065fbe33edec8"
   },
   "app/services/cash_register_service.py": {
-    "mtime": 1792270382835.8516,
-    "hash": "546b6ff93ea6513a399197c24f9dbb4b"
+    "mtime": 1792861254105.873,
+    "hash": "f00eed46ce263a5bbded95c9017e7035"
   },
   "app/services/checkin_service.py": {
-    "mtime": 1792260629362.236,
-    "hash": "399537e98fa2bc66edcaa4f1add3c85c"
+    "mtime": 1792965084249.8008,
+    "hash": "0a261684500911b37880a26fa5e073ba"
   },
   "app/services/commercial_service.py": {
     "mtime": 1783103274886.8547,
@@ -860,8 +860,8 @@
     "hash": "e8add152839f1459048c317955e98462"
   },
   "app/services/fx_service.py": {
-    "mtime": 1791849255875.8503,
-    "hash": "d0cd5944c135c68d1a454a8fddc0fd58"
+    "mtime": 1792782314886.2874,
+    "hash": "f3da2856f296b1390808931453a098f9"
   },
   "app/services/gemma_action_catalog.py": {
     "mtime": 1783103274887.3025,
@@ -896,8 +896,8 @@
     "hash": "ff8bb9885edb1d0d8f11cd4dbd1dfa2b"
   },
   "app/services/guest_service.py": {
-    "mtime": 1792100439485.0132,
-    "hash": "38ed98acc3a223394ca107a70bf4f3e9"
+    "mtime": 1792830394131.333,
+    "hash": "9b82179ad519e387ed938c9233a24fc8"
   },
   "app/services/hotel_api_key_service.py": {
     "mtime": 1787360058500.898,
@@ -912,12 +912,12 @@
     "hash": "b924edffe2f67bfe46ccb128f42fc75e"
   },
   "app/services/integration_service.py": {
-    "mtime": 1791849255876.7922,
-    "hash": "f4d0abf4da88f96ba1fbf8667519dcd1"
+    "mtime": 1792794167946.028,
+    "hash": "ec0fb3cc47f86440e760834d1f0ddedc"
   },
   "app/services/jurisdiction_profile.py": {
-    "mtime": 1791849255876.9517,
-    "hash": "865aa2b8cd63f05380032f862087251d"
+    "mtime": 1792942573273.854,
+    "hash": "26eec121ebfe4f687cbe897ab657f683"
   },
   "app/services/laundry_service.py": {
     "mtime": 1792273599102.2915,
@@ -928,8 +928,8 @@
     "hash": "07877dd0174b7ca7670f96b99483afdd"
   },
   "app/services/operational_report_service.py": {
-    "mtime": 1791849255879.5295,
-    "hash": "87ea352a470123b64f54afec1eaa0aeb"
+    "mtime": 1792819911889.265,
+    "hash": "0eeee8c676886aa3fac2b09a2ae3e3a8"
   },
   "app/services/ota/__init__.py": {
     "mtime": 1783103274888.6926,
@@ -964,40 +964,40 @@
     "hash": "801fd2946e48e87da9c75938e111c8ad"
   },
   "app/services/ota_manual_service.py": {
-    "mtime": 1791849255880.4011,
-    "hash": "b79b4a5917d5df278238f3dccbb78684"
+    "mtime": 1792948473072.3313,
+    "hash": "9f4df52fa366340ce68a25240197b900"
   },
   "app/services/ota_service.py": {
-    "mtime": 1791849255880.5713,
-    "hash": "a37d4bf30b15b467eb4c2ab8d2f4af7a"
+    "mtime": 1792948473073.0447,
+    "hash": "a6200acc9ef3703deb64508812027b9c"
   },
   "app/services/payment_link_service.py": {
-    "mtime": 1791849255880.9412,
-    "hash": "f416f621ebc18e8f9ec80a9c9a189b2d"
+    "mtime": 1792943792997.3071,
+    "hash": "b8aab5fde9e6fb3bab56cafc3ba18ac4"
   },
   "app/services/payment_link_test_service.py": {
-    "mtime": 1791849255881.173,
-    "hash": "f2a0544cf50cffbe904e8f0a46cc962a"
+    "mtime": 1792697169771.7146,
+    "hash": "1bdcf743995dc3128445397aaa017723"
   },
   "app/services/payment_service.py": {
-    "mtime": 1792268461208.9097,
-    "hash": "95f4e2ba49686bef0603e0e2f0557272"
+    "mtime": 1792948473073.7593,
+    "hash": "c74ec806d2de88250bc811ea93d2dc51"
   },
   "app/services/payment_webhook_service.py": {
-    "mtime": 1791849255881.7874,
-    "hash": "52a7d5291e7bf267dccefb64c2ccf4eb"
+    "mtime": 1792947248281.217,
+    "hash": "c62fe1085d3dd92aa49531bf481fcaaf"
   },
   "app/services/permission_service.py": {
-    "mtime": 1792257657881.3037,
-    "hash": "b349f296e874f0d74a60c73c94d9b3c0"
+    "mtime": 1792947640916.208,
+    "hash": "c53f893c6a42bc5fcf6803e3b6685653"
   },
   "app/services/pricing_policy_service.py": {
     "mtime": 1792240082199.2715,
     "hash": "af0afdb9fd6c5af78a26fb0aec6cb9e5"
   },
   "app/services/pricing_service.py": {
-    "mtime": 1791849255883.703,
-    "hash": "7c79d89948bd48e214ad77c265f262a0"
+    "mtime": 1792786056142.65,
+    "hash": "c0146c12d561afebe94a7669c1abd05c"
   },
   "app/services/rate_calendar_service.py": {
     "mtime": 1792240082199.3682,
@@ -1012,28 +1012,28 @@
     "hash": "c1d210a036dce7dac79db7b2f0cc8686"
   },
   "app/services/reservation_operations_service.py": {
-    "mtime": 1792100439486.5703,
-    "hash": "1d37601ab397f5385cd3377ba7504cbb"
+    "mtime": 1792948481604.4536,
+    "hash": "33a10281c189b46d3e35346d0e5722c5"
   },
   "app/services/reservation_service.py": {
-    "mtime": 1792240082199.8845,
-    "hash": "4ee7cf28b1476dd1b3d1e249e1b60cc1"
+    "mtime": 1792965019973.4475,
+    "hash": "aa5fb6ba15b9bda51bdb5670d86c1d1a"
   },
   "app/services/room_block_service.py": {
-    "mtime": 1791849255886.0342,
-    "hash": "fc26ae6ffd57eddb224452762363bc91"
+    "mtime": 1792964956676.1028,
+    "hash": "11b84e4ee86a0e8789d181fe7c6056e0"
   },
   "app/services/room_movement_group_service.py": {
-    "mtime": 1791849255886.1902,
-    "hash": "b9e9151e3b0b69d9c99c8a4bb53bc57d"
+    "mtime": 1792947001297.4255,
+    "hash": "20a41f6a15a326994975fd9bce9f30bb"
   },
   "app/services/security.py": {
     "mtime": 1787360063280.336,
     "hash": "538f3062177eee10bc3c585eb717e3d6"
   },
   "app/services/stock_service.py": {
-    "mtime": 1792273599101.6023,
-    "hash": "e0a0f0f953c28fb9bf20b49bb402dc58"
+    "mtime": 1792948558692.9446,
+    "hash": "ac5e977fefad653faa619943bf96b60a"
   },
   "app/services/subscription_entitlements.py": {
     "mtime": 1791849255886.9797,
@@ -1048,12 +1048,12 @@
     "hash": "855847ede3ae8d1ed14d415c3ba75a31"
   },
   "app/services/timezones.py": {
-    "mtime": 1792268444969.492,
-    "hash": "bd5ae641bc08384110023f044fc4e078"
+    "mtime": 1792677588598.7683,
+    "hash": "ac286b4eafa91cbbb44f96e05c57c3f1"
   },
   "app/services/waitlist_service.py": {
-    "mtime": 1783103274891.404,
-    "hash": "43c5986666273a59a1692e21567733e3"
+    "mtime": 1792965273248.7422,
+    "hash": "2bead0256c406bfa3ac2b4a7b5790ff1"
   },
   "app/services/whatsapp_booking_service.py": {
     "mtime": 1789673526495.8613,
@@ -1064,12 +1064,12 @@
     "hash": "0aabafc5fd6e89b75b99709816e443df"
   },
   "app/tasks/analytics_tasks.py": {
-    "mtime": 1792100439487.8508,
-    "hash": "33992d97fe2834ad60d5c5f25961f81a"
+    "mtime": 1792860947674.644,
+    "hash": "c9739315320fbd682fffa19206554451"
   },
   "app/tasks/celery_app.py": {
-    "mtime": 1791849255887.2932,
-    "hash": "c7c26425feb36367e3ee8001fc21f19a"
+    "mtime": 1792965019973.7664,
+    "hash": "d6c8eedbba4cf6457f3c9e64ae51b3db"
   },
   "app/tasks/ota_tasks.py": {
     "mtime": 1791849255887.561,
@@ -1116,24 +1116,24 @@
     "hash": "c87f326ccddcb8c797fb85009fdd454e"
   },
   "frontend/src/api/cashRegister.ts": {
-    "mtime": 1792268718282.9224,
-    "hash": "b31f76b08f1ea00241fbdd3fa09cfff1"
+    "mtime": 1792860968628.835,
+    "hash": "bba640383728db3554efebf31ff83123"
   },
   "frontend/src/api/categories.ts": {
     "mtime": 1783103274904.176,
     "hash": "295cb406ea26fb1ee80d8ffac736b24c"
   },
   "frontend/src/api/client.ts": {
-    "mtime": 1791849255905.4526,
-    "hash": "f90c05c5aa88e78a10587e339dab99c2"
+    "mtime": 1792819042823.2217,
+    "hash": "4077ba32bb52f1c323ebc53ca3f169b3"
   },
   "frontend/src/api/companies.ts": {
     "mtime": 1791849255905.714,
     "hash": "0558269c4d3043c7858428700a4dd204"
   },
   "frontend/src/api/config.ts": {
-    "mtime": 1792263961625.1687,
-    "hash": "8b23de0a4cb8ec29fc11fcbfffca7e10"
+    "mtime": 1792948360181.2385,
+    "hash": "10fa3f0d1b491c116429cf11484332d5"
   },
   "frontend/src/api/email.ts": {
     "mtime": 1783103274904.3967,
@@ -1160,20 +1160,20 @@
     "hash": "3c8b5c36808b3b0265a8203bef65ad69"
   },
   "frontend/src/api/paymentLinkTests.ts": {
-    "mtime": 1791849255906.858,
-    "hash": "286b84af9bd1ff42a3120746986faac0"
+    "mtime": 1792692244007.177,
+    "hash": "b5ebd6d54a0324ac73283eab18ba7f7a"
   },
   "frontend/src/api/paymentLinks.ts": {
-    "mtime": 1787360058512.2273,
-    "hash": "c71e4f43fce4faa17e07bfb23fe1e7cc"
+    "mtime": 1792696113293.684,
+    "hash": "da4146cb200fcd463f0d74227ab8916a"
   },
   "frontend/src/api/paymentSurcharges.ts": {
-    "mtime": 1783103274904.8555,
-    "hash": "54b7f58fde0829ae660bb19b6b9fa54a"
+    "mtime": 1792944826916.945,
+    "hash": "bfa1370403543eee63a6180bb4d42d91"
   },
   "frontend/src/api/payments.ts": {
-    "mtime": 1792240082202.7761,
-    "hash": "26ad366095ad069f597251119f23ed03"
+    "mtime": 1792944839703.6775,
+    "hash": "c68125bbfcb1c719f3f347deb35ddd5a"
   },
   "frontend/src/api/permissions.ts": {
     "mtime": 1792271220202.152,
@@ -1188,16 +1188,16 @@
     "hash": "1232e4f0fe8c315a756cd0766ced8fc4"
   },
   "frontend/src/api/reservations.ts": {
-    "mtime": 1792271223425.9817,
-    "hash": "ce58322d91a8276cb01d0b24b82308a6"
+    "mtime": 1792949836308.8247,
+    "hash": "8a45237b32f36569523c12c531bdce4b"
   },
   "frontend/src/api/roomBlocks.ts": {
-    "mtime": 1791849255907.977,
-    "hash": "4f1e2e0070b22109edb5a277819eb0a0"
+    "mtime": 1792965122590.2388,
+    "hash": "c4cdc6cc63c579d8d832cb40f9a15727"
   },
   "frontend/src/api/rooms.ts": {
-    "mtime": 1791849255908.9595,
-    "hash": "9731dc786ca54de9cfe878945e3c80c1"
+    "mtime": 1792967220702.4207,
+    "hash": "78b46ea1a2d00a208b87c7c47dcf1f57"
   },
   "frontend/src/api/stock.ts": {
     "mtime": 1791849255909.0847,
@@ -1216,8 +1216,8 @@
     "hash": "8b62f465ec160f64dc78be30e916f078"
   },
   "frontend/src/api/waitlist.ts": {
-    "mtime": 1783103274905.6294,
-    "hash": "260720b79bd0a5aa7381d4d6fbd8675d"
+    "mtime": 1792965278438.5916,
+    "hash": "60e2abab809f0f68d4e6f9ab77e598a7"
   },
   "frontend/src/components/CheckoutStub.tsx": {
     "mtime": 1791849255909.7185,
@@ -1272,8 +1272,8 @@
     "hash": "61cf34416d974ca23a4862fae03c4114"
   },
   "frontend/src/hooks/useCashRegister.ts": {
-    "mtime": 1791849255912.155,
-    "hash": "93624e771d28e5cbda06fc4e586fb520"
+    "mtime": 1792819056488.34,
+    "hash": "c7b95f8d14e1cc820dab7029e9b5aa46"
   },
   "frontend/src/hooks/useCategories.ts": {
     "mtime": 1791849255912.2405,
@@ -1303,21 +1303,17 @@
     "mtime": 1783103274907.5632,
     "hash": "9c6fdfef65ebfdd43f78828798e71ebe"
   },
-  "frontend/src/hooks/usePaymentLinkTests.ts": {
-    "mtime": 1791849255913.6682,
-    "hash": "e6940a6021a32dec62b86327d4f76ffc"
-  },
   "frontend/src/hooks/usePaymentLinks.ts": {
     "mtime": 1789061001923.618,
     "hash": "2e3c9ac1fc8e85ceec10115fefc92ac5"
   },
   "frontend/src/hooks/usePaymentSurcharges.ts": {
-    "mtime": 1791849255913.7722,
-    "hash": "fe3eccd4c7fde8315927e170ae4f74e2"
+    "mtime": 1792944835668.05,
+    "hash": "3feb9d1be6d2d8432257d618f8c0c8c6"
   },
   "frontend/src/hooks/usePayments.ts": {
-    "mtime": 1791849255913.981,
-    "hash": "e171dc138ce1d48480cfa775e0c7223d"
+    "mtime": 1792945263250.9946,
+    "hash": "e65927b81caaf35f90146b154901582a"
   },
   "frontend/src/hooks/useRateCalendar.ts": {
     "mtime": 1791849255914.2683,
@@ -1328,12 +1324,12 @@
     "hash": "2bc91c99e1a11e25dc9c1f03963656be"
   },
   "frontend/src/hooks/useReservations.ts": {
-    "mtime": 1792271228448.6648,
-    "hash": "380ec306695fff1dc60c99a6611a6713"
+    "mtime": 1792948405680.9521,
+    "hash": "ad018fb8410281468aacdaaedf4f3df0"
   },
   "frontend/src/hooks/useRoomBlocks.ts": {
-    "mtime": 1791849255914.7373,
-    "hash": "22096422b2d4275df1023b27167bf6ca"
+    "mtime": 1792965122592.6365,
+    "hash": "ff35abe52c5913e5d2dfce91c20fc8a1"
   },
   "frontend/src/hooks/useRooms.ts": {
     "mtime": 1791849255914.8467,
@@ -1388,16 +1384,16 @@
     "hash": "5850ae0d93dcaa99a607e48fd8274b74"
   },
   "frontend/src/router.tsx": {
-    "mtime": 1791849255917.3848,
-    "hash": "c520a55e63fcd572bc1fedf3661da409"
+    "mtime": 1792947813066.9294,
+    "hash": "f372a160b83088cc8be72c4cd7dc5758"
   },
   "frontend/src/state/session.tsx": {
     "mtime": 1791849255917.6216,
     "hash": "e52b3a0881c02939777c26d33b33d99c"
   },
   "frontend/src/ui/AppShell.tsx": {
-    "mtime": 1791849255917.9841,
-    "hash": "d5fd991e823a28fcfb2c7faed35d6c9d"
+    "mtime": 1792948013126.7397,
+    "hash": "0e62983feaad6a6171a738de212016fc"
   },
   "frontend/src/ui/HotelSelector.tsx": {
     "mtime": 1791849255918.0918,
@@ -1412,28 +1408,28 @@
     "hash": "aa4ff3906df63302c958ba06bf1f7c7d"
   },
   "frontend/src/views/onboarding/OnboardingWizard.tsx": {
-    "mtime": 1792100439496.2925,
-    "hash": "451fe7af151f199fa9b2644fefdd61f3"
+    "mtime": 1792677481511.9329,
+    "hash": "d0f189b4c01ec205385eca215af98df1"
   },
   "frontend/src/views/protected/CashRegisterPage.tsx": {
-    "mtime": 1792268561687.3667,
-    "hash": "ab0eb9b2393bc1fa02e775939da4911c"
+    "mtime": 1792861416103.7715,
+    "hash": "30d8562e0d1b978a01d7f3bcad514692"
   },
   "frontend/src/views/protected/CompaniesPage.tsx": {
-    "mtime": 1791849255919.5347,
-    "hash": "e7b99c0bc09129e5f93cd45dea84fd4a"
+    "mtime": 1792943488326.625,
+    "hash": "3957869e0fe6c170d464314403e87bc1"
   },
   "frontend/src/views/protected/DashboardPage.tsx": {
     "mtime": 1792264773486.864,
     "hash": "06989ada2055bb2d4a0221b21b76c008"
   },
   "frontend/src/views/protected/GuestsPage.tsx": {
-    "mtime": 1792264773487.374,
-    "hash": "305406676f4938adcc4376940f510262"
+    "mtime": 1792677481513.7444,
+    "hash": "9304da1e282b025a6b02170d1d65caf0"
   },
   "frontend/src/views/protected/LaundryPage.tsx": {
-    "mtime": 1792264723579.7146,
-    "hash": "f7f09305a0349b892d8d90fc3bd4408a"
+    "mtime": 1792947532903.9487,
+    "hash": "ddec47daa6d88844afb4f4d429aa157a"
   },
   "frontend/src/views/protected/RateCalendarPage.tsx": {
     "mtime": 1792264723580.2073,
@@ -1444,12 +1440,12 @@
     "hash": "49dcd300521a083b25cab5685b6ffd18"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1792269626903.9404,
-    "hash": "1c53033d670118ca99048948dbefa158"
+    "mtime": 1792946618861.6367,
+    "hash": "95116703426b819b9cf42e0d4e93772d"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
-    "mtime": 1792264696410.8118,
-    "hash": "4105fe26cdb9ceb44f8f6313cdb2ff1f"
+    "mtime": 1792965459461.1082,
+    "hash": "e81b1cd547c246d206557336b4ba6f3a"
   },
   "frontend/src/views/protected/SettingsApiKeysPage.tsx": {
     "mtime": 1790261007494.3623,
@@ -1464,8 +1460,8 @@
     "hash": "2830aabaf375e7b32e57a679c8f19c12"
   },
   "frontend/src/views/protected/SettingsHotelPage.tsx": {
-    "mtime": 1792263961625.94,
-    "hash": "55df73331e6e7f54e6f95f8cf43d44df"
+    "mtime": 1792948360182.2002,
+    "hash": "55f8107403ee5385ed79937d2d21c284"
   },
   "frontend/src/views/protected/SettingsPermissionsPage.tsx": {
     "mtime": 1792272945240.5386,
@@ -1480,8 +1476,8 @@
     "hash": "e075628aaf472ae693a6f8bde652b062"
   },
   "frontend/src/views/protected/SettingsTestsPage.tsx": {
-    "mtime": 1791849255923.8384,
-    "hash": "a02cbb96e6832480ff9bcf5b18add760"
+    "mtime": 1792691676140.0596,
+    "hash": "b035116513416c28ef90e4435502caf6"
   },
   "frontend/src/views/protected/SettingsUsersPage.tsx": {
     "mtime": 1791849255923.9763,
@@ -1492,12 +1488,12 @@
     "hash": "17aae97f3543168f0083da6975b95360"
   },
   "frontend/src/views/protected/StockPage.tsx": {
-    "mtime": 1792264807411.4995,
-    "hash": "e640f46b1300e93a5e76baff7dabab13"
+    "mtime": 1792803812978.9868,
+    "hash": "2785ace80a2dee2f3daf4d4c871bf457"
   },
   "frontend/src/views/protected/WaitlistPage.tsx": {
-    "mtime": 1790261007495.907,
-    "hash": "6f9ee9efe8e14809a92466437914f1e2"
+    "mtime": 1792965329625.6194,
+    "hash": "57fe8c7c47690d91313074ef79e0e8da"
   },
   "frontend/src/views/protected/analytics/AnalyticsPages.tsx": {
     "mtime": 1792272219865.5159,
@@ -1600,8 +1596,8 @@
     "hash": "079986c11d773531e7b208f2fb143c4e"
   },
   "tests/smoke/test_connect_channels_smoke.py": {
-    "mtime": 1790286208537.5554,
-    "hash": "6c70f5d38db889935246e4acbb17ebeb"
+    "mtime": 1792794167947.1426,
+    "hash": "20f4144b4a4da0a7437efe344e7aeaf9"
   },
   "tests/smoke/test_gemma_smoke_placeholder.py": {
     "mtime": 1783103275002.4556,
@@ -1628,28 +1624,28 @@
     "hash": "ada9675774fa6c19a3e6faf9a88e819e"
   },
   "tests/test_allocation_policy_api.py": {
-    "mtime": 1788026569644.47,
-    "hash": "f3a7eecede4b480162406780b1dc4d5c"
+    "mtime": 1792946219077.089,
+    "hash": "c0c056a58b344d4c15c6fdd966a1233e"
   },
   "tests/test_allocation_policy_service.py": {
-    "mtime": 1783103275002.964,
-    "hash": "d7959447516ca589e2c856b3b68ed688"
+    "mtime": 1792945976529.2927,
+    "hash": "0f605da2b427ba66e430a1a19ad9aed3"
   },
   "tests/test_allocation_product_compatibility.py": {
     "mtime": 1791849255934.3418,
     "hash": "2cb437eceac77d8120f521025231684e"
   },
   "tests/test_allocation_v72_rules.py": {
-    "mtime": 1791849255934.4783,
-    "hash": "d2898b53b9525340aa56ec784377e026"
+    "mtime": 1792966097159.1404,
+    "hash": "374db0cbe4911b31cee7218e0b5c37e7"
   },
   "tests/test_analytics_ai_providers.py": {
     "mtime": 1783103275003.2502,
     "hash": "cf8158612279def87b0d8fb7f7e1b7a9"
   },
   "tests/test_analytics_api.py": {
-    "mtime": 1792100439501.354,
-    "hash": "8219bfa541f157582096e809b887f8a7"
+    "mtime": 1792828675981.5376,
+    "hash": "5ab5c457ead63041fab220eff2f34d82"
   },
   "tests/test_analytics_block1_schema.py": {
     "mtime": 1791849255935.6824,
@@ -1668,8 +1664,8 @@
     "hash": "f3ab6343a6eca47b40c1f0874eddb40a"
   },
   "tests/test_api_scaffolding.py": {
-    "mtime": 1791849255937.1506,
-    "hash": "0e267f64ae0ef09f1018fd8506992704"
+    "mtime": 1792830400843.8582,
+    "hash": "8b8a23f227b0566093e3cafde2579e1e"
   },
   "tests/test_audit_coverage.py": {
     "mtime": 1791849255937.443,
@@ -1700,12 +1696,12 @@
     "hash": "fc2ad8ff5a8d34f6108d22cc31011504"
   },
   "tests/test_cash_register_api.py": {
-    "mtime": 1792240082214.169,
-    "hash": "b675fd689800623817cadb395ae84830"
+    "mtime": 1792819212127.837,
+    "hash": "d0d77c14308b03705124e960da65cdb3"
   },
   "tests/test_cash_register_service.py": {
-    "mtime": 1792270382836.2341,
-    "hash": "62e04807c5a94cac252d62c333a70d08"
+    "mtime": 1792783854472.289,
+    "hash": "153a019585d62a9439ba5705e4a3810c"
   },
   "tests/test_cassandra_timeseries.py": {
     "mtime": 1791849255938.6245,
@@ -1736,20 +1732,20 @@
     "hash": "bd6580401df666afc937956ce6ed9181"
   },
   "tests/test_company_documents_api.py": {
-    "mtime": 1791849255939.597,
-    "hash": "c79bb081deb00e81de0b66defdce8eaf"
+    "mtime": 1792943773326.6892,
+    "hash": "030b12d09ec2036a61c3ac0a3e318dd1"
   },
   "tests/test_company_documents_service.py": {
-    "mtime": 1783103275005.014,
-    "hash": "67894d54dd510f84469ad80ff0fd4478"
+    "mtime": 1792944670920.393,
+    "hash": "96e3f062dd924a24db18105f470837c1"
   },
   "tests/test_company_schema.py": {
     "mtime": 1791849255939.896,
     "hash": "5e0d8b78410e2dcaa5a1aa8564db56cc"
   },
   "tests/test_config_permissions.py": {
-    "mtime": 1792240082214.8303,
-    "hash": "8f636b9afde6b0c0ced6ad0bb18a9706"
+    "mtime": 1792965122411.038,
+    "hash": "c1f90000713b2afe11cfe072b1da2b36"
   },
   "tests/test_connections.py": {
     "mtime": 1783103275005.2117,
@@ -1780,8 +1776,8 @@
     "hash": "9797ebf9f936ae3c41ad905f1021a58c"
   },
   "tests/test_gmail_integration.py": {
-    "mtime": 1790302910636.7002,
-    "hash": "bf45c15d235056c1f53c34cf52556025"
+    "mtime": 1792794167947.7437,
+    "hash": "0f28835280fd48b1abd67fd8846bc46f"
   },
   "tests/test_gmail_outbound_flow.py": {
     "mtime": 1790286208540.4373,
@@ -1808,8 +1804,8 @@
     "hash": "a148d663a43423a6d30f1e09dc8cfcc0"
   },
   "tests/test_jurisdiction_profile.py": {
-    "mtime": 1791849255943.2964,
-    "hash": "3567a48da09451c5e57c5dc520f4e36a"
+    "mtime": 1792942573277.042,
+    "hash": "872f1f6e4162826caece3b8ba9ec343a"
   },
   "tests/test_laundry_service.py": {
     "mtime": 1783103275006.3328,
@@ -1876,12 +1872,12 @@
     "hash": "b7831bb749a0f5ea9b0cef9b11bbc037"
   },
   "tests/test_ota_inbound_lifecycle.py": {
-    "mtime": 1791849255947.1182,
-    "hash": "30845c2124a625b6f3cf1bbbfec93483"
+    "mtime": 1792947576124.1975,
+    "hash": "8ded5b5e6dca250450194d52d7077f1b"
   },
   "tests/test_ota_manual_service.py": {
-    "mtime": 1790552864212.1125,
-    "hash": "e8d7a6d7708f215e2892c4a33e490392"
+    "mtime": 1792945976529.712,
+    "hash": "69f84505856a18b7aac3aca71df6fd88"
   },
   "tests/test_ota_orchestrator.py": {
     "mtime": 1787360058535.2246,
@@ -1892,32 +1888,32 @@
     "hash": "e9c42eaf75a8b467a980286f08078b3c"
   },
   "tests/test_ota_webhooks_hardening.py": {
-    "mtime": 1791849255947.206,
-    "hash": "b6e3de35d4d2c84cdd8d82e71d2ee1b2"
+    "mtime": 1792683165334.8035,
+    "hash": "5faee9243d52e52eb4fa91808461ac9d"
   },
   "tests/test_payment_link_service.py": {
-    "mtime": 1790514932391.3425,
-    "hash": "c60033c038864445ba92ba74a9fd617f"
+    "mtime": 1792678534435.2156,
+    "hash": "7519aea68eb970bc10cd27414584787d"
   },
   "tests/test_payment_links_api.py": {
     "mtime": 1791849255947.52,
     "hash": "809e0f5107efcd7f48d0ad7288c82058"
   },
   "tests/test_payment_service.py": {
-    "mtime": 1792240082216.4019,
-    "hash": "e61961f5eb18038811411f8811e8cbfe"
+    "mtime": 1792795615577.0103,
+    "hash": "6f2d91599fe897de240e6c24d4f59003"
   },
   "tests/test_payment_webhook_service.py": {
-    "mtime": 1791849255948.1643,
-    "hash": "818d91fc00b5b9d45e9f91953ae70b6a"
+    "mtime": 1792947235536.4075,
+    "hash": "d0b0a1c5593d3738b53c2b1c4f12103e"
   },
   "tests/test_permission_service.py": {
     "mtime": 1792100439504.2124,
     "hash": "91934880adf849722cffcf7abad2c41b"
   },
   "tests/test_permissions_api.py": {
-    "mtime": 1792240082216.7507,
-    "hash": "7f3ac55d1df60a0df3f9a4a4ab7409c4"
+    "mtime": 1792947123465.7578,
+    "hash": "b3e1160c7a41edf885febcda61dda7e9"
   },
   "tests/test_postgres_validation.py": {
     "mtime": 1791849255949.979,
@@ -1968,36 +1964,36 @@
     "hash": "ea957100bc4ab1cb5cd463dcf64d7eff"
   },
   "tests/test_reservation_operations_service.py": {
-    "mtime": 1791849255953.1904,
-    "hash": "898a5be5f2070d11101c55e699b4c7fc"
+    "mtime": 1792799363637.9111,
+    "hash": "e8cda4e48389a1be2e43c48fdadabfdd"
   },
   "tests/test_reservation_reportable_origin.py": {
     "mtime": 1783103275009.5027,
     "hash": "427dd02ac6d6f46256dd892e08581ac6"
   },
   "tests/test_reservation_service.py": {
-    "mtime": 1791849255953.5796,
-    "hash": "689165d9632d870f544287f81c11cfae"
+    "mtime": 1792964880396.1458,
+    "hash": "d84d6a3927b94c21d7c8c43147e0e35b"
   },
   "tests/test_room_block_service.py": {
-    "mtime": 1791849255954.096,
-    "hash": "06d2321ded7bdc3634854d528a17a42d"
+    "mtime": 1792964956678.2202,
+    "hash": "7331da4aafd627681ad4d747050e7400"
   },
   "tests/test_room_blocks_api.py": {
-    "mtime": 1791849255954.2202,
-    "hash": "03e91f103bd0ac8cbfe116873c0b8fdf"
+    "mtime": 1792945976528.8394,
+    "hash": "42ecdfb3dd9a04940e34a48a387e2ce5"
   },
   "tests/test_room_movement_groups_api.py": {
-    "mtime": 1791849255954.6885,
-    "hash": "16defdc334bd68f08da1f36eac7fe4fd"
+    "mtime": 1792944670920.477,
+    "hash": "1841a99135322297fd696863a82c01de"
   },
   "tests/test_rooms_schema.py": {
     "mtime": 1783103275009.7812,
     "hash": "3f9f4b0293fdcef5abdb6536dbf08b16"
   },
   "tests/test_route_security_guardrail.py": {
-    "mtime": 1790454490468.7954,
-    "hash": "3e63f3ff983fcd75c183b61bc4b92989"
+    "mtime": 1792677481508.1643,
+    "hash": "2b4e3a9e964c4ee75de2c17163d8625c"
   },
   "tests/test_runtime_security.py": {
     "mtime": 1791849255955.34,
@@ -2008,8 +2004,8 @@
     "hash": "3d3d30e4ab4cb7c945d87c5af5411f22"
   },
   "tests/test_stock_service.py": {
-    "mtime": 1791849255956.2854,
-    "hash": "c07a822ffa50d97eb22fc19a86134b5e"
+    "mtime": 1792699776288.762,
+    "hash": "56f905bc09ecc2ffd4471c88d5e2f9ca"
   },
   "tests/test_subscription_tiers.py": {
     "mtime": 1792100439506.872,
@@ -2020,40 +2016,40 @@
     "hash": "4c7c35831a426faf53517394a2179f03"
   },
   "tests/test_timezones.py": {
-    "mtime": 1789061001945.6685,
-    "hash": "05fc14fe127035504603e92907d717b2"
+    "mtime": 1792677637449.752,
+    "hash": "58e397f5e4db2afe6119aa9b957ed798"
   },
   "tests/test_v72_cash_register.py": {
-    "mtime": 1792258359737.208,
-    "hash": "bf4ffede2af379efa939747a1dbd80d7"
+    "mtime": 1792826490269.6543,
+    "hash": "08d90bc7bd176be43397dd5025d6c0a6"
   },
   "tests/test_v72_change_dates.py": {
     "mtime": 1790535412178.1807,
     "hash": "e11b83399e0cdf05e22e95e886fc1d85"
   },
   "tests/test_v72_checkin_gate.py": {
-    "mtime": 1792240082218.4832,
-    "hash": "746775fd026d0452362a5433c7214ddd"
+    "mtime": 1792965128573.4978,
+    "hash": "2297010b802b2a69a23954811878aea0"
   },
   "tests/test_v72_checkout_balance.py": {
-    "mtime": 1790545044406.9075,
-    "hash": "09929f1b7587324be3b55145ee322a62"
+    "mtime": 1792807467530.4463,
+    "hash": "73bb59dc049c42edcc365a0ca4acf866"
   },
   "tests/test_v72_concurrency.py": {
     "mtime": 1791849255957.4778,
     "hash": "e608411c28eda153a365707c516640dc"
   },
   "tests/test_v72_daily_rates.py": {
-    "mtime": 1791849255957.601,
-    "hash": "c7e794576c8e198aec81ba6ac148ddb8"
+    "mtime": 1792786143559.3777,
+    "hash": "508d51494aee639476dff128219106dc"
   },
   "tests/test_v72_extension_conflict.py": {
-    "mtime": 1792100439507.3398,
-    "hash": "9bf813eba2ea489fe3e9a0287656d6d5"
+    "mtime": 1792680239414.6602,
+    "hash": "ce4fcbeb1d836b8a945dadf5e2e07d3d"
   },
   "tests/test_v72_features.py": {
-    "mtime": 1790545052080.6912,
-    "hash": "e5cdb6e93240f59499b11b0288ca105f"
+    "mtime": 1792944670920.3367,
+    "hash": "e9ba78dc8d5771de6d4ab55bb8a3ec01"
   },
   "tests/test_v72_fx_rates.py": {
     "mtime": 1791849255957.8145,
@@ -2064,8 +2060,8 @@
     "hash": "5700cd2b0c9fd1421f12b93742d2865e"
   },
   "tests/test_v72_movement_groups.py": {
-    "mtime": 1791849255958.208,
-    "hash": "9866f34c063db3651b4c0eb55c1d62d7"
+    "mtime": 1792944670920.5164,
+    "hash": "9b9910b8793e319c1324f6d3222282b2"
   },
   "tests/test_v72_occupancy_capacity.py": {
     "mtime": 1783103275011.1384,
@@ -2084,8 +2080,8 @@
     "hash": "9d62ad1e3bb69494e971078fe026766f"
   },
   "tests/test_waitlist_service.py": {
-    "mtime": 1783103275011.3994,
-    "hash": "17e51e5d0f4aeb3bc7307cd5bfea003d"
+    "mtime": 1792965276548.4438,
+    "hash": "cfbc27949b0c8264e5560b4649c10109"
   },
   "tests/test_whatsapp_booking_service.py": {
     "mtime": 1787360058542.2288,
@@ -2208,8 +2204,8 @@
     "hash": "c5cf55fd0b730c5179d460b18d33654e"
   },
   ".github/workflows/pr-validation.yml": {
-    "mtime": 1791849255848.4978,
-    "hash": "8ef15b917f405749653a0359837b2835"
+    "mtime": 1792781783289.0137,
+    "hash": "6ff97ee52dcc37bf03e9ed05b14ecdde"
   },
   "AGENTS.md": {
     "mtime": 1784817282420.943,
@@ -2272,8 +2268,8 @@
     "hash": "f7ffba8c7dbd49fd0d3b37ad8030f6ff"
   },
   "docs/architecture-audit.md": {
-    "mtime": 1792100439488.4517,
-    "hash": "1f5829c3f35d342a75106b19193dc9f5"
+    "mtime": 1792677609577.6943,
+    "hash": "fd4ddf1a9767256d3c0a1532bf4a9918"
   },
   "docs/business-requirements-master-v72.md": {
     "mtime": 1792240082200.5928,
@@ -2504,8 +2500,8 @@
     "hash": "95ad8777095544f1e09955e76764a169"
   },
   "docs/product-definition.md": {
-    "mtime": 1792100439489.3354,
-    "hash": "d7e7d43b7e599d4ec229ebb850a800de"
+    "mtime": 1792949136608.1138,
+    "hash": "eca14e046d6d255dac9bf488f4023042"
   },
   "docs/roadmap.md": {
     "mtime": 1792100439489.5164,
@@ -2516,12 +2512,12 @@
     "hash": "4a67d9d9f6fd4ca380f67bd20fd1f691"
   },
   "docs/security-baseline.md": {
-    "mtime": 1792271425190.224,
-    "hash": "e49de4725f949bcacea1b515d7811615"
+    "mtime": 1792943590828.1746,
+    "hash": "8699d280eb747d11e28208127d0d6ae3"
   },
   "docs/tooling-stack.md": {
-    "mtime": 1783103274899.8313,
-    "hash": "73c200747348aa12ac0532df506c2393"
+    "mtime": 1792781858899.2913,
+    "hash": "4cda332e9a82c7ab2ec2ad374dc00dbb"
   },
   "docs/v72-vertical-slices-plan.md": {
     "mtime": 1783103274899.9233,
@@ -2552,8 +2548,8 @@
     "hash": "a1b909ceb75ca90ba82af3bc55624cf8"
   },
   "render.yaml": {
-    "mtime": 1791849255930.8213,
-    "hash": "996f02ef8fd6487975906c4ac95a6472"
+    "mtime": 1792701825757.686,
+    "hash": "05c60f0f28601b902b99432693d09293"
   },
   "requirements.txt": {
     "mtime": 1792240082210.895,
@@ -2636,8 +2632,8 @@
     "hash": "74e21089f390db4cc8028040142bd4d0"
   },
   "knowledge/00-control/DECISION-LOG.md": {
-    "mtime": 1792100439497.5845,
-    "hash": "f66a8dd3b7444850b759d9179efc1615"
+    "mtime": 1792948590060.1587,
+    "hash": "e287204b8fc1920150c8654e58ccd5f8"
   },
   "knowledge/00-control/SOURCE-OF-TRUTH.md": {
     "mtime": 1784817282421.6729,
@@ -2724,12 +2720,12 @@
     "hash": "db90c008bb4198f3c2c13b80f0cdf678"
   },
   "knowledge/20-system/domain-and-data.md": {
-    "mtime": 1784398283675.3928,
-    "hash": "254337160e9a29ef0bbf8bbf2d98c67c"
+    "mtime": 1792796338462.0662,
+    "hash": "425f47203803624eba4bdac4b766eb2f"
   },
   "knowledge/20-system/frontend-and-ux.md": {
-    "mtime": 1784398283675.5083,
-    "hash": "3166195c94b6d7ff10ef99e66ca2d1a0"
+    "mtime": 1792796338462.3516,
+    "hash": "b89395093d23243c8e5d72bbe6a6e4ff"
   },
   "knowledge/20-system/product-and-personas.md": {
     "mtime": 1784398283675.647,
@@ -2772,28 +2768,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1792274537658.5261,
-    "hash": "f8b1723b2fa3e45458d5a31474bb16c5"
+    "mtime": 1792861593530.6448,
+    "hash": "ea9bc5f1135b915cca7c56d36be2cfb7"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1792274536948.8694,
-    "hash": "fd35fc451fe85aed243c13e2a13b1429"
+    "mtime": 1792861592782.3994,
+    "hash": "f7e3b918f8c7195b5e90c27529bfc6a8"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1792274537647.2178,
-    "hash": "baeb366b2f275483041b8eb76110cbcb"
+    "mtime": 1792861593519.2317,
+    "hash": "1c24297974bb0548fbe25d5723103451"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1792274536961.1072,
-    "hash": "67ed1861c7eb7052e07e908d78ece67a"
+    "mtime": 1792861592795.1807,
+    "hash": "2d5e6906b527bb327af7dd69273ab94e"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1792274537635.457,
-    "hash": "161f99c3ac69b60c1c0524669faf4943"
+    "mtime": 1792861593506.9612,
+    "hash": "ebd4134092a68f938c2836d04475261e"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1792274537141.8572,
-    "hash": "f96ffc746d3d5fe89637ace8e9cd14b5"
+    "mtime": 1792861592979.3137,
+    "hash": "18e724fb4a5a6e1216b8add887b34513"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -3236,8 +3232,8 @@
     "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1792273172914.6428,
-    "hash": "5f0f5f9f5ed5d4423c10268e283e6654"
+    "mtime": 1792861555534.1213,
+    "hash": "0b384388a5c874e276808b736f65d2f3"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784517879747.6167,
@@ -3300,8 +3296,8 @@
     "hash": "aea5151b6f2b917a5b6058f34a8f2f5f"
   },
   "tests/test_tenant_rls_contract.py": {
-    "mtime": 1792258359736.9434,
-    "hash": "975894f098e5e7ef32f43a101f157c0c"
+    "mtime": 1792946076235.9377,
+    "hash": "1ed807076ca4961fb869ccbbe23c4d4c"
   },
   "alembic/versions/20260724_payment_proofs.py": {
     "mtime": 1787360058488.9614,
@@ -3336,8 +3332,8 @@
     "hash": "6c6ac15ede5f33ded16c944491cd73d7"
   },
   "frontend/e2e/business-journey.spec.ts": {
-    "mtime": 1791849255893.1716,
-    "hash": "6029cc3b3b208cd65ae5e9f35ad5bd84"
+    "mtime": 1792693549800.6165,
+    "hash": "aa3399154ba437d50e4c6ba487e20dbc"
   },
   "alembic/versions/20260724_allocation_enum_values.py": {
     "mtime": 1787360058488.641,
@@ -3472,8 +3468,8 @@
     "hash": "8d5146a4ce94e17f48a6125d05e750a9"
   },
   "app/services/financial_ledger.py": {
-    "mtime": 1791849255875.6594,
-    "hash": "80bba8b27254e9a4b6b5ab78cb1a7ade"
+    "mtime": 1792676544935.4827,
+    "hash": "d0f6127e06b44373f65c7c58ffaa30dd"
   },
   "tests/test_payment_api_idempotency.py": {
     "mtime": 1791849255947.357,
@@ -3564,12 +3560,12 @@
     "hash": "03ba1788322e3f6538624b30be7380fd"
   },
   "frontend/e2e/settings-hotel.spec.ts": {
-    "mtime": 1792240082202.453,
-    "hash": "15f6a9bbc9d96ac48c5cf5be3bc3b245"
+    "mtime": 1792694789787.7495,
+    "hash": "e15960e8193d99d26320b65c218f753d"
   },
   "frontend/e2e/housekeeping-laundry-journey.spec.ts": {
-    "mtime": 1791849255896.2266,
-    "hash": "4df30e0528e038d07243a13b1b03b7be"
+    "mtime": 1792795205972.3293,
+    "hash": "8472623c31f57bb9971dc35ff5c52085"
   },
   "frontend/e2e/manager-reports-journey.spec.ts": {
     "mtime": 1791849255897.5776,
@@ -3604,12 +3600,12 @@
     "hash": "e2d0560e6f954b5f3f2b69bb1edd7bf6"
   },
   "frontend/e2e/payment-journey-full-matrix.spec.ts": {
-    "mtime": 1792240082201.989,
-    "hash": "ad6973b09c8f6a8e5cb9824c8273c2f4"
+    "mtime": 1792795692628.6396,
+    "hash": "5fd76420a5523716f378934189a00e1f"
   },
   "tests/test_mercadopago_webhook_endpoint.py": {
-    "mtime": 1791849255944.5999,
-    "hash": "3b5684f5c3751221242b541bfcd857fb"
+    "mtime": 1792817817273.407,
+    "hash": "8220cfddf3450f76b638f96854c56d64"
   },
   "alembic/versions/20260725_stock_adjustment_out.py": {
     "mtime": 1787360058489.3462,
@@ -3644,12 +3640,12 @@
     "hash": "4938a9e1ce3a93849d48edf80314b399"
   },
   "frontend/e2e/reservation-drawer-global.spec.ts": {
-    "mtime": 1791849255900.041,
-    "hash": "e8421d8578dc7340cba5751d23b07c9b"
+    "mtime": 1792783747380.3513,
+    "hash": "53da9e7cad10244d5b0a170e77c6dea4"
   },
   "frontend/src/components/ReservationDetailDrawer.tsx": {
-    "mtime": 1792271467965.5974,
-    "hash": "77502eaf6fcf4d405b5548b43f4ab31f"
+    "mtime": 1792965090144.348,
+    "hash": "a6897e5510a7bcccdcdd9cf58955c1f2"
   },
   "frontend/src/components/ReservationGlobalSearch.tsx": {
     "mtime": 1792100439493.4734,
@@ -3660,8 +3656,8 @@
     "hash": "31d13fd1dc75a9c8a1039401459e5560"
   },
   "frontend/src/utils/reservationStatus.ts": {
-    "mtime": 1787360058516.1746,
-    "hash": "37e930ea53b0912eb1bf5bc942bcbbb9"
+    "mtime": 1792948349447.8494,
+    "hash": "1f76fb3379c710f97369535f8b8317ae"
   },
   "tests/test_reservation_search.py": {
     "mtime": 1787360058539.8486,
@@ -3684,8 +3680,8 @@
     "hash": "1c7b5b2b463a00efe2f5dd003ca877ec"
   },
   "frontend/src/components/OccupancyGrid.tsx": {
-    "mtime": 1791849255910.7124,
-    "hash": "5d5cd980cb2248a80f93f6f395625393"
+    "mtime": 1792781068382.9705,
+    "hash": "2f3b82c0c14d6715d1dd15ff50fb13cc"
   },
   "frontend/src/views/protected/OccupancyPlanningPage.tsx": {
     "mtime": 1792264696411.1716,
@@ -3704,8 +3700,8 @@
     "hash": "23e30eada70d633747c7acc4fce046cf"
   },
   "tests/test_checkin_capture_and_partial.py": {
-    "mtime": 1791849255938.9136,
-    "hash": "bba01e8b2e0cedb8bcbaafe26dcc8354"
+    "mtime": 1792802265868.9465,
+    "hash": "4a0427a5f30b76577c70a99407e2ebc7"
   },
   "tests/test_guest_checkin_profile_migration.py": {
     "mtime": 1787360058533.0234,
@@ -3720,16 +3716,16 @@
     "hash": "105970cb5a16ec04909e08154b7279b7"
   },
   "frontend/e2e/manual-ota-reservation-journey.spec.ts": {
-    "mtime": 1791849255897.7449,
-    "hash": "2eb5fd845bde78738fd79c6bfd014104"
+    "mtime": 1792277539224.8008,
+    "hash": "1de630ab0a0971caf78c049bef44d9a6"
   },
   "frontend/src/components/GuestQuickCreatePanel.tsx": {
     "mtime": 1792240082203.1487,
     "hash": "cc8595d34742134f194fb3fc1d847d4e"
   },
   "frontend/src/components/ManualOtaReservationModal.tsx": {
-    "mtime": 1792264667129.5486,
-    "hash": "c9a8431727939991d44935beb4e2ebb1"
+    "mtime": 1792277392081.4368,
+    "hash": "d526c041db2bdfbcf40b8c952d0feefe"
   },
   "frontend/e2e/guest-pagination.spec.ts": {
     "mtime": 1790261017412.7249,
@@ -3744,24 +3740,24 @@
     "hash": "e8b1a1376b027d68da0b1aa727023842"
   },
   "app/api/laundry_vendor.py": {
-    "mtime": 1791849255858.7534,
-    "hash": "d8adf8b4b582b8a5d0519981cfeb8abb"
+    "mtime": 1792945722693.2483,
+    "hash": "3a823890e155bcc3020fa4113c4702c7"
   },
   "app/models/laundry_vendor.py": {
-    "mtime": 1791849255865.8713,
-    "hash": "a03e94becde7d2ec549fb7aafcfd5396"
+    "mtime": 1792945965542.9585,
+    "hash": "ba5c2b1eb205b0cb7672b4cf0dcba7b5"
   },
   "app/services/laundry_vendor_service.py": {
-    "mtime": 1792273599103.027,
-    "hash": "bb5021d50a3e4fa2e02005de468df249"
+    "mtime": 1792946076235.468,
+    "hash": "d2627ed8ab71d8d4aadbe6ed2a2f37f1"
   },
   "tests/test_laundry_vendor_api.py": {
-    "mtime": 1791849255943.7056,
-    "hash": "7db84907cf3f27fc0f949b58d739ff2b"
+    "mtime": 1792945927353.4531,
+    "hash": "17d8614959bec80fa513dd2a5e0cabc8"
   },
   "tests/test_laundry_vendor_service.py": {
-    "mtime": 1791849255943.9258,
-    "hash": "1a42a24a9061560ee82882815aa7f5f2"
+    "mtime": 1792945879796.3694,
+    "hash": "b94d972d10df5005dcdbd3e66b651d7f"
   },
   "alembic/versions/890876b925a7_repair_stock_items_locations_unique_.py": {
     "mtime": 1787360058490.1677,
@@ -3772,8 +3768,8 @@
     "hash": "17cd84cca464ee350a177d689f6b6ca2"
   },
   "frontend/src/api/laundryVendor.ts": {
-    "mtime": 1791849255906.4094,
-    "hash": "78d97563242535637c2db49c4ab6b6fb"
+    "mtime": 1792947263147.9949,
+    "hash": "e2c51a58902014c21eb9a85ecea0b5db"
   },
   "frontend/e2e/reports-default-date-timezone.spec.ts": {
     "mtime": 1787360058508.1787,
@@ -3808,8 +3804,8 @@
     "hash": "172ba776445b30c82143c77491acbedc"
   },
   "tests/test_rls_live_verification.py": {
-    "mtime": 1790286208541.4644,
-    "hash": "63e05fe604bac999214fed97743e1f64"
+    "mtime": 1792942930610.8313,
+    "hash": "3c081f93d8a80018f8c05cfe0e75d580"
   },
   "frontend/e2e/guest-search-typeahead.spec.ts": {
     "mtime": 1792240082201.6843,
@@ -3840,12 +3836,12 @@
     "hash": "3aed592eb88468f23e25a3efd47481cc"
   },
   "frontend/src/components/ConfirmDialog.tsx": {
-    "mtime": 1787360063376.7642,
-    "hash": "8277c1c3f29db4e762e2711e0ecb4434"
+    "mtime": 1792677481515.4531,
+    "hash": "95215c97c7a0d481823498096a97648a"
   },
   "tests/test_stock_api.py": {
-    "mtime": 1791849255956.0024,
-    "hash": "f23b27a8b82b5f7b162b4f25fbee500a"
+    "mtime": 1792699707363.9062,
+    "hash": "0cc43804de507d8646fe2d9ec44a4ff2"
   },
   "alembic/versions/20260727_linen_split.py": {
     "mtime": 1787360058489.6982,
@@ -3856,12 +3852,12 @@
     "hash": "5058524efe15dbc77b62320198c08353"
   },
   "app/models/linen.py": {
-    "mtime": 1791849255865.9646,
-    "hash": "3a9a97c8236add35679b757bff82afa4"
+    "mtime": 1792945006009.943,
+    "hash": "b2c8f736508686f37c1a958f08efc88f"
   },
   "app/services/linen_service.py": {
-    "mtime": 1792273740090.383,
-    "hash": "9b00311b3978c8a7d9b596767cedde96"
+    "mtime": 1792945305887.8015,
+    "hash": "d002d160f5c583a4b503db7c9f466005"
   },
   "frontend/src/api/linen.ts": {
     "mtime": 1791849255906.4983,
@@ -3964,8 +3960,8 @@
     "hash": "6b0e7a23cf089874e94ab204bb972f70"
   },
   "tests/test_role_contracts.py": {
-    "mtime": 1791849255953.9712,
-    "hash": "4dc85b37b9793a7f230eec9225a51c5f"
+    "mtime": 1792967220702.8022,
+    "hash": "45b08a97030dae7e818626b32a22b059"
   },
   "tests/test_settings_security_api.py": {
     "mtime": 1790427790229.5588,
@@ -4064,20 +4060,20 @@
     "hash": "fc9ae841cfc20938054d202013005b23"
   },
   "app/services/notification_service.py": {
-    "mtime": 1791849255878.9087,
-    "hash": "0fab90e6c38891679e363f68cc8526c8"
+    "mtime": 1792823696434.7085,
+    "hash": "e19a2d85f1a65f202f11bed9ca047f78"
   },
   "app/services/promotion_pricing_service.py": {
-    "mtime": 1791849255883.9673,
-    "hash": "933265ef1abe12becf29f0268ca9118a"
+    "mtime": 1792944388776.8494,
+    "hash": "99bcb19238fd8993585f9f930d6f68d6"
   },
   "app/services/promotion_service.py": {
     "mtime": 1791849255884.2324,
     "hash": "2e3d3b4f473cff953411884dd9ace894"
   },
   "app/services/push_adapter.py": {
-    "mtime": 1787360063279.334,
-    "hash": "5b2b3c9fbd670ee85e5aa38eaef1b913"
+    "mtime": 1792823696430.161,
+    "hash": "f08949d4bf2c9190f0c27a739ff9f85c"
   },
   "app/tasks/notification_tasks.py": {
     "mtime": 1787413025626.0547,
@@ -4152,8 +4148,8 @@
     "hash": "0d92cb44a62bc3f2d73464a2e4f9a890"
   },
   "frontend/public/sw.js": {
-    "mtime": 1787360063375.695,
-    "hash": "210ee687a83b44ebd009b5af2a704f7d"
+    "mtime": 1792677481510.9788,
+    "hash": "ff1f53812942e8a659fa2c02b6280b7d"
   },
   "frontend/src/api/guestRestrictions.ts": {
     "mtime": 1791849255906.1267,
@@ -4180,28 +4176,28 @@
     "hash": "33deea848114c8f8e30e62027a852a18"
   },
   "frontend/src/components/RateEditorMobileCards.tsx": {
-    "mtime": 1791849255911.232,
-    "hash": "1077c56111c1ace2de815a807c13262e"
+    "mtime": 1792677481514.8472,
+    "hash": "df3096a510f2d8421cdc0cfb76fb3963"
   },
   "frontend/src/components/RestrictionOverrideModal.tsx": {
     "mtime": 1787360063377.4485,
     "hash": "dc74473b308c59d14d0239dcd8fd214e"
   },
   "frontend/src/constants/notificationEvents.ts": {
-    "mtime": 1787360063377.6113,
-    "hash": "f9f2cc767dc3191c91cd5b4d1a793839"
+    "mtime": 1792695843394.764,
+    "hash": "078bd1835e19804c00d91a63c5e9ba91"
   },
   "frontend/src/hooks/useDialogA11y.ts": {
-    "mtime": 1789061001922.3845,
-    "hash": "65bf6abbef4875f4ed906f9cf3a3bc0a"
+    "mtime": 1792677481514.114,
+    "hash": "cc48c85b097819b678c1d6194274a66a"
   },
   "frontend/src/hooks/useGuestRestrictions.ts": {
     "mtime": 1791849255912.7668,
     "hash": "5448916d84de8df5938f02340c3c80bf"
   },
   "frontend/src/hooks/useInstallPrompt.ts": {
-    "mtime": 1787360063377.76,
-    "hash": "d5b7a0dd2fbfcacd5bf8a71e1ba45f2f"
+    "mtime": 1792677481515.0535,
+    "hash": "9080908ebc9455ebb2d521ab3dae0d6b"
   },
   "frontend/src/hooks/useIsDesktopViewport.ts": {
     "mtime": 1787360063377.807,
@@ -4212,8 +4208,8 @@
     "hash": "6fd842445f2d3f48798f4beac1501bc0"
   },
   "frontend/src/hooks/useOnlineStatus.ts": {
-    "mtime": 1787360063377.8992,
-    "hash": "e9e88f803370c3b27ae9af099517457f"
+    "mtime": 1792677481515.248,
+    "hash": "e157869951838edc6902e2feacfebab8"
   },
   "frontend/src/hooks/usePromotions.ts": {
     "mtime": 1789061001924.0752,
@@ -4240,8 +4236,8 @@
     "hash": "e42c50c4608a5e554a9d81ad5ac486f2"
   },
   "tests/test_financial_reports.py": {
-    "mtime": 1791849255941.9429,
-    "hash": "1402a573c6888a85c10850c4bbb0d34b"
+    "mtime": 1792820856019.6345,
+    "hash": "dbeb889ee7fd7ca20c4f66e1e692e2da"
   },
   "tests/test_guest_restriction_api.py": {
     "mtime": 1791849255942.433,
@@ -4260,8 +4256,8 @@
     "hash": "21607aedeca5032818cb614281f7894f"
   },
   "tests/test_linen_service.py": {
-    "mtime": 1791849255944.0815,
-    "hash": "c0df4796f522dcf3a9f3d522df14f83f"
+    "mtime": 1792945892977.2788,
+    "hash": "827b3e44f8011747f310bf3a2d04d567"
   },
   "tests/test_notification_api.py": {
     "mtime": 1787360063388.3816,
@@ -4272,16 +4268,16 @@
     "hash": "6dbff957b9b4b2f7797737784c7ee439"
   },
   "tests/test_notification_service.py": {
-    "mtime": 1791849255945.083,
-    "hash": "ce764d2c029196c229bec265a592106e"
+    "mtime": 1792823775353.1182,
+    "hash": "4da9a4d9e4ed525efc8ee16f36ce6986"
   },
   "tests/test_notification_wiring.py": {
     "mtime": 1790545067992.5654,
     "hash": "de20e7d4b264a8cea75421deaefe1db0"
   },
   "tests/test_payment_surcharge_decimal_api.py": {
-    "mtime": 1787360063389.078,
-    "hash": "02a070fb73c72865a6ad8e8deeacee56"
+    "mtime": 1792944388776.6821,
+    "hash": "3df62f4fd62ed515d0af8affc42c2daf"
   },
   "tests/test_permission_overrides_v2.py": {
     "mtime": 1791849255948.28,
@@ -4304,8 +4300,8 @@
     "hash": "02997ef8a1e5dded5c5439d4cedfbcd8"
   },
   "tests/test_rbac_sensitive_route_permissions.py": {
-    "mtime": 1792100439506.1467,
-    "hash": "5fb1caa893f1bbad81c841fccb5a8f7f"
+    "mtime": 1792965122409.9375,
+    "hash": "ae47a5728521fd4e5f4f5a19355093f8"
   },
   "tests/test_rbac_user_overrides_migration.py": {
     "mtime": 1788026569649.0813,
@@ -4760,8 +4756,8 @@
     "hash": "5670884831035b567ebd17a958802acf"
   },
   "docs/runbooks/backups-and-continuity.md": {
-    "mtime": 1790575231464.2292,
-    "hash": "3e08df925ba65f3bd0aa2c9810c13dce"
+    "mtime": 1792816659047.9612,
+    "hash": "804459d72627d398396ad55977a23fb2"
   },
   "frontend/public/brand/icon-192-maskable.png": {
     "mtime": 1787360063375.0508,
@@ -4852,16 +4848,16 @@
     "hash": "8cd95a4db3318a6b29b00e665c3af43e"
   },
   "app/services/room_state_service.py": {
-    "mtime": 1791849255886.307,
-    "hash": "6d749351fcfb228e52afb0f0cebeddd2"
+    "mtime": 1792946997281.0605,
+    "hash": "1e1b7c6549b671c99ad69e7c01a7ac18"
   },
   "app/services/staff_invitation_service.py": {
     "mtime": 1791849255886.5608,
     "hash": "d2345df96b2bd641417c95f1d0a26ad4"
   },
   "frontend/src/api/queryKeys.ts": {
-    "mtime": 1792264580673.5,
-    "hash": "054eb3e8abae345ceabbe389526b4d4b"
+    "mtime": 1792964585267.843,
+    "hash": "a1e0bf8c051dc81235f8ab22ffae6316"
   },
   "tests/migration_helpers.py": {
     "mtime": 1788047467669.0017,
@@ -4928,8 +4924,8 @@
     "hash": "a2b00eebb48e07548510d04cd7a83fce"
   },
   "tests/test_room_move_permission_tiers.py": {
-    "mtime": 1791849255954.402,
-    "hash": "b38da4769f3a0b164e3240ace5bc89e8"
+    "mtime": 1792947123465.4558,
+    "hash": "9e145eb4a6065f43d650b77500e132cd"
   },
   "alembic/versions/20260830_guest_room_avoidance.py": {
     "mtime": 1788117569902.5312,
@@ -5064,8 +5060,8 @@
     "hash": "41feea1a20cf80da4f4d6cfc22b4c4c5"
   },
   "app/services/object_storage.py": {
-    "mtime": 1792100439485.608,
-    "hash": "4e8b4f0475cc46cf415ec70e6bdd2dd3"
+    "mtime": 1792828431284.336,
+    "hash": "21a75c48ccb2614344f78cb676219735"
   },
   "app/services/service_heartbeat.py": {
     "mtime": 1789061001911.2817,
@@ -5080,16 +5076,16 @@
     "hash": "a91d6c3bef29efa202e788d48eccf3b6"
   },
   "frontend/i18n-auth-literals.test.mjs": {
-    "mtime": 1791849255903.3608,
-    "hash": "af58320aeb49a3c7b06acdf793fb814a"
+    "mtime": 1792947813070.555,
+    "hash": "1b490d689fb3ea11519d1ad4253edda6"
   },
   "frontend/src/api/collaboration.ts": {
     "mtime": 1789061001918.6565,
     "hash": "5224612e18a5ab6d5b23340f3ebdf5ea"
   },
   "frontend/src/api/queryInvalidation.ts": {
-    "mtime": 1791849255907.2734,
-    "hash": "e5e63f1b51f6973e16f0b021c9a7157f"
+    "mtime": 1792948400931.5396,
+    "hash": "d387000820a99fedfd0d75939e277ac4"
   },
   "frontend/src/hooks/useCollaborativeResource.ts": {
     "mtime": 1791849255912.3489,
@@ -5100,8 +5096,8 @@
     "hash": "ff39fe1c5affd5306f64fb27717ff403"
   },
   "frontend/src/i18n.ts": {
-    "mtime": 1791849255915.2754,
-    "hash": "8e74e088c9b3a923a3791d02d0c04b2a"
+    "mtime": 1792947813070.2952,
+    "hash": "6c7892d6549ee7fffb32959e702e0414"
   },
   "scripts/agent_ops/validate_gcp_readiness.py": {
     "mtime": 1791849255931.0293,
@@ -5144,8 +5140,8 @@
     "hash": "10654c8379cde46007b245b84f1c36c8"
   },
   "tests/test_object_storage.py": {
-    "mtime": 1789061001941.4294,
-    "hash": "e4f5901a72b01c63f65d9a41f2ec4ca0"
+    "mtime": 1792828675981.999,
+    "hash": "e6d887606f3f8d886dc94dbd80e811e0"
   },
   "tests/test_ota_lifecycle_enum_migration.py": {
     "mtime": 1789061001941.7583,
@@ -5256,12 +5252,12 @@
     "hash": "7f88fb34e6e153ea8355a3077914910c"
   },
   "app/services/cash_daily_summary_service.py": {
-    "mtime": 1792268516686.713,
-    "hash": "7371ae3e7108b8730f5eaf2efb4d7ce0"
+    "mtime": 1792861296172.928,
+    "hash": "6d97c7bd35be1250ddce882bd2f51129"
   },
   "app/services/operational_audit_service.py": {
-    "mtime": 1791849255879.2317,
-    "hash": "92b4f2df394567d895c2fe9e8573e311"
+    "mtime": 1792860993769.3005,
+    "hash": "2554f88f96f7594da764f1338fd3710d"
   },
   "frontend/src/api/operationalAudit.ts": {
     "mtime": 1789061001919.058,
@@ -5872,16 +5868,16 @@
     "hash": "0f6f37c355916995cad4589798fc19d7"
   },
   "frontend/payment-receipt-html.test.mjs": {
-    "mtime": 1791849255904.583,
-    "hash": "88fcbecf0b8af70aae4dcce96bce5fe1"
+    "mtime": 1792796121799.625,
+    "hash": "4fc03c10969df20833e3c028f35d55cf"
   },
   "frontend/src/utils/escapeHtml.ts": {
     "mtime": 1790541303870.5835,
     "hash": "a153a852e2b9523398054338c75815c3"
   },
   "frontend/src/utils/paymentReceiptHtml.ts": {
-    "mtime": 1791849255918.654,
-    "hash": "58cdc127d1ff285b106f25f4cd644cd0"
+    "mtime": 1792795419174.2595,
+    "hash": "4406a1bd70dd5b80b599699436a79ea2"
   },
   "frontend/voucher-html.test.mjs": {
     "mtime": 1790541303871.404,
@@ -5964,12 +5960,12 @@
     "hash": "cba694babf6aeeb6268f252db9a5046e"
   },
   "tests/test_row_locks.py": {
-    "mtime": 1791849255955.1306,
-    "hash": "6abb6742c1bfbfde5ca304d8e962636b"
+    "mtime": 1792801558924.6052,
+    "hash": "ffb907db83b27bf2065fc3fa2cbc3bca"
   },
   "frontend/query-load-budget.test.mjs": {
-    "mtime": 1792100439490.7156,
-    "hash": "c74b336121e2cd749695c3f176f6de60"
+    "mtime": 1792692254401.977,
+    "hash": "1155b0ef2a903f1ced1c026b0a5a054a"
   },
   "tests/test_db_pool_config.py": {
     "mtime": 1791849255940.8113,
@@ -6040,8 +6036,8 @@
     "hash": "412e63e920ba85dfa66cb7d4c4a91a3d"
   },
   "app/api/reservation_groups.py": {
-    "mtime": 1791849255860.5745,
-    "hash": "c50586031c7b5cb3a0b1b1db4aba4b4f"
+    "mtime": 1792795313667.9976,
+    "hash": "48db94e8fb6568d6eec63af2de62d83b"
   },
   "app/models/reservation_group.py": {
     "mtime": 1791849255866.5042,
@@ -6060,16 +6056,16 @@
     "hash": "bd564bb96802782da1d6d521005d80f8"
   },
   "frontend/e2e/reservation-company-group-journey.spec.ts": {
-    "mtime": 1791849255899.7917,
-    "hash": "bfdcf65e54f78f307337088d1d2c739f"
+    "mtime": 1792795692628.8684,
+    "hash": "31ba94686054e1fa4f8d0abaca02dda4"
   },
   "frontend/e2e/reused-invitation-link.spec.ts": {
     "mtime": 1791849255901.1157,
     "hash": "b2293ae3ab78419f00182e73c72ff6c2"
   },
   "frontend/src/views/protected/HousekeepingTodayPage.tsx": {
-    "mtime": 1791849255920.1194,
-    "hash": "4a7c925f29c0a9d20826a7ad80f928c7"
+    "mtime": 1792967182266.6426,
+    "hash": "78d83cfcbca2e96ce5b97925bbb597f5"
   },
   "tests/test_hotel_schedule_migration.py": {
     "mtime": 1791849255942.5017,
@@ -6156,8 +6152,8 @@
     "hash": "4c5dbf72e04dd2dd94ad1055f0e50946"
   },
   "frontend/e2e/h31-room-inventory-load.spec.ts": {
-    "mtime": 1791849255895.5815,
-    "hash": "18bfaf84d94ccdfe882d4dd848012060"
+    "mtime": 1792949360029.4329,
+    "hash": "7ae06dfe0562f62ee2bdbfd465efd03f"
   },
   "alembic/versions/6259a93c6205_laundry_remito_house_location.py": {
     "mtime": 1791849255854.6638,
@@ -6248,8 +6244,8 @@
     "hash": "95851115191bbb1155af333875485ee5"
   },
   "frontend/e2e/f040-company-deferred-checkin.spec.ts": {
-    "mtime": 1792240082201.5686,
-    "hash": "5f5f78d0379728ff8ec661625633f801"
+    "mtime": 1792680201905.3938,
+    "hash": "1ceb19d304d109c368cc2751eb8f8635"
   },
   "frontend/src/api/companyNightCharges.ts": {
     "mtime": 1791849255905.7651,
@@ -6296,8 +6292,8 @@
     "hash": "2d7b3dd2506785a8fbbe7ca8b8919ed6"
   },
   "frontend/src/api/fxRates.ts": {
-    "mtime": 1792240082202.5994,
-    "hash": "d2437daee28b60cff52468dc47da94b5"
+    "mtime": 1792679732994.8127,
+    "hash": "dce7d888d0f9228cfc9b0f915303a929"
   },
   "tests/test_cash_adjustment_permission.py": {
     "mtime": 1791849255938.1243,
@@ -6312,8 +6308,8 @@
     "hash": "67c00683c8c453ea31749c343580a2a6"
   },
   "tests/test_fx_conversion_provider.py": {
-    "mtime": 1791849255942.0327,
-    "hash": "47a6c352d203856527b33428f4bef15c"
+    "mtime": 1792782319046.3198,
+    "hash": "21e65f50f42141676b422502cf62b744"
   },
   "alembic/versions/20261014_payment_fx_currency.py": {
     "mtime": 1791849255853.7173,
@@ -6352,16 +6348,16 @@
     "hash": "5a39f4d9ba7444bab14480f8b539e396"
   },
   "app/services/financial_report_service.py": {
-    "mtime": 1792240082197.6428,
-    "hash": "0c30a705b9b6daa1c9c7e6f7b6fa5a90"
+    "mtime": 1792821269404.6567,
+    "hash": "47966ed99f3b5097c1cb3526b577d5eb"
   },
   "frontend/cross-tab-sync.test.mjs": {
     "mtime": 1792100439489.8765,
     "hash": "df621ec5e7c6bf79c944d6b0a976aef5"
   },
   "frontend/e2e/company-reservation-reception-permissions.spec.ts": {
-    "mtime": 1791849255893.9023,
-    "hash": "43f40e598429f2153b56c442a1ade0f3"
+    "mtime": 1792943828919.6604,
+    "hash": "676e13695cb43ecff5f1bcd9e5ff99dc"
   },
   "frontend/e2e/personal-security-access.spec.ts": {
     "mtime": 1791849255898.5679,
@@ -6372,8 +6368,8 @@
     "hash": "d9232bfd66257a6e64429ee988885267"
   },
   "frontend/query-invalidation-behavior.test.mjs": {
-    "mtime": 1791849255904.7844,
-    "hash": "7a0af8b093668358186b95d78e792891"
+    "mtime": 1792794691673.839,
+    "hash": "08f6d75675133b30538dccfea5193a92"
   },
   "frontend/src/views/protected/SettingsMySecurityPage.tsx": {
     "mtime": 1791849255922.9517,
@@ -6408,12 +6404,12 @@
     "hash": "82989dc578cb6d47f0837a0f16fa1766"
   },
   "app/models/reservation_group_payment.py": {
-    "mtime": 1791849255866.5544,
-    "hash": "9c8c3e11ebf5209aca70491da7cea5b8"
+    "mtime": 1792795185446.342,
+    "hash": "0e90d231bc310d14d4830612a5e6c298"
   },
   "app/schemas/reservation_group_payment.py": {
-    "mtime": 1791849255869.5615,
-    "hash": "d740dbb4386b370a12f8d33c9e4efde7"
+    "mtime": 1792795185446.8196,
+    "hash": "de57572d8e08aec52d5ad4f9f868dfe5"
   },
   "app/services/cash_expense_service.py": {
     "mtime": 1791849255873.8357,
@@ -6428,8 +6424,8 @@
     "hash": "d72223ca5d09fe22da94c28d7daa9b53"
   },
   "app/services/reservation_group_payment_service.py": {
-    "mtime": 1791849255885.1272,
-    "hash": "90c1444b320cbbb03dd929e3fc66e134"
+    "mtime": 1792944388776.7024,
+    "hash": "e285f3815938bdece1e38f7a13c66cc5"
   },
   "frontend/e2e/cash-action-errors.spec.ts": {
     "mtime": 1791849255893.3113,
@@ -6480,8 +6476,8 @@
     "hash": "325da6ccb7ff664e32ed0b69cd88f945"
   },
   "tests/test_reservation_group_payments.py": {
-    "mtime": 1791849255952.4836,
-    "hash": "733a88d6f094235309dab5885abfe8ec"
+    "mtime": 1792944388777.2502,
+    "hash": "6f5a5ba057c4a0b22f086076018998be"
   },
   "docs/operations/rate-change-drafts.md": {
     "mtime": 1791849255890.957,
@@ -6592,12 +6588,12 @@
     "hash": "f9936ae97507b0023c216a63c7c0e691"
   },
   "app/services/no_show_sweep_service.py": {
-    "mtime": 1791849255878.7844,
-    "hash": "3996d1dc56f0d75b34592036c3b47793"
+    "mtime": 1792949265452.864,
+    "hash": "1bcdef6291c9c4217fa172eb4e6a38a3"
   },
   "app/services/payment_receipt_email_service.py": {
-    "mtime": 1792266302726.4915,
-    "hash": "9a96e78c543eb1f80b79f569538f82df"
+    "mtime": 1792795302536.4363,
+    "hash": "b52de7b276881f700cb76c507d6921b2"
   },
   "app/tasks/no_show_tasks.py": {
     "mtime": 1791849255887.4382,
@@ -6612,8 +6608,8 @@
     "hash": "532a15cd5b8f0380c307f8e5c5561d59"
   },
   "frontend/e2e/individual-reservation-extension.spec.ts": {
-    "mtime": 1791849255896.4133,
-    "hash": "1be9a361e380ce5b9562cf82bb2478a0"
+    "mtime": 1792783724982.2478,
+    "hash": "e53b0a6ea840a0c606888a948dc8e6f1"
   },
   "frontend/e2e/operational-task-room-link.spec.ts": {
     "mtime": 1792240082201.8774,
@@ -6680,12 +6676,12 @@
     "hash": "971a67171c3f6c90f6d327e98a6ef6c3"
   },
   "tests/test_no_show_sweep.py": {
-    "mtime": 1791849255944.838,
-    "hash": "e751221d1193c84fd0d69734c11d39c4"
+    "mtime": 1792949290028.2058,
+    "hash": "b3602ac657e6778633cf841abec12fb7"
   },
   "tests/test_payment_receipt_email.py": {
-    "mtime": 1792266302727.5369,
-    "hash": "8aca3c85a802bc99e0f28a9abc86808f"
+    "mtime": 1792795302536.647,
+    "hash": "08bddc769fc36e0397ec9274c0c3e61a"
   },
   "tests/test_payment_receipt_email_migration.py": {
     "mtime": 1791849255947.677,
@@ -6772,8 +6768,8 @@
     "hash": "b0785b623a96571f8a345fb7bd5539b4"
   },
   "app/services/allocation_trigger_service.py": {
-    "mtime": 1791849255871.268,
-    "hash": "79bdc403a23d10b643003ee33f57aaa3"
+    "mtime": 1792965508155.4717,
+    "hash": "f7827b3bbcbd0a83d11d270c60ff0b82"
   },
   "app/services/postgres_event_listener.py": {
     "mtime": 1791849255882.266,
@@ -6808,8 +6804,8 @@
     "hash": "812face854da50be1c4bbf8637c9ace8"
   },
   "tests/test_analytics_postgres_reads.py": {
-    "mtime": 1792100439501.7454,
-    "hash": "a5ffb9ec205a4605d079af75d446a45d"
+    "mtime": 1792824919935.695,
+    "hash": "7774299daaa60c4bd011a03177cc849e"
   },
   "tests/test_notification_cycle_runner.py": {
     "mtime": 1791849255944.901,
@@ -6828,8 +6824,8 @@
     "hash": "91b8c7a6afe55daddc5831ec26ce355b"
   },
   "app/tasks/run_scheduled_hotel_jobs.py": {
-    "mtime": 1791849255887.6917,
-    "hash": "4c50fe4d8d24b549279ee20ac9cedcfe"
+    "mtime": 1792701694357.5625,
+    "hash": "4f421d15f9de5bc9fae02248b887143d"
   },
   "tests/test_scheduled_hotel_jobs.py": {
     "mtime": 1791849255955.5535,
@@ -6932,8 +6928,8 @@
     "hash": "204dde6284435707c09676216284f3cc"
   },
   "app/services/payment_receipt_pdf.py": {
-    "mtime": 1792266302726.1277,
-    "hash": "a3f528ee4caf9c199a1ae1dbd0d45968"
+    "mtime": 1792795302536.202,
+    "hash": "a9facfd14351ec2d1cc488b6e01fe0de"
   },
   "tests/test_business_clock.py": {
     "mtime": 1792273740090.7534,
@@ -7142,5 +7138,461 @@
   "frontend/src/components/TemporaryGrantApprovalPanel.tsx": {
     "mtime": 1792271346429.4705,
     "hash": "1b1243233fe42a6fb30989d9f7f3d8b5"
+  },
+  "app/services/daily_report_service.py": {
+    "mtime": 1792948329784.456,
+    "hash": "fc9bef29c672eea9235e183ea883ffb7"
+  },
+  "docs/audits/auditoria-thermos-antislop-escenarios-pms-2026-10-22.md": {
+    "mtime": 1792967200395.406,
+    "hash": "78eff37e3830867e8ae92ecebb8fa4b1"
+  },
+  "docs/research/ota-channel-connectivity-product-report-2026-10-20.md": {
+    "mtime": 1792500737179.9421,
+    "hash": "91a25883dd1f90eb6fefe7099f86ceba"
+  },
+  "tests/test_payment_link_test_webhook.py": {
+    "mtime": 1792691701641.521,
+    "hash": "d69caaf64e4d8987b169124827f51210"
+  },
+  "frontend/e2e/reservation-usd-estimate.spec.ts": {
+    "mtime": 1792679527799.892,
+    "hash": "9ab6ab80c538df7c2e646669716caed9"
+  },
+  "frontend/src/components/ReservationUsdEstimate.tsx": {
+    "mtime": 1792679652583.069,
+    "hash": "b640c820f94f28652a385f486bf29e74"
+  },
+  "app/services/reservation_update_plan.py": {
+    "mtime": 1792948481607.3674,
+    "hash": "ac6feeace10029c8749bce6c4423fe8e"
+  },
+  "tests/test_reservation_update_plan.py": {
+    "mtime": 1792692412191.1064,
+    "hash": "c36c54be673a146644d0053dbdd449bf"
+  },
+  "frontend/src/utils/reservationAuditMetadata.ts": {
+    "mtime": 1792683737817.4834,
+    "hash": "414ac914032c697b6869fc0a8084b696"
+  },
+  "tests/test_webhook_concurrency_postgres.py": {
+    "mtime": 1792827089564.6516,
+    "hash": "670feeec1b95524db72d393ce3bb1373"
+  },
+  "tests/test_payment_link_test_webhook_postgres.py": {
+    "mtime": 1792691556043.4893,
+    "hash": "1a2f36db8df463ecfa2833460aa23095"
+  },
+  "alembic/versions/20261022_fx_credit_ledger.py": {
+    "mtime": 1792694055083.5073,
+    "hash": "238e020334ac1b8793a99a3b08a0844d"
+  },
+  "alembic/versions/20261022_fx_rounding_policy.py": {
+    "mtime": 1792694756738.7244,
+    "hash": "fae2af48398f82293ce83c2c746ccea5"
+  },
+  "frontend/fx-rounding.test.mjs": {
+    "mtime": 1792943576313.1572,
+    "hash": "9299399fbb99345b29dfc9e96fa9797f"
+  },
+  "frontend/src/utils/fxRounding.mjs": {
+    "mtime": 1792943552326.262,
+    "hash": "b02aa82f70ded3d2ad1cc54f369cc276"
+  },
+  "tests/test_fx_credit_refund_api.py": {
+    "mtime": 1792694064280.9524,
+    "hash": "a2480d44d2725ba16842f7107193efe9"
+  },
+  "tests/test_fx_rounding_credit_ledger.py": {
+    "mtime": 1792943836250.1174,
+    "hash": "4ce7da3bd50c6c28b4f82fff452c1948"
+  },
+  "tests/test_fx_rounding_credit_ledger_migration.py": {
+    "mtime": 1792694058113.8965,
+    "hash": "651414b1807fbeb6bc79f09eb94f4987"
+  },
+  "tests/test_fx_rounding_policy_migration.py": {
+    "mtime": 1792694756739.001,
+    "hash": "bb3d26b79ebe5c4f83119248a01413d4"
+  },
+  "alembic/versions/20261022_payment_link_provider_revocation.py": {
+    "mtime": 1792701853856.693,
+    "hash": "5aab4a55c269ea2c8c57c9e3fc9f7b0c"
+  },
+  "tests/test_payment_link_revocation.py": {
+    "mtime": 1792701853857.584,
+    "hash": "de4657f3776966c2c6be69f41dfc0c06"
+  },
+  "tests/test_payment_link_revocation_postgres.py": {
+    "mtime": 1792701853857.358,
+    "hash": "a9dead3b83c5f679f1b9021cb9111c36"
+  },
+  "tests/test_ota_room_selection_postgres.py": {
+    "mtime": 1792699042863.9932,
+    "hash": "0ec2f90307ee583dde86aa7f59a4e398"
+  },
+  "requirements-lint.txt": {
+    "mtime": 1792698577846.7114,
+    "hash": "256f31ae6369a2366fb6573fd66c5f80"
+  },
+  "tests/test_stock_idempotency_postgres.py": {
+    "mtime": 1792699905266.846,
+    "hash": "e5d6bf350e0b860aed756e1c23a6ea75"
+  },
+  "app/services/reservation_update_service.py": {
+    "mtime": 1792804077501.0554,
+    "hash": "a27cf520748a9f482056e1098430b5f3"
+  },
+  "tests/test_reservation_update_service.py": {
+    "mtime": 1792804019476.7048,
+    "hash": "382fbe044535375fd539719ad542a157"
+  },
+  "app/tasks/payment_link_revocation_tasks.py": {
+    "mtime": 1792701694357.092,
+    "hash": "e95ba08570324cdb4266c3523e39035f"
+  },
+  "tests/test_payment_link_revocation_migration.py": {
+    "mtime": 1792701853855.7556,
+    "hash": "009d1496ed1b7df7b03724d5380288c5"
+  },
+  "tests/test_payment_link_revocation_tasks.py": {
+    "mtime": 1792701587808.3313,
+    "hash": "9246f63483d39ff4072c006216908d30"
+  },
+  "tests/test_checkin_room_lock_postgres.py": {
+    "mtime": 1792807730586.1096,
+    "hash": "12ff8259504be1bd6a4982a349e60b73"
+  },
+  "alembic/versions/20261023_cash_tender_change.py": {
+    "mtime": 1792795269156.052,
+    "hash": "3b00b3cf4eb89abf9ef4ea01ba1deb05"
+  },
+  "frontend/cash-tender.test.mjs": {
+    "mtime": 1792796021304.8284,
+    "hash": "a491cee9af842a1539ee5b40d872d10b"
+  },
+  "frontend/src/components/CashTenderField.tsx": {
+    "mtime": 1792796121796.0178,
+    "hash": "cccf41f88519879ff73a66818dd196c1"
+  },
+  "frontend/src/components/ReservationGroupPaymentDialog.tsx": {
+    "mtime": 1792945248109.937,
+    "hash": "a52c0b51681c30e0af9c0e817f1e9892"
+  },
+  "frontend/src/utils/cashTender.mjs": {
+    "mtime": 1792796021304.1091,
+    "hash": "06a105e4c17b999038a78f1c969be008"
+  },
+  "tests/test_cash_tender_change_migration.py": {
+    "mtime": 1792795536073.9495,
+    "hash": "0fba8a0ec483476d60be0bef26ead1c5"
+  },
+  "tests/test_cash_tender_change_schemas.py": {
+    "mtime": 1792795381882.4033,
+    "hash": "b1cd14d64abb314c5a9a9c17c3d9e959"
+  },
+  "frontend/src/components/ReservationGroupSummaryCard.tsx": {
+    "mtime": 1792786054323.7405,
+    "hash": "aa479db1a5e94e35558e4fd9be52a9aa"
+  },
+  "alembic/versions/20261023_housekeeping_checklists.py": {
+    "mtime": 1792794624237.5154,
+    "hash": "148d5ba32faab63b4b2a791a2aded3c2"
+  },
+  "app/api/housekeeping.py": {
+    "mtime": 1792795144669.8313,
+    "hash": "cc5afea82af3524b24622027a23a9d2a"
+  },
+  "app/models/housekeeping_checklist.py": {
+    "mtime": 1792794406265.4934,
+    "hash": "84db99b01d5601fda6dce29c499bca9c"
+  },
+  "app/schemas/housekeeping_checklist.py": {
+    "mtime": 1792795173769.6716,
+    "hash": "ec77fe5404132fd03a4cb8f4f2e374fb"
+  },
+  "app/services/housekeeping_checklist_policy.py": {
+    "mtime": 1792795176778.9724,
+    "hash": "e68c5d156b3ffe49af6738cc53d7ce2a"
+  },
+  "app/services/housekeeping_checklist_service.py": {
+    "mtime": 1792826378621.479,
+    "hash": "ab0535be2efc017cb49b6f23759ee21d"
+  },
+  "tests/test_housekeeping_checklist_migration.py": {
+    "mtime": 1792795146687.909,
+    "hash": "e410796d32a87c003281b6a871ccb830"
+  },
+  "tests/test_housekeeping_checklists.py": {
+    "mtime": 1792826393274.451,
+    "hash": "d89c68845cfc95e1843ab2cdce1c174d"
+  },
+  "tests/test_housekeeping_checklists_postgres.py": {
+    "mtime": 1792798028582.714,
+    "hash": "9521dab182d8af5b519b6cdbdba268ca"
+  },
+  "tests/test_room_move_locks_postgres.py": {
+    "mtime": 1792799998603.2595,
+    "hash": "795fc50ce65297fbe730823f1e072fd5"
+  },
+  "tests/test_ota_cancel_checkin_postgres.py": {
+    "mtime": 1792803005366.9827,
+    "hash": "9bd84993f731c3afa51686b4993e39a9"
+  },
+  "frontend/e2e/payment-surcharge-journey.spec.ts": {
+    "mtime": 1792945458180.3074,
+    "hash": "437ff0be199155a548ffb0d86b0e80a7"
+  },
+  "frontend/src/components/EditStockItemModal.tsx": {
+    "mtime": 1792803824601.3286,
+    "hash": "ed75a75326e41a18104c64e1cf1fc91e"
+  },
+  "tests/test_fx_rounding_credit_ledger_postgres.py": {
+    "mtime": 1792822695980.3564,
+    "hash": "2a864b9576d137d52e263fdb1c4b0afe"
+  },
+  "alembic/versions/ebaf9d3d2baa_reservation_cancellation_policy_snapshot.py": {
+    "mtime": 1792813688762.9097,
+    "hash": "f421e3bc403ad352e37a0730c4d0f53c"
+  },
+  "tests/test_reservation_cancellation_policy_snapshot_migration.py": {
+    "mtime": 1792813688762.9165,
+    "hash": "85ed35fda77d0821bcc84db288cdbcf9"
+  },
+  "tests/test_room_block_checkin_postgres.py": {
+    "mtime": 1792966633301.0017,
+    "hash": "9f80c994aceda9d54364337784b956b0"
+  },
+  "memory/checkpoints/2026-10-24/20261024-042338-codex-serialize-check-in-with-room-blocks.md": {
+    "mtime": 1792815818810.6462,
+    "hash": "4225ac7c053e10195ab07f22d0cd9539"
+  },
+  "memory/checkpoints/2026-10-24/20261024-043439-architecture-reviewer-hotspots-estructurales-y-mutación-ota-de-reservas-alojadas.md": {
+    "mtime": 1792816479298.777,
+    "hash": "58fe5b09568eb8b7a259666b35cf7d33"
+  },
+  "tests/test_notification_service_postgres.py": {
+    "mtime": 1792824160873.0024,
+    "hash": "0a3f0fd0de24eedc84d88885c8c44894"
+  },
+  "tests/test_soft_delete_postgres.py": {
+    "mtime": 1792824612063.1055,
+    "hash": "e393bab345da95e78542d9802c946664"
+  },
+  "alembic/versions/20261024_atomic_payment_corrections.py": {
+    "mtime": 1792946269908.4717,
+    "hash": "373eb664c6d5ea8cdd1a3e9261b6f888"
+  },
+  "app/models/payment_correction.py": {
+    "mtime": 1792855976962.178,
+    "hash": "8baa3f23787256146c8f2845786472f0"
+  },
+  "app/services/payment_correction_service.py": {
+    "mtime": 1792860923840.2698,
+    "hash": "a3175009036218a02520fbd094106164"
+  },
+  "frontend/src/components/PaymentCorrectionDialog.tsx": {
+    "mtime": 1792861488343.5337,
+    "hash": "db4d5c9dd7e91f51ac0551fd8e531e00"
+  },
+  "tests/test_payment_correction_migration.py": {
+    "mtime": 1792946288624.074,
+    "hash": "6c5148f54549c9e8f481dd451bed2f5b"
+  },
+  "tests/test_payment_corrections.py": {
+    "mtime": 1792861022783.9922,
+    "hash": "275d02b676112baa935723ddf9ec79dd"
+  },
+  "alembic/versions/20261024_cash_movement_voids.py": {
+    "mtime": 1792860893061.0535,
+    "hash": "d2b61ad94b0c3a29130d28457c56a55f"
+  },
+  "tests/test_cash_movement_void_migration.py": {
+    "mtime": 1792861032701.6675,
+    "hash": "2af2d45d4aa16d2b4a396064cc2baa4d"
+  },
+  "alembic/versions/20261025_allocation_reservation_trigger_index.py": {
+    "mtime": 1792965235175.2698,
+    "hash": "87c26e31b34a1d5acf215982bae40047"
+  },
+  "alembic/versions/20261025_company_documents_read_permission.py": {
+    "mtime": 1792943739193.9778,
+    "hash": "51e77b01908a27aebc61dd62f2ab4e0b"
+  },
+  "alembic/versions/20261025_company_reservation_terms.py": {
+    "mtime": 1792949783365.6794,
+    "hash": "d357ee06b1c51fc6b412ba8749756abf"
+  },
+  "alembic/versions/20261025_guest_arrivals.py": {
+    "mtime": 1792948789202.522,
+    "hash": "85fe38d927285acdf5e10c8f27862926"
+  },
+  "alembic/versions/20261025_laundry_discrepancy_workflow.py": {
+    "mtime": 1792945968856.187,
+    "hash": "fa9e02e4de52c5dedc676c5b4737cfed"
+  },
+  "alembic/versions/20261025_reservation_cancellation_review.py": {
+    "mtime": 1792947123465.3052,
+    "hash": "4d434cf8f7201098de8f384c6faa25e3"
+  },
+  "alembic/versions/20261025_stock_count_sessions.py": {
+    "mtime": 1792948145502.1296,
+    "hash": "50d4386ad22e288fe04a946eb0387193"
+  },
+  "app/models/cancellation_review.py": {
+    "mtime": 1792946278389.731,
+    "hash": "cdca2d3afed45c9f286c8ecf440bd6b1"
+  },
+  "app/models/laundry_discrepancy.py": {
+    "mtime": 1792945363463.9453,
+    "hash": "b4fcc886a2cd301f8670c50e6aa00a4d"
+  },
+  "app/models/reservation_company_terms_review.py": {
+    "mtime": 1792949763996.3286,
+    "hash": "7ea8f42fecbba35aa5f500225b84d48a"
+  },
+  "app/models/reservation_guest_arrival.py": {
+    "mtime": 1792948603263.777,
+    "hash": "83e96f953f25a90b47a8ad4a2a8f7c3c"
+  },
+  "app/schemas/cancellation_review.py": {
+    "mtime": 1792946292467.8074,
+    "hash": "cd99f31ce917255b344d4d1920bf626e"
+  },
+  "app/schemas/checkin.py": {
+    "mtime": 1792948254264.2405,
+    "hash": "6430f60f411a2be2475b244574d26019"
+  },
+  "app/schemas/company_reservation_terms.py": {
+    "mtime": 1792949750375.4219,
+    "hash": "415cff5e570c822c2d4545359bec2a32"
+  },
+  "app/schemas/payment_surcharge.py": {
+    "mtime": 1792944228917.7634,
+    "hash": "e598a86c8fa431ebaafea2be09c9f8cb"
+  },
+  "app/services/cancellation_policy_service.py": {
+    "mtime": 1792946005080.5847,
+    "hash": "e7b9a435da20dbf73d90de5d812099d5"
+  },
+  "app/services/company_reservation_terms.py": {
+    "mtime": 1792949652520.521,
+    "hash": "81fc116b61fbcb591c5aad522bc4ad19"
+  },
+  "app/services/company_reservation_terms_service.py": {
+    "mtime": 1792965084249.2593,
+    "hash": "a010c5955dbf57710cebbdbe0a513797"
+  },
+  "app/services/reservation_cancellation_service.py": {
+    "mtime": 1792948322533.1392,
+    "hash": "bcdb6613c9e97f5ded2870ab4c611f5f"
+  },
+  "app/tasks/allocation_tasks.py": {
+    "mtime": 1792965511230.3203,
+    "hash": "b63fcf6ad7b15ea54b8b240a99467f42"
+  },
+  "frontend/e2e/allocation-operator-flows.spec.ts": {
+    "mtime": 1792965387837.0874,
+    "hash": "695352c469bb4546f6d170550b2e726d"
+  },
+  "frontend/laundry-discrepancy-ui.test.mjs": {
+    "mtime": 1792947501938.7517,
+    "hash": "f472377c67221dac7c351bed4dc52c47"
+  },
+  "frontend/src/api/allocation.ts": {
+    "mtime": 1792947715883.568,
+    "hash": "6a049fe1a78970cd3fd7af8e31a75bba"
+  },
+  "frontend/src/components/AllocationPolicySettings.tsx": {
+    "mtime": 1792947906736.3787,
+    "hash": "6d5d4f1209cb3ef30a3fe163457ecc41"
+  },
+  "frontend/src/components/AllocationProposalReview.tsx": {
+    "mtime": 1792948000829.0305,
+    "hash": "bf3f3ffba01ad89ed1645ccb1c6fe918"
+  },
+  "frontend/src/components/AllocationReservationLocks.tsx": {
+    "mtime": 1792947764884.8445,
+    "hash": "48a08528bc31bb10e4ce19799b420e34"
+  },
+  "frontend/src/components/CompanyTermsReviewPanel.tsx": {
+    "mtime": 1792964587713.109,
+    "hash": "22897f667178455327ba66cfe43896a8"
+  },
+  "frontend/src/components/PaymentQuoteSummary.tsx": {
+    "mtime": 1792945468672.3708,
+    "hash": "e9181875507b8a34265ea4ec93a98c93"
+  },
+  "frontend/src/components/ReservationGuestArrivalPanel.tsx": {
+    "mtime": 1792948599810.2285,
+    "hash": "e5284b93a12a211291aeb3023ba9da02"
+  },
+  "frontend/src/hooks/useAllocationWorkspace.ts": {
+    "mtime": 1792948030026.426,
+    "hash": "9198221fdb2212fc6f98d225da0a72dd"
+  },
+  "frontend/src/views/protected/AllocationPage.tsx": {
+    "mtime": 1792948000828.563,
+    "hash": "5b3c5d3498ed9c71107f809362d8e513"
+  },
+  "tests/test_allocation_block_windows.py": {
+    "mtime": 1792949024936.5754,
+    "hash": "b529fc552da8e4f08e4cf144fbf91098"
+  },
+  "tests/test_allocation_creation_trigger.py": {
+    "mtime": 1792965446277.7593,
+    "hash": "256db404442973c8a1c1aaf423ed87fb"
+  },
+  "tests/test_allocation_runtime_postgres.py": {
+    "mtime": 1792949785000.723,
+    "hash": "809be411970e0139c3328f64ecd397f9"
+  },
+  "tests/test_cancellation_policy_service.py": {
+    "mtime": 1792945876274.212,
+    "hash": "7202e5371420da88bff79b4054d6bca7"
+  },
+  "tests/test_checkin_individual_arrivals.py": {
+    "mtime": 1792949217173.2244,
+    "hash": "b99ccd5d4df74a7547881f79b4c519f3"
+  },
+  "tests/test_company_documents_read_permission_migration.py": {
+    "mtime": 1792943630352.2588,
+    "hash": "307e95ef9080223985db9cdbfd6ad69b"
+  },
+  "tests/test_company_reservation_terms.py": {
+    "mtime": 1792965291974.7322,
+    "hash": "5a0313220a7ab32eee4f7e9e375dbf95"
+  },
+  "tests/test_laundry_discrepancies.py": {
+    "mtime": 1792945901251.9072,
+    "hash": "ec63d2c289c7d477f6104c95f7c6eb1e"
+  },
+  "tests/test_payment_surcharge_fx.py": {
+    "mtime": 1792944388776.8816,
+    "hash": "8bc840869cff5edc43b29aaec437ab56"
+  },
+  "tests/test_reservation_cancellation_review_api.py": {
+    "mtime": 1792947223767.1155,
+    "hash": "4a10251b5d088939f0226937c31318bd"
+  },
+  "tests/test_stock_count_migration.py": {
+    "mtime": 1792948145502.2,
+    "hash": "94e37c9c9f67cfb8ddd3a3b545a48093"
+  },
+  "tests/test_stock_count_sessions.py": {
+    "mtime": 1792948145502.31,
+    "hash": "f671b917ff8a5a14e64a65ed71e33be5"
+  },
+  "tests/test_stock_count_sessions_postgres.py": {
+    "mtime": 1792948437744.3938,
+    "hash": "2eaa35cebf75087796d19906d5612ed6"
+  },
+  "tests/test_waitlist_promotion_postgres.py": {
+    "mtime": 1792965528813.8186,
+    "hash": "a9e42f7fcd99455c779ef42fd9bb6596"
+  },
+  "memory/checkpoints/2026-10-25/20261025-165937-frontend-engineer-ui-de-discrepancias-de-lavandería.md": {
+    "mtime": 1792947577794.4307,
+    "hash": "2e0415cfc024c5911d0649e27c62b190"
   }
 }

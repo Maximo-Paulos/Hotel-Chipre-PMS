@@ -1,16 +1,55 @@
 from app.models.guest import Guest
 from app.services.checkin_service import validate_guest_for_checkin
-from app.services.jurisdiction_profile import compute_missing_guest_fields, get_profile
+from app.schemas.hotel_config import HotelConfigUpdate
+from app.schemas.onboarding import HotelIdentityPayload
+from app.services.jurisdiction_profile import (
+    UnsupportedJurisdictionError,
+    compute_missing_guest_fields,
+    get_profile,
+)
 
 
 def test_ar_profile_is_launch_active_and_default():
     profile = get_profile("AR")
-    fallback = get_profile("unknown")
+    default = get_profile(None)
 
     assert profile.code == "AR"
     assert profile.launch_active is True
     assert profile.experimental is False
-    assert fallback.code == "AR"
+    assert default.code == "AR"
+
+
+def test_unknown_jurisdiction_does_not_silently_fall_back_to_argentina():
+    try:
+        get_profile("MX")
+    except UnsupportedJurisdictionError as exc:
+        assert "MX" in str(exc)
+    else:
+        raise AssertionError("Unknown jurisdictions must fail closed")
+
+
+def test_onboarding_and_hotel_settings_reject_unsupported_jurisdictions():
+    identity = {
+        "name": "Hotel de prueba",
+        "timezone": "America/Argentina/Buenos_Aires",
+        "currency": "ARS",
+        "languages": ["es"],
+        "jurisdiction_code": "mx",
+    }
+
+    try:
+        HotelIdentityPayload(**identity)
+    except ValueError as exc:
+        assert "no está habilitada" in str(exc)
+    else:
+        raise AssertionError("Onboarding must reject unsupported jurisdictions")
+
+    try:
+        HotelConfigUpdate(jurisdiction_code="MX")
+    except ValueError as exc:
+        assert "no está habilitada" in str(exc)
+    else:
+        raise AssertionError("Hotel settings must reject unsupported jurisdictions")
 
 
 def test_uy_profile_lookup_is_safe():
@@ -45,6 +84,12 @@ def test_missing_field_computation_uses_profile(db, hotel_config):
     hotel_config.jurisdiction_code = "UY"
     db.flush()
     assert "La nacionalidad es obligatoria" in validate_guest_for_checkin(db, guest, hotel_config)
+
+    hotel_config.jurisdiction_code = "MX"
+    db.flush()
+    unsupported = validate_guest_for_checkin(db, guest, hotel_config)
+    assert len(unsupported) == 1
+    assert "no está habilitada" in unsupported[0]
 
 
 def test_required_guest_field_and_terms_messages_are_in_spanish():

@@ -30,6 +30,10 @@ class WebPushSendError(RuntimeError):
     """Raised on a transient failure -- eligible for the outbox's normal retry."""
 
 
+class WebPushUnavailableError(RuntimeError):
+    """Raised when this deployment cannot send push at all; do not retry."""
+
+
 class WebPushSubscriptionInvalid(RuntimeError):
     """Raised when the push service reports the endpoint no longer exists
     (typically HTTP 404/410). The caller must expire the subscription and
@@ -51,7 +55,7 @@ class NullWebPushAdapter(WebPushAdapter):
     outbox does not burn retries on a permanent configuration gap."""
 
     def send(self, subscription: PushSubscription, *, title: str, body: str, url: str | None = None) -> None:
-        raise WebPushSendError("Web Push is not enabled or not configured on this deployment")
+        raise WebPushUnavailableError("Web Push is not enabled or configured on this deployment")
 
 
 class RealWebPushAdapter(WebPushAdapter):
@@ -64,8 +68,8 @@ class RealWebPushAdapter(WebPushAdapter):
         try:
             require_external_connections("web push send", settings)
         except ExternalEffectsDisabled as exc:
-            raise WebPushSendError(str(exc)) from exc
-        raise WebPushSendError("Web Push delivery is not implemented on this deployment yet")
+            raise WebPushUnavailableError("Web Push is unavailable on this deployment") from exc
+        raise WebPushUnavailableError("Web Push delivery is not implemented on this deployment")
 
 
 def get_web_push_adapter() -> WebPushAdapter:

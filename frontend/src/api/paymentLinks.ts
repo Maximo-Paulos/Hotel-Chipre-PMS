@@ -14,6 +14,10 @@ export type PaymentLink = {
   payable: boolean;
   external_checkout_url?: string | null;
   expires_at?: string | null;
+  cancelled_at?: string | null;
+  provider_revocation_status: "not_required" | "pending" | "processing" | "succeeded" | "failed";
+  provider_revocation_attempts: number;
+  provider_revocation_last_attempt_at?: string | null;
   created_at: string;
 };
 

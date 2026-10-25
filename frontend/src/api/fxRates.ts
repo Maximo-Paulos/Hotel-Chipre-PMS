@@ -30,6 +30,8 @@ export type FxConversionQuote = {
   configured_market: "oficial" | "blue";
   quote_details: {
     configured_usd_market?: "oficial" | "blue";
+    configured_ars_to_usd_rate_side?: "compra" | "venta" | null;
+    spread_pct?: number | null;
     source_updated_at?: string | null;
     target_updated_at?: string | null;
     source_quote?: {

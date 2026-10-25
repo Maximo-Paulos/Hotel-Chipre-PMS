@@ -356,6 +356,7 @@ type RequestOptions = {
   session?: SessionLike;
   responseType?: "json" | "blob";
   domainEventOriginKey?: string;
+  onResponseHeaders?: (headers: Headers) => void;
 };
 
 const createRequestDeadline = (callerSignal: AbortSignal | undefined, timeoutMs: number) => {
@@ -636,6 +637,7 @@ async function requestWithRefresh<T>(
   }
 
   if (response.ok && responseType === "blob") {
+    options.onResponseHeaders?.(response.headers);
     if (MUTATING_METHODS.has(method) && requestSession?.hotelId) {
       broadcastDomainChange(requestSession.hotelId, path, domainEventOriginKey);
     }
@@ -729,6 +731,7 @@ async function requestWithRefresh<T>(
     broadcastDomainChange(requestSession.hotelId, path, domainEventOriginKey);
   }
 
+  options.onResponseHeaders?.(response.headers);
   return payload as T;
 }
 

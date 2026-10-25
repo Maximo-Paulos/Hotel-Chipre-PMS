@@ -3,22 +3,29 @@ import { useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tans
 import { useTranslation } from "react-i18next";
 
 import {
+  approveLaundryDiscrepancy,
+  confirmLaundryDiscrepancyReturn,
   createLaundryRemito,
   createLaundryVendor,
   getLaundryVendorBalance,
   getLaundryVendorSettlements,
   getLaundryVendorSpend,
   listLaundryMissingFollowUps,
+  listLaundryDiscrepancies,
   listLaundryRemitos,
   listLaundryVendorPrices,
   listLaundryVendors,
   markLaundryVendorSettlementPaid,
+  resolveLaundryDiscrepancy,
   setLaundryVendorPrice,
   updateLaundryVendor,
   updateLaundryMissingFollowUp,
   type LaundryRemitoCreate,
   type LaundryRemitoCreateResponse,
   type LaundryRemitoLineCreate,
+  type LaundryDiscrepancy,
+  type LaundryDiscrepancyAction,
+  type LaundryDiscrepancyResolution,
   type LaundryVendor,
   type LaundryVendorSettlementQuarter,
   type LaundryMissingFollowUp,
@@ -58,7 +65,263 @@ import { invalidateQueriesInBackground, refreshStockState } from "../../api/quer
 // existing (tested, see housekeeping-laundry-journey.spec.ts) desktop
 // behavior of never revealing that panel exists to housekeeping at all,
 // rather than showing a permission-denied explanation for it.
-type LaundryMobileTab = "available" | "remito" | "vendors" | "history";
+type LaundryMobileTab = "available" | "remito" | "vendors" | "history" | "review";
+
+type LaundryDiscrepancyCommand =
+  | { action: "approve"; discrepancyId: number; payload: LaundryDiscrepancyAction }
+  | { action: "resolve"; discrepancyId: number; payload: LaundryDiscrepancyResolution }
+  | { action: "return"; discrepancyId: number; payload: LaundryDiscrepancyAction };
+
+type LaundryDiscrepancyCommandWithKey = LaundryDiscrepancyCommand & { idempotencyKey: string };
+
+type LaundryDiscrepancyCardProps = {
+  discrepancy: LaundryDiscrepancy;
+  itemName?: string;
+  vendorName?: string;
+  remitoNumber?: string;
+  canReview: boolean;
+  saving: boolean;
+  error?: string;
+  onCloseError: () => void;
+  onAction: (command: LaundryDiscrepancyCommand) => void;
+};
+
+function LaundryDiscrepancyCard({
+  discrepancy,
+  itemName,
+  vendorName,
+  remitoNumber,
+  canReview,
+  saving,
+  error,
+  onCloseError,
+  onAction
+}: LaundryDiscrepancyCardProps) {
+  const { t, i18n } = useTranslation("common");
+  const [reason, setReason] = useState("");
+  const [resolutionCode, setResolutionCode] = useState(discrepancy.resolution_code ?? "");
+  const [creditAmount, setCreditAmount] = useState("");
+  const [creditCurrency, setCreditCurrency] = useState("");
+  const isExcess = discrepancy.discrepancy_type === "excess_return";
+  const canApprove = discrepancy.status === "pending_approval" || discrepancy.status === "pending_review";
+  const canResolve = isExcess
+    ? discrepancy.status === "pending_identification"
+    : ["pending_resolution", "pending_claim", "awaiting_replacement"].includes(discrepancy.status);
+  const canConfirmReturn = isExcess && discrepancy.status === "return_to_laundry";
+  const requiresAction = canApprove || canResolve || canConfirmReturn;
+  const locale = i18n.language === "en" ? "en-US" : "es-AR";
+  const formatQuantity = (value: string | number) =>
+    new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(Number(value));
+  const createdAt = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
+    new Date(discrepancy.created_at)
+  );
+  const quantity = formatQuantity(String(discrepancy.quantity));
+  const remainingQuantity = formatQuantity(String(discrepancy.remaining_quantity));
+  const reasonInput = (
+    <label className="block space-y-1 text-sm">
+      <span className="text-slate-700">{t("laundryDiscrepancies.reason")}</span>
+      <textarea
+        id={`laundry-discrepancy-${discrepancy.id}-reason`}
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+        placeholder={t("laundryDiscrepancies.reasonPlaceholder")}
+        maxLength={500}
+        required
+        rows={2}
+        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+      />
+    </label>
+  );
+  const reviewHint = isExcess
+    ? t("laundryDiscrepancies.excessNoStockUntilIdentification")
+    : t("laundryDiscrepancies.shortageNoStockUntilResolution");
+
+  return (
+    <article
+      data-testid={`laundry-discrepancy-${discrepancy.id}`}
+      className="space-y-3 rounded-xl border border-amber-200 bg-white p-4 shadow-sm"
+      aria-labelledby={`laundry-discrepancy-${discrepancy.id}-title`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            {t(isExcess ? "laundryDiscrepancies.excess" : "laundryDiscrepancies.shortage")}
+          </p>
+          <h3 id={`laundry-discrepancy-${discrepancy.id}-title`} className="text-base font-semibold text-slate-900">
+            {itemName ?? `${t("laundryDiscrepancies.item")} #${discrepancy.linen_item_id}`}
+          </h3>
+          <p className="text-sm text-slate-600">
+            {t("laundryDiscrepancies.remito")}: {remitoNumber ?? `#${discrepancy.remito_id}`} · {t("laundryDiscrepancies.vendor")}: {vendorName ?? `#${discrepancy.vendor_id}`}
+          </p>
+        </div>
+        <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
+          {t(`laundryDiscrepancies.status.${discrepancy.status}`)}
+        </span>
+      </div>
+
+      <dl className="grid gap-2 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-xs text-slate-500">{t("laundryDiscrepancies.quantity")}</dt>
+          <dd className="font-medium text-slate-800">{quantity}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-500">{t("laundryDiscrepancies.remaining")}</dt>
+          <dd className="font-medium text-slate-800">{remainingQuantity}</dd>
+        </div>
+        <div className="sm:col-span-2">
+          <dt className="text-xs text-slate-500">{t("laundryDiscrepancies.discrepancy", { id: discrepancy.id })}</dt>
+          <dd className="text-slate-700">{createdAt}</dd>
+        </div>
+      </dl>
+
+      {canApprove && canReview ? (
+        <form
+          className="space-y-3 rounded-lg bg-slate-50 p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onAction({ action: "approve", discrepancyId: discrepancy.id, payload: { reason: reason.trim() } });
+          }}
+        >
+          <p className="text-sm text-slate-700">{t("laundryDiscrepancies.noStockUntilReview")}</p>
+          {reasonInput}
+          <button
+            type="submit"
+            disabled={saving || !reason.trim()}
+            className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 sm:w-auto"
+          >
+            {saving ? t("laundryDiscrepancies.approving") : t("laundryDiscrepancies.approve")}
+          </button>
+        </form>
+      ) : null}
+
+      {canResolve && canReview ? (
+        <form
+          className="space-y-3 rounded-lg bg-slate-50 p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!resolutionCode) return;
+            const payload: LaundryDiscrepancyResolution = {
+              reason: reason.trim(),
+              resolution_code: resolutionCode
+            };
+            if (resolutionCode === "vendor_credit") {
+              payload.resolution_amount = creditAmount;
+              payload.resolution_currency_code = creditCurrency.trim().toUpperCase();
+            }
+            onAction({ action: "resolve", discrepancyId: discrepancy.id, payload });
+          }}
+        >
+          <p className="text-sm text-slate-700">{reviewHint}</p>
+          <label className="block space-y-1 text-sm">
+            <span className="text-slate-700">{t("laundryDiscrepancies.resolution")}</span>
+            <select
+              value={resolutionCode}
+              onChange={(event) => setResolutionCode(event.target.value)}
+              required
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+            >
+              <option value="">{t("laundryDiscrepancies.chooseResolution")}</option>
+              {(isExcess ? ["hotel_stock", "return_to_laundry"] : ["vendor_claim", "vendor_custody", "loss", "replacement", "vendor_credit"]).map((code) => (
+                <option key={code} value={code}>{t(`laundryDiscrepancies.resolutionOptions.${code}`)}</option>
+              ))}
+            </select>
+          </label>
+          {resolutionCode === "vendor_credit" ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-700">{t("laundryDiscrepancies.creditAmount")}</span>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={creditAmount}
+                  onChange={(event) => setCreditAmount(event.target.value)}
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-700">{t("laundryDiscrepancies.creditCurrency")}</span>
+                <input
+                  type="text"
+                  minLength={3}
+                  maxLength={3}
+                  pattern="[A-Za-z]{3}"
+                  value={creditCurrency}
+                  onChange={(event) => setCreditCurrency(event.target.value.toUpperCase())}
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm uppercase"
+                />
+              </label>
+              <p className="text-xs text-slate-600 sm:col-span-2">{t("laundryDiscrepancies.creditNotSettled")}</p>
+            </div>
+          ) : null}
+          {reasonInput}
+          <button
+            type="submit"
+            disabled={saving || !reason.trim() || !resolutionCode || resolutionCode === discrepancy.resolution_code || (resolutionCode === "vendor_credit" && (!creditAmount || !/^[A-Z]{3}$/.test(creditCurrency)))}
+            className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 sm:w-auto"
+          >
+            {saving ? t("laundryDiscrepancies.savingResolution") : t("laundryDiscrepancies.saveResolution")}
+          </button>
+        </form>
+      ) : null}
+
+      {canConfirmReturn && canReview ? (
+        <form
+          className="space-y-3 rounded-lg bg-slate-50 p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onAction({ action: "return", discrepancyId: discrepancy.id, payload: { reason: reason.trim() } });
+          }}
+        >
+          <p className="text-sm text-slate-700">{t("laundryDiscrepancies.returnAfterHandover")}</p>
+          {reasonInput}
+          <button
+            type="submit"
+            disabled={saving || !reason.trim()}
+            className="min-h-11 w-full rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 sm:w-auto"
+          >
+            {saving ? t("laundryDiscrepancies.confirmingPhysicalReturn") : t("laundryDiscrepancies.confirmPhysicalReturn")}
+          </button>
+        </form>
+      ) : null}
+
+      {discrepancy.reviewed_by_user_id ? (
+        <p className="text-xs text-slate-600">
+          {t("laundryDiscrepancies.reviewedBy", { userId: discrepancy.reviewed_by_user_id })}
+          {discrepancy.review_reason ? <> · {t("laundryDiscrepancies.recordedReason")}: {discrepancy.review_reason}</> : null}
+        </p>
+      ) : null}
+      {discrepancy.resolution_recorded_by_user_id ? (
+        <div className="space-y-1 text-xs text-slate-600">
+          <p>
+            {t("laundryDiscrepancies.resolvedBy", { userId: discrepancy.resolution_recorded_by_user_id })}
+            {discrepancy.resolution_reason ? <> · {t("laundryDiscrepancies.recordedReason")}: {discrepancy.resolution_reason}</> : null}
+          </p>
+          {discrepancy.resolution_code ? <p>{t(`laundryDiscrepancies.resolutionOptions.${discrepancy.resolution_code}`)}</p> : null}
+          {discrepancy.resolution_amount && discrepancy.resolution_currency_code ? (
+            <p>{t("laundryDiscrepancies.resolutionAmount", { amount: discrepancy.resolution_amount, currency: discrepancy.resolution_currency_code })}</p>
+          ) : null}
+        </div>
+      ) : null}
+      {discrepancy.returned_by_user_id ? (
+        <p className="text-xs text-slate-600">
+          {t("laundryDiscrepancies.returnedBy", { userId: discrepancy.returned_by_user_id })}
+          {discrepancy.return_reason ? <> · {t("laundryDiscrepancies.recordedReason")}: {discrepancy.return_reason}</> : null}
+        </p>
+      ) : null}
+
+      {error ? <LaundryMutationError error={error} onClose={onCloseError} /> : null}
+      {canReview && !canApprove && !canResolve && !canConfirmReturn ? (
+        <p className="text-sm text-slate-600">{t(`laundryDiscrepancies.status.${discrepancy.status}`)}</p>
+      ) : null}
+      {!canReview && requiresAction ? (
+        <p className="text-sm text-amber-900">{t("laundryDiscrepancies.permissionRequired")}</p>
+      ) : null}
+    </article>
+  );
+}
 
 // D2 (Via D lavanderia): replaces the old LaundryBatch/LaundryItem UI
 // entirely -- D0 confirmed no open batches in production, so there is no
@@ -109,6 +372,8 @@ export function LaundryPage() {
   const manageVendors = hasPermission("laundry:vendor_manage");
   const manageVendorPrices = hasPermission("laundry:price_manage");
   const operateRemitos = hasPermission("laundry:remito_manage");
+  const reviewDiscrepancies = hasPermission("laundry:discrepancy_approve");
+  const canListDiscrepancies = manageVendors || operateRemitos || reviewDiscrepancies;
   // Financial visibility (spend report + settlements), not vendor operations
   // -- owner/co-owner only by default now, matching the backend gate on
   // GET .../spend, GET .../settlements and the mark-paid POST (see
@@ -124,13 +389,19 @@ export function LaundryPage() {
     if (operateRemitos) tabs.push({ tab: "remito", label: "Nuevo remito" });
     if (manageVendors) tabs.push({ tab: "vendors", label: "Lavaderos" });
     if (operateRemitos) tabs.push({ tab: "history", label: "Historial" });
+    if (canListDiscrepancies) tabs.push({ tab: "review", label: t("laundryDiscrepancies.tab") });
     return tabs;
-  }, [operateRemitos, manageVendors]);
+  }, [operateRemitos, manageVendors, canListDiscrepancies, t]);
   const [mobileTab, setMobileTab] = useState<LaundryMobileTab>("available");
   const showSection = (tab: LaundryMobileTab) => isDesktop || mobileTab === tab;
   const remitoFormVisible = isDesktop || mobileTab === "remito";
   const vendorSectionVisible = isDesktop || showSection("vendors");
   const remitoHistoryVisible = isDesktop || showSection("history");
+
+  useEffect(() => {
+    if (mobileTabs.some(({ tab }) => tab === mobileTab)) return;
+    if (mobileTabs[0]) setMobileTab(mobileTabs[0].tab);
+  }, [mobileTabs, mobileTab]);
 
   const [message, setMessage] = useState<string | null>(null);
   const [mutationErrors, setMutationErrors] = useState<Record<string, string>>({});
@@ -178,7 +449,7 @@ export function LaundryPage() {
   const vendorsQuery = useQuery({
     queryKey: ["laundry-vendors", session.hotelId],
     queryFn: () => listLaundryVendors(session),
-    enabled,
+    enabled: enabled && operateRemitos,
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   // LaundryPage's own linen_items/linen_locations tables -- physically
@@ -186,13 +457,13 @@ export function LaundryPage() {
   const itemsQuery = useQuery({
     queryKey: ["linen-items", session.hotelId],
     queryFn: () => listLinenItems(session),
-    enabled,
+    enabled: enabled && (manageVendors || operateRemitos),
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const locationsQuery = useQuery({
     queryKey: ["linen-locations", session.hotelId],
     queryFn: () => listLinenLocations(session),
-    enabled,
+    enabled: enabled && (manageVendors || operateRemitos),
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const openingCountSummaryQuery = useQuery({
@@ -204,7 +475,7 @@ export function LaundryPage() {
   const remitosQuery = useQuery({
     queryKey: ["laundry-remitos", session.hotelId],
     queryFn: () => listLaundryRemitos({}, session),
-    enabled,
+    enabled: enabled && operateRemitos,
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
   const missingFollowUpsQuery = useQuery({
@@ -213,15 +484,23 @@ export function LaundryPage() {
     enabled: enabled && manageVendors && vendorSectionVisible,
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
+  const discrepanciesQuery = useQuery({
+    queryKey: ["laundry-discrepancies", session.hotelId],
+    queryFn: () => listLaundryDiscrepancies(session),
+    enabled: enabled && canListDiscrepancies,
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
+  });
 
   const vendors = useMemo(() => vendorsQuery.data ?? [], [vendorsQuery.data]);
   const activeVendors = useMemo(() => vendors.filter((vendor) => vendor.active), [vendors]);
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
   const locations = useMemo(() => locationsQuery.data ?? [], [locationsQuery.data]);
   const remitos = useMemo(() => remitosQuery.data ?? [], [remitosQuery.data]);
+  const discrepancies = useMemo(() => discrepanciesQuery.data ?? [], [discrepanciesQuery.data]);
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const vendorById = useMemo(() => new Map(vendors.map((vendor) => [vendor.id, vendor])), [vendors]);
   const locationById = useMemo(() => new Map(locations.map((location) => [location.id, location])), [locations]);
+  const remitoById = useMemo(() => new Map(remitos.map((remito) => [remito.id, remito])), [remitos]);
   const openingCountBalanceByPair = useMemo(() => {
     const balances = new Map<string, { quantity: string; hasMovements: boolean }>();
     (openingCountSummaryQuery.data ?? []).forEach((entry) => {
@@ -363,7 +642,7 @@ export function LaundryPage() {
   // A hotel realistically has 1-3 laundries (see plan D3), so N small
   // parallel requests summed client-side is simpler than adding and testing
   // a new aggregate backend endpoint for a handful of rows.
-  // ponytail: revisit with a real GET /api/laundry/spend-summary if a hotel
+  // Revisit with a real GET /api/laundry/spend-summary if a hotel
   // ever runs enough vendors that N requests becomes noticeable.
   const spendQueries = useQueries({
     queries: vendors.map((vendor) => ({
@@ -563,6 +842,40 @@ export function LaundryPage() {
       { queryKey: ["laundry-missing-follow-ups", session.hotelId] }
     )
   });
+
+  const discrepancyAttemptsRef = useRef(new Map<string, { fingerprint: string; idempotencyKey: string }>());
+  const discrepancyMutation = useGuardedMutation({
+    mutationFn: (command: LaundryDiscrepancyCommandWithKey) => {
+      if (command.action === "approve") {
+        return approveLaundryDiscrepancy(command.discrepancyId, command.payload, command.idempotencyKey, session);
+      }
+      if (command.action === "resolve") {
+        return resolveLaundryDiscrepancy(command.discrepancyId, command.payload, command.idempotencyKey, session);
+      }
+      return confirmLaundryDiscrepancyReturn(command.discrepancyId, command.payload, command.idempotencyKey, session);
+    },
+    onSuccess: async (_discrepancy, command) => {
+      discrepancyAttemptsRef.current.delete(`${command.discrepancyId}:${command.action}`);
+      clearMutationError(`laundry-discrepancy-${command.discrepancyId}`);
+      await refreshStockState(queryClient, session.hotelId);
+      setMessage(t("laundryDiscrepancies.actionSaved"));
+    }
+  });
+
+  const saveDiscrepancyAction = (command: LaundryDiscrepancyCommand) => {
+    const attemptKey = `${command.discrepancyId}:${command.action}`;
+    const fingerprint = JSON.stringify(command);
+    const currentAttempt = discrepancyAttemptsRef.current.get(attemptKey);
+    const idempotencyKey = currentAttempt?.fingerprint === fingerprint
+      ? currentAttempt.idempotencyKey
+      : globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${command.discrepancyId}-${Math.random().toString(36).slice(2)}`;
+    discrepancyAttemptsRef.current.set(attemptKey, { fingerprint, idempotencyKey });
+    const errorKey = `laundry-discrepancy-${command.discrepancyId}`;
+    clearMutationError(errorKey);
+    void discrepancyMutation.mutateAsync({ ...command, idempotencyKey }).catch((error: unknown) => {
+      showMutationError(errorKey, error, t("laundryDiscrepancies.actionFailed"));
+    });
+  };
 
   const saveMissingFollowUp = (id: number, payload: LaundryMissingFollowUpUpdate) => {
     const key = `missing-follow-up-${id}`;
@@ -1080,6 +1393,48 @@ export function LaundryPage() {
                 <p className="text-xs text-slate-500">Elegí un lavadero para editar sus precios.</p>
               )}
             </div>
+          </div>
+        </section>
+      )}
+
+      {canListDiscrepancies && (
+        <section className={showSection("review") ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">{t("laundryDiscrepancies.eyebrow")}</p>
+            <h2 className="text-lg font-semibold text-slate-900">{t("laundryDiscrepancies.title")}</h2>
+            <p className="text-sm text-slate-600">{t("laundryDiscrepancies.description")}</p>
+          </div>
+          {discrepanciesQuery.isLoading ? (
+            <p role="status" className="text-sm text-slate-600">{t("laundryDiscrepancies.loading")}</p>
+          ) : null}
+          {discrepanciesQuery.isError ? (
+            <p role="alert" className="text-sm text-rose-700">
+              {t("laundryDiscrepancies.loadFailed")} {(discrepanciesQuery.error as Error).message} {" "}
+              <button type="button" onClick={() => void discrepanciesQuery.refetch()} className="font-semibold underline">
+                {t("laundryDiscrepancies.retry")}
+              </button>
+            </p>
+          ) : null}
+          {!discrepanciesQuery.isLoading && !discrepanciesQuery.isError && discrepancies.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              {t("laundryDiscrepancies.empty")}
+            </p>
+          ) : null}
+          <div className="grid gap-3 xl:grid-cols-2">
+            {discrepancies.map((discrepancy) => (
+              <LaundryDiscrepancyCard
+                key={discrepancy.id}
+                discrepancy={discrepancy}
+                itemName={itemById.get(discrepancy.linen_item_id)?.name}
+                vendorName={vendorById.get(discrepancy.vendor_id)?.name}
+                remitoNumber={remitoById.get(discrepancy.remito_id)?.remito_number}
+                canReview={reviewDiscrepancies}
+                saving={discrepancyMutation.isPending}
+                error={mutationErrors[`laundry-discrepancy-${discrepancy.id}`]}
+                onCloseError={() => clearMutationError(`laundry-discrepancy-${discrepancy.id}`)}
+                onAction={saveDiscrepancyAction}
+              />
+            ))}
           </div>
         </section>
       )}

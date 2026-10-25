@@ -302,6 +302,7 @@ def enqueue_notifications_for_event(
     recipient_roles: Iterable[str] | None = None,
     expires_at: datetime | None = None,
     channels: Iterable[NotificationChannelEnum] | None = None,
+    force_in_app: bool = False,
 ) -> list[NotificationOutbox]:
     """Fan out one logical event to every eligible (recipient, channel) pair
     and insert-or-ignore the resulting NotificationOutbox rows.
@@ -310,7 +311,9 @@ def enqueue_notifications_for_event(
     a read permission they don't hold -- notifications must never disclose
     the existence of a record the recipient cannot otherwise read. Per
     channel, a recipient is skipped when their NotificationPreference has
-    that channel disabled for this event_type.
+    that channel disabled for this event_type. `force_in_app` is reserved for
+    critical operational alerts that must reach the normal inbox regardless of
+    the recipient's routine in-app notification preference.
     """
     if not str(event_type or "").strip():
         raise NotificationServiceError("event_type is required")
@@ -355,6 +358,10 @@ def enqueue_notifications_for_event(
                 NotificationChannelEnum.PUSH: preference["push_enabled"],
                 NotificationChannelEnum.EMAIL: preference["email_enabled"],
             }[channel]
+            if force_in_app and channel == NotificationChannelEnum.IN_APP:
+                # Critical operational discrepancies must reach the hotel's
+                # normal inbox even when a user disabled routine notifications.
+                channel_enabled = True
             if not channel_enabled:
                 continue
             rows_to_insert.append(
@@ -488,7 +495,12 @@ def _deliver_in_app(db: Session, row: NotificationOutbox) -> None:
 
 
 def _deliver_push(db: Session, row: NotificationOutbox, *, now: datetime) -> None:
-    from app.services.push_adapter import WebPushSendError, WebPushSubscriptionInvalid, get_web_push_adapter
+    from app.services.push_adapter import (
+        WebPushSendError,
+        WebPushSubscriptionInvalid,
+        WebPushUnavailableError,
+        get_web_push_adapter,
+    )
 
     subscriptions = _active_push_subscriptions(db, hotel_id=row.hotel_id, user_id=row.recipient_user_id)
     if not subscriptions:
@@ -504,6 +516,16 @@ def _deliver_push(db: Session, row: NotificationOutbox, *, now: datetime) -> Non
             sent = True
         except WebPushSubscriptionInvalid:
             subscription.expired_at = now
+        except WebPushUnavailableError:
+            if sent:
+                row.status = NotificationOutboxStatusEnum.SENT
+            else:
+                _mark_terminal(
+                    row,
+                    status=NotificationOutboxStatusEnum.FAILED,
+                    reason="web_push_unavailable",
+                )
+            return
         except WebPushSendError as exc:
             last_reason = str(exc)
 
@@ -570,10 +592,9 @@ def process_pending_outbox(db: Session, *, now: datetime | None = None, batch_si
                 quiet_end=preference["quiet_hours_end"],
                 now_utc=now,
             ):
-                # ponytail: a fixed 30-minute recheck instead of computing the
-                # exact quiet-hours-end instant -- simpler and still correct
-                # (never sends early), add precise scheduling if the recheck
-                # cadence ever matters operationally.
+                # Recheck after 30 minutes instead of scheduling the exact end
+                # of quiet hours. This cannot send early; use a precise wake-up
+                # time if the retry cadence becomes operationally significant.
                 row.next_retry_at = now + timedelta(minutes=30)
                 counts["deferred"] += 1
                 db.flush()

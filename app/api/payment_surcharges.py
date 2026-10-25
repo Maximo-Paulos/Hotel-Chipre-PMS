@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -21,7 +21,17 @@ from app.dependencies.auth import AuthContext, require_permission
 from app.models.audit_log import AuditActionEnum
 from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
+from app.schemas.payment_surcharge import (
+    PaymentSurchargeQuoteRead,
+    PaymentSurchargeQuoteRequest,
+)
 from app.services import audit_log_service
+from app.services.fx_service import SUPPORTED_CONVERSION_CURRENCIES
+from app.services.payment_service import (
+    PaymentError,
+    PaymentNotFoundError,
+    quote_reservation_payment_surcharge,
+)
 from app.services.permission_service import (
     PERMISSION_CASH_OPERATE,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
@@ -85,6 +95,14 @@ class PaymentSurchargeCreate(BaseModel):
     amount: Decimal = Field(..., ge=-1_000_000, le=1_000_000)
     currency_code: str = Field(default="ARS", max_length=3)
 
+    @field_validator("currency_code")
+    @classmethod
+    def normalize_currency_code(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized not in SUPPORTED_CONVERSION_CURRENCIES:
+            raise ValueError("La moneda debe ser ARS, USD, EUR, BRL, CLP o UYU.")
+        return normalized
+
     @model_validator(mode="after")
     def _validate_amount_range(self) -> "PaymentSurchargeCreate":
         if self.surcharge_type == PaymentSurchargeTypeEnum.PERCENTAGE and abs(self.amount) > 100:
@@ -98,6 +116,16 @@ class PaymentSurchargeUpdate(BaseModel):
     amount: Optional[Decimal] = Field(default=None, ge=-1_000_000, le=1_000_000)
     currency_code: Optional[str] = Field(default=None, max_length=3)
     is_active: Optional[bool] = None
+
+    @field_validator("currency_code")
+    @classmethod
+    def normalize_currency_code(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().upper()
+        if normalized not in SUPPORTED_CONVERSION_CURRENCIES:
+            raise ValueError("La moneda debe ser ARS, USD, EUR, BRL, CLP o UYU.")
+        return normalized
 
 
 def _get_surcharge_or_404(db: Session, surcharge_id: int, hotel_id: int) -> PaymentSurcharge:
@@ -130,6 +158,32 @@ def list_payment_surcharges(
         .all()
     )
     return [PaymentSurchargeRead.model_validate(surcharge) for surcharge in surcharges]
+
+
+@router.post("/quote", response_model=PaymentSurchargeQuoteRead)
+def quote_payment_surcharge(
+    payload: PaymentSurchargeQuoteRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+) -> PaymentSurchargeQuoteRead:
+    """Return the exact amount to collect and any FX/cash suggestion details."""
+    try:
+        quote = quote_reservation_payment_surcharge(
+            db,
+            hotel_id=context.hotel_id,
+            reservation_id=payload.reservation_id,
+            payment_method=payload.payment_method,
+            currency_code=payload.currency_code,
+            base_amount=payload.base_amount,
+        )
+    except PaymentNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PaymentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return PaymentSurchargeQuoteRead(
+        **quote,
+        payment_method=payload.payment_method,
+    )
 
 
 @router.post("", response_model=PaymentSurchargeRead, status_code=status.HTTP_201_CREATED)

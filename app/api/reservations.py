@@ -20,6 +20,7 @@ from app.models.audit_log import AuditActionEnum
 from app.models.company import Company
 from app.models.guest import Guest
 from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
+from app.models.cancellation_review import ReservationCancellationReview
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.room import Room, RoomCategory
 from app.models.hotel_config import HotelConfiguration
@@ -54,6 +55,17 @@ from app.schemas.reservation_operations import (
     RoomMoveRequest,
     RoomMoveResponse,
 )
+from app.schemas.cancellation_review import (
+    CancellationReviewDecisionRequest,
+    CancellationReviewRead,
+    CancellationReviewResolutionResponse,
+    ReservationCancellationResponse,
+)
+from app.schemas.company_reservation_terms import (
+    CompanyReservationTermsReviewEventRead,
+    CompanyReservationTermsReviewRead,
+    CompanyReservationTermsReviewRequest,
+)
 from app.services.reservation_service import (
     ConfirmedReservationPriceLocked,
     ManualRatePolicyError,
@@ -65,21 +77,27 @@ from app.services.reservation_service import (
     get_reservation_by_id,
     ReservationVersionConflict,
     mark_reservation_no_show,
-    update_reservation_fields,
-    validate_direct_individual_manual_rate_target,
     register_company_settlement,
     deferred_company_reservation_ids,
     reservation_has_deferred_company_billing,
+)
+from app.services.reservation_update_service import (
+    ReservationUpdateAuthorization,
+    ReservationUpdatePreparationError,
+    apply_reservation_update,
+    prepare_reservation_update,
 )
 from app.services.read_model_cache import get_cached_occupancy_grid_payload
 from app.services.csv_export_safety import spreadsheet_safe_row
 from app.services.guest_restriction_service import GuestProhibitedError, RestrictionOverridePermissionError
 from app.services.reservation_operations_service import (
     ReservationOperationsError,
+    ReservationExtensionImpactConfirmationError,
     RoomMovePermissionError,
     change_reservation_dates,
     extend_reservation_stay,
     preview_reservation_stay_extension,
+    plan_reservation_extension_impact,
     set_company_extension_request,
     add_reservation_charge,
     move_reservation_room,
@@ -87,6 +105,7 @@ from app.services.reservation_operations_service import (
     rebook_ota_reservation_as_direct,
     reservation_has_payment_or_deposit,
 )
+from app.services.room_movement_group_service import RoomMovementGroupError
 from app.services.reservation_action_service import (
     ReservationActionError,
     clear_reservation_manual_review,
@@ -119,8 +138,10 @@ from app.services.permission_service import (
     PERMISSION_CASH_RECORD_PRIOR_RECEIPT,
     PERMISSION_COMPANY_MANAGE,
     PERMISSION_GUEST_CREATE,
+    PERMISSION_GUEST_READ,
     PERMISSION_RESERVATION_CANCEL,
     PERMISSION_RESERVATION_CANCEL_PAID,
+    PERMISSION_RESERVATION_CANCEL_PENALTY_APPROVE,
     PERMISSION_OTA_PAYMENT_CONFIRM,
     PERMISSION_RESERVATION_CHARGE,
     PERMISSION_RESERVATION_CREATE,
@@ -140,6 +161,25 @@ from app.services.permission_service import (
     audit_permission_denied,
     resolve,
 )
+from app.services.reservation_cancellation_service import (
+    CancellationConfigurationRequired,
+    CancellationReviewConflict,
+    CancellationReviewNotFound,
+    get_pending_cancellation_review,
+    list_pending_cancellation_reviews,
+    prepare_cancellation_request,
+    process_payment_link_revocations_after_commit,
+    request_reservation_cancellation,
+    resolve_cancellation_review,
+    review_read_payload,
+)
+from app.services.company_reservation_terms_service import (
+    CompanyTermsReviewConflict,
+    CompanyTermsReviewError,
+    CompanyTermsReviewNotFound,
+    get_company_terms_review,
+    review_company_reservation_terms,
+)
 from app.services import audit_log_service
 from app.services.temporary_action_grant_service import (
     TemporaryGrantActor,
@@ -158,8 +198,96 @@ _RESERVATION_CSV_MAX_RANGE_DAYS = 367
 _RESERVATION_CSV_MAX_ROWS = 10_000
 
 
+def _company_terms_review_response(
+    *, reservation_id: int, state: dict, events: list[object]
+) -> CompanyReservationTermsReviewRead:
+    return CompanyReservationTermsReviewRead(
+        reservation_id=reservation_id,
+        history=[CompanyReservationTermsReviewEventRead.model_validate(event) for event in events],
+        **state,
+    )
+
+
+@router.get(
+    "/{reservation_id}/company-terms-review",
+    response_model=CompanyReservationTermsReviewRead,
+)
+def read_company_terms_review(
+    reservation_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_COMPANY_MANAGE, PERMISSION_RESERVATION_READ)
+    ),
+):
+    """Read the company terms snapshot and current profile drift for managers."""
+    try:
+        state, events = get_company_terms_review(
+            db,
+            hotel_id=context.hotel_id,
+            reservation_id=reservation_id,
+        )
+        return _company_terms_review_response(
+            reservation_id=reservation_id,
+            state=state,
+            events=events,
+        )
+    except CompanyTermsReviewNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CompanyTermsReviewError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/{reservation_id}/company-terms-review",
+    response_model=CompanyReservationTermsReviewRead,
+)
+def decide_company_terms_review(
+    reservation_id: int,
+    payload: CompanyReservationTermsReviewRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_COMPANY_MANAGE, PERMISSION_RESERVATION_READ)
+    ),
+):
+    """Record an auditable keep-snapshot or accept-current-config decision."""
+    if context.user_id is None:
+        raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
+    try:
+        review_company_reservation_terms(
+            db,
+            hotel_id=context.hotel_id,
+            reservation_id=reservation_id,
+            actor_user_id=context.user_id,
+            action=payload.action,
+            reason=payload.reason,
+            expected_config_fingerprint=payload.expected_config_fingerprint,
+            idempotency_key=payload.idempotency_key,
+        )
+        db.commit()
+        state, events = get_company_terms_review(
+            db,
+            hotel_id=context.hotel_id,
+            reservation_id=reservation_id,
+        )
+        return _company_terms_review_response(
+            reservation_id=reservation_id,
+            state=state,
+            events=events,
+        )
+    except CompanyTermsReviewNotFound as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CompanyTermsReviewConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except CompanyTermsReviewError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 def _reservation_status_label_es(status: ReservationStatusEnum) -> str:
     return {
+        ReservationStatusEnum.PARTIAL_CHECK_IN: "llegadas parciales",
         ReservationStatusEnum.CHECKED_IN: "en curso",
         ReservationStatusEnum.CHECKED_OUT: "finalizada",
         ReservationStatusEnum.CANCELLED: "cancelada",
@@ -167,13 +295,37 @@ def _reservation_status_label_es(status: ReservationStatusEnum) -> str:
     }.get(status, "en un estado que no admite cambios")
 
 
+def _can_view_guest_documents(db: Session | None, context: AuthContext | None) -> bool:
+    """Resolve the canonical guest-profile permission for reservation reads."""
+    if db is None or context is None or context.user_id is None:
+        return False
+    return resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        PERMISSION_GUEST_READ,
+        user_id=context.user_id,
+    )
+
+
 def _to_read(
     r: Reservation,
     *,
     db: Session | None = None,
+    context: AuthContext | None = None,
+    can_view_guest_documents: bool | None = None,
     company_billing_deferred: bool | None = None,
 ) -> ReservationRead:
     result = ReservationRead.model_validate(r)
+    if can_view_guest_documents is None:
+        can_view_guest_documents = _can_view_guest_documents(db, context)
+    if not can_view_guest_documents:
+        # Names remain useful reservation context, but identity-document PII
+        # is governed by guest:view (canonical guest:read), not reservation:read.
+        for guest in (result.guest, *result.additional_guests):
+            if guest is not None:
+                guest.document_type = None
+                guest.document_number = None
     room = getattr(r, "room", None)
     result.room_number = (
         room.room_number
@@ -401,15 +553,12 @@ def create_new_reservation(
             actor_user_id=context.user_id, actor_role=context.user_role,
             manual_rate_scope=manual_rate_scope,
         )
-        # create_reservation already validates and assigns a free room under
-        # row-level locking. Running the hotel-wide optimizer immediately for
-        # that same reservation repeats work and may move other unconfirmed
-        # bookings. Keep the global solve for allocation-changing updates; a
-        # new unassigned reservation may still request it unless it was
-        # deliberately wait-listed for manual review.
+        # create_reservation keeps the first-fit room as the transactional
+        # fallback and persists a durable proposal request. Wake the worker for
+        # every eligible booking, including assigned rooms, so reception can
+        # review possible improvements without applying them automatically.
         should_reoptimize = (
-            reservation.room_id is None
-            and not reservation.is_wait_listed
+            not reservation.is_wait_listed
             and reservation_overlaps_default_horizon(
                 db,
                 hotel_id=context.hotel_id,
@@ -438,7 +587,7 @@ def create_new_reservation(
                 hotel_id=context.hotel_id,
                 origin_key=db.info.get("domain_event_origin_key"),
             )
-        return _to_read(reservation, db=db)
+        return _to_read(reservation, db=db, context=context)
     except ManualRatePolicyError as e:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
@@ -459,6 +608,7 @@ def create_new_reservation(
 def create_or_update_manual_ota(
     data: ManualOTAReservationCreate,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(
         require_all_permissions(
@@ -544,9 +694,38 @@ def create_or_update_manual_ota(
             },
         )
         db.commit()
+        try:
+            from app.services.payment_link_service import process_payment_link_revocations
+
+            process_payment_link_revocations(db, context.hotel_id, reservation_id=reservation.id)
+            db.commit()
+        except Exception as exc:  # noqa: BLE001 - manual OTA state change is already durable
+            db.rollback()
+            logger.warning(
+                "payment_link.revocation_attempt_unavailable hotel_id=%s reservation_id=%s error_type=%s",
+                context.hotel_id,
+                reservation.id,
+                type(exc).__name__,
+            )
         db.refresh(reservation)
         _project_reservation_graph(context.hotel_id, reservation)
-        return _to_read(reservation, db=db)
+        if (
+            before is None
+            and not reservation.is_wait_listed
+            and reservation_overlaps_default_horizon(
+                db,
+                hotel_id=context.hotel_id,
+                check_in_date=reservation.check_in_date,
+                check_out_date=reservation.check_out_date,
+            )
+        ):
+            background_tasks.add_task(
+                _trigger_reoptimization_bg,
+                hotel_id=context.hotel_id,
+                trigger_type="new_reservation",
+                origin_key=db.info.get("domain_event_origin_key"),
+            )
+        return _to_read(reservation, db=db, context=context)
     except OTAManualReservationError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -587,8 +766,14 @@ def list_reservations(
             hotel_id=context.hotel_id,
             reservations=reservations,
         )
+        can_view_guest_documents = _can_view_guest_documents(db, context)
         return [
-            _to_read(r, company_billing_deferred=r.id in deferred_ids)
+            _to_read(
+                r,
+                db=db,
+                can_view_guest_documents=can_view_guest_documents,
+                company_billing_deferred=r.id in deferred_ids,
+            )
             for r in reservations
         ]
     except Exception as exc:
@@ -761,6 +946,92 @@ def list_pending_actions(
         ) from exc
 
 
+@router.get(
+    "/cancellation-reviews/pending",
+    response_model=list[CancellationReviewRead],
+)
+def list_pending_cancellation_reviews_endpoint(
+    limit: int = Query(default=100, ge=1, le=250),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CANCEL_PENALTY_APPROVE)),
+):
+    """Return the current hotel's cancellation decisions awaiting review."""
+    rows = list_pending_cancellation_reviews(db, hotel_id=context.hotel_id, limit=limit)
+    can_manage_companies = resolve(
+        db,
+        context.hotel_id,
+        context.user_role,
+        PERMISSION_COMPANY_MANAGE,
+        user_id=context.user_id,
+    )
+    return [
+        review_read_payload(review, reservation)
+        for review, reservation in rows
+        if reservation.company_id is None or can_manage_companies
+    ]
+
+
+@router.post(
+    "/cancellation-reviews/{review_id}/decision",
+    response_model=CancellationReviewResolutionResponse,
+)
+def decide_cancellation_review(
+    review_id: int,
+    payload: CancellationReviewDecisionRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_CANCEL_PENALTY_APPROVE)),
+):
+    review = (
+        db.query(ReservationCancellationReview)
+        .filter(
+            ReservationCancellationReview.id == review_id,
+            ReservationCancellationReview.hotel_id == context.hotel_id,
+        )
+        .first()
+    )
+    if review is None:
+        raise HTTPException(status_code=404, detail="No se encontró la revisión de cancelación.")
+    reservation = get_reservation_by_id(db, review.reservation_id, context.hotel_id)
+    if reservation is None:
+        raise HTTPException(status_code=404, detail="No se encontró la reserva.")
+    _authorize_company_reservation_management(request, db, context, reservation)
+    try:
+        resolved_review, resolved_reservation = resolve_cancellation_review(
+            db,
+            hotel_id=context.hotel_id,
+            review_id=review_id,
+            user_id=context.user_id,
+            decision=payload.decision,
+            reason=payload.reason,
+        )
+        db.commit()
+        if payload.decision == "approve":
+            process_payment_link_revocations_after_commit(
+                db,
+                hotel_id=context.hotel_id,
+                reservation_id=resolved_reservation.id,
+            )
+        db.refresh(resolved_review)
+        db.refresh(resolved_reservation)
+        return CancellationReviewResolutionResponse(
+            cancellation_review=review_read_payload(resolved_review, resolved_reservation),
+            reservation=_to_read(resolved_reservation, db=db, context=context),
+        )
+    except CancellationReviewNotFound as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="No se encontró la revisión de cancelación.") from exc
+    except CancellationReviewConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ReservationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception:
+        db.rollback()
+        raise
+
+
 @router.get("/occupancy-grid", response_model=OccupancyGridResponse)
 def occupancy_grid(
     date_from: date = Query(...),
@@ -891,7 +1162,7 @@ def register_settlement(
     except ReservationError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
-    return _to_read(reservation, db=db)
+    return _to_read(reservation, db=db, context=context)
 
 
 @router.get("/{reservation_id}", response_model=ReservationRead)
@@ -903,7 +1174,7 @@ def get_reservation(
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if not reservation:
         raise HTTPException(status_code=404, detail="No se encontró la reserva.")
-    return _to_read(reservation, db=db)
+    return _to_read(reservation, db=db, context=context)
 
 
 from app.schemas.guest import GuestCreate
@@ -918,9 +1189,18 @@ def add_reservation_guests(
         require_all_permissions(PERMISSION_RESERVATION_UPDATE, PERMISSION_GUEST_CREATE)
     ),
 ):
-    reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
+    reservation = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not reservation:
         raise HTTPException(status_code=404, detail="No se encontró la reserva.")
+    if reservation.status not in {
+        ReservationStatusEnum.PENDING,
+        ReservationStatusEnum.DEPOSIT_PAID,
+        ReservationStatusEnum.FULLY_PAID,
+        ReservationStatusEnum.PRE_CHECK_IN,
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
+        ReservationStatusEnum.CHECKED_IN,
+    }:
+        raise HTTPException(status_code=409, detail="No se pueden agregar perfiles en el estado actual de la reserva.")
 
     category = _reservation_room_capacity_category(
         db,
@@ -1017,7 +1297,7 @@ def add_reservation_guests(
     # round trip for every new companion, even though relationship inserts can
     # be persisted together by the unit of work.
     db.flush()
-    response = _to_read(reservation, db=db)
+    response = _to_read(reservation, db=db, context=context)
     # Build the response while ORM relationships remain loaded. Committing
     # expires the instance by default; refreshing it here re-queries the full
     # reservation graph after a mutation whose result is already in memory.
@@ -1025,7 +1305,7 @@ def add_reservation_guests(
     return response
 
 
-@router.post("/{reservation_id}/cancel", response_model=ReservationRead)
+@router.post("/{reservation_id}/cancel", response_model=ReservationCancellationResponse)
 def cancel_reservation(
     reservation_id: int,
     request: Request,
@@ -1086,7 +1366,11 @@ def cancel_reservation(
 
     _authorize_company_reservation_management(request, db, context, r)
 
-    if r.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
+    if r.status in (
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_OUT,
+    ):
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(
@@ -1118,6 +1402,7 @@ def cancel_reservation(
         if not r:
             raise HTTPException(status_code=404, detail="No se encontró la reserva.")
         if r.status in (
+            ReservationStatusEnum.PARTIAL_CHECK_IN,
             ReservationStatusEnum.CHECKED_IN,
             ReservationStatusEnum.CHECKED_OUT,
             ReservationStatusEnum.CANCELLED,
@@ -1151,38 +1436,53 @@ def cancel_reservation(
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
 
     try:
-        before = audit_log_service.model_snapshot(r)
-        transition_reservation_status(
-            db,
-            r,
-            ReservationStatusEnum.CANCELLED,
-            context.hotel_id,
-            reason_code="cancelled_by_user",
-            changed_by_user_id=context.user_id,
-        )
-        # Cancel any still-payable seña links so the guest can't pay a stale link.
-        try:
-            from app.services.payment_link_service import cancel_active_links_for_reservation
-
-            cancel_active_links_for_reservation(db, context.hotel_id, r.id, reason="reservation cancelled")
-        except Exception as exc:  # best-effort; never block the cancellation
-            logger.error("Failed cancelling payment links for reservation %s error_type=%s", r.id, type(exc).__name__)
-        db.commit()
-        db.refresh(r)
-        audit_log_service.safe_create_audit_log(
+        pending_review = get_pending_cancellation_review(
             db,
             hotel_id=context.hotel_id,
-            table_name="reservations",
-            record_id=r.id,
-            action=AuditActionEnum.STATUS_CHANGE,
-            actor_user_id=context.user_id,
-            payload_before=before,
-            payload_after=audit_log_service.model_snapshot(r),
+            reservation_id=r.id,
+            lock=True,
         )
-        return _to_read(r, db=db)
+        preparation = None
+        if pending_review is None:
+            try:
+                preparation = prepare_cancellation_request(r, config)
+            except CancellationConfigurationRequired as exc:
+                db.rollback()
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": exc.reason_code,
+                        "message": "Configurá el horario de check-in y la zona horaria del hotel antes de evaluar la cancelación.",
+                    },
+                ) from exc
+        result = request_reservation_cancellation(
+            db,
+            r,
+            user_id=context.user_id,
+            source="reservations_api",
+            preparation=preparation,
+        )
+        db.commit()
+        if result.outcome == "cancelled":
+            process_payment_link_revocations_after_commit(
+                db,
+                hotel_id=context.hotel_id,
+                reservation_id=r.id,
+            )
+        db.refresh(r)
+        return ReservationCancellationResponse(
+            **_to_read(r, db=db, context=context).model_dump(),
+            cancellation_outcome=result.outcome,
+            cancellation_review=(
+                review_read_payload(result.review, r) if result.review is not None else None
+            ),
+        )
     except ReservationError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    except CancellationReviewConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except TemporaryGrantError:
         db.rollback()
         raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
@@ -1265,6 +1565,19 @@ def release_no_guarantee_reservation(
             reason=reason,
         )
         db.commit()
+        try:
+            from app.services.payment_link_service import process_payment_link_revocations
+
+            process_payment_link_revocations(db, context.hotel_id, reservation_id=r.id)
+            db.commit()
+        except Exception as exc:  # noqa: BLE001 - release is already durable
+            db.rollback()
+            logger.warning(
+                "payment_link.revocation_attempt_unavailable hotel_id=%s reservation_id=%s error_type=%s",
+                context.hotel_id,
+                r.id,
+                type(exc).__name__,
+            )
         db.refresh(r)
         audit_log_service.safe_create_audit_log(
             db,
@@ -1276,7 +1589,7 @@ def release_no_guarantee_reservation(
             payload_before=before,
             payload_after=audit_log_service.model_snapshot(r),
         )
-        return _to_read(r, db=db)
+        return _to_read(r, db=db, context=context)
     except OTAManualReservationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1316,7 +1629,7 @@ def mark_no_show(
             payload_before=before,
             payload_after=audit_log_service.model_snapshot(r),
         )
-        return _to_read(r, db=db)
+        return _to_read(r, db=db, context=context)
     except ReservationError as e:
         db.rollback()
         if isinstance(e, ReservationVersionConflict):
@@ -1401,8 +1714,8 @@ def change_dates(
                 origin_key=db.info.get("domain_event_origin_key"),
             )
         return ReservationDateChangeResponse(
-            original_reservation=_to_read(result.original_reservation, db=db),
-            reservation=_to_read(result.reservation, db=db),
+            original_reservation=_to_read(result.original_reservation, db=db, context=context),
+            reservation=_to_read(result.reservation, db=db, context=context),
             recreated=result.recreated,
             status_transitioned=result.status_transitioned,
         )
@@ -1440,193 +1753,85 @@ def modify_reservation(
     r = get_reservation_by_id(db, reservation_id, context.hotel_id, for_update=True)
     if not r:
         raise HTTPException(status_code=404, detail="No se encontró la reserva.")
-    submitted_data = data.model_dump(exclude_unset=True)
-    effective_data = {
-        field: value
-        for field, value in submitted_data.items()
-        if field not in {
-            "client_version",
-            "restriction_override",
-            "paid_total_change_reason",
-            "confirm_large_total_adjustment",
-        }
-        and not (field == "room_id" and value is None)
-        and getattr(r, field, None) != value
-    }
-    if r.company_id is not None and effective_data:
-        _authorize_company_reservation_management(request, db, context, r)
-    total_adjustment_kind: Literal["manual", "paid"] | None = None
-    manual_rate_scope: Literal["bounded", "unbounded"] | None = None
-    confirmed_price_change_review_required = False
-    if "total_amount" in effective_data:
-        if reservation_has_deferred_company_billing(
+    authorization = ReservationUpdateAuthorization(
+        company_management=lambda: _authorize_company_reservation_management(
+            request,
             db,
+            context,
             r,
-            hotel_id=context.hotel_id,
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="El alojamiento de esta empresa se factura fuera del PMS y no admite correcciones de importe aquí.",
-            )
-        has_payment_or_deposit = reservation_has_payment_or_deposit(
+        ),
+        paid_total_adjustment=lambda: authorize_permission(
+            request,
             db,
-            hotel_id=context.hotel_id,
-            reservation=r,
-        )
-        confirmed_price_change_review_required = r.room_id is not None and has_payment_or_deposit
-        if confirmed_price_change_review_required:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "La reserva tiene habitación y pago asignados. El cambio de tarifa quedó bloqueado; "
-                    "solicitá una revisión manual."
-                ),
-            )
-        if has_payment_or_deposit:
-            # Existing paid-total corrections retain their stricter financial
-            # permission. This never rewrites the original transaction ledger.
-            total_adjustment_kind = "paid"
-            authorize_permission(request, db, context, PERMISSION_RESERVATION_PAID_TOTAL_ADJUST)
-        else:
-            # Manual-rate policy is separate from complimentary/upgrade
-            # adjustments. Reuse the direct-rate scope: owners with manual_rate
-            # retain the unbounded path; limited actors need configured bounds
-            # and a current quote in the reservation service.
-            try:
-                validate_direct_individual_manual_rate_target(r, hotel_id=context.hotel_id)
-            except ManualRatePolicyError as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=str(exc),
-                ) from exc
-            total_adjustment_kind = "manual"
-            manual_rate_scope = authorize_manual_rate_scope(db, context)
-    if "room_id" in effective_data and effective_data["room_id"] is not None:
+            context,
+            PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
+        ),
+        manual_rate_scope=lambda: authorize_manual_rate_scope(db, context),
         # update_reservation_fields rejects cross-category rooms, so this
-        # legacy edit path can only make a same-category (tier 1) move.
-        _ensure_action_permission(
+        # legacy edit path only supports a same-category (tier 1) move.
+        room_move=lambda: _ensure_action_permission(
             db,
             context,
             PERMISSION_RESERVATION_MOVE,
             acceptable_permissions=RESERVATION_MOVE_TIER_PERMISSIONS[1:],
-        )
-    dates_changed = (
-        "check_in_date" in effective_data
-        or "check_out_date" in effective_data
-    )
-    occupancy_changed = (
-        "num_adults" in effective_data
-        or "num_children" in effective_data
-    )
-    if (
-        (dates_changed or occupancy_changed)
-        and reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=r)
-        and not _is_manager_context(context)
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Modificar fechas u ocupación de una reserva con pagos requiere gerente, dueño o codueño.",
-    )
-    metadata_fields = {"arrival_time_hint", "reservation_comment"}
-    terminal_mutation_fields = set(effective_data) - metadata_fields - {"total_amount"}
-    if r.status in (
-        ReservationStatusEnum.CHECKED_IN,
-        ReservationStatusEnum.CHECKED_OUT,
-        ReservationStatusEnum.CANCELLED,
-        ReservationStatusEnum.NO_SHOW,
-    ) and terminal_mutation_fields:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No se puede modificar una reserva en estado «{_reservation_status_label_es(r.status)}».",
-        )
-    if data.client_version is not None and r.version != data.client_version:
-        raise HTTPException(
-            status_code=409,
-            detail="La reserva fue modificada por otra persona. Recargá e intentá de nuevo.",
-        )
-    if not effective_data:
-        return _to_read(r, db=db)
-    if data.client_version is None:
-        raise HTTPException(
-            status_code=status.HTTP_428_PRECONDITION_REQUIRED,
-            detail="client_version es obligatorio para modificar una reserva. Recargá e intentá nuevamente.",
-        )
-
-    update_payload = {**effective_data, "client_version": data.client_version}
-    if "restriction_override" in submitted_data:
-        update_payload["restriction_override"] = submitted_data["restriction_override"]
-    if "paid_total_change_reason" in submitted_data:
-        update_payload["paid_total_change_reason"] = submitted_data["paid_total_change_reason"]
-    if "confirm_large_total_adjustment" in submitted_data:
-        update_payload["confirm_large_total_adjustment"] = submitted_data[
-            "confirm_large_total_adjustment"
-        ]
-    update_data = ReservationUpdate.model_validate(update_payload)
-    before = audit_log_service.model_snapshot(r)
-    previous_allocation_interval = (r.check_in_date, r.check_out_date)
-    mobility_restriction_changed = (
-        "mobility_restriction" in effective_data
+        ),
     )
     try:
-        update_reservation_fields(
+        prepared = prepare_reservation_update(
+            db,
+            r,
+            data,
+            context.hotel_id,
+            actor_is_manager=_is_manager_context(context),
+            authorization=authorization,
+        )
+    except ReservationUpdatePreparationError as exc:
+        if exc.code == "deferred_company_billing":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
+        if exc.code == "manual_rate_target":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
+        if exc.code == "paid_dates_require_manager":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.detail) from exc
+        if exc.code == "status_restricted":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "No se puede modificar una reserva en estado «"
+                    f"{_reservation_status_label_es(r.status)}»."
+                ),
+            ) from exc
+        if exc.code == "client_version_required":
+            raise HTTPException(
+                status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+                detail=exc.detail,
+            ) from exc
+        raise
+    except ConfirmedReservationPriceLocked as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ReservationVersionConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    if prepared.update_data is None:
+        return _to_read(r, db=db, context=context)
+
+    update_plan = prepared.plan
+    update_data = prepared.update_data
+    previous_allocation_interval = prepared.previous_allocation_interval
+    mobility_restriction_changed = update_plan.mobility_restriction_changed
+    try:
+        apply_reservation_update(
             db,
             r,
             update_data,
             context.hotel_id,
-            changed_by_user_id=context.user_id,
-            actor_role=context.user_role,
-            room_move_reason_code="manual_update",
-            room_move_notes="Cambio manual desde API de reservas",
-            client_version=update_data.client_version,
-            preserve_unclassified_price=True,
-            total_adjustment_kind=total_adjustment_kind,
-            manual_rate_scope=manual_rate_scope,
-            confirmed_price_change_review_required=confirmed_price_change_review_required,
-        )
-        after = {
-            **(audit_log_service.model_snapshot(r) or {}),
-            "source": "reservations_api",
-        }
-        if "total_amount" in effective_data:
-            adjustment_payload = {
-                "previous_total_amount": str(
-                    Decimal(str(before.get("total_amount") or 0)).quantize(Decimal("0.01"))
-                ),
-                "updated_total_amount": str(
-                    Decimal(str(r.total_amount or 0)).quantize(Decimal("0.01"))
-                ),
-                "reason": data.paid_total_change_reason,
-                "actor_user_id": context.user_id,
-            }
-            if total_adjustment_kind == "manual":
-                try:
-                    pricing_snapshot = json.loads(r.pricing_snapshot or "{}")
-                except (TypeError, json.JSONDecodeError):
-                    pricing_snapshot = {}
-                history = pricing_snapshot.get("manual_total_adjustments", [])
-                latest_adjustment = history[-1] if isinstance(history, list) and history else {}
-                manual_rate_context = latest_adjustment.get("manual_rate")
-                if isinstance(manual_rate_context, dict):
-                    adjustment_payload["manual_rate"] = manual_rate_context
-            after["total_adjustment"] = adjustment_payload
-            if total_adjustment_kind == "paid":
-                # Retain the established audit key for existing readers.
-                after["paid_total_adjustment"] = adjustment_payload
-        audit_log_service.safe_create_audit_log(
-            db,
-            hotel_id=context.hotel_id,
-            table_name="reservations",
-            record_id=r.id,
-            action=AuditActionEnum.UPDATE,
             actor_user_id=context.user_id,
-            payload_before=before,
-            payload_after=after,
+            actor_role=context.user_role,
+            total_adjustment_kind=prepared.total_adjustment_kind,
+            manual_rate_scope=prepared.manual_rate_scope,
+            confirmed_price_change_review_required=prepared.confirmed_price_change_review_required,
         )
-        db.commit()
-        db.refresh(r)
         if (
-            any(field in effective_data for field in ("check_in_date", "check_out_date", "room_id"))
-            or mobility_restriction_changed
+            update_plan.dates_changed or update_plan.room_changed or mobility_restriction_changed
         ) and any(
             reservation_overlaps_default_horizon(
                 db,
@@ -1645,7 +1850,7 @@ def modify_reservation(
                 trigger_type="reservation_update",
                 origin_key=db.info.get("domain_event_origin_key"),
             )
-        return _to_read(r, db=db)
+        return _to_read(r, db=db, context=context)
     except ConfirmedReservationPriceLocked as e:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
@@ -1745,6 +1950,7 @@ def extend_stay(
                 PERMISSION_COMPANY_MANAGE,
                 user_id=context.user_id,
             ),
+            confirmed_impact_fingerprint=payload.confirmed_impact_fingerprint,
         )
         if not result.success:
             db.rollback()
@@ -1753,6 +1959,7 @@ def extend_stay(
                 detail={
                     "message": "No se pudo resolver el conflicto de extensión de estadía.",
                     "conflicts": result.conflicts or [],
+                    **({"impact_plan": result.impact_plan} if result.impact_plan else {}),
                 },
             )
         audit_log_service.safe_create_audit_log(
@@ -1768,7 +1975,7 @@ def extend_stay(
         db.commit()
         db.refresh(r)
         response = ReservationExtensionResponse(
-            reservation=_to_read(r, db=db),
+            reservation=_to_read(r, db=db, context=context),
             extension_amount=result.extension_amount,
             transaction=result.transaction,
             payment_link=result.payment_link,
@@ -1792,19 +1999,37 @@ def extend_stay(
                 origin_key=db.info.get("domain_event_origin_key"),
             )
         return response
+    except ReservationExtensionImpactConfirmationError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": e.code,
+                "message": str(e),
+                **({"impact_plan": e.impact_plan} if e.impact_plan else {}),
+            },
+        ) from e
     except ReservationVersionConflict as e:
         db.rollback()
         raise HTTPException(status_code=409, detail=str(e)) from e
+    except RoomMovementGroupError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ReservationOperationsError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{reservation_id}/extend-preview", response_model=ReservationExtensionPreviewResponse)
+@router.get(
+    "/{reservation_id}/extend-preview",
+    response_model=ReservationExtensionPreviewResponse,
+    response_model_exclude_none=True,
+)
 def preview_stay_extension(
     reservation_id: int,
     request: Request,
     new_checkout_date: date = Query(...),
+    payment_action: Literal["individual", "company_account"] = "individual",
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
 ):
@@ -1816,6 +2041,8 @@ def preview_stay_extension(
     reservation = get_reservation_by_id(db, reservation_id, context.hotel_id)
     if reservation is None:
         raise HTTPException(status_code=404, detail="No se encontró la reserva.")
+    if payment_action == "company_account":
+        require_all_permissions(PERMISSION_COMPANY_MANAGE)(request, db, context)
     config = db.get(HotelConfiguration, context.hotel_id)
     if config and not config.subscription_active:
         raise HTTPException(
@@ -1828,6 +2055,20 @@ def preview_stay_extension(
             reservation=reservation,
             hotel_id=context.hotel_id,
             new_checkout_date=new_checkout_date,
+            payment_action=payment_action,
+        )
+        impact_plan = plan_reservation_extension_impact(
+            db,
+            reservation=reservation,
+            hotel_id=context.hotel_id,
+            new_checkout_date=new_checkout_date,
+            can_manage_company_reservations=resolve(
+                db,
+                context.hotel_id,
+                context.user_role,
+                PERMISSION_COMPANY_MANAGE,
+                user_id=context.user_id,
+            ),
         )
     except ReservationOperationsError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -1838,6 +2079,7 @@ def preview_stay_extension(
         client_version=reservation.version or 0,
         extension_amount=amount,
         currency_code=reservation.currency_code,
+        impact_plan=impact_plan,
     )
 
 
@@ -1881,7 +2123,7 @@ def update_company_extension_request(
         )
         db.commit()
         db.refresh(reservation)
-        return _to_read(reservation, db=db)
+        return _to_read(reservation, db=db, context=context)
     except ReservationVersionConflict as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -1971,7 +2213,7 @@ def room_move(
                 origin_key=db.info.get("domain_event_origin_key"),
             )
         return RoomMoveResponse(
-            reservation=_to_read(reservation, db=db),
+            reservation=_to_read(reservation, db=db, context=context),
             category_changed=result.category_changed,
             price_action=result.price_action,
             previous_total_amount=result.previous_total_amount,
@@ -1989,6 +2231,9 @@ def room_move(
     except RoomMovePermissionError as e:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except RoomMovementGroupError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ReservationOperationsError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))

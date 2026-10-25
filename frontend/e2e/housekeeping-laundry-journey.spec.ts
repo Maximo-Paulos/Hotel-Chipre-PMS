@@ -189,8 +189,54 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
   await expect(vendorBalance).toContainText("5");
 });
 
-test("housekeeping board is usable on a mobile viewport in English", async ({ page }) => {
+test("housekeeping checklist completes and refreshes room state on mobile in English", async ({ page }) => {
   test.setTimeout(120_000);
+  const itemCodes = ["change_sheets", "clean_bathroom", "replenish_towels", "empty_waste", "check_amenities"] as const;
+  const itemLabels: Record<(typeof itemCodes)[number], string> = {
+    change_sheets: "Change sheets",
+    clean_bathroom: "Clean the bathroom",
+    replenish_towels: "Replenish towels",
+    empty_waste: "Empty waste",
+    check_amenities: "Check amenities"
+  };
+  const completedItems = new Set<(typeof itemCodes)[number]>();
+  let checklistCompleted = false;
+
+  const housekeepingBoard = () => ({
+    date: "2026-10-23",
+    rooms: [{
+      room_id: 101,
+      room_number: "101",
+      floor: 1,
+      category_name: "Standard",
+      operational_status: checklistCompleted ? "available" : "cleaning",
+      housekeeping_status: checklistCompleted ? "clean" : "in_progress",
+      has_arrival_today: false,
+      has_departure_today: true,
+      has_stayover_today: false,
+      maintenance_blocked: false
+    }]
+  });
+  const checklist = () => ({
+    checklist_id: 501,
+    room: {
+      id: 101,
+      number: "101",
+      operational_status: checklistCompleted ? "available" : "cleaning",
+      housekeeping_status: checklistCompleted ? "clean" : "in_progress"
+    },
+    status: checklistCompleted ? "completed" : "open",
+    version: completedItems.size,
+    created_at: "2026-10-23T12:00:00Z",
+    completed_at: checklistCompleted ? "2026-10-23T13:00:00Z" : null,
+    items: itemCodes.map((code) => ({
+      code,
+      label: itemLabels[code],
+      completed: completedItems.has(code),
+      completed_at: completedItems.has(code) ? "2026-10-23T12:30:00Z" : null
+    }))
+  });
+
   await page.route("**/api/config/interface-language", async (route) =>
     route.fulfill({
       status: 200,
@@ -198,14 +244,30 @@ test("housekeeping board is usable on a mobile viewport in English", async ({ pa
       body: JSON.stringify({ interface_language: "en" })
     })
   );
+  await page.route("**/api/rooms/housekeeping-board", async (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(housekeepingBoard()) })
+  );
+  await page.route("**/api/housekeeping/checklists", async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ checklists: checklistCompleted ? [] : [checklist()] })
+    })
+  );
+  await page.route("**/api/housekeeping/checklists/501/items/*/complete", async (route) => {
+    const itemCode = new URL(route.request().url()).pathname.split("/").at(-2) as (typeof itemCodes)[number];
+    expect(itemCodes).toContain(itemCode);
+    completedItems.add(itemCode);
+    checklistCompleted = itemCodes.every((code) => completedItems.has(code));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(checklist()) });
+  });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await login(page, housekeeping, "/habitaciones");
   const boardResponsePromise = page.waitForResponse((response) =>
     response.request().method() === "GET"
       && new URL(response.url()).pathname === "/api/rooms/housekeeping-board"
   );
-  await page.goto("/operacion/limpieza-hoy");
+  await login(page, housekeeping, "/habitaciones");
   const boardResponse = await boardResponsePromise;
   expect(boardResponse.status()).toBe(200);
   const board = await boardResponse.json() as {
@@ -227,10 +289,34 @@ test("housekeeping board is usable on a mobile viewport in English", async ({ pa
     expect(Object.keys(room).sort()).toEqual(expectedRoomFields);
   }
 
+  await page.goto("/operacion/limpieza-hoy");
   const main = page.locator("main");
   await expect(main.getByRole("heading", { name: "Housekeeping today", exact: true })).toBeVisible();
   await expect(main.getByRole("button", { name: "Refresh", exact: true })).toBeVisible();
-  await expect(main.getByRole("combobox", { name: "Cleaning status · 101", exact: true })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Checkout checklist", exact: true })).toBeVisible();
+  await expect(main.getByText("0 of 5 tasks completed", { exact: true })).toBeVisible();
+  await expect(main.getByRole("checkbox")).toHaveCount(5);
+  await expect(main.getByRole("combobox", { name: "Cleaning status · 101", exact: true })).toHaveCount(0);
+
+  for (const itemCode of itemCodes) {
+    const checkbox = main.getByRole("checkbox", { name: itemLabels[itemCode], exact: true });
+    const completionResponse = page.waitForResponse((response) =>
+      response.request().method() === "POST"
+        && new URL(response.url()).pathname.endsWith(`/items/${itemCode}/complete`)
+    );
+    await checkbox.click();
+    expect((await completionResponse).status()).toBe(200);
+    if (itemCode === "check_amenities") {
+      await expect(checkbox).toHaveCount(0);
+    } else {
+      await expect(checkbox).toBeChecked();
+    }
+  }
+  expect([...completedItems]).toEqual(itemCodes);
+  await expect(main.getByRole("combobox", { name: "Cleaning status · 101", exact: true })).toHaveValue("clean");
+  const roomCard = main.locator("article").filter({ hasText: "Room 101" });
+  await expect(roomCard.locator("span").filter({ hasText: /^Clean$/ })).toBeVisible();
+
   const layout = await page.evaluate(() => ({
     viewportWidth: window.innerWidth,
     documentWidth: document.documentElement.scrollWidth,

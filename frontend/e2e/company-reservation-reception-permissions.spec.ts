@@ -140,6 +140,10 @@ test("reception can operate company check-in and collect existing extras but can
   await expect(ownerRow).toBeVisible();
   await expect(ownerRow.getByRole("button", { name: "Editar", exact: true })).toBeVisible();
   await expect(ownerRow.getByRole("button", { name: "Cancelar", exact: true })).toBeVisible();
+  await ownerRow.getByRole("button", { name: "Ficha", exact: true }).click();
+  const ownerDrawer = page.getByRole("dialog", { name: reservation.confirmation_code });
+  await expect(ownerDrawer.getByText("Documentación de la empresa")).toBeVisible();
+  await ownerDrawer.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
 
   const receptionistPage = await browser.newPage();
   try {
@@ -160,6 +164,7 @@ test("reception can operate company check-in and collect existing extras but can
     const drawer = receptionistPage.getByRole("dialog", { name: reservation.confirmation_code });
     await expect(drawer).toBeVisible();
     await expect(drawer.getByRole("button", { name: "Cancelar", exact: true })).toHaveCount(0);
+    await expect(drawer.getByText("Documentación de la empresa")).toHaveCount(0);
     await expect(drawer.getByTestId("checkin-capture-form")).toBeVisible();
     await expect(drawer.getByLabel("Nombre del acompañante")).toBeVisible();
     await expect(drawer.getByTestId("company-extension-request")).toBeVisible();

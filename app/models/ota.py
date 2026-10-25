@@ -32,7 +32,7 @@ class OTAReservationMapping(Base):
     ota_reservation_id = Column(String(100), nullable=False)  # External booking code
     ota_guest_name = Column(String(250), nullable=True)
 
-    raw_payload = Column(Text, nullable=True)  # Full JSON payload from OTA
+    raw_payload = Column(Text, nullable=True)  # Typed reconciliation projection; free-form guest fields are omitted.
 
     sync_status = Column(
         Enum(

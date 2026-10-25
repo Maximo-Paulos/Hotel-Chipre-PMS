@@ -1,11 +1,17 @@
 """
 Pydantic schemas for Transaction / Payments.
 """
-from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Literal, Optional
 from datetime import date
 from decimal import Decimal
-from app.models.transaction import PaymentMethodEnum, TransactionStatusEnum, TransactionTypeEnum
+from typing import Literal, Optional
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.models.transaction import (
+    PaymentMethodEnum,
+    TransactionStatusEnum,
+    TransactionTypeEnum,
+)
 from app.schemas.datetime_types import UTCDateTime
 
 
@@ -16,17 +22,77 @@ class CompanyNightChargeRefundAllocation(BaseModel):
     amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
 
 
+class PaymentCorrectionRequest(BaseModel):
+    """Reverse an erroneous payment record and optionally reassign it."""
+
+    correction_type: Literal["reassign", "duplicate_reversal"]
+    destination_confirmation_code: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    reason: str = Field(..., min_length=3, max_length=240)
+
+    @field_validator("destination_confirmation_code")
+    @classmethod
+    def normalize_confirmation_code(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().upper()
+        return normalized or None
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 3:
+            raise ValueError("Ingresá un motivo claro para la corrección.")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_correction_shape(self) -> "PaymentCorrectionRequest":
+        if self.correction_type == "reassign" and not self.destination_confirmation_code:
+            raise ValueError("Ingresá el código de la reserva a la que corresponde el pago.")
+        if self.correction_type == "duplicate_reversal" and self.destination_confirmation_code:
+            raise ValueError("Una reversión por duplicado no debe indicar otra reserva.")
+        return self
+
+
+class PaymentCorrectionRead(BaseModel):
+    correction_id: int
+    correction_type: Literal["reassign", "duplicate_reversal"]
+    source_transaction_id: int
+    source_reservation_id: int
+    target_reservation_id: Optional[int] = None
+    replacement_transaction_id: Optional[int] = None
+    reason: str
+    actor_user_id: Optional[int] = None
+    created_at: UTCDateTime
+    replayed: bool = False
+
+
 class PaymentRequest(BaseModel):
     """Client-facing payment request (e.g. from booking cart)."""
     reservation_id: int
-    amount: float = Field(..., gt=0)
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
+    # Physical cash handed over at the desk. ``amount`` remains the amount to
+    # charge/apply; the service calculates and persists any change returned.
+    cash_received_amount: Optional[Decimal] = Field(
+        default=None,
+        gt=0,
+        max_digits=12,
+        decimal_places=2,
+    )
+    # Optional explicit gratuity from over-tender; omitted/zero means return
+    # the full excess as change.
+    cash_tip_amount: Decimal = Field(default=Decimal("0.00"), ge=0, max_digits=12, decimal_places=2)
     payment_method: PaymentMethodEnum
     transaction_type: TransactionTypeEnum
     currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
+    # Signed 15-minute quote from POST /api/payment-surcharges/quote. It binds
+    # the amount, tender currency, payment method and FX/surcharge snapshots.
+    payment_quote_token: Optional[str] = Field(default=None, max_length=24_000)
     description: Optional[str] = None
     manual_reference: Optional[str] = Field(default=None, min_length=1, max_length=120)
     refund_of_transaction_id: Optional[int] = Field(default=None, gt=0)
     refund_reason: Optional[str] = Field(default=None, min_length=1, max_length=240)
+    refund_component: Literal["payment", "rounding_credit"] = "payment"
     company_night_charge_ids: list[int] = Field(default_factory=list, max_length=90)
     company_night_charge_refund_allocations: list[CompanyNightChargeRefundAllocation] = Field(
         default_factory=list,
@@ -62,12 +128,26 @@ class PaymentRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_prior_receipt_fields(self) -> "PaymentRequest":
+        if self.cash_received_amount is not None:
+            if self.payment_method != PaymentMethodEnum.CASH:
+                raise ValueError("El efectivo entregado solo se admite en pagos en efectivo")
+            if self.transaction_type == TransactionTypeEnum.REFUND:
+                raise ValueError("El efectivo entregado no se admite en devoluciones")
+        if self.cash_tip_amount > 0:
+            if self.payment_method != PaymentMethodEnum.CASH:
+                raise ValueError("La propina solo se admite en pagos en efectivo")
+            if self.transaction_type == TransactionTypeEnum.REFUND:
+                raise ValueError("No se registra propina en una devolución")
+            if self.cash_received_amount is None:
+                raise ValueError("Para dejar propina se debe registrar el efectivo entregado")
         if any(charge_id <= 0 for charge_id in self.company_night_charge_ids):
             raise ValueError("Company night charge ids must be positive")
         if len(self.company_night_charge_ids) != len(set(self.company_night_charge_ids)):
             raise ValueError("Company night charge ids must be unique")
         if self.transaction_type == TransactionTypeEnum.REFUND and self.company_night_charge_ids:
             raise ValueError("Use explicit company night refund allocations for refunds")
+        if self.transaction_type != TransactionTypeEnum.REFUND and self.refund_component != "payment":
+            raise ValueError("Refund component is only valid for refunds")
         if self.transaction_type != TransactionTypeEnum.REFUND and self.company_night_charge_refund_allocations:
             raise ValueError("Company night refund allocations are only valid for refunds")
         refund_charge_ids = [row.charge_id for row in self.company_night_charge_refund_allocations]
@@ -94,6 +174,9 @@ class TransactionRead(BaseModel):
     currency: str
     tender_amount: Optional[float] = None
     tender_currency: Optional[str] = None
+    cash_received_amount: Optional[Decimal] = None
+    cash_change_amount: Optional[Decimal] = None
+    cash_tip_amount: Decimal = Decimal("0.00")
     fx_rate_snapshot: Optional[float] = None
     transaction_type: TransactionTypeEnum
     payment_method: PaymentMethodEnum
@@ -103,6 +186,9 @@ class TransactionRead(BaseModel):
     manual_reference: Optional[str] = None
     refund_of_transaction_id: Optional[int] = None
     refund_reason: Optional[str] = None
+    rounding_credit_amount: Decimal = Decimal("0.00")
+    credit_refund_amount: Decimal = Decimal("0.00")
+    refund_component: Literal["payment", "rounding_credit"] = "payment"
     collected_before: bool = False
     collected_on: Optional[date] = None
     prior_receipt_note: Optional[str] = None
@@ -130,6 +216,9 @@ class PaymentReceiptRead(BaseModel):
     fx_rate_snapshot: Optional[float] = None
     gross_amount: Decimal
     fee_amount: Decimal
+    cash_received_amount: Optional[Decimal] = None
+    cash_change_amount: Optional[Decimal] = None
+    cash_tip_amount: Decimal = Decimal("0.00")
     currency: str
     method: PaymentMethodEnum
     type: TransactionTypeEnum

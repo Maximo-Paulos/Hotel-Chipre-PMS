@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
+from app.models.laundry_discrepancy import LaundryDiscrepancyAction, LaundryRemitoDiscrepancy
 from app.models.laundry_vendor import (
     LaundryRemito,
     LaundryRemitoLine,
@@ -43,6 +44,14 @@ class LaundryVendorError(ValueError):
 
 class DuplicateLaundryRemitoError(LaundryVendorError):
     """The vendor already has a remito with this number and direction."""
+
+
+class LaundryDiscrepancyNotFound(LaundryVendorError):
+    """A discrepancy does not exist in the requested hotel tenant."""
+
+
+class LaundryDiscrepancyConflict(LaundryVendorError):
+    """A discrepancy action conflicts with its state or an idempotency key."""
 
 
 def is_duplicate_remito_integrity_error(error: IntegrityError) -> bool:
@@ -205,15 +214,15 @@ def create_remito(
     actor_user_id: int | None = None,
     reconciliation_warnings: list[str] | None = None,
 ) -> LaundryRemito:
-    """Record a remito as LinenMovements, including any declared loss.
+    """Record confirmed transfers and keep remito discrepancies out of stock.
 
     outbound: house_location -> vendor_location (dirty linen leaves the hotel)
-    inbound:  vendor_location -> house_location (clean linen comes back), with
-              any declared missing quantity written off at the vendor location
+    inbound:  vendor_location -> house_location (clean linen comes back).
 
-    The hotel-wide total per item only decreases by explicitly declared
-    missing_quantity. Any failure rolls back the whole remito: no partial
-    remito or dangling movements are left behind.
+    Only the quantity that matches the vendor's recorded custody moves as an
+    ordinary transfer. Any excess or declared shortage becomes a separate
+    discrepancy row; it does not create or remove an owned-stock movement.
+    Any failure rolls back the whole remito and its movements.
     """
 
     if direction not in DIRECTIONS:
@@ -304,50 +313,37 @@ def create_remito(
                 raise LaundryVendorError("El faltante solo se puede informar en una entrega del lavadero")
 
             item = linen_service.get_linen_item(db, hotel_id=hotel_id, item_id=linen_item_id)
-            available = linen_service.current_stock(
+            ledger_available = linen_service.current_stock(
                 db, hotel_id=hotel_id, item_id=linen_item_id, location_id=source_location_id
             )
-            source_quantity = quantity + missing_quantity if direction == "inbound" else quantity
+            received_quantity = quantity
+            excess_quantity = Decimal("0.00")
             if direction == "inbound":
-                if missing_quantity > available:
-                    source_quantity = missing_quantity
-                else:
-                    available_for_return = available - missing_quantity
-                    if quantity > available_for_return:
-                        reconciliation_quantity = quantity - available_for_return
-                        linen_service.register_movement(
-                            db,
-                            hotel_id=hotel_id,
-                            item_id=linen_item_id,
-                            location_id=source_location_id,
-                            movement_type="adjustment",
-                            quantity=reconciliation_quantity,
-                            reason=(
-                                f"Conciliación de entrega mayor al saldo registrado "
-                                f"(remito {remito_number}, id {remito.id})"
-                            ),
-                            created_by_user_id=actor_user_id,
-                        )
-                        available += reconciliation_quantity
-                        if reconciliation_warnings is not None:
-                            reconciliation_warnings.append(
-                                "Entrega mayor a lo registrado: "
-                                f"se ajustó +{reconciliation_quantity} de «{item.name}» en el lavadero."
-                            )
-            if source_quantity > available:
+                if missing_quantity > 0 and quantity > ledger_available:
+                    raise LaundryVendorError(
+                        "El mismo artículo no puede tener faltante y excedente en un único remito."
+                    )
+                if quantity > ledger_available:
+                    excess_quantity = quantity - ledger_available
+                    received_quantity = ledger_available
+                if excess_quantity > 0 and reconciliation_warnings is not None:
+                    reconciliation_warnings.append(
+                        f"Excedente de {excess_quantity} de «{item.name}» pendiente de aprobación e identificación."
+                    )
+                if missing_quantity > 0 and reconciliation_warnings is not None:
+                    reconciliation_warnings.append(
+                        f"Faltante de {missing_quantity} de «{item.name}» pendiente de revisión."
+                    )
+            source_quantity = received_quantity if direction == "inbound" else quantity
+            if source_quantity > ledger_available:
                 location = linen_service.get_location(db, hotel_id=hotel_id, location_id=source_location_id)
-                diagnosis = (
-                    "Verificá que el remito de retiro previo de este mismo lavadero esté registrado "
-                    "y que el conteo inicial sea correcto."
-                    if direction == "inbound"
-                    else "Verificá el conteo inicial de la ubicación."
-                )
+                diagnosis = "Verificá el conteo inicial de la ubicación."
                 raise LaundryVendorError(
                     f"No hay suficiente «{item.name}» en la ubicación de origen «{location.name}»: "
-                    f"hay {available}, se necesitan {source_quantity}. {diagnosis}"
+                    f"hay {ledger_available}, se necesitan {source_quantity}. {diagnosis}"
                 )
 
-            if quantity > 0:
+            if source_quantity > 0:
                 movement_reason = f"Laundry remito {remito_number} ({direction})"
                 linen_service.register_movement(
                     db,
@@ -355,7 +351,7 @@ def create_remito(
                     item_id=linen_item_id,
                     location_id=source_location_id,
                     movement_type="out",
-                    quantity=quantity,
+                    quantity=source_quantity,
                     reason=movement_reason,
                     created_by_user_id=actor_user_id,
                 )
@@ -365,23 +361,8 @@ def create_remito(
                     item_id=linen_item_id,
                     location_id=dest_location_id,
                     movement_type="in",
-                    quantity=quantity,
+                    quantity=source_quantity,
                     reason=movement_reason,
-                    created_by_user_id=actor_user_id,
-                )
-
-            if missing_quantity > 0:
-                linen_service.register_movement(
-                    db,
-                    hotel_id=hotel_id,
-                    item_id=linen_item_id,
-                    location_id=source_location_id,
-                    movement_type="adjustment_out",
-                    quantity=missing_quantity,
-                    reason=(
-                        f"Faltante declarado en remito interno {remito.id} "
-                        f"(número de proveedor {remito_number})"
-                    ),
                     created_by_user_id=actor_user_id,
                 )
 
@@ -398,6 +379,8 @@ def create_remito(
             db.add(line_record)
             db.flush()
             if missing_quantity > 0:
+                # Keep the existing neutral follow-up audit trail while the
+                # discrepancy workflow separately governs stock/custody.
                 db.add(
                     SecurityAuditLog(
                         hotel_id=hotel_id,
@@ -415,6 +398,119 @@ def create_remito(
                         ),
                     )
                 )
+            if excess_quantity > 0:
+                discrepancy = LaundryRemitoDiscrepancy(
+                    hotel_id=hotel_id,
+                    remito_id=remito.id,
+                    remito_line_id=line_record.id,
+                    vendor_id=vendor_id,
+                    linen_item_id=linen_item_id,
+                    discrepancy_type="excess_return",
+                    quantity=excess_quantity,
+                    remaining_quantity=excess_quantity,
+                    source_location_id=house_location_id,
+                    custody_location_id=house_location_id,
+                    status="pending_approval",
+                    created_by_user_id=actor_user_id,
+                    created_at=utc_naive(hotel_business_now(db, hotel_id)),
+                )
+                db.add(discrepancy)
+                db.flush()
+                db.add(
+                    SecurityAuditLog(
+                        hotel_id=hotel_id,
+                        user_id=actor_user_id,
+                        action="laundry.discrepancy.created",
+                        resource_type="laundry_remito_discrepancy",
+                        resource_id=str(discrepancy.id),
+                        details=json.dumps(
+                            {
+                                "remito_id": remito.id,
+                                "remito_line_id": line_record.id,
+                                "type": "excess_return",
+                                "quantity": str(excess_quantity),
+                                "custody_location_id": house_location_id,
+                                "status": discrepancy.status,
+                            },
+                            sort_keys=True,
+                        ),
+                    )
+                )
+            if direction == "inbound" and source_quantity > 0:
+                _match_shortage_receipt(
+                    db,
+                    hotel_id=hotel_id,
+                    vendor_id=vendor_id,
+                    item_id=linen_item_id,
+                    remito=remito,
+                    line=line_record,
+                    quantity=source_quantity,
+                    actor_user_id=actor_user_id,
+                )
+            if missing_quantity > 0:
+                disputed_quantity = (
+                    db.query(func.coalesce(func.sum(LaundryRemitoDiscrepancy.remaining_quantity), 0))
+                    .filter(
+                        LaundryRemitoDiscrepancy.hotel_id == hotel_id,
+                        LaundryRemitoDiscrepancy.vendor_id == vendor_id,
+                        LaundryRemitoDiscrepancy.linen_item_id == linen_item_id,
+                        LaundryRemitoDiscrepancy.discrepancy_type == "short_return",
+                        LaundryRemitoDiscrepancy.status != "resolved",
+                    )
+                    .scalar()
+                )
+                still_recorded_at_vendor = linen_service.current_stock(
+                    db,
+                    hotel_id=hotel_id,
+                    item_id=linen_item_id,
+                    location_id=vendor.linen_location_id,
+                )
+                unallocated_vendor_quantity = max(
+                    Decimal(still_recorded_at_vendor) - Decimal(disputed_quantity or 0),
+                    Decimal("0.00"),
+                )
+                if missing_quantity > unallocated_vendor_quantity:
+                    raise LaundryVendorError(
+                        "El faltante supera la cantidad disponible del lavadero no vinculada a otra discrepancia. "
+                        "Registrá el remito de salida correspondiente o conciliá el faltante abierto."
+                    )
+                discrepancy = LaundryRemitoDiscrepancy(
+                    hotel_id=hotel_id,
+                    remito_id=remito.id,
+                    remito_line_id=line_record.id,
+                    vendor_id=vendor_id,
+                    linen_item_id=linen_item_id,
+                    discrepancy_type="short_return",
+                    quantity=missing_quantity,
+                    remaining_quantity=missing_quantity,
+                    source_location_id=vendor.linen_location_id,
+                    custody_location_id=None,
+                    status="pending_review",
+                    created_by_user_id=actor_user_id,
+                    created_at=utc_naive(hotel_business_now(db, hotel_id)),
+                )
+                db.add(discrepancy)
+                db.flush()
+                db.add(
+                    SecurityAuditLog(
+                        hotel_id=hotel_id,
+                        user_id=actor_user_id,
+                        action="laundry.discrepancy.created",
+                        resource_type="laundry_remito_discrepancy",
+                        resource_id=str(discrepancy.id),
+                        details=json.dumps(
+                            {
+                                "remito_id": remito.id,
+                                "remito_line_id": line_record.id,
+                                "type": "short_return",
+                                "quantity": str(missing_quantity),
+                                "custody_location_id": None,
+                                "status": discrepancy.status,
+                            },
+                            sort_keys=True,
+                        ),
+                    )
+                )
     except IntegrityError as exc:
         db.rollback()
         if is_duplicate_remito_integrity_error(exc):
@@ -427,6 +523,461 @@ def create_remito(
         raise
 
     return remito
+
+
+def list_discrepancies(
+    db: Session,
+    *,
+    hotel_id: int,
+    status: str | None = None,
+    discrepancy_type: str | None = None,
+) -> list[LaundryRemitoDiscrepancy]:
+    query = db.query(LaundryRemitoDiscrepancy).filter(LaundryRemitoDiscrepancy.hotel_id == hotel_id)
+    if status is not None:
+        query = query.filter(LaundryRemitoDiscrepancy.status == status)
+    if discrepancy_type is not None:
+        query = query.filter(LaundryRemitoDiscrepancy.discrepancy_type == discrepancy_type)
+    return query.order_by(LaundryRemitoDiscrepancy.created_at.desc(), LaundryRemitoDiscrepancy.id.desc()).all()
+
+
+def _get_discrepancy(db: Session, *, hotel_id: int, discrepancy_id: int) -> LaundryRemitoDiscrepancy:
+    row = (
+        db.query(LaundryRemitoDiscrepancy)
+        .filter(
+            LaundryRemitoDiscrepancy.hotel_id == hotel_id,
+            LaundryRemitoDiscrepancy.id == discrepancy_id,
+        )
+        .with_for_update(of=LaundryRemitoDiscrepancy)
+        .one_or_none()
+    )
+    if row is None:
+        raise LaundryDiscrepancyNotFound("No se encontró la discrepancia de lavandería.")
+    return row
+
+
+def _validate_action_input(*, reason: str, idempotency_key: str) -> tuple[str, str]:
+    normalized_reason = (reason or "").strip()
+    normalized_key = (idempotency_key or "").strip()
+    if not normalized_reason:
+        raise LaundryVendorError("El motivo es obligatorio.")
+    if len(normalized_reason) > 500:
+        raise LaundryVendorError("El motivo no puede superar 500 caracteres.")
+    if not normalized_key or len(normalized_key) > 128 or any(ord(char) < 33 for char in normalized_key):
+        raise LaundryVendorError("El Idempotency-Key debe tener entre 1 y 128 caracteres visibles.")
+    return normalized_reason, normalized_key
+
+
+def _action_replay(
+    db: Session,
+    *,
+    hotel_id: int,
+    discrepancy_id: int,
+    actor_user_id: int | None,
+    action_type: str,
+    reason: str,
+    idempotency_key: str,
+    resolution_code: str | None = None,
+    resolution_amount: Decimal | None = None,
+    resolution_currency_code: str | None = None,
+    quantity: Decimal | None = None,
+    remito_id: int | None = None,
+    remito_line_id: int | None = None,
+) -> LaundryRemitoDiscrepancy | None:
+    existing = (
+        db.query(LaundryDiscrepancyAction)
+        .filter(
+            LaundryDiscrepancyAction.hotel_id == hotel_id,
+            LaundryDiscrepancyAction.idempotency_key == idempotency_key,
+        )
+        .one_or_none()
+    )
+    if existing is None:
+        return None
+    expected = (
+        existing.discrepancy_id == discrepancy_id,
+        existing.actor_user_id == actor_user_id,
+        existing.action_type == action_type,
+        existing.reason == reason,
+        existing.resolution_code == resolution_code,
+        existing.resolution_amount == resolution_amount,
+        existing.resolution_currency_code == resolution_currency_code,
+        existing.quantity == quantity,
+        existing.remito_id == remito_id,
+        existing.remito_line_id == remito_line_id,
+    )
+    if not all(expected):
+        raise LaundryDiscrepancyConflict("El Idempotency-Key ya fue usado con otra acción o datos.")
+    return _get_discrepancy(db, hotel_id=hotel_id, discrepancy_id=discrepancy_id)
+
+
+def _audit_discrepancy(
+    db: Session,
+    *,
+    hotel_id: int,
+    discrepancy: LaundryRemitoDiscrepancy,
+    actor_user_id: int | None,
+    action: str,
+    details: dict,
+) -> None:
+    db.add(
+        SecurityAuditLog(
+            hotel_id=hotel_id,
+            user_id=actor_user_id,
+            action=action,
+            resource_type="laundry_remito_discrepancy",
+            resource_id=str(discrepancy.id),
+            details=json.dumps(details, sort_keys=True),
+            created_at=utc_naive(hotel_business_now(db, hotel_id)),
+        )
+    )
+
+
+def _record_discrepancy_action(
+    db: Session,
+    *,
+    row: LaundryRemitoDiscrepancy,
+    actor_user_id: int | None,
+    action_type: str,
+    action_name: str,
+    reason: str,
+    idempotency_key: str,
+    resolution_code: str | None = None,
+    resolution_amount: Decimal | None = None,
+    resolution_currency_code: str | None = None,
+    quantity: Decimal | None = None,
+    remito_id: int | None = None,
+    remito_line_id: int | None = None,
+) -> None:
+    db.add(
+        LaundryDiscrepancyAction(
+            hotel_id=row.hotel_id,
+            discrepancy_id=row.id,
+            action_type=action_type,
+            idempotency_key=idempotency_key,
+            reason=reason,
+            quantity=quantity,
+            resolution_code=resolution_code,
+            resolution_amount=resolution_amount,
+            resolution_currency_code=resolution_currency_code,
+            remito_id=remito_id,
+            remito_line_id=remito_line_id,
+            actor_user_id=actor_user_id,
+            created_at=utc_naive(hotel_business_now(db, row.hotel_id)),
+        )
+    )
+    db.flush()
+    _audit_discrepancy(
+        db,
+        hotel_id=row.hotel_id,
+        discrepancy=row,
+        actor_user_id=actor_user_id,
+        action=action_name,
+        details={
+            "type": row.discrepancy_type,
+            "quantity": str(quantity if quantity is not None else row.remaining_quantity),
+            "status": row.status,
+            "resolution": resolution_code,
+            "amount": str(resolution_amount) if resolution_amount is not None else None,
+            "currency": resolution_currency_code,
+            "remito_id": remito_id,
+            "remito_line_id": remito_line_id,
+            "reason": reason,
+        },
+    )
+
+
+def approve_discrepancy(
+    db: Session,
+    *,
+    hotel_id: int,
+    discrepancy_id: int,
+    actor_user_id: int | None,
+    reason: str,
+    idempotency_key: str,
+) -> LaundryRemitoDiscrepancy:
+    """Authorize review without creating or removing linen stock."""
+    normalized_reason, normalized_key = _validate_action_input(reason=reason, idempotency_key=idempotency_key)
+    row = _get_discrepancy(db, hotel_id=hotel_id, discrepancy_id=discrepancy_id)
+    replay = _action_replay(
+        db,
+        hotel_id=hotel_id,
+        discrepancy_id=discrepancy_id,
+        actor_user_id=actor_user_id,
+        action_type="approval",
+        reason=normalized_reason,
+        idempotency_key=normalized_key,
+    )
+    if replay is not None:
+        return replay
+
+    expected_status = "pending_approval" if row.discrepancy_type == "excess_return" else "pending_review"
+    next_status = "pending_identification" if row.discrepancy_type == "excess_return" else "pending_resolution"
+    if row.status != expected_status:
+        raise LaundryDiscrepancyConflict("La discrepancia ya fue revisada o no admite aprobación en su estado actual.")
+
+    row.status = next_status
+    row.reviewed_by_user_id = actor_user_id
+    row.reviewed_at = utc_naive(hotel_business_now(db, hotel_id))
+    row.review_reason = normalized_reason
+    db.flush()
+    _record_discrepancy_action(
+        db,
+        row=row,
+        actor_user_id=actor_user_id,
+        action_type="approval",
+        action_name="laundry.discrepancy.approved",
+        reason=normalized_reason,
+        idempotency_key=normalized_key,
+    )
+    return row
+
+
+def resolve_discrepancy(
+    db: Session,
+    *,
+    hotel_id: int,
+    discrepancy_id: int,
+    actor_user_id: int | None,
+    resolution_code: str,
+    reason: str,
+    idempotency_key: str,
+    resolution_amount: Decimal | None = None,
+    resolution_currency_code: str | None = None,
+) -> LaundryRemitoDiscrepancy:
+    """Apply an authorized owner-selected outcome to a remito discrepancy."""
+    normalized_reason, normalized_key = _validate_action_input(reason=reason, idempotency_key=idempotency_key)
+    normalized_resolution = (resolution_code or "").strip().lower()
+    if not normalized_resolution or len(normalized_resolution) > 80:
+        raise LaundryVendorError("La resolución es obligatoria y no puede superar 80 caracteres.")
+    normalized_currency = (resolution_currency_code or "").strip().upper() or None
+    if resolution_amount is not None and resolution_amount <= 0:
+        raise LaundryVendorError("El importe del crédito debe ser mayor que cero.")
+    if normalized_currency is not None and (len(normalized_currency) != 3 or not normalized_currency.isalpha()):
+        raise LaundryVendorError("La moneda del crédito debe tener tres letras.")
+    is_credit = normalized_resolution == "vendor_credit"
+    if is_credit != (resolution_amount is not None and normalized_currency is not None):
+        raise LaundryVendorError("El crédito requiere importe y moneda negociados; otras resoluciones no los aceptan.")
+
+    row = _get_discrepancy(db, hotel_id=hotel_id, discrepancy_id=discrepancy_id)
+    replay = _action_replay(
+        db,
+        hotel_id=hotel_id,
+        discrepancy_id=discrepancy_id,
+        actor_user_id=actor_user_id,
+        action_type="resolution",
+        reason=normalized_reason,
+        idempotency_key=normalized_key,
+        resolution_code=normalized_resolution,
+        resolution_amount=resolution_amount,
+        resolution_currency_code=normalized_currency,
+        quantity=Decimal(row.quantity),
+    )
+    if replay is not None:
+        return replay
+
+    now = utc_naive(hotel_business_now(db, hotel_id))
+    if row.discrepancy_type == "excess_return":
+        if row.status != "pending_identification":
+            raise LaundryDiscrepancyConflict("El excedente debe aprobarse antes de conciliarlo.")
+        if normalized_resolution not in {"hotel_stock", "return_to_laundry"}:
+            raise LaundryVendorError("El excedente debe asignarse al stock del hotel o marcarse para devolución.")
+        if row.remaining_quantity <= 0:
+            raise LaundryDiscrepancyConflict("El excedente ya fue conciliado.")
+        remito = (
+            db.query(LaundryRemito)
+            .filter(LaundryRemito.hotel_id == hotel_id, LaundryRemito.id == row.remito_id)
+            .one_or_none()
+        )
+        if remito is None or remito.house_location_id is None:
+            raise LaundryVendorError("El remito no tiene una ubicación hotelera válida para conciliar el excedente.")
+        if normalized_resolution == "hotel_stock":
+            linen_service.register_movement(
+                db,
+                hotel_id=hotel_id,
+                item_id=row.linen_item_id,
+                location_id=remito.house_location_id,
+                movement_type="in",
+                quantity=row.remaining_quantity,
+                reason=f"Excedente de lavandería confirmado como propio: {normalized_reason}",
+                created_by_user_id=actor_user_id,
+            )
+            row.custody_location_id = remito.house_location_id
+            row.remaining_quantity = Decimal("0.00")
+            row.status = "resolved"
+            row.resolved_by_user_id = actor_user_id
+            row.resolved_at = now
+        else:
+            row.status = "return_to_laundry"
+    else:
+        if row.status not in {"pending_resolution", "pending_claim", "awaiting_replacement"}:
+            raise LaundryDiscrepancyConflict("El faltante no admite otra resolución en su estado actual.")
+        if row.remaining_quantity <= 0:
+            raise LaundryDiscrepancyConflict("El faltante ya fue conciliado.")
+        allowed = {"vendor_claim", "vendor_custody", "loss", "replacement", "vendor_credit"}
+        if normalized_resolution not in allowed:
+            raise LaundryVendorError("Elegí reclamo, custodia del lavadero, pérdida, reposición o crédito negociado.")
+        vendor = _get_vendor(db, hotel_id=hotel_id, vendor_id=row.vendor_id)
+        if normalized_resolution in {"loss", "vendor_credit"}:
+            linen_service.register_movement(
+                db,
+                hotel_id=hotel_id,
+                item_id=row.linen_item_id,
+                location_id=row.source_location_id,
+                movement_type="adjustment_out",
+                quantity=row.remaining_quantity,
+                reason=f"Faltante de lavandería: {normalized_resolution}: {normalized_reason}",
+                created_by_user_id=actor_user_id,
+            )
+            row.remaining_quantity = Decimal("0.00")
+            row.status = "resolved"
+            row.custody_location_id = None
+            row.resolved_by_user_id = actor_user_id
+            row.resolved_at = now
+        elif normalized_resolution == "vendor_custody":
+            row.custody_location_id = vendor.linen_location_id
+            row.remaining_quantity = Decimal("0.00")
+            row.status = "resolved"
+            row.resolved_by_user_id = actor_user_id
+            row.resolved_at = now
+        elif normalized_resolution == "vendor_claim":
+            row.custody_location_id = vendor.linen_location_id
+            row.status = "pending_claim"
+            row.resolved_by_user_id = None
+            row.resolved_at = None
+        else:
+            row.custody_location_id = None
+            row.status = "awaiting_replacement"
+            row.resolved_by_user_id = None
+            row.resolved_at = None
+
+    row.resolution_code = normalized_resolution
+    row.resolution_reason = normalized_reason
+    row.resolution_amount = resolution_amount if is_credit else None
+    row.resolution_currency_code = normalized_currency if is_credit else None
+    row.resolution_recorded_by_user_id = actor_user_id
+    row.resolution_recorded_at = now
+    db.flush()
+    _record_discrepancy_action(
+        db,
+        row=row,
+        actor_user_id=actor_user_id,
+        action_type="resolution",
+        action_name="laundry.discrepancy.resolved" if row.status == "resolved" else "laundry.discrepancy.resolution_selected",
+        reason=normalized_reason,
+        idempotency_key=normalized_key,
+        resolution_code=normalized_resolution,
+        resolution_amount=resolution_amount,
+        resolution_currency_code=normalized_currency,
+        quantity=row.quantity,
+    )
+    return row
+
+
+def confirm_discrepancy_return_to_laundry(
+    db: Session,
+    *,
+    hotel_id: int,
+    discrepancy_id: int,
+    actor_user_id: int | None,
+    reason: str,
+    idempotency_key: str,
+) -> LaundryRemitoDiscrepancy:
+    """Record physical handover of unowned excess back to its laundry vendor."""
+    normalized_reason, normalized_key = _validate_action_input(reason=reason, idempotency_key=idempotency_key)
+    row = _get_discrepancy(db, hotel_id=hotel_id, discrepancy_id=discrepancy_id)
+    replay = _action_replay(
+        db,
+        hotel_id=hotel_id,
+        discrepancy_id=discrepancy_id,
+        actor_user_id=actor_user_id,
+        action_type="return_to_laundry",
+        reason=normalized_reason,
+        idempotency_key=normalized_key,
+        quantity=Decimal(row.quantity),
+    )
+    if replay is not None:
+        return replay
+    if row.discrepancy_type != "excess_return" or row.status != "return_to_laundry":
+        raise LaundryDiscrepancyConflict("Solo un excedente marcado para devolución puede registrarse como entregado.")
+    vendor = _get_vendor(db, hotel_id=hotel_id, vendor_id=row.vendor_id)
+    row.custody_location_id = vendor.linen_location_id
+    row.status = "returned_to_laundry"
+    row.returned_by_user_id = actor_user_id
+    row.returned_at = utc_naive(hotel_business_now(db, hotel_id))
+    row.return_reason = normalized_reason
+    row.remaining_quantity = Decimal("0.00")
+    db.flush()
+    _record_discrepancy_action(
+        db,
+        row=row,
+        actor_user_id=actor_user_id,
+        action_type="return_to_laundry",
+        action_name="laundry.discrepancy.returned_to_laundry",
+        reason=normalized_reason,
+        idempotency_key=normalized_key,
+        quantity=row.quantity,
+    )
+    return row
+
+
+def _match_shortage_receipt(
+    db: Session,
+    *,
+    hotel_id: int,
+    vendor_id: int,
+    item_id: int,
+    remito: LaundryRemito,
+    line: LaundryRemitoLine,
+    quantity: Decimal,
+    actor_user_id: int | None,
+) -> None:
+    """Match physical receipt quantities to open laundry claims/replacements."""
+    remaining_receipt = quantity
+    rows = (
+        db.query(LaundryRemitoDiscrepancy)
+        .filter(
+            LaundryRemitoDiscrepancy.hotel_id == hotel_id,
+            LaundryRemitoDiscrepancy.vendor_id == vendor_id,
+            LaundryRemitoDiscrepancy.linen_item_id == item_id,
+            LaundryRemitoDiscrepancy.discrepancy_type == "short_return",
+            LaundryRemitoDiscrepancy.status.in_(
+                {"pending_review", "pending_resolution", "pending_claim", "awaiting_replacement"}
+            ),
+            LaundryRemitoDiscrepancy.remaining_quantity > 0,
+        )
+        .order_by(LaundryRemitoDiscrepancy.created_at.asc(), LaundryRemitoDiscrepancy.id.asc())
+        .with_for_update()
+        .all()
+    )
+    for row in rows:
+        if remaining_receipt <= 0:
+            break
+        received = min(remaining_receipt, Decimal(row.remaining_quantity)).quantize(Decimal("0.01"))
+        row.remaining_quantity = (Decimal(row.remaining_quantity) - received).quantize(Decimal("0.01"))
+        action_type = "claim_return" if row.status == "pending_claim" else "replacement_receipt"
+        if row.remaining_quantity == 0:
+            row.status = "resolved"
+            row.custody_location_id = remito.house_location_id
+            row.resolved_by_user_id = actor_user_id
+            row.resolved_at = utc_naive(hotel_business_now(db, hotel_id))
+        reason = f"Recepción de {received} mediante remito {remito.remito_number}."
+        action_key = f"remito-{remito.id}-line-{line.id}-discrepancy-{row.id}"
+        _record_discrepancy_action(
+            db,
+            row=row,
+            actor_user_id=actor_user_id,
+            action_type=action_type,
+            action_name="laundry.discrepancy.claim_quantity_returned"
+            if action_type == "claim_return"
+            else "laundry.discrepancy.replacement_received",
+            reason=reason,
+            idempotency_key=action_key,
+            resolution_code=row.resolution_code,
+            quantity=received,
+            remito_id=remito.id,
+            remito_line_id=line.id,
+        )
+        remaining_receipt = (remaining_receipt - received).quantize(Decimal("0.01"))
 
 
 def list_remitos(
@@ -480,10 +1031,34 @@ def vendor_balance(db: Session, *, hotel_id: int, vendor_id: int) -> list[dict]:
     balances = []
     for (item_id,) in item_ids:
         item = linen_service.get_linen_item(db, hotel_id=hotel_id, item_id=item_id)
-        quantity = linen_service.current_stock(
+        ledger_quantity = linen_service.current_stock(
             db, hotel_id=hotel_id, item_id=item_id, location_id=vendor.linen_location_id
         )
-        balances.append({"linen_item_id": item.id, "linen_item_name": item.name, "quantity": quantity})
+        quantity = linen_service.available_stock(
+            db, hotel_id=hotel_id, item_id=item_id, location_id=vendor.linen_location_id
+        )
+        pending_quantity = (
+            db.query(func.coalesce(func.sum(LaundryRemitoDiscrepancy.remaining_quantity), 0))
+            .filter(
+                LaundryRemitoDiscrepancy.hotel_id == hotel_id,
+                LaundryRemitoDiscrepancy.vendor_id == vendor_id,
+                LaundryRemitoDiscrepancy.linen_item_id == item_id,
+                LaundryRemitoDiscrepancy.discrepancy_type == "short_return",
+                LaundryRemitoDiscrepancy.status.in_(
+                    {"pending_review", "pending_resolution", "pending_claim", "awaiting_replacement"}
+                ),
+            )
+            .scalar()
+        )
+        balances.append(
+            {
+                "linen_item_id": item.id,
+                "linen_item_name": item.name,
+                "quantity": quantity,
+                "ledger_quantity": ledger_quantity,
+                "pending_shortage_quantity": Decimal(pending_quantity or 0).quantize(Decimal("0.01")),
+            }
+        )
     return balances
 
 

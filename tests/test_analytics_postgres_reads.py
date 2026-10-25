@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 
 from sqlalchemy import event
 
@@ -19,7 +20,7 @@ from app.models.reservation import (
     ReservationStatusEnum,
 )
 from app.models.room import Room, RoomCategory, RoomStatusEnum
-from app.services.analytics_service import build_home_payload
+from app.services.analytics_service import build_home_payload, build_room_detail_payload
 from app.services.analytics_facts import refresh_fact_reservation_daily
 
 
@@ -195,3 +196,59 @@ def test_company_reservation_fact_refresh_persists_company_channel_on_postgres(p
 
     assert result.inserted == 1
     assert fact.channel_code == ReservationChannelCodeEnum.COMPANY
+
+
+def test_room_detail_analytics_does_not_load_reservation_history_on_postgres(pg_session):
+    db = pg_session
+    hotel = HotelConfiguration(id=981103, hotel_name="Synthetic Room Detail Analytics")
+    db.add(hotel)
+    db.flush()
+
+    category = RoomCategory(
+        hotel_id=hotel.id,
+        name="Room Detail Synthetic",
+        code="RDS",
+        base_price_per_night=100,
+        max_occupancy=2,
+    )
+    db.add(category)
+    db.flush()
+    room = Room(
+        hotel_id=hotel.id,
+        room_number="RDS-01",
+        floor=1,
+        category_id=category.id,
+        status=RoomStatusEnum.AVAILABLE,
+        is_active=True,
+    )
+    db.add(room)
+    db.flush()
+
+    statements: list[str] = []
+
+    def capture(_connection, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement.lower())
+
+    connection = db.get_bind()
+    event.listen(connection, "before_cursor_execute", capture)
+    try:
+        payload = build_room_detail_payload(
+            db,
+            hotel_id=hotel.id,
+            room_id=room.id,
+            date_from=date(2026, 4, 1),
+            date_to=date(2026, 4, 5),
+            compare_previous=False,
+            compare_yoy=False,
+            currency_display="ARS",
+        )
+    finally:
+        event.remove(connection, "before_cursor_execute", capture)
+
+    assert payload["data"]["room"]["room_number"] == "RDS-01"
+    assert payload["data"]["room"]["category_name"] == "Room Detail Synthetic"
+    assert not [
+        statement
+        for statement in statements
+        if re.search(r"\b(?:from|join)\s+(?:public\.)?(?:reservations|transactions)\b", statement)
+    ]

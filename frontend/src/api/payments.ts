@@ -8,12 +8,19 @@ export type PaymentRequest = {
   reservation_id: number;
   amount: number;
   payment_method: PaymentMethod;
+  /** Total cash physically handed over, including any configured surcharge. */
+  cash_received_amount?: number;
+  /** Voluntary amount retained as a tip, separate from the payment amount. */
+  cash_tip_amount?: number;
   transaction_type: TransactionType;
   currency?: string;
   description?: string;
   manual_reference?: string;
   refund_of_transaction_id?: number;
+  refund_component?: "payment" | "rounding_credit";
   refund_reason?: string;
+  /** Signed backend FX/surcharge snapshot for this exact individual payment. */
+  payment_quote_token?: string;
   company_night_charge_refund_allocations?: Array<{
     charge_id: number;
     amount: number;
@@ -37,6 +44,21 @@ export type PaymentSummary = {
   /** Confirmed OTA prepayment; shown for revenue context and never cash. */
   ota_prepaid_amount?: number | null;
   balance_due: number | null;
+  rounding_credit_by_currency?: Array<{
+    currency_code: string;
+    issued_amount: number;
+    refunded_amount: number;
+    open_amount: number;
+  }>;
+  rounding_credit_sources?: Array<{
+    source_transaction_id: number;
+    currency_code: string;
+    issued_amount: number;
+    refunded_amount: number;
+    open_amount: number;
+  }>;
+  /** Internal corrections visible to authorized payment managers. */
+  payment_corrections?: PaymentCorrectionHistory[];
   // total_amount/balance_due only reflect the reservation's base price; they
   // ignore consumption charges (BillingAdjustment). operational_* includes
   // them and is the amount actually owed -- use it for collecting payment.
@@ -58,12 +80,19 @@ export type PaymentSummary = {
     fx_rate_snapshot?: number | null;
     gross_amount?: number;
     fee_amount?: number;
+    cash_received_amount?: number | null;
+    cash_change_amount?: number | null;
+    cash_tip_amount?: number | null;
     currency: string;
     method: string;
     type: string;
     status: string;
+    group_payment_batch_id?: number | null;
     manual_reference?: string | null;
     refund_of_transaction_id?: number | null;
+    rounding_credit_amount?: number | null;
+    credit_refund_amount?: number | null;
+    refund_component?: "payment" | "rounding_credit" | null;
     refund_reason?: string | null;
     collected_before?: boolean;
     collected_on?: string | null;
@@ -71,6 +100,34 @@ export type PaymentSummary = {
     created_at: string;
   }>;
 };
+
+export type PaymentCorrectionType = "reassign" | "duplicate_reversal";
+
+export type PaymentCorrectionRequest =
+  | {
+      correction_type: "reassign";
+      destination_confirmation_code: string;
+      reason: string;
+    }
+  | {
+      correction_type: "duplicate_reversal";
+      reason: string;
+    };
+
+export type PaymentCorrectionResponse = {
+  correction_id: number;
+  correction_type: PaymentCorrectionType;
+  source_transaction_id: number;
+  source_reservation_id: number;
+  target_reservation_id: number | null;
+  replacement_transaction_id: number | null;
+  reason: string;
+  actor_user_id?: number | null;
+  created_at: string;
+  replayed: boolean;
+};
+
+export type PaymentCorrectionHistory = Omit<PaymentCorrectionResponse, "replayed">;
 
 export type PaymentReceiptData = {
   id: number;
@@ -84,6 +141,9 @@ export type PaymentReceiptData = {
   fx_rate_snapshot?: number | null;
   gross_amount: number | string;
   fee_amount: number | string;
+  cash_received_amount?: number | string | null;
+  cash_change_amount?: number | string | null;
+  cash_tip_amount?: number | string | null;
   currency: string;
   method: string;
   type: string;
@@ -173,6 +233,24 @@ export const newPaymentIdempotencyKey = (reservationId: number) => {
   const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `ui-payment-${reservationId}-${requestId}`;
 };
+
+export const newPaymentCorrectionIdempotencyKey = (transactionId: number) => {
+  const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `ui-payment-correction-${transactionId}-${requestId}`;
+};
+
+export const correctPaymentTransaction = (
+  transactionId: number,
+  payload: PaymentCorrectionRequest,
+  session?: SessionLike,
+  idempotencyKey: string = newPaymentCorrectionIdempotencyKey(transactionId)
+) =>
+  apiFetch<PaymentCorrectionResponse>(`/api/payments/transactions/${transactionId}/correction`, {
+    method: "POST",
+    data: payload,
+    session,
+    headers: { "Idempotency-Key": idempotencyKey }
+  });
 
 export const makePayment = (
   payload: PaymentRequest,

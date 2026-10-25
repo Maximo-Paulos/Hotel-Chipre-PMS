@@ -6,7 +6,7 @@ cached, process-local reference list for the app.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from functools import lru_cache
 import ipaddress
 import os
@@ -70,6 +70,23 @@ def normalize_timezone(timezone_name: str) -> str:
     if not is_valid_timezone(candidate):
         raise ValueError(f"Invalid timezone: {timezone_name}")
     return candidate
+
+
+def hotel_local_date_bounds(
+    start_date: date,
+    end_date: date,
+    timezone_name: str,
+) -> tuple[datetime, datetime]:
+    """Return a half-open UTC range for inclusive hotel-local dates.
+
+    Transaction timestamp columns store UTC without timezone metadata, so the
+    result is naive. Compute calendar boundaries in the hotel's zone first so
+    daylight-saving days can span 23 or 25 hours.
+    """
+    zone = ZoneInfo(normalize_timezone(timezone_name))
+    start = datetime.combine(start_date, time.min, tzinfo=zone).astimezone(timezone.utc)
+    end = datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=zone).astimezone(timezone.utc)
+    return start.replace(tzinfo=None), end.replace(tzinfo=None)
 
 
 def local_today(timezone_name: str | None) -> date:

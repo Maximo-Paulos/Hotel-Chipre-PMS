@@ -12,6 +12,7 @@ export const KNOWN_NOTIFICATION_EVENT_TYPES: { value: string; label: string }[] 
   { value: "reservation.no_show", label: "No-show" },
   { value: "reservation.checked_in", label: "Check-in realizado" },
   { value: "reservation.checked_out", label: "Check-out realizado" },
+  { value: "payment_link.revocation_failed", label: "Link de pago pendiente de revisar" },
   { value: "guest.restriction.created", label: "Restricción de huésped creada" },
   { value: "guest.restriction.resolved", label: "Restricción de huésped resuelta" },
   { value: "guest.restriction.overridden", label: "Restricción de huésped anulada" },

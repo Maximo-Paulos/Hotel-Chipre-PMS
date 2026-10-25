@@ -18,9 +18,9 @@ from app.services.hotel_outbound_email_service import (
     ensure_hotel_gmail_ready,
     send_hotel_email,
 )
+from app.services.payment_receipt_pdf import generate_payment_receipt_pdf
 from app.services.payment_service import PaymentNotFoundError, get_payment_receipt_data
 from app.services.timezones import business_clock_enabled_for_hotel
-from app.services.payment_receipt_pdf import generate_payment_receipt_pdf
 
 
 class PaymentReceiptEmailError(Exception):
@@ -128,6 +128,12 @@ def _receipt_email_content(receipt: dict) -> tuple[str, str]:
             lines.append(f"Movimiento original: #{receipt['refund_of_transaction_id']}")
     else:
         lines.append(f"Importe: {_format_money(receipt['gross_amount'], receipt['currency'])}")
+        if receipt.get("cash_received_amount") is not None:
+            lines.append(f"Efectivo entregado: {_format_money(receipt['cash_received_amount'], receipt['currency'])}")
+            if Decimal(str(receipt.get("cash_tip_amount") or 0)) > Decimal("0.00"):
+                lines.append(f"Propina: {_format_money(receipt['cash_tip_amount'], receipt['currency'])}")
+            if receipt.get("cash_change_amount") is not None:
+                lines.append(f"Vuelto: {_format_money(receipt['cash_change_amount'], receipt['currency'])}")
         fee = Decimal(str(receipt.get("fee_amount") or 0)).copy_abs().quantize(Decimal("0.01"))
         if fee > Decimal("0.00"):
             lines.append(f"Cargo del medio de pago: {_format_money(fee, receipt['currency'])}")

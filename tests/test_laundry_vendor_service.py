@@ -4,17 +4,23 @@ from decimal import Decimal
 import pytest
 
 from app.models.hotel_config import HotelConfiguration
+from app.models.laundry_discrepancy import LaundryDiscrepancyAction, LaundryRemitoDiscrepancy
 from app.models.laundry_vendor import LaundryRemito, LaundryRemitoLine
 from app.models.linen import LinenMovement
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.laundry_vendor_service import (
+    LaundryDiscrepancyConflict,
     LaundryVendorError,
     DuplicateLaundryRemitoError,
+    approve_discrepancy,
+    confirm_discrepancy_return_to_laundry,
     create_remito,
     create_vendor,
     list_remitos,
+    list_discrepancies,
     list_vendor_prices,
     mark_vendor_settlement_paid,
+    resolve_discrepancy,
     set_vendor_price,
     vendor_balance,
     vendor_settlements,
@@ -361,7 +367,7 @@ def test_vendor_balance_reflects_partial_return(db):
     assert balance[0]["quantity"] == Decimal("5.00")
 
 
-def test_inbound_remito_records_declared_missing_linen_as_audited_adjustment(db):
+def test_inbound_remito_keeps_declared_missing_linen_pending_without_adjustment(db):
     _seed_hotels(db)
     item = create_linen_item(db, hotel_id=1, name="Sabanas faltantes", unit="unit", min_quantity=None, active=True)
     house = create_location(db, hotel_id=1, name="Deposito faltantes")
@@ -388,15 +394,14 @@ def test_inbound_remito_records_declared_missing_linen_as_audited_adjustment(db)
     assert inbound.lines[0].quantity == Decimal("18.00")
     assert inbound.lines[0].missing_quantity == Decimal("2.00")
     assert current_stock(db, hotel_id=1, item_id=item.id, location_id=house.id) == Decimal("18.00")
-    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=vendor.linen_location_id) == Decimal("0.00")
-    missing_adjustment = (
-        db.query(LinenMovement)
-        .filter_by(hotel_id=1, item_id=item.id, location_id=vendor.linen_location_id, movement_type="adjustment_out")
-        .one()
-    )
-    assert missing_adjustment.quantity == Decimal("2.00")
-    assert missing_adjustment.created_by_user_id is None
-    assert "R-FALT-IN" in missing_adjustment.reason
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=vendor.linen_location_id) == Decimal("2.00")
+    discrepancy = list_discrepancies(db, hotel_id=1, status="pending_review")[0]
+    assert discrepancy.quantity == Decimal("2.00")
+    assert discrepancy.remaining_quantity == Decimal("2.00")
+    assert discrepancy.custody_location_id is None
+    assert db.query(LinenMovement).filter_by(
+        hotel_id=1, item_id=item.id, location_id=vendor.linen_location_id, movement_type="adjustment_out"
+    ).count() == 0
 
 
 def test_inbound_remito_can_record_all_items_missing_and_rejects_over_reconciliation(db):
@@ -423,9 +428,10 @@ def test_inbound_remito_can_record_all_items_missing_and_rejects_over_reconcilia
     )
     db.commit()
     assert inbound.lines[0].quantity == Decimal("0.00")
-    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=vendor.linen_location_id) == Decimal("0.00")
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=vendor.linen_location_id) == Decimal("4.00")
+    assert list_discrepancies(db, hotel_id=1, status="pending_review")[0].remaining_quantity == Decimal("4.00")
 
-    with pytest.raises(LaundryVendorError, match="No hay suficiente"):
+    with pytest.raises(LaundryVendorError, match="faltante supera la cantidad disponible"):
         create_remito(
             db, hotel_id=1, vendor_id=vendor.id, direction="inbound", remito_number="R-MISSING-OVER",
             remito_date=datetime(2026, 7, 4, tzinfo=timezone.utc), house_location_id=house.id,
@@ -454,7 +460,7 @@ def test_outbound_remito_rejects_missing_quantity(db):
         )
 
 
-def test_inbound_with_no_vendor_stock_reconciles_and_returns_audited_warning(db):
+def test_inbound_with_no_vendor_stock_records_excess_pending_identification(db):
     _seed_hotels(db)
     item = create_linen_item(db, hotel_id=1, name="Sabanas sin retiro", unit="unit", min_quantity=None, active=True)
     house = create_location(db, hotel_id=1, name="Deposito sin retiro")
@@ -473,13 +479,15 @@ def test_inbound_with_no_vendor_stock_reconciles_and_returns_audited_warning(db)
     assert len(inbound.lines) == 1
     assert inbound.lines[0].quantity == Decimal("2.00")
     assert warnings == [
-        "Entrega mayor a lo registrado: se ajustó +2.00 de «Sabanas sin retiro» en el lavadero."
+        "Excedente de 2.00 de «Sabanas sin retiro» pendiente de aprobación e identificación."
     ]
-    adjustment = db.query(LinenMovement).filter_by(movement_type="adjustment").one()
-    assert adjustment.created_by_user_id is None
-    assert "R-IN-SIN-RETIRO" in adjustment.reason
+    discrepancy = list_discrepancies(db, hotel_id=1, discrepancy_type="excess_return")[0]
+    assert discrepancy.status == "pending_approval"
+    assert discrepancy.quantity == Decimal("2.00")
+    assert discrepancy.custody_location_id == house.id
+    assert db.query(LinenMovement).filter_by(movement_type="adjustment").count() == 0
     assert list_remitos(db, hotel_id=1, vendor_id=vendor.id) == [inbound]
-    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=house.id) == Decimal("2.00")
+    assert current_stock(db, hotel_id=1, item_id=item.id, location_id=house.id) == Decimal("0.00")
     assert current_stock(db, hotel_id=1, item_id=item.id, location_id=vendor.linen_location_id) == Decimal("0.00")
 
 

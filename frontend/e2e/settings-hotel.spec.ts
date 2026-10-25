@@ -126,3 +126,48 @@ test("owner can configure and persist the FX market and side for each conversion
     }
   }
 });
+
+test("owner can save and reload the foreign-payment conversion policy", async ({ page }, testInfo: TestInfo) => {
+  const ownerSession = await loginAsStepUpOwner(page, "fx-rounding-policy", testInfo.project.name);
+  let lastTotpStep = ownerSession.lastTotpStep;
+  let policyMayNeedRestore = false;
+
+  const savePolicy = async (policy: string) => {
+    await page.getByTestId("fx-rounding-policy").selectOption(policy);
+    const updateResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/config/"
+        && response.request().method() === "PATCH"
+        && response.status() === 200;
+    });
+    await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Confirmá que sos vos" })).toBeVisible();
+    lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
+    const updateResponse = await updateResponsePromise;
+    expect(updateResponse.status()).toBe(200);
+    await expect(page.getByText("Cambios guardados.", { exact: true })).toBeVisible();
+  };
+
+  try {
+    await page.goto("/settings/hotel");
+    const policy = page.getByTestId("fx-rounding-policy");
+    await expect(policy).toHaveValue("keep_remainder");
+    await expect(policy.locator("option")).toHaveCount(5);
+    await expect(page.getByTestId("fx-rounding-setting")).toContainText("El estimador es orientativo");
+    await expect(policy.locator('option[value="round_up"]')).toContainText("entero superior");
+    await expect(policy.locator('option[value="round_down"]')).toContainText("entero inferior");
+    await expect(policy.locator('option[value="nearest_ten"]')).toContainText("múltiplo de 10 más cercano");
+    await expect(policy.locator('option[value="exact"]')).toContainText("importe convertido exacto, incluidos centavos");
+    await expect(policy.locator('option[value="keep_remainder"]')).toContainText("cobrarlo en otra moneda");
+
+    policyMayNeedRestore = true;
+    await savePolicy("exact");
+    await page.reload();
+    await expect(page.getByTestId("fx-rounding-policy")).toHaveValue("exact");
+  } finally {
+    if (policyMayNeedRestore) {
+      await page.goto("/settings/hotel");
+      await savePolicy("keep_remainder");
+    }
+  }
+});

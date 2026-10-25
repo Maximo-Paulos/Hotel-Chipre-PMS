@@ -5,6 +5,7 @@ from datetime import date
 from pydantic import BaseModel, Field
 from typing import Optional
 from app.models.room import RoomHousekeepingStatusEnum, RoomStatusEnum
+from app.models.room_block import RoomBlockReasonEnum
 
 
 # ── RoomCategory ──
@@ -135,6 +136,7 @@ class HousekeepingBoardRoomRead(BaseModel):
     has_departure_today: bool
     has_stayover_today: bool
     maintenance_blocked: bool
+    active_block_reasons: list[RoomBlockReasonEnum] = Field(default_factory=list)
 
 
 class HousekeepingBoardRead(BaseModel):

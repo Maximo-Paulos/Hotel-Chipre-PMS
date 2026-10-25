@@ -22,9 +22,14 @@ from app.database import get_db
 from app.dependencies.auth import AuthContext, require_all_permissions, require_any_permission, require_permission
 from app.services.laundry_vendor_service import (
     LaundryVendorError,
+    LaundryDiscrepancyConflict,
+    LaundryDiscrepancyNotFound,
     DuplicateLaundryRemitoError,
+    approve_discrepancy,
+    confirm_discrepancy_return_to_laundry,
     create_remito,
     create_vendor,
+    list_discrepancies,
     list_remitos,
     list_vendor_prices,
     list_vendors,
@@ -35,6 +40,7 @@ from app.services.laundry_vendor_service import (
     vendor_balance,
     vendor_settlements,
     vendor_spend,
+    resolve_discrepancy,
     is_duplicate_remito_integrity_error,
 )
 from app.services.laundry_missing_followup_service import (
@@ -50,18 +56,22 @@ from app.services.linen_service import (
     create_linen_item,
     create_location as create_linen_location,
     current_stock as current_linen_stock,
+    available_stock as available_linen_stock,
     delete_linen_item,
     linen_summary,
     list_linen_items,
     list_locations as list_linen_locations,
     LinenIdempotencyConflict,
     register_movement as register_linen_movement,
+    retire_linen,
     register_opening_counts,
     set_location_minimum,
     transfer_linen_stock,
 )
 from app.services.permission_service import (
     PERMISSION_LAUNDRY_MANAGE_VENDORS,
+    PERMISSION_LAUNDRY_DISCREPANCY_APPROVE,
+    PERMISSION_LAUNDRY_MOVE,
     PERMISSION_LAUNDRY_OPERATE_REMITOS,
     PERMISSION_LAUNDRY_PRICE_MANAGE,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
@@ -164,6 +174,70 @@ class RemitoCreateResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class LaundryDiscrepancyRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    hotel_id: int
+    remito_id: int
+    remito_line_id: int
+    vendor_id: int
+    linen_item_id: int
+    discrepancy_type: str
+    quantity: Decimal
+    remaining_quantity: Decimal
+    source_location_id: int
+    custody_location_id: Optional[int] = None
+    status: str
+    created_by_user_id: Optional[int] = None
+    created_at: datetime
+    reviewed_by_user_id: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
+    review_reason: Optional[str] = None
+    resolution_code: Optional[str] = None
+    resolution_reason: Optional[str] = None
+    resolution_amount: Optional[Decimal] = None
+    resolution_currency_code: Optional[str] = None
+    resolution_recorded_by_user_id: Optional[int] = None
+    resolution_recorded_at: Optional[datetime] = None
+    resolved_by_user_id: Optional[int] = None
+    resolved_at: Optional[datetime] = None
+    returned_by_user_id: Optional[int] = None
+    returned_at: Optional[datetime] = None
+    return_reason: Optional[str] = None
+
+
+class LaundryDiscrepancyAction(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class LaundryDiscrepancyResolve(LaundryDiscrepancyAction):
+    resolution_code: str = Field(min_length=1, max_length=80)
+    resolution_amount: Optional[Decimal] = Field(default=None, gt=0)
+    resolution_currency_code: Optional[str] = Field(default=None, pattern="^[A-Za-z]{3}$")
+
+
+class LinenRetirementCreate(BaseModel):
+    linen_item_id: int
+    location_id: int
+    quantity: Decimal = Field(gt=0)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class LinenRetirementRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    hotel_id: int
+    item_id: int
+    location_id: Optional[int] = None
+    movement_type: str
+    quantity: Decimal
+    reason: Optional[str] = None
+    created_by_user_id: Optional[int] = None
+    created_at: datetime
+
+
 def _remito_reads(db: Session, *, hotel_id: int, remitos: list) -> list[RemitoRead]:
     labels = remito_creator_labels(db, hotel_id=hotel_id, remitos=remitos)
     results: list[RemitoRead] = []
@@ -200,6 +274,8 @@ class VendorBalanceLine(BaseModel):
     linen_item_id: int
     linen_item_name: str
     quantity: Decimal
+    ledger_quantity: Decimal = Decimal("0.00")
+    pending_shortage_quantity: Decimal = Decimal("0.00")
 
 
 class VendorSpendLine(BaseModel):
@@ -431,21 +507,27 @@ def get_current_laundry_linen_stock(
     ),
 ):
     try:
-        quantity = current_linen_stock(db, hotel_id=context.hotel_id, item_id=item_id, location_id=location_id)
+        quantity = available_linen_stock(db, hotel_id=context.hotel_id, item_id=item_id, location_id=location_id)
+        ledger_quantity = current_linen_stock(db, hotel_id=context.hotel_id, item_id=item_id, location_id=location_id)
     except LinenError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-    return {"item_id": item_id, "quantity": quantity}
+    return {"item_id": item_id, "quantity": quantity, "ledger_quantity": ledger_quantity}
 
 
 class LinenLocationBalanceRead(BaseModel):
     location_id: int
     current_quantity: Decimal
+    ledger_quantity: Decimal = Decimal("0.00")
+    pending_excess_quantity: Decimal = Decimal("0.00")
     has_movements: bool
 
 
 class LinenSummaryEntry(BaseModel):
     item: LinenItemRead
     current_quantity: Decimal
+    ledger_quantity: Decimal = Decimal("0.00")
+    pending_excess_quantity: Decimal = Decimal("0.00")
+    pending_shortage_quantity: Decimal = Decimal("0.00")
     min_quantity: Optional[Decimal] = None
     location_balances: list[LinenLocationBalanceRead] = Field(default_factory=list)
 
@@ -782,6 +864,161 @@ def list_laundry_remitos(
     if context.operational_role == "housekeeping":
         return [_housekeeping_remito(remito) for remito in remito_reads]
     return remito_reads
+
+
+@router.get("/discrepancies", response_model=list[LaundryDiscrepancyRead])
+def get_laundry_discrepancies(
+    status_filter: Optional[str] = None,
+    discrepancy_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(
+        require_any_permission(
+            PERMISSION_LAUNDRY_DISCREPANCY_APPROVE,
+            PERMISSION_LAUNDRY_OPERATE_REMITOS,
+            PERMISSION_LAUNDRY_MANAGE_VENDORS,
+        )
+    ),
+):
+    return list_discrepancies(
+        db,
+        hotel_id=context.hotel_id,
+        status=status_filter,
+        discrepancy_type=discrepancy_type,
+    )
+
+
+@router.post("/discrepancies/{discrepancy_id}/approve", response_model=LaundryDiscrepancyRead)
+def approve_laundry_discrepancy(
+    discrepancy_id: int,
+    data: LaundryDiscrepancyAction,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1, max_length=128),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_DISCREPANCY_APPROVE)),
+):
+    try:
+        discrepancy = approve_discrepancy(
+            db,
+            hotel_id=context.hotel_id,
+            discrepancy_id=discrepancy_id,
+            actor_user_id=context.user_id,
+            reason=data.reason,
+            idempotency_key=idempotency_key,
+        )
+        db.commit()
+        db.refresh(discrepancy)
+        return discrepancy
+    except LaundryDiscrepancyNotFound as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LaundryDiscrepancyConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except LaundryVendorError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/discrepancies/{discrepancy_id}/resolve", response_model=LaundryDiscrepancyRead)
+def resolve_laundry_discrepancy(
+    discrepancy_id: int,
+    data: LaundryDiscrepancyResolve,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1, max_length=128),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_DISCREPANCY_APPROVE)),
+):
+    try:
+        discrepancy = resolve_discrepancy(
+            db,
+            hotel_id=context.hotel_id,
+            discrepancy_id=discrepancy_id,
+            actor_user_id=context.user_id,
+            resolution_code=data.resolution_code,
+            reason=data.reason,
+            idempotency_key=idempotency_key,
+            resolution_amount=data.resolution_amount,
+            resolution_currency_code=data.resolution_currency_code,
+        )
+        db.commit()
+        db.refresh(discrepancy)
+        return discrepancy
+    except LaundryDiscrepancyNotFound as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LaundryDiscrepancyConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except LaundryVendorError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LinenError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post(
+    "/discrepancies/{discrepancy_id}/return-to-laundry",
+    response_model=LaundryDiscrepancyRead,
+)
+def return_laundry_discrepancy_to_vendor(
+    discrepancy_id: int,
+    data: LaundryDiscrepancyAction,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1, max_length=128),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_DISCREPANCY_APPROVE)),
+):
+    try:
+        discrepancy = confirm_discrepancy_return_to_laundry(
+            db,
+            hotel_id=context.hotel_id,
+            discrepancy_id=discrepancy_id,
+            actor_user_id=context.user_id,
+            reason=data.reason,
+            idempotency_key=idempotency_key,
+        )
+        db.commit()
+        db.refresh(discrepancy)
+        return discrepancy
+    except LaundryDiscrepancyNotFound as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LaundryDiscrepancyConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except LaundryVendorError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/retirements", response_model=LinenRetirementRead, status_code=status.HTTP_201_CREATED)
+def retire_laundry_linen(
+    data: LinenRetirementCreate,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=1, max_length=128),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MOVE)),
+):
+    try:
+        movement = retire_linen(
+            db,
+            hotel_id=context.hotel_id,
+            item_id=data.linen_item_id,
+            location_id=data.location_id,
+            quantity=data.quantity,
+            reason=data.reason,
+            created_by_user_id=context.user_id,
+            idempotency_key=idempotency_key,
+        )
+        db.commit()
+        db.refresh(movement)
+        return movement
+    except LinenNotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LinenIdempotencyConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except LinenError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/vendors/{vendor_id}/balance", response_model=list[VendorBalanceLine])

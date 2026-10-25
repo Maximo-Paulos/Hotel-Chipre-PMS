@@ -15,12 +15,15 @@ import {
   extendReservationStay,
   isDeferredCompanyReservation,
   previewReservationStayExtension,
+  type ReservationExtensionImpactAction,
+  type ReservationExtensionImpactPlan,
   type ReservationExtensionPayload,
   type ReservationExtensionPreview
 } from "../api/reservations";
 import { type GuestUpdatePayload } from "../api/guests";
 import { type RestrictionOverride } from "../api/guestRestrictions";
 import { type PaymentMethod } from "../api/payments";
+import { grossWithSurcharge } from "../api/paymentSurcharges";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import {
   useReservation,
@@ -38,10 +41,12 @@ import {
 } from "../hooks/useCompanies";
 import { useEffectivePermissions } from "../hooks/usePermissions";
 import { usePaymentMutation, usePaymentSummary } from "../hooks/usePayments";
+import { usePaymentSurchargeQuote, usePaymentSurcharges } from "../hooks/usePaymentSurcharges";
 import { useRestrictionOverridePrompt } from "../hooks/useRestrictionOverridePrompt";
 import { useGuardedMutation } from "../hooks/useGuardedMutation";
 import { useSession } from "../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../utils/currency";
+import { calculateCashTender, calculateCashTip } from "../utils/cashTender.mjs";
 import {
   canCancelReservation,
   canCheckInReservation,
@@ -51,9 +56,13 @@ import {
 } from "../utils/reservationStatus";
 
 import { GuestRestrictionBadge } from "./GuestRestrictionBadge";
+import { CashTenderField } from "./CashTenderField";
+import { PaymentQuoteSummary } from "./PaymentQuoteSummary";
 import ConfirmDialog from "./ConfirmDialog";
 import TemporaryCancelPermissionRequest from "./TemporaryCancelPermissionRequest";
 import { RestrictionOverrideModal } from "./RestrictionOverrideModal";
+import { ReservationGuestArrivalPanel } from "./ReservationGuestArrivalPanel";
+import { CompanyTermsReviewPanel } from "./CompanyTermsReviewPanel";
 
 type CheckinCaptureForm = {
   document_type: "" | "DNI" | "PASSPORT" | "CEDULA";
@@ -188,6 +197,67 @@ const manualPaymentMethods: PaymentMethod[] = ["credit_card", "debit_card", "ban
 type ExtensionManualPaymentMethod = Extract<PaymentMethod, "cash" | "credit_card" | "debit_card" | "bank_transfer">;
 type IndividualExtensionPaymentAction = "payment_link" | "immediate_payment" | "pending_balance";
 
+const mutatingExtensionImpactActions = new Set<ReservationExtensionImpactAction["action"]>([
+  "moved_equivalent",
+  "moved_superior",
+  "assignment_released"
+]);
+
+function hasBlockedExtensionImpact(impactPlan?: ReservationExtensionImpactPlan | null): boolean {
+  return Boolean(impactPlan?.actions.some((item) => item.action === "blocked"));
+}
+
+function hasMutatingExtensionImpact(impactPlan?: ReservationExtensionImpactPlan | null): boolean {
+  return Boolean(impactPlan?.actions.some((item) => mutatingExtensionImpactActions.has(item.action)));
+}
+
+function extensionImpactSummary(t: TFunction, impactPlan?: ReservationExtensionImpactPlan | null): string {
+  if (!impactPlan) return t("drawer.extensionImpact.noMovements");
+  if (impactPlan.actions.length === 0) return t("drawer.extensionImpact.noMovements");
+
+  return impactPlan.actions.map((item) => {
+    const action = t(`drawer.extensionImpact.actions.${item.action}`);
+    const room = item.room_label || t("drawer.extensionImpact.unknownRoom");
+    const dates = `${item.check_in_date} → ${item.check_out_date}`;
+    const confirmation = item.confirmation_code
+      ? ` (${t("drawer.extensionImpact.confirmationCode", { code: item.confirmation_code })})`
+      : "";
+    return `${action}: ${room}, ${dates}${confirmation}`;
+  }).join("; ");
+}
+
+function extensionImpactMessage(
+  t: TFunction,
+  baseMessage: string,
+  impactPlan?: ReservationExtensionImpactPlan | null
+): string {
+  return `${baseMessage} ${t("drawer.extensionImpact.title")}: ${extensionImpactSummary(t, impactPlan)}`;
+}
+
+function isCurrentExtensionPreview(
+  preview: ReservationExtensionPreview,
+  reservationId: number,
+  currentCheckoutDate: string,
+  newCheckoutDate: string,
+  currentVersion: number,
+  allowZeroAmount: boolean
+): boolean {
+  const amount = preview.extension_amount == null ? null : Number(preview.extension_amount);
+  return preview.reservation_id === reservationId &&
+    preview.current_checkout_date === currentCheckoutDate &&
+    preview.new_checkout_date === newCheckoutDate &&
+    preview.client_version === currentVersion &&
+    Number.isInteger(preview.client_version) &&
+    (allowZeroAmount
+      ? amount === null || (Number.isFinite(amount) && amount >= 0)
+      : amount !== null && Number.isFinite(amount) && amount > 0) &&
+    (!preview.impact_plan || (
+      typeof preview.impact_plan.fingerprint === "string" &&
+      preview.impact_plan.fingerprint.length > 0 &&
+      Array.isArray(preview.impact_plan.actions)
+    ));
+}
+
 function guestFullName(
   t: TFunction,
   guest?: { first_name: string; last_name: string } | null,
@@ -225,12 +295,16 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const { t } = useTranslation("reservations");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [cashReceivedAmountInput, setCashReceivedAmountInput] = useState("");
+  const [cashTipAmountInput, setCashTipAmountInput] = useState("");
   const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [captureForm, setCaptureForm] = useState<CheckinCaptureForm>(emptyCaptureForm);
   const [companyExtensionNote, setCompanyExtensionNote] = useState("");
   const [companyExtensionCheckoutDate, setCompanyExtensionCheckoutDate] = useState("");
+  const [companyExtensionPreview, setCompanyExtensionPreview] = useState<ReservationExtensionPreview | null>(null);
+  const [companyExtensionPreviewPending, setCompanyExtensionPreviewPending] = useState(false);
   const [companyExtensionConfirmOpen, setCompanyExtensionConfirmOpen] = useState(false);
   const [individualExtensionCheckoutDate, setIndividualExtensionCheckoutDate] = useState("");
   const [individualExtensionPaymentAction, setIndividualExtensionPaymentAction] =
@@ -238,6 +312,8 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const [individualExtensionPaymentMethod, setIndividualExtensionPaymentMethod] =
     useState<ExtensionManualPaymentMethod>("cash");
   const [individualExtensionManualReference, setIndividualExtensionManualReference] = useState("");
+  const [individualExtensionCashReceivedAmountInput, setIndividualExtensionCashReceivedAmountInput] = useState("");
+  const [individualExtensionCashTipAmountInput, setIndividualExtensionCashTipAmountInput] = useState("");
   const [individualExtensionRecipientEmail, setIndividualExtensionRecipientEmail] = useState("");
   const [individualExtensionPreview, setIndividualExtensionPreview] = useState<ReservationExtensionPreview | null>(null);
   const [individualExtensionPreviewPending, setIndividualExtensionPreviewPending] = useState(false);
@@ -246,6 +322,10 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     external_checkout_url?: string | null;
     execution_mode: "local_only" | "provider";
     payable: boolean;
+  } | null>(null);
+  const expectedIndividualExtensionDateRef = useRef<{
+    reservationId: number;
+    checkoutDate: string;
   } | null>(null);
   const [companionForm, setCompanionForm] = useState({ first_name: "", last_name: "", document_number: "" });
   const [companionError, setCompanionError] = useState<string | null>(null);
@@ -262,7 +342,16 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   useEffect(() => {
     setActionError(null);
     setActionMessage(null);
+    setPaymentAmount("");
+    setCashReceivedAmountInput("");
+    setCashTipAmountInput("");
     setCaptureForm(emptyCaptureForm);
+    setCompanyExtensionPreview(null);
+    setCompanyExtensionConfirmOpen(false);
+    setIndividualExtensionPreview(null);
+    setIndividualExtensionConfirmOpen(false);
+    setIndividualExtensionCreatedLink(null);
+    expectedIndividualExtensionDateRef.current = null;
     setCompanyVoucherFile(null);
     setCompanyVoucherFeedback(null);
     if (companyVoucherFileInputRef.current) companyVoucherFileInputRef.current.value = "";
@@ -304,11 +393,20 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     },
     onSuccess: refreshCompanyNightCharges
   });
-  const companyDocumentsQuery = useReservationCompanyDocuments(reservationQuery.data?.company_id ? reservationId ?? undefined : undefined);
+  const { hasPermission, permissionsKnown } = useEffectivePermissions();
+  const canReadCompanyDocuments = permissionsKnown && hasPermission("company:documents:read");
+  const companyDocumentsQuery = useReservationCompanyDocuments(
+    reservationQuery.data?.company_id && canReadCompanyDocuments ? reservationId ?? undefined : undefined
+  );
   const companyDocumentMutations = useCompanyDocumentMutations(reservationQuery.data?.company_id ?? undefined);
   const markCompanyDocumentSignedMutation = useMarkCompanyDocumentSigned();
-  const { hasPermission, permissionsKnown } = useEffectivePermissions();
+  const paymentSurchargesQuery = usePaymentSurcharges({
+    enabled: Boolean(reservationId && hasPermission("cash:operate"))
+  });
   const canManageCompanyCharges = hasPermission("company:manage");
+  const canReviewCompanyTerms = permissionsKnown
+    && canManageCompanyCharges
+    && hasPermission("reservation:read");
   const companyNightlyRatesQuery = useCompanyNightlyRates(
     reservationQuery.data?.company_id ?? undefined,
     Boolean(reservationId && canManageCompanyCharges)
@@ -395,23 +493,36 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     setCompanyExtensionNote(reservation?.company_extension_request_note ?? "");
   }, [reservation?.id, reservation?.company_extension_request_note]);
 
+  const currentReservationId = reservation?.id;
+  const currentReservationCheckoutDate = reservation?.check_out_date;
+
   useEffect(() => {
+    const expectedExtension = expectedIndividualExtensionDateRef.current;
+    const isAppliedExtensionDate = Boolean(
+      currentReservationId != null &&
+      expectedExtension?.reservationId === currentReservationId &&
+      expectedExtension.checkoutDate === currentReservationCheckoutDate
+    );
+    if (isAppliedExtensionDate) expectedIndividualExtensionDateRef.current = null;
+
     setCompanyExtensionCheckoutDate(
-      reservation?.check_out_date ? addIsoDays(reservation.check_out_date, 1) : ""
+      currentReservationCheckoutDate ? addIsoDays(currentReservationCheckoutDate, 1) : ""
     );
     setCompanyExtensionConfirmOpen(false);
     setIndividualExtensionCheckoutDate(
-      reservation?.check_out_date ? addIsoDays(reservation.check_out_date, 1) : ""
+      currentReservationCheckoutDate ? addIsoDays(currentReservationCheckoutDate, 1) : ""
     );
     setIndividualExtensionPaymentAction("payment_link");
     setIndividualExtensionPaymentMethod("cash");
     setIndividualExtensionManualReference("");
+    setIndividualExtensionCashReceivedAmountInput("");
+    setIndividualExtensionCashTipAmountInput("");
     setIndividualExtensionRecipientEmail("");
     setIndividualExtensionPreview(null);
     setIndividualExtensionPreviewPending(false);
     setIndividualExtensionConfirmOpen(false);
-    setIndividualExtensionCreatedLink(null);
-  }, [reservation?.id, reservation?.check_out_date]);
+    if (!isAppliedExtensionDate) setIndividualExtensionCreatedLink(null);
+  }, [currentReservationId, currentReservationCheckoutDate]);
 
   const buildGuestPatch = (): GuestUpdatePayload => ({
     document_type: captureForm.document_type || undefined,
@@ -452,6 +563,9 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   // ignore consumption charges. Always prefer the operational figures for
   // anything the operator will actually collect.
   const currencyCode = normalizeCurrencyCode(summary?.currency_code ?? reservation?.currency_code);
+  const extensionPaymentSurcharge = (paymentSurchargesQuery.data ?? []).find(
+    (surcharge) => surcharge.payment_method === individualExtensionPaymentMethod && surcharge.is_active
+  ) ?? null;
   const operationalBalanceDue = summary?.operational_balance_due ?? summary?.balance_due;
   const companyNightCharges = companyNightChargesQuery.data;
   const companyChargeRows = companyNightCharges?.charges ?? [];
@@ -470,9 +584,36 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const selectedCompanyChargeTotal = outstandingCompanyCharges
     .filter((charge) => selectedCompanyChargeIds.includes(charge.id) && !charge.review_only && !charge.payment_pending)
     .reduce((total, charge) => total + Number(charge.remaining_due), 0);
+  const paymentCashPreviewBase = Number(paymentAmount) > 0
+    ? Number(paymentAmount)
+    : selectedCompanyChargeIds.length > 0
+      ? selectedCompanyChargeTotal
+      : Number(operationalBalanceDue ?? 0);
+  const paymentQuoteQuery = usePaymentSurchargeQuote(
+    reservation && Number.isFinite(paymentCashPreviewBase) && paymentCashPreviewBase > 0
+      ? {
+          reservation_id: reservation.id,
+          payment_method: paymentMethod,
+          currency_code: currencyCode,
+          base_amount: paymentCashPreviewBase
+        }
+      : null,
+    {
+      enabled: Boolean(
+        reservation &&
+        Number.isFinite(paymentCashPreviewBase) &&
+        paymentCashPreviewBase > 0 &&
+        hasPermission("cash:operate")
+      )
+    }
+  );
+  const paymentQuote = paymentQuoteQuery.data;
+  const paymentCashPreviewTotal = paymentQuote ? Number(paymentQuote.final_amount) : 0;
+  const extensionCashPreviewBase = Number(individualExtensionPreview?.extension_amount ?? 0);
+  const extensionCashPreviewTotal = grossWithSurcharge(extensionCashPreviewBase, extensionPaymentSurcharge);
   const hasUnpaidCompanyCharges = outstandingCompanyCharges.length > 0;
   const isManualPaymentMethod = manualPaymentMethods.includes(paymentMethod);
-  const canSignCompanyDocuments = hasPermission("checkin:perform");
+  const canSignCompanyDocuments = hasPermission("checkin:perform") && canReadCompanyDocuments;
   const canApplyPendingCompanyExtension = Boolean(
     reservation?.company_id &&
     reservation.status === "checked_in" &&
@@ -699,7 +840,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     }
   };
 
-  const handleOpenCompanyExtensionConfirmation = () => {
+  const handleOpenCompanyExtensionConfirmation = async () => {
     if (!reservation || !companyExtensionCheckoutDate) return;
     if (companyExtensionCheckoutDate <= reservation.check_out_date) {
       setActionError(t("drawer.companyExtension.checkoutDateMustBeLater"));
@@ -708,11 +849,67 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     }
     setActionError(null);
     setActionMessage(null);
-    setCompanyExtensionConfirmOpen(true);
+    setCompanyExtensionPreview(null);
+    setCompanyExtensionConfirmOpen(false);
+    setCompanyExtensionPreviewPending(true);
+    try {
+      const preview = await previewReservationStayExtension(
+        reservation.id,
+        companyExtensionCheckoutDate,
+        "company_account",
+        session
+      );
+      if (!isCurrentExtensionPreview(
+        preview,
+        reservation.id,
+        reservation.check_out_date,
+        companyExtensionCheckoutDate,
+        reservation.version ?? 0,
+        true
+      )) {
+        throw new Error(t("drawer.companyExtension.previewStale"));
+      }
+      setCompanyExtensionPreview(preview);
+      if (hasBlockedExtensionImpact(preview.impact_plan)) {
+        setActionError(t("drawer.extensionImpact.manualResolutionRequired"));
+        return;
+      }
+      setCompanyExtensionConfirmOpen(true);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : t("drawer.companyExtension.previewFailed"));
+    } finally {
+      setCompanyExtensionPreviewPending(false);
+    }
   };
 
   const handleApplyCompanyExtension = async () => {
-    if (!reservation || !canApplyPendingCompanyExtension || !companyExtensionCheckoutDate) return;
+    if (
+      !reservation ||
+      !canApplyPendingCompanyExtension ||
+      !companyExtensionPreview ||
+      !companyExtensionCheckoutDate ||
+      !isCurrentExtensionPreview(
+        companyExtensionPreview,
+        reservation.id,
+        reservation.check_out_date,
+        companyExtensionCheckoutDate,
+        reservation.version ?? 0,
+        true
+      ) ||
+      hasBlockedExtensionImpact(companyExtensionPreview.impact_plan)
+    ) {
+      setCompanyExtensionConfirmOpen(false);
+      setActionError(t("drawer.companyExtension.previewStale"));
+      return;
+    }
+    const confirmedImpactFingerprint = hasMutatingExtensionImpact(companyExtensionPreview.impact_plan)
+      ? companyExtensionPreview.impact_plan?.fingerprint
+      : undefined;
+    if (hasMutatingExtensionImpact(companyExtensionPreview.impact_plan) && !confirmedImpactFingerprint) {
+      setCompanyExtensionConfirmOpen(false);
+      setActionError(t("drawer.companyExtension.previewStale"));
+      return;
+    }
     setCompanyExtensionConfirmOpen(false);
     setActionError(null);
     setActionMessage(null);
@@ -723,11 +920,15 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
           new_checkout_date: companyExtensionCheckoutDate,
           client_version: reservation.version ?? 0,
           pricing_mode: "current_rate",
-          payment_action: "company_account"
+          payment_action: "company_account",
+          ...(confirmedImpactFingerprint ? { confirmed_impact_fingerprint: confirmedImpactFingerprint } : {})
         }
       });
+      setCompanyExtensionPreview(null);
       setActionMessage(t("drawer.companyExtension.applied"));
     } catch (err) {
+      setCompanyExtensionConfirmOpen(false);
+      setCompanyExtensionPreview(null);
       setActionError(err instanceof ApiError ? err.message : t("drawer.companyExtension.applyFailed"));
     }
   };
@@ -760,25 +961,37 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     setActionError(null);
     setActionMessage(null);
     setIndividualExtensionCreatedLink(null);
+    setIndividualExtensionPreview(null);
+    setIndividualExtensionCashReceivedAmountInput("");
+    setIndividualExtensionCashTipAmountInput("");
+    setIndividualExtensionConfirmOpen(false);
     setIndividualExtensionPreviewPending(true);
     try {
       const preview = await previewReservationStayExtension(
         reservation.id,
         individualExtensionCheckoutDate,
+        "individual",
         session
       );
-      if (
-        preview.reservation_id !== reservation.id ||
-        preview.new_checkout_date !== individualExtensionCheckoutDate ||
-        preview.current_checkout_date !== reservation.check_out_date ||
-        !Number.isInteger(preview.client_version) ||
-        !Number.isFinite(Number(preview.extension_amount)) ||
-        Number(preview.extension_amount) <= 0
-      ) {
+      if (!isCurrentExtensionPreview(
+        preview,
+        reservation.id,
+        reservation.check_out_date,
+        individualExtensionCheckoutDate,
+        reservation.version ?? 0,
+        false
+      )) {
         throw new Error(t("drawer.individualExtension.previewStale"));
       }
       setIndividualExtensionPreview(preview);
-      setIndividualExtensionConfirmOpen(true);
+      if (hasBlockedExtensionImpact(preview.impact_plan)) {
+        setActionError(t("drawer.extensionImpact.manualResolutionRequired"));
+        return;
+      }
+      setIndividualExtensionConfirmOpen(!(
+        individualExtensionPaymentAction === "immediate_payment" &&
+        individualExtensionPaymentMethod === "cash"
+      ));
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : t("drawer.individualExtension.previewFailed"));
     } finally {
@@ -786,8 +999,66 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     }
   };
 
+  const handleOpenIndividualExtensionConfirmation = () => {
+    if (!individualExtensionPreview) return;
+    if (
+      individualExtensionPaymentAction === "immediate_payment" &&
+      individualExtensionPaymentMethod === "cash"
+    ) {
+      const expectedCashAmount = grossWithSurcharge(
+        Number(individualExtensionPreview.extension_amount),
+        extensionPaymentSurcharge
+      );
+      const cashTender = calculateCashTender(individualExtensionCashReceivedAmountInput, expectedCashAmount);
+      if (!cashTender.valid) {
+        setActionError(
+          cashTender.reason === "insufficient"
+            ? t("page.form.cashReceivedInsufficient", {
+                amount: formatMoney(expectedCashAmount, individualExtensionPreview.currency_code)
+              })
+            : t("page.form.cashReceivedInvalid")
+        );
+        return;
+      }
+      const cashTip = calculateCashTip(
+        individualExtensionCashTipAmountInput,
+        cashTender.changeAmount ?? 0
+      );
+      if (!cashTip.valid) {
+        setActionError(t("page.form.cashTipInvalid"));
+        return;
+      }
+    }
+    setActionError(null);
+    setIndividualExtensionConfirmOpen(true);
+  };
+
   const handleConfirmIndividualExtension = async () => {
     if (!reservation || !individualExtensionPreview || individualExtensionMutation.isPending) return;
+    if (!isCurrentExtensionPreview(
+      individualExtensionPreview,
+      reservation.id,
+      reservation.check_out_date,
+      individualExtensionCheckoutDate,
+      reservation.version ?? 0,
+      false
+    ) || hasBlockedExtensionImpact(individualExtensionPreview.impact_plan)) {
+      setActionError(t("drawer.individualExtension.previewStale"));
+      setIndividualExtensionConfirmOpen(false);
+      setIndividualExtensionPreview(null);
+      setIndividualExtensionCashReceivedAmountInput("");
+      setIndividualExtensionCashTipAmountInput("");
+      return;
+    }
+    const confirmedImpactFingerprint = hasMutatingExtensionImpact(individualExtensionPreview.impact_plan)
+      ? individualExtensionPreview.impact_plan?.fingerprint
+      : undefined;
+    if (hasMutatingExtensionImpact(individualExtensionPreview.impact_plan) && !confirmedImpactFingerprint) {
+      setActionError(t("drawer.individualExtension.previewStale"));
+      setIndividualExtensionConfirmOpen(false);
+      setIndividualExtensionPreview(null);
+      return;
+    }
     const amount = Number(individualExtensionPreview.extension_amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       setActionError(t("drawer.individualExtension.previewFailed"));
@@ -795,12 +1066,36 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       setIndividualExtensionPreview(null);
       return;
     }
+    const expectedCashAmount = grossWithSurcharge(amount, extensionPaymentSurcharge);
+    const extensionCashTender = individualExtensionPaymentAction === "immediate_payment" && individualExtensionPaymentMethod === "cash"
+      ? calculateCashTender(individualExtensionCashReceivedAmountInput, expectedCashAmount)
+      : null;
+    if (extensionCashTender && (!extensionCashTender.valid || extensionCashTender.receivedAmount === null)) {
+      setActionError(
+        extensionCashTender.reason === "insufficient"
+          ? t("page.form.cashReceivedInsufficient", {
+              amount: formatMoney(expectedCashAmount, individualExtensionPreview.currency_code)
+            })
+          : t("page.form.cashReceivedInvalid")
+      );
+      setIndividualExtensionConfirmOpen(false);
+      return;
+    }
+    const extensionCashTip = extensionCashTender
+      ? calculateCashTip(individualExtensionCashTipAmountInput, extensionCashTender.changeAmount ?? 0)
+      : null;
+    if (extensionCashTip && (!extensionCashTip.valid || extensionCashTip.tipAmount === null)) {
+      setActionError(t("page.form.cashTipInvalid"));
+      setIndividualExtensionConfirmOpen(false);
+      return;
+    }
 
     const payload: ReservationExtensionPayload = {
       new_checkout_date: individualExtensionPreview.new_checkout_date,
       client_version: individualExtensionPreview.client_version,
       pricing_mode: "current_rate",
-      payment_action: individualExtensionPaymentAction
+      payment_action: individualExtensionPaymentAction,
+      ...(confirmedImpactFingerprint ? { confirmed_impact_fingerprint: confirmedImpactFingerprint } : {})
     };
     if (individualExtensionPaymentAction === "immediate_payment") {
       const manualReference = individualExtensionManualReference.trim();
@@ -816,6 +1111,12 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
         payment_method: individualExtensionPaymentMethod,
         transaction_type: "balance_payment",
         currency: individualExtensionPreview.currency_code,
+        ...(extensionCashTender?.receivedAmount !== null && extensionCashTender?.receivedAmount !== undefined
+          ? { cash_received_amount: extensionCashTender.receivedAmount }
+          : {}),
+        ...(extensionCashTip?.tipAmount !== null && extensionCashTip?.tipAmount !== undefined && extensionCashTip.tipAmount > 0
+          ? { cash_tip_amount: extensionCashTip.tipAmount }
+          : {}),
         description: t("drawer.individualExtension.paymentDescription", {
           date: individualExtensionPreview.new_checkout_date
         }),
@@ -844,10 +1145,16 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
 
     setActionError(null);
     setActionMessage(null);
+    expectedIndividualExtensionDateRef.current = {
+      reservationId: reservation.id,
+      checkoutDate: payload.new_checkout_date
+    };
     try {
       const result = await individualExtensionMutation.mutateAsync({ id: reservation.id, payload });
       setIndividualExtensionConfirmOpen(false);
       setIndividualExtensionPreview(null);
+      setIndividualExtensionCashReceivedAmountInput("");
+      setIndividualExtensionCashTipAmountInput("");
       if (individualExtensionPaymentAction === "payment_link") {
         setIndividualExtensionCreatedLink(result.payment_link ? {
           external_checkout_url: result.payment_link.external_checkout_url,
@@ -861,6 +1168,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
         setActionMessage(t("drawer.individualExtension.paymentRegistered"));
       }
     } catch (err) {
+      expectedIndividualExtensionDateRef.current = null;
       setIndividualExtensionConfirmOpen(false);
       setIndividualExtensionPreview(null);
       setActionError(err instanceof ApiError ? err.message : t("drawer.individualExtension.applyFailed"));
@@ -911,6 +1219,30 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       setActionError(t("drawer.errors.invalidAmount"));
       return;
     }
+    const quote = paymentQuoteQuery.data;
+    if (!quote || Math.abs(Number(quote.base_amount) - amount) >= 0.005) {
+      setActionError(t("page.errors.paymentQuoteUnavailable"));
+      return;
+    }
+    const expectedCashAmount = Number(quote.final_amount);
+    const cashTender = paymentMethod === "cash"
+      ? calculateCashTender(cashReceivedAmountInput, expectedCashAmount)
+      : null;
+    if (cashTender && (!cashTender.valid || cashTender.receivedAmount === null)) {
+      setActionError(
+        cashTender.reason === "insufficient"
+          ? t("page.form.cashReceivedInsufficient", { amount: formatMoney(expectedCashAmount, currencyCode) })
+          : t("page.form.cashReceivedInvalid")
+      );
+      return;
+    }
+    const cashTip = cashTender
+      ? calculateCashTip(cashTipAmountInput, cashTender.changeAmount ?? 0)
+      : null;
+    if (cashTip && (!cashTip.valid || cashTip.tipAmount === null)) {
+      setActionError(t("page.form.cashTipInvalid"));
+      return;
+    }
     setActionError(null);
     setActionMessage(null);
     try {
@@ -924,11 +1256,20 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
         payment_method: paymentMethod,
         transaction_type: reservation?.status === "pending" ? "deposit" : "balance_payment",
         currency: currencyCode,
+        payment_quote_token: quote.payment_quote_token,
+        ...(cashTender?.receivedAmount !== null && cashTender?.receivedAmount !== undefined
+          ? { cash_received_amount: cashTender.receivedAmount }
+          : {}),
+        ...(cashTip?.tipAmount !== null && cashTip?.tipAmount !== undefined && cashTip.tipAmount > 0
+          ? { cash_tip_amount: cashTip.tipAmount }
+          : {}),
         ...(manualReference ? { manual_reference: manualReference } : {}),
         ...(selectedCompanyChargeIds.length > 0 ? { company_night_charge_ids: selectedCompanyChargeIds } : {})
       });
       setSelectedCompanyChargeIds([]);
       setPaymentAmount("");
+      setCashReceivedAmountInput("");
+      setCashTipAmountInput("");
       setPaymentReferenceInput("");
       setActionMessage(t("drawer.messages.paymentRegistered"));
     } catch (err) {
@@ -1110,16 +1451,25 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                 )}
               </section>
 
-              {reservation.company_id ? (
+              <ReservationGuestArrivalPanel
+                reservation={reservation}
+                canCheckIn={permissionsKnown && hasPermission("checkin:perform")}
+              />
+
+              {reservation.company_id && canReviewCompanyTerms ? (
+                <CompanyTermsReviewPanel reservationId={reservation.id} />
+              ) : null}
+
+              {reservation.company_id && (canReadCompanyDocuments || canManageCompanyCharges) ? (
                 <section className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3">
                   <p className="text-xs uppercase tracking-wide text-indigo-800">{t("drawer.companyDocuments.title")}</p>
-                  {companyDocumentsQuery.isLoading ? (
+                  {canReadCompanyDocuments && companyDocumentsQuery.isLoading ? (
                     <p className="mt-2 text-xs text-slate-500">{t("drawer.companyDocuments.loading")}</p>
-                  ) : companyDocumentsQuery.isError ? (
+                  ) : canReadCompanyDocuments && companyDocumentsQuery.isError ? (
                     <p className="mt-2 text-xs text-rose-700">{t("drawer.companyDocuments.loadFailed")}</p>
-                  ) : (companyDocumentsQuery.data ?? []).length === 0 ? (
+                  ) : canReadCompanyDocuments && (companyDocumentsQuery.data ?? []).length === 0 ? (
                     <p className="mt-2 text-xs text-slate-600">{t("drawer.companyDocuments.empty")}</p>
-                  ) : (
+                  ) : canReadCompanyDocuments ? (
                     <ul className="mt-2 space-y-2">
                       {(companyDocumentsQuery.data ?? []).map((companyDocument) => (
                         <li key={companyDocument.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-indigo-100 bg-white px-2 py-2">
@@ -1157,7 +1507,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                         </li>
                       ))}
                     </ul>
-                  )}
+                  ) : null}
                   {canManageCompanyCharges ? (
                     <div className="mt-3 border-t border-indigo-100 pt-3">
                       <label htmlFor="company-voucher-pdf" className="block text-xs font-semibold text-slate-700">
@@ -1254,21 +1604,34 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       type="date"
                       value={companyExtensionCheckoutDate}
                       min={addIsoDays(reservation.check_out_date, 1)}
-                      onChange={(event) => setCompanyExtensionCheckoutDate(event.target.value)}
+                      disabled={companyExtensionPreviewPending}
+                      onChange={(event) => {
+                        setCompanyExtensionCheckoutDate(event.target.value);
+                        setCompanyExtensionPreview(null);
+                        setCompanyExtensionConfirmOpen(false);
+                      }}
                       aria-label={t("drawer.companyExtension.newCheckoutDate")}
                       className="w-full rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-sm"
                     />
                   </label>
                   <button
                     type="button"
-                    onClick={handleOpenCompanyExtensionConfirmation}
-                    disabled={companyAccountExtensionMutation.isPending || !companyExtensionCheckoutDate}
+                    onClick={() => void handleOpenCompanyExtensionConfirmation()}
+                    disabled={companyAccountExtensionMutation.isPending || companyExtensionPreviewPending || !companyExtensionCheckoutDate}
                     className="mt-2 min-h-10 rounded-md border border-indigo-300 bg-white px-3 py-2 text-xs font-semibold text-indigo-950 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {companyAccountExtensionMutation.isPending
+                    {companyExtensionPreviewPending
+                      ? t("drawer.companyExtension.previewing")
+                      : companyAccountExtensionMutation.isPending
                       ? t("drawer.companyExtension.applying")
                       : t("drawer.companyExtension.apply")}
                   </button>
+                  {companyExtensionPreview?.impact_plan && hasBlockedExtensionImpact(companyExtensionPreview.impact_plan) ? (
+                    <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950" role="alert" data-testid="company-extension-impact-plan">
+                      <p className="font-semibold">{t("drawer.extensionImpact.manualResolutionRequired")}</p>
+                      <p className="mt-1">{t("drawer.extensionImpact.title")}: {extensionImpactSummary(t, companyExtensionPreview.impact_plan)}</p>
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
 
@@ -1282,9 +1645,12 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       type="date"
                       value={individualExtensionCheckoutDate}
                       min={addIsoDays(reservation.check_out_date, 1)}
+                      disabled={individualExtensionPreviewPending || individualExtensionMutation.isPending}
                       onChange={(event) => {
                         setIndividualExtensionCheckoutDate(event.target.value);
                         setIndividualExtensionPreview(null);
+                        setIndividualExtensionCashReceivedAmountInput("");
+                        setIndividualExtensionCashTipAmountInput("");
                         setIndividualExtensionConfirmOpen(false);
                         setIndividualExtensionCreatedLink(null);
                       }}
@@ -1296,9 +1662,12 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                     <span className="text-slate-700">{t("drawer.individualExtension.paymentAction")}</span>
                     <select
                       value={individualExtensionPaymentAction}
+                      disabled={individualExtensionPreviewPending || individualExtensionMutation.isPending}
                       onChange={(event) => {
                         setIndividualExtensionPaymentAction(event.target.value as IndividualExtensionPaymentAction);
                         setIndividualExtensionPreview(null);
+                        setIndividualExtensionCashReceivedAmountInput("");
+                        setIndividualExtensionCashTipAmountInput("");
                         setIndividualExtensionConfirmOpen(false);
                         setIndividualExtensionCreatedLink(null);
                       }}
@@ -1322,6 +1691,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                         required
                         maxLength={320}
                         value={individualExtensionRecipientEmail}
+                        disabled={individualExtensionPreviewPending || individualExtensionMutation.isPending}
                         onChange={(event) => {
                           setIndividualExtensionRecipientEmail(event.target.value);
                           setIndividualExtensionPreview(null);
@@ -1337,9 +1707,12 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                         <span className="text-slate-700">{t("drawer.individualExtension.paymentMethod")}</span>
                         <select
                           value={individualExtensionPaymentMethod}
+                          disabled={individualExtensionPreviewPending || individualExtensionMutation.isPending}
                           onChange={(event) => {
                             setIndividualExtensionPaymentMethod(event.target.value as ExtensionManualPaymentMethod);
                             setIndividualExtensionPreview(null);
+                            setIndividualExtensionCashReceivedAmountInput("");
+                            setIndividualExtensionCashTipAmountInput("");
                             setIndividualExtensionCreatedLink(null);
                           }}
                           aria-label={t("drawer.individualExtension.paymentMethod")}
@@ -1359,6 +1732,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                             required
                             maxLength={120}
                             value={individualExtensionManualReference}
+                            disabled={individualExtensionPreviewPending || individualExtensionMutation.isPending}
                             onChange={(event) => {
                               setIndividualExtensionManualReference(event.target.value);
                               setIndividualExtensionPreview(null);
@@ -1385,6 +1759,47 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       ? t("drawer.individualExtension.previewing")
                       : t("drawer.individualExtension.preview")}
                   </button>
+                  {individualExtensionPreview &&
+                  individualExtensionPaymentAction === "immediate_payment" &&
+                  individualExtensionPaymentMethod === "cash" &&
+                  !hasBlockedExtensionImpact(individualExtensionPreview.impact_plan) ? (
+                    <div className="mt-3 space-y-3 rounded-md border border-cyan-200 bg-white p-3" data-testid="individual-extension-cash-tender">
+                      <CashTenderField
+                        amount={individualExtensionCashReceivedAmountInput}
+                        tipAmount={individualExtensionCashTipAmountInput}
+                        expectedAmount={extensionCashPreviewTotal}
+                        currency={individualExtensionPreview.currency_code}
+                        label={t("page.form.cashReceived", { currency: individualExtensionPreview.currency_code })}
+                        hint={t("page.form.cashReceivedHint")}
+                        changeLabel={t("page.form.cashChange")}
+                        tipToggleLabel={t("page.form.cashTipToggle")}
+                        tipAmountLabel={t("page.form.cashTipAmount")}
+                        tipHint={t("page.form.cashTipHint")}
+                        invalidAmountMessage={t("page.form.cashReceivedInvalid")}
+                        insufficientMessage={t("page.form.cashReceivedInsufficient", { amount: formatMoney(extensionCashPreviewTotal, individualExtensionPreview.currency_code) })}
+                        tipInvalidMessage={t("page.form.cashTipInvalid")}
+                        onChange={setIndividualExtensionCashReceivedAmountInput}
+                        onTipAmountChange={setIndividualExtensionCashTipAmountInput}
+                        testId="individual-extension-cash-received"
+                        disabled={individualExtensionPreviewPending || individualExtensionMutation.isPending}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleOpenIndividualExtensionConfirmation}
+                        disabled={individualExtensionMutation.isPending || !calculateCashTender(individualExtensionCashReceivedAmountInput, extensionCashPreviewTotal).valid}
+                        className="min-h-10 rounded-md border border-cyan-300 bg-cyan-700 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        data-testid="individual-extension-cash-confirm"
+                      >
+                        {t("drawer.individualExtension.confirmApply")}
+                      </button>
+                    </div>
+                  ) : null}
+                  {individualExtensionPreview?.impact_plan && hasBlockedExtensionImpact(individualExtensionPreview.impact_plan) ? (
+                    <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950" role="alert" data-testid="individual-extension-impact-plan">
+                      <p className="font-semibold">{t("drawer.extensionImpact.manualResolutionRequired")}</p>
+                      <p className="mt-1">{t("drawer.extensionImpact.title")}: {extensionImpactSummary(t, individualExtensionPreview.impact_plan)}</p>
+                    </div>
+                  ) : null}
                   {individualExtensionCreatedLink ? (
                     <div className="mt-3 rounded-md border border-cyan-200 bg-white px-3 py-2 text-xs" role="status" data-testid="individual-extension-payment-link">
                       {individualExtensionCreatedLink.execution_mode === "provider" &&
@@ -1871,7 +2286,14 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       <span className="text-slate-600">{t("drawer.payment.methodLabel")}</span>
                       <select
                         value={paymentMethod}
-                        onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+                        onChange={(event) => {
+                          const method = event.target.value as PaymentMethod;
+                          setPaymentMethod(method);
+                          if (method !== "cash") {
+                            setCashReceivedAmountInput("");
+                            setCashTipAmountInput("");
+                          }
+                        }}
                         className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                         aria-label={t("drawer.payment.methodAria")}
                       >
@@ -1915,6 +2337,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       onClick={handlePay}
                       disabled={
                         paymentMutation.isPending ||
+                        !paymentQuote ||
                         (Boolean(reservation.company_id) && (companyNightChargesQuery.isLoading || companyNightChargesQuery.isError)) ||
                         (deferredCompanyBilling
                           ? selectedCompanyChargeIds.length === 0 || selectedCompanyChargeTotal <= 0
@@ -1928,6 +2351,42 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       {paymentMutation.isPending ? t("drawer.payment.submitting") : t("drawer.payment.submit")}
                     </button>
                   </div>
+                  {paymentQuoteQuery.isError ? (
+                    <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert" data-testid="reservation-drawer-payment-quote-error">
+                      {t("page.errors.paymentQuoteUnavailable")}
+                    </p>
+                  ) : paymentQuoteQuery.isLoading || !paymentQuote ? (
+                    <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" role="status">
+                      {t("page.form.paymentQuoteLoading")}
+                    </p>
+                  ) : (
+                    <div className="mt-3">
+                      <PaymentQuoteSummary quote={paymentQuote} showCashSuggestion={paymentMethod === "cash"} />
+                    </div>
+                  )}
+                  {paymentMethod === "cash" && paymentCashPreviewTotal > 0 ? (
+                    <div className="mt-3">
+                      <CashTenderField
+                        amount={cashReceivedAmountInput}
+                        tipAmount={cashTipAmountInput}
+                        expectedAmount={paymentCashPreviewTotal}
+                        currency={currencyCode}
+                        label={t("page.form.cashReceived", { currency: currencyCode })}
+                        hint={t("page.form.cashReceivedHint")}
+                        changeLabel={t("page.form.cashChange")}
+                        tipToggleLabel={t("page.form.cashTipToggle")}
+                        tipAmountLabel={t("page.form.cashTipAmount")}
+                        tipHint={t("page.form.cashTipHint")}
+                        invalidAmountMessage={t("page.form.cashReceivedInvalid")}
+                        insufficientMessage={t("page.form.cashReceivedInsufficient", { amount: formatMoney(paymentCashPreviewTotal, currencyCode) })}
+                        tipInvalidMessage={t("page.form.cashTipInvalid")}
+                        onChange={setCashReceivedAmountInput}
+                        onTipAmountChange={setCashTipAmountInput}
+                        testId="reservation-drawer-cash-received"
+                        disabled={paymentMutation.isPending}
+                      />
+                    </div>
+                  ) : null}
                 </section>
               )}
 
@@ -2082,9 +2541,13 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
         />
       ) : null}
       <ConfirmDialog
-        open={companyExtensionConfirmOpen}
+        open={companyExtensionConfirmOpen && companyExtensionPreview !== null}
         title={t("drawer.companyExtension.confirmTitle")}
-        message={t("drawer.companyExtension.confirmMessage", { date: companyExtensionCheckoutDate })}
+        message={extensionImpactMessage(
+          t,
+          t("drawer.companyExtension.confirmMessage", { date: companyExtensionCheckoutDate }),
+          companyExtensionPreview?.impact_plan
+        )}
         confirmLabel={t("drawer.companyExtension.confirmApply")}
         cancelLabel={t("drawer.companyExtension.cancel")}
         danger={false}
@@ -2094,12 +2557,16 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       <ConfirmDialog
         open={individualExtensionConfirmOpen && individualExtensionPreview !== null}
         title={t("drawer.individualExtension.confirmTitle")}
-        message={t("drawer.individualExtension.confirmMessage", {
-          date: individualExtensionPreview?.new_checkout_date ?? individualExtensionCheckoutDate,
-          amount: individualExtensionPreview
-            ? formatMoney(Number(individualExtensionPreview.extension_amount), individualExtensionPreview.currency_code)
-            : ""
-        })}
+        message={extensionImpactMessage(
+          t,
+          t("drawer.individualExtension.confirmMessage", {
+            date: individualExtensionPreview?.new_checkout_date ?? individualExtensionCheckoutDate,
+            amount: individualExtensionPreview
+              ? formatMoney(Number(individualExtensionPreview.extension_amount), individualExtensionPreview.currency_code)
+              : ""
+          }),
+          individualExtensionPreview?.impact_plan
+        )}
         confirmLabel={individualExtensionMutation.isPending
           ? t("drawer.individualExtension.applying")
           : t("drawer.individualExtension.confirmApply")}

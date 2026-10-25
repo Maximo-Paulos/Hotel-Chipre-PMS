@@ -11,6 +11,7 @@ different abstraction over one shared table.
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import NAMESPACE_URL, uuid5
@@ -20,8 +21,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditActionEnum
+from app.models.laundry_discrepancy import LaundryRemitoDiscrepancy
 from app.models.linen import LinenItem, LinenLocation, LinenMovement, LinenParLevel
 from app.models.laundry_vendor import LaundryVendor
+from app.models.security_audit_log import SecurityAuditLog
 from app.services import audit_log_service
 from app.services.timezones import hotel_business_now, utc_naive
 
@@ -45,8 +48,8 @@ class LinenIdempotencyConflict(LinenError):
 # Same movement vocabulary as stock_service.py: "adjustment" raises the
 # balance (physical count found more), "adjustment_out" lowers it (found
 # less / damaged in wash).
-VALID_MOVEMENT_TYPES = {"in", "out", "adjustment", "adjustment_out"}
-_OUTBOUND_MOVEMENT_TYPES = {"out", "adjustment_out"}
+VALID_MOVEMENT_TYPES = {"in", "out", "adjustment", "adjustment_out", "retirement"}
+_OUTBOUND_MOVEMENT_TYPES = {"out", "adjustment_out", "retirement"}
 
 
 def list_linen_items(db: Session, *, hotel_id: int) -> list[LinenItem]:
@@ -213,6 +216,8 @@ def register_movement(
 ) -> LinenMovement:
     if movement_type not in VALID_MOVEMENT_TYPES:
         raise LinenError("El tipo de movimiento de ropa blanca no es válido.")
+    if movement_type == "retirement":
+        raise LinenError("Usá la operación de baja por desgaste para retirar ropa blanca de circulación.")
     if quantity <= 0:
         raise LinenError("La cantidad del movimiento de ropa blanca debe ser positiva.")
     item = (
@@ -246,6 +251,120 @@ def register_movement(
     )
     db.add(movement)
     db.flush()
+    return movement
+
+
+def retire_linen(
+    db: Session,
+    *,
+    hotel_id: int,
+    item_id: int,
+    location_id: int,
+    quantity: Decimal,
+    reason: str,
+    created_by_user_id: int | None,
+    idempotency_key: str,
+) -> LinenMovement:
+    """Permanently remove worn linen from hotel-owned stock, with an audit trail."""
+    normalized_reason = (reason or "").strip()
+    normalized_key = (idempotency_key or "").strip()
+    if quantity <= 0:
+        raise LinenError("La cantidad de la baja debe ser positiva.")
+    if not normalized_reason or len(normalized_reason) > 500:
+        raise LinenError("El motivo de la baja es obligatorio y no puede superar 500 caracteres.")
+    if not normalized_key or len(normalized_key) > 128 or any(ord(char) < 33 for char in normalized_key):
+        raise LinenError("El Idempotency-Key debe tener entre 1 y 128 caracteres visibles.")
+
+    item = (
+        db.query(LinenItem)
+        .filter(LinenItem.id == item_id, LinenItem.hotel_id == hotel_id, LinenItem.deleted_at.is_(None))
+        .with_for_update(of=LinenItem)
+        .one_or_none()
+    )
+    if item is None:
+        raise LinenNotFoundError("No se encontró el artículo de ropa blanca.")
+    location = get_location(db, hotel_id=hotel_id, location_id=location_id)
+    vendor_location_id = (
+        db.query(LaundryVendor.id)
+        .filter(LaundryVendor.hotel_id == hotel_id, LaundryVendor.linen_location_id == location.id)
+        .first()
+    )
+    if vendor_location_id is not None:
+        raise LinenError("La baja por desgaste solo se puede registrar en una ubicación del hotel.")
+
+    existing = (
+        db.query(LinenMovement)
+        .filter(LinenMovement.hotel_id == hotel_id, LinenMovement.idempotency_key == normalized_key)
+        .one_or_none()
+    )
+    if existing is not None:
+        if (
+            existing.movement_type != "retirement"
+            or existing.item_id != item_id
+            or existing.location_id != location_id
+            or existing.quantity != quantity
+            or existing.reason != normalized_reason
+            or existing.created_by_user_id != created_by_user_id
+        ):
+            raise LinenIdempotencyConflict("El Idempotency-Key ya fue usado para otra baja de ropa blanca.")
+        return existing
+
+    if quantity > current_stock(db, hotel_id=hotel_id, item_id=item_id, location_id=location_id):
+        raise LinenError("La baja dejaría negativo el stock de ropa blanca en esa ubicación.")
+
+    movement = LinenMovement(
+        hotel_id=hotel_id,
+        item_id=item_id,
+        location_id=location_id,
+        movement_type="retirement",
+        quantity=quantity,
+        reason=normalized_reason,
+        created_by_user_id=created_by_user_id,
+        created_at=utc_naive(hotel_business_now(db, hotel_id)),
+        idempotency_key=normalized_key,
+    )
+    try:
+        with db.begin_nested():
+            db.add(movement)
+            db.flush()
+            db.add(
+                SecurityAuditLog(
+                    hotel_id=hotel_id,
+                    user_id=created_by_user_id,
+                    action="laundry.linen.retired",
+                    resource_type="linen_movement",
+                    resource_id=str(movement.id),
+                    details=json.dumps(
+                        {
+                            "item_id": item_id,
+                            "location_id": location_id,
+                            "quantity": str(quantity),
+                            "reason": normalized_reason,
+                        },
+                        sort_keys=True,
+                    ),
+                    created_at=utc_naive(hotel_business_now(db, hotel_id)),
+                )
+            )
+            db.flush()
+    except IntegrityError as exc:
+        existing = (
+            db.query(LinenMovement)
+            .filter(LinenMovement.hotel_id == hotel_id, LinenMovement.idempotency_key == normalized_key)
+            .one_or_none()
+        )
+        if existing is None:
+            raise
+        if (
+            existing.movement_type == "retirement"
+            and existing.item_id == item_id
+            and existing.location_id == location_id
+            and existing.quantity == quantity
+            and existing.reason == normalized_reason
+            and existing.created_by_user_id == created_by_user_id
+        ):
+            return existing
+        raise LinenIdempotencyConflict("El Idempotency-Key ya fue usado para otra baja de ropa blanca.") from exc
     return movement
 
 
@@ -499,18 +618,66 @@ def linen_summary(db: Session, *, hotel_id: int, location_id: int | None = None)
         )
         .filter(LinenMovement.hotel_id == hotel_id, LinenMovement.item_id.in_([item.id for item in items]))
     )
-    if location_id is not None:
-        query = query.filter(LinenMovement.location_id == location_id)
     movement_rows = query.group_by(LinenMovement.item_id, LinenMovement.location_id).all()
-    totals: dict[int, Decimal] = {}
-    location_balances: dict[int, dict[int, Decimal]] = {}
+    ledger_totals: dict[int, Decimal] = {}
+    location_balances: dict[int, dict[int | None, Decimal]] = {}
     location_movement_counts: dict[int, dict[int, int]] = {}
     for item_id, movement_location_id, total, movement_count in movement_rows:
         quantity = Decimal(total).quantize(Decimal("0.01"))
-        totals[item_id] = totals.get(item_id, Decimal("0.00")) + quantity
+        ledger_totals[item_id] = ledger_totals.get(item_id, Decimal("0.00")) + quantity
+        location_balances.setdefault(item_id, {})[movement_location_id] = quantity
         if movement_location_id is not None:
-            location_balances.setdefault(item_id, {})[movement_location_id] = quantity
             location_movement_counts.setdefault(item_id, {})[movement_location_id] = movement_count
+
+    discrepancies = (
+        db.query(LaundryRemitoDiscrepancy)
+        .filter(
+            LaundryRemitoDiscrepancy.hotel_id == hotel_id,
+            LaundryRemitoDiscrepancy.linen_item_id.in_([item.id for item in items]),
+        )
+        .order_by(LaundryRemitoDiscrepancy.id.asc())
+        .all()
+    )
+    discrepancies_by_item: dict[int, list[LaundryRemitoDiscrepancy]] = {}
+    for discrepancy in discrepancies:
+        discrepancies_by_item.setdefault(discrepancy.linen_item_id, []).append(discrepancy)
+
+    available_balances: dict[int, dict[int | None, Decimal]] = {}
+    pending_excess_by_location: dict[int, dict[int, Decimal]] = {}
+    pending_shortage_by_item: dict[int, Decimal] = {}
+    pending_excess_by_item: dict[int, Decimal] = {}
+    for item in items:
+        raw_balances = dict(location_balances.get(item.id, {}))
+        if not raw_balances:
+            raw_balances = {}
+        effective_balances = _apply_shortage_custody_overlay(
+            raw_balances,
+            [
+                row
+                for row in discrepancies_by_item.get(item.id, [])
+                if row.discrepancy_type == "short_return"
+            ],
+        )
+        available_balances[item.id] = effective_balances
+        for row in discrepancies_by_item.get(item.id, []):
+            if row.discrepancy_type == "short_return" and row.status != "resolved":
+                pending_shortage_by_item[item.id] = (
+                    pending_shortage_by_item.get(item.id, Decimal("0.00")) + Decimal(row.remaining_quantity)
+                )
+            elif (
+                row.discrepancy_type == "excess_return"
+                and row.status in {"pending_approval", "pending_identification", "return_to_laundry"}
+            ):
+                pending_excess_by_item[item.id] = (
+                    pending_excess_by_item.get(item.id, Decimal("0.00")) + Decimal(row.remaining_quantity)
+                )
+                if row.custody_location_id is not None:
+                    pending_excess_by_location.setdefault(item.id, {})[row.custody_location_id] = (
+                        pending_excess_by_location.setdefault(item.id, {}).get(
+                            row.custody_location_id, Decimal("0.00")
+                        )
+                        + Decimal(row.remaining_quantity)
+                    )
     minimums: dict[int, Decimal] = {}
     if location_id is not None:
         minimums = {
@@ -523,22 +690,45 @@ def linen_summary(db: Session, *, hotel_id: int, location_id: int | None = None)
             )
             .all()
         }
-    return [
-        {
-            "item": item,
-            "current_quantity": totals.get(item.id, Decimal("0.00")),
-            "min_quantity": minimums.get(item.id),
-            "location_balances": [
-                {
-                    "location_id": current_location_id,
-                    "current_quantity": quantity,
-                    "has_movements": location_movement_counts[item.id][current_location_id] > 0,
-                }
-                for current_location_id, quantity in sorted(location_balances.get(item.id, {}).items())
-            ],
+    results = []
+    for item in items:
+        ledger_by_location = location_balances.get(item.id, {})
+        effective_by_location = available_balances.get(item.id, {})
+        raw_total = ledger_totals.get(item.id, Decimal("0.00"))
+        available_total = sum(effective_by_location.values(), Decimal("0.00")).quantize(Decimal("0.01"))
+        location_ids = {
+            current_location_id
+            for current_location_id in set(ledger_by_location) | set(effective_by_location)
+            if current_location_id is not None
         }
-        for item in items
-    ]
+        location_ids.update(pending_excess_by_location.get(item.id, {}))
+        if location_id is not None:
+            raw_total = ledger_by_location.get(location_id, Decimal("0.00"))
+            available_total = effective_by_location.get(location_id, Decimal("0.00"))
+            location_ids = {location_id} if location_id in ledger_by_location or location_id in effective_by_location else set()
+        results.append(
+            {
+                "item": item,
+                "current_quantity": available_total,
+                "ledger_quantity": raw_total,
+                "pending_excess_quantity": pending_excess_by_item.get(item.id, Decimal("0.00")),
+                "pending_shortage_quantity": pending_shortage_by_item.get(item.id, Decimal("0.00")),
+                "min_quantity": minimums.get(item.id),
+                "location_balances": [
+                    {
+                        "location_id": current_location_id,
+                        "current_quantity": effective_by_location.get(current_location_id, Decimal("0.00")),
+                        "ledger_quantity": ledger_by_location.get(current_location_id, Decimal("0.00")),
+                        "pending_excess_quantity": pending_excess_by_location.get(item.id, {}).get(
+                            current_location_id, Decimal("0.00")
+                        ),
+                        "has_movements": location_movement_counts.get(item.id, {}).get(current_location_id, 0) > 0,
+                    }
+                    for current_location_id in sorted(location_ids)
+                ],
+            }
+        )
+    return results
 
 
 def current_stock(
@@ -560,3 +750,75 @@ def current_stock(
         query = query.filter(LinenMovement.location_id == location_id)
     total = query.scalar()
     return Decimal(total).quantize(Decimal("0.01"))
+
+
+def available_stock(
+    db: Session, *, hotel_id: int, item_id: int, location_id: int | None = None
+) -> Decimal:
+    """Available hotel-owned balance after isolating unresolved laundry shortages.
+
+    The movement ledger remains unchanged while a remito discrepancy is under
+    review. A confirmed custody location reclassifies the disputed quantity in
+    this projection; unknown custody remains unavailable until a person records
+    where the item is.
+    """
+    get_linen_item(db, hotel_id=hotel_id, item_id=item_id)
+    signed_quantity = case(
+        (LinenMovement.movement_type.in_(_OUTBOUND_MOVEMENT_TYPES), -LinenMovement.quantity),
+        else_=LinenMovement.quantity,
+    )
+    rows = (
+        db.query(LinenMovement.location_id, func.coalesce(func.sum(signed_quantity), 0))
+        .filter(LinenMovement.hotel_id == hotel_id, LinenMovement.item_id == item_id)
+        .group_by(LinenMovement.location_id)
+        .all()
+    )
+    balances = {
+        row_location_id: Decimal(quantity).quantize(Decimal("0.01"))
+        for row_location_id, quantity in rows
+    }
+    discrepancies = (
+        db.query(LaundryRemitoDiscrepancy)
+        .filter(
+            LaundryRemitoDiscrepancy.hotel_id == hotel_id,
+            LaundryRemitoDiscrepancy.linen_item_id == item_id,
+            LaundryRemitoDiscrepancy.discrepancy_type == "short_return",
+        )
+        .order_by(LaundryRemitoDiscrepancy.id.asc())
+        .all()
+    )
+    effective = _apply_shortage_custody_overlay(balances, discrepancies)
+    if location_id is not None:
+        get_location(db, hotel_id=hotel_id, location_id=location_id)
+        return effective.get(location_id, Decimal("0.00")).quantize(Decimal("0.01"))
+    return sum(effective.values(), Decimal("0.00")).quantize(Decimal("0.01"))
+
+
+def _apply_shortage_custody_overlay(
+    ledger_balances: dict[int | None, Decimal],
+    discrepancies: list[LaundryRemitoDiscrepancy],
+) -> dict[int | None, Decimal]:
+    """Project known/unknown missing linen without writing a ledger movement."""
+    effective = {key: Decimal(value).quantize(Decimal("0.01")) for key, value in ledger_balances.items()}
+    reserved_by_source: dict[int, Decimal] = {}
+    for discrepancy in discrepancies:
+        if discrepancy.status == "resolved":
+            # Terminal actions either record a ledger event or confirm that
+            # the quantity remains with the vendor. Pending states alone need
+            # an availability overlay.
+            continue
+        source_id = discrepancy.source_location_id
+        target_id = discrepancy.custody_location_id
+        if target_id == source_id:
+            continue
+        source_balance = max(effective.get(source_id, Decimal("0.00")), Decimal("0.00"))
+        already_reserved = reserved_by_source.get(source_id, Decimal("0.00"))
+        remaining_source = max(source_balance - already_reserved, Decimal("0.00"))
+        quantity = min(Decimal(discrepancy.remaining_quantity), remaining_source).quantize(Decimal("0.01"))
+        if quantity <= 0:
+            continue
+        effective[source_id] = (effective.get(source_id, Decimal("0.00")) - quantity).quantize(Decimal("0.01"))
+        reserved_by_source[source_id] = already_reserved + quantity
+        if target_id is not None:
+            effective[target_id] = (effective.get(target_id, Decimal("0.00")) + quantity).quantize(Decimal("0.01"))
+    return effective

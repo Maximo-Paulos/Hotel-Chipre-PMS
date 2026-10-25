@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import io
 import json
+import re
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -282,9 +283,6 @@ def _seed_analytics_data(SessionLocal):
             )
             db.add(company)
             db.flush()
-        guest = db.query(User).filter(User.email == "guest-seed@test.com").first()
-        if not guest:
-            pass
         from app.models.guest import Guest
 
         guest_obj = db.query(Guest).filter(Guest.hotel_id == 1, Guest.email == "guest@acme.test").first()
@@ -793,10 +791,13 @@ def test_analytics_breakdowns_reuse_facts_and_room_detail_filters_by_room(api_cl
         room_id = db.query(Room.id).filter(Room.hotel_id == 1, Room.room_number == "101").scalar()
     engine = SessionLocal.kw["bind"]
     statements: list[str] = []
+    all_statements: list[str] = []
 
     def capture(_connection, _cursor, statement, _parameters, _context, _executemany):
-        if "from fact_reservation_daily" in statement.lower():
-            statements.append(statement.lower())
+        normalized = statement.lower()
+        all_statements.append(normalized)
+        if "from fact_reservation_daily" in normalized:
+            statements.append(normalized)
 
     event.listen(engine, "before_cursor_execute", capture)
     try:
@@ -829,6 +830,7 @@ def test_analytics_breakdowns_reuse_facts_and_room_detail_filters_by_room(api_cl
         assert len(statements) == 1
         assert "fact_reservation_daily.room_id =" not in statements[0]
         statements.clear()
+        all_statements.clear()
 
         detail = client.get(
             f"/api/analytics/rooms/{room_id}",
@@ -836,11 +838,23 @@ def test_analytics_breakdowns_reuse_facts_and_room_detail_filters_by_room(api_cl
             headers=headers,
         )
         assert detail.status_code == 200, detail.text
+        room_payload = detail.json()["data"]["room"]
+        assert room_payload["room_number"] == "101"
+        assert room_payload["category_name"] == "Standard"
         reservation_fact_queries = [
             statement for statement in statements if "from fact_reservation_daily" in statement
         ]
         assert len(reservation_fact_queries) == 1
         assert "fact_reservation_daily.room_id =" in reservation_fact_queries[0]
+        history_hydration_queries = [
+            statement
+            for statement in all_statements
+            if re.search(r"\b(?:from|join)\s+(?:public\.)?(?:reservations|transactions)\b", statement)
+        ]
+        assert history_hydration_queries == [], (
+            "Room detail should read its bounded analytics facts without hydrating reservation or transaction history: "
+            f"{history_hydration_queries}"
+        )
     finally:
         event.remove(engine, "before_cursor_execute", capture)
 
@@ -1339,7 +1353,7 @@ def test_restart_recovers_xlsx_to_local_storage_and_downloads_it(api_client, tmp
 
     async def restart_once():
         async with main_module.lifespan(startup_app):
-            pass
+            await startup_app.state.analytics_export_queue.join()
 
     asyncio.run(restart_once())
 
@@ -1735,10 +1749,14 @@ def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatc
     _seed_analytics_data(SessionLocal)
     plan_state["plan"] = "ultra"
 
-    import app.services.analytics_service as analytics_service_module
     import app.services.analytics_insights as analytics_insights_module
+    import app.services.analytics_service as analytics_service_module
     import app.tasks.analytics_tasks as analytics_tasks_module
-    from app.services.analytics_ai_providers import AnalyticsAIProviderStatus, AnalyticsAIResult
+    from app.models.stored_object import StoredObject, StoredObjectStatusEnum
+    from app.services.analytics_ai_providers import (
+        AnalyticsAIProviderStatus,
+        AnalyticsAIResult,
+    )
     from app.services.object_storage import ObjectStorageError, get_object_storage
 
     monkeypatch.setattr(analytics_tasks_module, "get_engine", lambda url: SessionLocal.kw["bind"])
@@ -1766,6 +1784,7 @@ def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatc
     )
     assert xlsx_resp.status_code == 201, xlsx_resp.text
     job_id = xlsx_resp.json()["id"]
+    _wait_for_xlsx_completion(client, job_id, headers)
 
     active_xlsx_resp = client.post(
         "/api/analytics/exports/xlsx",
@@ -1774,7 +1793,6 @@ def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatc
     )
     assert active_xlsx_resp.status_code == 201, active_xlsx_resp.text
     active_job_id = active_xlsx_resp.json()["id"]
-    _wait_for_xlsx_completion(client, job_id, headers)
     _wait_for_xlsx_completion(client, active_job_id, headers)
 
     with SessionLocal() as db:
@@ -1794,6 +1812,28 @@ def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatc
         assert db.get(AnalyticsExportJob, job_id).status == AnalyticsExportStatusEnum.EXPIRED
     # Sanity check: the export bytes actually exist in object storage before cleanup runs.
     get_object_storage().get_bytes(object_key)
+    with SessionLocal() as db:
+        expired_object = db.query(StoredObject).filter(StoredObject.object_key == object_key).one()
+        active_object = db.query(StoredObject).filter(StoredObject.object_key == active_object_key).one()
+        assert expired_object.status == StoredObjectStatusEnum.READY.value
+        assert expired_object.deleted_at is None
+        assert active_object.status == StoredObjectStatusEnum.READY.value
+
+    delete_export_file = analytics_tasks_module.delete_export_file
+
+    def fail_object_delete(_job):
+        raise ObjectStorageError("simulated storage outage")
+
+    monkeypatch.setattr(analytics_tasks_module, "delete_export_file", fail_object_delete)
+    failed_cleanup = analytics_tasks_module.cleanup_expired_exports.run(database_url="sqlite:///:memory:")
+    assert failed_cleanup["deleted_objects"] == 0
+    with SessionLocal() as db:
+        job = db.query(AnalyticsExportJob).filter(AnalyticsExportJob.id == job_id).one()
+        stored_object = db.query(StoredObject).filter(StoredObject.object_key == object_key).one()
+        assert job.file_path == object_key
+        assert stored_object.status == StoredObjectStatusEnum.READY.value
+        assert stored_object.deleted_at is None
+    monkeypatch.setattr(analytics_tasks_module, "delete_export_file", delete_export_file)
 
     from sqlalchemy import event
 
@@ -1817,16 +1857,39 @@ def test_cleanup_expired_exports_task(api_client, monkeypatch: pytest.MonkeyPatc
         assert job is not None
         assert job.status == AnalyticsExportStatusEnum.EXPIRED
         assert job.file_path is None
+        expired_object = db.query(StoredObject).filter(StoredObject.object_key == object_key).one()
+        assert expired_object.status == StoredObjectStatusEnum.DELETED.value
+        assert expired_object.deleted_at is not None
+        assert expired_object.deleted_by_user_id is None
         active_job = db.get(AnalyticsExportJob, active_job_id)
         assert active_job is not None
         assert active_job.status == AnalyticsExportStatusEnum.COMPLETED
         assert active_job.file_path == active_object_key
+        active_object = db.query(StoredObject).filter(StoredObject.object_key == active_object_key).one()
+        assert active_object.status == StoredObjectStatusEnum.READY.value
+        assert active_object.deleted_at is None
 
     # cleanup_expired_exports must also delete the object-storage file, not just
     # flip the job status.
     with pytest.raises(ObjectStorageError):
         get_object_storage().get_bytes(object_key)
     get_object_storage().get_bytes(active_object_key)
+
+
+def test_delete_export_file_rejects_noncanonical_key():
+    from types import SimpleNamespace
+
+    from app.services.analytics_exports import delete_export_file
+    from app.services.object_storage import ObjectStorageError
+
+    job = SimpleNamespace(
+        id=104,
+        hotel_id=1,
+        created_at=datetime(2026, 10, 24, tzinfo=timezone.utc),
+        file_path="analytics-exports/2/2026/10/104.xlsx",
+    )
+    with pytest.raises(ObjectStorageError, match="does not match its job"):
+        delete_export_file(job)
 
 
 def test_analytics_read_preserves_stale_metadata_without_rebuilding_complete_facts(api_client):

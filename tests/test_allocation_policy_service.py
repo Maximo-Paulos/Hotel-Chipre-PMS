@@ -8,8 +8,14 @@ import pytest
 from app.models.allocation import AllocationExplanation
 from app.models.commercial import ProductRoomCompatibility, SellableProduct
 from app.models.hotel_config import HotelConfiguration
-from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
+from app.models.reservation import (
+    Reservation,
+    ReservationSourceEnum,
+    ReservationStatusEnum,
+)
+from app.services.allocation_learning_service import draft_policy_from_questionnaire
 from app.services.allocation_policy_service import (
+    AllocationPolicyError,
     apply_policy_suggestion,
     create_policy_suggestion_draft,
     create_policy_version,
@@ -20,8 +26,10 @@ from app.services.allocation_policy_service import (
     record_manual_override_feedback,
     review_policy_suggestion,
 )
-from app.services.allocation_learning_service import draft_policy_from_questionnaire
-from app.services.allocation_runtime_service import get_allocation_run_details, run_persisted_allocation
+from app.services.allocation_runtime_service import (
+    get_allocation_run_details,
+    run_persisted_allocation,
+)
 
 GEMMA_DEFER_REASON = "Gemma validation is deferred until the final IA configuration phase."
 
@@ -65,6 +73,35 @@ def test_policy_version_publish_switches_active_version(db):
     assert settings.version.id == custom_version.id
     assert settings.weights["prefer_exact_match"] == 900.0
     assert settings.constraints["allow_category_fallback"] is False
+
+
+def test_combined_objective_requires_hotel_weight_and_persists_it(db):
+    db.add(HotelConfiguration(id=63, hotel_name="Weighted Policy Hotel", subscription_active=True))
+    db.flush()
+    profile = ensure_default_policy_profile(db, 63)
+
+    with pytest.raises(AllocationPolicyError, match="revenue weight"):
+        create_policy_version(
+            db,
+            hotel_id=63,
+            profile_id=profile.id,
+            constraints={"optimization_objective": "combined"},
+            weights={},
+        )
+
+    version = create_policy_version(
+        db,
+        hotel_id=63,
+        profile_id=profile.id,
+        constraints={"optimization_objective": "combined"},
+        weights={"combined_revenue_weight": 0.35},
+        publish=True,
+    )
+    settings = get_active_policy_settings(db, 63)
+
+    assert version.is_published is True
+    assert settings.constraints["optimization_objective"] == "combined"
+    assert settings.weights["combined_revenue_weight"] == 0.35
 
 
 def test_record_manual_override_feedback_creates_reason_and_feedback(db, hotel_config, sample_guest, sample_categories):

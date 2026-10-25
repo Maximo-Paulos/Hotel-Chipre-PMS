@@ -2,16 +2,20 @@
 Pydantic schemas for Reservation.
 """
 import re
-
-from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Literal, Optional
 from datetime import date, datetime
 from decimal import Decimal
-from app.models.reservation import ReservationChannelCodeEnum, ReservationStatusEnum, ReservationSourceEnum
+from typing import Literal, Optional
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.models.reservation import (
+    ReservationChannelCodeEnum,
+    ReservationSourceEnum,
+    ReservationStatusEnum,
+)
+from app.schemas.guest_restriction import GuestRestrictionOverrideRequest
 from app.schemas.payment_link import PaymentLinkCreate, PaymentLinkRead
 from app.schemas.transaction import PaymentRequest, TransactionRead
-from app.schemas.guest_restriction import GuestRestrictionOverrideRequest
-
 
 _ARRIVAL_TIME_PATTERN = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 
@@ -48,6 +52,7 @@ class ReservationCreate(BaseModel):
     guest_id: int
     category_id: int
     room_id: Optional[int] = None
+    allocation_locked: bool = False
     sellable_product_id: Optional[int] = None
     rate_plan_id: Optional[int] = None
     tax_policy_id: Optional[int] = None
@@ -161,6 +166,7 @@ class ReservationRead(BaseModel):
     nights: int = 0
     additional_guests: list[GuestSummary] = []
     allocation_status: str = "unassigned"
+    allocation_locked: bool = False
     requires_manual_review: bool = False
     mobility_restriction: bool = False
     is_wait_listed: bool = False
@@ -224,6 +230,7 @@ class ReservationGroupRead(BaseModel):
 
 class ReservationUpdate(BaseModel):
     room_id: Optional[int] = None
+    allocation_locked: Optional[bool] = None
     check_in_date: Optional[date] = None
     check_out_date: Optional[date] = None
     total_amount: Optional[Decimal] = Field(default=None, ge=0, max_digits=12, decimal_places=2)
@@ -292,13 +299,28 @@ class ReservationDateChangeResponse(BaseModel):
     status_transitioned: bool = False
 
 
+class ReservationExtensionImpactAction(BaseModel):
+    action: Literal["moved_equivalent", "moved_superior", "assignment_released", "blocked"]
+    room_label: str = Field(max_length=50)
+    check_in_date: date
+    check_out_date: date
+    confirmation_code: Optional[str] = Field(default=None, max_length=30)
+    reason_code: Optional[str] = Field(default=None, max_length=80)
+
+
+class ReservationExtensionImpactPlan(BaseModel):
+    fingerprint: str = Field(pattern="^[0-9a-f]{64}$")
+    actions: list[ReservationExtensionImpactAction]
+
+
 class ReservationExtensionPreviewResponse(BaseModel):
     reservation_id: int
     current_checkout_date: date
     new_checkout_date: date
     client_version: int
-    extension_amount: Decimal
+    extension_amount: Optional[Decimal] = None
     currency_code: str = Field(min_length=3, max_length=3)
+    impact_plan: Optional[ReservationExtensionImpactPlan] = None
 
 
 class ReservationExtensionRequest(BaseModel):
@@ -306,6 +328,7 @@ class ReservationExtensionRequest(BaseModel):
     client_version: int
     pricing_mode: str = Field(default="current_rate", pattern="^(current_rate|original_average)$")
     payment_action: Literal["immediate_payment", "payment_link", "company_account", "pending_balance"] = "payment_link"
+    confirmed_impact_fingerprint: Optional[str] = Field(default=None, pattern="^[0-9a-f]{64}$")
     immediate_payment: Optional[PaymentRequest] = None
     payment_link: Optional[PaymentLinkCreate] = None
     notes: Optional[str] = Field(default=None, max_length=500)

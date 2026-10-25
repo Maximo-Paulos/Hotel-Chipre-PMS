@@ -137,6 +137,7 @@ from app.api import (
     cash_register,
     movement_groups,
     room_movement_groups,
+    housekeeping,
     health,
     events,
     collaboration,
@@ -508,7 +509,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Server-Timing", "X-Request-Id"],
+    expose_headers=[
+        "Server-Timing",
+        "X-Request-Id",
+        "X-Has-Next-Page",
+        "X-Page",
+        "X-Page-Size",
+    ],
 )
 
 # Keep large JSON responses small on Render's metered outbound bandwidth.
@@ -523,6 +530,7 @@ app.add_middleware(ResponseBodySizeTelemetryMiddleware)
 app.include_router(onboarding.router)
 app.include_router(reference.router)
 app.include_router(rooms.router)
+app.include_router(housekeeping.router)
 app.include_router(guests.router)
 app.include_router(guest_restrictions.router)
 app.include_router(guest_room_avoidances.router)

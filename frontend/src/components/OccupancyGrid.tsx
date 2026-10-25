@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { OccupancyGridBlock, OccupancyGridReservation, OccupancyGridResponse, OccupancyGridRoom } from "../api/reservations";
 import { reservationStatusConfig } from "../utils/reservationStatus";
 
-// ponytail: a fixed N-day window (30 by default, see OccupancyPlanningPage)
+// Use a fixed N-day window (30 by default, see OccupancyPlanningPage)
 // with prev/next prefetch, not virtualized infinite scroll. Rows are rooms
 // (dozens for this hotel), not thousands, so a plain table is plenty. If the
 // hotel ever crosses ~200 rooms or asks for continuous zoom, virtualize then.
@@ -178,9 +178,9 @@ function Cell({
   dropBlockedReason?: string | null;
 }) {
   const { t } = useTranslation("reservations");
-  // ponytail: native HTML5 drag, no dependency. Drag is a shortcut only --
-  // it does not work on touch or with a keyboard, so the picker in the
-  // reservation drawer stays the primary path.
+  // Use native HTML5 drag without a dependency. It is an additional desktop
+  // gesture and is not available to touch or keyboard users; the picker in
+  // the reservation drawer remains the primary path.
   const canDrop = Boolean(onDropReservation) && roomId !== undefined && !dropBlockedReason;
   const dropProps = canDrop
     ? {

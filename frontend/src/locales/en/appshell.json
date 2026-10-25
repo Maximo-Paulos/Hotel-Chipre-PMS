@@ -62,6 +62,7 @@
   "nav": {
     "daily": {
       "planning": "Planning",
+      "smartAllocation": "Smart allocation",
       "reservations": "Reservations",
       "guests": "Guests",
       "rooms": "Rooms",

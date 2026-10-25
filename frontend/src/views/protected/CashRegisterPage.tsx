@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   downloadCashExpensesCsv,
@@ -20,7 +21,7 @@ import {
   useCashDailySummary,
   useCashRegisterMutations,
   useCashExpenses,
-  useCashSessions,
+  useCashSessionPage,
   useCashSessionSummary
 } from "../../hooks/useCashRegister";
 import { useSession } from "../../state/session";
@@ -30,6 +31,7 @@ import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 import { formatHotelDateTime, formatHotelTime } from "../../utils/date";
 import { useBusinessDate } from "../../hooks/useBusinessClock";
 import { cashExpenseValidationMessage } from "../../utils/cashExpenseValidation.mjs";
+import { formatCashTenderAmount } from "../../utils/cashTender.mjs";
 
 const emptyMovementForm: CashMovementPayload = {
   movement_type: "income",
@@ -40,14 +42,18 @@ const emptyDailyEntries: CashDailyEntry[] = [];
 
 const money = (value?: number | string | null, currency = "ARS") =>
   Number(value ?? 0).toLocaleString("es-AR", { style: "currency", currency });
+const cashMoney = (value?: number | string | null, currency = "ARS") =>
+  formatCashTenderAmount(value, currency, "es-AR");
 
 export function CashRegisterPage() {
+  const { t } = useTranslation("reservations");
   const { session } = useSession();
   const { hasPermission } = useEffectivePermissions();
   const businessDate = useBusinessDate();
   const hotelConfigQuery = useHotelConfig();
   const defaultCurrency = (hotelConfigQuery.data?.default_currency || "ARS").toUpperCase();
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const [sessionPage, setSessionPage] = useState(1);
   const [openingBalance, setOpeningBalance] = useState<number | null>(null);
   const [openingCurrency, setOpeningCurrency] = useState("ARS");
   const [openingNotes, setOpeningNotes] = useState("");
@@ -95,12 +101,12 @@ export function CashRegisterPage() {
     });
   };
 
-  const sessionsQuery = useCashSessions();
+  const sessionsQuery = useCashSessionPage(sessionPage);
   const latestCloseReportQuery = useLatestCashCloseReport({ currency: openingCurrency });
   const pendingCloseReportsQuery = usePendingCashCloseReports();
   const canReceiveCustody = hasPermission("cash:custody:receive");
   const pendingCashCustodyReportsQuery = usePendingCashCustodyReports({ enabled: canReceiveCustody });
-  const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data]);
+  const sessions = useMemo(() => sessionsQuery.data?.sessions ?? [], [sessionsQuery.data]);
   const pendingCloseReports = useMemo(() => pendingCloseReportsQuery.data ?? [], [pendingCloseReportsQuery.data]);
   const pendingCashCustodyReports = useMemo(
     () => pendingCashCustodyReportsQuery.data ?? [],
@@ -259,6 +265,7 @@ export function CashRegisterPage() {
         currency_code: openingCurrency,
         notes: openingNotes.trim() || null
       });
+      setSessionPage(1);
       setSelectedSessionId(session.id);
       setOpeningBalance(null);
       setOpeningNotes("");
@@ -612,11 +619,13 @@ export function CashRegisterPage() {
         {dailySummaryQuery.isError ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">No se pudo cargar el resumen diario: {(dailySummaryQuery.error as Error).message}</p> : null}
         {dailySummaryQuery.data ? (
           <>
-            <div className="grid gap-3 sm:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
               <Metric label="Cobrado" value={money(dailySummaryQuery.data.gross_collected, dailySummaryQuery.data.currency_code)} />
               <Metric label="Devoluciones" value={money(dailySummaryQuery.data.refunds, dailySummaryQuery.data.currency_code)} />
               <Metric label="Neto" value={money(dailySummaryQuery.data.net_collected, dailySummaryQuery.data.currency_code)} />
               <Metric label="Efectivo neto" value={money(dailySummaryQuery.data.physical_cash_net_collected, dailySummaryQuery.data.currency_code)} />
+              <Metric label="Propinas voluntarias" value={cashMoney(dailySummaryQuery.data.cash_tips_total ?? 0, dailySummaryQuery.data.currency_code)} />
+              <Metric label="Propinas de recibos previos" value={cashMoney(dailySummaryQuery.data.prior_receipt_cash_tips_total ?? 0, dailySummaryQuery.data.currency_code)} />
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -728,7 +737,20 @@ export function CashRegisterPage() {
                         <tr key={receipt.transaction_id}>
                           <td className="whitespace-nowrap px-4 py-3">{new Date(`${receipt.collected_on}T12:00:00`).toLocaleDateString("es-AR")}</td>
                           <td className="px-4 py-3 font-medium text-slate-800">{receipt.confirmation_code}</td>
-                          <td className="whitespace-nowrap px-4 py-3 font-semibold">{money(receipt.amount, receipt.currency_code)}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-semibold">
+                            {money(receipt.amount, receipt.currency_code)}
+                            {receipt.cash_received_amount !== null && receipt.cash_received_amount !== undefined ? (
+                              <span className="mt-1 block whitespace-normal text-xs font-normal text-emerald-800">
+                                Entregado {cashMoney(receipt.cash_received_amount, receipt.currency_code)}
+                                {receipt.cash_change_amount !== null && receipt.cash_change_amount !== undefined
+                                  ? ` · Vuelto ${cashMoney(receipt.cash_change_amount, receipt.currency_code)}`
+                                  : ""}
+                                {Number(receipt.cash_tip_amount ?? 0) > 0
+                                  ? ` · Propina ${cashMoney(Number(receipt.cash_tip_amount), receipt.currency_code)}`
+                                  : ""}
+                              </span>
+                            ) : null}
+                          </td>
                           <td className="max-w-sm px-4 py-3 text-slate-600">{receipt.prior_receipt_note}</td>
                           <td className="px-4 py-3 text-slate-600">{receipt.recorded_by_name}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-slate-500">{formatHotelDateTime(receipt.recorded_at, hotelTimeZone)}</td>
@@ -780,7 +802,20 @@ export function CashRegisterPage() {
                       <td className="px-4 py-3 text-slate-600">{entry.payment_method ? paymentMethodLabel(entry.payment_method) : "Caja física"}</td>
                       <td className="px-4 py-3 text-slate-600">{entry.reservation_id ? `#${entry.reservation_id}` : "-"}</td>
                       <td className="px-4 py-3 text-slate-600">{entry.entry_type === "manual_movement" ? movementLabel(entry.movement_type) : entry.transaction_type === "refund" ? "Devolución" : "Cobro"}</td>
-                      <td className={`px-4 py-3 font-semibold ${entry.signed_amount < 0 ? "text-rose-700" : "text-slate-900"}`}>{money(entry.signed_amount, entry.currency_code)}</td>
+                      <td className={`px-4 py-3 font-semibold ${entry.signed_amount < 0 ? "text-rose-700" : "text-slate-900"}`}>
+                        {money(entry.signed_amount, entry.currency_code)}
+                        {entry.cash_received_amount !== null && entry.cash_received_amount !== undefined ? (
+                          <span className="mt-1 block whitespace-nowrap text-xs font-normal text-emerald-800">
+                            Entregado {cashMoney(entry.cash_received_amount, entry.currency_code)}
+                            {entry.cash_change_amount !== null && entry.cash_change_amount !== undefined
+                              ? ` · Vuelto ${cashMoney(entry.cash_change_amount, entry.currency_code)}`
+                              : ""}
+                            {Number(entry.cash_tip_amount ?? 0) > 0
+                              ? ` · Propina ${cashMoney(Number(entry.cash_tip_amount), entry.currency_code)}`
+                              : ""}
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-500">{formatHotelTime(entry.occurred_at, hotelTimeZone)}</td>
                     </tr>
                   ))}
@@ -874,9 +909,10 @@ export function CashRegisterPage() {
         </section>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Metric label="Saldo inicial" value={money(selectedSession?.opening_balance, currency)} />
         <Metric label="Ingresos" value={money(totals.income, currency)} />
+        <Metric label="Propinas voluntarias" value={cashMoney(summary?.cash_tips_total ?? 0, currency)} />
         <Metric label="Egresos" value={money(totals.expense, currency)} />
         <Metric label="Esperado" value={money(expectedBalance, currency)} />
       </div>
@@ -900,6 +936,7 @@ export function CashRegisterPage() {
                   <div className="flex justify-between gap-2"><dt>Ingresos</dt><dd>{money(collector.income_total, currency)}</dd></div>
                   <div className="flex justify-between gap-2"><dt>Egresos</dt><dd>{money(collector.expense_total, currency)}</dd></div>
                   <div className="flex justify-between gap-2"><dt>Ajustes</dt><dd>{money(collector.adjustment_total, currency)}</dd></div>
+                  <div className="flex justify-between gap-2"><dt>Propinas voluntarias</dt><dd>{cashMoney(collector.cash_tips_total ?? 0, currency)}</dd></div>
                   <div className="flex justify-between gap-2 border-t border-slate-200 pt-1 font-semibold text-slate-900"><dt>Neto</dt><dd>{money(collector.net_total, currency)}</dd></div>
                 </dl>
               </article>
@@ -954,6 +991,33 @@ export function CashRegisterPage() {
                 </div>
               )}
             </div>
+            {sessions.length > 0 ? (
+              <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
+                <span className="text-xs text-slate-500" aria-live="polite">
+                  Página {sessionPage}{sessionsQuery.isFetching ? " · actualizando" : ""}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => setSessionPage((current) => Math.max(1, current - 1))}
+                    disabled={sessionPage <= 1 || sessionsQuery.isFetching}
+                    aria-label="Ver página anterior de sesiones"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => setSessionPage((current) => current + 1)}
+                    disabled={!sessionsQuery.data?.hasNextPage || sessionsQuery.isFetching}
+                    aria-label="Ver página siguiente de sesiones"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <form className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={handleOpenSession}>
@@ -1220,12 +1284,34 @@ export function CashRegisterPage() {
                   {displayedMovements.map((movement) => (
                     <div key={movement.id} className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_auto]">
                       <div>
-                        <p className="font-semibold text-slate-900">{cashMovementTypeLabel[movement.movement_type]}</p>
+                        <p className={`font-semibold ${movement.voided_at ? "text-rose-800" : "text-slate-900"}`}>
+                          {movement.voided_at ? t("page.cashRegister.movementVoided") : cashMovementTypeLabel[movement.movement_type]}
+                        </p>
                         <p className="text-xs text-slate-500">
                           {movement.description || "Sin descripción"} - {formatHotelDateTime(movement.business_recorded_at ?? movement.recorded_at, hotelTimeZone)}
                         </p>
+                        {movement.voided_at ? (
+                          <p className="mt-1 text-xs text-rose-700">
+                            {t("page.cashRegister.voidedExcludedTotals")} · {t("page.cashRegister.paymentCorrection", { id: movement.voided_by_payment_correction_id })}
+                          </p>
+                        ) : null}
                       </div>
-                      <p className="font-semibold text-slate-900">{money(movement.amount, currency)}</p>
+                      <div className="text-right">
+                        <p className={`font-semibold ${movement.voided_at ? "text-slate-500 line-through" : "text-slate-900"}`}>
+                          {money(movement.amount, currency)}
+                        </p>
+                        {movement.cash_received_amount !== null && movement.cash_received_amount !== undefined ? (
+                          <p className="mt-1 text-xs font-normal text-emerald-800">
+                            {t("page.cashRegister.cashReceived")} {cashMoney(movement.cash_received_amount, currency)}
+                            {movement.cash_change_amount !== null && movement.cash_change_amount !== undefined
+                              ? ` · ${t("page.cashRegister.cashChange")} ${cashMoney(movement.cash_change_amount, currency)}`
+                              : ""}
+                            {Number(movement.cash_tip_amount ?? 0) > 0
+                              ? ` · ${t("page.cashRegister.cashTip")} ${cashMoney(Number(movement.cash_tip_amount), currency)}`
+                              : ""}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -52,6 +52,9 @@ class PaymentLinkRead(BaseModel):
     external_checkout_url: Optional[str] = None
     expires_at: Optional[datetime] = None
     cancelled_at: Optional[datetime] = None
+    provider_revocation_status: str
+    provider_revocation_attempts: int
+    provider_revocation_last_attempt_at: Optional[datetime] = None
     first_payment_at: Optional[datetime] = None
     last_payment_at: Optional[datetime] = None
     created_at: datetime

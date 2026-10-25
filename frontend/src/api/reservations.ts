@@ -9,6 +9,7 @@ export type ReservationStatus =
   | "deposit_paid"
   | "fully_paid"
   | "pre_check_in"
+  | "partial_checkin"
   | "checked_in"
   | "checked_out"
   | "cancelled"
@@ -120,6 +121,46 @@ export type ReservationPendingAction = {
   reference_id?: number | null;
 };
 
+export type CancellationReview = {
+  id: number;
+  reservation_id: number;
+  confirmation_code: string;
+  check_in_date: string;
+  check_out_date: string;
+  reservation_total: string | number | null;
+  reservation_currency_code: string | null;
+  review_type: "penalty" | "historical_policy_missing" | "policy_needs_review";
+  status: "pending" | "approved" | "rejected";
+  reason_code: string;
+  policy_snapshot: Record<string, unknown> | null;
+  free_cancellation_hours: number | null;
+  check_in_time: string | null;
+  hotel_timezone: string | null;
+  cancellation_cutoff_at: string | null;
+  penalty_amount: string | number | null;
+  penalty_currency_code: string | null;
+  requested_by_user_id: number | null;
+  requested_at: string;
+  reviewed_by_user_id: number | null;
+  reviewed_at: string | null;
+  review_reason: string | null;
+};
+
+export type CancellationDecisionPayload = {
+  decision: "approve" | "reject";
+  reason: string;
+};
+
+export type ReservationCancellationResponse = Reservation & {
+  cancellation_outcome: "cancelled" | "approval_required" | "manager_review_required";
+  cancellation_review: CancellationReview | null;
+};
+
+export type CancellationReviewResolutionResponse = {
+  cancellation_review: CancellationReview;
+  reservation: Reservation;
+};
+
 export type ReservationBillingAdjustmentSummary = {
   id: number;
   type: string;
@@ -133,6 +174,9 @@ export type ReservationBillingAdjustmentSummary = {
 export type ReservationTransactionSummary = {
   id: number;
   amount: number;
+  cash_received_amount?: number | null;
+  cash_change_amount?: number | null;
+  cash_tip_amount?: number | null;
   currency: string;
   method: string;
   type: string;
@@ -140,6 +184,9 @@ export type ReservationTransactionSummary = {
   manual_reference?: string | null;
   refund_of_transaction_id?: number | null;
   refund_reason?: string | null;
+  rounding_credit_amount?: number | null;
+  credit_refund_amount?: number | null;
+  refund_component?: "payment" | "rounding_credit" | null;
   created_at: string;
 };
 
@@ -154,6 +201,19 @@ export type ReservationFinancialSummary = {
   hotel_received_amount?: number | null;
   ota_prepaid_amount?: number | null;
   balance_due: number | null;
+  rounding_credit_by_currency?: Array<{
+    currency_code: string;
+    issued_amount: number;
+    refunded_amount: number;
+    open_amount: number;
+  }>;
+  rounding_credit_sources?: Array<{
+    source_transaction_id: number;
+    currency_code: string;
+    issued_amount: number;
+    refunded_amount: number;
+    open_amount: number;
+  }>;
   operational_total_amount: number;
   operational_balance_due: number;
   billing_adjustment_total: number;
@@ -390,6 +450,10 @@ export type ReservationGroupSummary = {
 
 export type ReservationGroupPaymentPayload = {
   received_amount: number;
+  /** Cash handed over for the whole group batch; allocations remain unchanged. */
+  cash_received_amount?: number;
+  /** Voluntary tip for the batch; does not change its reservation allocations. */
+  cash_tip_amount?: number;
   currency?: string;
   payment_method: Exclude<PaymentMethod, "mercado_pago" | "paypal">;
   manual_reference?: string;
@@ -405,6 +469,10 @@ export type ReservationGroupPaymentResult = {
   id: number;
   group_id: number;
   received_amount: number;
+  cash_received_amount?: number | null;
+  cash_change_amount?: number | null;
+  cash_tip_amount?: number | null;
+  gross_amount?: number | null;
   currency: string;
   payment_method: string;
   manual_reference?: string | null;
@@ -519,6 +587,19 @@ export const getReservationOperationsSummary = (id: number, session?: SessionLik
 export const listPendingReservationActions = (limit = 100, session?: SessionLike, signal?: AbortSignal) =>
   apiFetch<ReservationPendingAction[]>(`/api/reservations/actions/pending?limit=${limit}`, { session, signal });
 
+export const listPendingCancellationReviews = (session?: SessionLike, signal?: AbortSignal) =>
+  apiFetch<CancellationReview[]>("/api/reservations/cancellation-reviews/pending?limit=100", { session, signal });
+
+export const resolveCancellationReview = (
+  reviewId: number,
+  payload: CancellationDecisionPayload,
+  session?: SessionLike
+) => apiFetch<CancellationReviewResolutionResponse>(`/api/reservations/cancellation-reviews/${reviewId}/decision`, {
+  method: "POST",
+  data: payload,
+  session
+});
+
 export const createReservation = (payload: ReservationPayload, session?: SessionLike) =>
   apiFetch<Reservation>("/api/reservations/", { method: "POST", data: payload, session });
 
@@ -574,7 +655,7 @@ export const updateReservation = (id: number, payload: ReservationUpdatePayload,
   apiFetch<Reservation>(`/api/reservations/${id}`, { method: "PATCH", data: payload, session });
 
 export const cancelReservation = (id: number, session?: SessionLike, temporaryGrantToken?: string) =>
-  apiFetch<Reservation>(`/api/reservations/${id}/cancel`, {
+  apiFetch<ReservationCancellationResponse>(`/api/reservations/${id}/cancel`, {
     method: "POST",
     headers: temporaryGrantToken ? { "X-Temporary-Action-Grant": temporaryGrantToken } : undefined,
     session
@@ -607,6 +688,101 @@ export type CheckInPayload = {
 
 export const checkInReservation = (id: number, payload: CheckInPayload = {}, session?: SessionLike) =>
   apiFetch<Reservation>(`/api/checkin/${id}`, { method: "POST", data: payload, session });
+
+export type ReservationGuestArrival = {
+  id: number;
+  guest_id: number;
+  guest_name: string;
+  arrived_at: string;
+  actor_user_id: number | null;
+  actor_display_name?: string | null;
+  actor_role: string;
+};
+
+export type ReservationGuestArrivalSummary = {
+  reservation_id: number;
+  reservation_status: ReservationStatus;
+  status_policy: "partial_checkin" | "checked_in_on_first_guest";
+  expected_guest_count: number;
+  registered_guest_count: number;
+  arrived_guest_count: number;
+  missing_profile_count: number;
+  arrivals: ReservationGuestArrival[];
+};
+
+export type ReservationGuestArrivalResult = Omit<ReservationGuestArrivalSummary, "arrivals"> & {
+  already_recorded: boolean;
+  arrival: ReservationGuestArrival;
+};
+
+export const getReservationGuestArrivals = (id: number, session?: SessionLike, signal?: AbortSignal) =>
+  apiFetch<ReservationGuestArrivalSummary>("/api/checkin/" + id + "/guest-arrivals", { session, signal });
+
+export const checkInReservationGuest = (
+  id: number,
+  guestId: number,
+  payload: CheckInPayload = {},
+  session?: SessionLike
+) =>
+  apiFetch<ReservationGuestArrivalResult>("/api/checkin/" + id + "/guests/" + guestId, {
+    method: "POST",
+    data: payload,
+    session
+  });
+
+export type CompanyReservationTermsReviewAction = "keep_snapshot" | "accept_current";
+export type CompanyReservationTermsReviewEvent = {
+  id: number;
+  action: CompanyReservationTermsReviewAction;
+  reason: string;
+  changed_fields: string[];
+  actor_user_id: number;
+  created_at: string;
+};
+export type CompanyReservationTermsReview = {
+  reservation_id: number;
+  company_id: number | null;
+  company_name?: string | null;
+  status:
+    | "not_applicable"
+    | "captured"
+    | "hold_for_manager_review"
+    | "snapshot_missing"
+    | "manager_kept_snapshot"
+    | "manager_accepted_current";
+  needs_review: boolean;
+  blocks_checkin: boolean;
+  block_checkin_on_change?: boolean | null;
+  current_terms?: Record<string, unknown> | null;
+  reviewed_config?: Record<string, unknown> | null;
+  snapshot?: Record<string, unknown> | null;
+  changed_fields: string[];
+  current_fingerprint?: string | null;
+  reviewed_config_fingerprint?: string | null;
+  history: CompanyReservationTermsReviewEvent[];
+};
+export type CompanyReservationTermsReviewPayload = {
+  action: CompanyReservationTermsReviewAction;
+  reason: string;
+  expected_config_fingerprint: string;
+  idempotency_key: string;
+};
+
+export const getCompanyReservationTermsReview = (
+  id: number,
+  session?: SessionLike,
+  signal?: AbortSignal
+) => apiFetch<CompanyReservationTermsReview>(`/api/reservations/${id}/company-terms-review`, { session, signal });
+
+export const reviewCompanyReservationTerms = (
+  id: number,
+  payload: CompanyReservationTermsReviewPayload,
+  session?: SessionLike
+) => apiFetch<CompanyReservationTermsReview>(`/api/reservations/${id}/company-terms-review`, {
+  method: "POST",
+  data: payload,
+  session
+});
 
 // B3.1: writes PRE_CHECK_IN ("huésped ingresó al cuarto, falta confirmar").
 export const partialCheckInReservation = (id: number, payload: CheckInPayload = {}, session?: SessionLike) =>
@@ -663,9 +839,24 @@ export type ReservationExtensionPayload = {
   client_version: number;
   pricing_mode: "current_rate";
   payment_action: "immediate_payment" | "payment_link" | "company_account" | "pending_balance";
+  confirmed_impact_fingerprint?: string;
   immediate_payment?: PaymentRequest;
   payment_link?: PaymentLinkCreatePayload;
   notes?: string;
+};
+
+export type ReservationExtensionImpactAction = {
+  action: "moved_equivalent" | "moved_superior" | "assignment_released" | "blocked";
+  room_label: string;
+  check_in_date: string;
+  check_out_date: string;
+  confirmation_code?: string | null;
+  reason_code?: string | null;
+};
+
+export type ReservationExtensionImpactPlan = {
+  fingerprint: string;
+  actions: ReservationExtensionImpactAction[];
 };
 
 export type ReservationExtensionPreview = {
@@ -673,8 +864,9 @@ export type ReservationExtensionPreview = {
   current_checkout_date: string;
   new_checkout_date: string;
   client_version: number;
-  extension_amount: number | string;
+  extension_amount?: number | string | null;
   currency_code: string;
+  impact_plan?: ReservationExtensionImpactPlan | null;
 };
 
 export type ReservationExtensionResponse = {
@@ -707,12 +899,19 @@ export const extendReservationStay = (
 export const previewReservationStayExtension = (
   id: number,
   newCheckoutDate: string,
+  paymentAction: "individual" | "company_account",
   session?: SessionLike,
   signal?: AbortSignal
-) => apiFetch<ReservationExtensionPreview>(
-  `/api/reservations/${id}/extend-preview?new_checkout_date=${encodeURIComponent(newCheckoutDate)}`,
-  { session, signal }
-);
+) => {
+  const search = new URLSearchParams({
+    new_checkout_date: newCheckoutDate,
+    payment_action: paymentAction
+  });
+  return apiFetch<ReservationExtensionPreview>(`/api/reservations/${id}/extend-preview?${search.toString()}`, {
+    session,
+    signal
+  });
+};
 
 // ── B2: occupancy grid (planilla de ocupación) ──────────────────────────────
 

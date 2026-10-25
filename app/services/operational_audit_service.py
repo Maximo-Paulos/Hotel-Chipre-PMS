@@ -55,6 +55,7 @@ _SAFE_DETAIL_FIELDS = frozenset(
         "amount_paid", "price", "price_cash", "price_transfer", "price_mercadopago",
         "price_paypal", "price_credit_card", "price_debit_card", "price_booking",
         "price_expedia", "surcharge_type", "updated_at", "created_at",
+        "voided_at", "payment_correction_id",
     }
 )
 
@@ -433,14 +434,19 @@ def list_operational_audit(
         *_date_filter(CashMovement, start, end, "recorded_at"),
     )
     for movement in movement_query.order_by(CashMovement.recorded_at.desc(), CashMovement.id.desc()).limit(_MAX_CANDIDATES).all():
+        is_voided = movement.voided_at is not None
         signed_amount = -_money(movement.amount) if _value(movement.movement_type) == "expense" else _money(movement.amount)
         rows.append(
             _row(
                 source="cash_movement",
                 source_id=movement.id,
                 area="cash",
-                action=f"cash.{_value(movement.movement_type)}",
-                summary=f"Movimiento de caja #{movement.id}",
+                action="cash.voided" if is_voided else f"cash.{_value(movement.movement_type)}",
+                summary=(
+                    f"Movimiento de caja #{movement.id} anulado"
+                    if is_voided
+                    else f"Movimiento de caja #{movement.id}"
+                ),
                 actor_user_id=movement.recorded_by_user_id,
                 actor_name=_actor_name(_user(movement.recorded_by_user_id)),
                 occurred_at=movement.recorded_at,
@@ -448,7 +454,13 @@ def list_operational_audit(
                 movement_type=_value(movement.movement_type),
                 amount=signed_amount,
                 currency_code="ARS",
-                details={"session_id": movement.session_id, "transaction_id": movement.transaction_id, "description": _redact_text(movement.description or "")},
+                details={
+                    "session_id": movement.session_id,
+                    "transaction_id": movement.transaction_id,
+                    "description": _redact_text(movement.description or ""),
+                    "voided_at": movement.voided_at,
+                    "payment_correction_id": movement.voided_by_payment_correction_id,
+                },
             )
         )
 

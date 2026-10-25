@@ -15,7 +15,7 @@ Available backends:
 - GCSObjectStorage: implemented, but requires the optional
   `google-cloud-storage` package, a bucket and working cloud credentials.
   It is not activated merely because the adapter exists.
-- S3ObjectStorage: a stub that deliberately raises NotImplementedError.
+- S3: not implemented; selecting it fails explicitly in the backend factory.
 
 get_object_storage() picks the backend from the environment-configurable
 Settings fields. Confirm that the selected backend and its durable storage
@@ -23,13 +23,13 @@ are configured in the actual deployment before accepting uploaded files.
 """
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from datetime import timedelta
 import hashlib
 import hmac
 import io
 import time
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import BinaryIO
@@ -101,10 +101,9 @@ class LocalObjectStorage(ObjectStorage):
         return self._base_dir / _safe_relative_path(key)
 
     def put_bytes(self, key: str, data: bytes, *, content_type: str | None = None) -> None:
-        # ponytail: content_type is accepted for interface parity with a real
-        # object-store PUT (which usually takes a Content-Type header), but a
-        # plain file has nowhere to keep it -- callers persist content_type
-        # themselves alongside the key (see PaymentProofBlob.content_type).
+        # Local files do not store content_type. Callers persist it alongside
+        # the object key (for example, PaymentProofBlob.content_type), while
+        # remote object stores can apply it as a PUT header.
         path = self._path_for(key)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
@@ -173,54 +172,6 @@ class LocalObjectStorage(ObjectStorage):
         return f"local-object://{quote(key, safe='/')}?expires={expires_at}&sig={signature}"
 
 
-class S3ObjectStorage(ObjectStorage):
-    """Stub for a real S3-compatible bucket. Not wired to a live bucket --
-    there are no bucket credentials in this environment, so this raises
-    NotImplementedError instead of pretending to work.
-
-    TODO before enabling `OBJECT_STORAGE_BACKEND=s3` in production:
-    - Add `boto3` to requirements.txt (not currently a dependency).
-    - Add to app.config.Settings: `OBJECT_STORAGE_S3_BUCKET`,
-      `OBJECT_STORAGE_S3_ENDPOINT_URL` (leave empty for AWS S3 itself; set it
-      for R2/B2/MinIO/etc), `OBJECT_STORAGE_S3_REGION`. Credentials go
-      through the standard AWS env vars / instance role -- never a hardcoded
-      key/secret in Settings.
-    - Implement put_bytes/get_bytes/delete with boto3's S3 client
-      (put_object/get_object/delete_object with a shared `boto3.client("s3",
-      endpoint_url=..., region_name=...)`), translating ClientError
-      (specifically NoSuchKey on get) into ObjectStorageError.
-    - Keep the same key convention the local backend already uses
-      (`payment-proofs/{hotel_id}/...`, `analytics-exports/{hotel_id}/...`)
-      so nothing else has to change when the backend switches.
-    """
-
-    def __init__(self, *, bucket: str, endpoint_url: str | None = None, region: str | None = None):
-        self._bucket = bucket
-        self._endpoint_url = endpoint_url
-        self._region = region
-
-    def put_bytes(self, key: str, data: bytes, *, content_type: str | None = None) -> None:
-        raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
-
-    def put_file(self, key: str, file_obj: BinaryIO, *, byte_size: int, content_type: str | None = None) -> None:
-        raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
-
-    def get_bytes(self, key: str) -> bytes:
-        raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
-
-    def delete(self, key: str) -> None:
-        raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
-
-    def stat(self, key: str) -> ObjectStat:
-        raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
-
-    def get_signed_url(self, key: str, *, expires_seconds: int = 300) -> str:
-        raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
-
-    def open_read(self, key: str) -> BinaryIO:
-        raise NotImplementedError("S3ObjectStorage requires boto3 + bucket credentials -- see class docstring")
-
-
 class GCSObjectStorage(ObjectStorage):
     """Google Cloud Storage adapter with lazy optional dependency loading."""
 
@@ -283,6 +234,14 @@ class GCSObjectStorage(ObjectStorage):
         except ObjectStorageError:
             raise
         except Exception as exc:
+            # A retry can reach this path after GCS accepted a prior delete but
+            # the database transaction did not commit. Treat an already-missing
+            # object as success so the metadata cleanup can finish.
+            status_code = getattr(exc, "code", None)
+            if callable(status_code):
+                status_code = status_code()
+            if getattr(status_code, "value", status_code) == 404:
+                return
             raise ObjectStorageError("GCS delete failed") from exc
 
     def stat(self, key: str) -> ObjectStat:
@@ -319,10 +278,8 @@ def get_object_storage() -> ObjectStorage:
         local_dir = getattr(settings, "OBJECT_STORAGE_LOCAL_DIR", "") or "./var/object-storage"
         return LocalObjectStorage(local_dir)
     if backend == "s3":
-        return S3ObjectStorage(
-            bucket=getattr(settings, "OBJECT_STORAGE_S3_BUCKET", ""),
-            endpoint_url=getattr(settings, "OBJECT_STORAGE_S3_ENDPOINT_URL", "") or None,
-            region=getattr(settings, "OBJECT_STORAGE_S3_REGION", "") or None,
+        raise ObjectStorageError(
+            "OBJECT_STORAGE_BACKEND='s3' is not supported yet; configure 'local' or 'gcs' instead"
         )
     if backend == "gcs":
         return GCSObjectStorage(

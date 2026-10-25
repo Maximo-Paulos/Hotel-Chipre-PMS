@@ -53,7 +53,8 @@ export function useRoomBlocks(options?: { enabled?: boolean }) {
   });
 
   const extendBlockMutation = useGuardedMutation({
-    mutationFn: ({ blockId, endsAt }: { blockId: number; endsAt: string }) => extendRoomBlock(blockId, endsAt, session),
+    mutationFn: ({ blockId, endsAt, allocationRunId }: { blockId: number; endsAt: string; allocationRunId?: number | null }) =>
+      extendRoomBlock(blockId, { ends_at: endsAt, allocation_run_id: allocationRunId }, session),
     onSuccess: async () => invalidate()
   });
 

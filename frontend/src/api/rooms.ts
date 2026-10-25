@@ -2,6 +2,36 @@ import { apiFetch, type SessionLike } from "./client";
 
 export type RoomStatus = "available" | "occupied" | "maintenance" | "blocked" | "cleaning";
 export type HousekeepingStatus = "dirty" | "in_progress" | "clean" | "inspected";
+export type RoomBlockReason = "maintenance" | "deep_cleaning" | "owner_use" | "vip_hold" | "overbooking_buffer" | "other";
+export const HOUSEKEEPING_CHECKLIST_ITEM_CODES = [
+  "change_sheets",
+  "clean_bathroom",
+  "replenish_towels",
+  "empty_waste",
+  "check_amenities"
+] as const;
+export type HousekeepingChecklistItemCode = (typeof HOUSEKEEPING_CHECKLIST_ITEM_CODES)[number];
+export type HousekeepingChecklistItem = {
+  code: HousekeepingChecklistItemCode;
+  label: string;
+  completed: boolean;
+  completed_at: string | null;
+};
+export type HousekeepingChecklist = {
+  checklist_id: number;
+  room: {
+    id: number;
+    number: string;
+    operational_status: RoomStatus;
+    housekeeping_status: HousekeepingStatus;
+  };
+  status: "open" | "completed";
+  version: number;
+  created_at: string;
+  completed_at: string | null;
+  items: HousekeepingChecklistItem[];
+};
+export type OpenHousekeepingChecklistsResponse = { checklists: HousekeepingChecklist[] };
 export type HousekeepingBoardRoom = {
   room_id: number;
   room_number: string;
@@ -13,6 +43,7 @@ export type HousekeepingBoardRoom = {
   has_departure_today: boolean;
   has_stayover_today: boolean;
   maintenance_blocked: boolean;
+  active_block_reasons: RoomBlockReason[];
 };
 export type HousekeepingBoard = { date: string; rooms: HousekeepingBoardRoom[] };
 
@@ -62,6 +93,18 @@ export const listRooms = (session?: SessionLike) => apiFetch<Room[]>("/api/rooms
 
 export const getHousekeepingBoard = (session?: SessionLike) =>
   apiFetch<HousekeepingBoard>("/api/rooms/housekeeping-board", { session });
+
+export const getOpenHousekeepingChecklists = (session?: SessionLike) =>
+  apiFetch<OpenHousekeepingChecklistsResponse>("/api/housekeeping/checklists", { session });
+
+export const completeHousekeepingChecklistItem = (
+  checklistId: number,
+  itemCode: HousekeepingChecklistItemCode,
+  session?: SessionLike
+) => apiFetch<HousekeepingChecklist>(
+  `/api/housekeeping/checklists/${checklistId}/items/${encodeURIComponent(itemCode)}/complete`,
+  { method: "POST", session }
+);
 
 export const listRoomCategories = (session?: SessionLike) =>
   apiFetch<RoomCategory[]>("/api/rooms/categories", { session });

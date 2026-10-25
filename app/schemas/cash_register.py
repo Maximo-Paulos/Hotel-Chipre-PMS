@@ -55,9 +55,12 @@ class CashMovementRead(BaseModel):
     group_payment_batch_id: Optional[int] = None
     group_payment_total: Optional[Decimal] = None
     group_payment_reservation_count: Optional[int] = None
+    cash_tip_amount: Decimal = Decimal("0.00")
     movement_type: CashMovementTypeEnum
     amount: Decimal
     description: Optional[str] = None
+    voided_at: Optional[UTCDateTime] = None
+    voided_by_payment_correction_id: Optional[int] = None
     recorded_at: UTCDateTime
     business_recorded_at: Optional[UTCDateTime] = None
 
@@ -89,6 +92,7 @@ class CashSessionCollectorSummaryRead(BaseModel):
     expense_total: Decimal
     adjustment_total: Decimal
     net_total: Decimal
+    cash_tips_total: Decimal = Decimal("0.00")
     movement_count: int
 
 
@@ -101,6 +105,7 @@ class CashSessionSummaryRead(BaseModel):
     expense_total: Decimal
     adjustment_total: Decimal
     confirmed_cash_total: Decimal
+    cash_tips_total: Decimal = Decimal("0.00")
     expected_balance: Decimal
     movements_count: int
     by_collector: list[CashSessionCollectorSummaryRead] = Field(default_factory=list)
@@ -133,6 +138,9 @@ class CashDailyEntryRead(BaseModel):
     reservation_id: Optional[int] = None
     amount: Decimal
     signed_amount: Decimal
+    cash_received_amount: Optional[Decimal] = None
+    cash_change_amount: Optional[Decimal] = None
+    cash_tip_amount: Decimal = Decimal("0.00")
     currency_code: str
     payment_method: Optional[str] = None
     transaction_type: Optional[str] = None
@@ -180,6 +188,9 @@ class CashDailyPriorReceiptRead(BaseModel):
     reservation_id: int
     confirmation_code: str
     amount: Decimal
+    cash_received_amount: Optional[Decimal] = None
+    cash_change_amount: Optional[Decimal] = None
+    cash_tip_amount: Decimal = Decimal("0.00")
     currency_code: str
     collected_on: date
     prior_receipt_note: str
@@ -204,6 +215,8 @@ class CashDailySummaryRead(BaseModel):
     net_collected: Decimal
     physical_cash_net_collected: Decimal
     digital_net_collected: Decimal
+    cash_tips_total: Decimal = Decimal("0.00")
+    prior_receipt_cash_tips_total: Decimal = Decimal("0.00")
     by_payment_method: list[CashDailyPaymentMethodRead] = Field(default_factory=list)
     by_collector: list[CashDailyCollectorRead] = Field(default_factory=list)
     physical_cash: CashDailyPhysicalRead

@@ -390,16 +390,25 @@ def test_cash_payment_posts_income_movement_to_open_session(db):
     reservation = _reservation(db, 1, "CASH-PAY-1")
     session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("0.00"))
 
+    payment = PaymentRequest(
+        reservation_id=reservation.id,
+        amount=30.0,
+        payment_method=PaymentMethodEnum.CASH,
+        transaction_type=TransactionTypeEnum.DEPOSIT,
+    )
     tx = process_payment(
         db,
-        PaymentRequest(
-            reservation_id=reservation.id,
-            amount=30.0,
-            payment_method=PaymentMethodEnum.CASH,
-            transaction_type=TransactionTypeEnum.DEPOSIT,
-        ),
+        payment,
         hotel_id=1,
         actor_user_id=10,
+        idempotency_key="cash-payment-default-tender-001",
+    )
+    replay = process_payment(
+        db,
+        payment,
+        hotel_id=1,
+        actor_user_id=10,
+        idempotency_key="cash-payment-default-tender-001",
     )
     db.flush()
 
@@ -410,6 +419,9 @@ def test_cash_payment_posts_income_movement_to_open_session(db):
     assert movement.amount == Decimal("30.00")
     assert movement.transaction_id == tx.id
     assert movement.reservation_id == reservation.id
+    assert tx.cash_received_amount == Decimal("30.00")
+    assert tx.cash_change_amount == Decimal("0.00")
+    assert replay.id == tx.id
 
 
 def test_cash_payment_without_open_session_is_rejected(db):
@@ -789,7 +801,7 @@ def test_cash_payment_with_surcharge_posts_gross_amount_to_caja(db):
     from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
     from app.schemas.transaction import PaymentRequest
     from app.services.cash_register_service import list_movements
-    from app.services.payment_service import process_payment
+    from app.services.payment_service import PaymentError, process_payment
 
     _hotel(db, 1)
     _user(db, 10)
@@ -806,11 +818,23 @@ def test_cash_payment_with_surcharge_posts_gross_amount_to_caja(db):
     db.flush()
     session = open_session(db, hotel_id=1, opened_by_user_id=10, opening_balance=Decimal("0.00"))
 
+    under_tender = PaymentRequest(
+        reservation_id=reservation.id,
+        amount=100.0,
+        cash_received_amount=Decimal("104.99"),
+        payment_method=PaymentMethodEnum.CASH,
+        transaction_type=TransactionTypeEnum.FULL_PAYMENT,
+    )
+    with pytest.raises(PaymentError, match="menor al importe total"):
+        process_payment(db, under_tender, hotel_id=1, actor_user_id=10)
+    assert db.query(Transaction).filter_by(reservation_id=reservation.id).count() == 0
+
     tx = process_payment(
         db,
         PaymentRequest(
             reservation_id=reservation.id,
             amount=100.0,
+            cash_received_amount=Decimal("110.00"),
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.FULL_PAYMENT,
         ),
@@ -822,10 +846,13 @@ def test_cash_payment_with_surcharge_posts_gross_amount_to_caja(db):
     assert tx.amount == Decimal("100.00")
     assert tx.gross_amount == Decimal("105.00")
     assert tx.fee_amount == Decimal("5.00")
+    assert tx.cash_received_amount == Decimal("110.00")
+    assert tx.cash_change_amount == Decimal("5.00")
 
     movements = list_movements(db, hotel_id=1, session_id=session.id)
     assert len(movements) == 1
-    # Caja holds the gross cash received (100 + 5% surcharge).
+    # Caja holds the amount retained (100 + 5% surcharge); returned change is
+    # recorded separately and never inflates the drawer movement.
     assert movements[0].amount == Decimal("105.00")
     assert "recargo" in (movements[0].description or "")
 
@@ -878,6 +905,7 @@ def test_twenty_seven_prior_receipts_do_not_inflate_the_open_cash_session(db):
         request = PaymentRequest(
             reservation_id=reservation.id,
             amount=float(amount),
+            cash_received_amount=(amount + Decimal("100.00")) if index == 0 else None,
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
             collected_before=True,
@@ -920,6 +948,10 @@ def test_twenty_seven_prior_receipts_do_not_inflate_the_open_cash_session(db):
     assert summary["entries"] == []
     assert summary["physical_cash"]["expected_balance"] == Decimal("50000.00")
     assert len(summary["prior_receipts"]) == 27
+    first_prior_receipt = summary["prior_receipts"][0]
+    assert first_prior_receipt["amount"] == Decimal("50000.00")
+    assert first_prior_receipt["cash_received_amount"] == Decimal("50100.00")
+    assert first_prior_receipt["cash_change_amount"] == Decimal("100.00")
     assert summary["prior_receipt_totals"] == [
         {"currency_code": "ARS", "amount": Decimal("1710000.00"), "transaction_count": 27}
     ]

@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-// ponytail: one hook instead of repeating Escape/focus-trap/scroll-lock/
+// Share Escape, focus-trap, scroll-lock, and viewport logic in one hook
 // viewport logic in every dialog/drawer component (ReservationDetailDrawer,
 // ConfirmDialog, RestrictionOverrideModal, IntegrationHelpDrawer,
 // ManualOtaReservationModal, the AppShell mobile nav panel, NotificationsPanel).
@@ -12,7 +12,7 @@ const FOCUSABLE_SELECTOR =
 export function useDialogA11y(open: boolean, onClose: () => void) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<Element | null>(null);
-  // ponytail: onClose is an inline closure in every caller, so it gets a new
+  // onClose is an inline closure in every caller, so it gets a new
   // identity on every parent re-render (e.g. typing in a form field inside
   // the dialog). Reading it via ref keeps the effect below from re-running
   // on those renders -- otherwise it steals focus back to the first

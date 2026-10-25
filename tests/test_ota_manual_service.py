@@ -287,7 +287,10 @@ def test_manual_ota_total_amount_bypasses_rate_plan_policy_restriction(db):
     # Confirm the auto-quote path really is blocked for the "booking"
     # channel by this policy restriction (sanity check for the hypothesis,
     # not the bug itself).
-    from app.services.pricing_policy_service import PricingPolicyError, quote_rate_plan_stay
+    from app.services.pricing_policy_service import (
+        PricingPolicyError,
+        quote_rate_plan_stay,
+    )
 
     with pytest.raises(PricingPolicyError, match="sales channel"):
         quote_rate_plan_stay(
@@ -366,7 +369,7 @@ def test_no_guarantee_ota_internal_release_does_not_call_provider_cancel(db, mon
     ).count() == 1
 
 
-def test_release_no_guarantee_promotes_compatible_waitlist_entry(db):
+def test_release_no_guarantee_suggests_waitlist_without_promoting_automatically(db):
     category, room, ota_guest = _seed_hotel(db, hotel_id=1)
     waitlist_guest = Guest(
         hotel_id=1,
@@ -409,21 +412,18 @@ def test_release_no_guarantee_promotes_compatible_waitlist_entry(db):
     db.flush()
 
     assert released.status == ReservationStatusEnum.CANCELLED
-    assert entry.status == WaitlistStatusEnum.PROMOTED
-    assert entry.promoted_reservation_id is not None
-    promoted = db.get(Reservation, entry.promoted_reservation_id)
-    assert promoted is not None
-    assert promoted.hotel_id == 1
-    assert promoted.guest_id == waitlist_guest.id
-    assert promoted.room_id == room.id
+    assert entry.status == WaitlistStatusEnum.WAITING
+    assert entry.promoted_reservation_id is None
+    assert db.query(Reservation).filter(Reservation.guest_id == waitlist_guest.id).count() == 0
     audit = db.query(SecurityAuditLog).filter_by(
         hotel_id=1,
-        action="ota.no_guarantee.waitlist_promotion",
+        action="ota.no_guarantee.waitlist_suggestion",
         resource_type="reservation",
         resource_id=str(reservation.id),
     ).one()
-    assert '"outcome": "promoted"' in audit.details
+    assert '"outcome": "suggested"' in audit.details
     assert str(entry.id) in audit.details
+    assert f'"suggested_room_id": {room.id}' in audit.details
 
 
 def test_release_no_guarantee_without_waitlist_still_succeeds(db):
@@ -447,7 +447,7 @@ def test_release_no_guarantee_without_waitlist_still_succeeds(db):
     assert released.status == ReservationStatusEnum.CANCELLED
     audit = db.query(SecurityAuditLog).filter_by(
         hotel_id=1,
-        action="ota.no_guarantee.waitlist_promotion",
+        action="ota.no_guarantee.waitlist_suggestion",
         resource_type="reservation",
         resource_id=str(reservation.id),
     ).one()

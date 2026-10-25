@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date
 
 import pytest
@@ -11,11 +12,21 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
-from app.models.guest import Guest
+from app.models.audit_log import AuditLog
 from app.models.company import Company
+from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.housekeeping_checklist import (
+    HousekeepingChecklist,
+    HousekeepingChecklistStatusEnum,
+)
+from app.models.operations import RoomMoveEvent
 from app.models.permission import HotelPermissionOverride, UserPermissionOverride
-from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
+from app.models.reservation import (
+    Reservation,
+    ReservationSourceEnum,
+    ReservationStatusEnum,
+)
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.user import User
 from app.services.permission_service import (
@@ -163,6 +174,216 @@ def test_room_move_rejects_a_stale_reservation_version(room_move_api_client):
     assert reservation.room_id == rooms["same"].id
     assert reservation.notes == "changed by another operator"
     assert reservation.version == stale_version + 1
+
+
+def test_checked_in_room_move_returns_conflict_when_destination_checklist_is_open(
+    room_move_api_client,
+):
+    client, db, role_state = room_move_api_client
+    role_state["role"] = "manager"
+    reservation, rooms, *_ = _seed_move_shapes(db)
+    source_room = rooms["same"]
+    destination_room = rooms["same_category"]
+    reservation.status = ReservationStatusEnum.CHECKED_IN
+    source_room.status = RoomStatusEnum.OCCUPIED
+    db.add(
+        HousekeepingChecklist(
+            hotel_id=1,
+            room_id=destination_room.id,
+            reservation_id=reservation.id,
+            status=HousekeepingChecklistStatusEnum.OPEN.value,
+        )
+    )
+    db.commit()
+
+    response = client.post(
+        f"/api/reservations/{reservation.id}/room-move",
+        json={
+            "client_version": reservation.version,
+            "to_room_id": destination_room.id,
+            "reason_code": "guest_request",
+            "origin_room_disposition": "cleaning",
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert "ingresá un motivo" in response.json()["detail"]
+    db.refresh(reservation)
+    db.refresh(source_room)
+    db.refresh(destination_room)
+    assert reservation.room_id == source_room.id
+    assert source_room.status == RoomStatusEnum.OCCUPIED
+    assert destination_room.status == RoomStatusEnum.AVAILABLE
+    assert (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.hotel_id == 1,
+            AuditLog.table_name == "rooms",
+            AuditLog.record_id.in_([source_room.id, destination_room.id]),
+        )
+        .count()
+        == 0
+    )
+
+
+def test_manager_can_override_open_checklist_for_checked_in_move_with_audited_reason(
+    room_move_api_client,
+):
+    client, db, role_state = room_move_api_client
+    role_state["role"] = "manager"
+    reservation, rooms, *_ = _seed_move_shapes(db)
+    source_room = rooms["same"]
+    destination_room = rooms["same_category"]
+    reservation.status = ReservationStatusEnum.CHECKED_IN
+    source_room.status = RoomStatusEnum.OCCUPIED
+    destination_room.status = RoomStatusEnum.CLEANING
+    db.add(
+        HousekeepingChecklist(
+            hotel_id=1,
+            room_id=destination_room.id,
+            reservation_id=reservation.id,
+            status=HousekeepingChecklistStatusEnum.OPEN.value,
+        )
+    )
+    db.commit()
+
+    response = client.post(
+        f"/api/reservations/{reservation.id}/room-move",
+        json={
+            "client_version": reservation.version,
+            "to_room_id": destination_room.id,
+            "reason_code": "operational",
+            "notes": "Emergencia de mantenimiento en la habitación 101",
+            "origin_room_disposition": "cleaning",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    db.refresh(reservation)
+    db.refresh(source_room)
+    db.refresh(destination_room)
+    assert reservation.room_id == destination_room.id
+    assert destination_room.status == RoomStatusEnum.OCCUPIED
+    assert source_room.status == RoomStatusEnum.CLEANING
+    destination_audit = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.hotel_id == 1,
+            AuditLog.table_name == "rooms",
+            AuditLog.record_id == destination_room.id,
+        )
+        .one()
+    )
+    audit_after = json.loads(destination_audit.payload_after)
+    assert audit_after["checklist_override"] is True
+    assert audit_after["checklist_override_reason"] == "Emergencia de mantenimiento en la habitación 101"
+
+    movement = db.query(RoomMoveEvent).filter_by(hotel_id=1, reservation_id=reservation.id).one()
+    assert movement.reason_note == "Emergencia de mantenimiento en la habitación 101"
+    assert movement.to_room_id == destination_room.id
+
+
+def test_reception_cannot_override_open_checklist_even_with_a_reason(room_move_api_client):
+    client, db, role_state = room_move_api_client
+    role_state["role"] = "receptionist"
+    reservation, rooms, *_ = _seed_move_shapes(db)
+    source_room = rooms["same"]
+    destination_room = rooms["same_category"]
+    reservation.status = ReservationStatusEnum.CHECKED_IN
+    source_room.status = RoomStatusEnum.OCCUPIED
+    destination_room.status = RoomStatusEnum.CLEANING
+    db.add(
+        HousekeepingChecklist(
+            hotel_id=1,
+            room_id=destination_room.id,
+            reservation_id=reservation.id,
+            status=HousekeepingChecklistStatusEnum.OPEN.value,
+        )
+    )
+    db.commit()
+
+    response = client.post(
+        f"/api/reservations/{reservation.id}/room-move",
+        json={
+            "client_version": reservation.version,
+            "to_room_id": destination_room.id,
+            "reason_code": "operational",
+            "notes": "Hay una emergencia en la habitación 101",
+            "origin_room_disposition": "cleaning",
+        },
+    )
+
+    assert response.status_code == 403, response.text
+    assert "Autorizar traslado a habitación con checklist pendiente" in response.json()["detail"]
+    db.refresh(reservation)
+    db.refresh(source_room)
+    db.refresh(destination_room)
+    assert reservation.room_id == source_room.id
+    assert source_room.status == RoomStatusEnum.OCCUPIED
+    assert destination_room.status == RoomStatusEnum.CLEANING
+    assert db.query(RoomMoveEvent).filter_by(hotel_id=1, reservation_id=reservation.id).count() == 0
+
+
+@pytest.mark.parametrize("contended_room", ["destination", "origin"])
+def test_room_move_lock_conflict_returns_409_and_rolls_back(
+    monkeypatch,
+    room_move_api_client,
+    contended_room,
+):
+    from app.services import reservation_operations_service, room_movement_group_service
+    from app.services.room_movement_group_service import (
+        ROOM_MOVE_LOCK_CONFLICT_DETAIL,
+        RoomMovementGroupError,
+    )
+
+    client, db, role_state = room_move_api_client
+    role_state["role"] = "manager"
+    reservation, rooms, *_ = _seed_move_shapes(db)
+    source_room = rooms["same"]
+    destination_room = rooms["same_category"]
+    reservation.status = ReservationStatusEnum.CHECKED_IN
+    source_room.status = RoomStatusEnum.OCCUPIED
+    db.commit()
+
+    contended_room_id = destination_room.id if contended_room == "destination" else source_room.id
+    original_lock = room_movement_group_service.lock_room_for_movement
+
+    def lock_with_selected_contention(session, *, hotel_id, room_id):
+        if room_id == contended_room_id:
+            raise RoomMovementGroupError(ROOM_MOVE_LOCK_CONFLICT_DETAIL)
+        return original_lock(session, hotel_id=hotel_id, room_id=room_id)
+
+    monkeypatch.setattr(room_movement_group_service, "lock_room_for_movement", lock_with_selected_contention)
+    monkeypatch.setattr(reservation_operations_service, "lock_room_for_movement", lock_with_selected_contention)
+
+    response = client.post(
+        f"/api/reservations/{reservation.id}/room-move",
+        json={
+            "client_version": reservation.version,
+            "to_room_id": destination_room.id,
+            "reason_code": "guest_request",
+            "origin_room_disposition": "cleaning",
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == ROOM_MOVE_LOCK_CONFLICT_DETAIL
+    db.refresh(reservation)
+    db.refresh(source_room)
+    db.refresh(destination_room)
+    assert reservation.room_id == source_room.id
+    assert source_room.status == RoomStatusEnum.OCCUPIED
+    assert destination_room.status == RoomStatusEnum.AVAILABLE
+    assert (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.hotel_id == 1,
+            AuditLog.table_name == "rooms",
+            AuditLog.record_id.in_([source_room.id, destination_room.id]),
+        )
+        .count()
+        == 0
+    )
 
 
 def test_room_move_tier_classifier_uses_category_identity_then_capacity():

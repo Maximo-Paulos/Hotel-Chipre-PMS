@@ -5,7 +5,7 @@ from io import StringIO
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -13,26 +13,30 @@ import app.models  # noqa: F401
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
-from app.models.cash_register import CashCloseReport, CashMovement
 from app.models.cash_expense import CashExpense
+from app.models.cash_register import (
+    CashCloseReport,
+    CashMovement,
+    CashSession,
+    CashSessionStatusEnum,
+)
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
-from app.models.cash_register import CashSession, CashSessionStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.models.user_mfa import UserMfaSecret
-from app.models.security_audit_log import SecurityAuditLog
 from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.operational_audit_service import list_operational_audit
 from app.services.permission_service import (
     PERMISSION_CASH_APPROVE_DIFFERENCE,
     PERMISSION_CASH_CUSTODY_RECEIVE,
     PERMISSION_CASH_EXPENSE,
     set_user_override,
 )
-from app.services.operational_audit_service import list_operational_audit
 from app.services.timezones import hotel_today
 
 
@@ -118,6 +122,129 @@ def test_cash_register_api_open_add_close_and_list(client_with_db):
     listed = client.get("/api/cash-register/sessions")
     assert listed.status_code == 200
     assert [row["id"] for row in listed.json()] == [session_id]
+
+
+def test_cash_session_list_skips_movements_but_summary_and_detail_load_them(client_with_db):
+    client, db, _ctx = client_with_db
+    opened = client.post("/api/cash-register/sessions", json={"opening_balance": "100.00"})
+    assert opened.status_code == 201, opened.text
+    session_id = opened.json()["id"]
+    movement = client.post(
+        f"/api/cash-register/sessions/{session_id}/movements",
+        json={"movement_type": "income", "amount": "25.00", "description": "cash sale"},
+    )
+    assert movement.status_code == 201, movement.text
+
+    session = db.get(CashSession, session_id)
+    assert session is not None
+    db.expire_all()
+    statements: list[str] = []
+
+    def capture_select(connection, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().lower().startswith("select"):
+            statements.append(statement.lower())
+
+    bind = db.get_bind()
+    event.listen(bind, "before_cursor_execute", capture_select)
+    try:
+        listed = client.get("/api/cash-register/sessions")
+
+        assert listed.status_code == 200, listed.text
+        assert [row["id"] for row in listed.json()] == [session_id]
+        assert not any("cash_movements" in statement for statement in statements)
+        assert "movements" in inspect(session).unloaded
+
+        statements.clear()
+        summary = client.get(f"/api/cash-register/sessions/{session_id}/summary")
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["movements_count"] == 1
+        assert any("cash_movements" in statement for statement in statements)
+
+        statements.clear()
+        detail = client.get(f"/api/cash-register/sessions/{session_id}/movements")
+        assert detail.status_code == 200, detail.text
+        assert len(detail.json()) == 1
+        assert any("cash_movements" in statement for statement in statements)
+    finally:
+        event.remove(bind, "before_cursor_execute", capture_select)
+
+
+def test_cash_session_list_returns_latest_hundred_with_stable_pages_and_hotel_scope(client_with_db):
+    client, db, _ctx = client_with_db
+    opened_at = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    hotel_sessions = []
+    for index in range(105):
+        session = CashSession(
+            hotel_id=1,
+            status=CashSessionStatusEnum.CLOSED,
+            opening_balance=Decimal("0.00"),
+            currency_code="ARS",
+            opened_at=opened_at + timedelta(minutes=index // 2),
+        )
+        db.add(session)
+        hotel_sessions.append(session)
+
+    other_hotel_session = CashSession(
+        hotel_id=2,
+        status=CashSessionStatusEnum.CLOSED,
+        opening_balance=Decimal("0.00"),
+        currency_code="ARS",
+        opened_at=opened_at + timedelta(days=30),
+    )
+    db.add(other_hotel_session)
+    db.flush()
+    expected = sorted(
+        hotel_sessions,
+        key=lambda item: (item.opened_at, item.id),
+        reverse=True,
+    )
+
+    first_page = client.get(
+        "/api/cash-register/sessions",
+        headers={"Origin": "http://localhost:5173"},
+    )
+    assert first_page.status_code == 200, first_page.text
+    assert len(first_page.json()) == 100
+    assert [row["id"] for row in first_page.json()] == [row.id for row in expected[:100]]
+    assert first_page.headers["x-has-next-page"] == "true"
+    assert first_page.headers["x-page"] == "1"
+    assert first_page.headers["x-page-size"] == "100"
+    assert "x-has-next-page" in first_page.headers["access-control-expose-headers"].lower()
+
+    second_page = client.get("/api/cash-register/sessions?page=2")
+    assert second_page.status_code == 200, second_page.text
+    assert [row["id"] for row in second_page.json()] == [row.id for row in expected[100:]]
+    assert second_page.headers["x-has-next-page"] == "false"
+    assert other_hotel_session.id not in {row["id"] for row in first_page.json() + second_page.json()}
+
+
+def test_cash_session_list_can_filter_open_sessions_and_validates_page_bounds(client_with_db):
+    client, db, _ctx = client_with_db
+    open_session = CashSession(
+        hotel_id=1,
+        status=CashSessionStatusEnum.OPEN,
+        opening_balance=Decimal("0.00"),
+        currency_code="USD",
+        opened_at=datetime(2026, 10, 1, tzinfo=timezone.utc),
+    )
+    other_hotel_session = CashSession(
+        hotel_id=2,
+        status=CashSessionStatusEnum.OPEN,
+        opening_balance=Decimal("0.00"),
+        currency_code="USD",
+        opened_at=datetime(2026, 10, 2, tzinfo=timezone.utc),
+    )
+    db.add_all([open_session, other_hotel_session])
+    db.flush()
+
+    response = client.get("/api/cash-register/sessions?status=open")
+    assert response.status_code == 200, response.text
+    assert [row["id"] for row in response.json()] == [open_session.id]
+    assert response.headers["x-has-next-page"] == "false"
+
+    assert client.get("/api/cash-register/sessions?page=0").status_code == 422
+    assert client.get("/api/cash-register/sessions?page=10001").status_code == 422
+    assert client.get("/api/cash-register/sessions?page_size=101").status_code == 422
 
 
 def test_cash_session_summary_shows_movements_by_hotel_user(client_with_db):
@@ -644,6 +771,89 @@ def test_cash_csv_treats_formula_prefixed_actor_alias_as_text(client_with_db, mo
     rows = list(csv.DictReader(StringIO(response.text.lstrip("\ufeff")), delimiter=";"))
     assert rows[0]["responsable"] == "'@SUM(1+1)"
     assert rows[0]["fecha_local"] == "04/09/2026"
+
+
+def test_cash_csv_exports_physical_tender_and_change_separately(client_with_db, monkeypatch):
+    client, _db, _ctx = client_with_db
+    report = {
+        "report_date": "2026-09-04",
+        "hotel_id": 1,
+        "timezone": "America/Argentina/Buenos_Aires",
+        "sessions": [],
+        "entries": [
+            {
+                "entry_type": "payment",
+                "currency_code": "ARS",
+                "amount": Decimal("46000.00"),
+                "signed_amount": Decimal("46000.00"),
+                "cash_received_amount": Decimal("50000.00"),
+                "cash_change_amount": Decimal("3000.00"),
+                "cash_tip_amount": Decimal("1000.00"),
+                "payment_method": "cash",
+            }
+        ],
+    }
+    monkeypatch.setattr("app.api.cash_register.get_daily_summary", lambda *args, **kwargs: report)
+
+    response = client.get("/api/cash-register/export.csv?date=2026-09-04")
+
+    assert response.status_code == 200, response.text
+    rows = list(csv.DictReader(StringIO(response.text.lstrip("\ufeff")), delimiter=";"))
+    assert len(rows) == 1
+    assert rows[0]["importe"] == "46000,00"
+    assert rows[0]["importe_neto"] == "46000,00"
+    assert rows[0]["efectivo_entregado"] == "50000,00"
+    assert rows[0]["vuelto"] == "3000,00"
+    assert rows[0]["propina"] == "1000,00"
+
+
+def test_cash_csv_collapses_group_tender_and_change_to_one_net_row(client_with_db, monkeypatch):
+    client, _db, _ctx = client_with_db
+    report = {
+        "report_date": "2026-09-04",
+        "hotel_id": 1,
+        "timezone": "America/Argentina/Buenos_Aires",
+        "sessions": [],
+        "entries": [
+            {
+                "entry_type": "payment",
+                "currency_code": "ARS",
+                "amount": Decimal("30000.00"),
+                "signed_amount": Decimal("30000.00"),
+                "cash_received_amount": Decimal("50000.00"),
+                "cash_change_amount": Decimal("3000.00"),
+                "cash_tip_amount": Decimal("1000.00"),
+                "payment_method": "cash",
+                "group_payment_batch_id": 91,
+                "occurred_at": datetime(2026, 9, 4, 12, 0, tzinfo=timezone.utc),
+            },
+            {
+                "entry_type": "payment",
+                "currency_code": "ARS",
+                "amount": Decimal("16000.00"),
+                "signed_amount": Decimal("16000.00"),
+                "cash_received_amount": None,
+                "cash_change_amount": None,
+                "payment_method": "cash",
+                "group_payment_batch_id": 91,
+                "occurred_at": datetime(2026, 9, 4, 12, 1, tzinfo=timezone.utc),
+            },
+        ],
+    }
+    monkeypatch.setattr("app.api.cash_register.get_daily_summary", lambda *args, **kwargs: report)
+
+    response = client.get("/api/cash-register/export.csv?date=2026-09-04&currency=ARS")
+
+    assert response.status_code == 200, response.text
+    rows = list(csv.DictReader(StringIO(response.text.lstrip("\ufeff")), delimiter=";"))
+    assert len(rows) == 1
+    assert rows[0]["tipo"] == "cobro"
+    assert rows[0]["lote_grupal_id"] == "91"
+    assert rows[0]["importe"] == "46000,00"
+    assert rows[0]["importe_neto"] == "46000,00"
+    assert rows[0]["efectivo_entregado"] == "50000,00"
+    assert rows[0]["vuelto"] == "3000,00"
+    assert rows[0]["propina"] == "1000,00"
 
 
 def test_cash_csv_refuses_to_return_a_silently_truncated_report(client_with_db, monkeypatch):

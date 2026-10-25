@@ -13,27 +13,32 @@ They focus on explicit payment-gate scenarios not covered there:
   - Checkout room status side-effects
   - Cancelled reservation blocked at check-in
 """
-import pytest
 from datetime import date, datetime, time, timedelta, timezone
+
+import pytest
 from sqlalchemy import func
 
+from app.models.company import Company
+from app.models.guest import DocumentTypeEnum, Guest
+from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.room import RoomStatusEnum, Room
-from app.models.guest import Guest, DocumentTypeEnum
-from app.schemas.reservation import ReservationCreate
-from app.services.reservation_service import create_reservation
-from app.services.payment_service import process_payment
-from app.services.checkin_service import (
-    perform_checkin,
-    perform_partial_checkin,
-    perform_checkout,
-    validate_guest_for_checkin,
-    CheckInError,
-)
-from app.services import checkin_service
-from app.schemas.transaction import PaymentRequest, PaymentGatewayResponse
+from app.models.room import Room, RoomHousekeepingStatusEnum, RoomStatusEnum
+from app.models.room_block import RoomBlock
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
+from app.schemas.reservation import ReservationCreate
+from app.schemas.transaction import PaymentGatewayResponse, PaymentRequest
+from app.services import checkin_service
+from app.services.company_reservation_terms import build_company_terms_snapshot
 from app.services.cash_register_service import open_session
+from app.services.checkin_service import (
+    CheckInError,
+    perform_checkin,
+    perform_checkout,
+    perform_partial_checkin,
+    validate_guest_for_checkin,
+)
+from app.services.payment_service import process_payment
+from app.services.reservation_service import create_reservation
 
 
 @pytest.fixture(autouse=True)
@@ -101,6 +106,287 @@ def _pay_full(db, reservation, hotel_id=1):
     process_payment(db, payment, hotel_id=hotel_id)
     db.flush()
     db.refresh(reservation)
+
+
+class TestCheckinRoomReadiness:
+    """Final check-in requires an assigned, available, ready room."""
+
+    def test_checkin_rejects_room_block_overlapping_stay(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        check_in = date(2027, 1, 10)
+        check_out = date(2027, 1, 12)
+        reservation = _make_reservation(
+            db, sample_guest, sample_categories, check_in=check_in, check_out=check_out
+        )
+        _pay_full(db, reservation, hotel_id=hotel_config.id)
+        db.add(
+            RoomBlock(
+                hotel_id=hotel_config.id,
+                room_id=reservation.room_id,
+                starts_at=date(2027, 1, 11),
+                ends_at=date(2027, 1, 13),
+            )
+        )
+        db.flush()
+
+        with pytest.raises(CheckInError, match="bloqueo activo para las fechas de la estadía"):
+            perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+        assert reservation.status == ReservationStatusEnum.FULLY_PAID
+        assert reservation.actual_check_in is None
+
+    @pytest.mark.parametrize(
+        "block_window",
+        [None, (date(2027, 1, 8), date(2027, 1, 10)), (date(2027, 1, 12), date(2027, 1, 14))],
+        ids=["no-block", "block-ends-on-checkin", "block-starts-on-checkout"],
+    )
+    def test_checkin_allows_ready_room_without_overlapping_block(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config, block_window
+    ):
+        check_in = date(2027, 1, 10)
+        check_out = date(2027, 1, 12)
+        reservation = _make_reservation(
+            db, sample_guest, sample_categories, check_in=check_in, check_out=check_out
+        )
+        _pay_full(db, reservation, hotel_id=hotel_config.id)
+        if block_window is not None:
+            db.add(
+                RoomBlock(
+                    hotel_id=hotel_config.id,
+                    room_id=reservation.room_id,
+                    starts_at=block_window[0],
+                    ends_at=block_window[1],
+                )
+            )
+            db.flush()
+
+        checked_in = perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+        assert checked_in.status == ReservationStatusEnum.CHECKED_IN
+
+    def test_checkin_requires_an_assigned_room(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        reservation = _make_reservation(db, sample_guest, sample_categories)
+        _pay_full(db, reservation, hotel_id=hotel_config.id)
+        reservation.room_id = None
+        reservation.allocation_status = "unassigned"
+        db.flush()
+
+        with pytest.raises(CheckInError, match="habitación activa del hotel"):
+            perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+    def test_company_terms_snapshot_missing_blocks_checkin_by_default(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        reservation = _make_reservation(db, sample_guest, sample_categories)
+        company = Company(
+            hotel_id=hotel_config.id,
+            legal_name="Legacy Terms SA",
+            display_name="Legacy Terms",
+            tax_id="legacy-terms-test",
+            contact_name="Manager",
+            contact_email="legacy-terms@example.test",
+            contact_phone="+541100000000",
+            payment_deferred=False,
+            requires_voucher=False,
+            requires_signature=False,
+        )
+        db.add(company)
+        db.flush()
+        reservation.company_id = company.id
+        reservation.company_terms_snapshot = None
+        reservation.company_terms_reviewed_config = None
+        db.flush()
+        _pay_full(db, reservation, hotel_id=hotel_config.id)
+
+        with pytest.raises(CheckInError, match="Gerencia debe revisar esta reserva"):
+            perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+        assert reservation.actual_check_in is None
+        assert reservation.status == ReservationStatusEnum.FULLY_PAID
+
+    def test_first_company_checkin_locks_hotel_gate_and_company_profile(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch
+    ):
+        reservation = _make_reservation(db, sample_guest, sample_categories)
+        company = Company(
+            hotel_id=hotel_config.id,
+            legal_name="Locked Terms SA",
+            display_name="Locked Terms",
+            tax_id="locked-terms-test",
+            contact_name="Manager",
+            contact_email="locked-terms@example.test",
+            contact_phone="+541100000000",
+            payment_deferred=False,
+            requires_voucher=False,
+            requires_signature=False,
+        )
+        db.add(company)
+        db.flush()
+        reservation.company_id = company.id
+        reservation.company_terms_snapshot = build_company_terms_snapshot(company, reservation)
+        reservation.company_terms_reviewed_config = reservation.company_terms_snapshot["terms"]
+        _pay_full(db, reservation, hotel_id=hotel_config.id)
+
+        real_lock_query = checkin_service.lock_query
+        locked_models = []
+
+        def track_lock(query, model):
+            locked_models.append(model)
+            return real_lock_query(query, model)
+
+        monkeypatch.setattr(checkin_service, "lock_query", track_lock)
+        checked_in = perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+        assert checked_in.status == ReservationStatusEnum.CHECKED_IN
+        assert Reservation in locked_models
+        assert HotelConfiguration in locked_models
+        assert Company in locked_models
+
+    def test_hotel_can_configure_legacy_company_terms_review_to_not_block_checkin(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        reservation = _make_reservation(db, sample_guest, sample_categories)
+        company = Company(
+            hotel_id=hotel_config.id,
+            legal_name="Legacy Terms Optional SA",
+            display_name="Legacy Terms Optional",
+            tax_id="legacy-terms-optional-test",
+            contact_name="Manager",
+            contact_email="legacy-terms-optional@example.test",
+            contact_phone="+541100000000",
+            payment_deferred=False,
+            requires_voucher=False,
+            requires_signature=False,
+        )
+        db.add(company)
+        db.flush()
+        reservation.company_id = company.id
+        reservation.company_terms_snapshot = None
+        reservation.company_terms_reviewed_config = None
+        hotel_config.block_checkin_on_company_terms_change = False
+        db.flush()
+        _pay_full(db, reservation, hotel_id=hotel_config.id)
+
+        result = perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+        assert result.status == ReservationStatusEnum.CHECKED_IN
+        assert reservation.status == ReservationStatusEnum.CHECKED_IN
+        assert reservation.actual_check_in is not None
+
+    def test_partial_checkin_still_allows_unassigned_reservation(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        reservation = _make_reservation(db, sample_guest, sample_categories)
+        _pay_full(db, reservation, hotel_id=hotel_config.id)
+        reservation.room_id = None
+        reservation.allocation_status = "unassigned"
+        db.flush()
+
+        pre_checkin = perform_partial_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+        assert pre_checkin.status == ReservationStatusEnum.PRE_CHECK_IN
+        assert pre_checkin.pre_check_in_at is not None
+        with pytest.raises(CheckInError, match="habitación activa del hotel"):
+            perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+        assert reservation.status == ReservationStatusEnum.PRE_CHECK_IN
+
+    def test_checkin_rejects_room_assigned_from_another_hotel(
+        self,
+        db,
+        sample_guest,
+        sample_rooms,
+        sample_rooms_hotel2,
+        sample_categories,
+        hotel_config,
+    ):
+        reservation = _make_reservation(db, sample_guest, sample_categories)
+        _pay_full(db, reservation, hotel_id=hotel_config.id)
+        original_room_id = reservation.room_id
+        reservation.room_id = sample_rooms_hotel2[0].id
+
+        # This invalid cross-tenant assignment exists only in memory; the
+        # composite reservation-room foreign key prevents it from being stored.
+        with db.no_autoflush:
+            with pytest.raises(CheckInError, match="habitación activa del hotel"):
+                perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+        reservation.room_id = original_room_id
+
+    @pytest.mark.parametrize(
+        "room_status",
+        [
+            RoomStatusEnum.OCCUPIED,
+            RoomStatusEnum.MAINTENANCE,
+            RoomStatusEnum.BLOCKED,
+            RoomStatusEnum.CLEANING,
+        ],
+    )
+    def test_checkin_rejects_room_that_is_not_available(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config, room_status
+    ):
+        reservation = _make_reservation(db, sample_guest, sample_categories)
+        _pay_full(db, reservation, hotel_id=hotel_config.id)
+        room = db.query(Room).filter(Room.id == reservation.room_id, Room.hotel_id == hotel_config.id).one()
+        room.status = room_status
+        db.flush()
+
+        with pytest.raises(CheckInError, match="debe estar disponible"):
+            perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+        assert reservation.status == ReservationStatusEnum.FULLY_PAID
+        assert reservation.actual_check_in is None
+
+    @pytest.mark.parametrize(
+        "housekeeping_status",
+        [RoomHousekeepingStatusEnum.DIRTY, RoomHousekeepingStatusEnum.IN_PROGRESS],
+    )
+    def test_checkin_rejects_room_that_is_not_clean_or_inspected(
+        self,
+        db,
+        sample_guest,
+        sample_rooms,
+        sample_categories,
+        hotel_config,
+        housekeeping_status,
+    ):
+        reservation = _make_reservation(db, sample_guest, sample_categories)
+        _pay_full(db, reservation, hotel_id=hotel_config.id)
+        room = db.query(Room).filter(Room.id == reservation.room_id, Room.hotel_id == hotel_config.id).one()
+        room.housekeeping_status = housekeeping_status
+        db.flush()
+
+        with pytest.raises(CheckInError, match="limpia o inspeccionada"):
+            perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+        assert reservation.status == ReservationStatusEnum.FULLY_PAID
+        assert reservation.actual_check_in is None
+
+    @pytest.mark.parametrize(
+        "housekeeping_status",
+        [RoomHousekeepingStatusEnum.CLEAN, RoomHousekeepingStatusEnum.INSPECTED],
+    )
+    def test_checkin_accepts_ready_room_and_marks_it_occupied(
+        self,
+        db,
+        sample_guest,
+        sample_rooms,
+        sample_categories,
+        hotel_config,
+        housekeeping_status,
+    ):
+        reservation = _make_reservation(db, sample_guest, sample_categories)
+        _pay_full(db, reservation, hotel_id=hotel_config.id)
+        room = db.query(Room).filter(Room.id == reservation.room_id, Room.hotel_id == hotel_config.id).one()
+        room.housekeeping_status = housekeeping_status
+        db.flush()
+
+        checked_in = perform_checkin(db, reservation.id, hotel_id=hotel_config.id)
+
+        assert checked_in.status == ReservationStatusEnum.CHECKED_IN
+        assert room.status == RoomStatusEnum.OCCUPIED
 
 
 # ---------------------------------------------------------------------------

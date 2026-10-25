@@ -8,20 +8,24 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.api.movement_groups as movement_groups_api
+import app.api.room_movement_groups as room_movement_groups_api
 import app.database as db_module
 import app.main as main_module
+import app.services.room_movement_group_service as movement_group_service
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
-from app.models.guest import DocumentTypeEnum, Guest
 from app.models.company import Company
+from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
-from app.models.operations import RoomMoveEvent, RoomMoveTypeEnum, RoomMovementGroup
+from app.models.operations import RoomMoveEvent, RoomMovementGroup, RoomMoveTypeEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.services.room_movement_group_service import (
     RoomMovementGroupError,
+    RoomMovementLockConflict,
     create_grouped_room_move,
     revert_group,
 )
@@ -158,7 +162,7 @@ def test_revert_movement_group_restores_original_room_and_audits(movement_api_cl
         audit = db.query(SecurityAuditLog).filter(SecurityAuditLog.hotel_id == 1).one()
         assert reservation.room_id == from_room_id
         assert reservation.category_id == from_category_id
-        assert reservation.allocation_locked is True
+        assert reservation.allocation_locked is False
         assert reservation.requires_manual_review is False
         assert group.is_reverted is True
         assert group.reverted_by_user_id == 10
@@ -229,6 +233,29 @@ def test_revert_group_service_returns_reverted_without_conflicts(movement_api_cl
         ]
         assert reservation.room_id == from_room_id
         assert group.is_reverted is True
+
+
+def test_revert_group_aborts_when_origin_room_lock_is_contended(movement_api_client, monkeypatch):
+    _, SessionLocal, _ = movement_api_client
+
+    def reject_locked_room(*_args, **_kwargs):
+        raise RoomMovementLockConflict("Otra operación está modificando una habitación. Reintentá el movimiento.")
+
+    monkeypatch.setattr(movement_group_service, "lock_room_for_movement", reject_locked_room)
+
+    with SessionLocal() as db:
+        seeded = _seed_group(db, hotel_id=1, suffix="LOCKED_ORIGIN", trigger_reason="allocation_run")
+        group_id = seeded["group"].id
+        reservation_id = seeded["reservation"].id
+        destination_room_id = seeded["to_room"].id
+        db.commit()
+
+        with pytest.raises(RoomMovementLockConflict, match="Reintentá el movimiento"):
+            revert_group(db, hotel_id=1, group_id=group_id, reverted_by_user_id=10)
+
+        db.rollback()
+        assert db.get(Reservation, reservation_id).room_id == destination_room_id
+        assert db.get(RoomMovementGroup, group_id).is_reverted is False
 
 
 def test_revert_group_service_conflict_does_not_overwrite_original_room(movement_api_client):
@@ -544,6 +571,32 @@ def test_revert_already_reverted_group_returns_400(movement_api_client):
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Movement group is already reverted"
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "route_module"),
+    [
+        ("/api/movement-groups/987654/revert", movement_groups_api),
+        ("/api/room-movement-groups/987654/revert", room_movement_groups_api),
+    ],
+)
+def test_movement_group_revert_lock_conflict_returns_409(
+    movement_api_client,
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+    route_module,
+):
+    client, _, _ = movement_api_client
+
+    def reject_locked_room(*_args, **_kwargs):
+        raise RoomMovementLockConflict("Otra operación está modificando una habitación. Reintentá el movimiento.")
+
+    monkeypatch.setattr(route_module, "revert_group", reject_locked_room)
+
+    response = client.post(endpoint)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Otra operación está modificando una habitación. Reintentá el movimiento."
 
 
 def _seed_group(

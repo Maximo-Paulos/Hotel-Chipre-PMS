@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { getHotelConfig, updateHotelConfig, type HotelConfig } from "../../api/config";
+import { getHotelConfig, updateHotelConfig, type FxRoundingPolicy, type HotelConfig } from "../../api/config";
 import { getFxRates } from "../../api/fxRates";
 import {
   createRoomCategory,
@@ -515,6 +515,26 @@ export function SettingsHotelPage() {
               <p className="mt-1 text-xs">Las reservas particulares requieren el pago total antes del check-in. Las cuentas diferidas se autorizan por empresa.</p>
             </div>
             <label className="text-sm font-semibold text-slate-700">
+              Estado de la reserva durante llegadas individuales
+              <select
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                value={form.checkin_reservation_status_policy ?? "partial_checkin"}
+                onChange={(event) =>
+                  handleChange(
+                    "checkin_reservation_status_policy",
+                    event.target.value as HotelConfig["checkin_reservation_status_policy"]
+                  )
+                }
+                data-testid="hotel-checkin-status-policy"
+              >
+                <option value="partial_checkin">Mantener check-in parcial hasta que llegue todo el grupo</option>
+                <option value="checked_in_on_first_guest">Marcar check-in al llegar la primera persona</option>
+              </select>
+              <span className="mt-1 block text-xs font-normal text-slate-500">
+                Los perfiles y horarios de llegada se registran por persona; esta opción solo define el estado general de la reserva.
+              </span>
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
               Cancelación gratis (horas)
               <input type="number" min={0} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.free_cancellation_hours ?? 0} onChange={(e) => handleChange("free_cancellation_hours", parseInt(e.target.value || "0", 10))} />
             </label>
@@ -751,6 +771,27 @@ export function SettingsHotelPage() {
                     </div>
                   </div>
                 </fieldset>
+                <label className="text-sm font-semibold text-slate-700" data-testid="fx-rounding-setting">
+                  Política de conversión de pagos
+                  <select
+                    aria-label="Política de conversión de pagos"
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800"
+                    value={form.fx_rounding_policy ?? "keep_remainder"}
+                    onChange={(event) => handleChange("fx_rounding_policy", event.target.value as FxRoundingPolicy)}
+                    data-testid="fx-rounding-policy"
+                  >
+                    <option value="round_up">Sugerir efectivo al entero superior</option>
+                    <option value="round_down">Sugerir efectivo al entero inferior</option>
+                    <option value="nearest_ten">Sugerir efectivo a la decena más cercana</option>
+                    <option value="exact">Pedir el importe exacto con centavos, sin sugerir redondeo</option>
+                    <option value="keep_remainder">Mostrar cualquier saldo restante para cobrarlo aparte</option>
+                  </select>
+                  <span className="mt-1 block text-xs font-normal text-slate-500">
+                    Esta configuración solo orienta cuánto efectivo entregar: no cambia el importe aplicado ni perdona el saldo.
+                    El excedente se devuelve como vuelto, salvo que el huésped lo deje expresamente como propina. Tarjeta y
+                    transferencia siempre usan el importe exacto. El servidor confirma la conversión al registrar el cobro.
+                  </span>
+                </label>
                 <fieldset>
                   <legend className="text-sm font-semibold text-slate-700">Mercados visibles en cotizaciones</legend>
                   <div className="mt-1 grid gap-2 sm:grid-cols-2">
@@ -1281,6 +1322,10 @@ function PaymentSurchargesCard() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const active = (surchargesQuery.data ?? []).filter((s) => s.is_active);
+  const formatAmount = (amount: string | number) => {
+    const numericAmount = Number(amount);
+    return Number.isFinite(numericAmount) ? String(numericAmount) : String(amount);
+  };
 
   const handleAdd = async () => {
     setFormError(null);
@@ -1351,7 +1396,7 @@ function PaymentSurchargesCard() {
             <div key={s.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
               <span className="text-slate-800">
                 <strong>{surchargeMethodLabel(s.payment_method)}</strong>:{" "}
-                {s.surcharge_type === "percentage" ? `${s.amount}%` : `$${s.amount}`}
+                {s.surcharge_type === "percentage" ? `${formatAmount(s.amount)}%` : `$${formatAmount(s.amount)}`}
               </span>
               <button type="button" onClick={() => void handleDeactivate(s.id)} disabled={deactivateMutation.isPending} className="rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60">
                 Quitar

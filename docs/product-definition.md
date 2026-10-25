@@ -164,7 +164,7 @@ For each module, state what the **platform** provides and what each **hotel** co
 | Rooms & categories | Structure, state machine | Their rooms, categories, capacities, base tariffs |
 | Guests | PII fields, companions | — (no platform-level config) |
 | Check-in / out | Flow + audit | Required legal fields (per jurisdiction, TODO) |
-| Payments | Platform-wide: MercadoPago + PayPal (all tiers) + cash/transfer/manual. Stripe available on `pro`/`ultra` only. Card-brand support follows whatever Stripe supports for that merchant + geography — not modeled as separate product integrations. | Which of the enabled methods to turn on + own gateway credentials |
+| Payments | Platform-wide: MercadoPago + PayPal (all tiers) + cash/transfer/manual. Stripe available on `pro`/`ultra` only. Card-brand support follows whatever Stripe supports for that merchant + geography — not modeled as separate product integrations. Positive payments below the outstanding balance are valid partials; the remainder stays due. | Which of the enabled methods to turn on + own gateway credentials; exchange market, buy/sell side, and foreign-tender rounding policy (`round_up`, `round_down`, `nearest_ten`, `exact`, or `keep_remainder`). `exact` uses the converted tender amount to cent precision and settles the displayed balance; the default `keep_remainder` leaves any residual available to collect in another currency. Rounding applies when the tender and reservation currencies differ; same-currency payments keep the entered amount. Any excess created by a rounding-up policy is a reservation-scoped credit in the tender currency, separate from the amount paid and revenue. Its manual cash refund requires `payment:refund` (Owner, Co-owner, and Manager by default); credit cannot currently be applied to another reservation. |
 | OTA inbound | Booking / Expedia / Despegar adapters | Which channels connected + credentials |
 | OTA outbound | Future (post-launch) | TODO(owner) |
 | Allocation engine | OR-Tools solver, draft/apply policy | Policy weights within allowed bounds |
@@ -245,20 +245,20 @@ TODO(owner): hosted OpenAI-compatible endpoint vs local model per deployment. Pe
 - 8.2 Overbooking — platform stance (allow / forbid / flag). TODO(owner).
 - 8.3 Room-move authority — platform rule (owner only / front desk with log / any). TODO(owner).
 - 8.4 Manual-review triggers — platform-fixed list; not tenant-tunable. TODO(owner) confirm.
-- 8.5 Refund authority — resolved for the pilot by [ADR: Check-in, manual payments, and financial approvals](decisions/checkin-manual-payments-financial-approvals-adr.md): refunds require `payment:refund` and fresh step-up MFA; manager and owner receive it by default. The current manual refund path returns cash only; gateway-backed refunds remain a separate product capability.
+- 8.5 Refund authority — resolved for the pilot by [ADR: Check-in, manual payments, and financial approvals](decisions/checkin-manual-payments-financial-approvals-adr.md): refunds require `payment:refund` and fresh step-up MFA; Owner, Co-owner, and Manager receive it by default. The current manual refund path returns cash only; gateway-backed refunds remain a separate product capability.
 - 8.6 Roles & permissions — platform-wide matrix. Observable: `owner`, `co_owner`. TODO(verify) full matrix from `app/dependencies/auth.py`.
 
 ### 8.7 Refund handling
 
-Refunds are a platform-wide business rule area, **independent of subscription tiers**. At launch the platform must support, at minimum, these three paths:
+Refunds are a platform-wide business rule area, **independent of subscription tiers**. The current pilot supports manual cash refunds of completed reservation payments and reservation-scoped rounding credits. Gateway refunds and reusable vouchers remain future capabilities:
 
-1. **Monetary refund via original payment gateway** — when the gateway supports it, the amount is returned through the same channel (MP, PayPal, Stripe where enabled). Idempotent, audited, reconciled against the original transaction.
-2. **Internal voucher / credit** — when configured by the hotel, the refund is issued as a hotel credit for future use. Voucher lifecycle (expiry, partial redemption, non-transferability) TODO(owner).
-3. **Manual review / manual handling** — when gateway constraints, policy, or ambiguity prevent the above two, the case is flagged `manual_review` with an explicit reason. No silent close.
+1. **Manual cash refund** — requires `payment:refund`, the original transaction, a reason, and an audit record. A rounding credit is refunded as its own ledger component and cannot exceed the open credit from that source payment.
+2. **Monetary refund via original payment gateway** — future capability. When implemented, the amount should be returned through the same channel (MP, PayPal, Stripe where enabled), idempotently and reconciled against the original transaction.
+3. **Reusable hotel voucher / credit** — future capability. The rounding credit implemented for this pilot is tied to its reservation and cannot be applied to another stay. Voucher expiry, partial redemption, and transferability require an owner decision.
 
 Rules:
-- Refund outcome always produces an audit record (who / when / amount / path / reason).
-- Partial refunds are allowed if the chosen path supports them; otherwise fall to manual review.
+- Manual refund outcome produces an audit record (who / when / amount / path / reason).
+- Partial manual refunds are capped by the remaining refundable principal or rounding credit.
 - AI / Gemma never issues refunds directly — drafts and reconciliations only (per §9).
 - Gateway-specific limits (MP refund windows, PayPal dispute timing, Stripe charge age) are documented per integration — TODO(architect).
 
@@ -275,6 +275,12 @@ TODO(owner):
 - Extensions are available to direct and company reservations. Direct extensions may leave the additional amount outstanding. Deferred company extensions are recorded to the company account.
 - A physical move of a company guest from a double to a triple room preserves the contracted category and base tariff; a configured extra-person/night charge is tracked separately. Individual room/category re-pricing follows the selected operational rule.
 - `reservation:read` may read the reservation balance and payment history. Registering payments, refunds, or cash movements remains protected by their action permissions.
+
+### 8.9 Individual guest arrivals (2026-10-25)
+
+- Check-in is recorded separately for each guest in a reservation, with the arrival time and acting user/role. A repeated request for the same guest returns the original arrival record and does not create a duplicate or change the reservation balance or payments.
+- The first guest can arrive only when the assigned room passes the existing ready-room gate; that arrival marks the physical room occupied. Later guests are recorded against that occupied room.
+- Each hotel configures the reservation status policy: keep `partial_checkin` until the party arrives (default), or mark `checked_in` when its first guest arrives. The selected policy is snapshotted on the reservation when the first arrival is recorded. Missing guest profiles remain visible and do not count as arrivals.
 
 ---
 

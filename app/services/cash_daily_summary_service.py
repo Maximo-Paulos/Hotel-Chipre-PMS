@@ -24,7 +24,13 @@ from app.models.cash_register import (
 )
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation
-from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
+from app.models.reservation_group_payment import ReservationGroupPaymentBatch
+from app.models.transaction import (
+    PaymentMethodEnum,
+    Transaction,
+    TransactionStatusEnum,
+    TransactionTypeEnum,
+)
 from app.services.actor_label_service import resolve_hotel_actor_labels
 from app.services.timezones import normalize_timezone
 
@@ -126,6 +132,27 @@ def get_daily_summary(
         .limit(ENTRY_LIMIT + 1)
         .all()
     )
+    group_batch_ids = {
+        int(batch_id)
+        for batch_id in [
+            *(getattr(transaction, "group_payment_batch_id", None) for transaction in transactions),
+            *(getattr(transaction, "group_payment_batch_id", None) for transaction, _code in prior_receipt_rows),
+        ]
+        if batch_id is not None
+    }
+    group_batches = {
+        batch.id: batch
+        for batch in (
+            db.query(ReservationGroupPaymentBatch)
+            .filter(
+                ReservationGroupPaymentBatch.hotel_id == hotel_id,
+                ReservationGroupPaymentBatch.id.in_(group_batch_ids),
+            )
+            .all()
+            if group_batch_ids
+            else []
+        )
+    }
     prior_receipt_totals = (
         db.query(
             func.coalesce(Transaction.tender_currency, Transaction.currency),
@@ -146,6 +173,7 @@ def get_daily_summary(
         db.query(CashMovement)
         .filter(
             CashMovement.hotel_id == hotel_id,
+            CashMovement.voided_at.is_(None),
             or_(
                 and_(
                     CashMovement.business_recorded_at.is_not(None),
@@ -183,6 +211,7 @@ def get_daily_summary(
         .filter(
             CashMovement.hotel_id == hotel_id,
             CashMovement.session_id.in_(session_ids),
+            CashMovement.voided_at.is_(None),
             or_(
                 and_(
                     CashMovement.business_recorded_at.is_not(None),
@@ -275,6 +304,7 @@ def get_daily_summary(
         lambda: {"gross_collected": ZERO, "refunds": ZERO, "net_collected": ZERO, "transaction_count": 0}
     )
     entries: list[dict] = []
+    groups_with_reported_tender: set[int] = set()
     gross_total = ZERO
     refunds_total = ZERO
     physical_net = ZERO
@@ -287,7 +317,6 @@ def get_daily_summary(
         method = _value(transaction.payment_method)
         transaction_type = _value(transaction.transaction_type)
         amount = _decimal(transaction.gross_amount if transaction.gross_amount is not None else transaction.amount)
-        base_amount = _decimal(transaction.tender_amount if transaction.tender_amount is not None else transaction.amount)
         is_refund = transaction_type == TransactionTypeEnum.REFUND.value
         positive_amount = abs(amount)
         signed_amount = -positive_amount if is_refund else positive_amount
@@ -311,20 +340,44 @@ def get_daily_summary(
         collector_row["net_collected"] += signed_amount
         method_row["transaction_count"] += 1
         collector_row["transaction_count"] += 1
-        if method == PaymentMethodEnum.CASH.value:
-            physical_net += signed_amount
-        else:
+        if method != PaymentMethodEnum.CASH.value:
             digital_net += signed_amount
+        group_batch_id = getattr(transaction, "group_payment_batch_id", None)
+        cash_received_amount = getattr(transaction, "cash_received_amount", None)
+        cash_change_amount = getattr(transaction, "cash_change_amount", None)
+        cash_tip_amount = getattr(transaction, "cash_tip_amount", ZERO) or ZERO
+        if group_batch_id is not None:
+            cash_received_amount = None
+            cash_change_amount = None
+            cash_tip_amount = ZERO
+            batch = group_batches.get(group_batch_id)
+            if (
+                group_batch_id not in groups_with_reported_tender
+                and method == PaymentMethodEnum.CASH.value
+                and batch is not None
+            ):
+                cash_received_amount = batch.cash_received_amount
+                cash_change_amount = batch.cash_change_amount
+                cash_tip_amount = batch.cash_tip_amount or ZERO
+                if cash_received_amount is not None:
+                    groups_with_reported_tender.add(group_batch_id)
+        if method == PaymentMethodEnum.CASH.value:
+            # Tips are physical cash retained in the drawer, but remain
+            # excluded from gross/net reservation collections below.
+            physical_net += signed_amount + _decimal(cash_tip_amount)
         entries.append(
             {
                 "entry_type": "payment",
                 "actor_user_id": collector_key,
                 "actor_name": collector_name,
                 "transaction_id": transaction.id,
-                "group_payment_batch_id": getattr(transaction, "group_payment_batch_id", None),
+                "group_payment_batch_id": group_batch_id,
                 "reservation_id": transaction.reservation_id,
                 "amount": positive_amount,
                 "signed_amount": signed_amount,
+                "cash_received_amount": _decimal(cash_received_amount) if cash_received_amount is not None else None,
+                "cash_change_amount": _decimal(cash_change_amount) if cash_change_amount is not None else None,
+                "cash_tip_amount": _decimal(cash_tip_amount),
                 "currency_code": transaction_currency,
                 "payment_method": method,
                 "transaction_type": transaction_type,
@@ -397,6 +450,45 @@ def get_daily_summary(
             item.get("transaction_id") or item.get("cash_movement_id") or 0,
         )
     )
+
+    prior_receipts = []
+    for transaction, confirmation_code in prior_receipt_rows[:ENTRY_LIMIT]:
+        group_batch_id = getattr(transaction, "group_payment_batch_id", None)
+        cash_received_amount = getattr(transaction, "cash_received_amount", None)
+        cash_change_amount = getattr(transaction, "cash_change_amount", None)
+        cash_tip_amount = getattr(transaction, "cash_tip_amount", ZERO) or ZERO
+        if group_batch_id is not None:
+            cash_received_amount = None
+            cash_change_amount = None
+            cash_tip_amount = ZERO
+            batch = group_batches.get(group_batch_id)
+            if (
+                group_batch_id not in groups_with_reported_tender
+                and batch is not None
+                and _value(batch.payment_method) == PaymentMethodEnum.CASH.value
+            ):
+                cash_received_amount = batch.cash_received_amount
+                cash_change_amount = batch.cash_change_amount
+                cash_tip_amount = batch.cash_tip_amount or ZERO
+                if cash_received_amount is not None:
+                    groups_with_reported_tender.add(group_batch_id)
+        prior_receipts.append(
+            {
+                "transaction_id": transaction.id,
+                "reservation_id": transaction.reservation_id,
+                "confirmation_code": confirmation_code,
+                "amount": _decimal(transaction.tender_amount if transaction.tender_amount is not None else transaction.amount),
+                "cash_received_amount": _decimal(cash_received_amount) if cash_received_amount is not None else None,
+                "cash_change_amount": _decimal(cash_change_amount) if cash_change_amount is not None else None,
+                "cash_tip_amount": _decimal(cash_tip_amount),
+                "currency_code": str(transaction.tender_currency or transaction.currency or "ARS").upper(),
+                "collected_on": transaction.collected_on,
+                "prior_receipt_note": transaction.prior_receipt_note,
+                "recorded_at": _utc(transaction.created_at),
+                "recorded_by_user_id": transaction.created_by_user_id,
+                "recorded_by_name": _actor_name(transaction.created_by_user_id, actor_labels),
+            }
+        )
 
     # The opening balance is the balance carried by the session active at the
     # local-day boundary. New sessions opened during the day add their own
@@ -582,6 +674,14 @@ def get_daily_summary(
         "net_collected": _decimal(gross_total - refunds_total),
         "physical_cash_net_collected": _decimal(physical_net),
         "digital_net_collected": _decimal(digital_net),
+        # Gratuities are displayed separately from reservation collections.
+        # Physical caja totals already include them through cash movements.
+        "cash_tips_total": _decimal(
+            sum((entry.get("cash_tip_amount", ZERO) for entry in entries), ZERO)
+        ),
+        "prior_receipt_cash_tips_total": _decimal(
+            sum((entry.get("cash_tip_amount", ZERO) for entry in prior_receipts), ZERO)
+        ),
         "by_payment_method": [
             {"payment_method": key, **{field: _decimal(value) if field != "transaction_count" else int(value) for field, value in row.items()}}
             for key, row in sorted(methods.items())
@@ -607,21 +707,7 @@ def get_daily_summary(
             "manual_income_total": _decimal(manual_income),
             "manual_expense_total": _decimal(manual_expense),
         },
-        "prior_receipts": [
-            {
-                "transaction_id": transaction.id,
-                "reservation_id": transaction.reservation_id,
-                "confirmation_code": confirmation_code,
-                "amount": _decimal(transaction.tender_amount if transaction.tender_amount is not None else transaction.amount),
-                "currency_code": str(transaction.tender_currency or transaction.currency or "ARS").upper(),
-                "collected_on": transaction.collected_on,
-                "prior_receipt_note": transaction.prior_receipt_note,
-                "recorded_at": _utc(transaction.created_at),
-                "recorded_by_user_id": transaction.created_by_user_id,
-                "recorded_by_name": _actor_name(transaction.created_by_user_id, actor_labels),
-            }
-            for transaction, confirmation_code in prior_receipt_rows[:ENTRY_LIMIT]
-        ],
+        "prior_receipts": prior_receipts,
         "prior_receipt_totals": [
             {
                 "currency_code": str(currency or "ARS").upper(),

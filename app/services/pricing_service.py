@@ -35,13 +35,23 @@ _METHOD_COLS: dict[str, str] = {
 }
 
 
-def _period_price(period: PricePeriod, payment_method: Optional[str]) -> float:
+def _price_with_payment_method_override(
+    row: DailyRate | PricePeriod,
+    base_price: float,
+    payment_method: Optional[str],
+) -> float:
     if payment_method:
         column = _METHOD_COLS.get(payment_method)
-        override = getattr(period, column, None) if column else None
+        override = getattr(row, column, None) if column else None
         if override is not None:
             return float(override)
-    return float(period.price_per_night)
+    return float(base_price)
+
+
+def _period_price(period: PricePeriod, payment_method: Optional[str]) -> float:
+    return _price_with_payment_method_override(
+        period, period.price_per_night, payment_method
+    )
 
 
 def get_price_for_date(
@@ -71,13 +81,7 @@ def get_price_for_date(
         .first()
     )
     if daily is not None:
-        if payment_method:
-            col = _METHOD_COLS.get(payment_method)
-            if col:
-                override = getattr(daily, col, None)
-                if override is not None:
-                    return float(override)
-        return float(daily.price)
+        return _price_with_payment_method_override(daily, daily.price, payment_method)
 
     # 2. Best active PricePeriod covering this date
     period: Optional[PricePeriod] = (
@@ -184,12 +188,9 @@ def resolve_rate_calendar(
     while current <= to_date:
         row = daily_rows.get(current)
         if row is not None:
-            price = float(row.price)
-            if payment_method:
-                column = _METHOD_COLS.get(payment_method)
-                override = getattr(row, column, None) if column else None
-                if override is not None:
-                    price = float(override)
+            price = _price_with_payment_method_override(
+                row, row.price, payment_method
+            )
             result.append({
                 "date": current,
                 "price": price,

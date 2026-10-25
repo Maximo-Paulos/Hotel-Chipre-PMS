@@ -5,15 +5,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.database import Base
 from app.api import permissions as permissions_api
 from app.api import subscription as subscription_api
+from app.database import Base
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
-from app.models.security_audit_log import SecurityAuditLog
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.permission import HotelPermissionOverride, UserPermissionOverride
+from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.models.user_mfa import UserMfaSecret
 from app.models.whatsapp_crm import (
@@ -26,34 +26,37 @@ from app.models.whatsapp_crm import (
     WhatsAppMessageDirectionEnum,
     WhatsAppMessageStatusEnum,
 )
+from app.services import permission_service as permission_service_module
 from app.services.action_step_up_service import (
     create_action_step_up_ticket,
     create_permission_admin_read_step_up_ticket,
     is_permission_admin_read_action,
 )
 from app.services.mfa_service import encrypt_totp_secret
-from app.services import permission_service as permission_service_module
 from app.services.permission_service import (
     _CANONICAL_DEFINITIONS,
     LEGACY_PERMISSION_ALIASES,
     PERMISSION_APIKEY_MANAGE,
     PERMISSION_CASH_APPROVE_DIFFERENCE,
     PERMISSION_CASH_CUSTODY_RECEIVE,
+    PERMISSION_COMPANY_DOCUMENTS_READ,
     PERMISSION_GUEST_CREATE,
     PERMISSION_GUEST_EDIT,
+    PERMISSION_GUEST_READ,
     PERMISSION_HOTEL_PROPERTY_MANAGE,
     PERMISSION_HOTEL_SECURITY_MANAGE,
-    PERMISSION_GUEST_READ,
     PERMISSION_OCCUPANCY_VIEW,
+    PERMISSION_PAYMENT_RECEIPT_EMAIL,
+    PERMISSION_PERMISSION_MANAGE,
+    PERMISSION_RESERVATION_CANCEL_PENALTY_APPROVE,
     PERMISSION_RESERVATION_CREATE,
     PERMISSION_RESERVATION_MANUAL_RATE,
     PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
     PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
-    PERMISSION_PERMISSION_MANAGE,
-    PERMISSION_PAYMENT_RECEIPT_EMAIL,
+    PERMISSION_RESERVATION_ROOM_DIRTY_OVERRIDE,
     PERMISSION_ROOM_STATUS_UPDATE,
-    PERMISSION_SETTINGS_INTEGRATIONS_VIEW,
     PERMISSION_SETTINGS_FX_MANAGE,
+    PERMISSION_SETTINGS_INTEGRATIONS_VIEW,
     PERMISSION_STOCK_ADJUST,
     PERMISSION_WHATSAPP_INBOX_VIEW,
     canonical_permission_code,
@@ -186,8 +189,9 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         canonical_codes = set(_CANONICAL_DEFINITIONS)
         legacy_codes = set(LEGACY_PERMISSION_ALIASES)
 
-        # New role-only business actions are named capabilities in the catalog.
-        assert len(canonical_codes) == 114
+        # Exact canonical catalog size is contractual; cancellation review and
+        # dirty-room emergency authorization are explicit capabilities.
+        assert len(canonical_codes) == 119
         assert {"payment:proof:view", "payment:proof:review"} <= canonical_codes
         assert {"payment:refund", "reservation:cancel_paid"} <= canonical_codes
         assert {"reservation:manual_rate_limited", "reservation:manual_rate_policy_manage"} <= canonical_codes
@@ -199,6 +203,9 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         assert PERMISSION_PAYMENT_RECEIPT_EMAIL in canonical_codes
         assert "reservation:ota_record" in canonical_codes
         assert "company:night_rate_manage" in canonical_codes
+        assert PERMISSION_COMPANY_DOCUMENTS_READ in canonical_codes
+        assert PERMISSION_RESERVATION_CANCEL_PENALTY_APPROVE in canonical_codes
+        assert PERMISSION_RESERVATION_ROOM_DIRTY_OVERRIDE in canonical_codes
         assert {code for code in canonical_codes if code.startswith("whatsapp:")} == {
             "whatsapp:inbox:view", "whatsapp:inbox:all", "whatsapp:message:send",
             "whatsapp:note:manage", "whatsapp:conversation:assign", "whatsapp:conversation:close",
@@ -215,6 +222,65 @@ def test_permissions_matrix_exposes_only_canonical_rows_with_ui_metadata():
         for role in ("owner", "co_owner", "manager"):
             assert matrix[role]["payment:proof:review"]["allowed"] is True
             assert matrix[role]["reservation:export"]["allowed"] is True
+            assert matrix[role][PERMISSION_COMPANY_DOCUMENTS_READ]["allowed"] is True
+            assert matrix[role][PERMISSION_RESERVATION_CANCEL_PENALTY_APPROVE]["allowed"] is True
+            assert matrix[role][PERMISSION_RESERVATION_ROOM_DIRTY_OVERRIDE]["allowed"] is True
+        for role in ("receptionist", "housekeeping"):
+            assert matrix[role][PERMISSION_COMPANY_DOCUMENTS_READ]["allowed"] is False
+            assert matrix[role][PERMISSION_RESERVATION_CANCEL_PENALTY_APPROVE]["allowed"] is False
+            assert matrix[role][PERMISSION_RESERVATION_ROOM_DIRTY_OVERRIDE]["allowed"] is False
+        catalog_path = "/api/permissions/catalog"
+        catalog_response = client.get(
+            catalog_path,
+            headers=_step_up_headers(catalog_path, method="GET"),
+        )
+        assert catalog_response.status_code == 200
+        document_permission = next(
+            item for item in catalog_response.json()["permissions"]
+            if item["code"] == PERMISSION_COMPANY_DOCUMENTS_READ
+        )
+        assert document_permission["delegable"] is True
+        assert document_permission["critical"] is False
+        assert document_permission["locked"] is False
+
+        dirty_override_permission = next(
+            item for item in catalog_response.json()["permissions"]
+            if item["code"] == PERMISSION_RESERVATION_ROOM_DIRTY_OVERRIDE
+        )
+        assert dirty_override_permission["delegable"] is True
+        assert dirty_override_permission["critical"] is False
+        assert dirty_override_permission["locked"] is False
+
+        override_path = "/api/permissions/role-overrides"
+        override_response = client.put(
+            override_path,
+            headers=_step_up_headers(override_path, method="PUT"),
+            json={
+                "role": "receptionist",
+                "permission_code": PERMISSION_COMPANY_DOCUMENTS_READ,
+                "allowed": True,
+            },
+        )
+        assert override_response.status_code == 200, override_response.text
+        assert override_response.json()["allowed"] is True
+        updated_matrix = client.get(
+            "/api/permissions/matrix",
+            headers=_step_up_headers("/api/permissions/matrix", method="GET"),
+        )
+        assert updated_matrix.status_code == 200
+        assert updated_matrix.json()["matrix"]["receptionist"][PERMISSION_COMPANY_DOCUMENTS_READ]["allowed"] is True
+
+        dirty_override_response = client.put(
+            override_path,
+            headers=_step_up_headers(override_path, method="PUT"),
+            json={
+                "role": "receptionist",
+                "permission_code": PERMISSION_RESERVATION_ROOM_DIRTY_OVERRIDE,
+                "allowed": True,
+            },
+        )
+        assert dirty_override_response.status_code == 200, dirty_override_response.text
+        assert dirty_override_response.json()["allowed"] is True
         assert matrix["receptionist"]["reservation:export"]["allowed"] is False
         assert matrix["manager"][PERMISSION_PAYMENT_RECEIPT_EMAIL]["allowed"] is True
         assert matrix["receptionist"][PERMISSION_PAYMENT_RECEIPT_EMAIL]["allowed"] is True

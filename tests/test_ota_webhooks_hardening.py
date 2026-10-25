@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,8 +14,17 @@ from app.config import get_settings
 from app.database import Base, get_db
 from app.models.hotel_config import HotelConfiguration
 from app.models.ota import OTAReservationMapping
+from app.models.ota_core import OTAReservationLink
 from app.models.room import Room, RoomCategory, RoomStatusEnum
-from app.services.ota_service import OTAIntegrationService
+from app.services.encryption import get_encryption_fernet
+from app.services.ota_service import (
+    OTAIntegrationService,
+    OTAError,
+    OTAProcessingError,
+    OTA_CONFLICT_ERROR_MESSAGE,
+    OTA_PROCESSING_ERROR_MESSAGE,
+    _ota_reconciliation_payload_projection,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -149,7 +159,37 @@ def _seed_hotel(db, hotel_id: int, room_type_code: str) -> tuple[str, str]:
     return booking_secret, expedia_secret, despegar_secret
 
 
-def test_booking_webhook_scopes_by_hotel_and_secret(client: TestClient, db):
+def _assert_ota_payload_storage(
+    db,
+    mapping: OTAReservationMapping,
+    payload: dict,
+    *,
+    required_projection_fields: set[str],
+) -> None:
+    projected_payload = json.loads(mapping.raw_payload or "{}")
+    assert required_projection_fields <= projected_payload.keys()
+    serialized_projection = json.dumps(projected_payload, sort_keys=True)
+
+    for sensitive_value in ("Jane Doe", "jane@example.com", "Ana", "Lopez", "ana@example.com", "Luis", "Diaz", "luis@example.com"):
+        assert sensitive_value not in serialized_projection
+
+    link = db.query(OTAReservationLink).filter_by(
+        hotel_id=mapping.hotel_id,
+        external_reservation_id=mapping.ota_reservation_id,
+    ).one()
+    assert link.raw_payload_encrypted
+    assert not link.raw_payload_encrypted.startswith("{")
+    assert json.loads(
+        get_encryption_fernet().decrypt(link.raw_payload_encrypted.encode("ascii")).decode("utf-8")
+    ) == payload
+
+
+def test_booking_webhook_scopes_by_hotel_and_secret(client: TestClient, db, monkeypatch):
+    tenant_context_hotel_ids = []
+    monkeypatch.setattr(
+        "app.services.ota_service.set_tenant_hotel_context",
+        lambda _db, hotel_id: tenant_context_hotel_ids.append(hotel_id),
+    )
     booking_secret_1, _, _ = _seed_hotel(db, 1, "STD_DBL")
     booking_secret_2, _, _ = _seed_hotel(db, 2, "STD_DBL")
     db.commit()
@@ -171,6 +211,7 @@ def test_booking_webhook_scopes_by_hotel_and_secret(client: TestClient, db):
     response = client.post(f"/api/webhooks/booking/2/{booking_secret_2}", json=payload)
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    assert tenant_context_hotel_ids == [2, 2]
 
     db.expire_all()
     mapping = db.query(OTAReservationMapping).filter_by(
@@ -183,6 +224,20 @@ def test_booking_webhook_scopes_by_hotel_and_secret(client: TestClient, db):
     assert mapping.reservation.hotel_id == 2
     assert mapping.reservation.room is not None
     assert mapping.reservation.room.hotel_id == 2
+    _assert_ota_payload_storage(
+        db,
+        mapping,
+        payload,
+        required_projection_fields={
+            "reservation_id",
+            "property_id",
+            "checkin",
+            "checkout",
+            "room_type",
+            "total_price",
+            "currency",
+        },
+    )
 
     assert db.query(OTAReservationMapping).filter_by(
         hotel_id=1,
@@ -221,6 +276,12 @@ def test_expedia_webhook_scopes_by_hotel_and_secret(client: TestClient, db):
     assert mapping.reservation.hotel_id == 1
     assert mapping.reservation.room is not None
     assert mapping.reservation.room.hotel_id == 1
+    _assert_ota_payload_storage(
+        db,
+        mapping,
+        payload,
+        required_projection_fields={"booking_id", "stay", "room_type_id", "occupancy", "pricing"},
+    )
 
     assert db.query(OTAReservationMapping).filter_by(
         hotel_id=2,
@@ -283,9 +344,194 @@ def test_despegar_webhook_scopes_by_hotel_and_secret(client: TestClient, db):
     assert mapping.reservation.hotel_id == 2
     assert mapping.reservation.room is not None
     assert mapping.reservation.room.hotel_id == 2
+    _assert_ota_payload_storage(
+        db,
+        mapping,
+        payload,
+        required_projection_fields={
+            "reservation_id",
+            "confirmation_code",
+            "stay",
+            "product_code",
+            "occupancy",
+            "pricing",
+        },
+    )
 
     assert db.query(OTAReservationMapping).filter_by(
         hotel_id=1,
         ota_name="despegar",
         ota_reservation_id="DSP-2003",
     ).count() == 0
+
+
+def test_reconciliation_projection_rejects_pii_shaped_values_under_allowed_keys():
+    payload = {
+        "reservation_id": "guest@example.com",
+        "confirmation_code": "Jane Doe",
+        "booking_id": "ABC",
+        "event": "reservation.modified",
+        "event_type": "reservation_updated",
+        "status": "Ana Lopez",
+        "checkin": "guest@example.com",
+        "check_out_date": "2026-04-12",
+        "room_type": "Private Guest",
+        "product_code": "DELUXE",
+        "num_adults": "jane@example.com",
+        "children": 0,
+        "total_price": "Luis Diaz",
+        "currency": "ARS",
+        "stay": {
+            "checkin": "2026-04-10",
+            "checkout": "2026-04-12",
+            "guest_email": "nested@example.com",
+        },
+        "occupancy": {"adults": 2, "children": "Guest Name"},
+        "pricing": {
+            "total": 120.0,
+            "currency": "ARS",
+            "commission": {"total": 5.0},
+        },
+        "commission": 5.0,
+        "guest_email": "guest@example.com",
+    }
+
+    projected = _ota_reconciliation_payload_projection(payload)
+    serialized = json.dumps(projected, sort_keys=True)
+
+    assert projected["event"] == "reservation.modified"
+    assert projected["event_type"] == "reservation_updated"
+    assert projected["booking_id"] == "ABC"
+    assert projected["product_code"] == "DELUXE"
+    assert projected["check_out_date"] == "2026-04-12"
+    assert projected["children"] == 0
+    assert projected["stay"] == {"checkin": "2026-04-10", "checkout": "2026-04-12"}
+    assert projected["occupancy"] == {"adults": 2}
+    assert projected["pricing"] == {
+        "total": 120.0,
+        "currency": "ARS",
+        "commission": {"total": 5.0},
+    }
+    assert projected["commission"] == 5.0
+    for sensitive_value in (
+        "guest@example.com",
+        "Jane Doe",
+        "Ana Lopez",
+        "Luis Diaz",
+        "Private Guest",
+        "jane@example.com",
+        "Guest Name",
+        "nested@example.com",
+    ):
+        assert sensitive_value not in serialized
+    assert not {
+        "reservation_id",
+        "confirmation_code",
+        "status",
+        "checkin",
+        "room_type",
+        "num_adults",
+    }.intersection(projected)
+
+
+def test_ota_service_marks_unexpected_error_safely_before_caller_transaction_decision(db, monkeypatch):
+    booking_secret, _, _ = _seed_hotel(db, 1, "STD_DBL")
+    payload = {
+        "reservation_id": "BKG-5001",
+        "guest_name": "Private Guest",
+        "guest_email": "private@example.com",
+        "checkin": "2026-04-10",
+        "checkout": "2026-04-12",
+        "room_type": "STD_DBL",
+        "num_adults": 1,
+        "num_children": 0,
+        "total_price": 150.0,
+        "currency": "ARS",
+        "property_id": "booking-1",
+    }
+
+    def fail_materialization(*_args, **_kwargs):
+        raise RuntimeError("internal SQL detail private@example.com")
+
+    monkeypatch.setattr(
+        OTAIntegrationService,
+        "_materialize_incoming_reservation",
+        staticmethod(fail_materialization),
+    )
+
+    with pytest.raises(OTAProcessingError) as error:
+        OTAIntegrationService.process_booking_webhook(db, 1, booking_secret, payload)
+
+    assert str(error.value) == OTA_PROCESSING_ERROR_MESSAGE
+    # This service-level check commits to inspect its safe error state. The HTTP
+    # handler deliberately rolls the transaction back, as verified below.
+    db.commit()
+    mapping = db.query(OTAReservationMapping).filter_by(
+        hotel_id=1,
+        ota_name="booking",
+        ota_reservation_id="BKG-5001",
+    ).one()
+    assert mapping.error_message == OTA_PROCESSING_ERROR_MESSAGE
+    assert "internal SQL detail" not in mapping.error_message
+    assert "private@example.com" not in (mapping.raw_payload or "")
+
+
+def test_ota_webhook_returns_generic_500_for_unexpected_processing_error(client, db, monkeypatch):
+    booking_secret, _, _ = _seed_hotel(db, 1, "STD_DBL")
+    db.commit()
+
+    def fail_materialization(*_args, **_kwargs):
+        raise RuntimeError("internal SQL detail private@example.com")
+
+    monkeypatch.setattr(
+        OTAIntegrationService,
+        "_materialize_incoming_reservation",
+        staticmethod(fail_materialization),
+    )
+
+    response = client.post(
+        f"/api/webhooks/booking/1/{booking_secret}",
+        json={
+            "reservation_id": "BKG-5002",
+            "guest_name": "Private Guest",
+            "guest_email": "private@example.com",
+            "checkin": "2026-04-10",
+            "checkout": "2026-04-12",
+            "room_type": "STD_DBL",
+            "num_adults": 1,
+            "num_children": 0,
+            "total_price": 150.0,
+            "currency": "ARS",
+            "property_id": "booking-1",
+        },
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": OTA_PROCESSING_ERROR_MESSAGE}
+    assert "internal SQL detail" not in response.text
+    assert "private@example.com" not in response.text
+    assert db.query(OTAReservationMapping).filter_by(ota_reservation_id="BKG-5002").count() == 0
+
+
+def test_ota_webhook_hides_room_and_reservation_details_from_conflict_response(client, db, monkeypatch):
+    booking_secret, _, _ = _seed_hotel(db, 1, "STD_DBL")
+    db.commit()
+    internal_details = "OVERBOOKING: reservation BKG-PRIVATE room 402"
+
+    def fail_with_conflict(*_args, **_kwargs):
+        raise OTAError(internal_details)
+
+    monkeypatch.setattr(
+        OTAIntegrationService,
+        "process_booking_webhook",
+        staticmethod(fail_with_conflict),
+    )
+    response = client.post(
+        f"/api/webhooks/booking/1/{booking_secret}",
+        json={"reservation_id": "BKG-PRIVATE"},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": OTA_CONFLICT_ERROR_MESSAGE}
+    assert "BKG-PRIVATE" not in response.text
+    assert "402" not in response.text

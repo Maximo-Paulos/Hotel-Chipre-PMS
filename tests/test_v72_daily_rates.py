@@ -573,6 +573,42 @@ class TestResolveRateCalendar:
             db, 1, category.id, date(2026, 9, 1), payment_method="transfer"
         )
 
+    @pytest.mark.parametrize("row_type", ["daily_rate", "price_period"])
+    def test_payment_method_override_matches_single_and_batched_resolvers(
+        self, db, sample_categories, row_type
+    ):
+        from app.services.pricing_service import get_price_for_date, resolve_rate_calendar
+
+        category = sample_categories[0]
+        target_date = date(2026, 12, 20)
+        if row_type == "daily_rate":
+            db.add(DailyRate(
+                hotel_id=1,
+                category_id=category.id,
+                date=target_date,
+                price=100.0,
+                price_cash=85.0,
+            ))
+        else:
+            period = _make_period(
+                db, 1, category.id,
+                start=target_date, end=target_date, price=100.0,
+            )
+            period.price_cash = 85.0
+        db.flush()
+
+        calendar_row = resolve_rate_calendar(
+            db, 1, category.id, target_date, target_date, payment_method="cash"
+        )[0]
+        single_price = get_price_for_date(
+            db, 1, category.id, target_date, payment_method="cash"
+        )
+
+        assert calendar_row["source"] == row_type
+        assert calendar_row["price"] == 85.0
+        assert calendar_row["price_cash"] == 85.0
+        assert single_price == 85.0
+
     def test_batched_matches_per_date_and_reports_sources(self, db, sample_categories):
         from datetime import timedelta
         from app.services.pricing_service import get_price_for_date, resolve_rate_calendar

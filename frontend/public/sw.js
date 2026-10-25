@@ -1,4 +1,4 @@
-// ponytail: no vite-plugin-pwa dependency (not installed) and no build-time
+// No vite-plugin-pwa dependency is installed and there is no build-time
 // precache manifest -- this caches the app shell (HTML/JS/CSS/icons) the
 // first time each asset is actually requested by the browser, instead of
 // hardcoding Vite's content-hashed filenames (which would go stale on every

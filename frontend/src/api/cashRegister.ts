@@ -18,6 +18,15 @@ export type CashSession = {
   notes?: string | null;
 };
 
+export type CashSessionPage = {
+  sessions: CashSession[];
+  page: number;
+  pageSize: number;
+  hasNextPage: boolean;
+};
+
+export const CASH_SESSION_PAGE_SIZE = 100;
+
 export type CashMovement = {
   id: number;
   hotel_id: number;
@@ -28,9 +37,14 @@ export type CashMovement = {
   group_payment_batch_id?: number | null;
   group_payment_total?: number | null;
   group_payment_reservation_count?: number | null;
+  cash_received_amount?: number | null;
+  cash_change_amount?: number | null;
+  cash_tip_amount?: number | null;
   movement_type: CashMovementType;
   amount: number;
   description?: string | null;
+  voided_at?: string | null;
+  voided_by_payment_correction_id?: number | null;
   recorded_at: string;
   business_recorded_at?: string | null;
 };
@@ -84,6 +98,7 @@ export type CashSessionSummary = {
   income_total: number;
   expense_total: number;
   adjustment_total: number;
+  cash_tips_total?: number;
   confirmed_cash_total: number;
   expected_balance: number;
   movements_count: number;
@@ -93,6 +108,7 @@ export type CashSessionSummary = {
     income_total: number;
     expense_total: number;
     adjustment_total: number;
+    cash_tips_total?: number;
     net_total: number;
     movement_count: number;
   }>;
@@ -111,6 +127,7 @@ export type CashDailyCollector = {
   collector_name: string;
   gross_collected: number;
   refunds: number;
+  cash_tips_total?: number;
   net_collected: number;
   transaction_count: number;
 };
@@ -120,6 +137,9 @@ export type CashDailyPriorReceipt = {
   reservation_id: number;
   confirmation_code: string;
   amount: number;
+  cash_received_amount?: number | null;
+  cash_change_amount?: number | null;
+  cash_tip_amount?: number | null;
   currency_code: string;
   collected_on: string;
   prior_receipt_note: string;
@@ -144,6 +164,9 @@ export type CashDailyEntry = {
   reservation_id?: number | null;
   amount: number;
   signed_amount: number;
+  cash_received_amount?: number | null;
+  cash_change_amount?: number | null;
+  cash_tip_amount?: number | null;
   currency_code: string;
   payment_method?: string | null;
   transaction_type?: string | null;
@@ -182,6 +205,7 @@ export type CashDailySummary = {
   net_collected: number;
   physical_cash_net_collected: number;
   digital_net_collected: number;
+  cash_tips_total?: number;
   by_payment_method: CashDailyPaymentMethod[];
   by_collector: CashDailyCollector[];
   physical_cash: {
@@ -199,6 +223,7 @@ export type CashDailySummary = {
   };
   prior_receipts: CashDailyPriorReceipt[];
   prior_receipt_totals: CashDailyPriorReceiptTotal[];
+  prior_receipt_cash_tips_total?: number;
   prior_receipts_truncated: boolean;
   sessions: CashDailySession[];
   entries: CashDailyEntry[];
@@ -268,8 +293,35 @@ export type CashExpensePayload = {
   receipt_filename?: string | null;
 };
 
-export const listCashSessions = (session?: SessionLike) =>
-  apiFetch<CashSession[]>("/api/cash-register/sessions", { session });
+const cashSessionListPath = (options?: { page?: number; status?: CashSessionStatus }) => {
+  const query = new URLSearchParams();
+  if (options?.page && options.page > 1) query.set("page", String(options.page));
+  if (options?.status) query.set("status", options.status);
+  const queryString = query.toString();
+  const suffix = queryString ? `?${queryString}` : "";
+  return `/api/cash-register/sessions${suffix}`;
+};
+
+// Preserve the existing array contract for current-session consumers such as
+// ReservationsPage. The endpoint bounds this response to its default page.
+export const listCashSessions = (session?: SessionLike, status?: CashSessionStatus) =>
+  apiFetch<CashSession[]>(cashSessionListPath({ status }), { session });
+
+export const listCashSessionPage = (page: number, session?: SessionLike): Promise<CashSessionPage> => {
+  let hasNextPage: boolean | null = null;
+  return apiFetch<CashSession[]>(cashSessionListPath({ page }), {
+    session,
+    onResponseHeaders: (headers) => {
+      const value = headers.get("X-Has-Next-Page");
+      hasNextPage = value === null ? null : value.toLowerCase() === "true";
+    }
+  }).then((sessions) => ({
+    sessions,
+    page,
+    pageSize: CASH_SESSION_PAGE_SIZE,
+    hasNextPage: hasNextPage ?? sessions.length === CASH_SESSION_PAGE_SIZE
+  }));
+};
 
 export const getLatestCashCloseReport = (session?: SessionLike, currency?: string) =>
   apiFetch<CashCloseReport | null>(

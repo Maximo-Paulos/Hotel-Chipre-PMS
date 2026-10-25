@@ -5,7 +5,6 @@ from sqlalchemy.dialects import postgresql
 
 from app.models.guest import Guest
 from app.models.reservation import (
-    Reservation,
     ReservationStatusEnum,
 )
 from app.models.operations import ReservationStatusHistory
@@ -16,7 +15,7 @@ from app.models.transaction import (
     TransactionTypeEnum,
 )
 from app.schemas.reservation import ReservationCreate
-from app.services.reservation_service import ReservationError, create_reservation
+from app.services.reservation_service import create_reservation
 from app.services import row_locks
 from app.tasks.no_show_tasks import sweep_no_shows
 
@@ -84,6 +83,32 @@ def test_sweep_respects_local_cutoff_boundary_and_uses_hotel_timezone(
     # the bounded eligibility query so a repeated sweep can prove idempotency.
     assert len(captured) == 3
     assert all("FOR UPDATE OF reservations" in sql for sql in captured)
+
+
+def test_sweep_anchors_configured_no_show_window_to_hotel_checkin_time(
+    db, hotel_config, sample_guest, sample_categories, sample_rooms
+):
+    hotel_config.hotel_timezone = "America/Argentina/Buenos_Aires"
+    hotel_config.check_in_time = "15:00"
+    hotel_config.no_show_cutoff_hours = 24
+    row = _reservation(
+        db,
+        hotel_id=hotel_config.id,
+        guest=sample_guest,
+        category=sample_categories[0],
+        room=sample_rooms[0],
+        code="SWEEP-CONFIGURED-CHECKIN",
+    )
+    # 15:00 on Oct 1 in Argentina plus 24 elapsed hours is 18:00 UTC Oct 2.
+    before = datetime(2026, 10, 2, 17, 59, 59, tzinfo=timezone.utc)
+    exact = datetime(2026, 10, 2, 18, 0, 0, tzinfo=timezone.utc)
+
+    before_result = sweep_no_shows(db, now_utc=before)
+    exact_result = sweep_no_shows(db, now_utc=exact)
+
+    assert before_result["marked"] == 0
+    assert exact_result["marked"] == 1
+    assert row.status == ReservationStatusEnum.NO_SHOW
 
 
 @pytest.mark.parametrize(

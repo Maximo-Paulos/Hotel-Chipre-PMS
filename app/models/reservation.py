@@ -5,12 +5,28 @@ States: pending â†’ deposit_paid â†’ fully_paid â†’ checked_in â
 Also supports: cancelled (from any pre-checkin state)
 """
 import enum
+from datetime import datetime, timezone
+
 from sqlalchemy import (
-    Column, Integer, Float, Numeric, String, ForeignKey, Enum, Text, DateTime, Date, Boolean,
-    CheckConstraint, ForeignKeyConstraint, UniqueConstraint, Index, Table
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship, validates
-from datetime import datetime, timezone
 
 from app.database import Base
 
@@ -20,6 +36,7 @@ class ReservationStatusEnum(str, enum.Enum):
     DEPOSIT_PAID = "deposit_paid"
     FULLY_PAID = "fully_paid"
     PRE_CHECK_IN = "pre_check_in"   # v72 §7.2: docs loaded, waiting for room entry confirmation
+    PARTIAL_CHECK_IN = "partial_checkin"  # At least one registered guest arrived; the party is still incomplete.
     CHECKED_IN = "checked_in"
     CHECKED_OUT = "checked_out"
     CANCELLED = "cancelled"
@@ -138,23 +155,31 @@ VALID_TRANSITIONS: dict[ReservationStatusEnum, set[ReservationStatusEnum]] = {
         ReservationStatusEnum.FULLY_PAID,
         ReservationStatusEnum.PRE_CHECK_IN,
         ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
         ReservationStatusEnum.CANCELLED,
     },
     ReservationStatusEnum.DEPOSIT_PAID: {
         ReservationStatusEnum.FULLY_PAID,
         ReservationStatusEnum.PRE_CHECK_IN,
         ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
         ReservationStatusEnum.CANCELLED,
     },
     ReservationStatusEnum.FULLY_PAID: {
         ReservationStatusEnum.PRE_CHECK_IN,     # v72 §7.2: docs loaded, awaiting room entry
         ReservationStatusEnum.CHECKED_IN,       # skip pre_check_in if entry confirmed immediately
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
         ReservationStatusEnum.CANCELLED,
         ReservationStatusEnum.NO_SHOW,
     },
     ReservationStatusEnum.PRE_CHECK_IN: {       # v72 §7.2: "Huésped ingresó al cuarto"
         ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
         ReservationStatusEnum.CANCELLED,        # guest no-shows after pre-check-in
+    },
+    ReservationStatusEnum.PARTIAL_CHECK_IN: {
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_OUT,
     },
     ReservationStatusEnum.CHECKED_IN: {
         ReservationStatusEnum.CHECKED_OUT,
@@ -205,6 +230,7 @@ class Reservation(Base):
     actual_check_in = Column(DateTime, nullable=True)
     actual_check_out = Column(DateTime, nullable=True)
     pre_check_in_at = Column(DateTime, nullable=True)   # v72 §7.2: timestamp of pre-finalization
+    checkin_reservation_status_policy_snapshot = Column(String(32), nullable=True)
     arrival_time_hint = Column(String(80), nullable=True)
 
     # Financial
@@ -331,6 +357,14 @@ class Reservation(Base):
     external_confirmation_code = Column(String(120), nullable=True)
     requested_attributes_json = Column(Text, nullable=True)
     pricing_snapshot = Column(Text, nullable=True)
+    # Immutable rate-plan cancellation terms captured when this booking is created.
+    cancellation_policy_snapshot = Column(JSON, nullable=True)
+    # Mutable company settings are copied at booking time. The separately
+    # reviewed profile snapshot detects later changes without rewriting the
+    # financial agreement or historical terms.
+    company_terms_snapshot = Column(JSON, nullable=True)
+    company_terms_reviewed_config = Column(JSON, nullable=True)
+    company_terms_review_state = Column(String(40), nullable=True)
     manual_rate_reason = Column(String(500), nullable=True)
     manual_rate_scope = Column(String(16), nullable=True)
     allocation_status = Column(String(30), nullable=False, default="unassigned")
@@ -494,7 +528,11 @@ class Reservation(Base):
     def can_transition_to(self, new_status: ReservationStatusEnum) -> bool:
         """Check if a state transition is valid."""
         if (
-            self.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT)
+            self.status in (
+                ReservationStatusEnum.PARTIAL_CHECK_IN,
+                ReservationStatusEnum.CHECKED_IN,
+                ReservationStatusEnum.CHECKED_OUT,
+            )
             and new_status in (ReservationStatusEnum.CANCELLED, ReservationStatusEnum.NO_SHOW)
         ):
             # Defensive guard: never allow terminal pre-check-in outcomes after check-in/checkout

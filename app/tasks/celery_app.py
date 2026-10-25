@@ -33,6 +33,7 @@ celery_app.conf.update(
     task_routes={
         "domain_events.publish_outbox": {"queue": "critical"},
         "notifications.process_outbox": {"queue": "critical"},
+        "allocation.process_recalculation_requests": {"queue": "heavy"},
         "notifications.generate_daily_reports": {"queue": "heavy"},
         "reports.*": {"queue": "heavy"},
         "analytics.*": {"queue": "heavy"},
@@ -41,6 +42,7 @@ celery_app.conf.update(
     task_annotations={
         "domain_events.publish_outbox": {"rate_limit": "30/m", "time_limit": 60, "soft_time_limit": 30},
         "notifications.process_outbox": {"rate_limit": "30/m", "time_limit": 60, "soft_time_limit": 30},
+        "allocation.process_recalculation_requests": {"time_limit": 180, "soft_time_limit": 150},
     },
 )
 
@@ -105,7 +107,11 @@ def build_beat_schedule(runtime_settings: Settings) -> dict:
         "reservations-no-show-sweep": {
             "task": "reservations.sweep_no_shows",
             "schedule": 300.0,
-        }
+        },
+        "allocation-process-recalculation-requests": {
+            "task": "allocation.process_recalculation_requests",
+            "schedule": 30.0,
+        },
     }
     if not external_connections_enabled(runtime_settings):
         if _sandbox_domain_event_replay_enabled(runtime_settings):
@@ -159,6 +165,10 @@ def build_beat_schedule(runtime_settings: Settings) -> dict:
             "task": "domain_events.publish_outbox",
             "schedule": 30.0,
         },
+        "allocation-process-recalculation-requests": {
+            "task": "allocation.process_recalculation_requests",
+            "schedule": 30.0,
+        },
     }
 
 
@@ -167,9 +177,10 @@ def build_beat_schedule(runtime_settings: Settings) -> dict:
 celery_app.conf.beat_schedule = build_beat_schedule(settings)
 
 # Eager imports so Celery registers module-level tasks without autodiscovery.
-import app.tasks.ota_tasks  # noqa: F401,E402
+import app.tasks.allocation_tasks  # noqa: F401,E402
 import app.tasks.analytics_tasks  # noqa: F401,E402
-import app.tasks.report_tasks  # noqa: F401,E402
-import app.tasks.notification_tasks  # noqa: F401,E402
 import app.tasks.domain_event_tasks  # noqa: F401,E402
 import app.tasks.no_show_tasks  # noqa: F401,E402
+import app.tasks.notification_tasks  # noqa: F401,E402
+import app.tasks.ota_tasks  # noqa: F401,E402
+import app.tasks.report_tasks  # noqa: F401,E402

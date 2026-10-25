@@ -29,9 +29,11 @@ Estos valores son una propuesta operativa, no una configuración aplicada.
 
 - `render.yaml` apunta `DATABASE_URL` a una conexión configurada manualmente en
   Render y ejecuta `python -m alembic upgrade head` antes del web service.
-- `render.yaml` declara un Redis/Key Value privado con
-  `persistenceMode: journal-snapshot`. Eso sólo cubre la persistencia declarada
-  del servicio de colas/cache; no es un backup de PostgreSQL ni sustituye PITR.
+- El `render.yaml` actual declara un único servicio web, excluye Redis/Celery
+  como servicios separados y deja `REDIS_URL` vacío. El manifiesto no demuestra
+  persistencia de Redis en Render; el estado del entorno desplegado se debe
+  verificar por separado. Redis tampoco sería un backup de PostgreSQL ni
+  sustituiría PITR.
 - El repo no declara una política de backup, PITR, retención o copia inmutable
   para la base PostgreSQL de Supabase. La disponibilidad de esas funciones y el
   período contratado son `needs-verification` en la consola Supabase.

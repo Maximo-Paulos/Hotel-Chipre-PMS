@@ -20,17 +20,17 @@ from app.models.allocation import (
     AllocationPolicyProfile,
     AllocationPolicyVersion,
     LLMFeedbackEvent,
-    LLMPolicySuggestionStatusEnum,
     LLMPolicySuggestion,
+    LLMPolicySuggestionStatusEnum,
     ManualOverrideReason,
 )
 from app.models.user import User
-
 
 DEFAULT_ALLOCATION_CONSTRAINTS: dict[str, Any] = {
     "no_overlap": True,
     "respect_locked_assignments": True,
     "allow_category_fallback": True,
+    "optimization_objective": "occupied_nights",
 }
 
 DEFAULT_ALLOCATION_WEIGHTS: dict[str, float] = {
@@ -201,6 +201,23 @@ def create_policy_version(
     if not profile:
         raise AllocationPolicyError("Allocation policy profile not found for hotel")
 
+    resolved_constraints = dict(constraints or DEFAULT_ALLOCATION_CONSTRAINTS)
+    resolved_weights = dict(weights or DEFAULT_ALLOCATION_WEIGHTS)
+    objective_mode = resolved_constraints.get("optimization_objective", "occupied_nights")
+    if objective_mode not in {"occupied_nights", "net_revenue", "combined"}:
+        raise AllocationPolicyError("Unsupported allocation objective mode")
+    if objective_mode == "combined":
+        combined_revenue_weight = resolved_weights.get("combined_revenue_weight")
+        try:
+            combined_revenue_weight = float(combined_revenue_weight)
+        except (TypeError, ValueError):
+            raise AllocationPolicyError(
+                "Combined allocation objective requires a hotel-configured revenue weight"
+            ) from None
+        if not 0 <= combined_revenue_weight <= 1:
+            raise AllocationPolicyError("Combined revenue weight must be between 0 and 1")
+        resolved_weights["combined_revenue_weight"] = combined_revenue_weight
+
     current_version = (
         db.query(AllocationPolicyVersion)
         .filter(AllocationPolicyVersion.profile_id == profile.id)
@@ -216,8 +233,8 @@ def create_policy_version(
         profile_id=profile.id,
         version_number=next_version_number,
         source=source,
-        constraints_json=json.dumps(constraints or DEFAULT_ALLOCATION_CONSTRAINTS, ensure_ascii=True, sort_keys=True),
-        weights_json=json.dumps(weights or DEFAULT_ALLOCATION_WEIGHTS, ensure_ascii=True, sort_keys=True),
+        constraints_json=json.dumps(resolved_constraints, ensure_ascii=True, sort_keys=True),
+        weights_json=json.dumps(resolved_weights, ensure_ascii=True, sort_keys=True),
         prompt_summary=prompt_summary,
         is_published=publish,
         created_by_user_id=resolved_user_id,

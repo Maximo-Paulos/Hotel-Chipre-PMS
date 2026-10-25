@@ -29,7 +29,7 @@ type RateEditorMobileCardsProps = {
   disabled?: boolean;
 };
 
-// ponytail: parses "" -> null, otherwise a non-negative number or invalid.
+// Parse "" as null, otherwise accept a non-negative number or mark invalid.
 function parseField(raw: string): { value: number | null; valid: boolean } {
   const trimmed = raw.trim();
   if (trimmed === "") return { value: null, valid: true };

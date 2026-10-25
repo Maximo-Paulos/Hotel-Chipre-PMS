@@ -1,15 +1,16 @@
 """
 Pydantic schemas for HotelConfiguration.
 """
-from typing import Literal, Optional, List
+import re
 from datetime import datetime
 from decimal import Decimal
-import re
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.deposit_policy import DepositPolicyRule, validate_deposit_policy_rules
 from app.services.fx_service import OTHER_CURRENCIES
+from app.services.jurisdiction_profile import SUPPORTED_JURISDICTION_CODES
 from app.services.timezones import normalize_timezone
 
 SUPPORTED_CURRENCIES = {c.upper() for c in OTHER_CURRENCIES} | {"ARS", "USD"}
@@ -35,6 +36,9 @@ class HotelConfigRead(BaseModel):
     deposit_policy_rules: Optional[List[DepositPolicyRule]] = None
     deposit_policy_configured: bool
     checkin_payment_policy: Literal["deposit", "total", "free"]
+    checkin_reservation_status_policy: Literal["partial_checkin", "checked_in_on_first_guest"] = "partial_checkin"
+    block_checkin_on_company_terms_change: bool = True
+    allow_stock_count_self_approval: bool = False
     enable_full_payment: bool
     enable_deposit_payment: bool
     enable_cash: bool
@@ -70,6 +74,7 @@ class HotelConfigRead(BaseModel):
     fx_ars_to_usd_rate_type: Literal["oficial", "blue"] = "oficial"
     fx_usd_to_ars_rate_side: Literal["compra", "venta"] = "venta"
     fx_ars_to_usd_rate_side: Literal["compra", "venta"] = "venta"
+    fx_rounding_policy: Literal["round_up", "round_down", "nearest_ten", "exact", "keep_remainder"] = "keep_remainder"
     fx_display_rate_types: List[Literal["oficial", "blue"]] = Field(default_factory=lambda: ["oficial"])
     languages: List[str]
     jurisdiction_code: str
@@ -88,6 +93,9 @@ class HotelConfigUpdate(BaseModel):
     deposit_policy_rules: Optional[List[DepositPolicyRule]] = None
     deposit_policy_configured: Optional[bool] = None
     checkin_payment_policy: Optional[Literal["total"]] = None
+    checkin_reservation_status_policy: Optional[Literal["partial_checkin", "checked_in_on_first_guest"]] = None
+    block_checkin_on_company_terms_change: Optional[bool] = None
+    allow_stock_count_self_approval: Optional[bool] = None
     enable_full_payment: Optional[bool] = None
     enable_deposit_payment: Optional[bool] = None
     enable_cash: Optional[bool] = None
@@ -123,6 +131,7 @@ class HotelConfigUpdate(BaseModel):
     fx_ars_to_usd_rate_type: Optional[Literal["oficial", "blue"]] = None
     fx_usd_to_ars_rate_side: Optional[Literal["compra", "venta"]] = None
     fx_ars_to_usd_rate_side: Optional[Literal["compra", "venta"]] = None
+    fx_rounding_policy: Optional[Literal["round_up", "round_down", "nearest_ten", "exact", "keep_remainder"]] = None
     fx_display_rate_types: Optional[List[Literal["oficial", "blue"]]] = Field(default=None, min_length=1, max_length=2)
     languages: Optional[List[str]] = None
     jurisdiction_code: Optional[str] = Field(default=None, min_length=2, max_length=3)
@@ -139,6 +148,13 @@ class HotelConfigUpdate(BaseModel):
             raise ValueError("checkin_payment_policy cannot be null")
         if value != "total":
             raise ValueError("El check-in requiere el pago completo; las cuentas empresa diferidas se gestionan por empresa")
+        return value
+
+    @field_validator("allow_stock_count_self_approval")
+    @classmethod
+    def reject_null_stock_count_self_approval(cls, value: Optional[bool]) -> Optional[bool]:
+        if value is None:
+            raise ValueError("allow_stock_count_self_approval cannot be null")
         return value
 
     @field_validator("deposit_policy_rules")
@@ -186,6 +202,25 @@ class HotelConfigUpdate(BaseModel):
         if value is None:
             raise ValueError("El mercado de cotización no puede ser nulo")
         return value
+
+    @field_validator("fx_rounding_policy")
+    @classmethod
+    def reject_null_fx_rounding_policy(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            raise ValueError("La política de conversión cambiaria no puede ser nula")
+        return value
+
+    @field_validator("jurisdiction_code", mode="before")
+    @classmethod
+    def validate_jurisdiction_code(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("La jurisdicción debe ser un código de país")
+        candidate = value.strip().upper()
+        if candidate not in SUPPORTED_JURISDICTION_CODES:
+            raise ValueError(f"La jurisdicción '{candidate}' no está habilitada en el PMS")
+        return candidate
 
     @field_validator("interface_language")
     @classmethod

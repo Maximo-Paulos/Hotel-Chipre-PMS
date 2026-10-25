@@ -1,6 +1,6 @@
 """Focused regression coverage for staff permission boundaries."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 from fastapi import FastAPI
@@ -17,8 +17,14 @@ from app.dependencies.auth import AuthContext, get_auth_context
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.room import (
+    Room,
+    RoomCategory,
+    RoomHousekeepingStatusEnum,
+    RoomStatusEnum,
+)
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
-from app.models.room import Room, RoomCategory, RoomHousekeepingStatusEnum, RoomStatusEnum
+from app.models.user import User
 from app.services.permission_service import (
     DEFAULT_MATRIX,
     PERMISSION_CASH_APPROVE_DIFFERENCE,
@@ -82,6 +88,15 @@ def role_client():
     app.dependency_overrides[get_auth_context] = override_auth
 
     db.add(HotelConfiguration(id=1, hotel_name="Role Hotel", subscription_active=True))
+    db.add(
+        User(
+            id=501,
+            email="owner@example.test",
+            password_hash="test-only-hash",
+            is_active=True,
+            is_verified=True,
+        )
+    )
     db.flush()
     category = RoomCategory(
         hotel_id=1,
@@ -353,7 +368,28 @@ def test_housekeeping_today_board_is_hotel_scoped_and_has_no_guest_or_free_text_
         status=RoomStatusEnum.OCCUPIED,
         housekeeping_status=RoomHousekeepingStatusEnum.DIRTY,
     )
-    db.add(stayover_room)
+    deleted_arrival_room = Room(
+        hotel_id=1,
+        category_id=category.id,
+        room_number="103",
+        floor=1,
+        status=RoomStatusEnum.AVAILABLE,
+    )
+    deleted_departure_room = Room(
+        hotel_id=1,
+        category_id=category.id,
+        room_number="104",
+        floor=1,
+        status=RoomStatusEnum.AVAILABLE,
+    )
+    deleted_stayover_room = Room(
+        hotel_id=1,
+        category_id=category.id,
+        room_number="105",
+        floor=1,
+        status=RoomStatusEnum.OCCUPIED,
+    )
+    db.add_all((stayover_room, deleted_arrival_room, deleted_departure_room, deleted_stayover_room))
     db.flush()
     db.add_all(
         [
@@ -393,6 +429,45 @@ def test_housekeeping_today_board_is_hotel_scoped_and_has_no_guest_or_free_text_
                 total_amount=200,
                 num_adults=1,
             ),
+            Reservation(
+                hotel_id=1,
+                guest_id=guest.id,
+                category_id=category.id,
+                room_id=deleted_arrival_room.id,
+                confirmation_code="DELETED-ARRIVAL-CODE",
+                check_in_date=today,
+                check_out_date=today + timedelta(days=1),
+                status=ReservationStatusEnum.PENDING,
+                total_amount=100,
+                num_adults=1,
+                deleted_at=datetime.now(),
+            ),
+            Reservation(
+                hotel_id=1,
+                guest_id=guest.id,
+                category_id=category.id,
+                room_id=deleted_departure_room.id,
+                confirmation_code="DELETED-DEPARTURE-CODE",
+                check_in_date=today - timedelta(days=1),
+                check_out_date=today,
+                status=ReservationStatusEnum.CHECKED_IN,
+                total_amount=100,
+                num_adults=1,
+                deleted_at=datetime.now(),
+            ),
+            Reservation(
+                hotel_id=1,
+                guest_id=guest.id,
+                category_id=category.id,
+                room_id=deleted_stayover_room.id,
+                confirmation_code="DELETED-STAYOVER-CODE",
+                check_in_date=today - timedelta(days=2),
+                check_out_date=today + timedelta(days=1),
+                status=ReservationStatusEnum.CHECKED_IN,
+                total_amount=200,
+                num_adults=1,
+                deleted_at=datetime.now(),
+            ),
             RoomBlock(
                 hotel_id=1,
                 room_id=room.id,
@@ -400,6 +475,36 @@ def test_housekeeping_today_board_is_hotel_scoped_and_has_no_guest_or_free_text_
                 reason_note="PRIVATE maintenance note",
                 starts_at=today,
                 ends_at=today + timedelta(days=1),
+            ),
+            RoomBlock(
+                hotel_id=1,
+                room_id=room.id,
+                reason_code=RoomBlockReasonEnum.OWNER_USE,
+                reason_note="PRIVATE owner-use note",
+                starts_at=today,
+                ends_at=today + timedelta(days=1),
+            ),
+            RoomBlock(
+                hotel_id=1,
+                room_id=stayover_room.id,
+                reason_code=RoomBlockReasonEnum.DEEP_CLEANING,
+                starts_at=today,
+                ends_at=today + timedelta(days=1),
+            ),
+            RoomBlock(
+                hotel_id=1,
+                room_id=stayover_room.id,
+                reason_code=RoomBlockReasonEnum.OWNER_USE,
+                starts_at=today,
+                ends_at=today + timedelta(days=1),
+                resolved_at=datetime.now(),
+            ),
+            RoomBlock(
+                hotel_id=1,
+                room_id=stayover_room.id,
+                reason_code=RoomBlockReasonEnum.VIP_HOLD,
+                starts_at=today + timedelta(days=1),
+                ends_at=today + timedelta(days=2),
             ),
         ]
     )
@@ -425,20 +530,30 @@ def test_housekeeping_today_board_is_hotel_scoped_and_has_no_guest_or_free_text_
         "has_departure_today",
         "has_stayover_today",
         "maintenance_blocked",
+        "active_block_reasons",
     }
     assert room_item["operational_status"] == "occupied"
     assert room_item["has_arrival_today"] is True
     assert room_item["has_departure_today"] is True
     assert room_item["has_stayover_today"] is False
     assert room_item["maintenance_blocked"] is True
+    assert room_item["active_block_reasons"] == ["maintenance", "owner_use"]
     stayover_item = next(item for item in payload["rooms"] if item["room_id"] == stayover_room.id)
     assert stayover_item["has_arrival_today"] is False
     assert stayover_item["has_departure_today"] is False
     assert stayover_item["has_stayover_today"] is True
+    assert stayover_item["maintenance_blocked"] is False
+    assert stayover_item["active_block_reasons"] == ["deep_cleaning"]
+    for deleted_room in (deleted_arrival_room, deleted_departure_room, deleted_stayover_room):
+        deleted_room_item = next(item for item in payload["rooms"] if item["room_id"] == deleted_room.id)
+        assert deleted_room_item["has_arrival_today"] is False
+        assert deleted_room_item["has_departure_today"] is False
+        assert deleted_room_item["has_stayover_today"] is False
     assert "PRIVATE-ARRIVAL-CODE" not in response.text
     assert "PRIVATE-DEPARTURE-CODE" not in response.text
     assert "PRIVATE-STAYOVER-CODE" not in response.text
     assert "PRIVATE maintenance note" not in response.text
+    assert "PRIVATE owner-use note" not in response.text
     assert guest.first_name not in response.text
 
     auth["role"] = "receptionist"

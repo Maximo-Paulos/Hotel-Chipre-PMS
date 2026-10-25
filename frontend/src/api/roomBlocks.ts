@@ -1,4 +1,5 @@
 import { apiFetch, type SessionLike } from "./client";
+import type { AllocationRunDetail } from "./allocation";
 
 export type RoomBlockReasonCode =
   | "maintenance"
@@ -31,12 +32,36 @@ export type RoomBlockCreatePayload = {
   is_indefinite: boolean;
   reason_code: RoomBlockReasonCode;
   reason_note?: string | null;
+  allocation_run_id?: number | null;
+};
+
+export type RoomBlockAllocationPreview = {
+  room_id: number;
+  starts_at: string;
+  ends_at: string | null;
+  is_indefinite: boolean;
+  reservation_count: number;
+  protected_reservation_count: number;
+  requires_confirmation: boolean;
+  allocation_run: AllocationRunDetail | null;
 };
 
 export type RoomBlockConflictPreview = {
   reservation_count: number;
   protected_reservation_count: number;
   overlapping_block_count?: number;
+};
+
+export type RoomBlockExtensionAllocationPreview = {
+  block_id: number;
+  room_id: number;
+  previous_ends_at: string;
+  ends_at: string;
+  reservation_count: number;
+  protected_reservation_count: number;
+  overlapping_block_count: number;
+  requires_confirmation: boolean;
+  allocation_run: AllocationRunDetail | null;
 };
 
 export const listActiveRoomBlocks = (
@@ -52,6 +77,13 @@ export const listActiveRoomBlocks = (
 
 export const createRoomBlock = (payload: RoomBlockCreatePayload, session?: SessionLike) =>
   apiFetch<RoomBlock>("/api/room-blocks/", { method: "POST", data: payload, session });
+
+export const previewRoomBlockAllocation = (payload: RoomBlockCreatePayload, session?: SessionLike) =>
+  apiFetch<RoomBlockAllocationPreview>("/api/room-blocks/allocation-preview", {
+    method: "POST",
+    data: payload,
+    session
+  });
 
 export const previewRoomBlockConflicts = (
   params: { room_id: number; starts_at: string; ends_at?: string | null; is_indefinite: boolean },
@@ -74,9 +106,23 @@ export const previewRoomBlockExtension = (blockId: number, endsAt: string, sessi
   return apiFetch<RoomBlockConflictPreview>(`/api/room-blocks/${blockId}/extend-preview?${search.toString()}`, { session });
 };
 
-export const extendRoomBlock = (blockId: number, endsAt: string, session?: SessionLike) =>
+export const previewRoomBlockExtensionAllocation = (
+  blockId: number,
+  endsAt: string,
+  session?: SessionLike
+) => apiFetch<RoomBlockExtensionAllocationPreview>(`/api/room-blocks/${blockId}/allocation-preview`, {
+  method: "POST",
+  data: { ends_at: endsAt },
+  session
+});
+
+export const extendRoomBlock = (
+  blockId: number,
+  payload: { ends_at: string; allocation_run_id?: number | null },
+  session?: SessionLike
+) =>
   apiFetch<RoomBlock>(`/api/room-blocks/${blockId}/extend`, {
     method: "POST",
-    data: { ends_at: endsAt },
+    data: payload,
     session
   });

@@ -150,6 +150,79 @@ def test_cross_hotel_isolation_for_payment_link_service(db):
         cancel_link(db, 1, link_b.id)
 
 
+def test_payment_link_test_callback_binds_reference_hotel_before_query(monkeypatch):
+    from app.services import payment_link_test_service
+
+    calls = []
+
+    class Query:
+        def filter(self, *criteria):
+            calls.append(("filter", len(criteria)))
+            return self
+
+        def first(self):
+            return None
+
+    class Database:
+        def query(self, model):
+            calls.append(("query", model.__name__))
+            return Query()
+
+    monkeypatch.setattr(payment_link_test_service, "require_inbound_provider_events", lambda _provider: None)
+    monkeypatch.setattr(
+        payment_link_test_service,
+        "set_tenant_hotel_context",
+        lambda _db, hotel_id: calls.append(("tenant", hotel_id)),
+    )
+
+    result = payment_link_test_service.refresh_mercadopago_payment_link_test_by_reference(
+        Database(),
+        "mp-test-12-0123456789abcdef01",
+        external_payment_id="synthetic-payment-12",
+        payment_fetcher=lambda _db, _hotel_id, _payment_id: {},
+    )
+
+    assert result is None
+    assert calls[0] == ("tenant", 12)
+    assert calls[1] == ("query", "PaymentLinkTest")
+
+
+@pytest.mark.parametrize(
+    ("reference", "hotel_id"),
+    [
+        ("arbitrary-reference", 12),
+        ("mp-test-12-0123456789abcdef01", 13),
+    ],
+)
+def test_payment_link_test_callback_rejects_ambiguous_hotel_before_query(monkeypatch, reference, hotel_id):
+    from app.services import payment_link_test_service
+
+    calls = []
+
+    class Database:
+        def query(self, _model):
+            calls.append("query")
+            raise AssertionError("invalid reference must be rejected before querying")
+
+    monkeypatch.setattr(payment_link_test_service, "require_inbound_provider_events", lambda _provider: None)
+    monkeypatch.setattr(
+        payment_link_test_service,
+        "set_tenant_hotel_context",
+        lambda _db, scoped_hotel_id: calls.append(("tenant", scoped_hotel_id)),
+    )
+
+    with pytest.raises(PaymentLinkTestError):
+        payment_link_test_service.refresh_mercadopago_payment_link_test_by_reference(
+            Database(),
+            reference,
+            hotel_id=hotel_id,
+            external_payment_id="synthetic-payment",
+            payment_fetcher=lambda _db, _hotel_id, _payment_id: {},
+        )
+
+    assert calls == []
+
+
 def _fake_mp_gateway(checkout="https://mp.example/checkout/abc", preference_id="pref-123"):
     def gateway(db, hotel_id, link):
         return {"checkout_url": checkout, "preference_id": preference_id, "raw": {"id": preference_id}}

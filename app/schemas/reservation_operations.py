@@ -160,6 +160,21 @@ class ReservationCompanyNightRefundableAllocationRead(BaseModel):
     remaining_amount: float
 
 
+class ReservationRoundingCreditByCurrencyRead(BaseModel):
+    currency_code: str
+    issued_amount: float
+    refunded_amount: float
+    open_amount: float
+
+
+class ReservationRoundingCreditSourceRead(BaseModel):
+    source_transaction_id: int
+    currency_code: str
+    issued_amount: float
+    refunded_amount: float
+    open_amount: float
+
+
 class ReservationTransactionSummaryRead(BaseModel):
     id: int
     group_payment_batch_id: Optional[int] = None
@@ -175,6 +190,9 @@ class ReservationTransactionSummaryRead(BaseModel):
     status: str
     manual_reference: Optional[str] = None
     refund_of_transaction_id: Optional[int] = None
+    rounding_credit_amount: float = 0.0
+    credit_refund_amount: float = 0.0
+    refund_component: str = "payment"
     collected_before: bool = False
     collected_on: Optional[date] = None
     prior_receipt_note: Optional[str] = None
@@ -192,6 +210,18 @@ class ReservationBillingAdjustmentSummaryRead(BaseModel):
     total_amount: float
     currency_code: str
     notes: Optional[str] = None
+
+
+class ReservationPaymentCorrectionSummaryRead(BaseModel):
+    correction_id: int
+    correction_type: str
+    source_transaction_id: int
+    source_reservation_id: int
+    target_reservation_id: Optional[int] = None
+    replacement_transaction_id: Optional[int] = None
+    reason: str
+    actor_user_id: Optional[int] = None
+    created_at: str
 
 
 class ReservationFinancialSummaryRead(BaseModel):
@@ -214,6 +244,9 @@ class ReservationFinancialSummaryRead(BaseModel):
     has_financial_reconciliation_gap: bool
     financial_reconciliation_gap: float | None
     recommended_next_action: Optional[str] = None
+    rounding_credit_by_currency: list[ReservationRoundingCreditByCurrencyRead] = Field(default_factory=list)
+    rounding_credit_sources: list[ReservationRoundingCreditSourceRead] = Field(default_factory=list)
+    payment_corrections: list[ReservationPaymentCorrectionSummaryRead] = Field(default_factory=list)
     transactions: list[ReservationTransactionSummaryRead]
     billing_adjustments: list[ReservationBillingAdjustmentSummaryRead]
     completed_payments: float

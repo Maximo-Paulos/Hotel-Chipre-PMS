@@ -4,12 +4,13 @@ Uses pydantic-settings for environment variable management.
 """
 import hmac
 import os
+from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlsplit
+
 from cryptography.fernet import Fernet
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
-from functools import lru_cache
 
 
 class Settings(BaseSettings):
@@ -215,7 +216,7 @@ class Settings(BaseSettings):
     # images and analytics .xlsx exports live instead of Postgres. "local"
     # is the default but may be ephemeral in hosted containers; GCS has an
     # adapter but requires its optional library, bucket and credentials.
-    # S3 remains a stub (see S3ObjectStorage for what's needed to enable it).
+    # Selecting S3 fails explicitly until its adapter is implemented.
     OBJECT_STORAGE_BACKEND: str = "local"
     OBJECT_STORAGE_LOCAL_DIR: str = "./var/object-storage"
     OBJECT_STORAGE_S3_BUCKET: str = ""

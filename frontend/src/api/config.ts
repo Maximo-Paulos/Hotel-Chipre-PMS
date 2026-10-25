@@ -1,6 +1,8 @@
 import { apiFetch, type SessionLike } from "./client";
 import type { DepositPolicyRules } from "./depositPolicy";
 
+export type FxRoundingPolicy = "round_up" | "round_down" | "nearest_ten" | "exact" | "keep_remainder";
+
 export type HotelConfig = {
   id: number;
   hotel_name: string;
@@ -18,11 +20,13 @@ export type HotelConfig = {
   fx_ars_to_usd_rate_type: "oficial" | "blue";
   fx_usd_to_ars_rate_side: "compra" | "venta";
   fx_ars_to_usd_rate_side: "compra" | "venta";
+  fx_rounding_policy: FxRoundingPolicy;
   fx_display_rate_types: Array<"oficial" | "blue">;
   deposit_percentage: number;
   deposit_policy_rules?: DepositPolicyRules | null;
   deposit_policy_configured: boolean;
   checkin_payment_policy: "deposit" | "total" | "free";
+  checkin_reservation_status_policy: "partial_checkin" | "checked_in_on_first_guest";
   free_cancellation_hours: number;
   cancellation_penalty_percentage: number;
   enable_full_payment: boolean;

@@ -198,6 +198,17 @@ test("owner creates a four-room company group and sees its total balance in the 
   await expect(paymentDialog).toBeVisible();
   await paymentDialog.getByTestId("group-payment-method").selectOption("cash");
   await paymentDialog.getByTestId("group-payment-received-amount").fill("100.00");
+  const groupCashTenderInput = paymentDialog.getByTestId("group-payment-cash-received");
+  const groupCashExpected = Number(await groupCashTenderInput.getAttribute("placeholder"));
+  const groupCashDelivered = Number((groupCashExpected + 20).toFixed(2));
+  await groupCashTenderInput.fill(String(groupCashDelivered));
+  const groupCashTipToggle = paymentDialog.getByTestId("group-payment-cash-received-tip-toggle");
+  await expect(groupCashTipToggle).not.toBeChecked();
+  await groupCashTipToggle.check();
+  const groupCashTipInput = paymentDialog.getByTestId("group-payment-cash-received-tip-amount");
+  await expect(groupCashTipInput).toHaveValue("20.00");
+  await groupCashTipInput.fill("7.50");
+  await expect(paymentDialog.getByTestId("group-payment-cash-received-change")).toContainText("12,50");
   await paymentDialog.getByLabel(new RegExp(group.reservation_codes[0])).fill("50.00");
   await paymentDialog.getByLabel(new RegExp(group.reservation_codes[1])).fill("50.00");
   for (const code of group.reservation_codes.slice(2)) {
@@ -214,15 +225,25 @@ test("owner creates a four-room company group and sees its total balance in the 
   const payment = await groupPaymentResponse.json() as {
     id: number;
     received_amount: number;
+    cash_received_amount?: number;
+    cash_change_amount?: number;
+    cash_tip_amount?: number;
     allocations: Array<{ reservation_id: number; received_amount: number }>;
   };
   expect(Number(payment.received_amount)).toBe(100);
+  expect(Number(payment.cash_received_amount)).toBe(groupCashDelivered);
+  expect(Number(payment.cash_tip_amount)).toBeCloseTo(7.5, 2);
+  expect(Number(payment.cash_change_amount)).toBeCloseTo(12.5, 2);
   expect(payment.allocations.map((item) => Number(item.received_amount))).toEqual([50, 50]);
   expect(payment.allocations.reduce((sum, item) => sum + Number(item.received_amount), 0)).toBe(100);
-  await expect(page.getByText("Cobro grupal registrado y distribuido entre las reservas.", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Cobro grupal registrado y distribuido.*Propina voluntaria de.*7,50.*registrada por separado/)).toBeVisible();
 
   await page.goto("/caja");
   const groupedCashReceipt = page.getByTestId(`group-payment-cash-entry-${payment.id}`);
   await expect(groupedCashReceipt).toHaveCount(1);
   await expect(groupedCashReceipt).toContainText("100");
+  await expect(groupedCashReceipt).toContainText("Entregado");
+  await expect(groupedCashReceipt).toContainText("Vuelto");
+  await expect(groupedCashReceipt).toContainText("Propina");
+  await expect(groupedCashReceipt).toContainText("7,50");
 });

@@ -142,6 +142,22 @@ def create_reservation_group_payment_route(
                 payload_after={
                     "group_id": group_id,
                     "received_amount": str(batch["received_amount"]),
+                    "cash_received_amount": (
+                        str(batch["cash_received_amount"])
+                        if batch.get("cash_received_amount") is not None
+                        else None
+                    ),
+                    "cash_change_amount": (
+                        str(batch["cash_change_amount"])
+                        if batch.get("cash_change_amount") is not None
+                        else None
+                    ),
+                    "cash_tip_amount": str(batch.get("cash_tip_amount") or 0),
+                    "gross_amount": (
+                        str(batch["gross_amount"])
+                        if batch.get("gross_amount") is not None
+                        else None
+                    ),
                     "currency": batch["currency"],
                     "payment_method": getattr(batch["payment_method"], "value", batch["payment_method"]),
                     "reservation_ids": [item["reservation_id"] for item in batch["allocations"]],

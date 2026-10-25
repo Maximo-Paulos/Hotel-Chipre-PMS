@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { buildSync } from "esbuild";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { formatCashTenderAmount } from "./src/utils/cashTender.mjs";
 
 const entry = fileURLToPath(new URL("./src/utils/paymentReceiptHtml.ts", import.meta.url));
 const { outputFiles } = buildSync({
@@ -95,6 +96,57 @@ test("foreign-currency receipt shows both credited amount and frozen exchange ra
   assert.match(html, /ARS 14\.000,00/);
   assert.match(html, /Cotización aplicada al cobro/);
   assert.match(html, /1 ARS = 0,001 USD/);
+});
+
+test("cash receipt distinguishes applied amount from cash handed over and change", () => {
+  const html = buildPaymentReceiptHtml({
+    ...receipt,
+    cashReceivedLabel: "Efectivo recibido",
+    cashReceived: "$ 30.000,00",
+    cashChangeLabel: "Vuelto",
+    cashChange: "$ 5.000,00"
+  });
+
+  assert.match(html, /Importe registrado/);
+  assert.match(html, /Efectivo recibido/);
+  assert.match(html, /\$ 30\.000,00/);
+  assert.match(html, /Vuelto/);
+  assert.match(html, /\$ 5\.000,00/);
+});
+
+test("cash receipt prints a voluntary tip separately from the applied payment", () => {
+  const html = buildPaymentReceiptHtml({
+    ...receipt,
+    cashReceivedLabel: "Efectivo recibido",
+    cashReceived: "$ 86.000,00",
+    cashTipLabel: "Propina",
+    cashTip: "$ 1.350,00",
+    cashChangeLabel: "Vuelto",
+    cashChange: "$ 0,00"
+  });
+
+  assert.match(html, /Importe registrado/);
+  assert.match(html, /Efectivo recibido/);
+  assert.match(html, /\$ 86\.000,00/);
+  assert.match(html, /Propina/);
+  assert.match(html, /\$ 1\.350,00/);
+  assert.match(html, /Vuelto/);
+});
+
+test("cash receipt preserves two decimal places for physical tender amounts", () => {
+  const html = buildPaymentReceiptHtml({
+    ...receipt,
+    cashReceivedLabel: "Efectivo recibido",
+    cashReceived: formatCashTenderAmount(86000, "ARS", "es-AR"),
+    cashTipLabel: "Propina",
+    cashTip: formatCashTenderAmount(7.5, "ARS", "es-AR"),
+    cashChangeLabel: "Vuelto",
+    cashChange: formatCashTenderAmount(12.5, "ARS", "es-AR")
+  });
+
+  assert.match(html, /86\.000,00/);
+  assert.match(html, /7,50/);
+  assert.match(html, /12,50/);
 });
 
 test("only authorized users can print confirmed payment or refund movements", () => {

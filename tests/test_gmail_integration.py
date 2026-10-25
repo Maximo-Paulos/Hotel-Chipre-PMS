@@ -14,6 +14,7 @@ from app.services.integration_service import (
     encrypt_payload,
     redact_integration_error,
     validate_gmail_credentials,
+    validate_provider_credentials,
     verify_connection_health,
 )
 from app.config import get_settings
@@ -132,6 +133,44 @@ def test_validate_gmail_credentials_enriches_identity(monkeypatch):
     assert enriched['account_sub'] == 'google-sub'
     assert enriched['refresh_token'] == 'refresh-123'
     assert 'expires_at' in enriched
+
+
+def test_validate_provider_credentials_keeps_mercadopago_provider_validation(monkeypatch):
+    def fake_get(url, headers=None, timeout=None):
+        assert url == "https://api.mercadopago.com/users/me"
+        assert headers["Authorization"] == "Bearer synthetic-access-token"
+        return _Response(True, {"id": 42, "nickname": "hotel-account", "email": "hotel@example.test"})
+
+    monkeypatch.setattr("app.services.integration_service.requests.get", fake_get)
+
+    validated = validate_provider_credentials("mercadopago", {"access_token": "synthetic-access-token"})
+
+    assert validated["user_id"] == "42"
+    assert validated["account_nickname"] == "hotel-account"
+    assert validated["account_email"] == "hotel@example.test"
+
+
+def test_validate_provider_credentials_keeps_gmail_provider_validation(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.integration_service.requests.get",
+        lambda *args, **kwargs: _Response(
+            True, {"email": "hotel@example.test", "name": "Hotel Sender", "sub": "google-sub"}
+        ),
+    )
+
+    validated = validate_provider_credentials(
+        "gmail",
+        {
+            "access_token": "synthetic-access-token",
+            "refresh_token": "synthetic-refresh-token",
+            "scope": f"openid email profile {GMAIL_SEND_SCOPE}",
+            "expires_in": 3600,
+        },
+    )
+
+    assert validated["account_email"] == "hotel@example.test"
+    assert validated["account_name"] == "Hotel Sender"
+    assert validated["account_sub"] == "google-sub"
 
 
 def test_validate_gmail_credentials_requires_send_scope(monkeypatch):

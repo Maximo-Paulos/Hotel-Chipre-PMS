@@ -4,27 +4,37 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, lazyload
 
+from app.models.cash_expense import CashExpense, CashExpenseStatusEnum
 from app.models.cash_register import (
+    CashCloseReport,
     CashCustodyHandoff,
     CashCustodyStatusEnum,
-    CashCloseReport,
     CashMovement,
     CashMovementTypeEnum,
     CashSession,
     CashSessionStatusEnum,
 )
-from app.models.cash_expense import CashExpense, CashExpenseStatusEnum
+from app.models.reservation_group_payment import ReservationGroupPaymentBatch
 from app.models.security_audit_log import SecurityAuditLog
-from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
+from app.models.transaction import (
+    PaymentMethodEnum,
+    Transaction,
+    TransactionStatusEnum,
+    TransactionTypeEnum,
+)
 from app.services.distributed_lock import with_distributed_lock
 from app.services.timezones import hotel_business_now, utc_naive
+
+CASH_SESSION_PAGE_SIZE_DEFAULT = 100
+CASH_SESSION_PAGE_SIZE_MAX = 100
+CASH_SESSION_PAGE_MAX = 10_000
 
 
 class CashRegisterError(Exception):
@@ -185,7 +195,10 @@ def enqueue_pending_difference_notification(db: Session, report: CashCloseReport
         return
 
     try:
-        from app.models.notification import NotificationChannelEnum, NotificationSeverityEnum
+        from app.models.notification import (
+            NotificationChannelEnum,
+            NotificationSeverityEnum,
+        )
         from app.services.notification_service import enqueue_notifications_for_event
 
         with db.begin_nested():
@@ -366,14 +379,18 @@ def record_cash_payment_movement(
     is_refund = transaction.transaction_type == TransactionTypeEnum.REFUND
     movement_type = CashMovementTypeEnum.EXPENSE if is_refund else CashMovementTypeEnum.INCOME
     label = "Devolución" if is_refund else "Cobro"
-    # The caja must hold the cash physically moved, i.e. the gross amount that
-    # includes any payment surcharge (gross_amount). Fall back to the base amount
-    # when no surcharge was recorded.
+    # The caja holds the amount retained from the tender: the gross amount
+    # including any surcharge, plus an explicitly accepted tip. It excludes
+    # returned change. Fall back to the base amount when no surcharge exists.
     cash_amount = transaction.gross_amount if transaction.gross_amount is not None else transaction.amount
+    cash_amount = _money(cash_amount + _money(getattr(transaction, "cash_tip_amount", 0) or 0))
     surcharge = _money(transaction.fee_amount or 0)
     description = f"{label} reserva #{transaction.reservation_id} (tx #{transaction.id})"
     if surcharge > 0:
         description += f" · incl. recargo ${surcharge}"
+    tip = _money(getattr(transaction, "cash_tip_amount", 0) or 0)
+    if tip > 0:
+        description += f" · propina ${tip}"
 
     return add_movement(
         db,
@@ -402,6 +419,7 @@ def _confirmed_cash_movements_total(db: Session, session: CashSession, business_
         .filter(
             CashMovement.hotel_id == session.hotel_id,
             CashMovement.session_id == session.id,
+            CashMovement.voided_at.is_(None),
             CashMovement.business_recorded_at.is_not(None),
             CashMovement.business_recorded_at >= business_opened_at,
             CashMovement.business_recorded_at <= business_as_of,
@@ -413,6 +431,7 @@ def _confirmed_cash_movements_total(db: Session, session: CashSession, business_
         .filter(
             CashMovement.hotel_id == session.hotel_id,
             CashMovement.session_id == session.id,
+            CashMovement.voided_at.is_(None),
             CashMovement.business_recorded_at.is_(None),
             CashMovement.recorded_at >= session.opened_at,
             CashMovement.recorded_at <= business_as_of,
@@ -450,8 +469,9 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
 
     ``expected_balance`` reuses the SAME confirmed-cash logic as the arqueo
     (:func:`close_session`) so the number the UI shows always matches what the
-    close will compute — single source of truth. Raw income/expense/adjustment
-    totals are returned for display.
+    close will compute — single source of truth. Income/expense/adjustment
+    totals include only active movements; voided rows remain visible in the
+    movement history for audit.
     """
     session = (
         db.query(CashSession)
@@ -463,9 +483,23 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
 
     as_of = utc_naive(hotel_business_now(db, hotel_id))
     movements = list_movements(db, hotel_id=hotel_id, session_id=session_id)
-    income = sum((_money(m.amount) for m in movements if m.movement_type == CashMovementTypeEnum.INCOME), Decimal("0.00"))
-    expense = sum((_money(m.amount) for m in movements if m.movement_type == CashMovementTypeEnum.EXPENSE), Decimal("0.00"))
-    adjustment = sum((_money(m.amount) for m in movements if m.movement_type == CashMovementTypeEnum.ADJUSTMENT), Decimal("0.00"))
+    active_movements = [
+        movement
+        for movement in movements
+        if movement.voided_at is None
+        and (
+            movement.transaction_id is None
+            or getattr(movement, "transaction_status", None)
+            == TransactionStatusEnum.COMPLETED.value
+        )
+    ]
+    income = sum((_money(m.amount) for m in active_movements if m.movement_type == CashMovementTypeEnum.INCOME), Decimal("0.00"))
+    expense = sum((_money(m.amount) for m in active_movements if m.movement_type == CashMovementTypeEnum.EXPENSE), Decimal("0.00"))
+    adjustment = sum((_money(m.amount) for m in active_movements if m.movement_type == CashMovementTypeEnum.ADJUSTMENT), Decimal("0.00"))
+    cash_tips_total = sum(
+        (_money(getattr(movement, "cash_tip_amount", 0) or 0) for movement in active_movements),
+        Decimal("0.00"),
+    )
     confirmed_total = _confirmed_cash_movements_total(db, session, as_of)
     expected_balance = _money(session.opening_balance) + confirmed_total
     collector_totals: dict[int | None, dict[str, Decimal | int]] = {}
@@ -474,18 +508,23 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
         CashMovementTypeEnum.EXPENSE: "expense_total",
         CashMovementTypeEnum.ADJUSTMENT: "adjustment_total",
     }
-    for movement in movements:
+    for movement in active_movements:
         totals = collector_totals.setdefault(
             movement.recorded_by_user_id,
             {
                 "income_total": Decimal("0.00"),
                 "expense_total": Decimal("0.00"),
                 "adjustment_total": Decimal("0.00"),
+                "cash_tips_total": Decimal("0.00"),
                 "movement_count": 0,
             },
         )
         total_key = total_key_by_movement_type[movement.movement_type]
         totals[total_key] = _money(Decimal(str(totals[total_key])) + _money(movement.amount))
+        totals["cash_tips_total"] = _money(
+            Decimal(str(totals["cash_tips_total"]))
+            + _money(getattr(movement, "cash_tip_amount", 0) or 0)
+        )
         totals["movement_count"] = int(totals["movement_count"]) + 1
 
     by_collector = [
@@ -513,8 +552,9 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
         "expense_total": _money(expense),
         "adjustment_total": _money(adjustment),
         "confirmed_cash_total": confirmed_total,
+        "cash_tips_total": _money(cash_tips_total),
         "expected_balance": expected_balance,
-        "movements_count": len(movements),
+        "movements_count": len(active_movements),
         "by_collector": by_collector,
     }
 
@@ -767,13 +807,35 @@ def approve_close_difference(
     return report
 
 
-def list_sessions(db: Session, *, hotel_id: int) -> list[CashSession]:
-    return (
+def list_sessions(
+    db: Session,
+    *,
+    hotel_id: int,
+    page: int = 1,
+    page_size: int = CASH_SESSION_PAGE_SIZE_DEFAULT,
+    status: CashSessionStatusEnum | None = None,
+) -> tuple[list[CashSession], bool]:
+    if page < 1 or page > CASH_SESSION_PAGE_MAX:
+        raise ValueError(f"page must be between 1 and {CASH_SESSION_PAGE_MAX}")
+    if page_size < 1 or page_size > CASH_SESSION_PAGE_SIZE_MAX:
+        raise ValueError(f"page_size must be between 1 and {CASH_SESSION_PAGE_SIZE_MAX}")
+
+    query = (
         db.query(CashSession)
+        .options(lazyload(CashSession.movements))
         .filter(CashSession.hotel_id == hotel_id)
-        .order_by(CashSession.opened_at.desc(), CashSession.id.desc())
+    )
+    if status is not None:
+        query = query.filter(CashSession.status == status)
+
+    rows = (
+        query.order_by(CashSession.opened_at.desc(), CashSession.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size + 1)
         .all()
     )
+    has_next_page = len(rows) > page_size
+    return rows[:page_size], has_next_page
 
 
 def list_movements(db: Session, *, hotel_id: int, session_id: int) -> list[CashMovement]:
@@ -797,9 +859,35 @@ def list_movements(db: Session, *, hotel_id: int, session_id: int) -> list[CashM
         else []
     )
     by_transaction = {transaction.id: transaction for transaction in transactions}
+    for movement in movements:
+        transaction = by_transaction.get(movement.transaction_id)
+        movement.transaction_status = (
+            transaction.status.value
+            if transaction is not None and hasattr(transaction.status, "value")
+            else str(transaction.status) if transaction is not None else None
+        )
+    batch_ids = {
+        getattr(transaction, "group_payment_batch_id", None)
+        for transaction in transactions
+        if getattr(transaction, "group_payment_batch_id", None) is not None
+    }
+    group_batches = (
+        db.query(ReservationGroupPaymentBatch)
+        .filter(
+            ReservationGroupPaymentBatch.hotel_id == hotel_id,
+            ReservationGroupPaymentBatch.id.in_(batch_ids),
+        )
+        .all()
+        if batch_ids
+        else []
+    )
+    group_tips = {batch.id: _money(batch.cash_tip_amount or 0) for batch in group_batches}
     group_totals: dict[int, Decimal] = {}
     group_reservations: dict[int, set[int]] = {}
+    first_movement_by_batch: dict[int, int] = {}
     for movement in movements:
+        if movement.voided_at is not None:
+            continue
         transaction = by_transaction.get(movement.transaction_id)
         batch_id = getattr(transaction, "group_payment_batch_id", None) if transaction is not None else None
         is_confirmed_cash_payment = (
@@ -810,10 +898,20 @@ def list_movements(db: Session, *, hotel_id: int, session_id: int) -> list[CashM
         )
         if not batch_id or not is_confirmed_cash_payment:
             continue
-        group_totals[batch_id] = group_totals.get(batch_id, ZERO) + _money(movement.amount)
+        # Keep the reservation collection total distinct from the physical
+        # movement amount, which can also include the group's explicit tip.
+        group_gross = transaction.gross_amount if transaction.gross_amount is not None else transaction.amount
+        group_totals[batch_id] = group_totals.get(batch_id, ZERO) + _money(group_gross)
         group_reservations.setdefault(batch_id, set()).add(transaction.reservation_id)
+        first_movement_by_batch.setdefault(batch_id, movement.id)
 
     for movement in movements:
+        if movement.voided_at is not None:
+            movement.group_payment_batch_id = None
+            movement.group_payment_total = None
+            movement.group_payment_reservation_count = None
+            movement.cash_tip_amount = ZERO
+            continue
         transaction = by_transaction.get(movement.transaction_id)
         batch_id = getattr(transaction, "group_payment_batch_id", None) if transaction is not None else None
         is_confirmed_cash_payment = (
@@ -825,4 +923,12 @@ def list_movements(db: Session, *, hotel_id: int, session_id: int) -> list[CashM
         movement.group_payment_batch_id = batch_id if batch_id and is_confirmed_cash_payment else None
         movement.group_payment_total = group_totals.get(batch_id) if movement.group_payment_batch_id else None
         movement.group_payment_reservation_count = len(group_reservations[batch_id]) if movement.group_payment_batch_id else None
+        if movement.group_payment_batch_id:
+            movement.cash_tip_amount = (
+                group_tips.get(batch_id, ZERO)
+                if first_movement_by_batch.get(batch_id) == movement.id
+                else ZERO
+            )
+        else:
+            movement.cash_tip_amount = _money(getattr(transaction, "cash_tip_amount", 0) or 0)
     return movements

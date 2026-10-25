@@ -69,3 +69,40 @@ def test_connect_channels_upsert_is_idempotent(client):
     ]
     assert len(connections) == 1
     assert connections[0]["id"] == first_connection["id"]
+
+
+def test_expedia_connection_rejects_unverified_credentials_without_persisting(client):
+    headers, _ = register_owner(client, "expedia-owner@example.com")
+
+    status_before = client.get("/api/integrations/", headers=headers)
+    assert status_before.status_code == 200, status_before.text
+    expedia = next(item for item in status_before.json()["catalog"] if item["provider"] == "expedia")
+    connect_path = f"/api/integrations/{expedia['id']}/connect"
+    action_headers = {
+        **headers,
+        "X-Action-Step-Up-Ticket": create_action_step_up_ticket(
+            user_id=int(headers["X-User-Id"]),
+            hotel_id=int(headers["X-Hotel-Id"]),
+            token_version=0,
+            permission_code=PERMISSION_HOTEL_SECURITY_MANAGE,
+            method="POST",
+            path=connect_path,
+        ),
+    }
+
+    response = client.post(
+        connect_path,
+        json={"payload": {"secret": "synthetic-expedia-input"}},
+        headers=action_headers,
+    )
+
+    assert response.status_code == 409, response.text
+    assert "synthetic-expedia-input" not in response.text
+    assert "no se guardaron las credenciales" in response.json()["detail"].lower()
+
+    status_after = client.get("/api/integrations/", headers=headers)
+    assert status_after.status_code == 200, status_after.text
+    assert not any(
+        connection["integration"]["provider"] == "expedia"
+        for connection in status_after.json()["connections"]
+    )

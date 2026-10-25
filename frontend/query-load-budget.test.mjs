@@ -168,15 +168,14 @@ test("frequently revisited operator reads rely on hotel-scoped event invalidatio
 });
 
 test("notification, WhatsApp, and payment-test lists rely on domain events instead of recurring polls", async () => {
-  const [notifications, whatsapp, paymentPage, paymentHook, queryKeys] = await Promise.all([
+  const [notifications, whatsapp, paymentPage, queryKeys] = await Promise.all([
     source("./src/hooks/useNotifications.ts"),
     source("./src/hooks/useWhatsappCRM.ts"),
     source("./src/views/protected/SettingsTestsPage.tsx"),
-    source("./src/hooks/usePaymentLinkTests.ts"),
     source("./src/api/queryKeys.ts")
   ]);
 
-  for (const hook of [notifications, whatsapp, paymentPage, paymentHook]) {
+  for (const hook of [notifications, whatsapp, paymentPage]) {
     assert.doesNotMatch(hook, /refetchInterval/);
   }
   assert.match(queryKeys, /\| "whatsapp"/);

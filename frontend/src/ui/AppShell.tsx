@@ -53,6 +53,7 @@ type NavSection = {
 // useTranslation() hook themselves.
 const dailyNav: NavItem[] = [
   { label: "nav.daily.planning", to: "/operacion/planilla", requiresAnyPermission: ["occupancy:view"], hideForPreviewRoles: ["housekeeping"] },
+  { label: "nav.daily.smartAllocation", to: "/operacion/asignacion", requiresAnyPermission: ["reservation:move"], hideForPreviewRoles: ["housekeeping"] },
   { label: "nav.daily.reservations", to: "/reservas", requiresAnyPermission: ["reservation:read"], hideForPreviewRoles: ["housekeeping"] },
   { label: "nav.daily.guests", to: "/huespedes", requiresAnyPermission: ["guest:read"], hideForPreviewRoles: ["housekeeping"] },
   { label: "nav.daily.rooms", to: "/habitaciones", requiresAnyPermission: ["room:read"] },
@@ -87,7 +88,7 @@ const groupedNav: NavSection[] = [
       { label: "nav.sections.moreOperations.reports", to: "/reportes", requiresAnyPermission: ["reports:operational:view"], hideForPreviewRoles: ["housekeeping"] },
       { label: "nav.sections.moreOperations.audit", to: "/operacion/auditoria", requiresAnyPermission: ["operations:audit:view"], hideForPreviewRoles: ["housekeeping"] },
       { label: "nav.sections.moreOperations.waitlist", to: "/operacion/lista-espera", requiresAnyPermission: ["waitlist:view"], hideForPreviewRoles: ["housekeeping"] },
-      { label: "nav.sections.moreOperations.laundry", to: "/operacion/lavanderia", requiresAnyPermission: ["laundry:read"] },
+      { label: "nav.sections.moreOperations.laundry", to: "/operacion/lavanderia", requiresAnyPermission: ["laundry:read", "laundry:discrepancy_approve"] },
       { label: "nav.sections.moreOperations.stock", to: "/operacion/stock", requiresAnyPermission: ["stock:read"], hideForPreviewRoles: ["housekeeping"] },
       { label: "nav.sections.moreOperations.rates", to: "/operacion/tarifas", requiresAnyPermission: ["rates:read"], hideForPreviewRoles: ["housekeeping"] },
       { label: "nav.sections.moreOperations.promotions", to: "/operacion/promociones", requiresAnyPermission: ["promotions:read"], hideForPreviewRoles: ["housekeeping"] },

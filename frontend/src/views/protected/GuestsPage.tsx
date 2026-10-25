@@ -48,7 +48,7 @@ const TAG_OPTIONS: Array<{ value: GuestTagType }> = [
   { value: "otro" }
 ];
 
-// ponytail: tag labels resolved via t(`tags.types.${value}`) at render time
+// Resolve tag labels via t(`tags.types.${value}`) at render time
 // instead of a precomputed map -- one lookup path, and unknown tag types
 // still render (via i18next's defaultValue) instead of needing a fallback.
 

@@ -31,14 +31,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from app.models.hotel_config import HotelConfiguration
 from app.services.pricing_service import resolve_rate_calendar
-from app.services.promotion_service import PromotionMatchContext, apply_promotions_to_night, find_applicable_promotions
+from app.services.promotion_service import (
+    PromotionMatchContext,
+    apply_promotions_to_night,
+    find_applicable_promotions,
+)
 from app.services.timezones import hotel_today
 
 MONEY_QUANTUM = Decimal("0.01")
@@ -206,7 +210,10 @@ def compute_canonical_stay_pricing(
     subtotal = _quantize(subtotal)
 
     # Step 4: taxes/fees -- reuse the existing tax-policy engine.
-    from app.services.pricing_policy_service import _apply_tax_policy, _select_tax_policy  # local import: same layer, avoids a hard module-load-order dependency
+    from app.services.pricing_policy_service import (  # local import: same layer, avoids a hard module-load-order dependency
+        _apply_tax_policy,
+        _select_tax_policy,
+    )
 
     tax_policy = _select_tax_policy(db, hotel_id=hotel_id, tax_policy_id=tax_policy_id)
     tax_amount_f, fee_amount_f, _tax_breakdown = _apply_tax_policy(
@@ -232,7 +239,10 @@ def compute_canonical_stay_pricing(
     fx_quote_details: dict | None = None
     booking_total = gross_total
     if target_currency and target_currency.upper() != base_currency:
-        from app.services.pricing_policy_service import PricingPolicyError, _convert_amount
+        from app.services.pricing_policy_service import (
+            PricingPolicyError,
+            _convert_amount,
+        )
 
         try:
             converted, rate, fx_quote_details = _convert_amount(
@@ -257,13 +267,19 @@ def compute_canonical_stay_pricing(
         from app.services.payment_service import calculate_payment_surcharge
 
         info = calculate_payment_surcharge(
-            db, hotel_id=hotel_id, payment_method=payment_method, base_amount=booking_total,
+            db,
+            hotel_id=hotel_id,
+            payment_method=payment_method,
+            base_amount=booking_total,
+            currency_code=output_currency,
         )
         payment_adjustment = {
             "payment_method": payment_method,
+            "currency_code": output_currency,
             "surcharge_type": info["surcharge_type"],
             "surcharge_value": str(info["surcharge_value"]) if info["surcharge_value"] is not None else None,
             "surcharge_amount": str(info["surcharge_amount"]),
+            "fx_quote_details": info["surcharge_fx_quote_details"],
         }
         final_total = _quantize(info["final_amount"])
 

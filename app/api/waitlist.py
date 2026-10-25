@@ -2,8 +2,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.api.reservations import _to_read as _reservation_to_read
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
+from app.dependencies.auth import (
+    AuthContext,
+    require_all_permissions,
+    require_permission,
+)
 from app.models.waitlist import WaitlistStatusEnum
 from app.schemas.waitlist import (
     WaitlistEntryCreate,
@@ -11,8 +16,12 @@ from app.schemas.waitlist import (
     WaitlistEntryUpdate,
     WaitlistPromoteRequest,
     WaitlistPromoteResponse,
+    WaitlistPromotionSuggestionRead,
 )
-from app.services.permission_service import PERMISSION_RESERVATION_CREATE, PERMISSION_WAITLIST_VIEW
+from app.services.permission_service import (
+    PERMISSION_RESERVATION_CREATE,
+    PERMISSION_WAITLIST_VIEW,
+)
 from app.services.waitlist_service import (
     WaitlistError,
     add_to_waitlist,
@@ -21,12 +30,25 @@ from app.services.waitlist_service import (
     get_waitlist_entry,
     list_waitlist_entries,
     promote_from_waitlist,
+    suggest_waitlist_promotions,
     update_waitlist_entry,
 )
-from app.api.reservations import _to_read as _reservation_to_read
-
 
 router = APIRouter(prefix="/api/waitlist", tags=["Waitlist"])
+
+
+@router.get("/suggestions", response_model=list[WaitlistPromotionSuggestionRead])
+def get_waitlist_promotion_suggestions(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_all_permissions(PERMISSION_RESERVATION_CREATE, PERMISSION_WAITLIST_VIEW)),
+):
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 100")
+    try:
+        return suggest_waitlist_promotions(db, hotel_id=context.hotel_id, limit=limit)
+    except WaitlistError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/", response_model=WaitlistEntryRead, status_code=status.HTTP_201_CREATED)
@@ -43,7 +65,7 @@ def create_waitlist_entry(
         return entry
     except WaitlistError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/", response_model=list[WaitlistEntryRead])
@@ -98,6 +120,7 @@ def promote_waitlist_entry(
             context.hotel_id,
             entry_id,
             room_id=payload.room_id,
+            expected_entry_fingerprint=payload.expected_entry_fingerprint,
             notes=payload.notes,
         )
         db.commit()
@@ -106,7 +129,15 @@ def promote_waitlist_entry(
         return WaitlistPromoteResponse(waitlist_entry=entry, reservation=_reservation_to_read(reservation))
     except WaitlistError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc))
+        message = str(exc).lower()
+        code = (
+            status.HTTP_409_CONFLICT
+            if "no longer available" in message
+            or "changed" in message
+            or "request a new suggestion" in message
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
 
 
 @router.post("/{entry_id}/cancel", response_model=WaitlistEntryRead)

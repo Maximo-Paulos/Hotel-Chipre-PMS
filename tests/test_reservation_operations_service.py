@@ -1,14 +1,35 @@
 from __future__ import annotations
 
-import pytest
+import json
 from datetime import date
 
+import pytest
+
 from app.models.allocation import LLMFeedbackEvent, ManualOverrideReason
-from app.models.commercial import FxPolicy, ProductRoomCompatibility, RatePlan, RatePlanPrice, SellableProduct, TaxPolicy, TaxRule
-from app.models.hotel_config import HotelConfiguration
 from app.models.analytics import FactReservationDaily
-from app.models.ota_core import OTACommissionRule, OTACurrencyRate, OTAProvider, OTAReservationLink, OTAReservationLifecycleEnum
-from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
+from app.models.audit_log import AuditLog
+from app.models.commercial import (
+    FxPolicy,
+    ProductRoomCompatibility,
+    RatePlan,
+    RatePlanPrice,
+    SellableProduct,
+    TaxPolicy,
+    TaxRule,
+)
+from app.models.hotel_config import HotelConfiguration
+from app.models.ota_core import (
+    OTACommissionRule,
+    OTACurrencyRate,
+    OTAProvider,
+    OTAReservationLifecycleEnum,
+    OTAReservationLink,
+)
+from app.models.reservation import (
+    Reservation,
+    ReservationSourceEnum,
+    ReservationStatusEnum,
+)
 from app.models.reservation_group import ReservationGroup
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services.allocation_runtime_service import run_persisted_allocation
@@ -702,6 +723,86 @@ def test_move_reservation_room_updates_room_status_for_checked_in_reservation(
     assert from_room.status == RoomStatusEnum.CLEANING
 
 
+def test_sync_room_statuses_audits_strictly_inside_the_callers_transaction(
+    db,
+    hotel_config,
+    sample_categories,
+    sample_rooms,
+    sample_guest,
+):
+    from app.services.room_movement_group_service import sync_room_statuses_after_move
+
+    from_room = sample_rooms[0]
+    to_room = sample_rooms[1]
+    from_room.status = RoomStatusEnum.OCCUPIED
+    db.flush()
+    reservation = Reservation(
+        confirmation_code="ROOM-MOVE-STRICT-AUDIT",
+        hotel_id=hotel_config.id,
+        guest_id=sample_guest.id,
+        room_id=from_room.id,
+        category_id=sample_categories[0].id,
+        check_in_date=date(2026, 8, 17),
+        check_out_date=date(2026, 8, 19),
+        total_amount=120.0,
+        subtotal_amount=120.0,
+        net_amount=120.0,
+        amount_paid=120.0,
+        deposit_amount=36.0,
+        currency_code="ARS",
+        status=ReservationStatusEnum.CHECKED_IN,
+        source=ReservationSourceEnum.DIRECT,
+        num_adults=2,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+    nested = db.begin_nested()
+
+    before_after = sync_room_statuses_after_move(
+        db,
+        hotel_id=hotel_config.id,
+        reservation=reservation,
+        from_room_id=from_room.id,
+        to_room=to_room,
+    )
+
+    assert before_after == (RoomStatusEnum.OCCUPIED.value, RoomStatusEnum.CLEANING.value)
+    room_audits = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.hotel_id == hotel_config.id,
+            AuditLog.table_name == "rooms",
+            AuditLog.record_id.in_([from_room.id, to_room.id]),
+        )
+        .all()
+    )
+    assert len(room_audits) == 2
+    audits_by_room = {audit.record_id: audit for audit in room_audits}
+    assert audits_by_room[from_room.id].action.value == "status_change"
+    assert json.loads(audits_by_room[from_room.id].payload_before)["status"] == "occupied"
+    assert json.loads(audits_by_room[from_room.id].payload_after)["status"] == "cleaning"
+    assert json.loads(audits_by_room[from_room.id].payload_after)["housekeeping_status"] == "dirty"
+    assert json.loads(audits_by_room[to_room.id].payload_before)["status"] == "available"
+    assert json.loads(audits_by_room[to_room.id].payload_after)["status"] == "occupied"
+
+    nested.rollback()
+    db.refresh(from_room)
+    db.refresh(to_room)
+    assert from_room.status == RoomStatusEnum.OCCUPIED
+    assert to_room.status == RoomStatusEnum.AVAILABLE
+    assert (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.hotel_id == hotel_config.id,
+            AuditLog.table_name == "rooms",
+            AuditLog.record_id.in_([from_room.id, to_room.id]),
+        )
+        .count()
+        == 0
+    )
+
+
 def test_checked_in_room_move_requires_explicit_origin_disposition(
     db,
     hotel_config,
@@ -709,7 +810,10 @@ def test_checked_in_room_move_requires_explicit_origin_disposition(
     sample_rooms,
     sample_guest,
 ):
-    from app.services.reservation_operations_service import ReservationOperationsError, move_reservation_room
+    from app.services.reservation_operations_service import (
+        ReservationOperationsError,
+        move_reservation_room,
+    )
 
     from_room = sample_rooms[0]
     to_room = sample_rooms[1]
@@ -760,7 +864,10 @@ def test_checked_in_room_move_persists_non_cleaning_disposition_and_note(
     sample_guest,
 ):
     from app.models.operations import RoomMoveEvent
-    from app.services.reservation_operations_service import ReservationOperationsError, move_reservation_room
+    from app.services.reservation_operations_service import (
+        ReservationOperationsError,
+        move_reservation_room,
+    )
 
     from_room = sample_rooms[0]
     to_room = sample_rooms[1]
@@ -961,7 +1068,10 @@ def test_move_reservation_room_requires_reason_code(
     db.add(reservation)
     db.flush()
 
-    from app.services.reservation_operations_service import ReservationOperationsError, move_reservation_room
+    from app.services.reservation_operations_service import (
+        ReservationOperationsError,
+        move_reservation_room,
+    )
 
     with pytest.raises(ReservationOperationsError, match="reason_code"):
         move_reservation_room(
@@ -1025,7 +1135,10 @@ def test_move_reservation_room_rejects_capacity_overflow_across_categories(
     db.add(reservation)
     db.flush()
 
-    from app.services.reservation_operations_service import ReservationOperationsError, move_reservation_room
+    from app.services.reservation_operations_service import (
+        ReservationOperationsError,
+        move_reservation_room,
+    )
 
     with pytest.raises(ReservationOperationsError, match="hasta 1"):
         move_reservation_room(

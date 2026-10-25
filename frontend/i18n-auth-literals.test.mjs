@@ -13,9 +13,10 @@ const migratedFiles = [
   "src/components/ReservationDetailDrawer.tsx",
   "src/views/protected/ReservationsPage.tsx",
   "src/auth/ActionStepUpProvider.tsx",
-  "src/views/protected/OccupancyPlanningPage.tsx"
+  "src/views/protected/OccupancyPlanningPage.tsx",
+  "src/views/protected/AllocationPage.tsx"
 ];
-const localeFiles = ["auth.json", "common.json", "appshell.json", "dashboard.json", "guests.json", "rooms.json", "reservations.json"];
+const localeFiles = ["auth.json", "common.json", "appshell.json", "allocation.json", "dashboard.json", "guests.json", "rooms.json", "reservations.json"];
 const spanishLiteralPatterns = [
   /"[^"\r\n]*[áéíóúÁÉÍÓÚñÑ¿¡][^"\r\n]*"/gu,
   /'[^'\r\n]*[áéíóúÁÉÍÓÚñÑ¿¡][^'\r\n]*'/gu,
@@ -89,8 +90,9 @@ test("reservation group manual-rate notice uses its declared Spanish error key",
 
 test("reservation and room views use declared localized keys", async () => {
   const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-  const [reservations, drawer, rooms, spanishReservations, englishReservations, spanishRooms, englishRooms, spanishCommon, englishCommon] = await Promise.all([
+  const [reservations, groupPayment, drawer, rooms, spanishReservations, englishReservations, spanishRooms, englishRooms, spanishCommon, englishCommon] = await Promise.all([
     read("src/views/protected/ReservationsPage.tsx"),
+    read("src/components/ReservationGroupPaymentDialog.tsx"),
     read("src/components/ReservationDetailDrawer.tsx"),
     read("src/views/protected/RoomsPage.tsx"),
     read("src/locales/es/reservations.json").then(JSON.parse),
@@ -122,7 +124,7 @@ test("reservation and room views use declared localized keys", async () => {
   assert.match(reservations, /t\("drawer\.errors\.voucherFinancialSummaryUnavailable"\)/);
   assert.match(reservations, /t\("page\.errors\.communicationAccepted"\)/);
   assert.match(reservations, /t\("page\.details\.communicationResend"\)/);
-  assert.match(reservations, /t\("common:saving"\)/);
+  assert.match(groupPayment, /t\("common:saving"\)/);
   assert.doesNotMatch(reservations, /t\("page\.errors\.manualPaymentReferenceRequired"\)/);
   assert.doesNotMatch(reservations, /t\("page\.messages\.communication(?:Accepted|Unknown|Failed|Pending)"\)/);
   assert.match(drawer, /t\("drawer\.errors\.manualPaymentReferenceRequired"\)/);

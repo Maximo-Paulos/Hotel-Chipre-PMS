@@ -13,6 +13,7 @@ from app.services.permission_service import (
 )
 from app.services.room_movement_group_service import (
     RoomMovementGroupError,
+    RoomMovementLockConflict,
     get_group,
     group_has_company_reservations,
     list_groups,
@@ -68,6 +69,9 @@ def revert_room_movement_group(
         db.commit()
         db.refresh(group)
         return group
+    except RoomMovementLockConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except RoomMovementGroupError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_permission
-from app.models.cash_register import CashMovementTypeEnum
+from app.models.cash_register import CashMovementTypeEnum, CashSessionStatusEnum
 from app.models.cash_expense import CashExpense, CashExpenseStatusEnum
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation
@@ -33,6 +33,9 @@ from app.schemas.cash_register import (
 )
 from app.services.cash_register_service import (
     CashRegisterError,
+    CASH_SESSION_PAGE_MAX,
+    CASH_SESSION_PAGE_SIZE_DEFAULT,
+    CASH_SESSION_PAGE_SIZE_MAX,
     add_movement,
     approve_close_difference,
     close_session,
@@ -281,7 +284,7 @@ def export_cash_ledger_csv(
     columns = [
         "fecha_local", "hotel_id", "moneda", "tipo", "fecha_hora_local", "responsable",
         "usuario_id", "reserva_id", "transaccion_id", "movimiento_id", "lote_grupal_id",
-        "sesion_id", "importe", "importe_neto", "medio_pago", "tipo_transaccion",
+        "sesion_id", "importe", "importe_neto", "efectivo_entregado", "vuelto", "propina", "medio_pago", "tipo_transaccion",
         "tipo_movimiento", "proveedor", "descripcion", "apertura", "esperado",
         "contado", "diferencia", "estado_turno", "registrado_el",
     ]
@@ -346,6 +349,9 @@ def export_cash_ledger_csv(
             "sesion_id": "",
             "importe": entry.get("amount"),
             "importe_neto": entry.get("signed_amount"),
+            "efectivo_entregado": entry.get("cash_received_amount"),
+            "vuelto": entry.get("cash_change_amount"),
+            "propina": entry.get("cash_tip_amount"),
             "medio_pago": entry.get("payment_method"),
             "tipo_transaccion": entry.get("transaction_type"),
             "tipo_movimiento": entry.get("movement_type"),
@@ -361,6 +367,9 @@ def export_cash_ledger_csv(
         safe_row = spreadsheet_safe_row(row)
         safe_row["importe"] = _csv_decimal(entry.get("amount"))
         safe_row["importe_neto"] = _csv_decimal(entry.get("signed_amount"))
+        safe_row["efectivo_entregado"] = _csv_decimal(entry.get("cash_received_amount"))
+        safe_row["vuelto"] = _csv_decimal(entry.get("cash_change_amount"))
+        safe_row["propina"] = _csv_decimal(entry.get("cash_tip_amount"))
         writer.writerow(safe_row)
 
     # Include each turno's reconciliation once in the selected local date
@@ -386,6 +395,9 @@ def export_cash_ledger_csv(
                 "sesion_id": shift.get("session_id"),
                 "importe": "",
                 "importe_neto": "",
+                "efectivo_entregado": "",
+                "vuelto": "",
+                "propina": "",
                 "medio_pago": "",
                 "tipo_transaccion": "",
                 "tipo_movimiento": "",
@@ -428,6 +440,9 @@ def export_cash_ledger_csv(
             "sesion_id": "",
             "importe": transaction.tender_amount if transaction.tender_amount is not None else transaction.amount,
             "importe_neto": transaction.tender_amount if transaction.tender_amount is not None else transaction.amount,
+            "efectivo_entregado": transaction.cash_received_amount,
+            "vuelto": transaction.cash_change_amount,
+            "propina": transaction.cash_tip_amount,
             "medio_pago": "cash",
             "tipo_transaccion": "",
             "tipo_movimiento": "",
@@ -444,6 +459,9 @@ def export_cash_ledger_csv(
         amount = transaction.tender_amount if transaction.tender_amount is not None else transaction.amount
         safe_row["importe"] = _csv_decimal(amount)
         safe_row["importe_neto"] = _csv_decimal(amount)
+        safe_row["efectivo_entregado"] = _csv_decimal(transaction.cash_received_amount)
+        safe_row["vuelto"] = _csv_decimal(transaction.cash_change_amount)
+        safe_row["propina"] = _csv_decimal(transaction.cash_tip_amount)
         writer.writerow(safe_row)
 
     filename = f"caja-{start.isoformat()}-{end.isoformat()}.csv"
@@ -481,10 +499,28 @@ def open_cash_session(
 @router.get("/api/cash-register/sessions", response_model=list[CashSessionRead])
 @router.get("/cash-register/sessions", response_model=list[CashSessionRead])
 def list_cash_sessions(
+    response: Response,
+    page: int = Query(default=1, ge=1, le=CASH_SESSION_PAGE_MAX),
+    page_size: int = Query(
+        default=CASH_SESSION_PAGE_SIZE_DEFAULT,
+        ge=1,
+        le=CASH_SESSION_PAGE_SIZE_MAX,
+    ),
+    status_filter: CashSessionStatusEnum | None = Query(default=None, alias="status"),
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_CASH_VIEW)),
 ):
-    return list_sessions(db, hotel_id=context.hotel_id)
+    sessions, has_next_page = list_sessions(
+        db,
+        hotel_id=context.hotel_id,
+        page=page,
+        page_size=page_size,
+        status=status_filter,
+    )
+    response.headers["X-Has-Next-Page"] = str(has_next_page).lower()
+    response.headers["X-Page"] = str(page)
+    response.headers["X-Page-Size"] = str(page_size)
+    return sessions
 
 
 @router.get("/api/cash-register/close-reports/latest", response_model=CashCloseReportRead | None)

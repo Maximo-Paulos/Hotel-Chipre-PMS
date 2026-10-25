@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 class AllocationPolicyVersionCreate(BaseModel):
     constraints: dict[str, Any] = Field(default_factory=dict)
     weights: dict[str, float] = Field(default_factory=dict)
+    optimization_objective: Literal["occupied_nights", "net_revenue", "combined"] | None = None
+    combined_revenue_weight: float | None = Field(default=None, ge=0, le=1)
     prompt_summary: Optional[str] = None
     source: str = Field(default="manual", min_length=1, max_length=30)
     publish: bool = False
@@ -21,6 +23,8 @@ class AllocationPolicyVersionRead(BaseModel):
     source: str
     constraints: dict[str, Any]
     weights: dict[str, float]
+    optimization_objective: Literal["occupied_nights", "net_revenue", "combined"] = "occupied_nights"
+    combined_revenue_weight: float | None = None
     prompt_summary: Optional[str]
     is_published: bool
     created_by_user_id: Optional[int]
@@ -114,3 +118,24 @@ class AllocationRunDetailRead(BaseModel):
     created_at: datetime
     explanations: list[AllocationExplanationRead] = Field(default_factory=list)
     metrics: list[SolverMetricRead] = Field(default_factory=list)
+    assignments: list["AllocationAssignmentRead"] = Field(default_factory=list)
+
+
+class AllocationAssignmentRead(BaseModel):
+    id: int
+    reservation_id: int
+    source_room_id: Optional[int] = None
+    room_id: Optional[int] = None
+    status: str
+    explanation_summary: Optional[str] = None
+
+
+class ReservationReassignmentLockRequest(BaseModel):
+    locked: bool
+    reason: Optional[str] = Field(default=None, max_length=500)
+
+
+class ReservationReassignmentLockRead(BaseModel):
+    reservation_id: int
+    room_id: Optional[int] = None
+    allocation_locked: bool

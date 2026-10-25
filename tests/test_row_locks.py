@@ -1,10 +1,13 @@
+from contextlib import nullcontext
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -31,6 +34,19 @@ from app.services.company_night_charge_service import (
     _reservation as get_locked_company_reservation,
 )
 from app.services.permission_service import seed_default_permissions
+from app.services.room_movement_group_service import (
+    RoomMovementGroupError,
+    RoomMovementLockConflict,
+    lock_room_for_movement,
+)
+from app.services.checkin_service import (
+    CheckInConflictError,
+    CheckOutConflictError,
+    _is_postgres_lock_not_available as checkin_is_lock_not_available,
+    _lock_room_for_checkout,
+    _load_ready_room_for_checkin,
+    _load_reservation,
+)
 from app.services.row_locks import lock_query
 from app.services import company_night_charge_service
 
@@ -46,6 +62,211 @@ def test_lock_query_targets_reservations_in_postgresql_sql():
         assert "FOR UPDATE OF reservations" in sql
     finally:
         engine.dispose()
+
+
+def test_room_movement_lock_targets_room_and_uses_postgresql_nowait():
+    engine = create_engine("sqlite://")
+    try:
+        with Session(engine) as session:
+            query = (
+                session.query(Room)
+                .filter(Room.id == 1, Room.hotel_id == 1)
+                .populate_existing()
+                .with_for_update(of=Room, nowait=True)
+            )
+            sql = str(query.statement.compile(dialect=postgresql.dialect()))
+
+        assert "FOR UPDATE OF rooms NOWAIT" in sql
+    finally:
+        engine.dispose()
+
+
+def test_checkin_loader_refreshes_and_locks_reservation_before_room_lookup():
+    reservation = Reservation(id=1, hotel_id=1, room_id=2)
+    recorded = {"populated": False, "lock_target": None}
+
+    class Query:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def populate_existing(self):
+            recorded["populated"] = True
+            return self
+
+        def with_for_update(self, *, of):
+            recorded["lock_target"] = of
+            return self
+
+        def first(self):
+            return reservation
+
+    class SessionStub:
+        no_autoflush = nullcontext()
+
+        def query(self, model):
+            assert model is Reservation
+            return Query()
+
+    loaded, hotel_id = _load_reservation(SessionStub(), reservation_id=1, hotel_id=1)
+
+    assert loaded is reservation
+    assert hotel_id == 1
+    assert recorded == {"populated": True, "lock_target": Reservation}
+    assert loaded.room_id == 2
+
+
+@pytest.mark.parametrize(
+    ("sqlstate", "expected"),
+    [("55P03", True), ("57014", False)],
+)
+def test_checkin_translates_only_postgres_lock_not_available(sqlstate, expected):
+    error = OperationalError("SELECT room", {}, SimpleNamespace(sqlstate=sqlstate))
+
+    assert checkin_is_lock_not_available(error) is expected
+
+
+def test_checkin_room_lock_conflict_is_retryable_domain_error():
+    error = OperationalError("SELECT room", {}, SimpleNamespace(sqlstate="55P03"))
+    recorded = {}
+
+    class FailingQuery:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def populate_existing(self):
+            return self
+
+        def with_for_update(self, **_kwargs):
+            recorded.update(_kwargs)
+            return self
+
+        def first(self):
+            raise error
+
+    class FailingSession:
+        def query(self, model):
+            assert model is Room
+            return FailingQuery()
+
+    with pytest.raises(CheckInConflictError, match="reintentá el check-in"):
+        _load_ready_room_for_checkin(
+            FailingSession(),
+            SimpleNamespace(room_id=1),
+            hotel_id=1,
+        )
+
+    assert recorded == {"of": Room, "nowait": True}
+
+
+def test_checkout_room_lock_targets_room_and_uses_postgresql_nowait():
+    engine = create_engine("sqlite://")
+    try:
+        with Session(engine) as session:
+            query = (
+                session.query(Room)
+                .filter(Room.id == 1, Room.hotel_id == 1)
+                .populate_existing()
+                .with_for_update(of=Room, nowait=True)
+            )
+            sql = str(query.statement.compile(dialect=postgresql.dialect()))
+
+        assert "FOR UPDATE OF rooms NOWAIT" in sql
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("sqlstate", "expected_exception"),
+    [("55P03", CheckOutConflictError), ("57014", OperationalError)],
+)
+def test_checkout_room_lock_translates_only_postgres_lock_contention(sqlstate, expected_exception):
+    error = OperationalError("SELECT room", {}, SimpleNamespace(sqlstate=sqlstate))
+    recorded = {}
+
+    class FailingQuery:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def populate_existing(self):
+            return self
+
+        def options(self, *_args, **_kwargs):
+            return self
+
+        def with_for_update(self, **_kwargs):
+            recorded.update(_kwargs)
+            return self
+
+        def one_or_none(self):
+            raise error
+
+    class FailingSession:
+        def query(self, model):
+            assert model is Room
+            return FailingQuery()
+
+    with pytest.raises(expected_exception):
+        _lock_room_for_checkout(
+            FailingSession(),
+            reservation=SimpleNamespace(room_id=1),
+            hotel_id=1,
+        )
+
+    assert recorded == {"of": Room, "nowait": True}
+
+
+@pytest.mark.parametrize(
+    ("sqlstate", "expected_exception"),
+    [("55P03", RoomMovementGroupError), ("57014", OperationalError)],
+)
+def test_room_movement_lock_translates_only_postgres_lock_contention(sqlstate, expected_exception):
+    error = OperationalError("SELECT room", {}, SimpleNamespace(sqlstate=sqlstate))
+
+    class FailingQuery:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def populate_existing(self):
+            return self
+
+        def with_for_update(self, **_kwargs):
+            return self
+
+        def first(self):
+            raise error
+
+    class FailingSession:
+        def query(self, model):
+            assert model is Room
+            return FailingQuery()
+
+    with pytest.raises(expected_exception):
+        lock_room_for_movement(FailingSession(), hotel_id=1, room_id=1)
+
+
+def test_room_movement_lock_contention_uses_retryable_subtype():
+    error = OperationalError("SELECT room", {}, SimpleNamespace(sqlstate="55P03"))
+
+    class FailingQuery:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def populate_existing(self):
+            return self
+
+        def with_for_update(self, **_kwargs):
+            return self
+
+        def first(self):
+            raise error
+
+    class FailingSession:
+        def query(self, model):
+            assert model is Room
+            return FailingQuery()
+
+    with pytest.raises(RoomMovementLockConflict, match="Reintentá el movimiento"):
+        lock_room_for_movement(FailingSession(), hotel_id=1, room_id=1)
 
 
 def test_company_night_charge_reservation_lock_targets_only_reservation():

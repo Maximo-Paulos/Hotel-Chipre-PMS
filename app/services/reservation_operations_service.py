@@ -9,20 +9,19 @@ Handles operational scenarios that go beyond a plain reservation update:
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-import json
+from hashlib import sha256
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.services.row_locks import lock_query
 from app.models.audit_log import AuditActionEnum
 from app.models.commercial import RatePlan, SellableProduct, TaxPolicy
 from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
-from app.models.ota_core import OTAReservationLifecycleEnum, OTAReservationLink
 from app.models.operations import (
     BillingAdjustment,
     BillingAdjustmentTypeEnum,
@@ -33,16 +32,28 @@ from app.models.operations import (
     RoomMoveEvent,
     RoomMoveTypeEnum,
 )
-from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
+from app.models.ota_core import OTAReservationLifecycleEnum, OTAReservationLink
+from app.models.reservation import (
+    Reservation,
+    ReservationSourceEnum,
+    ReservationStatusEnum,
+)
 from app.models.room import Room, RoomCategory
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionTypeEnum
-from app.services import audit_log_service
-from app.services.allocation_policy_service import record_manual_override_feedback
-from app.services.guest_room_avoidance_service import record_guest_room_avoidance
-from app.services.analytics_facts import touch_reservation_fact_window
 from app.schemas.payment_link import PaymentLinkCreate
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.schemas.transaction import PaymentRequest
+from app.services import audit_log_service
+from app.services.allocation_policy_service import record_manual_override_feedback
+from app.services.analytics_facts import touch_reservation_fact_window
+from app.services.financial_ledger import (
+    reservation_has_any_transaction,
+    reservation_has_payment_or_deposit,
+)
+from app.services.guest_room_avoidance_service import record_guest_room_avoidance
+from app.services.housekeeping_checklist_policy import (
+    open_housekeeping_checklist_exists,
+)
 from app.services.payment_link_service import PaymentLinkError, create_link
 from app.services.payment_service import (
     MANUAL_REFERENCE_METHODS,
@@ -51,11 +62,12 @@ from app.services.payment_service import (
     sync_reservation_financial_status,
 )
 from app.services.permission_service import (
+    PERMISSION_COMPANY_MANAGE,
     PERMISSION_RESERVATION_MOVE,
     PERMISSION_RESERVATION_MOVE_CAPACITY,
     PERMISSION_RESERVATION_MOVE_CATEGORY,
     PERMISSION_RESERVATION_RATE_ADJUST,
-    PERMISSION_COMPANY_MANAGE,
+    PERMISSION_RESERVATION_ROOM_DIRTY_OVERRIDE,
     RESERVATION_MOVE_TIER_PERMISSIONS,
     audit_permission_denied,
     resolve,
@@ -64,24 +76,27 @@ from app.services.pricing_policy_service import PricingPolicyError, quote_rate_p
 from app.services.read_model_cache import invalidate_hotel_operational_caches
 from app.services.reservation_service import (
     ReservationError,
-    check_room_availability,
+    _apply_corporate_pricing,
+    _apply_pricing_result_to_reservation,
+    _notify_reservation_event,
+    _validate_reservation_occupancy,
     calculate_reservation_pricing,
+    check_room_availability,
     compute_reservation_pricing,
     create_reservation,
     lock_reservation_version,
     manual_override_total_for_nights,
     transition_reservation_status,
     update_reservation_fields,
-    _apply_corporate_pricing,
-    _notify_reservation_event,
-    _apply_pricing_result_to_reservation,
-    _validate_reservation_occupancy,
 )
+from app.services.room_block_service import room_has_active_block
 from app.services.room_movement_group_service import (
     create_grouped_room_move,
+    lock_room_for_movement,
     reservation_actual_guest_count,
     sync_room_statuses_after_move,
 )
+from app.services.row_locks import lock_query
 from app.services.timezones import hotel_today
 
 
@@ -91,6 +106,19 @@ class ReservationOperationsError(ReservationError):
 
 class RoomMovePermissionError(ReservationOperationsError):
     """A caller lacks the permission tier required by a room move's shape."""
+
+
+class ReservationExtensionImpactConfirmationError(ReservationOperationsError):
+    """The room reallocation plan changed or was not explicitly confirmed."""
+
+    def __init__(self, code: str, impact_plan: dict | None = None):
+        self.code = code
+        self.impact_plan = impact_plan
+        if code == "impact_confirmation_required":
+            message = "Confirmá el impacto de reasignación antes de aplicar la extensión."
+        else:
+            message = "El impacto cambió desde la vista previa. Revisá el plan actualizado."
+        super().__init__(message)
 
 
 def _validate_direct_individual_extension_target(
@@ -322,6 +350,7 @@ class ReservationExtensionResult:
     payment_link: object | None = None
     success: bool = True
     conflicts: list[dict] | None = None
+    impact_plan: dict | None = None
 
 
 @dataclass(slots=True)
@@ -407,31 +436,13 @@ def add_reservation_charge(
     return charge
 
 
-def _has_transactions(db: Session, *, hotel_id: int, reservation_id: int) -> bool:
-    return (
-        db.query(Transaction.id)
-        .filter(Transaction.hotel_id == hotel_id, Transaction.reservation_id == reservation_id)
-        .first()
-        is not None
-    )
-
-
-def reservation_has_payment_or_deposit(db: Session, *, hotel_id: int, reservation: Reservation) -> bool:
-    return (
-        reservation.status in (ReservationStatusEnum.DEPOSIT_PAID, ReservationStatusEnum.FULLY_PAID)
-        or Decimal(str(reservation.amount_paid or 0)) > Decimal("0")
-        or Decimal(str(reservation.external_paid_amount or 0)) > Decimal("0")
-        or bool(reservation.external_paid_ever_confirmed)
-        or _has_transactions(db, hotel_id=hotel_id, reservation_id=reservation.id)
-    )
-
-
 def _extension_conflicts(
     db: Session,
     *,
     reservation: Reservation,
     hotel_id: int,
     new_checkout_date: date,
+    for_update: bool = True,
 ) -> list[Reservation]:
     if reservation.room_id is None:
         return []
@@ -446,6 +457,7 @@ def _extension_conflicts(
                 [
                     ReservationStatusEnum.CANCELLED,
                     ReservationStatusEnum.CHECKED_OUT,
+                    ReservationStatusEnum.NO_SHOW,
                 ]
             ),
             Reservation.check_in_date < new_checkout_date,
@@ -454,7 +466,38 @@ def _extension_conflicts(
         .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
         .populate_existing()
     )
-    return lock_query(overlapping_query, Reservation).all()
+    if for_update:
+        overlapping_query = lock_query(overlapping_query, Reservation)
+    return overlapping_query.all()
+
+
+def _extension_no_show_reservations(
+    db: Session,
+    *,
+    reservation: Reservation,
+    hotel_id: int,
+    new_checkout_date: date,
+    for_update: bool,
+) -> list[Reservation]:
+    if reservation.room_id is None:
+        return []
+    query = (
+        db.query(Reservation)
+        .filter(
+            Reservation.hotel_id == hotel_id,
+            Reservation.room_id == reservation.room_id,
+            Reservation.id != reservation.id,
+            Reservation.deleted_at.is_(None),
+            Reservation.status == ReservationStatusEnum.NO_SHOW,
+            Reservation.check_in_date < new_checkout_date,
+            Reservation.check_out_date > reservation.check_out_date,
+        )
+        .order_by(Reservation.check_in_date.asc(), Reservation.id.asc())
+        .populate_existing()
+    )
+    if for_update:
+        query = lock_query(query, Reservation)
+    return query.all()
 
 
 def _is_auto_assignable_future_reservation(conflict: Reservation) -> bool:
@@ -462,6 +505,7 @@ def _is_auto_assignable_future_reservation(conflict: Reservation) -> bool:
         not bool(conflict.allocation_locked)
         and conflict.status
         not in (
+            ReservationStatusEnum.PARTIAL_CHECK_IN,
             ReservationStatusEnum.CHECKED_IN,
             ReservationStatusEnum.CHECKED_OUT,
             ReservationStatusEnum.CANCELLED,
@@ -477,6 +521,8 @@ def _available_room_for_conflict(
     conflict: Reservation,
     extension_room_id: int,
     superior: bool,
+    lock_for_update: bool = False,
+    planned_assignments: list[tuple[int, date, date]] | None = None,
 ) -> Room | None:
     current_category = (
         db.query(RoomCategory)
@@ -507,7 +553,14 @@ def _available_room_for_conflict(
             .all()
         )
         for room in rooms:
-            if check_room_availability(
+            if any(
+                planned_room_id == room.id
+                and planned_start < conflict.check_out_date
+                and planned_end > conflict.check_in_date
+                for planned_room_id, planned_start, planned_end in (planned_assignments or [])
+            ):
+                continue
+            if not check_room_availability(
                 db,
                 room.id,
                 conflict.check_in_date,
@@ -515,8 +568,357 @@ def _available_room_for_conflict(
                 hotel_id=hotel_id,
                 exclude_reservation_id=conflict.id,
             ):
-                return room
+                continue
+            if lock_for_update:
+                room = lock_room_for_movement(db, hotel_id=hotel_id, room_id=room.id)
+                if room is None or not check_room_availability(
+                    db,
+                    room.id,
+                    conflict.check_in_date,
+                    conflict.check_out_date,
+                    hotel_id=hotel_id,
+                    exclude_reservation_id=conflict.id,
+                    known_room=room,
+                ):
+                    continue
+            return room
     return None
+
+
+def _extension_room_label(db: Session, *, hotel_id: int, room_id: int | None) -> str | None:
+    if room_id is None:
+        return None
+    return (
+        db.query(Room.room_number)
+        .filter(Room.id == room_id, Room.hotel_id == hotel_id)
+        .scalar()
+    )
+
+
+def _public_extension_action(
+    *,
+    action: str,
+    room_label: str | None,
+    conflict: Reservation,
+    reason_code: str | None = None,
+) -> dict:
+    result = {
+        "action": action,
+        "room_label": room_label or "Sin habitación asignada",
+        "check_in_date": conflict.check_in_date.isoformat(),
+        "check_out_date": conflict.check_out_date.isoformat(),
+    }
+    if conflict.confirmation_code:
+        result["confirmation_code"] = conflict.confirmation_code
+    if reason_code:
+        result["reason_code"] = reason_code
+    return result
+
+
+def _extension_impact_fingerprint(
+    *,
+    root_room_label: str | None,
+    reservation: Reservation,
+    new_checkout_date: date,
+    can_manage_company_reservations: bool,
+    root_room_blocked: bool,
+    planned: list[dict],
+) -> str:
+    canonical = {
+        "hotel_id": reservation.hotel_id,
+        "reservation_id": reservation.id,
+        "reservation_version": reservation.version or 0,
+        "reservation_status": str(getattr(reservation.status, "value", reservation.status)),
+        "current_checkout_date": reservation.check_out_date.isoformat(),
+        "new_checkout_date": new_checkout_date.isoformat(),
+        "room_id": reservation.room_id,
+        "room_label": root_room_label,
+        "can_manage_company_reservations": can_manage_company_reservations,
+        "root_room_blocked": root_room_blocked,
+        "actions": [
+            {
+                "reservation_id": item["reservation"].id,
+                "version": item["reservation"].version or 0,
+                "status": str(
+                    getattr(item["reservation"].status, "value", item["reservation"].status)
+                ),
+                "company_id": item["reservation"].company_id,
+                "allocation_locked": bool(item["reservation"].allocation_locked),
+                "check_in_date": item["reservation"].check_in_date.isoformat(),
+                "check_out_date": item["reservation"].check_out_date.isoformat(),
+                "confirmation_code": item["reservation"].confirmation_code,
+                "room_id": item["reservation"].room_id,
+                "room_label": item.get("from_room_label"),
+                "has_payment_or_deposit": item["has_payment_or_deposit"],
+                "action": item["action"],
+                "reason_code": item.get("reason_code"),
+                "to_room_id": item["to_room"].id if item.get("to_room") else None,
+                "to_room_label": item["to_room"].room_number if item.get("to_room") else None,
+            }
+            for item in planned
+        ],
+    }
+    payload = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _build_extension_impact_plan(
+    db: Session,
+    *,
+    reservation: Reservation,
+    hotel_id: int,
+    new_checkout_date: date,
+    can_manage_company_reservations: bool,
+    lock_rows: bool,
+) -> dict:
+    conflicts = _extension_conflicts(
+        db,
+        reservation=reservation,
+        hotel_id=hotel_id,
+        new_checkout_date=new_checkout_date,
+        for_update=lock_rows,
+    )
+    no_show_reservations = _extension_no_show_reservations(
+        db,
+        reservation=reservation,
+        hotel_id=hotel_id,
+        new_checkout_date=new_checkout_date,
+        for_update=lock_rows,
+    )
+    conflicts.extend(no_show_reservations)
+    conflicts.sort(key=lambda item: (item.check_in_date, item.id))
+    if not conflicts or reservation.room_id is None:
+        return {
+            "resolved": True,
+            "conflicts": [],
+            "planned_actions": [],
+            "impact_plan": None,
+        }
+
+    unresolved: list[dict] = []
+    planned: list[dict] = []
+    public_actions: list[dict] = []
+    planned_assignments: list[tuple[int, date, date]] = []
+    extension_room_id = reservation.room_id
+
+    for conflict in conflicts:
+        details = {
+            "reservation_id": conflict.id,
+            "confirmation_code": conflict.confirmation_code,
+            "room_id": conflict.room_id,
+            "check_in_date": conflict.check_in_date.isoformat(),
+            "check_out_date": conflict.check_out_date.isoformat(),
+        }
+        has_payment_or_deposit = reservation_has_payment_or_deposit(
+            db,
+            hotel_id=hotel_id,
+            reservation=conflict,
+        )
+        plan_item = {
+            "reservation": conflict,
+            "has_payment_or_deposit": has_payment_or_deposit,
+            "from_room_label": _extension_room_label(
+                db, hotel_id=hotel_id, room_id=conflict.room_id
+            ),
+            "to_room": None,
+        }
+        if conflict.status == ReservationStatusEnum.NO_SHOW:
+            reason_code = "no_show_reservation_blocks_extension"
+            unresolved.append(
+                {
+                    **details,
+                    "reason": reason_code,
+                    "message": "La reserva marcada como no-show requiere revisión antes de extender esta habitación.",
+                }
+            )
+            plan_item.update(action="blocked", reason_code=reason_code)
+            public_actions.append(
+                _public_extension_action(
+                    action="blocked",
+                    room_label=plan_item["from_room_label"],
+                    conflict=conflict,
+                    reason_code=reason_code,
+                )
+            )
+            planned.append(plan_item)
+            continue
+        if conflict.company_id is not None and not can_manage_company_reservations:
+            reason_code = "company_reservation_requires_management_permission"
+            unresolved.append(
+                {
+                    **details,
+                    "reason": reason_code,
+                    "message": "Se necesita permiso para reasignar una reserva de empresa en conflicto.",
+                }
+            )
+            plan_item.update(action="blocked", reason_code=reason_code)
+            public_actions.append(
+                _public_extension_action(
+                    action="blocked",
+                    room_label=plan_item["from_room_label"],
+                    conflict=conflict,
+                    reason_code=reason_code,
+                )
+            )
+            planned.append(plan_item)
+            continue
+        if has_payment_or_deposit:
+            reason_code = "future_reservation_has_payment_or_deposit"
+            unresolved.append(
+                {
+                    **details,
+                    "reason": reason_code,
+                    "message": "La reserva futura tiene pago o seña y no puede ser desplazada automáticamente.",
+                }
+            )
+            plan_item.update(action="blocked", reason_code=reason_code)
+            public_actions.append(
+                _public_extension_action(
+                    action="blocked",
+                    room_label=plan_item["from_room_label"],
+                    conflict=conflict,
+                    reason_code=reason_code,
+                )
+            )
+            planned.append(plan_item)
+            continue
+
+        if not _is_auto_assignable_future_reservation(conflict):
+            if conflict.status in {
+                ReservationStatusEnum.PARTIAL_CHECK_IN,
+                ReservationStatusEnum.CHECKED_IN,
+            }:
+                reason_code = "checked_in_reservation_cannot_be_reallocated"
+                message = "La reserva en estadía no puede ser reasignada por una extensión."
+            elif conflict.allocation_locked:
+                reason_code = "reservation_allocation_locked"
+                message = "La asignación de habitación está bloqueada y requiere revisión manual."
+            else:
+                reason_code = "reservation_not_reallocatable"
+                message = "La reserva requiere revisión antes de cambiar su asignación."
+            unresolved.append({**details, "reason": reason_code, "message": message})
+            plan_item.update(action="blocked", reason_code=reason_code)
+            public_actions.append(
+                _public_extension_action(
+                    action="blocked",
+                    room_label=plan_item["from_room_label"],
+                    conflict=conflict,
+                    reason_code=reason_code,
+                )
+            )
+            planned.append(plan_item)
+            continue
+
+        if _is_auto_assignable_future_reservation(conflict):
+            equivalent = _available_room_for_conflict(
+                db,
+                hotel_id=hotel_id,
+                conflict=conflict,
+                extension_room_id=extension_room_id,
+                superior=False,
+                lock_for_update=lock_rows,
+                planned_assignments=planned_assignments,
+            )
+            if equivalent is not None:
+                plan_item.update(action="moved_equivalent", to_room=equivalent)
+                planned_assignments.append(
+                    (equivalent.id, conflict.check_in_date, conflict.check_out_date)
+                )
+                public_actions.append(
+                    _public_extension_action(
+                        action="moved_equivalent",
+                        room_label=f"{plan_item['from_room_label'] or 'Sin habitación'} → {equivalent.room_number}",
+                        conflict=conflict,
+                    )
+                )
+                planned.append(plan_item)
+                continue
+
+            superior = _available_room_for_conflict(
+                db,
+                hotel_id=hotel_id,
+                conflict=conflict,
+                extension_room_id=extension_room_id,
+                superior=True,
+                lock_for_update=lock_rows,
+                planned_assignments=planned_assignments,
+            )
+            if superior is not None:
+                plan_item.update(action="moved_superior", to_room=superior)
+                planned_assignments.append(
+                    (superior.id, conflict.check_in_date, conflict.check_out_date)
+                )
+                public_actions.append(
+                    _public_extension_action(
+                        action="moved_superior",
+                        room_label=f"{plan_item['from_room_label'] or 'Sin habitación'} → {superior.room_number}",
+                        conflict=conflict,
+                    )
+                )
+                planned.append(plan_item)
+                continue
+
+        plan_item.update(action="assignment_released")
+        public_actions.append(
+            _public_extension_action(
+                action="assignment_released",
+                room_label=plan_item["from_room_label"],
+                conflict=conflict,
+            )
+        )
+        planned.append(plan_item)
+
+    root_room_blocked = room_has_active_block(
+        db,
+        hotel_id=hotel_id,
+        room_id=extension_room_id,
+        start_date=reservation.check_out_date,
+        end_date=new_checkout_date,
+    )
+    fingerprint = _extension_impact_fingerprint(
+        root_room_label=_extension_room_label(db, hotel_id=hotel_id, room_id=reservation.room_id),
+        reservation=reservation,
+        new_checkout_date=new_checkout_date,
+        can_manage_company_reservations=can_manage_company_reservations,
+        root_room_blocked=root_room_blocked,
+        planned=planned,
+    )
+    return {
+        "resolved": not unresolved and not root_room_blocked,
+        "conflicts": unresolved,
+        "planned_actions": planned,
+        "impact_plan": {"fingerprint": fingerprint, "actions": public_actions},
+        "root_room_blocked": root_room_blocked,
+    }
+
+
+def plan_reservation_extension_impact(
+    db: Session,
+    *,
+    reservation: Reservation,
+    hotel_id: int,
+    new_checkout_date: date,
+    can_manage_company_reservations: bool = False,
+) -> dict | None:
+    """Return a read-only, PII-minimized extension impact plan when conflicts exist."""
+    if reservation.room_id is None:
+        return None
+    if room_has_active_block(
+        db,
+        hotel_id=hotel_id,
+        room_id=reservation.room_id,
+        start_date=reservation.check_out_date,
+        end_date=new_checkout_date,
+    ):
+        raise ReservationOperationsError("La habitación no está disponible para la extensión")
+    return _build_extension_impact_plan(
+        db,
+        reservation=reservation,
+        hotel_id=hotel_id,
+        new_checkout_date=new_checkout_date,
+        can_manage_company_reservations=can_manage_company_reservations,
+        lock_rows=False,
+    )["impact_plan"]
 
 
 def resolve_extension_conflict(
@@ -527,23 +929,55 @@ def resolve_extension_conflict(
     new_checkout_date: date,
     actor_user_id: int | None = None,
     can_manage_company_reservations: bool = False,
+    confirmed_impact_fingerprint: str | None = None,
 ) -> dict:
-    conflicts = _extension_conflicts(
+    if reservation.room_id is not None and room_has_active_block(
+        db,
+        hotel_id=hotel_id,
+        room_id=reservation.room_id,
+        start_date=reservation.check_out_date,
+        end_date=new_checkout_date,
+    ):
+        raise ReservationOperationsError("La habitación no está disponible para la extensión")
+
+    plan = _build_extension_impact_plan(
         db,
         reservation=reservation,
         hotel_id=hotel_id,
         new_checkout_date=new_checkout_date,
+        can_manage_company_reservations=can_manage_company_reservations,
+        lock_rows=True,
     )
-    if not conflicts:
-        return {"resolved": True, "conflicts": [], "actions": []}
+    impact_plan = plan["impact_plan"]
+    if confirmed_impact_fingerprint is not None and (
+        impact_plan is None or confirmed_impact_fingerprint != impact_plan["fingerprint"]
+    ):
+        raise ReservationExtensionImpactConfirmationError(
+            "impact_plan_stale",
+            impact_plan,
+        )
+    if plan["conflicts"] or plan.get("root_room_blocked"):
+        return {
+            "resolved": False,
+            "conflicts": plan["conflicts"],
+            "actions": [],
+            "impact_plan": impact_plan,
+        }
 
-    unresolved: list[dict] = []
+    planned_actions = plan["planned_actions"]
+    has_mutations = any(
+        item["action"] in {"moved_equivalent", "moved_superior", "assignment_released"}
+        for item in planned_actions
+    )
+    if has_mutations and confirmed_impact_fingerprint is None:
+        raise ReservationExtensionImpactConfirmationError(
+            "impact_confirmation_required",
+            impact_plan,
+        )
+
     actions: list[dict] = []
-    extension_room_id = reservation.room_id
-    if extension_room_id is None:
-        return {"resolved": True, "conflicts": [], "actions": []}
-
-    for conflict in conflicts:
+    for item in planned_actions:
+        conflict = item["reservation"]
         details = {
             "reservation_id": conflict.id,
             "confirmation_code": conflict.confirmation_code,
@@ -551,128 +985,98 @@ def resolve_extension_conflict(
             "check_in_date": conflict.check_in_date.isoformat(),
             "check_out_date": conflict.check_out_date.isoformat(),
         }
-        if conflict.company_id is not None and not can_manage_company_reservations:
-            unresolved.append(
-                {
-                    **details,
-                    "reason": "company_reservation_requires_management_permission",
-                    "message": "Se necesita permiso para reasignar una reserva de empresa en conflicto.",
-                }
+        action = item["action"]
+        destination = item.get("to_room")
+        if action == "moved_equivalent" and destination is not None:
+            reason = (
+                "Reserva futura movida a habitacion equivalente para resolver conflicto "
+                f"por extension de reserva {reservation.confirmation_code}"
             )
-            continue
-        if reservation_has_payment_or_deposit(db, hotel_id=hotel_id, reservation=conflict):
-            unresolved.append(
-                {
-                    **details,
-                    "reason": "future_reservation_has_payment_or_deposit",
-                    "message": "La reserva futura tiene pago o sena y no puede ser desplazada automaticamente",
-                }
-            )
-            continue
-
-        if _is_auto_assignable_future_reservation(conflict):
-            equivalent = _available_room_for_conflict(
+            group, event = create_grouped_room_move(
                 db,
                 hotel_id=hotel_id,
-                conflict=conflict,
-                extension_room_id=extension_room_id,
-                superior=False,
+                reservation=conflict,
+                to_room=destination,
+                trigger_reason="extension_conflict",
+                reason_code="extension_conflict_equivalent",
+                reason_note=reason,
+                move_type=RoomMoveTypeEnum.AUTO_ASSIGNMENT,
+                trigger_event="extension_conflict",
+                created_by_user_id=actor_user_id,
+                group_notes=reason,
             )
-            if equivalent is not None:
-                reason = (
-                    "Reserva futura movida a habitacion equivalente para resolver conflicto "
-                    f"por extension de reserva {reservation.confirmation_code}"
-                )
-                group, event = create_grouped_room_move(
-                    db,
-                    hotel_id=hotel_id,
-                    reservation=conflict,
-                    to_room=equivalent,
-                    trigger_reason="extension_conflict",
-                    reason_code="extension_conflict_equivalent",
-                    reason_note=reason,
-                    move_type=RoomMoveTypeEnum.AUTO_ASSIGNMENT,
-                    trigger_event="extension_conflict",
-                    created_by_user_id=actor_user_id,
-                    group_notes=reason,
-                )
-                actions.append(
-                    {
-                        **details,
-                        "action": "moved_equivalent",
-                        "to_room_id": equivalent.id,
-                        "movement_group_id": group.id,
-                        "move_event_id": event.id,
-                    }
-                )
-                continue
-
-            superior = _available_room_for_conflict(
+            actions.append(
+                {
+                    **details,
+                    "action": "moved_equivalent",
+                    "to_room_id": destination.id,
+                    "movement_group_id": group.id,
+                    "move_event_id": event.id,
+                }
+            )
+        elif action == "moved_superior" and destination is not None:
+            reason = (
+                "Reserva futura actualizada a habitacion superior para resolver conflicto "
+                f"por extension de reserva {reservation.confirmation_code}"
+            )
+            group, event = create_grouped_room_move(
                 db,
                 hotel_id=hotel_id,
-                conflict=conflict,
-                extension_room_id=extension_room_id,
-                superior=True,
+                reservation=conflict,
+                to_room=destination,
+                trigger_reason="extension_conflict",
+                reason_code="extension_conflict_upgrade",
+                reason_note=reason,
+                move_type=RoomMoveTypeEnum.UPGRADE,
+                trigger_event="extension_conflict",
+                created_by_user_id=actor_user_id,
+                group_notes=reason,
             )
-            if superior is not None:
-                reason = (
-                    "Reserva futura actualizada a habitacion superior para resolver conflicto "
-                    f"por extension de reserva {reservation.confirmation_code}"
-                )
-                group, event = create_grouped_room_move(
-                    db,
-                    hotel_id=hotel_id,
-                    reservation=conflict,
-                    to_room=superior,
-                    trigger_reason="extension_conflict",
-                    reason_code="extension_conflict_upgrade",
-                    reason_note=reason,
-                    move_type=RoomMoveTypeEnum.UPGRADE,
-                    trigger_event="extension_conflict",
-                    created_by_user_id=actor_user_id,
-                    group_notes=reason,
-                )
-                actions.append(
-                    {
-                        **details,
-                        "action": "moved_superior",
-                        "to_room_id": superior.id,
-                        "movement_group_id": group.id,
-                        "move_event_id": event.id,
-                    }
-                )
-                continue
+            actions.append(
+                {
+                    **details,
+                    "action": "moved_superior",
+                    "to_room_id": destination.id,
+                    "movement_group_id": group.id,
+                    "move_event_id": event.id,
+                }
+            )
+        elif action == "assignment_released":
+            before = audit_log_service.model_snapshot(conflict)
+            previous_room_id = conflict.room_id
+            conflict.room_id = None
+            conflict.allocation_status = "pending_assignment"
+            conflict.requires_manual_review = True
+            conflict.notes = (
+                (conflict.notes or "")
+                + f"\n[EXTENSION CONFLICT] Room assignment released for extension of {reservation.confirmation_code}"
+            ).strip()
+            conflict.version = (conflict.version or 0) + 1
+            audit_log_service.queue_audit_log(
+                db,
+                hotel_id=hotel_id,
+                table_name="reservations",
+                record_id=conflict.id,
+                action=AuditActionEnum.UPDATE,
+                actor_user_id=actor_user_id,
+                payload_before=before,
+                payload_after=audit_log_service.model_snapshot(conflict),
+            )
+            actions.append(
+                {
+                    **details,
+                    "action": "assignment_released",
+                    "from_room_id": previous_room_id,
+                    "message": "Reserva futura sin pago liberada para revisión manual",
+                }
+            )
 
-        before = audit_log_service.model_snapshot(conflict)
-        previous_room_id = conflict.room_id
-        conflict.room_id = None
-        conflict.allocation_status = "pending_assignment"
-        conflict.requires_manual_review = True
-        conflict.notes = (
-            (conflict.notes or "")
-            + f"\n[EXTENSION CONFLICT] Room assignment released for extension of {reservation.confirmation_code}"
-        ).strip()
-        conflict.version = (conflict.version or 0) + 1
-        audit_log_service.queue_audit_log(
-            db,
-            hotel_id=hotel_id,
-            table_name="reservations",
-            record_id=conflict.id,
-            action=AuditActionEnum.UPDATE,
-            actor_user_id=actor_user_id,
-            payload_before=before,
-            payload_after=audit_log_service.model_snapshot(conflict),
-        )
-        actions.append(
-            {
-                **details,
-                "action": "assignment_released",
-                "from_room_id": previous_room_id,
-                "message": "Reserva futura sin pago liberada para revision manual",
-            }
-        )
-
-    return {"resolved": not unresolved, "conflicts": unresolved, "actions": actions}
+    return {
+        "resolved": True,
+        "conflicts": [],
+        "actions": actions,
+        "impact_plan": impact_plan,
+    }
 
 
 def change_reservation_dates(
@@ -704,6 +1108,7 @@ def change_reservation_dates(
     original_check_in = reservation.check_in_date
     original_check_out = reservation.check_out_date
     if reservation.status in (
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
         ReservationStatusEnum.CHECKED_IN,
         ReservationStatusEnum.CHECKED_OUT,
         ReservationStatusEnum.CANCELLED,
@@ -714,7 +1119,11 @@ def change_reservation_dates(
     tiene_pago = (
         reservation.status in (ReservationStatusEnum.DEPOSIT_PAID, ReservationStatusEnum.FULLY_PAID)
         or Decimal(str(reservation.amount_paid or 0)) > Decimal("0")
-        or _has_transactions(db, hotel_id=hotel_id, reservation_id=reservation.id)
+        or reservation_has_any_transaction(
+            db,
+            hotel_id=hotel_id,
+            reservation_id=reservation.id,
+        )
     )
     target_room_id = room_id if room_id is not None else reservation.room_id
 
@@ -884,32 +1293,73 @@ def preview_reservation_stay_extension(
     reservation: Reservation,
     hotel_id: int,
     new_checkout_date: date,
-) -> Decimal:
-    """Read-only quote for a direct, individually billed stay extension.
+    payment_action: str = "individual",
+) -> Decimal | None:
+    """Return a read-only quote for individual extensions or validate deferred company terms.
 
     The committing extension flow rechecks the reservation version, state,
-    availability and current rate while holding the reservation lock.
+    impact and current rate while holding the reservation lock.
     """
-    _validate_direct_individual_extension_target(
-        db,
-        reservation=reservation,
-        hotel_id=hotel_id,
-    )
-    if reservation.settlement_status == "deferred":
-        raise ReservationOperationsError("Las reservas con cuenta diferida no admiten una cotizacion de cobro individual")
-    if reservation.status not in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.FULLY_PAID):
-        raise ReservationOperationsError("Solo se pueden extender reservas en estadía o pagadas por completo")
+    if reservation.hotel_id != hotel_id:
+        raise ReservationOperationsError("La reserva no pertenece al hotel activo")
     if new_checkout_date <= reservation.check_out_date:
         raise ReservationOperationsError("La nueva fecha de salida debe ser posterior a la fecha de salida actual")
-    if reservation.room_id and not check_room_availability(
-        db,
-        reservation.room_id,
-        reservation.check_out_date,
-        new_checkout_date,
-        hotel_id=hotel_id,
-        exclude_reservation_id=reservation.id,
+
+    if payment_action == "company_account":
+        if reservation.company_id is None:
+            raise ReservationOperationsError("La extensión a cuenta solo está disponible para reservas de empresa")
+        company = (
+            db.query(Company)
+            .filter(
+                Company.id == reservation.company_id,
+                Company.hotel_id == hotel_id,
+                Company.is_active.is_(True),
+            )
+            .first()
+        )
+        is_deferred = reservation.settlement_status == "deferred" or bool(
+            company and company.payment_deferred
+        )
+        if company is None or not is_deferred:
+            raise ReservationOperationsError("La empresa no está activa o no tiene habilitada la cuenta diferida")
+        if int(company.deferred_days or 0) < 0:
+            raise ReservationOperationsError("La empresa tiene un plazo de cuenta diferida inválido")
+        if reservation.status not in {
+            ReservationStatusEnum.PARTIAL_CHECK_IN,
+            ReservationStatusEnum.CHECKED_IN,
+        }:
+            raise ReservationOperationsError("La extensión a cuenta solo está disponible para una reserva activa")
+        if reservation.settlement_status != "deferred" and not company.payment_deferred:
+            raise ReservationOperationsError("La reserva no utiliza cuenta diferida")
+        if reservation.room_id and room_has_active_block(
+            db,
+            hotel_id=hotel_id,
+            room_id=reservation.room_id,
+            start_date=reservation.check_out_date,
+            end_date=new_checkout_date,
+        ):
+            raise ReservationOperationsError("La habitación no está disponible para la extensión")
+        return None
+
+    if payment_action != "individual":
+        raise ReservationOperationsError("Acción de preview de extensión inválida")
+    _validate_direct_individual_extension_target(db, reservation=reservation, hotel_id=hotel_id)
+    if reservation.settlement_status == "deferred":
+        raise ReservationOperationsError("Las reservas con cuenta diferida no admiten una cotización de cobro individual")
+    if reservation.status not in (
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.FULLY_PAID,
     ):
-        raise ReservationOperationsError("La habitacion no esta disponible para la extension")
+        raise ReservationOperationsError("Solo se pueden extender reservas en estadía o pagadas por completo")
+    if reservation.room_id and room_has_active_block(
+        db,
+        hotel_id=hotel_id,
+        room_id=reservation.room_id,
+        start_date=reservation.check_out_date,
+        end_date=new_checkout_date,
+    ):
+        raise ReservationOperationsError("La habitación no está disponible para la extensión")
 
     amount = _extension_amount(
         db,
@@ -1004,6 +1454,7 @@ def extend_reservation_stay(
     changed_by_user_id: int | None = None,
     notes: str | None = None,
     can_manage_company_reservations: bool = False,
+    confirmed_impact_fingerprint: str | None = None,
 ) -> ReservationExtensionResult:
     if reservation.hotel_id != hotel_id:
         raise ReservationOperationsError("La reserva no pertenece al hotel activo")
@@ -1040,7 +1491,10 @@ def extend_reservation_stay(
         deferred_company = company
         if int(deferred_company.deferred_days or 0) < 0:
             raise ReservationOperationsError("La empresa tiene un plazo de cuenta diferida inválido")
-        if reservation.status != ReservationStatusEnum.CHECKED_IN:
+        if reservation.status not in {
+            ReservationStatusEnum.PARTIAL_CHECK_IN,
+            ReservationStatusEnum.CHECKED_IN,
+        }:
             raise ReservationOperationsError("La extensión a cuenta solo está disponible para una reserva activa")
         if pricing_mode != "current_rate":
             raise ReservationOperationsError("La extensión a cuenta debe usar la tarifa vigente")
@@ -1055,10 +1509,23 @@ def extend_reservation_stay(
         hotel_id=hotel_id,
         client_version=client_version,
     )
-    if reservation.status not in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.FULLY_PAID):
+    if reservation.status not in (
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.FULLY_PAID,
+    ):
         raise ReservationOperationsError("Solo se pueden extender reservas en estadía o pagadas por completo")
     if new_checkout_date <= reservation.check_out_date:
         raise ReservationOperationsError("La nueva fecha de salida debe ser posterior a la fecha de salida actual")
+    if reservation.room_id is not None:
+        extension_room = (
+            db.query(Room)
+            .filter(Room.id == reservation.room_id, Room.hotel_id == hotel_id)
+            .with_for_update(of=Room)
+            .first()
+        )
+        if extension_room is None:
+            raise ReservationOperationsError("La habitación de la reserva no pertenece al hotel activo")
     conflict_resolution = resolve_extension_conflict(
         db,
         reservation=reservation,
@@ -1066,6 +1533,7 @@ def extend_reservation_stay(
         new_checkout_date=new_checkout_date,
         actor_user_id=changed_by_user_id,
         can_manage_company_reservations=can_manage_company_reservations,
+        confirmed_impact_fingerprint=confirmed_impact_fingerprint,
     )
     if not conflict_resolution["resolved"]:
         return ReservationExtensionResult(
@@ -1073,6 +1541,7 @@ def extend_reservation_stay(
             extension_amount=Decimal("0.00"),
             success=False,
             conflicts=conflict_resolution["conflicts"],
+            impact_plan=conflict_resolution.get("impact_plan"),
         )
     if reservation.room_id and not check_room_availability(
         db,
@@ -1246,7 +1715,10 @@ def move_reservation_room(
     if reason_code is None or not reason_code.strip():
         raise ReservationOperationsError("reason_code is required for room moves")
     reason_code = reason_code.strip()
-    is_checked_in = reservation.status == ReservationStatusEnum.CHECKED_IN
+    is_checked_in = reservation.status in {
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
+        ReservationStatusEnum.CHECKED_IN,
+    }
     allowed_dispositions = {"cleaning", "available", "maintenance"}
     if is_checked_in and origin_room_disposition not in allowed_dispositions:
         raise ReservationOperationsError("Para trasladar una reserva alojada debes elegir el estado de la habitación origen")
@@ -1255,13 +1727,7 @@ def move_reservation_room(
     if is_checked_in and origin_room_disposition != "cleaning" and not (origin_room_disposition_note or "").strip():
         raise ReservationOperationsError("Si la habitación origen no va a limpieza debes dejar una justificación")
 
-    room = (
-        db.query(Room)
-        .filter(Room.id == to_room_id, Room.hotel_id == hotel_id)
-        .enable_eagerloads(False)
-        .with_for_update()
-        .first()
-    )
+    room = lock_room_for_movement(db, hotel_id=hotel_id, room_id=to_room_id)
     if not room:
         raise ReservationOperationsError("La habitacion destino no existe para este hotel")
 
@@ -1283,6 +1749,40 @@ def move_reservation_room(
         exclude_reservation_id=reservation.id,
     ):
         raise ReservationOperationsError("La habitacion destino no esta disponible para esas fechas")
+
+    checklist_override_reason: str | None = None
+    allow_checklist_override = False
+    if is_checked_in and open_housekeeping_checklist_exists(
+        db,
+        hotel_id=hotel_id,
+        room_id=room.id,
+    ):
+        checklist_override_reason = (notes or "").strip()
+        if not checklist_override_reason:
+            raise ReservationOperationsError(
+                "Para trasladar a una habitación con checklist de limpieza pendiente, ingresá un motivo."
+            )
+        if len(checklist_override_reason) > 500:
+            raise ReservationOperationsError("El motivo del override no puede superar 500 caracteres.")
+        if not resolve(
+            db,
+            hotel_id,
+            actor_role,
+            PERMISSION_RESERVATION_ROOM_DIRTY_OVERRIDE,
+            user_id=moved_by_user_id,
+        ):
+            audit_permission_denied(
+                db,
+                hotel_id=hotel_id,
+                user_id=moved_by_user_id,
+                role=actor_role,
+                permission_code=PERMISSION_RESERVATION_ROOM_DIRTY_OVERRIDE,
+            )
+            raise RoomMovePermissionError(
+                "Para autorizar el traslado a una habitación con limpieza pendiente necesitás el permiso "
+                "'Autorizar traslado a habitación con checklist pendiente'."
+            )
+        allow_checklist_override = True
 
     category_changed = destination_category.id != current_category.id
     try:
@@ -1367,7 +1867,6 @@ def move_reservation_room(
     if price_action == "reprice" and pricing is not None:
         _apply_pricing_result_to_reservation(reservation, pricing)
     if move_type == RoomMoveTypeEnum.MANUAL_MOVE:
-        reservation.allocation_locked = True
         reservation.requires_manual_review = False
     origin_room_status_before, origin_room_status_after = sync_room_statuses_after_move(
         db,
@@ -1378,6 +1877,8 @@ def move_reservation_room(
         origin_room_disposition=origin_room_disposition,
         origin_room_disposition_note=origin_room_disposition_note,
         actor_user_id=moved_by_user_id,
+        allow_open_checklist_occupancy_override=allow_checklist_override,
+        checklist_override_reason=checklist_override_reason,
     )
     event = RoomMoveEvent(
         hotel_id=hotel_id,
@@ -1601,7 +2102,11 @@ def rebook_ota_reservation_as_direct(
         raise ReservationOperationsError("La reserva no existe o ya no está activa")
     if reservation.source == ReservationSourceEnum.DIRECT:
         raise ReservationOperationsError("Esta operacion esta pensada para reservas de canales externos")
-    if reservation.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
+    if reservation.status in {
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_OUT,
+    }:
         raise ReservationOperationsError("No se puede rebookear una reserva ya check-in o check-out")
     if reservation.status == ReservationStatusEnum.CANCELLED:
         raise ReservationOperationsError("La reserva original ya esta cancelada")

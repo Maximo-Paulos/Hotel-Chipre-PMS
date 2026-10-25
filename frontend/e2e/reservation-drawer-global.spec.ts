@@ -21,6 +21,11 @@ async function login(page: Page) {
 }
 
 test("owner opens the reservation drawer from the dashboard, global search, and a deep link", async ({ page }, testInfo) => {
+  await page.route("**/api/payment-surcharges", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: "[]"
+  }));
   const suffix = Date.now().toString();
   const guestLastName = `DrawerQA-${suffix}`;
   const ownerSession = await loginAsStepUpOwner(page, "cash-business", testInfo.project.name);
@@ -142,7 +147,29 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
 
   // Cobrar seña en el momento, directly from the drawer.
   await drawer.getByLabel("Importe a cobrar").fill("100");
+  const cashReceivedInput = drawer.getByTestId("reservation-drawer-cash-received");
+  let cashPaymentRequestCount = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/payments" && request.method() === "POST") {
+      cashPaymentRequestCount += 1;
+    }
+  });
+  await cashReceivedInput.fill("99");
   await drawer.getByRole("button", { name: "Registrar cobro", exact: true }).click();
+  await expect(drawer.getByText(/El efectivo entregado debe cubrir al menos/)).toBeVisible();
+  expect(cashPaymentRequestCount).toBe(0);
+  await cashReceivedInput.fill("120");
+  await expect(drawer.getByTestId("reservation-drawer-cash-received-change")).toContainText("20");
+  const paymentRequest = page.waitForRequest((request) =>
+    new URL(request.url()).pathname === "/api/payments" && request.method() === "POST"
+  );
+  await drawer.getByRole("button", { name: "Registrar cobro", exact: true }).click();
+  expect((await paymentRequest).postDataJSON()).toMatchObject({
+    payment_method: "cash",
+    amount: 100,
+    cash_received_amount: 120
+  });
+  expect(cashPaymentRequestCount).toBe(1);
   await expect(drawer.getByText("Pago registrado.", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Cerrar detalle de reserva" }).click();

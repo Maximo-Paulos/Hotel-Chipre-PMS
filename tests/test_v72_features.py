@@ -26,18 +26,18 @@ from app.models.guest import (
 from app.models.operations import RoomMoveTypeEnum
 from app.models.reservation import (
     Reservation,
-    ReservationStatusEnum,
     ReservationSourceEnum,
+    ReservationStatusEnum,
 )
 from app.models.room import Room, RoomStatusEnum
 from app.schemas.reservation import ReservationUpdate
+from app.services import checkin_service
 from app.services.allocation_engine import (
     ReservationSlot,
     RoomSlot,
     _run_allocation_greedy,
 )
 from app.services.checkin_service import CheckInError, perform_checkin
-from app.services import checkin_service
 from app.services.guest_service import (
     add_tag,
     list_active_tags,
@@ -273,7 +273,7 @@ def test_reservation_mobility_restriction_field(db, sample_guest, sample_rooms):
     assert reservation.mobility_restriction is True
 
 
-def test_reservation_is_motor_protected_set_on_manual_move(db, sample_guest, sample_rooms):
+def test_manual_move_does_not_implicitly_lock_reservation(db, sample_guest, sample_rooms):
     reservation = _reservation(db, code="V72-MANUAL-MOVE", guest=sample_guest, room=sample_rooms[0])
 
     move_reservation_room(
@@ -288,12 +288,11 @@ def test_reservation_is_motor_protected_set_on_manual_move(db, sample_guest, sam
     )
 
     db.refresh(reservation)
-    # BRM §8: a MANUAL move protects the reservation from motor re-optimization.
-    # main expresses this as allocation_locked (renamed from is_motor_protected).
-    assert reservation.allocation_locked is True
+    # Only the explicit owner-selected lock prevents future optimizer moves.
+    assert reservation.allocation_locked is False
 
 
-def test_reservation_edit_room_change_protects_manual_assignment(db, sample_guest, sample_rooms):
+def test_edit_room_change_does_not_implicitly_lock_reservation(db, sample_guest, sample_rooms):
     reservation = _reservation(db, code="V72-MANUAL-EDIT", guest=sample_guest, room=sample_rooms[0])
 
     update_reservation_fields(
@@ -302,6 +301,21 @@ def test_reservation_edit_room_change_protects_manual_assignment(db, sample_gues
         ReservationUpdate(room_id=sample_rooms[1].id),
         hotel_id=sample_guest.hotel_id,
         room_move_reason_code="manual_update",
+    )
+
+    assert reservation.room_id == sample_rooms[1].id
+    assert reservation.allocation_locked is False
+
+
+def test_owner_can_explicitly_lock_manual_room_assignment(db, sample_guest, sample_rooms):
+    reservation = _reservation(db, code="V72-EXPLICIT-LOCK", guest=sample_guest, room=sample_rooms[0])
+
+    update_reservation_fields(
+        db,
+        reservation,
+        ReservationUpdate(room_id=sample_rooms[1].id, allocation_locked=True),
+        hotel_id=sample_guest.hotel_id,
+        room_move_reason_code="guest_request",
     )
 
     assert reservation.room_id == sample_rooms[1].id

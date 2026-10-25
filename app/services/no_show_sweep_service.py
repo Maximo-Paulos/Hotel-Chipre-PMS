@@ -73,6 +73,21 @@ def sweep_no_shows(
         except ValueError:
             timezone_name = "UTC"
         hotel_zone = ZoneInfo(timezone_name)
+        # A hotel's no-show window starts at its configured local check-in
+        # time. Older hotels may not have one yet; preserve the established
+        # local-midnight anchor until they configure the time in settings.
+        try:
+            local_check_in_time = (
+                time.fromisoformat(hotel.check_in_time)
+                if hotel.check_in_time
+                else time.min
+            )
+        except ValueError:
+            logger.warning(
+                "no_show_sweep.invalid_check_in_time hotel_id=%s",
+                current_hotel_id,
+            )
+            local_check_in_time = time.min
         cutoff_hours = max(int(hotel.no_show_cutoff_hours), 0)
         eligible_through_local_date = (
             current_utc - timedelta(hours=cutoff_hours)
@@ -95,7 +110,7 @@ def sweep_no_shows(
         totals["scanned"] += len(candidates)
         for reservation in candidates:
             cutoff_utc = datetime.combine(
-                reservation.check_in_date, time.min, tzinfo=hotel_zone
+                reservation.check_in_date, local_check_in_time, tzinfo=hotel_zone
             ).astimezone(timezone.utc) + timedelta(hours=cutoff_hours)
             if current_utc < cutoff_utc:
                 continue

@@ -47,8 +47,17 @@ def _audit(
     )
 
 
-def _get_guest(db: Session, hotel_id: int, guest_id: int) -> Guest:
-    guest = db.query(Guest).filter(Guest.id == guest_id, Guest.hotel_id == hotel_id).one_or_none()
+def _get_guest(
+    db: Session,
+    hotel_id: int,
+    guest_id: int,
+    *,
+    load_reservations: bool = True,
+) -> Guest:
+    query = db.query(Guest)
+    if not load_reservations:
+        query = query.options(noload(Guest.reservations))
+    guest = query.filter(Guest.id == guest_id, Guest.hotel_id == hotel_id).one_or_none()
     if guest is None:
         raise GuestServiceError("Guest not found")
     return guest
@@ -212,7 +221,7 @@ def search_guests(
 
 
 def list_active_tags(db: Session, *, hotel_id: int, guest_id: int) -> list[GuestTag]:
-    _get_guest(db, hotel_id, guest_id)
+    _get_guest(db, hotel_id, guest_id, load_reservations=False)
     return (
         db.query(GuestTag)
         .filter(
@@ -245,44 +254,51 @@ def quick_profile(
     guest_id: int,
     offset: int = 0,
     limit: int = 5,
+    include_reservation_history: bool = True,
 ) -> dict[str, Any]:
     """BRM §2.5: quick guest profile with paginated stays and per-status breakdown.
 
     Backward compatible: ``last_stays`` keeps the same shape (most recent stays,
     paginated via ``offset``/``limit``). Adds ``observations`` and a
     ``stays_by_status`` breakdown (previas / futuras / canceladas / no_show)
-    plus ``total_stays`` for the "Mostrar más" pagination.
+    plus ``total_stays`` for the "Mostrar más" pagination. When
+    ``include_reservation_history`` is false, stay fields keep their shape but
+    stay empty and no reservation history is queried.
     """
-    guest = _get_guest(db, hotel_id, guest_id)
-
-    base_query = (
-        active_reservations(db, hotel_id)
-        .filter(Reservation.guest_id == guest_id)
-        .order_by(Reservation.check_out_date.desc(), Reservation.id.desc())
-    )
-
-    total_stays = base_query.count()
+    # The profile queries stays explicitly only when the caller's effective
+    # permissions allow it. Suppress Guest.reservations' eager loader so a
+    # restricted profile does not fetch that history as a side effect.
+    guest = _get_guest(db, hotel_id, guest_id, load_reservations=False)
 
     page_offset = max(int(offset or 0), 0)
     page_limit = max(int(limit if limit is not None else 5), 0)
-    page = base_query.offset(page_offset).limit(page_limit).all()
-
-    today = hotel_today(db, hotel_id)
     previas: list[dict[str, Any]] = []
     futuras: list[dict[str, Any]] = []
     canceladas: list[dict[str, Any]] = []
     no_show: list[dict[str, Any]] = []
+    page: list[Reservation] = []
+    total_stays = 0
 
-    for stay in base_query.all():
-        serialized = _serialize_stay(stay)
-        if stay.status == ReservationStatusEnum.CANCELLED:
-            canceladas.append(serialized)
-        elif stay.status == ReservationStatusEnum.NO_SHOW:
-            no_show.append(serialized)
-        elif stay.check_out_date is not None and stay.check_out_date <= today:
-            previas.append(serialized)
-        else:
-            futuras.append(serialized)
+    if include_reservation_history:
+        base_query = (
+            active_reservations(db, hotel_id)
+            .filter(Reservation.guest_id == guest_id)
+            .order_by(Reservation.check_out_date.desc(), Reservation.id.desc())
+        )
+        total_stays = base_query.count()
+        page = base_query.offset(page_offset).limit(page_limit).all()
+
+        today = hotel_today(db, hotel_id)
+        for stay in base_query.all():
+            serialized = _serialize_stay(stay)
+            if stay.status == ReservationStatusEnum.CANCELLED:
+                canceladas.append(serialized)
+            elif stay.status == ReservationStatusEnum.NO_SHOW:
+                no_show.append(serialized)
+            elif stay.check_out_date is not None and stay.check_out_date <= today:
+                previas.append(serialized)
+            else:
+                futuras.append(serialized)
 
     return {
         "guest": guest,

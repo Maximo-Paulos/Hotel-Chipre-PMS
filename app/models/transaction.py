@@ -38,6 +38,13 @@ class TransactionTypeEnum(str, enum.Enum):
     REFUND = "refund"
 
 
+class RefundComponentEnum(str, enum.Enum):
+    """Ledger component returned by a manual cash refund."""
+
+    PAYMENT = "payment"
+    ROUNDING_CREDIT = "rounding_credit"
+
+
 class Transaction(Base):
     """
     Financial transaction linked to a reservation.
@@ -57,10 +64,31 @@ class Transaction(Base):
     # amount/currency are the amount applied to the reservation balance.
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(3), nullable=False, default="ARS")
-    # Tender fields preserve what the guest actually handed over. Legacy rows
-    # have NULL tender values and use amount/currency for both meanings.
+    # Tender fields preserve the amount charged in the selected currency for
+    # FX conversion and payment history. Physical cash handed over is recorded
+    # separately in cash_received_amount; legacy rows have NULL tender values.
     tender_amount = Column(Numeric(12, 2), nullable=True)
     tender_currency = Column(String(3), nullable=True)
+    # Optional cash drawer detail. NULL preserves historical rows and child
+    # transactions allocated from a group-level receipt.
+    cash_received_amount = Column(Numeric(12, 2), nullable=True)
+    cash_change_amount = Column(Numeric(12, 2), nullable=True)
+    # Explicit gratuity retained from cash over-tender. It is separate from
+    # amount/gross_amount so it never becomes reservation lodging revenue.
+    cash_tip_amount = Column(Numeric(12, 2), nullable=False, default=0, server_default="0")
+    # Foreign-currency overage approved by the hotel's configured FX rounding
+    # policy. It remains in the tender currency and is not applied to the
+    # reservation balance or revenue.
+    rounding_credit_amount = Column(Numeric(12, 2), nullable=False, default=0, server_default="0")
+    # Amount of a source payment's rounding credit returned manually in cash.
+    # This is separate from amount, which is the reservation-balance effect.
+    credit_refund_amount = Column(Numeric(12, 2), nullable=False, default=0, server_default="0")
+    refund_component = Column(
+        String(24),
+        nullable=False,
+        default=RefundComponentEnum.PAYMENT.value,
+        server_default=RefundComponentEnum.PAYMENT.value,
+    )
     gross_amount = Column(Numeric(12, 2), nullable=True)
     tax_amount = Column(Numeric(12, 2), nullable=True)
     fee_amount = Column(Numeric(12, 2), nullable=True)
@@ -143,7 +171,36 @@ class Transaction(Base):
     reservation = relationship("Reservation", back_populates="transactions")
 
     __table_args__ = (
-        CheckConstraint("amount != 0", name="ck_transaction_amount_nonzero"),
+        CheckConstraint(
+            "(cash_received_amount IS NULL AND cash_change_amount IS NULL AND cash_tip_amount = 0) OR "
+            "(cash_received_amount IS NOT NULL AND cash_change_amount IS NOT NULL "
+            "AND cash_received_amount > 0 AND cash_change_amount >= 0 "
+            "AND cash_change_amount <= cash_received_amount "
+            "AND cash_received_amount >= COALESCE(gross_amount, amount) "
+            "AND cash_tip_amount >= 0 "
+            "AND cash_tip_amount <= cash_received_amount - COALESCE(gross_amount, amount) "
+            "AND ROUND(cash_change_amount, 2) = "
+            "ROUND(cash_received_amount - COALESCE(gross_amount, amount) - cash_tip_amount, 2) "
+            "AND payment_method = 'cash' AND transaction_type != 'refund')",
+            name="ck_transaction_cash_received_change_consistent",
+        ),
+        CheckConstraint(
+            "amount != 0 OR (transaction_type = 'refund' AND "
+            "refund_component = 'rounding_credit' AND credit_refund_amount > 0)",
+            name="ck_transaction_amount_nonzero_or_credit_refund",
+        ),
+        CheckConstraint(
+            "rounding_credit_amount >= 0 AND credit_refund_amount >= 0 AND "
+            "(rounding_credit_amount = 0 OR transaction_type != 'refund') AND "
+            "((refund_component = 'payment' AND credit_refund_amount = 0) OR "
+            "(refund_component = 'rounding_credit' AND transaction_type = 'refund' "
+            "AND amount = 0 AND credit_refund_amount > 0 AND tender_amount = credit_refund_amount))",
+            name="ck_transaction_rounding_credit_fields_consistent",
+        ),
+        CheckConstraint(
+            "refund_component IN ('payment', 'rounding_credit')",
+            name="ck_transaction_refund_component",
+        ),
         CheckConstraint(
             "(collected_before = false AND collected_on IS NULL AND prior_receipt_note IS NULL) OR "
             "(collected_before = true AND collected_on IS NOT NULL AND prior_receipt_note IS NOT NULL "
@@ -171,8 +228,8 @@ class Transaction(Base):
             "uq_transactions_manual_reference_hotel_method",
             "hotel_id", "payment_method", func.lower(manual_reference),
             unique=True,
-            sqlite_where=manual_reference.isnot(None),
-            postgresql_where=manual_reference.isnot(None),
+            sqlite_where=(manual_reference.isnot(None)) & (status != TransactionStatusEnum.CANCELLED),
+            postgresql_where=(manual_reference.isnot(None)) & (status != TransactionStatusEnum.CANCELLED),
         ),
         Index("ix_transactions_refund_source_status", "hotel_id", "refund_of_transaction_id", "status"),
         Index("ix_transactions_hotel_status_created_at", "hotel_id", "status", "created_at"),

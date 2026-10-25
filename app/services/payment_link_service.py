@@ -5,21 +5,21 @@ balance_due is ALWAYS computed from confirmed transactions, never from payments.
 The external_reference is HMAC-signed so an inbound webhook can resolve the hotel
 without trusting caller-supplied hotel_id.
 """
-from datetime import datetime, timezone
-from decimal import Decimal
-import logging
 import hashlib
 import hmac
-from typing import Any, Callable, Optional
-from urllib.parse import urlencode, urlparse
+import logging
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from typing import Any
+from urllib.parse import quote, urlencode, urlparse
 from uuid import uuid4
 
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.services.row_locks import lock_query
 from app.config import get_settings
-from app.services.outbound_http_telemetry import observed_http_call
 from app.models.payment import Payment, PaymentLink
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.schemas.payment_link import PaymentLinkCreate
@@ -28,10 +28,13 @@ from app.services.external_effects_policy import (
     external_connections_enabled,
     require_external_connections,
 )
+from app.services.outbound_http_telemetry import observed_http_call
 from app.services.payment_service import (
+    PaymentError,
     calculate_base_amount_before_surcharge,
     calculate_payment_surcharge,
 )
+from app.services.row_locks import lock_query
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +46,7 @@ MpGateway = Callable[[Session, int, PaymentLink], dict[str, Any]]
 # Delivery callable signature: (db, hotel_id, link) -> str (sender identifier).
 # Injectable so tests never send real email.
 EmailDelivery = Callable[[Session, int, PaymentLink], str]
+MpRevocation = Callable[[Session, int, PaymentLink], dict[str, Any]]
 
 
 class PaymentLinkError(Exception):
@@ -58,8 +62,9 @@ def _create_mercadopago_preference(db: Session, hotel_id: int, link: PaymentLink
     require_external_connections("Mercado Pago payment-link creation")
 
     # Imported lazily so the local-only path never pulls in network code.
-    from app.services.payment_link_test_service import _mercadopago_connection_payload  # noqa: PLC0415
-    import requests  # noqa: PLC0415
+    import requests
+
+    from app.services.payment_link_test_service import _mercadopago_connection_payload
 
     connection_payload = _mercadopago_connection_payload(db, hotel_id)
     access_token = str(connection_payload["access_token"])
@@ -127,9 +132,199 @@ def _create_mercadopago_preference(db: Session, hotel_id: int, link: PaymentLink
     }
 
 
+def _ensure_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _assert_mercadopago_preference_identity(
+    data: Any,
+    *,
+    preference_id: str,
+    external_reference: str,
+    expected_account_id: str | None,
+    known_account_id: str | None = None,
+) -> str | None:
+    if not isinstance(data, dict):
+        raise PaymentLinkError("provider_revocation_unconfirmed")
+    if str(data.get("id") or "") != preference_id:
+        raise PaymentLinkError("provider_preference_mismatch")
+    if str(data.get("external_reference") or "") != external_reference:
+        raise PaymentLinkError("provider_preference_mismatch")
+    account_id = data.get("collector_id") or data.get("user_id")
+    normalized_account_id = str(account_id) if account_id else None
+    if expected_account_id and normalized_account_id != expected_account_id:
+        raise PaymentLinkError("provider_account_mismatch")
+    if known_account_id and normalized_account_id != known_account_id:
+        raise PaymentLinkError("provider_account_mismatch")
+    return normalized_account_id
+
+
+def _mercadopago_preference_expired(
+    db: Session, hotel_id: int, link: PaymentLink
+) -> dict[str, Any]:
+    """Expire and verify a canceled Checkout Pro preference.
+
+    Mercado Pago exposes preference update/read operations rather than a
+    dedicated preference DELETE/revoke endpoint. This updates the preference's
+    validity window to end at the already-persisted local cancellation time,
+    then confirms `preference_expired` with Mercado Pago. It deliberately does
+    not use `date_of_expiration`, which is for offline-payment deadlines and
+    can cause a late payment to be returned automatically to the payer.
+    """
+    require_external_connections("Mercado Pago payment-link revocation")
+    import requests
+
+    from app.services.payment_link_test_service import _mercadopago_connection_payload
+
+    preference_id = get_preference_id(link)
+    if not isinstance(preference_id, str) or not preference_id or len(preference_id) > 200:
+        raise PaymentLinkError("preference_id_unavailable")
+    # IDs are path components supplied by the provider and persisted locally.
+    # Restrict the accepted alphabet before placing one in a request URL.
+    if not all(char.isalnum() or char in "-_" for char in preference_id):
+        raise PaymentLinkError("preference_id_unavailable")
+    if not link.external_reference:
+        raise PaymentLinkError("provider_preference_mismatch")
+
+    connection_payload = _mercadopago_connection_payload(
+        db, hotel_id, seed_catalog_entries=False
+    )
+    # The worker has already committed its claim. Skip catalog seeding and close
+    # this credential-read transaction before provider I/O so no DB connection
+    # or transaction remains checked out while waiting on Mercado Pago.
+    db.commit()
+    access_token = str(connection_payload["access_token"])
+    account_id = (
+        connection_payload.get("user_id")
+        or connection_payload.get("collector_id")
+        or connection_payload.get("merchant_id")
+    )
+    stored_account_id = (link.gateway_response or {}).get("pms_account_id")
+    if stored_account_id and (
+        not account_id or str(stored_account_id) != str(account_id)
+    ):
+        raise PaymentLinkError("provider_account_mismatch")
+    expected_provider_account_id = (
+        str(stored_account_id or account_id) if (stored_account_id or account_id) else None
+    )
+
+    cancelled_at = _ensure_utc(link.cancelled_at or datetime.now(UTC))
+    created_at = _ensure_utc(link.created_at or cancelled_at)
+    if created_at >= cancelled_at:
+        # Preserve an ordered window if an imported row has an unusable
+        # creation timestamp. The end remains the fixed cancellation instant.
+        created_at = cancelled_at - timedelta(seconds=1)
+
+    webhook_base = get_settings().APP_BASE_URL.rstrip("/")
+    payload: dict[str, Any] = {
+        "items": [
+            {
+                "title": link.title or "Pago de Reserva",
+                "quantity": 1,
+                "currency_id": link.currency,
+                "unit_price": float(_money(link.requested_amount)),
+            }
+        ],
+        "payer": {"email": link.recipient_email},
+        "external_reference": link.external_reference,
+        "metadata": {
+            "source": "hotel_chipre_pms",
+            "hotel_id": hotel_id,
+            "link_code": link.link_code,
+            **({"account_id": str(account_id)} if account_id else {}),
+        },
+        "statement_descriptor": "HOTEL CHIPRE",
+        "expires": True,
+        "expiration_date_from": created_at.isoformat(timespec="milliseconds"),
+        "expiration_date_to": cancelled_at.isoformat(timespec="milliseconds"),
+    }
+    if _is_safe_provider_url(webhook_base):
+        payload["notification_url"] = (
+            f"{webhook_base}/api/payment-links/mercadopago/webhook?"
+            + urlencode({"external_reference": link.external_reference or ""})
+        )
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+    preference_url = f"https://api.mercadopago.com/checkout/preferences/{quote(preference_id, safe='')}"
+    preflight = observed_http_call(
+        "mercadopago.payment_link_revoke_preflight",
+        requests.get,
+        preference_url,
+        headers=headers,
+        timeout=20,
+    )
+    if not preflight.ok:
+        raise PaymentLinkError("provider_preference_unavailable")
+    try:
+        preflight_data = preflight.json()
+    except (TypeError, ValueError) as exc:
+        raise PaymentLinkError("provider_revocation_unconfirmed") from exc
+    preflight_account_id = _assert_mercadopago_preference_identity(
+        preflight_data,
+        preference_id=preference_id,
+        external_reference=link.external_reference,
+        expected_account_id=expected_provider_account_id,
+    )
+    if preflight_data.get("preference_expired") is True:
+        return {"preference_expired": True}
+
+    response = observed_http_call(
+        "mercadopago.payment_link_revoke",
+        requests.put,
+        preference_url,
+        headers=headers,
+        json=payload,
+        timeout=20,
+    )
+    if not response.ok:
+        raise PaymentLinkError("provider_rejected_revocation")
+    try:
+        response_data = response.json()
+    except (TypeError, ValueError) as exc:
+        raise PaymentLinkError("provider_revocation_unconfirmed") from exc
+    _assert_mercadopago_preference_identity(
+        response_data,
+        preference_id=preference_id,
+        external_reference=link.external_reference,
+        expected_account_id=expected_provider_account_id,
+        known_account_id=preflight_account_id,
+    )
+    if response_data.get("preference_expired") is True:
+        return {"preference_expired": True}
+
+    # A 2xx update is not proof that the checkout stopped accepting payments.
+    # Read the provider's computed expiration flag before reporting success.
+    verification = observed_http_call(
+        "mercadopago.payment_link_revoke_verify",
+        requests.get,
+        preference_url,
+        headers=headers,
+        timeout=20,
+    )
+    if not verification.ok:
+        raise PaymentLinkError("provider_revocation_unconfirmed")
+    try:
+        verification_data = verification.json()
+    except (TypeError, ValueError) as exc:
+        raise PaymentLinkError("provider_revocation_unconfirmed") from exc
+    _assert_mercadopago_preference_identity(
+        verification_data,
+        preference_id=preference_id,
+        external_reference=link.external_reference,
+        expected_account_id=expected_provider_account_id,
+        known_account_id=preflight_account_id,
+    )
+    return {"preference_expired": verification_data.get("preference_expired") is True}
+
+
 def _default_email_delivery(db: Session, hotel_id: int, link: PaymentLink) -> str:
     """Default email delivery: reuses the hotel outbound email pipeline."""
-    from app.services.payment_link_test_service import _send_payment_link_email  # noqa: PLC0415
+    from app.services.payment_link_test_service import _send_payment_link_email
 
     return _send_payment_link_email(
         db,
@@ -251,7 +446,7 @@ def _available_provider_balance(
     reservation: Reservation,
     provider: str,
 ) -> Decimal:
-    from app.services.financial_ledger import operational_balance_due  # noqa: PLC0415
+    from app.services.financial_ledger import operational_balance_due
 
     balance = _money(operational_balance_due(db, hotel_id=hotel_id, reservation=reservation))
     active_links = (
@@ -271,12 +466,18 @@ def _available_provider_balance(
             Decimal("0.00"),
             _money(active_link.requested_amount) - _money(active_link.collected_amount),
         )
-        reserved += calculate_base_amount_before_surcharge(
-            db,
-            hotel_id=hotel_id,
-            payment_method=active_link.provider or provider,
-            final_amount=provider_outstanding,
-        )
+        link_metadata = active_link.gateway_response if isinstance(active_link.gateway_response, dict) else {}
+        try:
+            reserved += calculate_base_amount_before_surcharge(
+                db,
+                hotel_id=hotel_id,
+                payment_method=active_link.provider or provider,
+                final_amount=provider_outstanding,
+                currency_code=active_link.currency,
+                surcharge_quote_snapshot=link_metadata.get("_pms_surcharge_quote"),
+            )
+        except PaymentError as exc:
+            raise PaymentLinkError(str(exc)) from exc
     return max(Decimal("0.00"), balance - reserved).quantize(Decimal("0.01"))
 
 
@@ -285,9 +486,9 @@ def create_link(
     hotel_id: int,
     payload: PaymentLinkCreate,
     *,
-    mp_gateway: Optional[MpGateway] = None,
-    delivery_channel: Optional[str] = None,
-    email_delivery: Optional[EmailDelivery] = None,
+    mp_gateway: MpGateway | None = None,
+    delivery_channel: str | None = None,
+    email_delivery: EmailDelivery | None = None,
     idempotency_key: str | None = None,
 ) -> PaymentLink:
     reservation = _get_reservation_for_hotel(db, hotel_id, payload.reservation_id)
@@ -311,12 +512,16 @@ def create_link(
             f"La moneda del link ({currency}) debe coincidir con la reserva ({reservation_currency})"
         )
     recipient_email = str(payload.recipient_email).strip().lower()
-    surcharge_info = calculate_payment_surcharge(
-        db,
-        hotel_id=hotel_id,
-        payment_method=provider,
-        base_amount=payload.requested_amount,
-    )
+    try:
+        surcharge_info = calculate_payment_surcharge(
+            db,
+            hotel_id=hotel_id,
+            payment_method=provider,
+            base_amount=payload.requested_amount,
+            currency_code=currency,
+        )
+    except PaymentError as exc:
+        raise PaymentLinkError(str(exc)) from exc
     normalized_idempotency_key = _normalized_idempotency_key(idempotency_key)
     existing = _find_idempotent_link(db, hotel_id, normalized_idempotency_key)
     if existing is not None:
@@ -366,6 +571,7 @@ def create_link(
         idempotency_key=normalized_idempotency_key,
         external_reference=sign_external_reference(hotel_id, link_code),
         expires_at=payload.expires_at,
+        gateway_response={"_pms_surcharge_quote": surcharge_info["surcharge_quote_snapshot"]},
     )
     if normalized_idempotency_key is None:
         db.add(link)
@@ -411,6 +617,7 @@ def create_link(
                 )
             link.gateway_response = {
                 **(result.get("raw") or {}),
+                **(link.gateway_response or {}),
                 "preference_id": preference_id,
                 **({"pms_account_id": str(account_id)} if account_id else {}),
             }
@@ -450,7 +657,7 @@ def deliver_link(
     link: PaymentLink,
     *,
     channel: str,
-    email_delivery: Optional[EmailDelivery] = None,
+    email_delivery: EmailDelivery | None = None,
 ) -> PaymentLink:
     """§12.2 best-effort delivery of a payment link.
 
@@ -519,9 +726,10 @@ def cancel_link(db: Session, hotel_id: int, link_id: int, reason: str | None = N
         return link
     if link.status == "completed":
         raise PaymentLinkError("No se puede cancelar un link ya completado")
+    _queue_provider_revocation(link)
     link.status = "cancelled"
     link.payable = False
-    link.cancelled_at = datetime.now(timezone.utc)
+    link.cancelled_at = datetime.now(UTC)
     if reason:
         # No dedicated column; record the operator reason in last_error for traceability.
         link.last_error = f"cancelled: {reason}"
@@ -538,16 +746,230 @@ def cancel_active_links_for_reservation(
     links = list_links_for_reservation(db, hotel_id, reservation_id)
     cancelled = 0
     for link in links:
-        if link.status in {"pending", "partially_paid"}:
+        if link.status in {"active", "pending", "partially_paid"}:
+            _queue_provider_revocation(link)
             link.status = "cancelled"
             link.payable = False
-            link.cancelled_at = datetime.now(timezone.utc)
+            link.cancelled_at = datetime.now(UTC)
             if reason:
                 link.last_error = f"cancelled: {reason}"
             cancelled += 1
     if cancelled:
         db.flush()
     return cancelled
+
+
+def _queue_provider_revocation(link: PaymentLink) -> None:
+    """Persist a same-transaction request for canceling an MP checkout."""
+    provider = (link.provider or "").strip().lower().replace("mercadopago", "mercado_pago")
+    preference_id = get_preference_id(link)
+    if (
+        provider == "mercado_pago"
+        and link.execution_mode == "provider"
+        and link.payable
+        and isinstance(preference_id, str)
+        and bool(preference_id.strip())
+    ):
+        link.provider_revocation_status = "pending"
+        link.provider_revocation_error = None
+    else:
+        link.provider_revocation_status = "not_required"
+        link.provider_revocation_error = None
+
+
+def _revocation_error_code(exc: Exception) -> str:
+    if isinstance(exc, ExternalEffectsDisabled):
+        return "external_connections_disabled"
+    safe_codes = {
+        "preference_id_unavailable",
+        "provider_preference_unavailable",
+        "provider_account_mismatch",
+        "provider_preference_mismatch",
+        "provider_rejected_revocation",
+        "provider_revocation_unconfirmed",
+    }
+    if isinstance(exc, PaymentLinkError) and str(exc) in safe_codes:
+        return str(exc)
+    return "provider_unconfirmed"
+
+
+def _enqueue_provider_revocation_failure(db: Session, link: PaymentLink) -> None:
+    from app.models.notification import (
+        NotificationChannelEnum,
+        NotificationSeverityEnum,
+    )
+    from app.services.notification_service import enqueue_notifications_for_event
+
+    enqueue_notifications_for_event(
+        db,
+        hotel_id=link.hotel_id,
+        event_type="payment_link.revocation_failed",
+        dedupe_key=f"payment-link-revocation-failed:{link.id}",
+        title="No se pudo confirmar la baja del link de Mercado Pago",
+        body=(
+            "La reserva quedó cancelada en el PMS, pero Mercado Pago no confirmó que el link de checkout "
+            "haya dejado de aceptar pagos. Revisá el estado del link en Mercado Pago. No se realizó ninguna devolución."
+        ),
+        severity=NotificationSeverityEnum.CRITICAL,
+        entity_type="reservation",
+        entity_id=link.reservation_id,
+        payload={
+            "reservation_id": link.reservation_id,
+            "payment_link_id": link.id,
+        },
+        recipient_roles=("owner", "co_owner", "manager"),
+        channels=(NotificationChannelEnum.IN_APP,),
+        force_in_app=True,
+    )
+
+
+def process_payment_link_revocations(
+    db: Session,
+    hotel_id: int,
+    *,
+    reservation_id: int | None = None,
+    limit: int = 50,
+    revoke_gateway: MpRevocation | None = None,
+) -> dict[str, int]:
+    """Attempt pending provider revocations after the local cancellation commits.
+
+    Claim one pending row in a short transaction immediately before its network
+    call. This keeps unstarted rows out of the stale-claim window while a batch
+    is processed sequentially. The attempt count fences a late worker from
+    overwriting a newer attempt after a stale claim is recovered. Claims older
+    than five minutes are reclaimed after a process crash. A failed/ambiguous
+    attempt is terminal and gets one deduplicated manager alert. No payment,
+    ledger transaction, or refund state is changed.
+    """
+    # Cancellation routes also call this processor immediately after their
+    # local commit. Keep queued work pending while provider traffic is closed;
+    # otherwise the adapter's later guard would turn a configuration skip into
+    # a terminal failure that the scheduled worker cannot recover.
+    if not external_connections_enabled():
+        logger.info(
+            "payment_link.provider_revocation_deferred hotel_id=%s reason=external_connections_disabled",
+            hotel_id,
+        )
+        return {"processed": 0, "succeeded": 0, "failed": 0, "skipped": 1}
+
+    bounded_limit = max(1, min(int(limit), 100))
+    counts = {"processed": 0, "succeeded": 0, "failed": 0, "skipped": 0}
+    gateway = revoke_gateway or _mercadopago_preference_expired
+    claim_count = 0
+    while claim_count < bounded_limit:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        stale_before = now - timedelta(minutes=5)
+        stale_claims = db.query(PaymentLink).filter(
+            PaymentLink.hotel_id == hotel_id,
+            PaymentLink.provider_revocation_status == "processing",
+            or_(
+                PaymentLink.provider_revocation_last_attempt_at.is_(None),
+                PaymentLink.provider_revocation_last_attempt_at <= stale_before,
+            ),
+        )
+        if reservation_id is not None:
+            stale_claims = stale_claims.filter(PaymentLink.reservation_id == reservation_id)
+        stale_claims.update(
+            {PaymentLink.provider_revocation_status: "pending"},
+            synchronize_session="fetch",
+        )
+
+        candidates = db.query(PaymentLink).filter(
+            PaymentLink.hotel_id == hotel_id,
+            PaymentLink.status == "cancelled",
+            PaymentLink.provider_revocation_status == "pending",
+            PaymentLink.execution_mode == "provider",
+            PaymentLink.provider.in_(("mercado_pago", "mercadopago")),
+        )
+        if reservation_id is not None:
+            candidates = candidates.filter(PaymentLink.reservation_id == reservation_id)
+        link = (
+            candidates.order_by(PaymentLink.id.asc())
+            .limit(1)
+            .with_for_update(skip_locked=True)
+            .first()
+        )
+        if link is None:
+            # Release any stale-claim update even when there was no work to claim.
+            db.commit()
+            break
+
+        payment_link_id = link.id
+        claimed_attempt = int(link.provider_revocation_attempts or 0) + 1
+        link.provider_revocation_status = "processing"
+        link.provider_revocation_attempts = claimed_attempt
+        link.provider_revocation_last_attempt_at = now
+        # This service is called only after the local cancellation transaction
+        # commits. Persist and release the single claim before provider I/O.
+        db.commit()
+        claim_count += 1
+
+        link = (
+            db.query(PaymentLink)
+            .filter(
+                PaymentLink.id == payment_link_id,
+                PaymentLink.hotel_id == hotel_id,
+                PaymentLink.provider_revocation_status == "processing",
+                PaymentLink.provider_revocation_attempts == claimed_attempt,
+            )
+            .first()
+        )
+        if link is None:
+            counts["skipped"] += 1
+            db.commit()
+            continue
+        # Keep an immutable ORM snapshot for the gateway and end this read
+        # transaction before external I/O. The detached object is read-only.
+        db.expunge(link)
+        db.commit()
+        gateway_error: Exception | None = None
+        gateway_succeeded = False
+        try:
+            result = gateway(db, hotel_id, link)
+            if not isinstance(result, dict) or result.get("preference_expired") is not True:
+                raise PaymentLinkError("provider_revocation_unconfirmed")
+            gateway_succeeded = True
+        except Exception as exc:  # noqa: BLE001 - cancellation remains local and durable
+            gateway_error = exc
+            # A provider adapter may have failed while using this Session.
+            # Clear any failed read transaction before persisting its outcome.
+            db.rollback()
+
+        current_link = (
+            db.query(PaymentLink)
+            .filter(
+                PaymentLink.id == payment_link_id,
+                PaymentLink.hotel_id == hotel_id,
+                PaymentLink.provider_revocation_status == "processing",
+                PaymentLink.provider_revocation_attempts == claimed_attempt,
+            )
+            .with_for_update(skip_locked=True)
+            .first()
+        )
+        if current_link is None:
+            db.rollback()
+            counts["skipped"] += 1
+            continue
+
+        if gateway_succeeded:
+            current_link.provider_revocation_status = "succeeded"
+            current_link.provider_revocation_error = None
+            counts["succeeded"] += 1
+        else:
+            error = gateway_error or PaymentLinkError("provider_revocation_unconfirmed")
+            current_link.provider_revocation_status = "failed"
+            current_link.provider_revocation_error = _revocation_error_code(error)
+            _enqueue_provider_revocation_failure(db, current_link)
+            logger.warning(
+                "payment_link.provider_revocation_failed hotel_id=%s payment_link_id=%s error_type=%s",
+                hotel_id,
+                current_link.id,
+                type(error).__name__,
+            )
+            counts["failed"] += 1
+        counts["processed"] += 1
+        db.commit()
+    return counts
 
 
 def expire_link(db: Session, hotel_id: int, link_id: int) -> PaymentLink:

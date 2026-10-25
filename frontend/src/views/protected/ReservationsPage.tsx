@@ -44,13 +44,19 @@ import {
   type RoomMovementGroup
 } from "../../api/allocationRuns";
 import { ApiError, hasValidSession } from "../../api/client";
-import { getFxConversionQuote, type FxCurrencyCode } from "../../api/fxRates";
+import type { FxCurrencyCode } from "../../api/fxRates";
 import { getGuestProhibitedDetail } from "../../api/guestRestrictions";
 import GuestQuickCreatePanel, {
   emptyQuickGuestForm,
   hasQuickGuestFormData,
   type QuickGuestFormValues
 } from "../../components/GuestQuickCreatePanel";
+import ReservationUsdEstimate from "../../components/ReservationUsdEstimate";
+import { CashTenderField } from "../../components/CashTenderField";
+import { PaymentQuoteSummary } from "../../components/PaymentQuoteSummary";
+import { ReservationGroupSummaryCard } from "../../components/ReservationGroupSummaryCard";
+import { ReservationGroupPaymentDialog } from "../../components/ReservationGroupPaymentDialog";
+import PaymentCorrectionDialog from "../../components/PaymentCorrectionDialog";
 import LocalizedDateField from "../../components/LocalizedDateField";
 import ManualOtaReservationModal from "../../components/ManualOtaReservationModal";
 import { RestrictionOverrideModal } from "../../components/RestrictionOverrideModal";
@@ -61,6 +67,7 @@ import {
   downloadPaymentReceiptPdf,
   emailPaymentReceipt,
   newPaymentReceiptEmailIdempotencyKey,
+  type PaymentCorrectionResponse,
   type PaymentMethod,
   type PaymentRequest,
   type PaymentSummary
@@ -69,6 +76,8 @@ import { useCategories } from "../../hooks/useCategories";
 import { useGuest, useGuestCreate } from "../../hooks/useGuests";
 import {
   usePendingReservationActions,
+  usePendingCancellationReviews,
+  useCancellationReviewMutation,
   useReservation,
   useReservationQuote,
   useReservationActionMutations,
@@ -78,7 +87,7 @@ import {
 } from "../../hooks/useReservations";
 import { usePaymentMutation, usePaymentSummary } from "../../hooks/usePayments";
 import { useCashSessions } from "../../hooks/useCashRegister";
-import { usePaymentSurcharges } from "../../hooks/usePaymentSurcharges";
+import { usePaymentSurchargeQuote, usePaymentSurcharges } from "../../hooks/usePaymentSurcharges";
 import { grossWithSurcharge } from "../../api/paymentSurcharges";
 import { usePaymentLinks, usePaymentLinkCancel, usePaymentLinkCreate } from "../../hooks/usePaymentLinks";
 import { usePaymentProofMutations, usePaymentProofs } from "../../hooks/usePaymentProofs";
@@ -92,8 +101,11 @@ import { useSession } from "../../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
 import { escapeHtml, resolveVoucherOperationalBalance } from "../../utils/escapeHtml";
 import { isLargeTotalAdjustment } from "../../utils/largeTotalAdjustment.mjs";
+import { resolveFxRoundingPolicy, roundFxAmount, suggestFxTenderSettlement } from "../../utils/fxRounding.mjs";
+import { calculateCashTender, calculateCashTip, formatCashTenderAmount } from "../../utils/cashTender.mjs";
 import { canPrintPaymentReceipt } from "../../utils/paymentReceiptHtml";
 import { addDaysIso, formatHotelDateTime, formatLocalIsoDate } from "../../utils/date";
+import { reservationAuditMetadataLines } from "../../utils/reservationAuditMetadata";
 import {
   canCancelReservation,
   canCheckInReservation,
@@ -107,6 +119,7 @@ import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 import {
   invalidateQueriesInBackground,
   refreshReservationCreatedState,
+  refreshPaymentState,
   refreshReservationState
 } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
@@ -141,6 +154,12 @@ type PaymentReceiptEmailAttempt = {
   deliveryMode?: "provider" | "local_simulation";
 };
 
+type PaymentCorrectionTarget = {
+  transaction: PaymentSummary["transactions"][number];
+  sourceReservationId: number;
+  sourceConfirmationCode: string;
+};
+
 const isValidReceiptEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
 const PAYMENT_CURRENCIES: FxCurrencyCode[] = ["ARS", "USD", "EUR", "BRL", "CLP", "UYU"];
@@ -154,6 +173,7 @@ const paymentMethodValues: PaymentMethod[] = [
   "paypal"
 ];
 const manualPaymentMethods: PaymentMethod[] = ["credit_card", "debit_card", "bank_transfer"];
+const correctablePaymentMethods = new Set(["cash", "credit_card", "debit_card", "bank_transfer"]);
 
 // Single source of truth for which payment methods are offered: the hotel
 // configuration (enable_* flags). Avoids offering a method the backend will reject.
@@ -213,26 +233,6 @@ const reservationGuestLabel = (
 const formatDateTime = (value?: string | null, timeZone?: string | null) =>
   formatHotelDateTime(value, timeZone);
 
-const auditMetadataLines = (
-  details: Record<string, unknown>,
-  labels: { arrival: string; comment: string; empty: string }
-) => {
-  const before = details.before && typeof details.before === "object" ? details.before as Record<string, unknown> : {};
-  const after = details.after && typeof details.after === "object" ? details.after as Record<string, unknown> : {};
-  const beforeMetadata = details.metadata && typeof details.metadata === "object" ? details.metadata as Record<string, unknown> : before;
-  const afterMetadata = details.metadata && typeof details.metadata === "object" ? details.metadata as Record<string, unknown> : after;
-  const lines: string[] = [];
-  for (const [field, label] of [["arrival_time_hint", labels.arrival], ["reservation_comment", labels.comment]] as const) {
-    const hasChange = Object.prototype.hasOwnProperty.call(beforeMetadata, field) || Object.prototype.hasOwnProperty.call(afterMetadata, field);
-    if (!hasChange) continue;
-    const previous = beforeMetadata[field] ?? labels.empty;
-    const next = afterMetadata[field] ?? labels.empty;
-    if (previous === next) continue;
-    lines.push(`${label}: ${String(previous)} → ${String(next)}`);
-  }
-  return lines;
-};
-
 const diffNights = (checkIn: string, checkOut: string) => {
   if (!checkIn || !checkOut) return 0;
   const start = new Date(`${checkIn}T00:00:00`);
@@ -251,6 +251,7 @@ const readFileAsDataUrl = (file: File, errorMessage: string) =>
 
 export function ReservationsPage() {
   const { t, i18n } = useTranslation("reservations");
+  const cashTenderLocale = i18n.resolvedLanguage?.toLowerCase().startsWith("en") ? "en-US" : "es-AR";
   // Backend codes (hotel_collect, not_applicable...) never reach the screen
   // raw; an unmapped value falls back to the code rather than a blank.
   const enumLabel = (group: "collection" | "settlement" | "nextAction", value: string) =>
@@ -264,6 +265,7 @@ export function ReservationsPage() {
   const { hasPermission } = useEffectivePermissions();
   const canManageCompanyReservation = (reservation: Pick<Reservation, "company_id">) =>
     !reservation.company_id || hasPermission("company:manage");
+  const canReviewCancellation = hasPermission("reservation:cancel_penalty_approve");
   const canAdjustPaidReservationTotal = hasPermission("reservation:paid_total_adjust");
   const canSetUnboundedReservationRate = hasPermission("reservation:manual_rate");
   const canSetBoundedReservationRate = hasPermission("reservation:manual_rate_limited");
@@ -280,10 +282,14 @@ export function ReservationsPage() {
   const [guestForm, setGuestForm] = useState<QuickGuestFormValues>(emptyQuickGuestForm);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentAmountInput, setPaymentAmountInput] = useState("");
+  const [cashReceivedAmountInput, setCashReceivedAmountInput] = useState("");
+  const [cashTipAmountInput, setCashTipAmountInput] = useState("");
   const [paymentTenderCurrencyInput, setPaymentTenderCurrencyInput] = useState("");
   const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
   const [payingGroup, setPayingGroup] = useState<ReservationGroupSummary | null>(null);
   const [groupPaymentTotalInput, setGroupPaymentTotalInput] = useState("");
+  const [groupCashReceivedAmountInput, setGroupCashReceivedAmountInput] = useState("");
+  const [groupCashTipAmountInput, setGroupCashTipAmountInput] = useState("");
   const [groupPaymentAllocations, setGroupPaymentAllocations] = useState<Record<number, string>>({});
   const [groupPaymentMethod, setGroupPaymentMethod] = useState<PaymentMethod>("cash");
   const [groupPaymentReference, setGroupPaymentReference] = useState("");
@@ -296,6 +302,9 @@ export function ReservationsPage() {
   const [refundTargetTransactionId, setRefundTargetTransactionId] = useState<number | null>(null);
   const [refundReasonInput, setRefundReasonInput] = useState("");
   const [refundNightAmounts, setRefundNightAmounts] = useState<Record<number, string>>({});
+  const [roundingCreditRefundSourceId, setRoundingCreditRefundSourceId] = useState<number | null>(null);
+  const [roundingCreditRefundAmountInput, setRoundingCreditRefundAmountInput] = useState("");
+  const [roundingCreditRefundReasonInput, setRoundingCreditRefundReasonInput] = useState("");
   const paymentProofInputRef = useRef<HTMLInputElement | null>(null);
   const [paymentProofPreview, setPaymentProofPreview] = useState<{ proofId: number; url: string } | null>(null);
   const [viewingPaymentProofId, setViewingPaymentProofId] = useState<number | null>(null);
@@ -328,9 +337,11 @@ export function ReservationsPage() {
   const [detailsReservationId, setDetailsReservationId] = useState<number | null>(null);
   const [detailsActionError, setDetailsActionError] = useState<{ reservationId: number; message: string } | null>(null);
   const [pageActionError, setPageActionError] = useState<string | null>(null);
+  const [cancellationReviewReasons, setCancellationReviewReasons] = useState<Record<number, string>>({});
   const [communicationRecipient, setCommunicationRecipient] = useState("");
   const [receiptEmailAttempt, setReceiptEmailAttempt] = useState<PaymentReceiptEmailAttempt | null>(null);
   const [receiptDownloadTransactionId, setReceiptDownloadTransactionId] = useState<number | null>(null);
+  const [paymentCorrectionTarget, setPaymentCorrectionTarget] = useState<PaymentCorrectionTarget | null>(null);
   const receiptEmailAttemptsRef = useRef(new Map<number, PaymentReceiptEmailAttempt>());
   const receiptEmailDialogRef = useRef<HTMLDivElement | null>(null);
   const receiptEmailTitleRef = useRef<HTMLHeadingElement | null>(null);
@@ -440,6 +451,7 @@ export function ReservationsPage() {
 
   const { data: reservations = [], isLoading, isFetching, error, refetch: refetchReservations } = useReservations(filters);
   const pendingActionsQuery = usePendingReservationActions(12);
+  const cancellationReviewsQuery = usePendingCancellationReviews(canReviewCancellation);
   const { roomsQuery } = useRooms();
   const { data: categoriesData = [] } = useCategories();
   const companyOptionsQuery = useQuery<CompanyOption[]>({
@@ -498,7 +510,8 @@ export function ReservationsPage() {
   );
   const paymentFormOpen = formOpen || Boolean(payingGroup);
   const cashSessionsQuery = useCashSessions({
-    enabled: hasPermission("cash:view") && paymentFormOpen
+    enabled: hasPermission("cash:view") && paymentFormOpen,
+    status: "open"
   });
   const paymentReservationCurrency = normalizeCurrencyCode(
     paymentSummaryQuery.data?.currency_code ?? editing?.currency_code
@@ -506,23 +519,40 @@ export function ReservationsPage() {
   const paymentTenderCurrency = normalizeCurrencyCode(
     paymentTenderCurrencyInput || paymentReservationCurrency
   );
-  const paymentFxQuoteQuery = useQuery({
-    queryKey: ["payment-fx-quote", session.hotelId, paymentTenderCurrency, paymentReservationCurrency],
-    queryFn: () => getFxConversionQuote(
-      paymentTenderCurrency as FxCurrencyCode,
-      paymentReservationCurrency as FxCurrencyCode,
-      session
-    ),
-    enabled: Boolean(
-      editing &&
-      paymentReservationCurrency !== paymentTenderCurrency &&
-      PAYMENT_CURRENCIES.includes(paymentReservationCurrency as FxCurrencyCode) &&
-      PAYMENT_CURRENCIES.includes(paymentTenderCurrency as FxCurrencyCode) &&
-      hasValidSession(session)
-    ),
-    staleTime: 30_000,
-    retry: false
-  });
+  const enteredPaymentBaseAmount = paymentAmountInput.trim() &&
+    Number.isFinite(Number(paymentAmountInput)) &&
+    Number(paymentAmountInput) > 0
+    ? Number(paymentAmountInput)
+    : null;
+  const paymentQuoteEnabled = Boolean(
+    paymentFormOpen &&
+    editing &&
+    hasPermission("cash:operate") &&
+    !collectedBefore &&
+    refundTargetTransactionId === null &&
+    !refundReasonInput.trim()
+  );
+  const paymentEntryQuoteQuery = usePaymentSurchargeQuote(
+    editing
+      ? {
+          reservation_id: editing.id,
+          payment_method: paymentMethod,
+          currency_code: paymentTenderCurrency,
+          ...(enteredPaymentBaseAmount !== null ? { base_amount: enteredPaymentBaseAmount } : {})
+        }
+      : null,
+    { enabled: paymentQuoteEnabled }
+  );
+  const fullPaymentQuoteQuery = usePaymentSurchargeQuote(
+    editing
+      ? {
+          reservation_id: editing.id,
+          payment_method: paymentMethod,
+          currency_code: paymentTenderCurrency
+        }
+      : null,
+    { enabled: paymentQuoteEnabled }
+  );
   useEffect(() => {
     setPaymentTenderCurrencyInput(paymentReservationCurrency);
   }, [editing?.id, paymentReservationCurrency]);
@@ -550,6 +580,7 @@ export function ReservationsPage() {
     mutationFn: (payload) => checkRoomAvailability(payload, session)
   });
   const { createMutation, updateMutation, cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations(filters);
+  const cancellationReviewMutation = useCancellationReviewMutation();
   const createGroupMutation = useGuardedMutation<ReservationGroupSummary, unknown, ReservationPayload[]>({
     mutationFn: (payloads) => createReservationGroup(payloads, session),
     onSuccess: () => {
@@ -579,13 +610,19 @@ export function ReservationsPage() {
       }
       return createReservationGroupPayment(groupId, payload, session, key);
     },
-    onSuccess: (_result, variables) => {
+    onSuccess: (result, variables) => {
       groupPaymentAttemptKeysRef.current.delete(JSON.stringify(variables));
       void refreshReservationState(queryClient, session.hotelId).catch(() => undefined);
       invalidateQueriesInBackground(queryClient, { queryKey: ["reservation-groups", session.hotelId] });
       setPayingGroup(null);
       setGroupPaymentError(null);
-      showToast("success", t("page.groups.paymentSuccess"));
+      const tipAmount = Number(result.cash_tip_amount ?? 0);
+      showToast(
+        "success",
+        tipAmount > 0
+          ? t("page.groups.paymentSuccessWithTip", { amount: formatCashTenderAmount(tipAmount, result.currency, cashTenderLocale) })
+          : t("page.groups.paymentSuccess")
+      );
     },
     onError: (cause) => {
       setGroupPaymentError(cause instanceof Error ? cause.message : t("page.groups.paymentError"));
@@ -880,6 +917,16 @@ export function ReservationsPage() {
     quoteNights,
     selectedFormCategory
   ]);
+  const shouldShowReservationUsdEstimate = Boolean(
+    formOpen &&
+      !editing &&
+      !deferredCompanyBooking &&
+      manualTotalAmountInput.trim() === "" &&
+      !quoteQuery.isFetching &&
+      !quoteQuery.isError &&
+      reservationQuote &&
+      normalizeCurrencyCode(reservationQuote.currencyCode) === "ARS"
+  );
   const canUseUnboundedManualRate = hasPermission("reservation:manual_rate");
   const canUseBoundedManualRate = hasPermission("reservation:manual_rate_limited");
   const isBoundedManualRate = !canUseUnboundedManualRate && canUseBoundedManualRate;
@@ -973,6 +1020,7 @@ export function ReservationsPage() {
     );
   }, [reservations, today]);
   const pendingActions = pendingActionsQuery.data ?? [];
+  const cancellationReviews = cancellationReviewsQuery.data ?? [];
   const criticalPendingActions = pendingActions.filter((item) => item.priority === "critical").length;
   const reservationStatsError = Boolean(error) && reservations.length === 0;
   const reservationStatsLoading = isLoading;
@@ -1004,6 +1052,8 @@ export function ReservationsPage() {
     setPaidTotalChangeReasonInput("");
     setLastCreatedReservation(null);
     setPaymentAmountInput("");
+    setCashReceivedAmountInput("");
+    setCashTipAmountInput("");
     setPaymentReferenceInput("");
     setCollectedBefore(false);
     setCollectedOn("");
@@ -1011,6 +1061,9 @@ export function ReservationsPage() {
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
     setRefundNightAmounts({});
+    setRoundingCreditRefundSourceId(null);
+    setRoundingCreditRefundAmountInput("");
+    setRoundingCreditRefundReasonInput("");
     if (paymentProofInputRef.current) paymentProofInputRef.current.value = "";
     setFormOpen(true);
   };
@@ -1087,6 +1140,8 @@ export function ReservationsPage() {
     setConfirmLargeTotalAdjustment(false);
     setLastCreatedReservation(null);
     setPaymentAmountInput("");
+    setCashReceivedAmountInput("");
+    setCashTipAmountInput("");
     setPaymentReferenceInput("");
     setCollectedBefore(false);
     setCollectedOn("");
@@ -1094,6 +1149,9 @@ export function ReservationsPage() {
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
     setRefundNightAmounts({});
+    setRoundingCreditRefundSourceId(null);
+    setRoundingCreditRefundAmountInput("");
+    setRoundingCreditRefundReasonInput("");
     if (paymentProofInputRef.current) paymentProofInputRef.current.value = "";
     setFormOpen(true);
   };
@@ -1111,6 +1169,8 @@ export function ReservationsPage() {
     setConfirmLargeTotalAdjustment(false);
     setLastCreatedReservation(null);
     setPaymentAmountInput("");
+    setCashReceivedAmountInput("");
+    setCashTipAmountInput("");
     setPaymentReferenceInput("");
     setCollectedBefore(false);
     setCollectedOn("");
@@ -1118,6 +1178,9 @@ export function ReservationsPage() {
     setRefundTargetTransactionId(null);
     setRefundReasonInput("");
     setRefundNightAmounts({});
+    setRoundingCreditRefundSourceId(null);
+    setRoundingCreditRefundAmountInput("");
+    setRoundingCreditRefundReasonInput("");
     if (paymentProofInputRef.current) paymentProofInputRef.current.value = "";
   };
 
@@ -1463,10 +1526,31 @@ export function ReservationsPage() {
   const handleCancel = async (reservation: Reservation) => {
     if (!canManageCompanyReservation(reservation)) return;
     try {
-      await cancelMutation.mutateAsync(reservation.id);
-      showToast("success", t("page.messages.cancelled"));
+      const result = await cancelMutation.mutateAsync(reservation.id);
+      if (result.cancellation_outcome === "cancelled") {
+        showToast("success", t("page.messages.cancelled"));
+      } else if (result.cancellation_outcome === "approval_required") {
+        showToast("info", t("page.cancellationReviews.requestedPenalty"));
+      } else {
+        showToast("info", t("page.cancellationReviews.requestedHistorical"));
+      }
     } catch (err: unknown) {
       showReservationActionError(reservation.id, err instanceof Error ? err.message : t("page.errors.cancelFailed"));
+    }
+  };
+
+  const handleCancellationReviewDecision = async (reviewId: number, decision: "approve" | "reject") => {
+    const reason = (cancellationReviewReasons[reviewId] ?? "").trim();
+    if (reason.length < 3) {
+      showToast("error", t("page.cancellationReviews.reasonRequired"));
+      return;
+    }
+    try {
+      await cancellationReviewMutation.mutateAsync({ reviewId, payload: { decision, reason } });
+      setCancellationReviewReasons((current) => ({ ...current, [reviewId]: "" }));
+      showToast("success", t(`page.cancellationReviews.${decision}Success`));
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : t("page.cancellationReviews.decisionFailed"));
     }
   };
 
@@ -1575,21 +1659,15 @@ export function ReservationsPage() {
 
   const isManualPaymentMethod = manualPaymentMethods.includes(paymentMethod);
   const canOperateCash = hasPermission("cash:operate");
+  const canCorrectPayments = hasPermission("payment:correct") && canOperateCash;
   const canEmailPaymentReceipt = hasPermission("payment:receipt_email");
-  const paymentFxRate = paymentTenderCurrency === paymentReservationCurrency
-    ? 1
-    : Number(paymentFxQuoteQuery.data?.rate ?? 0);
-  const paymentFxUsdQuote = paymentFxQuoteQuery.data?.quote_details?.source_quote?.currency === "USD"
-    ? paymentFxQuoteQuery.data.quote_details.source_quote
-    : paymentFxQuoteQuery.data?.quote_details?.target_quote?.currency === "USD"
-      ? paymentFxQuoteQuery.data.quote_details.target_quote
-      : null;
-  const paymentFxUsdSide = paymentFxUsdQuote?.side === "compra"
-    ? "Compra"
-    : paymentFxUsdQuote?.side === "venta"
-      ? "Venta"
-      : null;
-  const paymentFxReady = Number.isFinite(paymentFxRate) && paymentFxRate > 0;
+  const hotelConfigQuery = useHotelConfig();
+  const paymentFxRoundingPolicy = paymentTenderCurrency === paymentReservationCurrency
+    ? "keep_remainder"
+    : resolveFxRoundingPolicy(
+        paymentMethod,
+        hotelConfigQuery.data?.fx_rounding_policy ?? "keep_remainder"
+      );
   const hasMatchingCashSession = Boolean(
     collectedBefore ||
     paymentMethod !== "cash" ||
@@ -1599,10 +1677,32 @@ export function ReservationsPage() {
   );
   const canRegisterSelectedPayment = canOperateCash &&
     (paymentMethod === "cash" || isManualPaymentMethod) &&
-    paymentFxReady &&
     hasMatchingCashSession;
   const canRecordPriorReceipt = hasPermission("cash:record_prior_receipt");
   const canRefundPayment = hasPermission("payment:refund");
+  const refundCents = (amount: number) => Math.round((amount + Number.EPSILON) * 100);
+  const roundingCreditByCurrency = paymentSummary?.rounding_credit_by_currency ?? [];
+  const openRoundingCreditSources = (paymentSummary?.rounding_credit_sources ?? [])
+    .filter((credit) => Number(credit.open_amount) > 0)
+    .sort((left, right) => left.source_transaction_id - right.source_transaction_id);
+  const selectedRoundingCreditSourceId = openRoundingCreditSources.find(
+    (credit) => credit.source_transaction_id === roundingCreditRefundSourceId
+  )?.source_transaction_id ?? openRoundingCreditSources[0]?.source_transaction_id ?? null;
+  const selectedRoundingCreditSource = openRoundingCreditSources.find(
+    (credit) => credit.source_transaction_id === selectedRoundingCreditSourceId
+  ) ?? null;
+  const enteredRoundingCreditRefundAmount = Number(roundingCreditRefundAmountInput);
+  const enteredRoundingCreditRefundCents = Number.isFinite(enteredRoundingCreditRefundAmount)
+    ? refundCents(enteredRoundingCreditRefundAmount)
+    : NaN;
+  const roundingCreditSourceOpenCents = selectedRoundingCreditSource
+    ? refundCents(Number(selectedRoundingCreditSource.open_amount))
+    : 0;
+  const validRoundingCreditRefundAmount = selectedRoundingCreditSource !== null &&
+    Number.isFinite(enteredRoundingCreditRefundAmount) &&
+    Math.abs(enteredRoundingCreditRefundAmount * 100 - enteredRoundingCreditRefundCents) < 0.0001 &&
+    enteredRoundingCreditRefundCents > 0 &&
+    enteredRoundingCreditRefundCents <= roundingCreditSourceOpenCents;
   const refundablePaymentOptions = (paymentSummary?.transactions ?? [])
     .filter((transaction) => transaction.status === "completed" && transaction.type !== "refund")
     .map((transaction) => {
@@ -1611,6 +1711,7 @@ export function ReservationsPage() {
           (refund) =>
             refund.status === "completed" &&
             refund.type === "refund" &&
+            refund.refund_component !== "rounding_credit" &&
             refund.refund_of_transaction_id === transaction.id
         )
         .reduce((total, refund) => total + Number(refund.amount || 0), 0);
@@ -1627,7 +1728,6 @@ export function ReservationsPage() {
   const selectedRefundTarget = refundablePaymentOptions.find((transaction) => transaction.id === selectedRefundTargetId) ?? null;
   const companyNightRefundableAllocations = selectedRefundTarget?.company_night_charge_refundable_allocations ?? [];
   const isCompanyNightRefund = companyNightRefundableAllocations.length > 0;
-  const refundCents = (amount: number) => Math.round((amount + Number.EPSILON) * 100);
   const enteredCompanyNightRefunds = companyNightRefundableAllocations.map((allocation) => {
     const rawAmount = refundNightAmounts[allocation.charge_id] ?? "";
     const hasValue = rawAmount.trim().length > 0;
@@ -1690,7 +1790,10 @@ export function ReservationsPage() {
   useEffect(() => {
     setRefundNightAmounts({});
   }, [selectedRefundTargetId]);
-  const hotelConfigQuery = useHotelConfig();
+  useEffect(() => {
+    setRoundingCreditRefundAmountInput("");
+    setRoundingCreditRefundReasonInput("");
+  }, [selectedRoundingCreditSourceId]);
   const availablePaymentMethods = useMemo(
     () => enabledPaymentMethods(hotelConfigQuery.data),
     [hotelConfigQuery.data]
@@ -1714,6 +1817,33 @@ export function ReservationsPage() {
     () => (surchargesQuery.data ?? []).find((s) => s.payment_method === paymentMethod && s.is_active) ?? null,
     [surchargesQuery.data, paymentMethod]
   );
+  const buildCashTenderFields = (
+    amount: number,
+    skipSurcharge = false,
+    quotedFinalAmount?: number
+  ): Pick<PaymentRequest, "cash_received_amount" | "cash_tip_amount"> | null => {
+    if (paymentMethod !== "cash") return {};
+    const expectedCash = quotedFinalAmount ?? grossWithSurcharge(amount, skipSurcharge ? null : activeSurcharge);
+    const tender = calculateCashTender(cashReceivedAmountInput, expectedCash);
+    if (!tender.valid || tender.receivedAmount === null) {
+      showToast(
+        "error",
+        tender.reason === "insufficient"
+          ? t("page.form.cashReceivedInsufficient", { amount: formatMoney(expectedCash, paymentTenderCurrency) })
+          : t("page.form.cashReceivedInvalid")
+      );
+      return null;
+    }
+    const tip = calculateCashTip(cashTipAmountInput, tender.changeAmount ?? 0);
+    if (!tip.valid || tip.tipAmount === null) {
+      showToast("error", t("page.form.cashTipInvalid"));
+      return null;
+    }
+    return {
+      cash_received_amount: tender.receivedAmount,
+      ...(tip.tipAmount > 0 ? { cash_tip_amount: tip.tipAmount } : {})
+    };
+  };
   const groupPaymentMethods = availablePaymentMethods.filter(
     (method): method is Exclude<PaymentMethod, "mercado_pago" | "paypal"> =>
       method !== "mercado_pago" && method !== "paypal"
@@ -1725,6 +1855,12 @@ export function ReservationsPage() {
   const groupPaymentGross = Number.isFinite(groupPaymentTotal)
     ? grossWithSurcharge(groupPaymentTotal, groupPaymentSurcharge)
     : 0;
+  const groupCashTender = groupPaymentMethod === "cash"
+    ? calculateCashTender(groupCashReceivedAmountInput, groupPaymentGross)
+    : null;
+  const groupCashTip = groupCashTender?.valid
+    ? calculateCashTip(groupCashTipAmountInput, groupCashTender.changeAmount ?? 0)
+    : null;
   const groupAllocatedCents = Object.values(groupPaymentAllocations).reduce((sum, raw) => {
     const amount = Number(raw);
     return Number.isFinite(amount) && amount > 0 ? sum + Math.round((amount + Number.EPSILON) * 100) : sum;
@@ -1744,6 +1880,8 @@ export function ReservationsPage() {
     setPayingGroup(group);
     setGroupPaymentAllocations(initialAllocations);
     setGroupPaymentTotalInput(initialTotal > 0 ? initialTotal.toFixed(2) : "");
+    setGroupCashReceivedAmountInput("");
+    setGroupCashTipAmountInput("");
     setGroupPaymentMethod(groupPaymentMethods[0] ?? "cash");
     setGroupPaymentReference("");
     setGroupPaymentDescription("");
@@ -1763,6 +1901,24 @@ export function ReservationsPage() {
     }
     if (groupPaymentManualMethod && !groupPaymentReference.trim()) {
       setGroupPaymentError(t("page.groups.paymentReferenceRequired"));
+      return;
+    }
+    const cashTender = groupPaymentMethod === "cash"
+      ? calculateCashTender(groupCashReceivedAmountInput, groupPaymentGross)
+      : null;
+    if (cashTender && (!cashTender.valid || cashTender.receivedAmount === null)) {
+      setGroupPaymentError(
+        cashTender.reason === "insufficient"
+          ? t("page.form.cashReceivedInsufficient", { amount: formatMoney(groupPaymentGross, payingGroup.currency_code) })
+          : t("page.form.cashReceivedInvalid")
+      );
+      return;
+    }
+    const cashTip = cashTender
+      ? calculateCashTip(groupCashTipAmountInput, cashTender.changeAmount ?? 0)
+      : null;
+    if (cashTip && (!cashTip.valid || cashTip.tipAmount === null)) {
+      setGroupPaymentError(t("page.form.cashTipInvalid"));
       return;
     }
     const allocations = payingGroup.reservations
@@ -1790,6 +1946,12 @@ export function ReservationsPage() {
       received_amount: receivedAmount,
       currency: payingGroup.currency_code,
       payment_method: groupPaymentMethod as Exclude<PaymentMethod, "mercado_pago" | "paypal">,
+      ...(cashTender?.receivedAmount !== null && cashTender?.receivedAmount !== undefined
+        ? { cash_received_amount: cashTender.receivedAmount }
+        : {}),
+      ...(cashTip?.tipAmount !== null && cashTip?.tipAmount !== undefined && cashTip.tipAmount > 0
+        ? { cash_tip_amount: cashTip.tipAmount }
+        : {}),
       manual_reference: groupPaymentManualMethod ? groupPaymentReference.trim() : undefined,
       description: groupPaymentDescription.trim() || undefined,
       allocations
@@ -1870,30 +2032,15 @@ export function ReservationsPage() {
   );
   const reservationUnitsPerTenderUnit = paymentTenderCurrency === editingCurrencyCode
     ? 1
-    : Number(paymentFxQuoteQuery.data?.rate ?? 0);
-  const conversionReady = Number.isFinite(reservationUnitsPerTenderUnit) && reservationUnitsPerTenderUnit > 0;
+    : 1 / Number(fullPaymentQuoteQuery.data?.fx_rate_snapshot ?? 0);
   const convertReservationToTender = (amount: number, rate = reservationUnitsPerTenderUnit) =>
-    Number.isFinite(rate) && rate > 0 ? Number((amount / rate).toFixed(2)) : null;
+    Number.isFinite(rate) && rate > 0 ? roundFxAmount(amount / rate, paymentFxRoundingPolicy) : null;
   const convertTenderToReservation = (amount: number, rate = reservationUnitsPerTenderUnit) =>
-    Number.isFinite(rate) && rate > 0 ? Number((amount * rate).toFixed(2)) : null;
+    Number.isFinite(rate) && rate > 0 ? roundFxAmount(amount * rate, "keep_remainder") : null;
   const refreshPaymentFxRateForAction = async (): Promise<number | null> => {
     if (paymentTenderCurrency === editingCurrencyCode) return 1;
-    try {
-      const result = await paymentFxQuoteQuery.refetch();
-      const rate = Number(result.data?.rate ?? 0);
-      if (result.error || !Number.isFinite(rate) || rate <= 0) {
-        throw result.error instanceof Error
-          ? result.error
-          : new Error(t("page.errors.paymentFxQuoteUnavailable"));
-      }
-      return rate;
-    } catch (error: unknown) {
-      showToast(
-        "error",
-        error instanceof Error ? error.message : t("page.errors.paymentFxQuoteUnavailable")
-      );
-      return null;
-    }
+    showToast("error", t("page.errors.paymentFxQuoteUnavailable"));
+    return null;
   };
   const suggestedDepositAmount = Math.max(
     Number(paymentSummary?.deposit_required ?? 0) - Number(paymentSummary?.amount_paid ?? 0),
@@ -1907,6 +2054,35 @@ export function ReservationsPage() {
     requestedDepositPreview > 0
     ? Number(requestedDepositPreview.toFixed(2))
     : null;
+  const depositQuoteBaseAmount = enteredPaymentBaseAmount ?? depositAmountPreview;
+  const depositPaymentQuoteQuery = usePaymentSurchargeQuote(
+    editing && depositQuoteBaseAmount !== null
+      ? {
+          reservation_id: editing.id,
+          payment_method: paymentMethod,
+          currency_code: paymentTenderCurrency,
+          base_amount: depositQuoteBaseAmount
+        }
+      : null,
+    {
+      enabled: paymentQuoteEnabled && suggestedDepositAmount > 0 && depositQuoteBaseAmount !== null
+    }
+  );
+  const fullPaymentQuote = fullPaymentQuoteQuery.data;
+  const fullPaymentSuggestion = fullPaymentQuote
+    ? {
+        exactTenderAmount: Number(fullPaymentQuote.final_amount),
+        suggestedTenderAmount: Number(fullPaymentQuote.cash_tender_suggestion ?? fullPaymentQuote.final_amount),
+        isPartial: Number(fullPaymentQuote.remaining_balance) > 0,
+        remainingDue: Number(fullPaymentQuote.remaining_balance)
+      }
+    : null;
+  const cashTenderPreviewQuote = enteredPaymentBaseAmount !== null
+    ? paymentEntryQuoteQuery.data
+    : fullPaymentQuote;
+  const cashTenderPreviewTotal = cashTenderPreviewQuote
+    ? Number(cashTenderPreviewQuote.final_amount)
+    : 0;
   const canApprovePaymentProof = hasPermission("payment:proof:review");
   const detailsCurrencyCode = normalizeCurrencyCode(
     detailsSummary?.currency_code ??
@@ -1984,15 +2160,30 @@ export function ReservationsPage() {
       showToast("info", t("page.messages.depositAlreadyCovered"));
       return;
     }
-    const freshFxRate = await refreshPaymentFxRateForAction();
-    if (freshFxRate === null) return;
+    const priorReceiptFields = getPriorReceiptFields();
+    if (!priorReceiptFields) return;
+    const isPriorReceipt = priorReceiptFields.collected_before === true;
+    const quote = isPriorReceipt ? null : depositPaymentQuoteQuery.data;
+    if (!isPriorReceipt && !quote) {
+      showToast(
+        "error",
+        depositPaymentQuoteQuery.error instanceof Error
+          ? depositPaymentQuoteQuery.error.message
+          : t("page.errors.paymentQuoteUnavailable")
+      );
+      return;
+    }
     const enteredAmount = paymentAmountInput.trim();
-    const suggestedTenderAmount = convertReservationToTender(due, freshFxRate);
-    const requestedAmount = enteredAmount
-      ? Number(enteredAmount)
-      : suggestedTenderAmount ?? due;
+    const suggestedTenderAmount = depositAmountPreview;
+    const requestedAmount = quote
+      ? Number(quote.base_amount)
+      : enteredAmount
+        ? Number(enteredAmount)
+        : suggestedTenderAmount ?? due;
     const balance = Number(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
-    const appliedPreview = convertTenderToReservation(requestedAmount, freshFxRate);
+    const appliedPreview = quote
+      ? Number(quote.applied_amount)
+      : convertTenderToReservation(requestedAmount);
     if (!Number.isFinite(requestedAmount) || requestedAmount <= 0 || appliedPreview === null || appliedPreview <= 0) {
       showToast("error", t("page.errors.invalidPartialAmount"));
       return;
@@ -2016,8 +2207,12 @@ export function ReservationsPage() {
     ) {
       return;
     }
-    const priorReceiptFields = getPriorReceiptFields();
-    if (!priorReceiptFields) return;
+    const cashTenderFields = buildCashTenderFields(
+      amount,
+      isPriorReceipt,
+      quote ? Number(quote.final_amount) : undefined
+    );
+    if (!cashTenderFields) return;
     try {
       await paymentMutation.mutateAsync({
         reservation_id: editing.id,
@@ -2026,9 +2221,13 @@ export function ReservationsPage() {
         transaction_type: "deposit",
         currency: paymentTenderCurrency,
         manual_reference: manualReference,
+        ...(quote ? { payment_quote_token: quote.payment_quote_token } : {}),
+        ...cashTenderFields,
         ...priorReceiptFields
       });
       setPaymentAmountInput("");
+      setCashReceivedAmountInput("");
+      setCashTipAmountInput("");
       setPaymentReferenceInput("");
       setCollectedBefore(false);
       setCollectedOn("");
@@ -2055,35 +2254,76 @@ export function ReservationsPage() {
       showToast("error", t("drawer.errors.manualPaymentReferenceRequired"));
       return;
     }
-    const due = paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0;
+    const due = Number(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
     if (due <= 0.01) {
       showToast("info", t("page.messages.noBalanceDue"));
       return;
     }
     const priorReceiptFields = getPriorReceiptFields();
     if (!priorReceiptFields) return;
-    const freshFxRate = await refreshPaymentFxRateForAction();
-    if (freshFxRate === null) return;
-    const tenderAmount = convertReservationToTender(Number(due), freshFxRate);
-    if (tenderAmount === null) {
-      showToast("error", paymentFxQuoteQuery.error instanceof Error ? paymentFxQuoteQuery.error.message : t("drawer.errors.paymentFxQuoteUnavailable"));
+    const isPriorReceipt = priorReceiptFields.collected_before === true;
+    const quote = isPriorReceipt ? null : fullPaymentQuoteQuery.data;
+    if (!isPriorReceipt && !quote) {
+      showToast(
+        "error",
+        fullPaymentQuoteQuery.error instanceof Error
+          ? fullPaymentQuoteQuery.error.message
+          : t("page.errors.paymentQuoteUnavailable")
+      );
       return;
     }
+    let amount: number;
+    let remainingDue: number;
+    if (quote) {
+      amount = Number(quote.base_amount);
+      remainingDue = Number(quote.remaining_balance);
+    } else {
+      const freshFxRate = await refreshPaymentFxRateForAction();
+      if (freshFxRate === null) return;
+      const settlement = suggestFxTenderSettlement(due, freshFxRate, paymentFxRoundingPolicy);
+      if (!settlement) {
+        showToast("error", t("drawer.errors.paymentFxQuoteUnavailable"));
+        return;
+      }
+      amount = settlement.tenderAmount;
+      remainingDue = settlement.remainingDue;
+    }
+    // The configured rounding rule only suggests a convenient cash tender.
+    // The reservation is credited only with the exact converted amount; any
+    // sub-cent FX residue stays due and can be collected in the reservation
+    // currency as a separate mixed-currency payment.
+    const isPartial = remainingDue > 0;
+    const transactionType = isPartial ? "partial_payment" : "full_payment";
+    const cashTenderFields = buildCashTenderFields(
+      amount,
+      isPriorReceipt,
+      quote ? Number(quote.final_amount) : undefined
+    );
+    if (!cashTenderFields) return;
     try {
       await paymentMutation.mutateAsync({
         reservation_id: editing.id,
-        amount: tenderAmount,
+        amount: Number(amount.toFixed(2)),
         payment_method: paymentMethod,
-        transaction_type: "full_payment",
+        transaction_type: transactionType,
         currency: paymentTenderCurrency,
         manual_reference: manualReference,
+        ...(quote ? { payment_quote_token: quote.payment_quote_token } : {}),
+        ...cashTenderFields,
         ...priorReceiptFields
       });
+      setCashReceivedAmountInput("");
+      setCashTipAmountInput("");
       setPaymentReferenceInput("");
       setCollectedBefore(false);
       setCollectedOn("");
       setPriorReceiptNote("");
-      showToast("success", t("page.messages.fullPaymentDone"));
+      showToast(
+        "success",
+        isPartial
+          ? t("page.messages.fullPaymentRoundedPartial", { remaining: formatMoney(remainingDue, editingCurrencyCode) })
+          : t("page.messages.fullPaymentDone")
+      );
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.paymentFailed"));
     }
@@ -2105,28 +2345,63 @@ export function ReservationsPage() {
       showToast("error", t("drawer.errors.manualPaymentReferenceRequired"));
       return;
     }
-    const amount = Number(paymentAmountInput);
+    const amount = Number(paymentAmountInput.trim());
     const balance = Number(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0);
-    const freshFxRate = await refreshPaymentFxRateForAction();
-    if (freshFxRate === null) return;
-    const appliedPreview = convertTenderToReservation(amount, freshFxRate);
-    if (!Number.isFinite(amount) || amount <= 0 || appliedPreview === null || appliedPreview > balance + 0.01) {
+    const priorReceiptFields = getPriorReceiptFields();
+    if (!priorReceiptFields) return;
+    const isPriorReceipt = priorReceiptFields.collected_before === true;
+    const quote = isPriorReceipt ? null : paymentEntryQuoteQuery.data;
+    if (!isPriorReceipt && !quote) {
+      showToast(
+        "error",
+        paymentEntryQuoteQuery.error instanceof Error
+          ? paymentEntryQuoteQuery.error.message
+          : t("page.errors.paymentQuoteUnavailable")
+      );
+      return;
+    }
+    const quotedBaseAmount = quote ? Number(quote.base_amount) : amount;
+    if (quote && Math.abs(quotedBaseAmount - amount) >= 0.005) {
+      showToast("error", t("page.errors.paymentQuoteUnavailable"));
+      return;
+    }
+    const appliedPreview = quote
+      ? Number(quote.applied_amount)
+      : convertTenderToReservation(amount);
+    const amountCents = Number.isFinite(amount) ? refundCents(amount) : NaN;
+    const appliedCents = appliedPreview === null ? NaN : refundCents(appliedPreview);
+    const balanceCents = Number.isFinite(balance) ? refundCents(balance) : NaN;
+    if (
+      !Number.isFinite(amount) ||
+      Math.abs(amount * 100 - amountCents) >= 0.0001 ||
+      amountCents <= 0 ||
+      appliedPreview === null ||
+      appliedCents > balanceCents
+    ) {
       showToast("error", t("page.errors.invalidPartialAmount"));
       return;
     }
-    const priorReceiptFields = getPriorReceiptFields();
-    if (!priorReceiptFields) return;
+    const cashTenderFields = buildCashTenderFields(
+      amount,
+      isPriorReceipt,
+      quote ? Number(quote.final_amount) : undefined
+    );
+    if (!cashTenderFields) return;
     try {
       await paymentMutation.mutateAsync({
         reservation_id: editing.id,
-        amount: Number(amount.toFixed(2)),
+        amount: Number(quotedBaseAmount.toFixed(2)),
         payment_method: paymentMethod,
         transaction_type: "partial_payment",
         currency: paymentTenderCurrency,
         manual_reference: manualReference,
+        ...(quote ? { payment_quote_token: quote.payment_quote_token } : {}),
+        ...cashTenderFields,
         ...priorReceiptFields
       });
       setPaymentAmountInput("");
+      setCashReceivedAmountInput("");
+      setCashTipAmountInput("");
       setPaymentReferenceInput("");
       setCollectedBefore(false);
       setCollectedOn("");
@@ -2193,6 +2468,50 @@ export function ReservationsPage() {
       setRefundReasonInput("");
       setRefundNightAmounts({});
       showToast("success", t("page.messages.refundDone"));
+    } catch (err: unknown) {
+      showToast("error", err instanceof Error ? err.message : t("page.errors.refundFailed"));
+    }
+  };
+
+  const handleRefundRoundingCredit = async () => {
+    if (!editing || !paymentSummary || !canRefundPayment) return;
+    if (!selectedRoundingCreditSource) {
+      showToast("error", t("page.form.roundingCreditRefundSourceRequired"));
+      return;
+    }
+    if (!validRoundingCreditRefundAmount) {
+      showToast("error", t("page.form.roundingCreditRefundAmountInvalid"));
+      return;
+    }
+    const refundReason = roundingCreditRefundReasonInput.trim();
+    if (!refundReason) {
+      showToast("error", t("page.form.roundingCreditRefundReasonRequired"));
+      return;
+    }
+
+    const currency = normalizeCurrencyCode(selectedRoundingCreditSource.currency_code);
+    const amount = enteredRoundingCreditRefundCents / 100;
+    if (!window.confirm(t("page.confirm.roundingCreditRefund", {
+      amount: formatMoney(amount, currency),
+      source: selectedRoundingCreditSource.source_transaction_id
+    }))) {
+      return;
+    }
+
+    try {
+      await paymentMutation.mutateAsync({
+        reservation_id: editing.id,
+        amount,
+        payment_method: "cash",
+        transaction_type: "refund",
+        currency,
+        refund_component: "rounding_credit",
+        refund_of_transaction_id: selectedRoundingCreditSource.source_transaction_id,
+        refund_reason: refundReason
+      });
+      setRoundingCreditRefundAmountInput("");
+      setRoundingCreditRefundReasonInput("");
+      showToast("success", t("page.messages.roundingCreditRefundDone"));
     } catch (err: unknown) {
       showToast("error", err instanceof Error ? err.message : t("page.errors.refundFailed"));
     }
@@ -2525,6 +2844,29 @@ export function ReservationsPage() {
     } finally {
       setReceiptDownloadTransactionId(null);
     }
+  };
+
+  const handlePaymentCorrectionSuccess = (
+    result: PaymentCorrectionResponse,
+    destinationConfirmationCode: string
+  ) => {
+    const affectedReservationIds = Array.from(new Set(
+      [result.source_reservation_id, result.target_reservation_id]
+        .filter((reservationId): reservationId is number => typeof reservationId === "number")
+    ));
+    affectedReservationIds.forEach((reservationId) => {
+      void refreshPaymentState(queryClient, session.hotelId, reservationId).catch(() => undefined);
+    });
+
+    const sourceCode = paymentCorrectionTarget?.sourceConfirmationCode ??
+      `#${paymentCorrectionTarget?.sourceReservationId ?? result.source_reservation_id}`;
+    const successMessage = result.correction_type === "reassign"
+      ? t("page.details.paymentCorrection.successReassigned", {
+          source: sourceCode,
+          destination: destinationConfirmationCode
+        })
+      : t("page.details.paymentCorrection.successReversed", { source: sourceCode });
+    showToast("success", successMessage);
   };
 
   const openReceiptEmailDialog = (transactionId: number, trigger: HTMLButtonElement) => {
@@ -2883,6 +3225,125 @@ export function ReservationsPage() {
           )}
         </div>
       </div>
+
+      {canReviewCancellation ? (
+        <section className="rounded-xl border border-amber-200 bg-white p-4 shadow-sm" aria-labelledby="cancellation-review-title">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-amber-800">{t("page.cancellationReviews.eyebrow")}</p>
+              <h2 id="cancellation-review-title" className="text-lg font-semibold text-slate-900">
+                {t("page.cancellationReviews.title")}
+              </h2>
+              <p className="max-w-3xl text-sm text-slate-600">{t("page.cancellationReviews.description")}</p>
+            </div>
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
+              {t("page.cancellationReviews.count", { count: cancellationReviews.length })}
+            </span>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {cancellationReviewsQuery.isLoading ? (
+              <p className="text-sm text-slate-500" role="status">{t("page.cancellationReviews.loading")}</p>
+            ) : cancellationReviewsQuery.isError ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+                <span>{t("page.cancellationReviews.error")}</span>
+                <button
+                  type="button"
+                  onClick={() => void cancellationReviewsQuery.refetch()}
+                  className="min-h-11 rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-800 hover:bg-rose-100"
+                >
+                  {t("page.cancellationReviews.retry")}
+                </button>
+              </div>
+            ) : cancellationReviews.length === 0 ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                {t("page.cancellationReviews.empty")}
+              </div>
+            ) : (
+              cancellationReviews.map((review) => {
+                const snapshot = review.policy_snapshot ?? {};
+                const planName = typeof snapshot.rate_plan_name === "string" ? snapshot.rate_plan_name : null;
+                const cancellationModel = typeof snapshot.cancellation_model === "string" ? snapshot.cancellation_model : null;
+                const penaltyType = typeof snapshot.penalty_type === "string" ? snapshot.penalty_type : null;
+                const penaltyValue = snapshot.penalty_value === null || snapshot.penalty_value === undefined
+                  ? null
+                  : String(snapshot.penalty_value);
+                const proposedPenalty = review.penalty_amount === null ? null : Number(review.penalty_amount);
+                const reason = cancellationReviewReasons[review.id] ?? "";
+
+                return (
+                  <article key={review.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4" data-testid={`cancellation-review-${review.id}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900">
+                            {t(`page.cancellationReviews.types.${review.review_type}`)}
+                          </span>
+                          <span className="text-xs font-semibold text-slate-700">{review.confirmation_code}</span>
+                          <span className="text-xs text-slate-500">{review.check_in_date} → {review.check_out_date}</span>
+                        </div>
+                        <p className="text-sm text-slate-700">
+                          {t(`page.cancellationReviews.reasons.${review.reason_code}`, { defaultValue: review.reason_code })}
+                        </p>
+                        <dl className="grid gap-x-5 gap-y-1 text-xs text-slate-600 sm:grid-cols-2">
+                          {planName ? <div><dt className="inline font-semibold">{t("page.cancellationReviews.ratePlan")}: </dt><dd className="inline">{planName}</dd></div> : null}
+                          {cancellationModel ? <div><dt className="inline font-semibold">{t("page.cancellationReviews.policy")}: </dt><dd className="inline">{cancellationModel}</dd></div> : null}
+                          {review.free_cancellation_hours !== null ? <div><dt className="inline font-semibold">{t("page.cancellationReviews.freeWindow")}: </dt><dd className="inline">{t("page.cancellationReviews.hours", { count: review.free_cancellation_hours })}</dd></div> : null}
+                          {penaltyType ? <div><dt className="inline font-semibold">{t("page.cancellationReviews.penaltyRule")}: </dt><dd className="inline">{penaltyType}{penaltyValue ? ` · ${penaltyValue}` : ""}</dd></div> : null}
+                          {review.check_in_time || review.hotel_timezone ? <div><dt className="inline font-semibold">{t("page.cancellationReviews.hotelSchedule")}: </dt><dd className="inline">{review.check_in_time ?? "—"} · {review.hotel_timezone ?? "—"}</dd></div> : null}
+                          {review.cancellation_cutoff_at ? <div><dt className="inline font-semibold">{t("page.cancellationReviews.cutoff")}: </dt><dd className="inline">{formatDateTime(review.cancellation_cutoff_at, review.hotel_timezone)}</dd></div> : null}
+                        </dl>
+                        {proposedPenalty !== null ? (
+                          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                            {t("page.cancellationReviews.proposedPenalty", {
+                              amount: formatMoney(proposedPenalty, review.penalty_currency_code || review.reservation_currency_code || "ARS")
+                            })}
+                          </p>
+                        ) : (
+                          <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+                            {t("page.cancellationReviews.noPenaltySnapshot")}
+                          </p>
+                        )}
+                        <p className="text-xs text-slate-500">{t("page.cancellationReviews.auditOnly")}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+                      <label className="text-xs font-semibold text-slate-700">
+                        {t("page.cancellationReviews.reasonLabel")}
+                        <input
+                          value={reason}
+                          onChange={(event) => setCancellationReviewReasons((current) => ({ ...current, [review.id]: event.target.value }))}
+                          maxLength={500}
+                          minLength={3}
+                          className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
+                          aria-label={t("page.cancellationReviews.reasonLabel")}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => void handleCancellationReviewDecision(review.id, "reject")}
+                        disabled={cancellationReviewMutation.isPending || reason.trim().length < 3}
+                        className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {t("page.cancellationReviews.reject")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleCancellationReviewDecision(review.id, "approve")}
+                        disabled={cancellationReviewMutation.isPending || reason.trim().length < 3}
+                        className="min-h-11 rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {t("page.cancellationReviews.approve")}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        </section>
+      ) : null}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -3288,42 +3749,14 @@ export function ReservationsPage() {
                   (group.company_id && companyOptions.find((company) => company.id === group.company_id)?.payment_deferred !== false)
                 );
                 return (
-                  <article
-                  key={group.id}
-                  data-testid={`reservation-group-summary-${group.id}`}
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="font-semibold text-slate-900">{group.guest_name}</p>
-                      {group.company_name && <p className="text-xs text-slate-600">{group.company_name}</p>}
-                    </div>
-                    <span className="rounded-full bg-brand-100 px-2 py-1 text-xs font-semibold text-brand-800">
-                      {t("page.groups.rooms", { count: group.reservation_count })}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-600">
-                    {group.check_in_date} → {group.check_out_date} · {group.reservation_codes.join(", ")}
-                  </p>
-                  {groupDeferredBilling ? (
-                    <p className="mt-3 text-xs text-amber-900">{t("page.groups.deferredCompanyBilling")}</p>
-                  ) : <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                    <div><dt className="text-slate-500">{t("page.groups.total")}</dt><dd className="font-semibold">{formatMoney(group.total_amount, group.currency_code)}</dd></div>
-                    <div><dt className="text-slate-500">{t("page.groups.paid")}</dt><dd className="font-semibold">{formatMoney(group.amount_paid, group.currency_code)}</dd></div>
-                    <div><dt className="text-slate-500">{t("page.groups.balance")}</dt><dd className="font-semibold">{formatMoney(group.balance_due, group.currency_code)}</dd></div>
-                  </dl>}
-                  {hasPermission("cash:operate") && !groupDeferredBilling && Number(group.balance_due ?? 0) > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => openGroupPayment(group)}
-                      disabled={groupPaymentMutation.isPending || groupPaymentMethods.length === 0}
-                      className="mt-3 rounded-lg bg-brand-700 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-800 disabled:opacity-50"
-                      data-testid={`reservation-group-payment-${group.id}`}
-                    >
-                      {t("page.groups.registerPayment")}
-                    </button>
-                  )}
-                  </article>
+                  <ReservationGroupSummaryCard
+                    key={group.id}
+                    group={group}
+                    deferredBilling={groupDeferredBilling}
+                    showPaymentAction={canOperateCash && !groupDeferredBilling && Number(group.balance_due ?? 0) > 0}
+                    paymentActionDisabled={groupPaymentMutation.isPending || groupPaymentMethods.length === 0}
+                    onRegisterPayment={() => openGroupPayment(group)}
+                  />
                 );
               })}
             </div>
@@ -3998,7 +4431,7 @@ export function ReservationsPage() {
                           <p className="text-xs text-slate-500">{t("page.form.quoteNights")}</p>
                           <p className="font-semibold">{reservationQuote?.nights ?? quoteNights}</p>
                         </div>
-                        <div className="rounded-lg border border-brand-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
+                        <div data-testid="reservation-quote-total" className="rounded-lg border border-brand-100 bg-white/80 px-3 py-2 text-sm text-slate-800">
                           <p className="text-xs text-slate-500">{t("page.form.quoteTotalFinal")}</p>
                           <p className="font-semibold">
                             {quoteQuery.isFetching
@@ -4027,6 +4460,10 @@ export function ReservationsPage() {
                           </p>
                         </div>
                       </div>
+
+                      {shouldShowReservationUsdEstimate && reservationQuote ? (
+                        <ReservationUsdEstimate amount={reservationQuote.total} />
+                      ) : null}
 
                       {!quoteQuery.isError && reservationQuote && (reservationQuote.subtotal !== reservationQuote.total || reservationQuote.taxAmount > 0 || reservationQuote.feeAmount > 0) ? (
                         <p className="mt-2 text-xs text-slate-600">
@@ -4337,6 +4774,41 @@ export function ReservationsPage() {
                     <p className="mt-2 text-sm text-slate-600">{t("page.form.loadingSummary")}</p>
                   )}
 
+                  {roundingCreditByCurrency.length > 0 ? (
+                    <section
+                      className="mt-3 rounded-lg border border-violet-200 bg-violet-50/70 p-3"
+                      aria-labelledby="rounding-credit-summary-heading"
+                      data-testid="rounding-credit-summary"
+                    >
+                      <h3 id="rounding-credit-summary-heading" className="text-sm font-semibold text-violet-950">
+                        {t("page.form.roundingCreditTitle")}
+                      </h3>
+                      <p className="mt-1 text-xs text-violet-900">{t("page.form.roundingCreditDisclaimer")}</p>
+                      <ul className="mt-2 grid gap-2 md:grid-cols-2">
+                        {roundingCreditByCurrency.map((credit) => (
+                          <li
+                            key={credit.currency_code}
+                            className="grid grid-cols-3 gap-2 rounded-md border border-violet-100 bg-white p-2 text-xs"
+                          >
+                            <p className="col-span-3 font-semibold text-slate-800">{credit.currency_code}</p>
+                            <div>
+                              <p className="text-slate-500">{t("page.form.roundingCreditIssued")}</p>
+                              <p className="font-semibold text-slate-800">{formatMoney(credit.issued_amount, credit.currency_code)}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-500">{t("page.form.roundingCreditRefunded")}</p>
+                              <p className="font-semibold text-slate-800">{formatMoney(credit.refunded_amount, credit.currency_code)}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-500">{t("page.form.roundingCreditOpen")}</p>
+                              <p className="font-semibold text-violet-900">{formatMoney(credit.open_amount, credit.currency_code)}</p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ) : null}
+
                   {canAdjustReservationTotal ? (
                     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="reservation-total-adjustment">
                       <p className="text-sm font-semibold text-amber-950">{t("page.form.paidTotalAdjustmentTitle")}</p>
@@ -4417,6 +4889,10 @@ export function ReservationsPage() {
                           setPaymentMethod(e.target.value as PaymentMethod);
                           setPaymentReferenceInput("");
                           if (e.target.value !== "cash") {
+                            setCashReceivedAmountInput("");
+                            setCashTipAmountInput("");
+                          }
+                          if (e.target.value !== "cash") {
                             setCollectedBefore(false);
                             setCollectedOn("");
                             setPriorReceiptNote("");
@@ -4482,6 +4958,33 @@ export function ReservationsPage() {
                         />
                       )}
                     </label>
+                    {paymentMethod === "cash" &&
+                    !isCompanyNightRefund &&
+                    refundTargetTransactionId === null &&
+                    !refundReasonInput.trim() &&
+                    cashTenderPreviewTotal > 0 ? (
+                      <div className="sm:col-span-6">
+                        <CashTenderField
+                          amount={cashReceivedAmountInput}
+                          tipAmount={cashTipAmountInput}
+                          expectedAmount={cashTenderPreviewTotal}
+                          currency={paymentTenderCurrency}
+                          label={t("page.form.cashReceived", { currency: paymentTenderCurrency })}
+                          hint={t("page.form.cashReceivedHint")}
+                          changeLabel={t("page.form.cashChange")}
+                          tipToggleLabel={t("page.form.cashTipToggle")}
+                          tipAmountLabel={t("page.form.cashTipAmount")}
+                          tipHint={t("page.form.cashTipHint")}
+                          invalidAmountMessage={t("page.form.cashReceivedInvalid")}
+                          insufficientMessage={t("page.form.cashReceivedInsufficient", { amount: formatMoney(cashTenderPreviewTotal, paymentTenderCurrency) })}
+                          tipInvalidMessage={t("page.form.cashTipInvalid")}
+                          onChange={setCashReceivedAmountInput}
+                          onTipAmountChange={setCashTipAmountInput}
+                          testId="reservation-payment-cash-received"
+                          disabled={paymentMutation.isPending}
+                        />
+                      </div>
+                    ) : null}
                     <div className="sm:col-span-6" id="payment-fx-conversion-help" aria-live="polite">
                       {isCompanyNightRefund ? (
                         <div className="rounded border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950" id="company-night-refund-cash-hint" data-testid="company-night-refund-conversion-hint">
@@ -4490,35 +4993,68 @@ export function ReservationsPage() {
                             <p className="mt-1 text-rose-800" role="alert">{companyNightRefundValidationMessage}</p>
                           ) : null}
                         </div>
-                      ) : paymentTenderCurrency !== editingCurrencyCode ? (
-                        paymentFxQuoteQuery.isError ? (
-                          <p className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" data-testid="payment-fx-error">
-                            No se pudo obtener una cotización vigente desde DolarAPI. El cobro queda bloqueado hasta poder consultar el mercado elegido por el hotel.
-                          </p>
-                        ) : paymentFxQuoteQuery.isLoading || !paymentFxQuoteQuery.data ? (
-                          <p className="rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600" role="status">
-                            Consultando cotización vigente desde DolarAPI…
-                          </p>
-                        ) : (
-                          <div className="rounded border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950" data-testid="payment-fx-quote">
-                            <p className="font-semibold">
-                              DolarAPI · {paymentFxQuoteQuery.data.configured_market === "blue" ? "Blue" : "Oficial"} · 1 {paymentTenderCurrency} = {paymentFxRate.toLocaleString("es-AR", { maximumFractionDigits: 6 })} {editingCurrencyCode}
-                              {paymentFxUsdSide ? ` · USD ${paymentFxUsdSide}` : ""}
-                              {paymentFxQuoteQuery.data.quote_details?.source_quote?.is_derived_blue || paymentFxQuoteQuery.data.quote_details?.target_quote?.is_derived_blue ? " · equivalente blue derivado" : ""}
-                            </p>
-                            <p className="mt-1">
-                              El importe recibido se aplica al saldo en {editingCurrencyCode} con esta cotización y el spread configurado. No se usa otro mercado si esta cotización falla.
-                              {paymentAmountInput && Number.isFinite(Number(paymentAmountInput)) && Number(paymentAmountInput) > 0 && conversionReady
-                                ? t("page.form.fxCreditEstimate", { amount: formatMoney(convertTenderToReservation(Number(paymentAmountInput)) ?? 0, editingCurrencyCode) })
-                                : ""}
-                            </p>
+                      ) : !paymentQuoteEnabled || refundTargetTransactionId !== null || refundReasonInput.trim() || collectedBefore ? null : paymentEntryQuoteQuery.isError ? (
+                        <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" data-testid="payment-quote-error" role="alert">
+                          <p>{t("page.errors.paymentQuoteUnavailable")}</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void paymentEntryQuoteQuery.refetch()}
+                              disabled={paymentEntryQuoteQuery.isFetching}
+                              className="rounded-md border border-rose-300 bg-white px-3 py-1.5 font-semibold text-rose-900 hover:bg-rose-100 disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-700 focus-visible:ring-offset-2"
+                              data-testid="payment-quote-retry"
+                            >
+                              {t("page.form.paymentQuoteRetry")}
+                            </button>
+                            {paymentTenderCurrency !== editingCurrencyCode ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPaymentAmountInput("");
+                                  setPaymentTenderCurrencyInput(paymentReservationCurrency);
+                                }}
+                                className="rounded-md border border-rose-300 bg-white px-3 py-1.5 font-semibold text-rose-900 hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-700 focus-visible:ring-offset-2"
+                                data-testid="payment-fx-switch-to-reservation-currency"
+                              >
+                                {t("page.form.paymentFxFallbackAction", { currency: editingCurrencyCode })}
+                              </button>
+                            ) : null}
                           </div>
-                        )
-                      ) : null}
+                        </div>
+                      ) : paymentEntryQuoteQuery.isLoading || !paymentEntryQuoteQuery.data ? (
+                        <p className="rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600" role="status">
+                          {t("page.form.paymentQuoteLoading")}
+                        </p>
+                      ) : (
+                        <PaymentQuoteSummary quote={paymentEntryQuoteQuery.data} showCashSuggestion={paymentMethod === "cash"} />
+                      )}
                       {paymentMethod === "cash" && paymentTenderCurrency !== editingCurrencyCode && !hasMatchingCashSession ? (
                         <p className="mt-1 text-xs text-amber-800">Abrí una caja en {paymentTenderCurrency} para registrar ese efectivo y poder arquearlo en su moneda.</p>
                       ) : null}
                     </div>
+                    {paymentMethod === "cash" && !paymentAmountInput.trim() && fullPaymentQuote && fullPaymentSuggestion && fullPaymentQuote.cash_tender_suggestion !== null && Math.abs(fullPaymentSuggestion.suggestedTenderAmount - fullPaymentSuggestion.exactTenderAmount) >= 0.005 ? (
+                      <div
+                        className="rounded border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-950 sm:col-span-6"
+                        role="status"
+                        data-testid="payment-fx-rounding-preview"
+                      >
+                        <p>
+                          {t("page.form.fxFullPaymentSuggestion", {
+                            exactAmount: formatMoney(fullPaymentSuggestion.exactTenderAmount, paymentTenderCurrency),
+                            amount: formatMoney(fullPaymentSuggestion.suggestedTenderAmount, paymentTenderCurrency),
+                            policy: t(`page.form.fxRoundingPolicies.${fullPaymentQuote.cash_tender_rounding_policy ?? "exact"}`)
+                          })}
+                        </p>
+                        {fullPaymentQuote.cash_tender_rounding_policy === "exact" ? (
+                          <p className="mt-1">{t("page.form.fxFullPaymentExactPreview")}</p>
+                        ) : null}
+                        {fullPaymentSuggestion.isPartial ? (
+                          <p className="mt-1">{t("page.form.fxFullPaymentPartialPreview", {
+                            remaining: formatMoney(fullPaymentSuggestion.remainingDue, editingCurrencyCode)
+                          })}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {paymentMethod === "cash" && canRecordPriorReceipt ? (
                       <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 sm:col-span-6">
                         <label className="flex items-start gap-2 text-sm font-semibold text-slate-800">
@@ -4659,6 +5195,94 @@ export function ReservationsPage() {
                         </label>
                       </>
                     ) : null}
+                    {openRoundingCreditSources.length > 0 ? (
+                      <section
+                        className="rounded-lg border border-violet-200 bg-violet-50/70 p-3 sm:col-span-6"
+                        aria-labelledby="rounding-credit-refund-heading"
+                        data-testid="rounding-credit-refund"
+                      >
+                        <h3 id="rounding-credit-refund-heading" className="text-sm font-semibold text-violet-950">
+                          {t("page.form.roundingCreditRefundTitle")}
+                        </h3>
+                        <p className="mt-1 text-xs text-violet-900">{t("page.form.roundingCreditRefundHint")}</p>
+                        {canRefundPayment ? (
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <label className="text-xs font-semibold text-slate-700">
+                              {t("page.form.roundingCreditRefundSource")}
+                              <select
+                                value={selectedRoundingCreditSourceId ?? ""}
+                                onChange={(event) => setRoundingCreditRefundSourceId(event.target.value ? Number(event.target.value) : null)}
+                                className="mt-1 w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
+                                data-testid="rounding-credit-refund-source"
+                              >
+                                {openRoundingCreditSources.map((credit) => (
+                                  <option key={credit.source_transaction_id} value={credit.source_transaction_id}>
+                                    {t("page.form.roundingCreditSourceOption", {
+                                      source: credit.source_transaction_id,
+                                      amount: formatMoney(credit.open_amount, credit.currency_code)
+                                    })}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="text-xs font-semibold text-slate-700">
+                              {t("page.form.roundingCreditRefundAmount", {
+                                currency: selectedRoundingCreditSource?.currency_code ?? ""
+                              })}
+                              <input
+                                type="number"
+                                min="0.01"
+                                max={selectedRoundingCreditSource?.open_amount ?? undefined}
+                                step="0.01"
+                                inputMode="decimal"
+                                value={roundingCreditRefundAmountInput}
+                                onChange={(event) => setRoundingCreditRefundAmountInput(event.target.value)}
+                                aria-describedby="rounding-credit-refund-available"
+                                className="mt-1 w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
+                                data-testid="rounding-credit-refund-amount"
+                              />
+                              <span id="rounding-credit-refund-available" className="mt-1 block font-normal text-slate-600">
+                                {t("page.form.roundingCreditRefundAvailable", {
+                                  amount: selectedRoundingCreditSource
+                                    ? formatMoney(selectedRoundingCreditSource.open_amount, selectedRoundingCreditSource.currency_code)
+                                    : "—"
+                                })}
+                              </span>
+                            </label>
+                            <label className="text-xs font-semibold text-slate-700 sm:col-span-2">
+                              {t("page.form.roundingCreditRefundReason")}
+                              <input
+                                type="text"
+                                maxLength={240}
+                                value={roundingCreditRefundReasonInput}
+                                onChange={(event) => setRoundingCreditRefundReasonInput(event.target.value)}
+                                placeholder={t("page.form.roundingCreditRefundReasonPlaceholder")}
+                                className="mt-1 w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
+                                data-testid="rounding-credit-refund-reason"
+                              />
+                            </label>
+                            {roundingCreditRefundAmountInput && !validRoundingCreditRefundAmount ? (
+                              <p className="text-xs text-rose-800 sm:col-span-2" role="alert">
+                                {t("page.form.roundingCreditRefundAmountInvalid")}
+                              </p>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => void handleRefundRoundingCredit()}
+                              disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || !validRoundingCreditRefundAmount || !roundingCreditRefundReasonInput.trim()}
+                              className="w-fit rounded-lg border border-violet-300 bg-white px-3 py-2 text-sm font-semibold text-violet-900 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              data-testid="rounding-credit-refund-submit"
+                            >
+                              {t("page.form.roundingCreditRefund")}
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-xs text-amber-900" role="status">
+                            {t("page.form.roundingCreditRefundPermissionRequired")}
+                          </p>
+                        )}
+                      </section>
+                    ) : null}
                     {isManualPaymentMethod ? (
                       <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
                         {paymentMethod === "bank_transfer"
@@ -4685,15 +5309,18 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handlePayPartial}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || !canRegisterSelectedPayment}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || !canRegisterSelectedPayment || (!collectedBefore && (enteredPaymentBaseAmount === null || !paymentEntryQuoteQuery.data))}
                       className="rounded-lg border border-sky-200 bg-sky-100 px-3 py-2 text-sm font-semibold text-sky-800 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Cobro parcial
                     </button>
+                    <p className="text-xs text-slate-600 sm:col-span-6" data-testid="payment-partial-hint">
+                      {t("page.form.partialPaymentHint")}
+                    </p>
                     <button
                       type="button"
                       onClick={handlePayDeposit}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || !canRegisterSelectedPayment}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isLoading || !canRegisterSelectedPayment || (!collectedBefore && !depositPaymentQuoteQuery.data)}
                       className="rounded-lg border border-amber-200 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800 hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {depositAmountPreview === null
@@ -4705,7 +5332,7 @@ export function ReservationsPage() {
                     <button
                       type="button"
                       onClick={handlePayFull}
-                      disabled={paymentMutation.isPending || paymentSummaryQuery.isFetching || !canRegisterSelectedPayment}
+                      disabled={paymentMutation.isPending || paymentSummaryQuery.isFetching || !canRegisterSelectedPayment || (!collectedBefore && !fullPaymentQuoteQuery.data)}
                       className="rounded-lg border border-emerald-200 bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-800 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {t("page.form.fullPayment")}
@@ -4854,26 +5481,6 @@ export function ReservationsPage() {
                       adds a surcharge on top (see payment_service.process_payment
                       apply_surcharge=False), so showing a higher final figure here would
                       promise a surcharge that is never actually charged. */}
-                  {activeSurcharge && paymentMethod !== "bank_transfer" && paymentSummary && (paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0) > 0 && (
-                    <p className="mt-2 text-xs text-amber-700">
-                      {t("page.form.surchargePrefix", {
-                        method: t(`page.paymentMethods.${paymentMethod}`),
-                        value:
-                          activeSurcharge.surcharge_type === "percentage"
-                            ? `${activeSurcharge.amount}%`
-                            : formatMoney(activeSurcharge.amount, editingCurrencyCode),
-                        balance: formatMoney(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0, editingCurrencyCode)
-                      })}{" "}
-                      <strong>
-                        {formatMoney(
-                          grossWithSurcharge(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0, activeSurcharge),
-                          editingCurrencyCode
-                        )}
-                      </strong>
-                      .
-                    </p>
-                  )}
-
                   <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50/60 px-3 py-2 text-xs text-slate-700">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-semibold text-slate-800">{t("page.form.depositRequestTitle")}</p>
@@ -4893,15 +5500,39 @@ export function ReservationsPage() {
                             lnk.execution_mode === "provider" && lnk.payable
                               ? lnk.external_checkout_url
                               : null;
+                          const revocationMessage =
+                            lnk.provider_revocation_status === "pending"
+                              ? t("page.form.providerRevocationPending")
+                              : lnk.provider_revocation_status === "processing"
+                                ? t("page.form.providerRevocationProcessing")
+                              : lnk.provider_revocation_status === "succeeded"
+                                ? t("page.form.providerRevocationSucceeded")
+                                : lnk.provider_revocation_status === "failed"
+                                  ? t("page.form.providerRevocationFailed")
+                                  : null;
                           return (
                             <li key={lnk.id} className="flex flex-wrap items-center justify-between gap-2" data-testid={`payment-link-${lnk.id}`}>
                               <span className="min-w-0">
                                 <span className="block truncate">
                                   {formatMoney(lnk.requested_amount, lnk.currency)} · {lnk.status}
                                 </span>
-                                {!payableUrl && (
+                                {lnk.execution_mode === "local_only" && (
                                   <span className="block text-[11px] font-semibold text-amber-700" data-testid="payment-link-local-only">
                                     {t("page.form.localOnlyLink")}
+                                  </span>
+                                )}
+                                {revocationMessage && (
+                                  <span
+                                    className={`block text-[11px] font-semibold ${
+                                      lnk.provider_revocation_status === "failed"
+                                        ? "text-amber-700"
+                                        : lnk.provider_revocation_status === "succeeded"
+                                          ? "text-emerald-700"
+                                          : "text-slate-500"
+                                    }`}
+                                    data-testid={`payment-link-revocation-${lnk.id}`}
+                                  >
+                                    {revocationMessage}
                                   </span>
                                 )}
                               </span>
@@ -4954,7 +5585,32 @@ export function ReservationsPage() {
                                   })}
                                 </span>
                               ) : null}
+                              {Number(tx.rounding_credit_amount ?? 0) > 0 ? (
+                                <span className="block text-violet-800">
+                                  {t("page.form.roundingCreditTransaction", {
+                                    amount: formatMoney(Number(tx.rounding_credit_amount), tx.currency)
+                                  })}
+                                </span>
+                              ) : null}
+                              {Number(tx.credit_refund_amount ?? 0) > 0 || tx.refund_component === "rounding_credit" ? (
+                                <span className="block text-violet-800">
+                                  {t("page.form.roundingCreditRefundTransaction", {
+                                    amount: formatMoney(Number(tx.credit_refund_amount ?? tx.amount), tx.currency)
+                                  })}
+                                </span>
+                              ) : null}
                               {tx.manual_reference ? <span className="block text-slate-500">{t("page.form.manualPaymentReferenceRecorded", { reference: tx.manual_reference })}</span> : null}
+                              {tx.cash_received_amount !== null && tx.cash_received_amount !== undefined ? (
+                                <span className="block text-emerald-800">
+                                  {t("page.form.cashReceived", { currency: tx.currency })}: {formatCashTenderAmount(tx.cash_received_amount, tx.currency, cashTenderLocale)}
+                                  {tx.cash_change_amount !== null && tx.cash_change_amount !== undefined
+                                    ? ` · ${t("page.form.cashChange")}: ${formatCashTenderAmount(tx.cash_change_amount, tx.currency, cashTenderLocale)}`
+                                    : ""}
+                                  {Number(tx.cash_tip_amount ?? 0) > 0
+                                    ? ` · ${t("page.form.cashTipRecorded", { amount: formatCashTenderAmount(Number(tx.cash_tip_amount), tx.currency, cashTenderLocale) })}`
+                                    : ""}
+                                </span>
+                              ) : null}
                               {tx.fee_amount && tx.fee_amount > 0 ? (
                                 <span className="text-amber-700">{t("page.form.feeSuffix", { amount: formatMoney(tx.fee_amount, tx.currency) })}</span>
                               ) : null}
@@ -5263,6 +5919,36 @@ export function ReservationsPage() {
                     </button>
                   </div>
                 )}
+                {!detailsDeferredCompanyBilling && detailsSummary?.rounding_credit_by_currency?.length ? (
+                  <section
+                    className="rounded-lg border border-violet-200 bg-violet-50/70 p-3"
+                    aria-labelledby="reservation-rounding-credit-details-heading"
+                    data-testid="reservation-rounding-credit-details"
+                  >
+                    <h3 id="reservation-rounding-credit-details-heading" className="text-sm font-semibold text-violet-950">
+                      {t("page.form.roundingCreditTitle")}
+                    </h3>
+                    <p className="mt-1 text-xs text-violet-900">{t("page.form.roundingCreditDisclaimer")}</p>
+                    <ul className="mt-2 space-y-2">
+                      {detailsSummary.rounding_credit_by_currency.map((credit) => (
+                        <li key={credit.currency_code} className="grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <p className="text-slate-500">{t("page.form.roundingCreditIssued")}</p>
+                            <p className="font-semibold text-slate-800">{formatMoney(credit.issued_amount, credit.currency_code)}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">{t("page.form.roundingCreditRefunded")}</p>
+                            <p className="font-semibold text-slate-800">{formatMoney(credit.refunded_amount, credit.currency_code)}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">{t("page.form.roundingCreditOpen")}</p>
+                            <p className="font-semibold text-violet-900">{formatMoney(credit.open_amount, credit.currency_code)}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
                 {!detailsDeferredCompanyBilling && detailsOperations?.financial_summary ? (
                   <div className="rounded-lg border border-slate-200 bg-white/70 p-3 text-xs text-slate-700">
                     <div className="grid grid-cols-2 gap-2">
@@ -5731,7 +6417,32 @@ export function ReservationsPage() {
                               status: translatedEnum("transactionStatus", tx.status)
                             })}
                           </p>
+                          {Number(tx.rounding_credit_amount ?? 0) > 0 ? (
+                            <p className="text-xs text-violet-800">
+                              {t("page.form.roundingCreditTransaction", {
+                                amount: formatMoney(Number(tx.rounding_credit_amount), tx.currency)
+                              })}
+                            </p>
+                          ) : null}
+                          {Number(tx.credit_refund_amount ?? 0) > 0 || tx.refund_component === "rounding_credit" ? (
+                            <p className="text-xs text-violet-800">
+                              {t("page.form.roundingCreditRefundTransaction", {
+                                amount: formatMoney(Number(tx.credit_refund_amount ?? tx.amount), tx.currency)
+                              })}
+                            </p>
+                          ) : null}
                           {tx.manual_reference ? <p className="text-xs text-slate-500">{t("page.form.manualPaymentReferenceRecorded", { reference: tx.manual_reference })}</p> : null}
+                          {tx.cash_received_amount !== null && tx.cash_received_amount !== undefined ? (
+                            <p className="text-xs text-emerald-800">
+                              {t("page.form.cashReceived", { currency: tx.currency })}: {formatCashTenderAmount(tx.cash_received_amount, tx.currency, cashTenderLocale)}
+                              {tx.cash_change_amount !== null && tx.cash_change_amount !== undefined
+                                ? ` · ${t("page.form.cashChange")}: ${formatCashTenderAmount(tx.cash_change_amount, tx.currency, cashTenderLocale)}`
+                                : ""}
+                              {Number(tx.cash_tip_amount ?? 0) > 0
+                                ? ` · ${t("page.form.cashTipRecorded", { amount: formatCashTenderAmount(Number(tx.cash_tip_amount), tx.currency, cashTenderLocale) })}`
+                                : ""}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="flex flex-col items-end gap-1">
                           <span className="text-xs text-slate-500">
@@ -5765,6 +6476,31 @@ export function ReservationsPage() {
                               ) : null}
                             </div>
                           ) : null}
+                          {canCorrectPayments &&
+                          tx.status === "completed" &&
+                          tx.type !== "refund" &&
+                          tx.group_payment_batch_id == null &&
+                          !tx.company_night_charge_refundable_allocations?.length &&
+                          !detailsSummary.transactions.some((refund) =>
+                            refund.status === "completed" &&
+                            refund.type === "refund" &&
+                            refund.refund_of_transaction_id === tx.id
+                          ) &&
+                          correctablePaymentMethods.has(tx.method) ? (
+                            <button
+                              type="button"
+                              data-testid={`payment-correction-open-${tx.id}`}
+                              aria-label={t("page.details.paymentCorrection.actionFor", { id: tx.id })}
+                              onClick={() => setPaymentCorrectionTarget({
+                                transaction: tx,
+                                sourceReservationId: detailsReservation.id,
+                                sourceConfirmationCode: detailsReservation.confirmation_code
+                              })}
+                              className="min-h-10 rounded-md border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
+                            >
+                              {t("page.details.paymentCorrection.action")}
+                            </button>
+                          ) : null}
                         </div>
                       </li>
                     ))}
@@ -5772,6 +6508,40 @@ export function ReservationsPage() {
                 ) : (
                   <p className="text-sm text-slate-600">{t("page.details.noTransactions")}</p>
                 )}
+                {hasPermission("payment:correct") && detailsSummary?.payment_corrections?.length ? (
+                  <section
+                    className="mt-4 rounded-lg border border-violet-200 bg-violet-50/50 p-3"
+                    aria-labelledby="payment-correction-history-title"
+                    data-testid="payment-correction-history"
+                  >
+                    <h3 id="payment-correction-history-title" className="text-xs font-semibold uppercase tracking-wide text-violet-900">
+                      {t("page.details.paymentCorrection.historyTitle")}
+                    </h3>
+                    <ul className="mt-2 divide-y divide-violet-100">
+                      {detailsSummary.payment_corrections.map((correction) => (
+                        <li key={correction.correction_id} className="py-2 text-xs text-slate-700">
+                          <p className="font-medium text-slate-900">
+                            {correction.correction_type === "reassign"
+                              ? t("page.details.paymentCorrection.historyReassigned", {
+                                  sourcePayment: correction.source_transaction_id,
+                                  sourceReservation: correction.source_reservation_id,
+                                  targetReservation: correction.target_reservation_id ?? "?",
+                                  replacementPayment: correction.replacement_transaction_id ?? "?"
+                                })
+                              : t("page.details.paymentCorrection.historyDuplicateReversal", {
+                                  sourcePayment: correction.source_transaction_id,
+                                  sourceReservation: correction.source_reservation_id
+                                })}
+                          </p>
+                          <p className="mt-1">{t("page.details.paymentCorrection.historyReason", { reason: correction.reason })}</p>
+                          <time className="mt-1 block text-slate-500" dateTime={correction.created_at}>
+                            {formatHotelDateTime(correction.created_at, hotelConfigQuery.data?.hotel_timezone, i18n.language === "en" ? "en-US" : "es-AR")}
+                          </time>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
               </div>
             </div>
             {hasPermission("operations:audit:view") ? (
@@ -5786,7 +6556,7 @@ export function ReservationsPage() {
                       <li key={`${item.source}-${item.source_id}`} className="py-2 text-sm">
                         <p className="font-semibold text-slate-900">{item.summary}</p>
                         <p className="text-xs text-slate-600">{item.action} · {item.actor_name} · {formatHotelDateTime(item.occurred_at, hotelConfigQuery.data?.hotel_timezone)}</p>
-                        {auditMetadataLines(item.details, {
+                        {reservationAuditMetadataLines(item.details, {
                           arrival: t("page.details.timelineArrivalTime"),
                           comment: t("page.details.reservationComment"),
                           empty: t("page.form.collab.emptyValue")
@@ -5818,153 +6588,58 @@ export function ReservationsPage() {
       )}
 
       {payingGroup && (
-        <div className="fixed inset-0 z-40 flex animate-fade-in items-center justify-center bg-slate-900/40 px-4 py-6">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="group-payment-title"
-            className="max-h-[90vh] w-full max-w-2xl animate-scale-in overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
-            data-testid="reservation-group-payment-dialog"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 id="group-payment-title" className="text-lg font-semibold text-slate-900">
-                  {t("page.groups.paymentTitle", { guest: payingGroup.guest_name })}
-                </h2>
-                <p className="mt-1 text-xs text-slate-600">{t("page.groups.paymentHint")}</p>
-              </div>
-              <button
-                type="button"
-                disabled={groupPaymentMutation.isPending}
-                onClick={() => { setPayingGroup(null); setGroupPaymentError(null); }}
-                className="text-sm text-slate-600 hover:text-slate-900 disabled:opacity-50"
-              >
-                {t("page.common.close")}
-              </button>
-            </div>
-
-            {groupPaymentError && (
-              <div className="mt-4 flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
-                <p>{groupPaymentError}</p>
-                <button type="button" onClick={() => setGroupPaymentError(null)} className="shrink-0 text-xs font-semibold underline">
-                  {t("page.groups.paymentCloseError")}
-                </button>
-              </div>
-            )}
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className="text-sm font-semibold text-slate-700">
-                {t("page.groups.paymentTotal")}
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={groupPaymentTotalInput}
-                    onChange={(event) => setGroupPaymentTotalInput(event.target.value)}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2"
-                    data-testid="group-payment-received-amount"
-                  />
-                  <span className="text-xs text-slate-500">{payingGroup.currency_code}</span>
-                </div>
-              </label>
-              <label className="text-sm font-semibold text-slate-700">
-                {t("page.groups.paymentMethod")}
-                <select
-                  value={groupPaymentMethod}
-                  onChange={(event) => setGroupPaymentMethod(event.target.value as PaymentMethod)}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-                  data-testid="group-payment-method"
-                >
-                  {groupPaymentMethods.map((method) => (
-                    <option key={method} value={method}>{t(`page.paymentMethods.${method}`)}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="mt-4 rounded-lg border border-slate-200">
-              <div className="grid grid-cols-[1fr_9rem] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
-                <span>{t("page.groups.paymentAllocation")}</span>
-                <span className="text-right">{payingGroup.currency_code}</span>
-              </div>
-              <div className="divide-y divide-slate-100">
-                {payingGroup.reservations.map((child) => (
-                  <label key={child.id} className="grid grid-cols-[1fr_9rem] items-center gap-3 px-3 py-2 text-sm">
-                    <span className="min-w-0">
-                      <span className="block font-medium text-slate-800">{child.confirmation_code}</span>
-                      <span className="block text-xs text-slate-500">
-                        {t("page.groups.balance")}: {formatMoney(child.balance_due, child.currency_code)}
-                      </span>
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      max={child.balance_due ?? undefined}
-                      disabled={child.company_billing_deferred || child.balance_due === null}
-                      value={groupPaymentAllocations[child.id] ?? ""}
-                      onChange={(event) => setGroupPaymentAllocations((current) => ({ ...current, [child.id]: event.target.value }))}
-                      className="w-full rounded-lg border border-slate-200 px-2 py-2 text-right"
-                      aria-label={`${t("page.groups.paymentAllocation")} ${child.confirmation_code}`}
-                    />
-                  </label>
-                ))}
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs">
-                <span className="text-slate-600">{t("page.groups.paymentAllocated")}</span>
-                <strong className={groupRequestedCents === groupAllocatedCents ? "text-emerald-700" : "text-rose-700"}>
-                  {formatMoney(groupAllocatedCents / 100, payingGroup.currency_code)} / {formatMoney(groupPaymentTotalInput, payingGroup.currency_code)}
-                </strong>
-              </div>
-            </div>
-
-            {groupPaymentManualMethod && (
-              <label className="mt-4 block text-sm font-semibold text-slate-700">
-                {t("page.groups.paymentReference")}
-                <input
-                  value={groupPaymentReference}
-                  onChange={(event) => setGroupPaymentReference(event.target.value)}
-                  maxLength={120}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-                  data-testid="group-payment-reference"
-                />
-              </label>
-            )}
-            <label className="mt-4 block text-sm font-semibold text-slate-700">
-              {t("page.groups.paymentDescription")}
-              <input
-                value={groupPaymentDescription}
-                onChange={(event) => setGroupPaymentDescription(event.target.value)}
-                maxLength={300}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
-              />
-            </label>
-            <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
-              {t("page.groups.paymentCashTotal")}: <strong>{formatMoney(groupPaymentGross, payingGroup.currency_code)}</strong>
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                disabled={groupPaymentMutation.isPending}
-                onClick={() => { setPayingGroup(null); setGroupPaymentError(null); }}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
-              >
-                {t("page.common.close")}
-              </button>
-              <button
-                type="button"
-                onClick={() => void submitGroupPayment()}
-                disabled={groupPaymentMutation.isPending || groupRequestedCents === 0 || groupRequestedCents !== groupAllocatedCents}
-                className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-50"
-                data-testid="group-payment-submit"
-              >
-                {groupPaymentMutation.isPending ? t("common:saving") : t("page.groups.paymentSubmit")}
-              </button>
-            </div>
-          </section>
-        </div>
+        <ReservationGroupPaymentDialog
+          group={payingGroup}
+          totalInput={groupPaymentTotalInput}
+          onTotalInputChange={setGroupPaymentTotalInput}
+          paymentMethod={groupPaymentMethod}
+          paymentMethods={groupPaymentMethods}
+          onPaymentMethodChange={(method) => {
+            setGroupPaymentMethod(method);
+            if (method !== "cash") {
+              setGroupCashReceivedAmountInput("");
+              setGroupCashTipAmountInput("");
+            }
+          }}
+          allocations={groupPaymentAllocations}
+          onAllocationChange={(reservationId, value) => {
+            setGroupPaymentAllocations((current) => ({ ...current, [reservationId]: value }));
+          }}
+          requestedCents={groupRequestedCents}
+          allocatedCents={groupAllocatedCents}
+          isManualPaymentMethod={groupPaymentManualMethod}
+          paymentReference={groupPaymentReference}
+          onPaymentReferenceChange={setGroupPaymentReference}
+          paymentDescription={groupPaymentDescription}
+          onPaymentDescriptionChange={setGroupPaymentDescription}
+          paymentGross={groupPaymentGross}
+          cashReceivedAmountInput={groupCashReceivedAmountInput}
+          onCashReceivedAmountChange={setGroupCashReceivedAmountInput}
+          cashTipAmountInput={groupCashTipAmountInput}
+          onCashTipAmountChange={setGroupCashTipAmountInput}
+          cashTenderInvalid={Boolean(groupCashTender && !groupCashTender.valid)}
+          cashTipInvalid={Boolean(groupCashTip && !groupCashTip.valid)}
+          pending={groupPaymentMutation.isPending}
+          error={groupPaymentError}
+          onClearError={() => setGroupPaymentError(null)}
+          onClose={() => {
+            setPayingGroup(null);
+            setGroupPaymentError(null);
+          }}
+          onSubmit={submitGroupPayment}
+        />
       )}
+
+      {paymentCorrectionTarget ? (
+        <PaymentCorrectionDialog
+          open
+          transaction={paymentCorrectionTarget.transaction}
+          sourceConfirmationCode={paymentCorrectionTarget.sourceConfirmationCode}
+          session={session}
+          onClose={() => setPaymentCorrectionTarget(null)}
+          onSuccess={handlePaymentCorrectionSuccess}
+        />
+      ) : null}
 
       {guestIdOpen && (
         <div className="fixed inset-0 z-30 flex animate-fade-in items-center justify-center bg-slate-900/30 px-4 py-6">

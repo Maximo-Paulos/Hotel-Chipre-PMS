@@ -83,6 +83,12 @@ def generate_payment_receipt_pdf(receipt: dict) -> bytes:
             rows.append(("Movimiento original", f"#{receipt['refund_of_transaction_id']}"))
     else:
         rows.append(("Importe recibido", _amount(receipt["gross_amount"], currency)))
+        if receipt.get("cash_received_amount") is not None:
+            rows.append(("Efectivo entregado", _amount(receipt["cash_received_amount"], currency)))
+            if Decimal(str(receipt.get("cash_tip_amount") or 0)) > Decimal("0.00"):
+                rows.append(("Propina", _amount(receipt["cash_tip_amount"], currency)))
+            if receipt.get("cash_change_amount") is not None:
+                rows.append(("Vuelto", _amount(receipt["cash_change_amount"], currency)))
         fee = Decimal(str(receipt.get("fee_amount") or 0)).copy_abs().quantize(Decimal("0.01"))
         if fee > Decimal("0.00"):
             rows.append(("Cargo del medio de pago", _amount(fee, currency)))

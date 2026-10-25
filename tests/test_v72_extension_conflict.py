@@ -11,7 +11,12 @@ from app.models.reservation import Reservation, ReservationSourceEnum, Reservati
 from app.models.room import Room
 from app.models.transaction import PaymentMethodEnum, Transaction, TransactionStatusEnum, TransactionTypeEnum
 from app.schemas.transaction import PaymentRequest
-from app.services.reservation_operations_service import ReservationOperationsError, extend_reservation_stay
+from app.services.reservation_operations_service import (
+    ReservationExtensionImpactConfirmationError,
+    ReservationOperationsError,
+    extend_reservation_stay,
+    plan_reservation_extension_impact,
+)
 from app.services.cash_register_service import open_session
 from app.services.payment_service import process_payment
 
@@ -90,6 +95,12 @@ def test_unpaid_future_conflict_moves_to_equivalent_room_and_extension_proceeds(
         check_in=date(2027, 10, 4),
         check_out=date(2027, 10, 7),
     )
+    impact_plan = plan_reservation_extension_impact(
+        db,
+        reservation=current,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2027, 10, 6),
+    )
 
     result = extend_reservation_stay(
         db,
@@ -100,6 +111,7 @@ def test_unpaid_future_conflict_moves_to_equivalent_room_and_extension_proceeds(
         pricing_mode="original_average",
         payment_action="immediate_payment",
         immediate_payment=_payment(current),
+        confirmed_impact_fingerprint=impact_plan["fingerprint"],
     )
 
     assert result.success is True
@@ -143,6 +155,13 @@ def test_unpaid_future_conflict_upgrades_to_superior_when_no_equivalent_availabl
             check_out=date(2027, 11, 7),
         )
 
+    impact_plan = plan_reservation_extension_impact(
+        db,
+        reservation=current,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2027, 11, 6),
+    )
+
     result = extend_reservation_stay(
         db,
         reservation=current,
@@ -152,6 +171,7 @@ def test_unpaid_future_conflict_upgrades_to_superior_when_no_equivalent_availabl
         pricing_mode="original_average",
         payment_action="immediate_payment",
         immediate_payment=_payment(current),
+        confirmed_impact_fingerprint=impact_plan["fingerprint"],
     )
 
     assert result.success is True
@@ -205,6 +225,316 @@ def test_paid_future_conflict_reports_conflict_and_extension_does_not_proceed(db
     assert result.conflicts
     assert result.conflicts[0]["reservation_id"] == future.id
     assert result.conflicts[0]["reason"] == "future_reservation_has_payment_or_deposit"
+    assert db.query(RoomMovementGroup).count() == 0
+
+
+def test_extension_impact_plan_is_read_only_and_contains_only_operational_fields(
+    db, sample_guest, sample_rooms
+):
+    current = _reservation(
+        db,
+        code="EXT-PLAN-CURRENT",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 4, 1),
+        check_out=date(2028, 4, 4),
+        amount_paid=300.0,
+        status=ReservationStatusEnum.FULLY_PAID,
+    )
+    future = _reservation(
+        db,
+        code="EXT-PLAN-FUTURE",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 4, 4),
+        check_out=date(2028, 4, 7),
+    )
+    previous_state = (future.room_id, future.version, future.notes)
+
+    plan = plan_reservation_extension_impact(
+        db,
+        reservation=current,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2028, 4, 6),
+    )
+
+    assert plan is not None
+    assert len(plan["fingerprint"]) == 64
+    assert plan["actions"] == [
+        {
+            "action": "moved_equivalent",
+            "room_label": f"{sample_rooms[0].room_number} → {sample_rooms[1].room_number}",
+            "check_in_date": "2028-04-04",
+            "check_out_date": "2028-04-07",
+            "confirmation_code": "EXT-PLAN-FUTURE",
+        }
+    ]
+    assert (future.room_id, future.version, future.notes) == previous_state
+    assert db.query(RoomMovementGroup).count() == 0
+    assert "guest_id" not in str(plan)
+    assert "first_name" not in str(plan)
+
+
+def test_extension_rejects_missing_confirmation_without_mutation(db, sample_guest, sample_rooms):
+    current = _reservation(
+        db,
+        code="EXT-CONFIRM-MISSING-CURRENT",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 5, 1),
+        check_out=date(2028, 5, 4),
+        amount_paid=300.0,
+        status=ReservationStatusEnum.FULLY_PAID,
+    )
+    future = _reservation(
+        db,
+        code="EXT-CONFIRM-MISSING-FUTURE",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 5, 4),
+        check_out=date(2028, 5, 7),
+    )
+    original_root = (current.check_out_date, current.total_amount, current.version)
+    original_future = (future.room_id, future.check_out_date, future.version, future.notes)
+
+    with pytest.raises(ReservationExtensionImpactConfirmationError):
+        extend_reservation_stay(
+            db,
+            reservation=current,
+            hotel_id=sample_guest.hotel_id,
+            new_checkout_date=date(2028, 5, 6),
+            client_version=current.version or 0,
+            pricing_mode="original_average",
+            payment_action="pending_balance",
+        )
+
+    assert (current.check_out_date, current.total_amount, current.version) == original_root
+    assert (future.room_id, future.check_out_date, future.version, future.notes) == original_future
+    assert db.query(RoomMovementGroup).count() == 0
+
+
+def test_extension_rejects_stale_confirmation_when_available_room_changes(db, sample_guest, sample_rooms):
+    current = _reservation(
+        db,
+        code="EXT-CONFIRM-STALE-CURRENT",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 5, 1),
+        check_out=date(2028, 5, 4),
+        amount_paid=300.0,
+        status=ReservationStatusEnum.FULLY_PAID,
+    )
+    future = _reservation(
+        db,
+        code="EXT-CONFIRM-STALE-FUTURE",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 5, 4),
+        check_out=date(2028, 5, 7),
+    )
+    new_checkout = date(2028, 5, 6)
+    original_plan = plan_reservation_extension_impact(
+        db,
+        reservation=current,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=new_checkout,
+    )
+    blocker = _reservation(
+        db,
+        code="EXT-CONFIRM-STALE-BLOCKER",
+        guest=sample_guest,
+        room=sample_rooms[1],
+        check_in=date(2028, 5, 4),
+        check_out=date(2028, 5, 7),
+    )
+    refreshed_plan = plan_reservation_extension_impact(
+        db,
+        reservation=current,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=new_checkout,
+    )
+    assert refreshed_plan["fingerprint"] != original_plan["fingerprint"]
+
+    with pytest.raises(ReservationExtensionImpactConfirmationError) as exc_info:
+        extend_reservation_stay(
+            db,
+            reservation=current,
+            hotel_id=sample_guest.hotel_id,
+            new_checkout_date=new_checkout,
+            client_version=current.version or 0,
+            pricing_mode="original_average",
+            payment_action="pending_balance",
+            confirmed_impact_fingerprint=original_plan["fingerprint"],
+        )
+
+    assert exc_info.value.code == "impact_plan_stale"
+    assert exc_info.value.impact_plan["fingerprint"] == refreshed_plan["fingerprint"]
+    assert current.check_out_date == date(2028, 5, 4)
+    assert future.room_id == sample_rooms[0].id
+    assert blocker.room_id == sample_rooms[1].id
+    assert db.query(RoomMovementGroup).count() == 0
+
+
+def test_matching_extension_confirmation_applies_the_previewed_plan(db, sample_guest, sample_rooms):
+    current = _reservation(
+        db,
+        code="EXT-CONFIRM-MATCH-CURRENT",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 6, 1),
+        check_out=date(2028, 6, 4),
+        amount_paid=300.0,
+        status=ReservationStatusEnum.FULLY_PAID,
+    )
+    future = _reservation(
+        db,
+        code="EXT-CONFIRM-MATCH-FUTURE",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 6, 4),
+        check_out=date(2028, 6, 7),
+    )
+    plan = plan_reservation_extension_impact(
+        db,
+        reservation=current,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2028, 6, 6),
+    )
+
+    result = extend_reservation_stay(
+        db,
+        reservation=current,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2028, 6, 6),
+        client_version=current.version or 0,
+        pricing_mode="original_average",
+        payment_action="pending_balance",
+        confirmed_impact_fingerprint=plan["fingerprint"],
+    )
+
+    assert result.success is True
+    assert future.room_id == sample_rooms[1].id
+    assert current.check_out_date == date(2028, 6, 6)
+
+
+def test_mixed_paid_and_unpaid_conflicts_do_not_partially_reallocate(db, sample_guest, sample_rooms):
+    current = _reservation(
+        db,
+        code="EXT-MIXED-CURRENT",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 7, 1),
+        check_out=date(2028, 7, 4),
+        amount_paid=300.0,
+        status=ReservationStatusEnum.FULLY_PAID,
+    )
+    unpaid = _reservation(
+        db,
+        code="EXT-MIXED-UNPAID",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 7, 4),
+        check_out=date(2028, 7, 7),
+    )
+    paid = _reservation(
+        db,
+        code="EXT-MIXED-PAID",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 7, 5),
+        check_out=date(2028, 7, 8),
+        amount_paid=50.0,
+        status=ReservationStatusEnum.DEPOSIT_PAID,
+    )
+
+    plan = plan_reservation_extension_impact(
+        db,
+        reservation=current,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2028, 7, 6),
+    )
+    result = extend_reservation_stay(
+        db,
+        reservation=current,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2028, 7, 6),
+        client_version=current.version or 0,
+        pricing_mode="original_average",
+        payment_action="pending_balance",
+        confirmed_impact_fingerprint=plan["fingerprint"],
+    )
+
+    assert result.success is False
+    assert current.check_out_date == date(2028, 7, 4)
+    assert unpaid.room_id == sample_rooms[0].id
+    assert paid.room_id == sample_rooms[0].id
+    assert db.query(RoomMovementGroup).count() == 0
+
+
+@pytest.mark.parametrize(
+    ("status", "allocation_locked", "expected_reason"),
+    [
+        (
+            ReservationStatusEnum.CHECKED_IN,
+            False,
+            "checked_in_reservation_cannot_be_reallocated",
+        ),
+        (ReservationStatusEnum.PENDING, True, "reservation_allocation_locked"),
+        (
+            ReservationStatusEnum.NO_SHOW,
+            False,
+            "no_show_reservation_blocks_extension",
+        ),
+    ],
+)
+def test_non_reallocatable_conflicts_are_blocked_without_mutation(
+    db, sample_guest, sample_rooms, status, allocation_locked, expected_reason
+):
+    current = _reservation(
+        db,
+        code=f"EXT-BLOCKED-{status.value}-CURRENT",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 8, 1),
+        check_out=date(2028, 8, 4),
+        amount_paid=300.0,
+        status=ReservationStatusEnum.FULLY_PAID,
+    )
+    conflict = _reservation(
+        db,
+        code=f"EXT-BLOCKED-{status.value}-CONFLICT",
+        guest=sample_guest,
+        room=sample_rooms[0],
+        check_in=date(2028, 8, 4),
+        check_out=date(2028, 8, 7),
+        status=status,
+        allocation_locked=allocation_locked,
+    )
+    original_state = (conflict.room_id, conflict.version, conflict.notes)
+
+    plan = plan_reservation_extension_impact(
+        db,
+        reservation=current,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2028, 8, 6),
+    )
+    result = extend_reservation_stay(
+        db,
+        reservation=current,
+        hotel_id=sample_guest.hotel_id,
+        new_checkout_date=date(2028, 8, 6),
+        client_version=current.version or 0,
+        pricing_mode="original_average",
+        payment_action="pending_balance",
+        confirmed_impact_fingerprint=plan["fingerprint"],
+    )
+
+    assert result.success is False
+    assert result.conflicts[0]["reason"] == expected_reason
+    assert plan["actions"][0]["action"] == "blocked"
+    assert plan["actions"][0]["reason_code"] == expected_reason
+    assert current.check_out_date == date(2028, 8, 4)
+    assert (conflict.room_id, conflict.version, conflict.notes) == original_state
     assert db.query(RoomMovementGroup).count() == 0
 
 

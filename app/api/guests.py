@@ -38,6 +38,8 @@ from app.services.permission_service import (
     PERMISSION_GUEST_EXPORT,
     PERMISSION_GUEST_TAGS,
     PERMISSION_GUEST_VIEW,
+    PERMISSION_RESERVATION_READ,
+    resolve,
 )
 
 router = APIRouter(prefix="/api/guests", tags=["Guests"])
@@ -269,12 +271,20 @@ def get_guest_quick_profile(
     context: AuthContext = Depends(require_permission(PERMISSION_GUEST_VIEW)),
 ):
     try:
+        can_read_reservation_history = resolve(
+            db,
+            context.hotel_id,
+            context.user_role,
+            PERMISSION_RESERVATION_READ,
+            user_id=context.user_id,
+        )
         profile = quick_profile(
             db,
             hotel_id=context.hotel_id,
             guest_id=guest_id,
             offset=offset,
             limit=limit,
+            include_reservation_history=can_read_reservation_history,
         )
         # Do not return ORM instances here. Guest.reservations and
         # GuestTag.guest form cyclic SQLAlchemy relationships; FastAPI's

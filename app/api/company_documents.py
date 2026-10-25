@@ -6,10 +6,20 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
+from app.dependencies.auth import (
+    AuthContext,
+    require_all_permissions,
+    require_permission,
+)
 from app.models.audit_log import AuditActionEnum
 from app.models.company_document import CompanyDocument, CompanyDocumentStatusEnum
-from app.schemas.company_document import CompanyDocumentCreate, CompanyDocumentRead, CompanyDocumentStatusUpdate, CompanyDocumentUpload
+from app.schemas.company_document import (
+    CompanyDocumentCreate,
+    CompanyDocumentRead,
+    CompanyDocumentStatusUpdate,
+    CompanyDocumentUpload,
+)
+from app.services import audit_log_service
 from app.services.company_document_service import (
     CompanyDocumentError,
     create_document,
@@ -19,9 +29,13 @@ from app.services.company_document_service import (
     set_signature_status,
     upload_company_document,
 )
-from app.services import audit_log_service
-from app.services.permission_service import PERMISSION_CHECKIN_PERFORM, PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW, PERMISSION_RESERVATION_READ
-
+from app.services.permission_service import (
+    PERMISSION_CHECKIN_PERFORM,
+    PERMISSION_COMPANY_DOCUMENTS_READ,
+    PERMISSION_COMPANY_MANAGE,
+    PERMISSION_COMPANY_VIEW,
+    PERMISSION_RESERVATION_READ,
+)
 
 router = APIRouter(prefix="/api/company-documents", tags=["Company Documents"])
 
@@ -75,7 +89,9 @@ def upload_company_document_route(
 def get_company_document_file(
     document_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_RESERVATION_READ, PERMISSION_COMPANY_DOCUMENTS_READ)
+    ),
 ):
     try:
         content, file_name = get_company_document_bytes(db, hotel_id=context.hotel_id, document_id=document_id)
@@ -139,7 +155,9 @@ def create_company_document(
 def get_company_document(
     document_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_all_permissions(PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_COMPANY_VIEW, PERMISSION_COMPANY_DOCUMENTS_READ)
+    ),
 ):
     return _get_document_or_404(db, hotel_id=context.hotel_id, document_id=document_id)
 
@@ -148,7 +166,9 @@ def get_company_document(
 def list_company_documents(
     company_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_all_permissions(PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_COMPANY_VIEW, PERMISSION_COMPANY_DOCUMENTS_READ)
+    ),
 ):
     return list_documents_for_company(db, hotel_id=context.hotel_id, company_id=company_id)
 
@@ -157,7 +177,9 @@ def list_company_documents(
 def list_reservation_documents(
     reservation_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_RESERVATION_READ, PERMISSION_COMPANY_DOCUMENTS_READ)
+    ),
 ):
     return list_documents_for_reservation(db, hotel_id=context.hotel_id, reservation_id=reservation_id)
 
@@ -166,7 +188,9 @@ def list_reservation_documents(
 def mark_company_document_signed_for_checkin(
     document_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CHECKIN_PERFORM)),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_CHECKIN_PERFORM, PERMISSION_COMPANY_DOCUMENTS_READ)
+    ),
 ):
     try:
         document = set_signature_status(

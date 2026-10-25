@@ -10,8 +10,10 @@ import {
 const RESERVATION_QUERY_PREFIXES = new Set([
   "reservations",
   "reservation",
+  "reservation-guest-arrivals",
   "room-availability",
   "reservation-operations",
+  "reservation-cancellation-reviews",
   "reservation-pending-actions",
   "occupancy-grid",
   "waitlist"
@@ -27,6 +29,7 @@ const CASH_QUERY_PREFIXES = new Set([
 ]);
 const RESERVATION_ENTITY_QUERY_PREFIXES = new Set([
   "reservation",
+  "reservation-guest-arrivals",
   "reservation-operations",
   "payment-summary",
   "payment-links",
@@ -42,7 +45,13 @@ const GUEST_QUERY_PREFIXES = new Set([
   "guest-restrictions",
   "guest-checkin-validation"
 ]);
-const ROOM_QUERY_PREFIXES = new Set(["rooms", "room-availability", "housekeeping-board", "room-state-events"]);
+const ROOM_QUERY_PREFIXES = new Set([
+  "rooms",
+  "room-availability",
+  "housekeeping-board",
+  "housekeeping-checklists",
+  "room-state-events"
+]);
 type ReservationRecordRefreshOptions = {
   includePaymentSummary?: boolean;
   includePaymentLinks?: boolean;

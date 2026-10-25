@@ -10,16 +10,18 @@ from typing import Optional
 
 from app.config import get_settings
 from app.database import get_engine
-from app.models.analytics import AnalyticsExportJob, AnalyticsExportStatusEnum, FactReservationDaily
+from app.models.analytics import (
+    AnalyticsExportJob,
+    AnalyticsExportStatusEnum,
+    FactReservationDaily,
+)
 from app.models.cash_register import CashMovement
 from app.models.hotel_config import HotelConfiguration
 from app.models.room import Room, RoomCategory
 from app.models.stock import StockMovement
+from app.models.stored_object import StoredObject, StoredObjectStatusEnum
 from app.models.transaction import Transaction, TransactionStatusEnum
 from app.services.analytics_exports import delete_export_file
-from app.services.financial_ledger import signed_transaction_amount
-from app.services.external_effects_policy import require_external_connections
-from app.services.object_storage import ObjectStorageError
 from app.services.analytics_warehouse import (
     DIM_DATE_TABLE,
     DIM_HOTEL_TABLE,
@@ -37,6 +39,9 @@ from app.services.analytics_warehouse import (
     reconcile_derived_fact,
     reconcile_reservation_fact_counts,
 )
+from app.services.external_effects_policy import require_external_connections
+from app.services.financial_ledger import signed_transaction_amount
+from app.services.object_storage import ObjectStorageError
 from app.services.tenant_context import set_tenant_hotel_context
 from app.tasks.celery_app import celery_app
 
@@ -153,6 +158,7 @@ def _project_operational_window(
         db.query(CashMovement)
         .filter(
             CashMovement.hotel_id == hotel_id,
+            CashMovement.voided_at.is_(None),
             CashMovement.recorded_at >= start_at,
             CashMovement.recorded_at < end_at,
         )
@@ -305,7 +311,9 @@ def detect_no_shows(
     try:
         from sqlalchemy.orm import sessionmaker
 
-        from app.services.analytics_facts import detect_no_shows as detect_no_shows_service
+        from app.services.analytics_facts import (
+            detect_no_shows as detect_no_shows_service,
+        )
 
         settings = get_settings()
         url = database_url or settings.DATABASE_URL
@@ -350,9 +358,12 @@ def refresh_fact_reservation_daily(
 ):
     try:
         from datetime import date
+
         from sqlalchemy.orm import sessionmaker
 
-        from app.services.analytics_facts import refresh_fact_reservation_daily as refresh_service
+        from app.services.analytics_facts import (
+            refresh_fact_reservation_daily as refresh_service,
+        )
 
         settings = get_settings()
         url = database_url or settings.DATABASE_URL
@@ -398,9 +409,12 @@ def refresh_fact_room_occupancy_daily(
 ):
     try:
         from datetime import date
+
         from sqlalchemy.orm import sessionmaker
 
-        from app.services.analytics_facts import refresh_fact_room_occupancy_daily as refresh_service
+        from app.services.analytics_facts import (
+            refresh_fact_room_occupancy_daily as refresh_service,
+        )
 
         settings = get_settings()
         url = database_url or settings.DATABASE_URL
@@ -453,6 +467,7 @@ def project_reservation_facts_to_clickhouse(
 
     try:
         from datetime import date
+
         from sqlalchemy.orm import sessionmaker
 
         require_external_connections("scheduled ClickHouse projection")
@@ -704,7 +719,26 @@ def cleanup_expired_exports(self, database_url: Optional[str] = None):
                         job.status = AnalyticsExportStatusEnum.EXPIRED
                         expired_ids.append(job.id)
                     try:
+                        object_key = job.file_path
                         delete_export_file(job)
+                        stored_object = (
+                            db.query(StoredObject)
+                            .filter(
+                                StoredObject.hotel_id == hotel_id,
+                                StoredObject.purpose == "analytics_export",
+                                StoredObject.object_key == object_key,
+                            )
+                            .one_or_none()
+                        )
+                        if stored_object is not None:
+                            if stored_object.deleted_at is None:
+                                stored_object.deleted_at = now
+                            stored_object.status = StoredObjectStatusEnum.DELETED.value
+                        else:
+                            logger.warning(
+                                "analytics.cleanup_expired_exports stored_object_metadata_missing job_id=%s",
+                                job.id,
+                            )
                         job.file_path = None
                         deleted_objects += 1
                     except ObjectStorageError as exc:

@@ -6,7 +6,17 @@ import { hasValidSession } from "../../api/client";
 import { invalidateQueriesInBackground } from "../../api/queryInvalidation";
 import { queryKeys } from "../../api/queryKeys";
 import { EVENT_REFRESHED_QUERY_STALE_TIME_MS } from "../../api/queryPolicy";
-import { getHousekeepingBoard, updateRoomCleaningStatus, type HousekeepingStatus } from "../../api/rooms";
+import {
+  completeHousekeepingChecklistItem,
+  HOUSEKEEPING_CHECKLIST_ITEM_CODES,
+  getHousekeepingBoard,
+  getOpenHousekeepingChecklists,
+  updateRoomCleaningStatus,
+  type HousekeepingBoard,
+  type HousekeepingChecklistItemCode,
+  type HousekeepingStatus,
+  type OpenHousekeepingChecklistsResponse
+} from "../../api/rooms";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import { useSession } from "../../state/session";
@@ -33,16 +43,61 @@ export function HousekeepingTodayPage() {
     enabled,
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
+  const checklistsQuery = useQuery({
+    queryKey: queryKeys.housekeepingChecklists(session.hotelId),
+    queryFn: () => getOpenHousekeepingChecklists(session),
+    enabled,
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
+  });
   const statusMutation = useGuardedMutation({
     mutationFn: ({ roomId, status }: { roomId: number; status: HousekeepingStatus }) =>
       updateRoomCleaningStatus(roomId, status, undefined, session),
     onSuccess: () => {
-      invalidateQueriesInBackground(queryClient, { queryKey: ["housekeeping-board", session.hotelId] });
-      invalidateQueriesInBackground(queryClient, { queryKey: ["rooms", session.hotelId] });
+      invalidateQueriesInBackground(queryClient, { queryKey: queryKeys.housekeepingBoard(session.hotelId) });
+      invalidateQueriesInBackground(queryClient, { queryKey: queryKeys.rooms(session.hotelId) });
+    }
+  });
+  const checklistMutation = useGuardedMutation({
+    mutationFn: ({ checklistId, itemCode }: { checklistId: number; itemCode: HousekeepingChecklistItemCode }) =>
+      completeHousekeepingChecklistItem(checklistId, itemCode, session),
+    onSuccess: (updatedChecklist) => {
+      queryClient.setQueryData<OpenHousekeepingChecklistsResponse>(
+        queryKeys.housekeepingChecklists(session.hotelId),
+        (current) => {
+          if (!current) return current;
+          return {
+            checklists: updatedChecklist.status === "completed"
+              ? current.checklists.filter((checklist) => checklist.checklist_id !== updatedChecklist.checklist_id)
+              : current.checklists.map((checklist) => checklist.checklist_id === updatedChecklist.checklist_id
+                ? updatedChecklist
+                : checklist)
+          };
+        }
+      );
+      queryClient.setQueryData<HousekeepingBoard>(queryKeys.housekeepingBoard(session.hotelId), (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          rooms: current.rooms.map((room) => room.room_id === updatedChecklist.room.id
+            ? {
+                ...room,
+                operational_status: updatedChecklist.room.operational_status,
+                housekeeping_status: updatedChecklist.room.housekeeping_status
+              }
+            : room)
+        };
+      });
+      invalidateQueriesInBackground(queryClient, { queryKey: queryKeys.housekeepingBoard(session.hotelId) });
+      invalidateQueriesInBackground(queryClient, { queryKey: queryKeys.housekeepingChecklists(session.hotelId) });
+      invalidateQueriesInBackground(queryClient, { queryKey: queryKeys.rooms(session.hotelId) });
     }
   });
 
   const rooms = useMemo(() => boardQuery.data?.rooms ?? [], [boardQuery.data?.rooms]);
+  const checklistsByRoom = useMemo(
+    () => new Map((checklistsQuery.data?.checklists ?? []).map((checklist) => [checklist.room.id, checklist])),
+    [checklistsQuery.data?.checklists]
+  );
   const floors = useMemo(() => [...new Set(rooms.map((room) => room.floor))].sort((a, b) => a - b), [rooms]);
   const visibleRooms = useMemo(
     () => selectedFloor === "all" ? rooms : rooms.filter((room) => String(room.floor) === selectedFloor),
@@ -83,11 +138,11 @@ export function HousekeepingTodayPage() {
           </div>
           <button
             type="button"
-            onClick={() => void boardQuery.refetch()}
-            disabled={boardQuery.isFetching}
+            onClick={() => void Promise.all([boardQuery.refetch(), checklistsQuery.refetch()])}
+            disabled={boardQuery.isFetching || checklistsQuery.isFetching}
             className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60"
           >
-            {boardQuery.isFetching ? t("housekeepingToday.refreshing") : t("housekeepingToday.refresh")}
+            {boardQuery.isFetching || checklistsQuery.isFetching ? t("housekeepingToday.refreshing") : t("housekeepingToday.refresh")}
           </button>
         </div>
       </header>
@@ -101,11 +156,19 @@ export function HousekeepingTodayPage() {
         ))}
       </section>
 
-      {boardQuery.isLoading ? <p role="status" className="rounded-lg bg-white p-4 text-sm text-slate-600">{t("housekeepingToday.loading")}</p> : null}
+      {boardQuery.isLoading || checklistsQuery.isLoading ? <p role="status" className="rounded-lg bg-white p-4 text-sm text-slate-600">{t("housekeepingToday.loading")}</p> : null}
       {boardQuery.isError ? (
         <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
           {t("housekeepingToday.loadError")}
           <button type="button" onClick={() => void boardQuery.refetch()} className="ml-2 font-semibold underline">{t("housekeepingToday.retry")}</button>
+        </div>
+      ) : null}
+      {checklistsQuery.isError ? (
+        <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          {t("housekeepingToday.checklistsLoadError")}
+          <button type="button" onClick={() => void checklistsQuery.refetch()} className="ml-2 font-semibold underline">
+            {t("housekeepingToday.retry")}
+          </button>
         </div>
       ) : null}
       {statusMutation.isError ? (
@@ -113,7 +176,12 @@ export function HousekeepingTodayPage() {
           {t("inventory.statusUpdateError", { message: statusMutation.error instanceof Error ? statusMutation.error.message : t("inventory.statusUpdateDefaultError") })}
         </div>
       ) : null}
-      {!boardQuery.isLoading && !boardQuery.isError && rooms.length === 0 ? (
+      {checklistMutation.isError ? (
+        <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          {t("housekeepingToday.checklistUpdateError")}
+        </div>
+      ) : null}
+      {boardQuery.isSuccess && checklistsQuery.isSuccess && rooms.length === 0 ? (
         <p className="rounded-lg bg-white p-4 text-sm text-slate-600">{t("housekeepingToday.empty")}</p>
       ) : null}
 
@@ -135,8 +203,11 @@ export function HousekeepingTodayPage() {
           <section key={floor} aria-label={t("housekeepingToday.floorLabel", { floor })}>
             <h2 className="mb-2 text-sm font-semibold text-slate-700">{t("housekeepingToday.floorLabel", { floor })}</h2>
             <div className="space-y-2">
-              {floorRooms.map((room) => (
-                <article key={room.room_id} className="flex min-w-0 flex-col gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              {floorRooms.map((room) => {
+                const checklist = checklistsByRoom.get(room.room_id);
+                const completedCount = checklist?.items.filter((item) => item.completed).length ?? 0;
+                return (
+                <article key={room.room_id} className="flex min-w-0 flex-col gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <h3 className="font-semibold text-slate-900">{t("housekeepingToday.room", { number: room.room_number })}</h3>
@@ -149,13 +220,53 @@ export function HousekeepingTodayPage() {
                       {room.has_departure_today && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-orange-800">{t("housekeepingToday.departure")}</span>}
                       {room.has_arrival_today && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-800">{t("housekeepingToday.arrival")}</span>}
                       {room.has_stayover_today && <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-800">{t("housekeepingToday.stayover")}</span>}
-                      {room.maintenance_blocked && <span className="rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-800">{t("housekeepingToday.maintenanceBlocked")}</span>}
-                      {!room.has_arrival_today && !room.has_departure_today && !room.has_stayover_today && !room.maintenance_blocked && (
+                      {room.active_block_reasons.map((reason) => (
+                        <span key={reason} className="rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-800">
+                          {t(`housekeepingToday.blockReasons.${reason}`)}
+                        </span>
+                      ))}
+                      {!room.has_arrival_today && !room.has_departure_today && !room.has_stayover_today && room.active_block_reasons.length === 0 && (
                         <span className="text-slate-500">{t("housekeepingToday.noSpecialEvents")}</span>
                       )}
                     </div>
                   </div>
-                  {canUpdate ? (
+                  {checklist ? (
+                    <div className="w-full min-w-0 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 sm:max-w-md">
+                      <div className="flex flex-wrap items-baseline justify-between gap-1">
+                        <h4 className="text-sm font-semibold text-slate-900">{t("housekeepingToday.checklist.title")}</h4>
+                        <p className="text-xs text-slate-600" aria-live="polite">
+                          {t("housekeepingToday.checklist.progress", { completed: completedCount, total: checklist.items.length })}
+                        </p>
+                      </div>
+                      <fieldset className="mt-2 space-y-1.5" disabled={!canUpdate || checklistMutation.isPending}>
+                        <legend className="sr-only">
+                          {t("housekeepingToday.checklist.title")} · {t("housekeepingToday.room", { number: room.room_number })}
+                        </legend>
+                        {HOUSEKEEPING_CHECKLIST_ITEM_CODES.map((itemCode) => {
+                          const item = checklist.items.find((checklistItem) => checklistItem.code === itemCode);
+                          if (!item) return null;
+                          return (
+                            <label key={item.code} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-1 text-sm text-slate-800 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-indigo-600">
+                              <input
+                                type="checkbox"
+                                checked={item.completed}
+                                disabled={!canUpdate || item.completed || checklistMutation.isPending}
+                                onChange={(event) => {
+                                  if (event.currentTarget.checked) {
+                                    checklistMutation.mutate({ checklistId: checklist.checklist_id, itemCode: item.code });
+                                  }
+                                }}
+                                className="h-4 w-4 shrink-0 rounded border-slate-400 text-indigo-700 focus:ring-indigo-600"
+                              />
+                              <span>{t(`housekeepingToday.checklist.items.${item.code}`)}</span>
+                            </label>
+                          );
+                        })}
+                      </fieldset>
+                      <p className="mt-2 text-xs text-slate-600">{t("housekeepingToday.checklist.completionHint")}</p>
+                      {!canUpdate ? <p className="mt-1 text-xs text-amber-800">{t("housekeepingToday.checklist.readOnly")}</p> : null}
+                    </div>
+                  ) : canUpdate && checklistsQuery.isSuccess ? (
                     <label className="flex shrink-0 items-center gap-2 text-xs text-slate-700 sm:min-w-44">
                       <span className="sr-only">{t("housekeepingStatus.label")}</span>
                       <select
@@ -170,7 +281,8 @@ export function HousekeepingTodayPage() {
                     </label>
                   ) : null}
                 </article>
-              ))}
+                );
+              })}
             </div>
           </section>
         ))}

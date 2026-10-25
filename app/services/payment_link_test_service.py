@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 import ipaddress
 import hmac
 import hashlib
-from typing import Any
+import re
+from typing import Any, Callable
 from uuid import uuid4
 from urllib.parse import urlparse
 
@@ -22,10 +24,26 @@ from app.services.external_effects_policy import (
     require_external_connections,
     require_inbound_provider_events,
 )
+from app.services.tenant_context import set_tenant_hotel_context
 
 
 class PaymentLinkTestError(Exception):
     pass
+
+
+_PAYMENT_TEST_REFERENCE_RE = re.compile(r"^mp-test-([1-9][0-9]*)-([0-9a-f]{18})$")
+_PAYMENT_TEST_PROVIDER_RESPONSE_FIELDS = (
+    "id",
+    "external_reference",
+    "status",
+    "status_detail",
+    "transaction_amount",
+    "currency_id",
+    "date_approved",
+    "date_last_updated",
+    "transaction_amount_refunded",
+    "amount_refunded",
+)
 
 
 def _validate_email(email: str) -> str:
@@ -51,7 +69,12 @@ def _mercadopago_access_token(db: Session, hotel_id: int) -> str:
     return str(access_token)
 
 
-def _mercadopago_connection_payload(db: Session, hotel_id: int) -> dict[str, Any]:
+def _mercadopago_connection_payload(
+    db: Session,
+    hotel_id: int,
+    *,
+    seed_catalog_entries: bool = True,
+) -> dict[str, Any]:
     """Return the active hotel's MP credentials and account metadata.
 
     Payment links must never fall back to a process-wide token: a payment
@@ -59,7 +82,12 @@ def _mercadopago_connection_payload(db: Session, hotel_id: int) -> dict[str, Any
     """
     try:
         require_external_connections("Mercado Pago account access")
-        payload = get_connection_payload(db, hotel_id, "mercadopago")
+        payload = get_connection_payload(
+            db,
+            hotel_id,
+            "mercadopago",
+            seed_catalog_entries=seed_catalog_entries,
+        )
     except ValueError as exc:
         raise PaymentLinkTestError(str(exc)) from exc
     if not isinstance(payload, dict) or not payload.get("access_token"):
@@ -83,7 +111,7 @@ def _friendly_mercadopago_error(detail: object, status_code: int | None = None) 
     return "Mercado Pago rechazo la prueba."
 
 
-def _status_from_payment(status: str | None) -> str:
+def _status_from_payment(status: str | None) -> str | None:
     normalized = (status or "").lower()
     if normalized == "approved":
         return "approved"
@@ -95,7 +123,7 @@ def _status_from_payment(status: str | None) -> str:
         return "refunded"
     if normalized in {"rejected", "charged_back"}:
         return "failed"
-    return "pending"
+    return None
 
 
 def _send_payment_link_email(db: Session, hotel_id: int, recipient_email: str, amount: float, currency: str, payment_url: str, description: str) -> str:
@@ -216,7 +244,7 @@ def _parse_provider_datetime(value: Any) -> datetime | None:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return _ensure_utc(datetime.fromisoformat(str(value).replace("Z", "+00:00")))
     except ValueError:
         return None
 
@@ -228,8 +256,15 @@ def _money(value: Any) -> float:
         return 0.0
 
 
-def _status_from_payment_payload(payment: dict[str, Any], record: PaymentLinkTest) -> tuple[str, float]:
+def _status_from_payment_payload(
+    payment: dict[str, Any], record: PaymentLinkTest
+) -> tuple[str | None, float]:
     normalized = _status_from_payment(payment.get("status"))
+    if normalized is None:
+        return None, _money(
+            payment.get("transaction_amount_refunded")
+            or payment.get("amount_refunded")
+        )
     status_detail = str(payment.get("status_detail") or "").lower()
     refunded_amount = _money(
         payment.get("transaction_amount_refunded")
@@ -246,6 +281,15 @@ def _status_from_payment_payload(payment: dict[str, Any], record: PaymentLinkTes
         return "partially_refunded", refunded_amount
 
     return normalized, refunded_amount
+
+
+def _payment_test_provider_response_projection(payment: dict[str, Any]) -> dict[str, Any]:
+    """Persist only canonical fields used by the payment-test state mapping."""
+    return {
+        key: payment[key]
+        for key in _PAYMENT_TEST_PROVIDER_RESPONSE_FIELDS
+        if key in payment
+    }
 
 
 def _apply_terminal_dates(record: PaymentLinkTest, status: str, payment: dict[str, Any]) -> None:
@@ -428,44 +472,143 @@ def refresh_mercadopago_payment_link_test_by_reference(
     db: Session,
     external_reference: str,
     hotel_id: int | None = None,
-    payload: dict[str, Any] | None = None,
+    *,
+    external_payment_id: str,
+    payment_fetcher: Callable[[Session, int, str], dict[str, Any]],
 ) -> PaymentLinkTest | None:
     try:
         require_inbound_provider_events("Mercado Pago")
     except InboundProviderEventsDisabled as exc:
         raise PaymentLinkTestError(str(exc)) from exc
+    reference_match = (
+        _PAYMENT_TEST_REFERENCE_RE.fullmatch(external_reference)
+        if isinstance(external_reference, str)
+        else None
+    )
+    if reference_match is None:
+        raise PaymentLinkTestError("La referencia del link de prueba no es valida.")
+    reference_hotel_id = int(reference_match.group(1))
+    if hotel_id is not None and hotel_id != reference_hotel_id:
+        raise PaymentLinkTestError("La referencia del link de prueba no coincide con el hotel.")
+    hotel_id = reference_hotel_id
+    # payment_link_tests is protected by forced tenant RLS. The external
+    # reference carries the hotel ID created by this service; require it to
+    # agree with any callback query parameter before binding the RLS context.
+    set_tenant_hotel_context(db, hotel_id)
     query = db.query(PaymentLinkTest).filter(
         PaymentLinkTest.external_reference == external_reference,
         PaymentLinkTest.provider == "mercadopago",
+        PaymentLinkTest.hotel_id == hotel_id,
     )
-    if hotel_id is not None:
-        query = query.filter(PaymentLinkTest.hotel_id == hotel_id)
     record = query.first()
     if not record:
         return None
 
-    # Never poll the provider from a callback. Persist only fields delivered in
-    # the already signature-verified event and reject financial mismatches.
-    event = payload if isinstance(payload, dict) else {}
-    data = event.get("data") if isinstance(event.get("data"), dict) else {}
-    payment = {**event, **data}
-    incoming_currency = str(payment.get("currency_id") or payment.get("currency") or "").strip().upper()
-    if incoming_currency and incoming_currency != record.currency.upper():
-        raise PaymentLinkTestError("La moneda del webhook no coincide con el link de prueba.")
-    incoming_amount = payment.get("transaction_amount") or payment.get("amount")
-    if incoming_amount not in (None, "") and abs(_money(incoming_amount) - _money(record.amount)) > 0.01:
-        raise PaymentLinkTestError("El monto del webhook no coincide con el link de prueba.")
+    expected_reference = record.external_reference
+    expected_currency = str(record.currency or "").strip().upper()
+    try:
+        expected_amount = Decimal(str(round(float(record.amount), 2)))
+    except (InvalidOperation, TypeError, ValueError, OverflowError):
+        raise PaymentLinkTestError("El monto del link de prueba es invalido.") from None
+
+    signed_payment_id = str(external_payment_id or "").strip()
+    if not signed_payment_id:
+        raise PaymentLinkTestError("El webhook de Mercado Pago no incluyo el id del pago firmado.")
+
+    # The webhook signature authenticates data.id, request-id and timestamp,
+    # not external_reference/status/amount in the request body. Resolve the
+    # payment through the hotel's connected account and persist only that
+    # canonical response.
+    payment = payment_fetcher(db, hotel_id, signed_payment_id)
+    if not isinstance(payment, dict):
+        raise PaymentLinkTestError("Mercado Pago devolvio una respuesta de pago invalida.")
+
+    canonical_payment_id = str(payment.get("id") or "").strip()
+    if canonical_payment_id != signed_payment_id:
+        raise PaymentLinkTestError("El id del pago verificado no coincide con el webhook firmado.")
+
+    canonical_reference = payment.get("external_reference")
+    if not isinstance(canonical_reference, str) or canonical_reference != expected_reference:
+        raise PaymentLinkTestError("La referencia del pago verificado no coincide con el link de prueba.")
+
+    canonical_currency = str(payment.get("currency_id") or "").strip().upper()
+    if not canonical_currency or canonical_currency != expected_currency:
+        raise PaymentLinkTestError("La moneda del pago verificado no coincide con el link de prueba.")
+
+    try:
+        canonical_amount = Decimal(str(payment.get("transaction_amount")))
+        # Preference creation sends round(payload.amount, 2) to Mercado Pago;
+        # compare against that same provider-facing cents representation.
+    except (InvalidOperation, TypeError, ValueError):
+        raise PaymentLinkTestError("El monto del pago verificado es invalido.") from None
+    if (
+        not canonical_amount.is_finite()
+        or not expected_amount.is_finite()
+        or canonical_amount != expected_amount
+    ):
+        raise PaymentLinkTestError("El monto del pago verificado no coincide con el link de prueba.")
+
+    provider_status = payment.get("status")
+    if not isinstance(provider_status, str) or not provider_status.strip():
+        raise PaymentLinkTestError("Mercado Pago no devolvio el estado del pago verificado.")
+
+    provider_updated_at = _parse_provider_datetime(payment.get("date_last_updated"))
+    if provider_updated_at is None:
+        raise PaymentLinkTestError("Mercado Pago no devolvio la fecha de actualizacion del pago verificado.")
+
+    # The callback's transaction stays open only while loading the hotel's
+    # provider credentials. The fetcher releases it before network I/O; restore
+    # the tenant context and lock/reload the row only for this short apply step.
+    set_tenant_hotel_context(db, hotel_id)
+    record = (
+        query.populate_existing()
+        .with_for_update()
+        .first()
+    )
+    if not record:
+        return None
+
+    previous_payment_id = str(record.external_payment_id or "").strip()
+    current_gateway_response = record.gateway_response if isinstance(record.gateway_response, dict) else {}
+    current_updated_at = _parse_provider_datetime(current_gateway_response.get("date_last_updated"))
+    if previous_payment_id == canonical_payment_id and current_updated_at:
+        if provider_updated_at <= current_updated_at:
+            return record
+    elif (
+        previous_payment_id
+        and previous_payment_id != canonical_payment_id
+        and record.status in {"approved", "refunded", "partially_refunded"}
+    ):
+        # This model represents one test payment. A second payment attempt for
+        # its reference must not replace an already completed payment.
+        return record
 
     record.last_checked_at = datetime.now(timezone.utc)
-    record.external_payment_id = str(payment.get("id") or "").strip() or record.external_payment_id
-    provider_status = payment.get("status")
-    if provider_status:
-        record.external_status = str(payment.get("status_detail") or provider_status)
-        record.status, record.refunded_amount = _status_from_payment_payload(payment, record)
-        _apply_terminal_dates(record, record.status, payment)
-    else:
-        record.external_status = "signed_callback_received"
-    record.gateway_response = event
+    record.external_payment_id = canonical_payment_id
+    record.gateway_response = _payment_test_provider_response_projection(payment)
+    mapped_status = _status_from_payment(provider_status)
+    if mapped_status is None:
+        # Keep the last recognized business state, but retain the canonical
+        # provider status and a diagnostic so a newly introduced value is
+        # visible rather than silently downgraded to pending.
+        record.external_status = provider_status
+        record.last_error = "Mercado Pago devolvio un estado de pago no reconocido."
+        db.flush()
+        return record
+
+    record.external_status = str(payment.get("status_detail") or provider_status)
+    mapped_status, refunded_amount = _status_from_payment_payload(payment, record)
+    if mapped_status is None:
+        # The main status was recognized above. This guard protects future
+        # additions to the payment payload mapper from reintroducing a pending
+        # fallback for an unknown provider value.
+        record.external_status = provider_status
+        record.last_error = "Mercado Pago devolvio un estado de pago no reconocido."
+        db.flush()
+        return record
+    record.status = mapped_status
+    record.refunded_amount = refunded_amount
+    _apply_terminal_dates(record, record.status, payment)
     record.last_error = None
     db.flush()
     return record

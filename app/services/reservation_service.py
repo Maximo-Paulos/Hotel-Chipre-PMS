@@ -5,38 +5,42 @@ Uses pessimistic locking to prevent race conditions (overbooking).
 """
 import json
 import logging
-import string
 import random
+import string
 from dataclasses import dataclass, field, replace
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol
 from zoneinfo import ZoneInfo
-from pydantic import ValidationError
 
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, lazyload
 
-from app.services.row_locks import lock_query
 from app.models.commercial import RatePlan, SellableProduct, TaxPolicy
 from app.models.company import Company
 from app.models.daily_rate import DailyRate, PricePeriod
-from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
+from app.models.hotel_config import HotelConfiguration
+from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
+from app.models.operations import ReservationStatusHistory
 from app.models.reservation import (
     Reservation,
     ReservationChannelCodeEnum,
     ReservationNoShowPolicyAppliedEnum,
     ReservationOutcomeEnum,
-    ReservationStatusEnum,
     ReservationSourceEnum,
+    ReservationStatusEnum,
     reservation_additional_guests,
 )
-from app.models.hotel_config import HotelConfiguration
-from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
-from app.models.operations import ReservationStatusHistory
+from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
-from app.services.financial_ledger import billing_adjustment_totals_by_reservation, paid_amounts_by_reservation
+from app.services.financial_ledger import (
+    billing_adjustment_totals_by_reservation,
+    paid_amounts_by_reservation,
+    reservation_has_payment_or_deposit,
+)
+from app.services.company_reservation_terms import build_company_terms_snapshot
 from app.services.pricing_policy_service import (
     PricingPolicyError,
     StayPricingQuote,
@@ -47,7 +51,12 @@ from app.services.pricing_policy_service import (
 from app.services.pricing_service import build_pricing_revision, resolve_rate_calendar
 from app.services.quote_token_service import QuoteTokenError, verify_quote_token
 from app.services.read_model_cache import invalidate_hotel_operational_caches
-from app.services.room_block_service import blocked_room_ids_for_range, list_active_blocks, room_has_active_block
+from app.services.room_block_service import (
+    blocked_room_ids_for_range,
+    list_active_blocks,
+    room_has_active_block,
+)
+from app.services.row_locks import lock_query
 from app.services.timezones import hotel_today, normalize_timezone
 
 if TYPE_CHECKING:
@@ -55,6 +64,12 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+_RESERVABLE_ROOM_STATUSES = (
+    RoomStatusEnum.AVAILABLE,
+    RoomStatusEnum.OCCUPIED,
+    RoomStatusEnum.CLEANING,
+)
 
 
 class ReservationError(Exception):
@@ -201,6 +216,7 @@ class _ReservationListProjection:
     created_at: Any
     updated_at: Any
     allocation_status: str
+    allocation_locked: bool
     requires_manual_review: bool
     mobility_restriction: bool
     is_wait_listed: bool
@@ -1108,6 +1124,7 @@ def _resolve_reservation_company(db: Session, *, hotel_id: int, company_id: int 
     company = (
         db.query(Company)
         .filter(Company.id == company_id, Company.hotel_id == hotel_id, Company.is_active == True)
+        .with_for_update()
         .first()
     )
     if company is None:
@@ -1292,14 +1309,11 @@ def _pricing_with_total(
     )
 
 
-# ponytail: manual-total override does not run the OTACurrencyRate/FxPolicy
-# conversion pipeline (that lives in pricing_policy_service.py and only fires
-# for rate_plan-priced stays) -- it just labels the reservation with the
-# currency the operator typed. fx_rate_snapshot stays whatever the earlier
-# rate_plan quote (if any) already computed; it is not fabricated here. If a
-# hotel needs a real live conversion for manual/no-rate-plan pricing, that is
-# its own feature (wiring pricing_policy_service's converter or fx_service.py
-# into this path), not something to invent inside a UI wiring task.
+# Manual totals retain the amount and currency entered by the operator. They do
+# not run the OTACurrencyRate/FxPolicy conversion pipeline used by rate-plan
+# pricing, and this path does not fabricate an fx_rate_snapshot. Live
+# conversion for manual/no-rate-plan pricing would need an explicit product
+# decision and integration with the pricing policy service.
 def _apply_manual_total_override(
     db: Session,
     *,
@@ -1397,7 +1411,8 @@ def check_room_availability(
 ) -> bool:
     """
     Check if a specific room is available for the given date range.
-    A room is unavailable if there is ANY overlapping active reservation.
+    A room is unavailable if it is inactive, deleted, in a non-reservable
+    operational state, blocked, or has an overlapping active reservation.
     """
     _validate_stay_dates(check_in, check_out)
     if known_room is not None:
@@ -1422,6 +1437,13 @@ def check_room_availability(
     hotel_id = _resolve_hotel_id(hotel_id, room=room)
     if room.hotel_id != hotel_id:
         raise ReservationError("La habitación no pertenece al hotel activo")
+
+    if (
+        room.deleted_at is not None
+        or not room.is_active
+        or room.status not in _RESERVABLE_ROOM_STATUSES
+    ):
+        return False
 
     if room_has_active_block(db, hotel_id=hotel_id, room_id=room_id, start_date=check_in, end_date=check_out):
         return False
@@ -1489,7 +1511,7 @@ def find_available_rooms(
             Room.hotel_id == hotel_id,
             Room.deleted_at.is_(None),
             Room.is_active == True,
-            Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
+            Room.status.in_(_RESERVABLE_ROOM_STATUSES),
         )
     )
     if lock_for_update:
@@ -1840,10 +1862,21 @@ def create_reservation(
         deferred_days = int(company.deferred_days or 0)
         settlement_due_date = data.check_out_date + timedelta(days=deferred_days)
 
+    cancellation_policy_snapshot = _capture_cancellation_policy_snapshot(
+        db,
+        hotel_id=hotel_id,
+        rate_plan_id=pricing.rate_plan_id,
+        sellable_product_id=pricing.sellable_product_id,
+        reservation_source=data.source,
+    )
+
     # Revalidate inside the same transaction, right before persisting: a
     # restriction created after the quote (or after this call started) must
     # still block the write. See app/services/guest_restriction_service.py.
-    from app.services.guest_restriction_service import record_restriction_override, validate_no_active_restriction
+    from app.services.guest_restriction_service import (
+        record_restriction_override,
+        validate_no_active_restriction,
+    )
 
     overridden_restriction = validate_no_active_restriction(
         db,
@@ -1880,6 +1913,7 @@ def create_reservation(
         fx_rate_snapshot=pricing.fx_rate_snapshot,
         status=ReservationStatusEnum.PENDING,
         source=data.source,
+        cancellation_policy_snapshot=cancellation_policy_snapshot,
         channel_code=channel_code,
         external_id=data.external_id,
         num_adults=data.num_adults,
@@ -1891,15 +1925,20 @@ def create_reservation(
         reservation_comment=data.reservation_comment,
         mobility_restriction=data.mobility_restriction,
         allocation_status="assigned" if room_id is not None else "unassigned",
+        allocation_locked=bool(data.allocation_locked),
         pricing_snapshot=pricing.pricing_snapshot,
         manual_rate_reason=data.manual_rate_reason if manual_rate_scope is not None else None,
         manual_rate_scope=manual_rate_scope,
-        allocation_locked=bool(company and (company.requires_signature or company.payment_deferred)),
         requires_manual_review=bool(company and (company.requires_signature or company.payment_deferred)),
         payment_collection_model="hotel_collect" if data.source == ReservationSourceEnum.DIRECT else "unknown",
         settlement_status=settlement_status,
         settlement_due_date=settlement_due_date,
     )
+    if company is not None:
+        company_terms_snapshot = build_company_terms_snapshot(company, reservation)
+        reservation.company_terms_snapshot = company_terms_snapshot
+        reservation.company_terms_reviewed_config = company_terms_snapshot["terms"]
+        reservation.company_terms_review_state = "captured"
     db.add(reservation)
     db.flush()
     if overridden_restriction is not None:
@@ -1923,6 +1962,24 @@ def create_reservation(
         db, hotel_id=hotel_id, reservation=reservation, event_type="reservation.created",
         title=f"New reservation {reservation.confirmation_code}", dedupe_suffix="created",
     )
+    try:
+        # Persist a coalesced, hotel-scoped optimizer request in this booking
+        # transaction. A Celery worker builds the human-reviewed proposal
+        # after commit; CP-SAT never runs on the reservation request path.
+        from app.services.allocation_trigger_service import (
+            request_reservation_created_allocation,
+        )
+
+        request_reservation_created_allocation(db, reservation)
+    except Exception as exc:  # pragma: no cover - booking remains on first-fit fallback
+        logger.warning(
+            "reservation.allocation_request_enqueue_failed",
+            extra={
+                "hotel_id": hotel_id,
+                "reservation_id": reservation.id,
+                "error_type": type(exc).__name__,
+            },
+        )
     return reservation
 
 
@@ -2154,6 +2211,7 @@ def list_reservations(
         Reservation.created_at,
         Reservation.updated_at,
         Reservation.allocation_status,
+        Reservation.allocation_locked,
         Reservation.requires_manual_review,
         Reservation.mobility_restriction,
         Reservation.is_wait_listed,
@@ -2260,6 +2318,7 @@ def list_reservations(
             created_at=row.created_at,
             updated_at=row.updated_at,
             allocation_status=row.allocation_status,
+            allocation_locked=bool(row.allocation_locked),
             requires_manual_review=row.requires_manual_review,
             mobility_restriction=row.mobility_restriction,
             is_wait_listed=row.is_wait_listed,
@@ -2455,6 +2514,119 @@ def lock_reservation_version(
         )
 
 
+def _apply_date_change_pricing(
+    db: Session,
+    reservation: Reservation,
+    *,
+    hotel_id: int,
+    check_in_date: date,
+    check_out_date: date,
+    occupancy: int,
+    recalculate_pricing: bool,
+    recalculate_explicit_price: bool,
+    preserve_unclassified_price: bool,
+) -> None:
+    """Apply the existing pricing policy when an edit changes stay dates.
+
+    Date validation, room availability, and date mutation remain with the
+    reservation update orchestrator. This helper only decides whether a date
+    edit reprices and applies the matching pricing result to the reservation.
+    """
+    pricing_snapshot = _pricing_snapshot_values(reservation)
+    pricing_source = pricing_snapshot.get("pricing_source")
+    is_explicit_price = pricing_source == "manual_total_override"
+    is_booked_company_price = pricing_source == "company_base_price"
+    is_classified_price = pricing_source in {
+        "manual_total_override",
+        "rate_plan_quote",
+        "daily_rates",
+        "company_base_price",
+    }
+    should_recalculate = recalculate_pricing and (
+        (not (is_explicit_price or is_booked_company_price) or recalculate_explicit_price)
+        and (not preserve_unclassified_price or is_classified_price or recalculate_explicit_price)
+    )
+    if should_recalculate and is_explicit_price:
+        nights = (check_out_date - check_in_date).days
+        explicit_total = manual_override_total_for_nights(reservation, nights=nights)
+        category = (
+            db.query(RoomCategory)
+            .filter(RoomCategory.id == reservation.category_id, RoomCategory.hotel_id == hotel_id)
+            .enable_eagerloads(False)
+            .first()
+        )
+        if category is None:
+            raise ReservationError("No se encontró la categoría de habitación")
+        pricing = _pricing_result_for_explicit_total(
+            db,
+            hotel_id=hotel_id,
+            category=category,
+            check_in=check_in_date,
+            check_out=check_out_date,
+            sellable_product_id=reservation.sellable_product_id,
+            rate_plan_id=reservation.rate_plan_id,
+            tax_policy_id=reservation.tax_policy_id,
+        )
+        if reservation.company_id is not None:
+            company = _resolve_reservation_company(
+                db, hotel_id=hotel_id, company_id=reservation.company_id
+            )
+            pricing = _apply_corporate_pricing(
+                db,
+                hotel_id=hotel_id,
+                pricing=pricing,
+                company=company,
+                explicit_total=explicit_total,
+                target_currency=reservation.currency_code,
+            )
+        else:
+            pricing = _apply_manual_total_override(
+                db,
+                hotel_id=hotel_id,
+                pricing=pricing,
+                total_amount=explicit_total,
+                target_currency=reservation.currency_code,
+            )
+        _apply_pricing_result_to_reservation(reservation, pricing)
+    elif should_recalculate:
+        pricing = calculate_reservation_pricing(
+            db,
+            category_id=reservation.category_id,
+            check_in=check_in_date,
+            check_out=check_out_date,
+            hotel_id=hotel_id,
+            sellable_product_id=reservation.sellable_product_id,
+            rate_plan_id=reservation.rate_plan_id,
+            tax_policy_id=reservation.tax_policy_id,
+            pricing_channel_code=(
+                pricing_snapshot.get("pricing_channel_code")
+                or reservation.source_provider_code
+                or reservation.source.value
+            ),
+            pricing_payment_method=(
+                pricing_snapshot.get("pricing_payment_method")
+                or pricing_snapshot.get("payment_method")
+            ),
+            guest_scope=pricing_snapshot.get("guest_scope") or "all",
+            target_currency=reservation.currency_code,
+            occupancy=occupancy,
+            guest_id=reservation.guest_id,
+            company_id=reservation.company_id,
+        )
+        if reservation.company_id is not None:
+            company = _resolve_reservation_company(
+                db, hotel_id=hotel_id, company_id=reservation.company_id
+            )
+            pricing = _apply_corporate_pricing(
+                db,
+                hotel_id=hotel_id,
+                pricing=pricing,
+                company=company,
+                explicit_total=None,
+            )
+        _apply_pricing_result_to_reservation(reservation, pricing)
+
+
 def update_reservation_fields(
     db: Session,
     reservation: Reservation,
@@ -2491,10 +2663,6 @@ def update_reservation_fields(
             )
         if reservation.room_id is not None:
             if confirmed_price_change_review_required is None:
-                # Runtime import avoids a module cycle: reservation_operations_service
-                # also delegates a number of transitions to this service.
-                from app.services.reservation_operations_service import reservation_has_payment_or_deposit
-
                 confirmed_price_change_review_required = reservation_has_payment_or_deposit(
                     db,
                     hotel_id=hotel_id,
@@ -2537,7 +2705,10 @@ def update_reservation_fields(
     # Reject-before-mutate: revalidate the guest restriction before touching
     # any other field, so a blocked update never partially persists (e.g.
     # `notes`) ahead of raising.
-    from app.services.guest_restriction_service import record_restriction_override, validate_no_active_restriction
+    from app.services.guest_restriction_service import (
+        record_restriction_override,
+        validate_no_active_restriction,
+    )
 
     overridden_restriction = validate_no_active_restriction(
         db,
@@ -2597,99 +2768,17 @@ def update_reservation_fields(
             exclude_reservation_id=reservation.id,
         ):
             raise ReservationError("La habitación no está disponible para las nuevas fechas")
-        pricing_snapshot = _pricing_snapshot_values(reservation)
-        pricing_source = pricing_snapshot.get("pricing_source")
-        is_explicit_price = pricing_source == "manual_total_override"
-        is_booked_company_price = pricing_source == "company_base_price"
-        is_classified_price = pricing_source in {
-            "manual_total_override",
-            "rate_plan_quote",
-            "daily_rates",
-            "company_base_price",
-        }
-        should_recalculate = recalculate_pricing and (
-            (not (is_explicit_price or is_booked_company_price) or recalculate_explicit_price)
-            and (not preserve_unclassified_price or is_classified_price or recalculate_explicit_price)
+        _apply_date_change_pricing(
+            db,
+            reservation,
+            hotel_id=hotel_id,
+            check_in_date=new_ci,
+            check_out_date=new_co,
+            occupancy=pricing_occupancy,
+            recalculate_pricing=recalculate_pricing,
+            recalculate_explicit_price=recalculate_explicit_price,
+            preserve_unclassified_price=preserve_unclassified_price,
         )
-        if should_recalculate and is_explicit_price:
-            nights = (new_co - new_ci).days
-            explicit_total = manual_override_total_for_nights(reservation, nights=nights)
-            category = (
-                db.query(RoomCategory)
-                .filter(RoomCategory.id == reservation.category_id, RoomCategory.hotel_id == hotel_id)
-                .enable_eagerloads(False)
-                .first()
-            )
-            if category is None:
-                raise ReservationError("No se encontró la categoría de habitación")
-            pricing = _pricing_result_for_explicit_total(
-                db,
-                hotel_id=hotel_id,
-                category=category,
-                check_in=new_ci,
-                check_out=new_co,
-                sellable_product_id=reservation.sellable_product_id,
-                rate_plan_id=reservation.rate_plan_id,
-                tax_policy_id=reservation.tax_policy_id,
-            )
-            if reservation.company_id is not None:
-                company = _resolve_reservation_company(
-                    db, hotel_id=hotel_id, company_id=reservation.company_id
-                )
-                pricing = _apply_corporate_pricing(
-                    db,
-                    hotel_id=hotel_id,
-                    pricing=pricing,
-                    company=company,
-                    explicit_total=explicit_total,
-                    target_currency=reservation.currency_code,
-                )
-            else:
-                pricing = _apply_manual_total_override(
-                    db,
-                    hotel_id=hotel_id,
-                    pricing=pricing,
-                    total_amount=explicit_total,
-                    target_currency=reservation.currency_code,
-                )
-            _apply_pricing_result_to_reservation(reservation, pricing)
-        elif should_recalculate:
-            pricing = calculate_reservation_pricing(
-                db,
-                category_id=reservation.category_id,
-                check_in=new_ci,
-                check_out=new_co,
-                hotel_id=hotel_id,
-                sellable_product_id=reservation.sellable_product_id,
-                rate_plan_id=reservation.rate_plan_id,
-                tax_policy_id=reservation.tax_policy_id,
-                pricing_channel_code=(
-                    pricing_snapshot.get("pricing_channel_code")
-                    or reservation.source_provider_code
-                    or reservation.source.value
-                ),
-                pricing_payment_method=(
-                    pricing_snapshot.get("pricing_payment_method")
-                    or pricing_snapshot.get("payment_method")
-                ),
-                guest_scope=pricing_snapshot.get("guest_scope") or "all",
-                target_currency=reservation.currency_code,
-                occupancy=pricing_occupancy,
-                guest_id=reservation.guest_id,
-                company_id=reservation.company_id,
-            )
-            if reservation.company_id is not None:
-                company = _resolve_reservation_company(
-                    db, hotel_id=hotel_id, company_id=reservation.company_id
-                )
-                pricing = _apply_corporate_pricing(
-                    db,
-                    hotel_id=hotel_id,
-                    pricing=pricing,
-                    company=company,
-                    explicit_total=None,
-                )
-            _apply_pricing_result_to_reservation(reservation, pricing)
         reservation.check_in_date = new_ci
         reservation.check_out_date = new_co
 
@@ -2714,9 +2803,6 @@ def update_reservation_fields(
             raise ReservationError("La nueva habitación no está disponible para esas fechas")
         reservation.room_id = update_data["room_id"]
         if previous_room_id != reservation.room_id:
-            # A room selected by staff through the edit endpoint is a manual
-            # decision and must remain stable during later reoptimization.
-            reservation.allocation_locked = True
             from app.models.operations import RoomMoveEvent, RoomMoveTypeEnum
 
             db.add(
@@ -2731,6 +2817,13 @@ def update_reservation_fields(
                     created_by_user_id=changed_by_user_id,
                 )
             )
+
+    if "allocation_locked" in update_data and update_data["allocation_locked"] is not None:
+        requested_lock = bool(update_data["allocation_locked"])
+        requested_room_id = update_data.get("room_id", reservation.room_id)
+        if requested_lock and requested_room_id is None:
+            raise ReservationError("Asigná una habitación antes de bloquear su reasignación.")
+        reservation.allocation_locked = requested_lock
 
     for field in (
         "num_adults",
@@ -2878,6 +2971,7 @@ def mark_reservation_no_show(
         client_version=client_version,
     )
     if reservation.status in (
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
         ReservationStatusEnum.CHECKED_IN,
         ReservationStatusEnum.CHECKED_OUT,
         ReservationStatusEnum.CANCELLED,
@@ -2996,6 +3090,88 @@ def _resolve_reservation_commercial_context(
     except PricingPolicyError as exc:
         raise ReservationError(str(exc)) from exc
     return sellable_product, rate_plan, tax_policy
+
+
+def _capture_cancellation_policy_snapshot(
+    db: Session,
+    *,
+    hotel_id: int,
+    rate_plan_id: int | None,
+    sellable_product_id: int | None,
+    reservation_source: ReservationSourceEnum,
+) -> dict[str, Any]:
+    """Capture the applicable cancellation terms once, at booking time.
+
+    A selected rate plan owns its cancellation terms. Manual or other bookings
+    without a resolved rate plan use the hotel's explicitly confirmed default
+    policy. Existing historical reservations are not backfilled: cancellation
+    decisions must never fill a missing snapshot from today's configuration.
+    """
+    if rate_plan_id is None:
+        config = db.get(HotelConfiguration, hotel_id)
+        if config is None or config.id != hotel_id or not config.deposit_policy_configured:
+            raise ReservationError(
+                "Antes de crear una reserva sin plan tarifario, el hotel debe configurar y confirmar "
+                "sus reglas de depósito y cancelación en Configuración del hotel."
+            )
+        try:
+            free_hours = int(config.free_cancellation_hours)
+            penalty = Decimal(str(config.cancellation_penalty_percentage))
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            raise ReservationError("La política general de cancelación del hotel no es válida") from exc
+        if free_hours < 0 or not penalty.is_finite() or penalty < 0 or penalty > 100:
+            raise ReservationError("La política general de cancelación del hotel no es válida")
+        return {
+            "schema_version": 1,
+            "source": "hotel_configuration",
+            "reservation_source": getattr(reservation_source, "value", str(reservation_source)),
+            "cancellation_model": "flexible",
+            "is_refundable": True,
+            "free_cancellation_hours": free_hours,
+            "penalty_type": "percentage",
+            "penalty_value": str(penalty),
+            "currency": str(config.default_currency or "").strip().upper(),
+            "snapshot_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    rate_plan = (
+        db.query(RatePlan)
+        .filter(RatePlan.id == rate_plan_id, RatePlan.hotel_id == hotel_id)
+        .first()
+    )
+    if rate_plan is None:
+        raise ReservationError("El plan tarifario no pertenece al hotel activo")
+    if sellable_product_id is not None and rate_plan.sellable_product_id != sellable_product_id:
+        raise ReservationError("El plan tarifario no pertenece al producto comercializable seleccionado")
+
+    penalty_value = rate_plan.cancellation_penalty_value
+    if penalty_value is not None:
+        try:
+            decimal_penalty = Decimal(str(penalty_value))
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            raise ReservationError("El valor de penalidad del plan tarifario no es válido") from exc
+        if not decimal_penalty.is_finite():
+            raise ReservationError("El valor de penalidad del plan tarifario no es válido")
+        # JSON numbers are decoded as binary floats by common clients. Keep the
+        # decimal source representation as text so later calculations can use
+        # Decimal without adding another rounding step.
+        penalty_value = str(decimal_penalty)
+
+    return {
+        "schema_version": 1,
+        "source": "rate_plan",
+        "reservation_source": getattr(reservation_source, "value", str(reservation_source)),
+        "rate_plan_id": int(rate_plan.id),
+        "rate_plan_name": rate_plan.name,
+        "rate_plan_code": rate_plan.code,
+        "cancellation_model": rate_plan.cancellation_model,
+        "is_refundable": bool(rate_plan.is_refundable),
+        "free_cancellation_hours": int(rate_plan.free_cancellation_hours or 0),
+        "penalty_type": rate_plan.cancellation_penalty_type,
+        "penalty_value": penalty_value,
+        "currency": str(rate_plan.currency_code or "").strip().upper(),
+        "snapshot_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def validate_reservation_category_compatibility(

@@ -2,46 +2,42 @@
 FastAPI routes for Room management + Housekeeping.
 """
 from datetime import date, datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_
-from sqlalchemy.orm import Session, joinedload, raiseload
-from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, joinedload, raiseload
+
 from app.database import get_db
+from app.dependencies.auth import AuthContext, require_permission
 from app.models.audit_log import AuditActionEnum
 from app.models.hotel_config import HotelConfiguration
-from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.schemas.room import (
-    RoomCreate,
-    RoomHousekeepingRead,
-    RoomRead,
+    HousekeepingBoardRead,
+    HousekeepingBoardRoomRead,
     RoomCategoryCreate,
     RoomCategoryOperationalRead,
     RoomCategoryRead,
     RoomCategoryUpdate,
+    RoomCreate,
+    RoomHousekeepingRead,
     RoomHousekeepingStatusUpdate,
-    HousekeepingBoardRead,
-    HousekeepingBoardRoomRead,
-    RoomUpdate,
+    RoomRead,
     RoomStatusUpdateResponse,
+    RoomUpdate,
 )
-from app.services.reservation_service import ReservationError, find_available_rooms
-from app.services.pricing_service import resolve_current_rates_for_categories, resolve_rate_calendar
-from app.services.timezones import hotel_today
-from app.dependencies.auth import AuthContext, require_permission
-from app.services.allocation_runtime_service import run_persisted_allocation
-from app.services.read_model_cache import get_cached_availability_payload, invalidate_hotel_operational_caches
-from app.services.subscription_service import ensure_room_within_limit
-from app.services.room_catalog_service import create_category as create_category_service, create_room as create_room_service
-from app.services.analytics_service import record_hotel_audit_event
 from app.services import audit_log_service
-from app.services.timeseries_projection import project_room_state_event
-from app.services.room_state_service import change_room_status
-from app.services.distributed_lock import DistributedLockBusy, DistributedLockUnavailable
+from app.services.allocation_runtime_service import run_persisted_allocation
+from app.services.analytics_service import record_hotel_audit_event
+from app.services.distributed_lock import (
+    DistributedLockBusy,
+    DistributedLockUnavailable,
+)
 from app.services.permission_service import (
     PERMISSION_HOTEL_SETTINGS_UPDATE,
     PERMISSION_HOUSEKEEPING_BOARD_VIEW,
@@ -49,6 +45,25 @@ from app.services.permission_service import (
     PERMISSION_ROOM_READ,
     PERMISSION_ROOM_STATUS_UPDATE,
 )
+from app.services.pricing_service import (
+    resolve_current_rates_for_categories,
+    resolve_rate_calendar,
+)
+from app.services.read_model_cache import (
+    get_cached_availability_payload,
+    invalidate_hotel_operational_caches,
+)
+from app.services.reservation_service import ReservationError, find_available_rooms
+from app.services.room_catalog_service import create_category as create_category_service
+from app.services.room_catalog_service import create_room as create_room_service
+from app.services.room_state_service import (
+    RoomStateTransitionError,
+    change_room_status,
+    mutate_room_state,
+)
+from app.services.subscription_service import ensure_room_within_limit
+from app.services.timeseries_projection import project_room_state_event
+from app.services.timezones import hotel_today
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 
@@ -329,6 +344,7 @@ def get_housekeeping_board(
             db.query(Reservation.room_id)
             .filter(
                 Reservation.hotel_id == context.hotel_id,
+                Reservation.deleted_at.is_(None),
                 Reservation.room_id.in_(room_ids),
                 Reservation.check_in_date == today,
                 Reservation.status.in_(
@@ -350,6 +366,7 @@ def get_housekeeping_board(
             db.query(Reservation.room_id)
             .filter(
                 Reservation.hotel_id == context.hotel_id,
+                Reservation.deleted_at.is_(None),
                 Reservation.room_id.in_(room_ids),
                 Reservation.check_out_date == today,
                 Reservation.status == ReservationStatusEnum.CHECKED_IN,
@@ -364,6 +381,7 @@ def get_housekeeping_board(
             db.query(Reservation.room_id)
             .filter(
                 Reservation.hotel_id == context.hotel_id,
+                Reservation.deleted_at.is_(None),
                 Reservation.room_id.in_(room_ids),
                 Reservation.check_in_date < today,
                 Reservation.check_out_date > today,
@@ -373,22 +391,20 @@ def get_housekeeping_board(
             .all()
         )
     }
-    maintenance_room_ids = {
-        room_id
-        for (room_id,) in (
-            db.query(RoomBlock.room_id)
-            .filter(
-                RoomBlock.hotel_id == context.hotel_id,
-                RoomBlock.room_id.in_(room_ids),
-                RoomBlock.reason_code == RoomBlockReasonEnum.MAINTENANCE,
-                RoomBlock.resolved_at.is_(None),
-                RoomBlock.starts_at <= today,
-                or_(RoomBlock.ends_at.is_(None), RoomBlock.ends_at > today),
-            )
-            .distinct()
-            .all()
+    active_block_reasons_by_room: dict[int, set[RoomBlockReasonEnum]] = {}
+    for room_id, reason_code in (
+        db.query(RoomBlock.room_id, RoomBlock.reason_code)
+        .filter(
+            RoomBlock.hotel_id == context.hotel_id,
+            RoomBlock.room_id.in_(room_ids),
+            RoomBlock.resolved_at.is_(None),
+            RoomBlock.starts_at <= today,
+            or_(RoomBlock.ends_at.is_(None), RoomBlock.ends_at > today),
         )
-    }
+        .all()
+    ):
+        active_block_reasons_by_room.setdefault(room_id, set()).add(reason_code)
+
     return {
         "date": today,
         "rooms": [
@@ -402,7 +418,11 @@ def get_housekeeping_board(
                 has_arrival_today=room.id in arrival_room_ids,
                 has_departure_today=room.id in departure_room_ids,
                 has_stayover_today=room.id in stayover_room_ids,
-                maintenance_blocked=room.id in maintenance_room_ids,
+                maintenance_blocked=RoomBlockReasonEnum.MAINTENANCE in active_block_reasons_by_room.get(room.id, set()),
+                active_block_reasons=sorted(
+                    active_block_reasons_by_room.get(room.id, set()),
+                    key=lambda reason: reason.value,
+                ),
             )
             for room, category_name in rooms
         ],
@@ -432,7 +452,13 @@ def update_room(
 ):
     """Generic room update (number, floor, notes, status, etc.)."""
     _require_manager_room_lane(context)
-    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
+    room = (
+        db.query(Room)
+        .filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None))
+        .populate_existing()
+        .with_for_update(of=Room)
+        .first()
+    )
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
@@ -470,15 +496,19 @@ def update_room(
             )
 
     if status_changed:
-        change_room_status(
-            db,
-            room=room,
-            hotel_id=context.hotel_id,
-            status=payload["status"],
-            notes=payload.get("notes"),
-            actor_user_id=context.user_id,
-            source="rooms.generic.patch",
-        )
+        try:
+            change_room_status(
+                db,
+                room=room,
+                hotel_id=context.hotel_id,
+                status=payload["status"],
+                notes=payload.get("notes"),
+                actor_user_id=context.user_id,
+                source="rooms.generic.patch",
+            )
+        except RoomStateTransitionError as exc:
+            db.rollback()
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         return room
 
     try:
@@ -511,19 +541,29 @@ def update_room_status(
     """Update room status for housekeeping. When a room is set to cleaning/maintenance/blocked,
     any reservations assigned to it are automatically relocated by the allocation engine."""
     _require_manager_room_lane(context)
-    room = db.query(Room).filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None)).first()
+    room = (
+        db.query(Room)
+        .filter(Room.id == room_id, Room.hotel_id == context.hotel_id, Room.deleted_at.is_(None))
+        .populate_existing()
+        .with_for_update(of=Room)
+        .first()
+    )
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
-    realloc_result = change_room_status(
-        db,
-        room=room,
-        hotel_id=context.hotel_id,
-        status=data.status,
-        notes=data.notes,
-        actor_user_id=context.user_id,
-        source="rooms.status.patch",
-    )
+    try:
+        realloc_result = change_room_status(
+            db,
+            room=room,
+            hotel_id=context.hotel_id,
+            status=data.status,
+            notes=data.notes,
+            actor_user_id=context.user_id,
+            source="rooms.status.patch",
+        )
+    except RoomStateTransitionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"room": room, "reallocation": realloc_result}
 
 
@@ -548,6 +588,8 @@ def update_room_cleaning_status(
             Room.hotel_id == context.hotel_id,
             Room.deleted_at.is_(None),
         )
+        .populate_existing()
+        .with_for_update(of=Room)
         .first()
     )
     if not room:
@@ -563,20 +605,20 @@ def update_room_cleaning_status(
         safe_room = _housekeeping_room(room) if context.operational_role == "housekeeping" else room
         return {"room": safe_room, "reallocation": None}
 
-    before = audit_log_service.model_snapshot(room)
-    room.housekeeping_status = data.status
+    try:
+        mutate_room_state(
+            db,
+            room=room,
+            hotel_id=context.hotel_id,
+            housekeeping_status=data.status,
+            actor_user_id=context.user_id,
+        )
+    except RoomStateTransitionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     db.commit()
     db.refresh(room)
-    audit_log_service.safe_create_audit_log(
-        db,
-        hotel_id=context.hotel_id,
-        table_name="rooms",
-        record_id=room.id,
-        action=AuditActionEnum.STATUS_CHANGE,
-        actor_user_id=context.user_id,
-        payload_before=before,
-        payload_after=audit_log_service.model_snapshot(room),
-    )
     invalidate_hotel_operational_caches(context.hotel_id)
     project_room_state_event(
         context.hotel_id,

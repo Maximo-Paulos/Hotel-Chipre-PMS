@@ -20,6 +20,7 @@ from app.models.commercial import TaxPolicy
 from app.models.user import User
 from app.services import checkin_service
 from app.services.action_step_up_service import create_action_step_up_ticket
+from app.services.permission_service import PERMISSION_RESERVATION_READ, set_role_override
 
 
 @pytest.fixture
@@ -192,6 +193,223 @@ def test_guest_quick_profile_api_serializes_stays_without_relationship_recursion
     payload = response.json()
     assert payload["guest"]["id"] == guest_id
     assert payload["last_stays"][0]["confirmation_code"] == "QP-RES-001"
+    assert payload["total_stays"] == 1
+    assert payload["stays_by_status"]["previas"][0]["confirmation_code"] == "QP-RES-001"
+
+
+def test_guest_tags_api_does_not_load_reservation_history(api_client):
+    client, SessionLocal = api_client
+
+    with SessionLocal() as db:
+        category = RoomCategory(
+            hotel_id=1,
+            name="Guest tags category",
+            code="GTAGS",
+            base_price_per_night=100.0,
+            max_occupancy=2,
+        )
+        guest = Guest(
+            hotel_id=1,
+            first_name="Tag",
+            last_name="Guest",
+            document_type=DocumentTypeEnum.DNI,
+            document_number="GTAGS-1",
+        )
+        db.add_all([category, guest])
+        db.flush()
+        room = Room(
+            hotel_id=1,
+            room_number="GT-101",
+            floor=1,
+            category_id=category.id,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(room)
+        db.flush()
+        db.add(
+            Reservation(
+                confirmation_code="GTAGS-RES-001",
+                hotel_id=1,
+                guest_id=guest.id,
+                room_id=room.id,
+                category_id=category.id,
+                check_in_date=date(2026, 7, 20),
+                check_out_date=date(2026, 7, 22),
+                total_amount=100.0,
+                amount_paid=100.0,
+                status=ReservationStatusEnum.CHECKED_OUT,
+            )
+        )
+        db.commit()
+        guest_id = guest.id
+        engine = db.get_bind()
+
+    statements = []
+
+    def capture_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement.lower())
+
+    event.listen(engine, "before_cursor_execute", capture_sql)
+    try:
+        response = client.get(f"/api/guests/{guest_id}/tags")
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_sql)
+
+    assert response.status_code == 200, response.text
+    assert response.json() == []
+    assert not any("reservations" in statement for statement in statements), statements
+
+
+def test_guest_quick_profile_hides_stays_without_reservation_read(api_client, monkeypatch):
+    client, SessionLocal = api_client
+
+    with SessionLocal() as db:
+        category = RoomCategory(
+            hotel_id=1,
+            name="Restricted profile category",
+            code="RPROFILE",
+            base_price_per_night=100.0,
+            max_occupancy=2,
+        )
+        guest = Guest(
+            hotel_id=1,
+            first_name="Visible",
+            last_name="Guest",
+            document_type=DocumentTypeEnum.DNI,
+            document_number="RPROFILE-1",
+        )
+        db.add_all([category, guest])
+        db.flush()
+        room = Room(
+            hotel_id=1,
+            room_number="RP-101",
+            floor=1,
+            category_id=category.id,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(room)
+        db.flush()
+        db.add(
+            Reservation(
+                confirmation_code="RP-RES-001",
+                hotel_id=1,
+                guest_id=guest.id,
+                room_id=room.id,
+                category_id=category.id,
+                check_in_date=date(2026, 7, 20),
+                check_out_date=date(2026, 7, 22),
+                total_amount=100.0,
+                amount_paid=100.0,
+                status=ReservationStatusEnum.CHECKED_OUT,
+            )
+        )
+        db.flush()
+        set_role_override(
+            db,
+            hotel_id=1,
+            role="receptionist",
+            code=PERMISSION_RESERVATION_READ,
+            allowed=False,
+            actor_user_id=1,
+        )
+        db.commit()
+        guest_id = guest.id
+        engine = db.get_bind()
+
+    monkeypatch.setitem(
+        main_module.app.dependency_overrides,
+        get_auth_context,
+        lambda: AuthContext(
+            hotel_id=1,
+            user_id=1,
+            user_email="reception@test.com",
+            user_role="receptionist",
+            is_verified=True,
+            permissions=set(),
+        ),
+    )
+    statements = []
+
+    def capture_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement.lower())
+
+    event.listen(engine, "before_cursor_execute", capture_sql)
+    try:
+        response = client.get(f"/api/guests/{guest_id}/quick-profile")
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_sql)
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["guest"]["id"] == guest_id
+    assert payload["guest"]["first_name"] == "Visible"
+    assert payload["last_stays"] == []
+    assert payload["total_stays"] == 0
+    assert payload["stays_by_status"] == {
+        "previas": [],
+        "futuras": [],
+        "canceladas": [],
+        "no_show": [],
+    }
+    assert not any(
+        " from reservations" in statement or " join reservations" in statement
+        for statement in statements
+    ), statements
+
+
+def test_guest_quick_profile_is_tenant_scoped(api_client):
+    client, SessionLocal = api_client
+
+    with SessionLocal() as db:
+        db.add(HotelConfiguration(id=2, hotel_name="Other hotel", subscription_active=True))
+        db.flush()
+        category = RoomCategory(
+            hotel_id=2,
+            name="Other hotel category",
+            code="TENANT2",
+            base_price_per_night=100.0,
+            max_occupancy=2,
+        )
+        guest = Guest(
+            hotel_id=2,
+            first_name="Other",
+            last_name="Tenant",
+            document_type=DocumentTypeEnum.DNI,
+            document_number="TENANT2-1",
+        )
+        db.add_all([category, guest])
+        db.flush()
+        room = Room(
+            hotel_id=2,
+            room_number="T2-101",
+            floor=1,
+            category_id=category.id,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(room)
+        db.flush()
+        db.add(
+            Reservation(
+                confirmation_code="TENANT2-RES-001",
+                hotel_id=2,
+                guest_id=guest.id,
+                room_id=room.id,
+                category_id=category.id,
+                check_in_date=date(2026, 7, 20),
+                check_out_date=date(2026, 7, 22),
+                total_amount=100.0,
+                amount_paid=100.0,
+                status=ReservationStatusEnum.CHECKED_OUT,
+            )
+        )
+        db.commit()
+        guest_id = guest.id
+
+    response = client.get(f"/api/guests/{guest_id}/quick-profile")
+
+    assert response.status_code == 404, response.text
+    assert "Other" not in response.text
+    assert "TENANT2-RES-001" not in response.text
 
 
 def test_room_status_and_category_fetch(api_client):
@@ -424,11 +642,20 @@ def test_checkin_api_blocks_missing_primary_guest_fields(api_client, monkeypatch
         )
         db.add_all([guest, category])
         db.flush()
+        room = Room(
+            hotel_id=1,
+            category_id=category.id,
+            room_number="CHK-REQ-ROOM",
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(room)
+        db.flush()
         reservation = Reservation(
             confirmation_code="CHK-REQ-001",
             hotel_id=1,
             guest_id=guest.id,
             category_id=category.id,
+            room_id=room.id,
             check_in_date=date(2026, 4, 10),
             check_out_date=date(2026, 4, 12),
             total_amount=200.0,

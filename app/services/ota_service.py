@@ -7,11 +7,13 @@ Uses row-level locking to handle race conditions on simultaneous bookings.
 import hashlib
 import hmac
 import json
+import re
 import secrets
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from typing import Optional
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.commercial import ProductRoomCompatibility, RatePlan, SellableProduct
@@ -32,6 +34,9 @@ from app.models.ota_core import (
 from app.models.hotel_config import HotelConfiguration
 from app.services.ota import NormalizedOTAReservation, get_default_adapter
 from app.services.external_effects_policy import require_inbound_provider_events
+from app.services.encryption import get_encryption_fernet
+from app.services.row_locks import lock_query
+from app.services.tenant_context import set_tenant_hotel_context
 from app.services.reservation_service import (
     create_reservation,
     find_available_rooms,
@@ -56,6 +61,332 @@ class OTAError(Exception):
 class OTAAuthError(OTAError):
     """Raised when a webhook is missing a valid hotel-scoped secret."""
     pass
+
+
+class OTAProcessingError(OTAError):
+    """Raised for unexpected processing failures without exposing internals."""
+
+
+OTA_PROCESSING_ERROR_MESSAGE = "No se pudo procesar el evento OTA"
+OTA_CONFLICT_ERROR_MESSAGE = "El evento OTA no pudo aplicarse"
+
+_OTA_RECONCILIATION_PAYLOAD_KEYS = frozenset(
+    {
+        "reservation_id",
+        "booking_id",
+        "external_reservation_id",
+        "confirmation_code",
+        "external_confirmation_code",
+        "property_id",
+        "external_property_id",
+        "hotel_id",
+        "event",
+        "event_type",
+        "reservation_status",
+        "booking_status",
+        "status",
+        "checkin",
+        "checkout",
+        "check_in",
+        "check_out",
+        "check_in_date",
+        "check_out_date",
+        "stay",
+        "room_type",
+        "room_type_id",
+        "room_type_code",
+        "product_code",
+        "rate_plan_id",
+        "rate_plan_code",
+        "num_adults",
+        "num_children",
+        "adults",
+        "children",
+        "occupancy",
+        "pricing",
+        "total_price",
+        "total",
+        "currency",
+        "currency_code",
+        "gross_total",
+        "subtotal",
+        "tax_total",
+        "taxes",
+        "fee_total",
+        "fees",
+        "commission_total",
+        "commission",
+        "paid_amount",
+        "paid_total",
+        "amount_paid",
+        "payment_collection_model",
+        "payment_model",
+        "settlement_status",
+        "arrival_time",
+    }
+)
+
+
+_OTA_RECONCILIATION_PAYLOAD_KEYS_NORMALIZED = frozenset(
+    re.sub(r"[^a-z0-9]", "", key.casefold()) for key in _OTA_RECONCILIATION_PAYLOAD_KEYS
+)
+
+_OTA_RECONCILIATION_ID_FIELDS = frozenset(
+    {
+        "reservationid",
+        "bookingid",
+        "externalreservationid",
+        "confirmationcode",
+        "externalconfirmationcode",
+        "propertyid",
+        "externalpropertyid",
+    }
+)
+_OTA_RECONCILIATION_CODE_FIELDS = frozenset(
+    {"roomtype", "roomtypeid", "roomtypecode", "productcode", "rateplanid", "rateplancode"}
+)
+_OTA_RECONCILIATION_STATUS_FIELDS = frozenset(
+    {"event", "eventtype", "reservationstatus", "bookingstatus", "status"}
+)
+_OTA_RECONCILIATION_STATUS_VALUES = frozenset(
+    {
+        "active",
+        "accepted",
+        "amended",
+        "booked",
+        "cancel",
+        "canceled",
+        "cancelled",
+        "cancelled_by_guest",
+        "cancelled_by_hotel",
+        "checked_in",
+        "checked_out",
+        "commit",
+        "completed",
+        "confirmed",
+        "confirmed_new",
+        "created",
+        "deleted",
+        "modified",
+        "modified_reservation",
+        "modify",
+        "new",
+        "new_reservation",
+        "no_show",
+        "noshow",
+        "pending",
+        "pending_confirmation",
+        "rejected",
+        "reservation_cancelled",
+        "reservation_confirmed",
+        "reservation_created",
+        "reservation_modified",
+        "reservation_update",
+        "reservation_updated",
+        "update",
+        "updated",
+        "reserved",
+        "voided",
+    }
+)
+_OTA_RECONCILIATION_DATE_FIELDS = frozenset(
+    {"checkin", "checkout", "checkindate", "checkoutdate"}
+)
+_OTA_RECONCILIATION_INTEGER_FIELDS = frozenset(
+    {"hotelid", "numadults", "numchildren", "adults", "children"}
+)
+_OTA_RECONCILIATION_AMOUNT_FIELDS = frozenset(
+    {
+        "totalprice",
+        "total",
+        "grosstotal",
+        "subtotal",
+        "taxtotal",
+        "feetotal",
+        "commission",
+        "commissiontotal",
+        "paidamount",
+        "paidtotal",
+        "amountpaid",
+    }
+)
+_OTA_RECONCILIATION_CURRENCY_FIELDS = frozenset({"currency", "currencycode"})
+_OTA_RECONCILIATION_ENUM_FIELDS = {
+    "paymentcollectionmodel": frozenset(
+        {
+            "agency_collect",
+            "direct_bill",
+            "hotel_collect",
+            "ota_partial",
+            "ota_prepaid",
+            "ota_virtual_card",
+            "partial",
+            "pay_at_property",
+            "pay_on_arrival",
+            "prepaid",
+            "virtual_card",
+        }
+    ),
+    "paymentmodel": frozenset(
+        {"agency_collect", "hotel_collect", "ota_partial", "ota_prepaid", "ota_virtual_card", "partial", "prepaid"}
+    ),
+    "settlementstatus": frozenset(
+        {
+            "complete",
+            "completed",
+            "failed",
+            "in_progress",
+            "not_applicable",
+            "paid",
+            "partial",
+            "pending",
+            "pending_settlement",
+            "reconciled",
+            "refunded",
+            "settled",
+            "unknown",
+            "unpaid",
+            "unreconciled",
+        }
+    ),
+}
+_OTA_RECONCILIATION_CONTAINER_FIELDS = frozenset(
+    {"stay", "occupancy", "pricing", "taxes", "fees", "commission"}
+)
+_OTA_RECONCILIATION_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$")
+_OTA_RECONCILIATION_CODE_RE = re.compile(r"^[A-Z0-9][A-Z0-9_.-]{0,63}$")
+_OTA_RECONCILIATION_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
+
+
+def _ota_reconciliation_payload_projection(payload: dict) -> dict:
+    """Keep typed fields and reject free-form values shaped like guest PII."""
+
+    def validate_scalar(field: str, value):
+        if field in _OTA_RECONCILIATION_ID_FIELDS:
+            if not isinstance(value, str):
+                return None
+            candidate = value.strip()
+            if not _OTA_RECONCILIATION_IDENTIFIER_RE.fullmatch(candidate):
+                return None
+            return candidate
+
+        if field in _OTA_RECONCILIATION_CODE_FIELDS:
+            if isinstance(value, int) and not isinstance(value, bool):
+                return value if 0 < value < 10**10 else None
+            if not isinstance(value, str):
+                return None
+            candidate = value.strip().upper()
+            if not _OTA_RECONCILIATION_CODE_RE.fullmatch(candidate):
+                return None
+            return candidate
+
+        if field in _OTA_RECONCILIATION_STATUS_FIELDS:
+            if not isinstance(value, str):
+                return None
+            original = value.strip()
+            candidate = re.sub(r"[^a-z0-9]+", "_", original.casefold()).strip("_")
+            return original if candidate in _OTA_RECONCILIATION_STATUS_VALUES else None
+
+        if field in _OTA_RECONCILIATION_DATE_FIELDS:
+            if not isinstance(value, str) or not value.strip() or len(value) > 40:
+                return None
+            candidate = value.strip()
+            try:
+                date.fromisoformat(candidate)
+            except ValueError:
+                try:
+                    datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+                except ValueError:
+                    return None
+            return candidate
+
+        if field in _OTA_RECONCILIATION_INTEGER_FIELDS:
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, str) and value.isdigit():
+                value = int(value)
+            if not isinstance(value, int) or value < 0 or value > 100_000_000:
+                return None
+            return value
+
+        if field in _OTA_RECONCILIATION_AMOUNT_FIELDS:
+            if isinstance(value, bool) or value is None:
+                return None
+            try:
+                amount = Decimal(str(value))
+            except Exception:
+                return None
+            if not amount.is_finite() or amount < 0 or amount > Decimal("1000000000000"):
+                return None
+            return value
+
+        if field in _OTA_RECONCILIATION_CURRENCY_FIELDS:
+            if not isinstance(value, str):
+                return None
+            candidate = value.strip().upper()
+            return candidate if _OTA_RECONCILIATION_CURRENCY_RE.fullmatch(candidate) else None
+
+        if field in _OTA_RECONCILIATION_ENUM_FIELDS:
+            if not isinstance(value, str):
+                return None
+            original = value.strip()
+            candidate = re.sub(r"[^a-z0-9]+", "_", original.casefold()).strip("_")
+            return original if candidate in _OTA_RECONCILIATION_ENUM_FIELDS[field] else None
+
+        if field == "arrivaltime":
+            if not isinstance(value, str) or len(value) > 20:
+                return None
+            try:
+                time.fromisoformat(value.strip())
+            except ValueError:
+                return None
+            return value.strip()
+
+        return None
+
+    def project(value):
+        if not isinstance(value, dict):
+            return None
+        projected = {}
+        for key, child in value.items():
+            if not isinstance(key, str):
+                continue
+            normalized_key = re.sub(r"[^a-z0-9]", "", key.casefold())
+            if normalized_key not in _OTA_RECONCILIATION_PAYLOAD_KEYS_NORMALIZED:
+                continue
+            if normalized_key in _OTA_RECONCILIATION_CONTAINER_FIELDS and isinstance(child, dict):
+                safe_child = project(child)
+                if not safe_child:
+                    continue
+            else:
+                safe_child = validate_scalar(normalized_key, child)
+                if safe_child is None:
+                    continue
+            projected[key] = safe_child
+        return projected
+
+    if not isinstance(payload, dict):
+        return {}
+    result = project(payload)
+    external_property_id = OTAIntegrationService._extract_external_property_id(payload)
+    if external_property_id:
+        safe_property_id = validate_scalar("externalpropertyid", external_property_id)
+        if safe_property_id:
+            result.setdefault("external_property_id", safe_property_id)
+    return result
+
+
+def _serialize_ota_reconciliation_payload(payload: dict) -> str:
+    return json.dumps(
+        _ota_reconciliation_payload_projection(payload),
+        ensure_ascii=True,
+        sort_keys=True,
+    )
+
+
+def _encrypt_ota_payload(payload: dict) -> str:
+    serialized_payload = json.dumps(payload, ensure_ascii=True, sort_keys=True)
+    return get_encryption_fernet().encrypt(serialized_payload.encode("utf-8")).decode("ascii")
 
 
 def _hotel_default_currency(db: Session, hotel_id: int) -> str:
@@ -168,6 +499,12 @@ class OTAIntegrationService:
         webhook_secret: str,
         payload: dict,
     ) -> OTAWebhookCredential:
+        if hotel_id <= 0:
+            raise OTAAuthError("Webhook OTA no configurado para este hotel")
+        # The credential table is protected by forced tenant RLS. Bind the
+        # path's hotel before the lookup; the query remains scoped to the same
+        # hotel and still requires the per-hotel secret below.
+        set_tenant_hotel_context(db, hotel_id)
         credential = (
             db.query(OTAWebhookCredential)
             .filter(
@@ -286,7 +623,7 @@ class OTAIntegrationService:
         link.sync_status = sync_status
         link.currency_code = currency_code
         link.gross_total = gross_total
-        link.raw_payload_encrypted = json.dumps(payload)
+        link.raw_payload_encrypted = _encrypt_ota_payload(payload)
         link.error_message = error_message
         link.last_seen_at = datetime.now(timezone.utc)
         db.flush()
@@ -309,6 +646,24 @@ class OTAIntegrationService:
         return "new"
 
     @staticmethod
+    def _lock_inbound_reservation_identity(
+        db: Session,
+        *,
+        hotel_id: int,
+        provider_code: str,
+        external_reservation_id: str,
+    ) -> None:
+        """Serialize concurrent deliveries for one external reservation on PostgreSQL."""
+        if db.get_bind().dialect.name != "postgresql":
+            return
+
+        lock_key = f"hotel-chipre:ota-inbound:{hotel_id}:{provider_code}:{external_reservation_id}"
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+            {"lock_key": lock_key},
+        )
+
+    @staticmethod
     def _sync_mapping_payload(
         mapping: OTAReservationMapping,
         *,
@@ -318,7 +673,7 @@ class OTAIntegrationService:
         error_message: str | None = None,
     ) -> None:
         mapping.ota_guest_name = guest_name
-        mapping.raw_payload = json.dumps(payload, ensure_ascii=True, sort_keys=True)
+        mapping.raw_payload = _serialize_ota_reconciliation_payload(payload)
         if sync_status is not None:
             mapping.sync_status = sync_status
         mapping.error_message = error_message
@@ -380,11 +735,24 @@ class OTAIntegrationService:
                 db.query(Room)
                 .filter(Room.id == current_room.id, Room.hotel_id == hotel_id)
                 .enable_eagerloads(False)
+                .populate_existing()
                 .with_for_update()
                 .first()
             )
-            if locked_room:
-                return category_by_id[current_room.category_id], locked_room
+            if (
+                locked_room
+                and locked_room.category_id in category_by_id
+                and check_room_availability(
+                    db,
+                    locked_room.id,
+                    normalized.check_in_date,
+                    normalized.check_out_date,
+                    hotel_id=hotel_id,
+                    exclude_reservation_id=reservation_id,
+                    known_room=locked_room,
+                )
+            ):
+                return category_by_id[locked_room.category_id], locked_room
 
         for category in candidate_categories:
             available_rooms = find_available_rooms(
@@ -397,15 +765,29 @@ class OTAIntegrationService:
             )
             if not available_rooms:
                 continue
-            room = (
-                db.query(Room)
-                .filter(Room.id == available_rooms[0].id, Room.hotel_id == hotel_id)
-                .enable_eagerloads(False)
-                .with_for_update()
-                .first()
-            )
-            if room:
-                return category, room
+            for candidate in available_rooms:
+                room = (
+                    db.query(Room)
+                    .filter(Room.id == candidate.id, Room.hotel_id == hotel_id)
+                    .enable_eagerloads(False)
+                    .populate_existing()
+                    .with_for_update()
+                    .first()
+                )
+                if (
+                    room
+                    and room.category_id == category.id
+                    and check_room_availability(
+                        db,
+                        room.id,
+                        normalized.check_in_date,
+                        normalized.check_out_date,
+                        hotel_id=hotel_id,
+                        exclude_reservation_id=reservation_id,
+                        known_room=room,
+                    )
+                ):
+                    return category, room
         return None, None
 
     @staticmethod
@@ -445,7 +827,7 @@ class OTAIntegrationService:
             ota_name=provider_code,
             ota_reservation_id=external_reservation_id,
             ota_guest_name=guest_name,
-            raw_payload=json.dumps(payload),
+            raw_payload=_serialize_ota_reconciliation_payload(payload),
             sync_status=OTASyncStatusEnum.PENDING,
         )
         db.add(mapping)
@@ -846,15 +1228,14 @@ class OTAIntegrationService:
             payload=payload,
             error_message=None,
         )
-        OTAIntegrationService._sync_guest_record(
-            db,
-            hotel_id=hotel_id,
-            guest=reservation.guest,
-            normalized=normalized,
-        )
-
         event_type = OTAIntegrationService._normalize_event_type(normalized.event_type)
         if event_type == "cancelled":
+            OTAIntegrationService._sync_guest_record(
+                db,
+                hotel_id=hotel_id,
+                guest=reservation.guest,
+                normalized=normalized,
+            )
             return OTAIntegrationService._cancel_existing_reservation_from_normalized(
                 db,
                 hotel_id=hotel_id,
@@ -948,13 +1329,113 @@ class OTAIntegrationService:
             db.flush()
             return mapping
 
-        selected_category, selected_room = OTAIntegrationService._select_room_for_normalized_reservation(
+        operational_status = reservation.status in {
+            ReservationStatusEnum.PARTIAL_CHECK_IN,
+            ReservationStatusEnum.CHECKED_IN,
+            ReservationStatusEnum.CHECKED_OUT,
+        }
+        if operational_status:
+            current_room = reservation.room
+            current_category_id = reservation.category_id
+            candidate_category_ids = {category.id for category in candidate_categories}
+            stay_changed = (
+                normalized.check_in_date != reservation.check_in_date
+                or normalized.check_out_date != reservation.check_out_date
+            )
+            room_assignment_changed = (
+                current_room is None
+                or current_room.hotel_id != hotel_id
+                or current_room.category_id != current_category_id
+                or current_category_id not in candidate_category_ids
+            )
+            if stay_changed or room_assignment_changed:
+                OTAIntegrationService._mark_reservation_manual_review(
+                    reservation,
+                    reason=(
+                        "La modificacion OTA intenta cambiar la estadia o la habitacion "
+                        "de una reserva ya operada."
+                    ),
+                )
+                mapping.sync_status = OTASyncStatusEnum.CONFLICT
+                mapping.error_message = (
+                    "Modification would change stay or room assignment after check-in/checkout"
+                )
+                OTAIntegrationService._sync_foundation_reservation_link(
+                    db,
+                    hotel_id=hotel_id,
+                    provider_code=normalized.provider_code,
+                    external_reservation_id=normalized.external_reservation_id,
+                    external_confirmation_code=normalized.external_confirmation_code,
+                    reservation=reservation,
+                    payload=payload,
+                    gross_total=normalized.gross_total,
+                    currency_code=normalized.currency_code,
+                    sync_status="manual_resolution_required",
+                    provider_state=OTAReservationLifecycleEnum.MANUAL_RESOLUTION_REQUIRED,
+                    error_message=mapping.error_message,
+                    rate_plan_id=reservation.rate_plan_id,
+                )
+                db.flush()
+                return mapping
+
+            # A room marked occupied/cleaning is not available to the generic
+            # selector. Keep the committed operational assignment as-is.
+            selected_category = next(
+                category for category in candidate_categories if category.id == current_category_id
+            )
+            selected_room = current_room
+        else:
+            selected_category, selected_room = OTAIntegrationService._select_room_for_normalized_reservation(
+                db,
+                hotel_id=hotel_id,
+                reservation_id=reservation.id,
+                normalized=normalized,
+                candidate_categories=candidate_categories,
+                current_room=reservation.room,
+            )
+
+            # A modification that cannot be assigned is a conflict, not a
+            # partially-applied reservation update. Keep the existing stay,
+            # room, and financial terms intact while the hotel resolves the
+            # change in the provider extranet. The incoming payload is already
+            # retained on the OTA mapping for the manual review.
+            if selected_room is None or selected_category is None:
+                error_message = (
+                    "OTA modification rejected: no compatible room is available; "
+                    "resolve the change in the provider extranet"
+                )
+                OTAIntegrationService._mark_reservation_manual_review(
+                    reservation,
+                    reason=(
+                        "El cambio OTA no tenia una habitacion compatible disponible; "
+                        "se conservaron las condiciones existentes."
+                    ),
+                )
+                mapping.sync_status = OTASyncStatusEnum.CONFLICT
+                mapping.error_message = error_message
+                OTAIntegrationService._sync_foundation_reservation_link(
+                    db,
+                    hotel_id=hotel_id,
+                    provider_code=normalized.provider_code,
+                    external_reservation_id=normalized.external_reservation_id,
+                    external_confirmation_code=normalized.external_confirmation_code,
+                    reservation=reservation,
+                    payload=payload,
+                    gross_total=normalized.gross_total,
+                    currency_code=normalized.currency_code,
+                    sync_status="manual_resolution_required",
+                    provider_state=OTAReservationLifecycleEnum.MANUAL_RESOLUTION_REQUIRED,
+                    error_message=error_message,
+                    rate_plan_id=reservation.rate_plan_id,
+                )
+                db.flush()
+                return mapping
+
+        OTAIntegrationService._sync_guest_record(
             db,
             hotel_id=hotel_id,
-            reservation_id=reservation.id,
+            guest=reservation.guest,
             normalized=normalized,
-            candidate_categories=candidate_categories,
-            current_room=reservation.room,
         )
 
         new_notes = normalized.notes if normalized.notes is not None else reservation.notes
@@ -995,13 +1476,22 @@ class OTAIntegrationService:
             reservation,
             normalized,
             preserve_operational_status=reservation.status in {
+                ReservationStatusEnum.PARTIAL_CHECK_IN,
                 ReservationStatusEnum.CHECKED_IN,
                 ReservationStatusEnum.CHECKED_OUT,
                 ReservationStatusEnum.CANCELLED,
             },
         )
 
-        if selected_room and selected_category:
+        if operational_status:
+            # OTA changes may update commercial snapshots, but must not rewrite
+            # the room allocation state of an in-house or checked-out stay.
+            mapping.sync_status = OTASyncStatusEnum.SYNCED
+            mapping.error_message = None
+            provider_state = OTAReservationLifecycleEnum.MODIFIED
+            sync_status = mapping.sync_status.value
+            error_message = None
+        elif selected_room and selected_category:
             reservation.room_id = selected_room.id
             reservation.category_id = selected_category.id
             reservation.requires_manual_review = False
@@ -1060,7 +1550,11 @@ class OTAIntegrationService:
         normalized: NormalizedOTAReservation,
         payload: dict,
     ) -> OTAReservationMapping:
-        if reservation.status in {ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT}:
+        if reservation.status in {
+            ReservationStatusEnum.PARTIAL_CHECK_IN,
+            ReservationStatusEnum.CHECKED_IN,
+            ReservationStatusEnum.CHECKED_OUT,
+        }:
             OTAIntegrationService._mark_reservation_manual_review(
                 reservation,
                 reason="La OTA informo una cancelacion pero la reserva ya estaba operada.",
@@ -1146,14 +1640,40 @@ class OTAIntegrationService:
         if not external_reservation_id:
             raise OTAError(f"Missing {external_reservation_id_key} in {provider_code} payload")
 
+        adapter = get_default_adapter(provider_code)
+        normalized = adapter.normalize_reservation_payload(payload)
+        OTAIntegrationService._lock_inbound_reservation_identity(
+            db,
+            hotel_id=hotel_id,
+            provider_code=provider_code,
+            external_reservation_id=normalized.external_reservation_id,
+        )
         existing = db.query(OTAReservationMapping).filter(
             OTAReservationMapping.hotel_id == hotel_id,
             OTAReservationMapping.ota_name == provider_code,
-            OTAReservationMapping.ota_reservation_id == external_reservation_id,
+            OTAReservationMapping.ota_reservation_id == normalized.external_reservation_id,
         ).first()
-        adapter = get_default_adapter(provider_code)
-        normalized = adapter.normalize_reservation_payload(payload)
         if existing:
+            if existing.reservation_id is not None:
+                # Reservation operations lock Reservation before Room. Lock and
+                # refresh the linked row before the audit snapshot, guest or
+                # payload writes, state decision, and any room selection, so
+                # the complete OTA event uses the committed operational state.
+                reservation_query = (
+                    db.query(Reservation)
+                    .filter(
+                        Reservation.id == existing.reservation_id,
+                        Reservation.hotel_id == hotel_id,
+                    )
+                    .populate_existing()
+                )
+                reservation = lock_query(reservation_query, Reservation).first()
+                if reservation is None:
+                    # A stale or cross-tenant mapping must not fall through to
+                    # materializing a new reservation from an existing event.
+                    raise OTAError("La reserva vinculada no está disponible para este hotel")
+                existing.reservation = reservation
+
             before = audit_log_service.model_snapshot(existing.reservation)
             try:
                 result = OTAIntegrationService._process_existing_incoming_reservation(
@@ -1194,10 +1714,10 @@ class OTAIntegrationService:
                     guest_name=normalized.guest_full_name,
                     payload=payload,
                     sync_status=OTASyncStatusEnum.FAILED,
-                    error_message=str(exc),
+                    error_message=OTA_PROCESSING_ERROR_MESSAGE,
                 )
                 db.flush()
-                raise OTAError(f"Failed to process {provider_code} reservation update: {exc}")
+                raise OTAProcessingError(OTA_PROCESSING_ERROR_MESSAGE) from exc
 
         mapping = OTAIntegrationService._create_legacy_mapping(
             db,
@@ -1267,9 +1787,9 @@ class OTAIntegrationService:
             raise
         except Exception as exc:
             mapping.sync_status = OTASyncStatusEnum.FAILED
-            mapping.error_message = str(exc)
+            mapping.error_message = OTA_PROCESSING_ERROR_MESSAGE
             db.flush()
-            raise OTAError(f"Failed to process {provider_code} reservation: {exc}")
+            raise OTAProcessingError(OTA_PROCESSING_ERROR_MESSAGE) from exc
 
     @staticmethod
     def upsert_webhook_credential(

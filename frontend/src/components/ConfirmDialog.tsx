@@ -1,6 +1,6 @@
 import { useDialogA11y } from "../hooks/useDialogA11y";
 
-// ponytail: replaces window.confirm for destructive actions. window.confirm
+// Replace window.confirm for destructive actions. window.confirm
 // is a synchronous, chrome-owned dialog -- some mobile in-app browsers
 // (WhatsApp/Instagram-style embedded WebViews) silently no-op JS dialogs
 // instead of showing them, so a tap on "Eliminar" can do nothing with zero

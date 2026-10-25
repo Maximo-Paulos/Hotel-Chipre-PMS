@@ -33,6 +33,12 @@ export type PaymentReceiptContent = {
   surcharge?: string | null;
   amountLabel: string;
   amount: string;
+  cashReceivedLabel?: string;
+  cashReceived?: string | null;
+  cashChangeLabel?: string;
+  cashChange?: string | null;
+  cashTipLabel?: string;
+  cashTip?: string | null;
   referenceLabel: string;
   manualReference?: string | null;
   refundOfLabel: string;
@@ -53,6 +59,15 @@ export function buildPaymentReceiptHtml(receipt: PaymentReceiptContent): string 
     : "";
   const surchargeRow = receipt.surcharge
     ? row(receipt.surchargeLabel || "", receipt.surcharge)
+    : "";
+  const cashReceivedRow = receipt.cashReceived
+    ? row(receipt.cashReceivedLabel || "", receipt.cashReceived)
+    : "";
+  const cashChangeRow = receipt.cashChange
+    ? row(receipt.cashChangeLabel || "", receipt.cashChange)
+    : "";
+  const cashTipRow = receipt.cashTip
+    ? row(receipt.cashTipLabel || "", receipt.cashTip)
     : "";
   const refundRow = receipt.refundOfTransactionId != null
     ? row(receipt.refundOfLabel, "#" + receipt.refundOfTransactionId)
@@ -97,6 +112,9 @@ export function buildPaymentReceiptHtml(receipt: PaymentReceiptContent): string 
     appliedAmountRow,
     fxRateRow,
     surchargeRow,
+    cashReceivedRow,
+    cashChangeRow,
+    cashTipRow,
     referenceRow,
     refundRow,
     "</dl>",

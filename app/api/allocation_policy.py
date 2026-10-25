@@ -7,23 +7,28 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
-from app.services.permission_service import PERMISSION_CONFIG_MANAGE
 from app.schemas.allocation_policy import (
+    ActiveAllocationPolicyRead,
+    AllocationAssignmentRead,
     AllocationExplanationRead,
     AllocationFeedbackDraftRequest,
     AllocationPolicySuggestionApplyRequest,
     AllocationPolicySuggestionApplyResponse,
-    AllocationPolicySuggestionReviewRequest,
-    ActiveAllocationPolicyRead,
-    AllocationRunDetailRead,
-    AllocationQuestionnaireDraftRequest,
     AllocationPolicySuggestionCreate,
     AllocationPolicySuggestionRead,
+    AllocationPolicySuggestionReviewRequest,
     AllocationPolicyVersionCreate,
     AllocationPolicyVersionRead,
+    AllocationQuestionnaireDraftRequest,
+    AllocationRunDetailRead,
+    ReservationReassignmentLockRead,
+    ReservationReassignmentLockRequest,
     SolverMetricRead,
 )
-from app.services.allocation_learning_service import draft_policy_from_feedback, draft_policy_from_questionnaire
+from app.services.allocation_learning_service import (
+    draft_policy_from_feedback,
+    draft_policy_from_questionnaire,
+)
 from app.services.allocation_policy_service import (
     AllocationPolicyError,
     apply_policy_suggestion,
@@ -35,7 +40,19 @@ from app.services.allocation_policy_service import (
     publish_policy_version,
     review_policy_suggestion,
 )
-from app.services.allocation_runtime_service import get_allocation_run_details, get_latest_allocation_run_details
+from app.services.allocation_runtime_service import (
+    AllocationRuntimeError,
+    accept_allocation_run,
+    get_allocation_run_details,
+    get_latest_allocation_run_details,
+    reject_allocation_run,
+    set_reservation_reassignment_lock,
+)
+from app.services.permission_service import (
+    PERMISSION_CONFIG_MANAGE,
+    PERMISSION_RESERVATION_MOVE,
+    PERMISSION_RESERVATION_UPDATE,
+)
 
 router = APIRouter(prefix="/api/allocation/policy", tags=["Allocation Policy"])
 
@@ -50,6 +67,8 @@ def _serialize_policy_version(version) -> AllocationPolicyVersionRead:
         source=version.source,
         constraints=constraints,
         weights=weights,
+        optimization_objective=constraints.get("optimization_objective", "occupied_nights"),
+        combined_revenue_weight=weights.get("combined_revenue_weight"),
         prompt_summary=version.prompt_summary,
         is_published=version.is_published,
         created_by_user_id=version.created_by_user_id,
@@ -75,6 +94,11 @@ def _serialize_suggestion(suggestion) -> AllocationPolicySuggestionRead:
 
 def _serialize_run_details(details) -> AllocationRunDetailRead:
     run = details.run
+    assignment_sources = {
+        item.reservation_id: _load_json_dict(item.details_json).get("source_room_id")
+        for item in details.explanations
+        if item.explanation_type == "assignment"
+    }
     return AllocationRunDetailRead(
         run_id=run.id,
         status=run.status.value if hasattr(run.status, "value") else str(run.status),
@@ -101,6 +125,17 @@ def _serialize_run_details(details) -> AllocationRunDetailRead:
         metrics=[
             SolverMetricRead(metric_key=item.metric_key, metric_value=float(item.metric_value))
             for item in details.metrics
+        ],
+        assignments=[
+            AllocationAssignmentRead(
+                id=item.id,
+                reservation_id=item.reservation_id,
+                source_room_id=assignment_sources.get(item.reservation_id),
+                room_id=item.room_id,
+                status=item.status.value if hasattr(item.status, "value") else str(item.status),
+                explanation_summary=item.explanation_summary,
+            )
+            for item in details.assignments
         ],
     )
 
@@ -137,12 +172,18 @@ def create_version(
 ):
     try:
         settings = get_active_policy_settings(db, context.hotel_id)
+        constraints = dict(payload.constraints)
+        weights = dict(payload.weights)
+        if payload.optimization_objective is not None:
+            constraints["optimization_objective"] = payload.optimization_objective
+        if payload.combined_revenue_weight is not None:
+            weights["combined_revenue_weight"] = payload.combined_revenue_weight
         version = create_policy_version(
             db,
             hotel_id=context.hotel_id,
             profile_id=settings.profile.id,
-            constraints=payload.constraints,
-            weights=payload.weights,
+            constraints=constraints,
+            weights=weights,
             prompt_summary=payload.prompt_summary,
             source=payload.source,
             created_by_user_id=context.user_id,
@@ -300,7 +341,7 @@ def create_feedback_draft(
 @router.get("/runs/latest", response_model=AllocationRunDetailRead)
 def get_latest_run(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
     details = get_latest_allocation_run_details(db, hotel_id=context.hotel_id)
     if details is None:
@@ -312,12 +353,85 @@ def get_latest_run(
 def get_run(
     run_id: int,
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_CONFIG_MANAGE)),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
     details = get_allocation_run_details(db, hotel_id=context.hotel_id, run_id=run_id)
     if details is None:
         raise HTTPException(status_code=404, detail="Allocation run not found")
     return _serialize_run_details(details)
+
+
+@router.post("/runs/{run_id}/accept", response_model=AllocationRunDetailRead)
+def accept_run(
+    run_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
+):
+    try:
+        details = accept_allocation_run(
+            db,
+            hotel_id=context.hotel_id,
+            run_id=run_id,
+            user_id=context.user_id,
+        )
+        db.commit()
+        return _serialize_run_details(details)
+    except AllocationRuntimeError as exc:
+        db.rollback()
+        code = status.HTTP_404_NOT_FOUND if "not found" in str(exc).lower() else status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+
+
+@router.post("/runs/{run_id}/reject", response_model=AllocationRunDetailRead)
+def reject_run(
+    run_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
+):
+    try:
+        details = reject_allocation_run(
+            db,
+            hotel_id=context.hotel_id,
+            run_id=run_id,
+            user_id=context.user_id,
+        )
+        db.commit()
+        return _serialize_run_details(details)
+    except AllocationRuntimeError as exc:
+        db.rollback()
+        code = status.HTTP_404_NOT_FOUND if "not found" in str(exc).lower() else status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+
+
+@router.patch(
+    "/reservations/{reservation_id}/reassignment-lock",
+    response_model=ReservationReassignmentLockRead,
+)
+def update_reassignment_lock(
+    reservation_id: int,
+    payload: ReservationReassignmentLockRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_UPDATE)),
+):
+    try:
+        reservation = set_reservation_reassignment_lock(
+            db,
+            hotel_id=context.hotel_id,
+            reservation_id=reservation_id,
+            locked=payload.locked,
+            reason=payload.reason,
+            user_id=context.user_id,
+        )
+        db.commit()
+        return ReservationReassignmentLockRead(
+            reservation_id=reservation.id,
+            room_id=reservation.room_id,
+            allocation_locked=reservation.allocation_locked,
+        )
+    except AllocationRuntimeError as exc:
+        db.rollback()
+        code = status.HTTP_404_NOT_FOUND if "not found" in str(exc).lower() else status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
 
 
 def _load_json_dict(raw_value: str | None) -> dict:

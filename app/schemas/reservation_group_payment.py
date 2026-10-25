@@ -24,6 +24,17 @@ class ReservationGroupPaymentAllocationRequest(BaseModel):
 
 class ReservationGroupPaymentCreate(BaseModel):
     received_amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    # Actual notes/coins received for the whole group collection. Allocations
+    # still describe the amount retained and applied across reservations.
+    cash_received_amount: Decimal | None = Field(
+        default=None,
+        gt=0,
+        max_digits=12,
+        decimal_places=2,
+    )
+    # Explicit gratuity from the group over-tender. Zero keeps all excess as
+    # change and avoids treating it as part of the reservation allocations.
+    cash_tip_amount: Decimal = Field(default=Decimal("0.00"), ge=0, max_digits=12, decimal_places=2)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     payment_method: PaymentMethodEnum
     manual_reference: str | None = Field(default=None, min_length=1, max_length=120)
@@ -45,6 +56,13 @@ class ReservationGroupPaymentCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_allocations_sum(self):
+        if self.cash_received_amount is not None and self.payment_method != PaymentMethodEnum.CASH:
+            raise ValueError("El efectivo entregado solo se admite en cobros grupales en efectivo.")
+        if self.cash_tip_amount > 0:
+            if self.payment_method != PaymentMethodEnum.CASH:
+                raise ValueError("La propina solo se admite en cobros grupales en efectivo.")
+            if self.cash_received_amount is None:
+                raise ValueError("Para dejar propina se debe registrar el efectivo entregado.")
         reservation_ids = [item.reservation_id for item in self.allocations]
         if len(reservation_ids) != len(set(reservation_ids)):
             raise ValueError("Cada reserva puede recibir una sola asignación por cobro grupal.")
@@ -66,6 +84,10 @@ class ReservationGroupPaymentRead(BaseModel):
     id: int
     group_id: int
     received_amount: Decimal
+    gross_amount: Decimal | None = None
+    cash_received_amount: Decimal | None = None
+    cash_change_amount: Decimal | None = None
+    cash_tip_amount: Decimal = Decimal("0.00")
     currency: str
     payment_method: PaymentMethodEnum
     manual_reference: str | None = None

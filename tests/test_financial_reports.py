@@ -170,7 +170,47 @@ def test_daily_report_totals_a_completed_transaction_without_crashing(reports_cl
     response = client.get("/api/reports/daily", params={"report_date": report_date.isoformat()})
 
     assert response.status_code == 200
-    assert response.json()["revenue"]["total"] == 15000.5
+    payload = response.json()
+    assert set(payload) == {
+        "report_date",
+        "generated_at",
+        "occupancy",
+        "arrivals",
+        "departures",
+        "in_house",
+        "revenue",
+        "pending_payments",
+        "no_shows",
+    }
+    assert payload["report_date"] == report_date.isoformat()
+    assert set(payload["occupancy"]) == {"total_rooms", "occupied", "available", "occupancy_rate"}
+    assert set(payload["arrivals"]) == {"count", "reservations"}
+    assert set(payload["arrivals"]["reservations"][0]) == {
+        "id",
+        "confirmation_code",
+        "guest_id",
+        "room_id",
+        "status",
+        "company_billing_deferred",
+        "total_amount",
+        "balance_due",
+        "company_night_extra_due",
+    }
+    assert set(payload["departures"]) == {"count", "reservations"}
+    assert set(payload["in_house"]) == {"count", "checked_in", "expected"}
+    assert set(payload["revenue"]) == {
+        "currency_code",
+        "total",
+        "by_method",
+        "by_currency",
+        "by_method_by_currency",
+        "timezone",
+        "transactions_count",
+    }
+    assert payload["revenue"]["total"] == 15000.5
+    assert payload["revenue"]["by_currency"] == [{"currency_code": "ARS", "total": 15000.5}]
+    assert set(payload["pending_payments"]) == {"currency_code", "total_balance", "by_currency", "count"}
+    assert set(payload["no_shows"]) == {"count", "reservations"}
 
 
 def test_revenue_report_totals_multiple_completed_transactions_without_crashing(reports_client):
@@ -192,6 +232,111 @@ def test_revenue_report_totals_multiple_completed_transactions_without_crashing(
     assert payload["expected"]["total"] == "15000.50"
     assert payload["expected"]["pending"] == "0.25"
     assert payload["expected"]["reservations_count"] == 1
+
+
+def test_deferred_company_revenue_uses_scalar_reservation_projection(reports_client):
+    client, db, reservation_id = reports_client
+    company = Company(
+        hotel_id=1,
+        legal_name="Deferred Company",
+        display_name="Deferred Company",
+        payment_deferred=True,
+    )
+    db.add(company)
+    db.flush()
+    reservation = db.get(Reservation, reservation_id)
+    reservation.company_id = company.id
+    _make_completed_transaction(db, reservation_id=reservation_id, amount="100.00")
+
+    statements = []
+
+    def capture_select(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", capture_select)
+    try:
+        report_date = hotel_today(db, 1)
+        response = client.get(
+            "/api/reports/revenue",
+            params={"start_date": report_date.isoformat(), "end_date": report_date.isoformat()},
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_select)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["collected"]["by_currency"] == []
+
+    scalar_reservation_selects = [
+        statement.lower().replace('"', "")
+        for statement in statements
+        if "from reservations" in statement.lower()
+        and "reservations_settlement_status" in statement.lower()
+    ]
+    expected_projection = (
+        "reservations.id as reservations_id, "
+        "reservations.hotel_id as reservations_hotel_id, "
+        "reservations.company_id as reservations_company_id, "
+        "reservations.settlement_status as reservations_settlement_status"
+    )
+    assert any(
+        " ".join(statement.split("from", 1)[0].split()).removeprefix("select ")
+        == expected_projection
+        for statement in scalar_reservation_selects
+    ), scalar_reservation_selects
+
+
+def test_revenue_report_projects_category_scalars_without_loading_rooms(reports_client):
+    client, db, reservation_id = reports_client
+    reservation = db.get(Reservation, reservation_id)
+    report_date = hotel_today(db, 1)
+    reservation.external_paid_confirmed = True
+    reservation.external_paid_amount = Decimal("25.00")
+    reservation.external_paid_currency = "ARS"
+    reservation.external_paid_confirmed_at = datetime.combine(
+        report_date, datetime.min.time()
+    ) + timedelta(hours=15)
+    _make_completed_transaction(db, reservation_id=reservation_id, amount="100.00")
+
+    statements = []
+
+    def capture_select(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", capture_select)
+    try:
+        response = client.get(
+            "/api/reports/revenue",
+            params={"start_date": report_date.isoformat(), "end_date": report_date.isoformat()},
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_select)
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["collected"]["by_category"][0]["category_name"] == "Standard"
+    assert payload["external_ota_collected"]["by_category"] == [
+        {"category_name": "Standard", "currency_code": "ARS", "amount": "25.00"}
+    ]
+
+    category_selects = [
+        " ".join(statement.lower().replace('"', "").split())
+        for statement in statements
+        if "from room_categories" in statement.lower()
+    ]
+    expected_projection = (
+        "room_categories.id as room_categories_id, "
+        "room_categories.name as room_categories_name"
+    )
+    assert len(category_selects) == 2, category_selects
+    assert all(
+        statement.split(" from ", 1)[0].removeprefix("select ") == expected_projection
+        for statement in category_selects
+    ), category_selects
+    assert not any("from rooms" in statement.lower() for statement in statements)
 
 
 def test_revenue_refunds_and_transaction_bounds_use_hotel_local_days(reports_client):

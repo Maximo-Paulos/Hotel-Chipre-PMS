@@ -16,6 +16,11 @@ from app.services.payment_link_test_service import (
     validate_mercadopago_webhook_signature,
 )
 from app.services.permission_service import PERMISSION_SETTINGS_TESTS_EXECUTE, PERMISSION_SETTINGS_TESTS_VIEW
+from app.services.payment_webhook_service import (
+    PaymentWebhookError,
+    RetryablePaymentWebhookError,
+    fetch_mercadopago_payment,
+)
 from app.api.webhook_payloads import read_bounded_body
 from app.services.external_effects_policy import (
     InboundProviderEventsDisabled,
@@ -148,15 +153,32 @@ async def mercadopago_webhook(
             db,
             str(external_reference),
             hotel_id=int(hotel_id) if hotel_id and hotel_id.isdigit() else None,
-            payload=payload,
+            external_payment_id=str(data_id or ""),
+            payment_fetcher=lambda session, provider_hotel_id, payment_id: fetch_mercadopago_payment(
+                session,
+                provider_hotel_id,
+                payment_id,
+                commit_before_network=True,
+            ),
         )
         db.commit()
     except PaymentLinkTestError as exc:
         db.rollback()
         return {"status": "error", "reason": str(exc)}
+    except PaymentWebhookError as exc:
+        db.rollback()
+        if isinstance(exc, RetryablePaymentWebhookError):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="No se pudo verificar el pago; Mercado Pago puede reintentar.",
+            ) from exc
+        return {"status": "error", "reason": "No se pudo verificar el pago informado"}
     except Exception as exc:
         db.rollback()
-        return {"status": "error", "reason": "No se pudo actualizar el link de pago"}
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No se pudo actualizar el link de pago; Mercado Pago puede reintentar.",
+        ) from exc
 
     if not record:
         return {"status": "ignored", "reason": "payment_link_not_found"}

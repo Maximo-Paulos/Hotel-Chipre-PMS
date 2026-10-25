@@ -139,8 +139,8 @@ def _is_route_secured(route: APIRoute) -> bool:
 
 
 def test_all_routes_are_authenticated_or_explicitly_allowlisted():
-    # ponytail: FastAPI >=0.137 wraps included sub-routers in `_IncludedRouter`
-    # objects, so `app.routes` is no longer a flat list of `APIRoute` -- a naive
+    # FastAPI wraps included sub-routers in `_IncludedRouter` objects, so
+    # `app.routes` is no longer a flat list of `APIRoute`; a naive
     # `isinstance(route, APIRoute)` filter here silently dropped every nested
     # route (only 6 of 288 real routes survived), turning this guardrail into a
     # false pass. `iter_route_contexts` is the helper FastAPI itself uses to walk

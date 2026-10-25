@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, raiseload, selectinload
 
-from app.services.row_locks import lock_query
 from app.models.audit_log import AuditActionEnum
 from app.models.operations import RoomMoveEvent, RoomMovementGroup
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.room import Room, RoomCategory, RoomHousekeepingStatusEnum, RoomStatusEnum
+from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.services import audit_log_service
 from app.services.reservation_service import (
@@ -17,10 +17,48 @@ from app.services.reservation_service import (
     _validate_reservation_occupancy,
     check_room_availability,
 )
+from app.services.room_state_service import RoomStateTransitionError, mutate_room_state
+from app.services.row_locks import lock_query
 
 
 class RoomMovementGroupError(Exception):
     """Business error for room movement group operations."""
+
+
+class RoomMovementLockConflict(RoomMovementGroupError):
+    """A room needed by a movement is currently locked by another operation."""
+
+
+ROOM_MOVE_LOCK_CONFLICT_DETAIL = (
+    "Otra operación está modificando una habitación. Reintentá el movimiento."
+)
+
+
+def _is_postgres_lock_not_available(error: OperationalError) -> bool:
+    original = error.orig
+    diagnostic = getattr(original, "diag", None)
+    sqlstate = (
+        getattr(original, "sqlstate", None)
+        or getattr(original, "pgcode", None)
+        or getattr(diagnostic, "sqlstate", None)
+    )
+    return sqlstate == "55P03"
+
+
+def lock_room_for_movement(db: Session, *, hotel_id: int, room_id: int) -> Room | None:
+    """Lock a tenant-owned movement room without waiting behind another writer."""
+    try:
+        return (
+            db.query(Room)
+            .filter(Room.id == room_id, Room.hotel_id == hotel_id)
+            .populate_existing()
+            .with_for_update(of=Room, nowait=True)
+            .first()
+        )
+    except OperationalError as exc:
+        if not _is_postgres_lock_not_available(exc):
+            raise
+        raise RoomMovementLockConflict(ROOM_MOVE_LOCK_CONFLICT_DETAIL) from exc
 
 
 def group_has_company_reservations(db: Session, *, hotel_id: int, group_id: int) -> bool:
@@ -67,25 +105,43 @@ def sync_room_statuses_after_move(
     origin_room_disposition: str | None = None,
     origin_room_disposition_note: str | None = None,
     actor_user_id: int | None = None,
+    allow_open_checklist_occupancy_override: bool = False,
+    checklist_override_reason: str | None = None,
 ) -> tuple[str | None, str | None]:
     """Keep Room.status in sync after a reservation's room changed.
 
-    Room.status is a persisted column, not computed from reservations, so a
-    move has to update it explicitly -- mirrors the check-in/check-out
-    pattern in checkin_service.py. Only a checked-in reservation actually
-    occupies a room, so a move of a pending/future reservation leaves
-    Room.status untouched.
+    Room.status is persisted, so checked-in moves update it through the
+    canonical transaction-local room-state service. Pending/future moves do
+    not change room status.
     """
     if reservation.status != ReservationStatusEnum.CHECKED_IN:
         return None, None
 
-    destination_status_before = to_room.status.value if hasattr(to_room.status, "value") else str(to_room.status)
-    to_room.status = RoomStatusEnum.OCCUPIED
+    # Moves take the reservation lock before room locks. Any room contention
+    # must fail fast so the transaction releases that reservation lock instead
+    # of waiting while holding it.
+    locked_to_room = lock_room_for_movement(db, hotel_id=hotel_id, room_id=to_room.id)
+    if locked_to_room is None:
+        raise RoomMovementGroupError("Destination room does not belong to the active hotel")
+    to_room = locked_to_room
+    try:
+        mutate_room_state(
+            db,
+            room=to_room,
+            hotel_id=hotel_id,
+            status=RoomStatusEnum.OCCUPIED,
+            actor_user_id=actor_user_id,
+            allow_open_checklist_occupancy_override=allow_open_checklist_occupancy_override,
+            checklist_override_reason=checklist_override_reason,
+        )
+    except RoomStateTransitionError as exc:
+        raise RoomMovementGroupError(str(exc)) from exc
+
     source_before: str | None = None
     source_after: str | None = None
 
     if from_room_id is not None and from_room_id != to_room.id:
-        from_room = db.query(Room).filter(Room.id == from_room_id, Room.hotel_id == hotel_id).first()
+        from_room = lock_room_for_movement(db, hotel_id=hotel_id, room_id=from_room_id)
     else:
         from_room = None
 
@@ -102,48 +158,31 @@ def sync_room_statuses_after_move(
         before_status = from_room.status.value if hasattr(from_room.status, "value") else str(from_room.status)
         source_before = before_status
         if origin_room_disposition == "cleaning":
-            from_room.status = RoomStatusEnum.CLEANING
-            from_room.housekeeping_status = RoomHousekeepingStatusEnum.DIRTY
+            next_status = RoomStatusEnum.CLEANING
         elif origin_room_disposition == "available":
-            from_room.status = RoomStatusEnum.AVAILABLE
+            next_status = RoomStatusEnum.AVAILABLE
         elif origin_room_disposition == "maintenance":
-            from_room.status = RoomStatusEnum.MAINTENANCE
+            next_status = RoomStatusEnum.MAINTENANCE
         else:
             # System/grouped moves keep the historical safe default. Manual
             # occupied moves are validated by move_reservation_room before
             # reaching this helper and therefore always provide a choice.
-            from_room.status = RoomStatusEnum.CLEANING
-            from_room.housekeeping_status = RoomHousekeepingStatusEnum.DIRTY
+            next_status = RoomStatusEnum.CLEANING
+
+        try:
+            mutate_room_state(
+                db,
+                room=from_room,
+                hotel_id=hotel_id,
+                status=next_status,
+                actor_user_id=actor_user_id,
+            )
+        except RoomStateTransitionError as exc:
+            raise RoomMovementGroupError(str(exc)) from exc
+
         after_status = from_room.status.value if hasattr(from_room.status, "value") else str(from_room.status)
         source_after = after_status
-        if before_status != after_status:
-            audit_log_service.queue_audit_log(
-                db,
-                hotel_id=hotel_id,
-                table_name="rooms",
-                record_id=from_room.id,
-                action=AuditActionEnum.STATUS_CHANGE,
-                actor_user_id=actor_user_id,
-                payload_before={"id": from_room.id, "status": before_status},
-                payload_after={
-                    "id": from_room.id,
-                    "status": after_status,
-                    "reservation_id": reservation.id,
-                    "origin_room_disposition": origin_room_disposition,
-                    "origin_room_disposition_note": origin_room_disposition_note,
-                },
-            )
-    if destination_status_before != RoomStatusEnum.OCCUPIED.value:
-        audit_log_service.queue_audit_log(
-            db,
-            hotel_id=hotel_id,
-            table_name="rooms",
-            record_id=to_room.id,
-            action=AuditActionEnum.STATUS_CHANGE,
-            actor_user_id=actor_user_id,
-            payload_before={"id": to_room.id, "status": destination_status_before},
-            payload_after={"id": to_room.id, "status": RoomStatusEnum.OCCUPIED.value, "reservation_id": reservation.id},
-        )
+
     return source_before, source_after
 
 
@@ -222,11 +261,15 @@ def create_grouped_room_move(
     if reservation.company_id is None:
         reservation.category_id = to_room.category_id
     reservation.version = (reservation.version or 0) + 1
-    reservation.allocation_locked = True
     reservation.requires_manual_review = False
     reservation.allocation_status = "assigned"
     sync_room_statuses_after_move(
-        db, hotel_id=hotel_id, reservation=reservation, from_room_id=from_room_id, to_room=to_room,
+        db,
+        hotel_id=hotel_id,
+        reservation=reservation,
+        from_room_id=from_room_id,
+        to_room=to_room,
+        actor_user_id=created_by_user_id,
     )
 
     event = RoomMoveEvent(
@@ -320,12 +363,7 @@ def revert_group(
         reservation = reservations_by_id.get(event.reservation_id)
         if reservation is None:
             raise RoomMovementGroupError("Linked reservation no longer exists")
-        from_room_query = (
-            db.query(Room)
-            .filter(Room.id == event.from_room_id, Room.hotel_id == hotel_id)
-            .populate_existing()
-        )
-        from_room = lock_query(from_room_query, Room).first()
+        from_room = lock_room_for_movement(db, hotel_id=hotel_id, room_id=event.from_room_id)
         if from_room is None:
             raise RoomMovementGroupError("Original room no longer exists")
 
@@ -467,7 +505,6 @@ def revert_group(
         if reservation.company_id is None:
             reservation.category_id = from_room.category_id
         reservation.version = (reservation.version or 0) + 1
-        reservation.allocation_locked = True
         reservation.requires_manual_review = False
         reverted.append(
             {

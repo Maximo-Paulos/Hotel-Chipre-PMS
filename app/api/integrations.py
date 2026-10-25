@@ -25,6 +25,7 @@ from app.schemas.integration import (
     IntegrationStatusResponse,
 )
 from app.services.integration_service import (
+    ProviderCredentialValidationUnavailable,
     build_redirect_url,
     connection_account_label,
     derive_expires_at,
@@ -317,6 +318,9 @@ def connect_integration(
         if any(oauth_payload.get(key) for key in manual_keys):
             try:
                 oauth_payload = validate_provider_credentials(integration.provider, oauth_payload)
+            except ProviderCredentialValidationUnavailable as exc:
+                db.rollback()
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
             except ValueError as exc:
                 conn = upsert_connection(
                     db,
@@ -410,6 +414,9 @@ def connect_integration(
 
     try:
         manual_payload = validate_provider_credentials(integration.provider, manual_payload)
+    except ProviderCredentialValidationUnavailable as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         conn = upsert_connection(
             db,

@@ -17,12 +17,13 @@ from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy.orm import Session
 
 from app.database import get_session_factory
-from app.models.analytics import AnalyticsExportFormatEnum, AnalyticsExportJob, AnalyticsExportStatusEnum
+from app.models.analytics import (
+    AnalyticsExportFormatEnum,
+    AnalyticsExportJob,
+    AnalyticsExportStatusEnum,
+)
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.analytics_api import AnalyticsExportJobRead, AnalyticsExportRequest
-from app.services.object_storage import ObjectStorageError, get_object_storage
-from app.services.stored_object_service import register_uploaded_object, register_uploaded_object_file
-from app.services.csv_export_safety import spreadsheet_safe_value
 from app.services.analytics_service import (
     _analytics_window,
     build_category_detail_payload,
@@ -34,8 +35,13 @@ from app.services.analytics_service import (
     build_segments_payload,
     get_company_fact_detail,
 )
+from app.services.csv_export_safety import spreadsheet_safe_value
+from app.services.object_storage import ObjectStorageError, get_object_storage
+from app.services.stored_object_service import (
+    register_uploaded_object,
+    register_uploaded_object_file,
+)
 from app.services.tenant_context import set_tenant_hotel_context
-
 
 PNG_EXPORT_PAGE_ROWS = 250
 PNG_EXPORT_SPOOL_MEMORY_BYTES = 8 * 1024 * 1024
@@ -903,6 +909,8 @@ def get_export_file(job: AnalyticsExportJob) -> BinaryIO:
 
 def delete_export_file(job: AnalyticsExportJob) -> None:
     if job.file_path:
+        if job.file_path != _export_object_key(job):
+            raise ObjectStorageError("analytics export object key does not match its job")
         get_object_storage().delete(job.file_path)
 
 

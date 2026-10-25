@@ -83,7 +83,13 @@ def test_linen_summary_returns_every_active_item_balance_in_one_call_hotel_scope
     summary_at_house = linen_summary(db, hotel_id=1, location_id=house.id)
     assert summary_at_house[0]["current_quantity"] == Decimal("6.00")
     assert summary_at_house[0]["location_balances"] == [
-        {"location_id": house.id, "current_quantity": Decimal("6.00"), "has_movements": True}
+        {
+            "location_id": house.id,
+            "current_quantity": Decimal("6.00"),
+            "ledger_quantity": Decimal("6.00"),
+            "pending_excess_quantity": Decimal("0.00"),
+            "has_movements": True,
+        }
     ]
 
 
@@ -149,7 +155,13 @@ def test_linen_summary_marks_zero_balance_as_having_history(db):
     summary = linen_summary(db, hotel_id=1, location_id=house.id)
     assert summary[0]["current_quantity"] == Decimal("0.00")
     assert summary[0]["location_balances"] == [
-        {"location_id": house.id, "current_quantity": Decimal("0.00"), "has_movements": True}
+        {
+            "location_id": house.id,
+            "current_quantity": Decimal("0.00"),
+            "ledger_quantity": Decimal("0.00"),
+            "pending_excess_quantity": Decimal("0.00"),
+            "has_movements": True,
+        }
     ]
 
 

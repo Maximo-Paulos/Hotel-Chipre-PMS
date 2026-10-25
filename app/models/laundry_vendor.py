@@ -217,6 +217,7 @@ class LaundryRemitoLine(Base):
             "quantity >= 0 AND missing_quantity >= 0 AND (quantity > 0 OR missing_quantity > 0)",
             name="ck_laundry_remito_lines_quantities_valid",
         ),
+        UniqueConstraint("hotel_id", "id", name="uq_laundry_remito_lines_hotel_id_id"),
         CheckConstraint(
             "(missing_quantity = 0 AND follow_up_status IS NULL) OR "
             "(missing_quantity > 0 AND follow_up_status IS NOT NULL AND follow_up_status IN "

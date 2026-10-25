@@ -177,6 +177,54 @@ def test_movement_idempotency_key_header_dedupes_a_retried_request():
         _teardown(db, engine)
 
 
+def test_movement_idempotency_key_with_different_payload_returns_409():
+    client, db, engine = _client_with_db()
+    try:
+        item = client.post("/api/stock/items", json={"name": "Sabanas", "unit": "unidad"}).json()
+        headers = {"Idempotency-Key": "payload-conflict-key"}
+        first = client.post(
+            "/api/stock/movements",
+            json={"item_id": item["id"], "movement_type": "in", "quantity": "10.00", "reason": "Conteo"},
+            headers=headers,
+        )
+        assert first.status_code == 201
+
+        conflicting_retry = client.post(
+            "/api/stock/movements",
+            json={
+                "item_id": item["id"],
+                "movement_type": "in",
+                "quantity": "10.00",
+                "reason": "Motivo diferente",
+            },
+            headers=headers,
+        )
+        assert conflicting_retry.status_code == 409
+        assert "different stock movement" in conflicting_retry.json()["detail"]
+
+        history = client.get(f"/api/stock/movements?item_id={item['id']}")
+        assert len(history.json()) == 1
+    finally:
+        _teardown(db, engine)
+
+
+def test_movement_idempotency_key_rejects_whitespace_only_value():
+    client, db, engine = _client_with_db()
+    try:
+        item = client.post("/api/stock/items", json={"name": "Sabanas", "unit": "unidad"}).json()
+        response = client.post(
+            "/api/stock/movements",
+            json={"item_id": item["id"], "movement_type": "in", "quantity": "1.00"},
+            headers={"Idempotency-Key": "        "},
+        )
+
+        assert response.status_code == 422
+        assert "Idempotency-Key" in response.json()["detail"]
+        assert client.get(f"/api/stock/movements?item_id={item['id']}").json() == []
+    finally:
+        _teardown(db, engine)
+
+
 def test_stock_summary_is_hotel_scoped_and_requires_stock_read_permission():
     client, db, engine = _client_with_db()
     try:

@@ -14,10 +14,12 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.models.user_mfa import UserMfaSecret
+from app.schemas.hotel_config import HotelConfigUpdate
 from app.dependencies.auth import AuthContext
 from app.services.action_step_up_service import create_action_step_up_ticket
 from app.services.permission_service import (
     PERMISSION_CONFIG_MANAGE,
+    PERMISSION_COMPANY_MANAGE,
     PERMISSION_HOTEL_SETTINGS_READ,
     PERMISSION_RESERVATION_MANUAL_RATE,
     PERMISSION_RESERVATION_MANUAL_RATE_LIMITED,
@@ -36,6 +38,19 @@ def get_db_override_target():
 def get_auth_context_target():
     from app.dependencies.auth import get_auth_context
     return get_auth_context
+
+
+@pytest.mark.parametrize(
+    "policy",
+    ["round_up", "round_down", "nearest_ten", "exact", "keep_remainder"],
+)
+def test_fx_rounding_policy_schema_accepts_each_supported_policy(policy):
+    assert HotelConfigUpdate(fx_rounding_policy=policy).fx_rounding_policy == policy
+
+
+def test_fx_rounding_policy_schema_rejects_unknown_policy():
+    with pytest.raises(ValueError):
+        HotelConfigUpdate(fx_rounding_policy="nearest_hundred")
 
 
 @pytest.fixture
@@ -113,6 +128,7 @@ def test_config_defaults_include_permissions(ctx):
     assert body["fx_ars_to_usd_rate_type"] == "oficial"
     assert body["fx_usd_to_ars_rate_side"] == "venta"
     assert body["fx_ars_to_usd_rate_side"] == "venta"
+    assert body["fx_rounding_policy"] == "keep_remainder"
 
 
 def test_manual_rate_permissions_keep_owner_policy_separate_from_bounded_entry(ctx):
@@ -135,6 +151,49 @@ def test_config_update_permissions(ctx):
     body = r.json()
     for k, v in payload.items():
         assert body[k] == v
+
+
+def test_company_terms_checkin_bypass_toggle_requires_manager_authority(ctx):
+    client, db = ctx
+    config = db.get(HotelConfiguration, 1)
+    initial_value = config.block_checkin_on_company_terms_change
+    set_override(db, 1, "receptionist", PERMISSION_CONFIG_MANAGE, True, user_id=None)
+
+    def receptionist_context():
+        return AuthContext(
+            hotel_id=1,
+            user_id=22,
+            user_email="reception@test.com",
+            user_role="receptionist",
+            is_verified=True,
+            permissions={PERMISSION_CONFIG_MANAGE},
+        )
+
+    fastapi_app.dependency_overrides[get_auth_context_target()] = receptionist_context
+    response = client.patch("/api/config/", json={"block_checkin_on_company_terms_change": not initial_value})
+
+    assert response.status_code == 403, response.text
+    db.refresh(config)
+    assert config.block_checkin_on_company_terms_change is initial_value
+
+    # Owner/manager company authority plus configuration authority can change it.
+    set_override(db, 1, "manager", PERMISSION_CONFIG_MANAGE, True, user_id=None)
+
+    def manager_context():
+        return AuthContext(
+            hotel_id=1,
+            user_id=23,
+            user_email="manager@test.com",
+            user_role="manager",
+            is_verified=True,
+            permissions={PERMISSION_CONFIG_MANAGE, PERMISSION_COMPANY_MANAGE},
+        )
+
+    fastapi_app.dependency_overrides[get_auth_context_target()] = manager_context
+    allowed = client.patch("/api/config/", json={"block_checkin_on_company_terms_change": not initial_value})
+
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["block_checkin_on_company_terms_change"] is (not initial_value)
 
 
 def test_fiscal_profile_update_is_validated_and_audited_in_the_same_request(ctx):
@@ -300,7 +359,11 @@ def test_co_owner_can_change_fx_market_after_step_up(ctx):
 
 def test_fx_conversion_sides_are_owner_configurable_and_audited(ctx):
     client, db = ctx
-    payload = {"fx_usd_to_ars_rate_type": "blue", "fx_usd_to_ars_rate_side": "compra"}
+    payload = {
+        "fx_usd_to_ars_rate_type": "blue",
+        "fx_usd_to_ars_rate_side": "compra",
+        "fx_rounding_policy": "exact",
+    }
     challenge = client.patch("/api/config/", json=payload)
     assert challenge.status_code == 428
     assert challenge.json()["detail"]["permission_code"] == PERMISSION_SETTINGS_FX_MANAGE
@@ -323,11 +386,13 @@ def test_fx_conversion_sides_are_owner_configurable_and_audited(ctx):
     assert response.json()["fx_ars_to_usd_rate_type"] == "oficial"
     assert response.json()["fx_usd_to_ars_rate_side"] == "compra"
     assert response.json()["fx_ars_to_usd_rate_side"] == "venta"
+    assert response.json()["fx_rounding_policy"] == "exact"
     assert response.json()["fx_conversion_rate_type"] == "oficial"
 
     read_response = client.get("/api/config/")
     assert read_response.status_code == 200
     assert read_response.json()["fx_usd_to_ars_rate_side"] == "compra"
+    assert read_response.json()["fx_rounding_policy"] == "exact"
 
     log = (
         db.query(AuditLog)
@@ -339,10 +404,12 @@ def test_fx_conversion_sides_are_owner_configurable_and_audited(ctx):
     assert json.loads(log.payload_before) == {
         "fx_usd_to_ars_rate_type": "oficial",
         "fx_usd_to_ars_rate_side": "venta",
+        "fx_rounding_policy": "keep_remainder",
     }
     assert json.loads(log.payload_after) == {
         "fx_usd_to_ars_rate_type": "blue",
         "fx_usd_to_ars_rate_side": "compra",
+        "fx_rounding_policy": "exact",
     }
 
 
@@ -353,6 +420,8 @@ def test_fx_conversion_sides_are_owner_configurable_and_audited(ctx):
         {"fx_usd_to_ars_rate_type": "tarjeta"},
         {"fx_ars_to_usd_rate_type": "tarjeta"},
         {"fx_usd_to_ars_rate_type": None},
+        {"fx_rounding_policy": "nearest_hundred"},
+        {"fx_rounding_policy": None},
         {"fx_ars_to_usd_rate_type": None},
         {"fx_usd_to_ars_rate_side": "medio"},
         {"fx_ars_to_usd_rate_side": "medio"},

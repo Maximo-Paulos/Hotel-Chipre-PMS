@@ -1,12 +1,12 @@
 """
 FastAPI routes for stock and inventory operations.
 """
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -15,26 +15,34 @@ from app.schemas.datetime_types import UTCDateTime
 from app.services.permission_service import (
     PERMISSION_STOCK_ADJUST,
     PERMISSION_STOCK_ADMIN,
+    PERMISSION_STOCK_COUNT_CONFIRM,
     PERMISSION_STOCK_MOVE,
     PERMISSION_STOCK_READ,
     audit_permission_denied,
     resolve,
 )
 from app.services.stock_service import (
+    StockCountRecountRequired,
     StockError,
     StockIdempotencyConflict,
+    cancel_stock_count_session,
+    confirm_stock_count_session,
     consumption_report,
     create_location,
+    create_stock_count_session,
     create_stock_item,
     current_stock,
     delete_location,
     delete_stock_item,
     get_location,
+    get_stock_count_session,
     get_stock_item,
-    list_stock_movements,
     list_locations,
+    list_stock_count_sessions,
     list_stock_items,
+    list_stock_movements,
     low_stock_items,
+    record_stock_count,
     register_movement,
     register_opening_count,
     stock_summary,
@@ -154,6 +162,85 @@ class StockOpeningCountCreate(BaseModel):
     location_id: int = Field(gt=0)
     quantity: Decimal = Field(gt=0)
     reason: str = Field(min_length=1, max_length=500)
+
+
+class StockCountSessionCreate(BaseModel):
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def nonblank_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("A reason is required")
+        return normalized
+
+
+class StockCountRecordCreate(BaseModel):
+    item_id: int = Field(gt=0)
+    location_id: int | None = Field(default=None, gt=0)
+    counted_quantity: Decimal = Field(ge=0, le=Decimal("9999999999.99"))
+
+    @field_validator("counted_quantity")
+    @classmethod
+    def supported_count_precision(cls, value: Decimal) -> Decimal:
+        if not value.is_finite():
+            raise ValueError("Counted quantity must be finite")
+        if value % Decimal("0.01") != 0:
+            raise ValueError("Counted quantity supports at most two decimal places")
+        return value
+
+
+class StockCountConfirmation(BaseModel):
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def nonblank_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("A confirmation reason is required")
+        return normalized
+
+
+class StockCountSessionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    hotel_id: int
+    status: str
+    reason: str
+    created_by_user_id: int | None
+    created_at: UTCDateTime
+    counter_user_id: int | None
+    confirmed_by_user_id: int | None
+    confirmation_reason: str | None
+    confirmed_at: UTCDateTime | None
+    self_approved: bool
+    cancelled_by_user_id: int | None
+    cancellation_reason: str | None
+    cancelled_at: UTCDateTime | None
+
+
+class StockCountLineRead(BaseModel):
+    id: int
+    item_id: int
+    item_name: str
+    location_id: int | None
+    location_name: str | None
+    system_quantity_at_count: Decimal
+    counted_quantity: Decimal
+    movement_version: int
+    current_movement_version: int
+    recount_required: bool
+    counted_by_user_id: int | None
+    counted_at: UTCDateTime
+    applied_adjustment: Decimal | None
+    adjusted_at: UTCDateTime | None
+
+
+class StockCountSessionDetailRead(StockCountSessionRead):
+    counts: list[StockCountLineRead]
 
 
 class StockConsumptionItem(BaseModel):
@@ -362,6 +449,13 @@ def create_movement(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_STOCK_MOVE)),
 ):
+    if idempotency_key is not None:
+        idempotency_key = idempotency_key.strip()
+        if not 8 <= len(idempotency_key) <= 100:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Idempotency-Key must contain between 8 and 100 non-whitespace characters",
+            )
     try:
         if data.movement_type in ("adjustment", "adjustment_out"):
             _ensure_adjustment_permission(db, context)
@@ -372,6 +466,8 @@ def create_movement(
             idempotency_key=idempotency_key,
             **data.model_dump(),
         )
+    except StockIdempotencyConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except StockError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     db.commit()
@@ -445,6 +541,192 @@ def create_opening_stock_count(
     db.commit()
     db.refresh(movement)
     return movement
+
+
+def _stock_count_line_read(line, *, session_status: str) -> StockCountLineRead:
+    item = line.item
+    location = line.location
+    current_version = item.movement_version or 0
+    return StockCountLineRead(
+        id=line.id,
+        item_id=line.item_id,
+        item_name=item.name,
+        location_id=line.location_id,
+        location_name=location.name if location is not None else None,
+        system_quantity_at_count=line.system_quantity_at_count,
+        counted_quantity=line.counted_quantity,
+        movement_version=line.movement_version,
+        current_movement_version=current_version,
+        recount_required=session_status == "open"
+        and current_version != line.movement_version,
+        counted_by_user_id=line.counted_by_user_id,
+        counted_at=line.counted_at,
+        applied_adjustment=line.applied_adjustment,
+        adjusted_at=line.adjusted_at,
+    )
+
+
+def _stock_count_session_detail(session) -> StockCountSessionDetailRead:
+    return StockCountSessionDetailRead(
+        **StockCountSessionRead.model_validate(session).model_dump(),
+        counts=[
+            _stock_count_line_read(line, session_status=session.status)
+            for line in session.counts
+        ],
+    )
+
+
+@router.post(
+    "/count-sessions",
+    response_model=StockCountSessionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def start_stock_count_session(
+    data: StockCountSessionCreate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_MOVE)),
+):
+    try:
+        session = create_stock_count_session(
+            db,
+            hotel_id=context.hotel_id,
+            created_by_user_id=context.user_id,
+            reason=data.reason,
+        )
+    except StockError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+@router.get("/count-sessions", response_model=list[StockCountSessionRead])
+def get_stock_count_sessions(
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
+):
+    return list_stock_count_sessions(
+        db, hotel_id=context.hotel_id, limit=limit, offset=offset
+    )
+
+
+@router.get("/count-sessions/{session_id}", response_model=StockCountSessionDetailRead)
+def get_stock_count_session_detail(
+    session_id: int,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_READ)),
+):
+    try:
+        session = get_stock_count_session(
+            db, hotel_id=context.hotel_id, session_id=session_id
+        )
+    except StockError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return _stock_count_session_detail(session)
+
+
+@router.post(
+    "/count-sessions/{session_id}/counts",
+    response_model=StockCountLineRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def record_stock_count_line(
+    session_id: int,
+    data: StockCountRecordCreate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_MOVE)),
+):
+    try:
+        line = record_stock_count(
+            db,
+            hotel_id=context.hotel_id,
+            session_id=session_id,
+            item_id=data.item_id,
+            location_id=data.location_id,
+            counted_quantity=data.counted_quantity,
+            counted_by_user_id=context.user_id,
+        )
+    except StockError as exc:
+        message = str(exc)
+        code = (
+            404
+            if message
+            in {
+                "Stock count session not found",
+                "Stock item not found",
+                "Stock location not found",
+            }
+            else 409
+        )
+        raise HTTPException(status_code=code, detail=message)
+    db.commit()
+    db.refresh(line)
+    return _stock_count_line_read(line, session_status="open")
+
+
+@router.post(
+    "/count-sessions/{session_id}/confirm",
+    response_model=StockCountSessionDetailRead,
+)
+def confirm_stock_count(
+    session_id: int,
+    data: StockCountConfirmation,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_COUNT_CONFIRM)),
+):
+    try:
+        session = confirm_stock_count_session(
+            db,
+            hotel_id=context.hotel_id,
+            session_id=session_id,
+            confirmed_by_user_id=context.user_id,
+            reason=data.reason,
+        )
+    except StockCountRecountRequired as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": str(exc),
+                "recount_required": exc.items,
+            },
+        )
+    except StockError as exc:
+        message = str(exc)
+        code = 404 if message == "Stock count session not found" else 409
+        raise HTTPException(status_code=code, detail=message)
+    db.commit()
+    return _stock_count_session_detail(
+        get_stock_count_session(db, hotel_id=context.hotel_id, session_id=session_id)
+    )
+
+
+@router.post(
+    "/count-sessions/{session_id}/cancel",
+    response_model=StockCountSessionRead,
+)
+def cancel_stock_count(
+    session_id: int,
+    data: StockCountConfirmation,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_STOCK_COUNT_CONFIRM)),
+):
+    try:
+        session = cancel_stock_count_session(
+            db,
+            hotel_id=context.hotel_id,
+            session_id=session_id,
+            cancelled_by_user_id=context.user_id,
+            reason=data.reason,
+        )
+    except StockError as exc:
+        message = str(exc)
+        code = 404 if message == "Stock count session not found" else 409
+        raise HTTPException(status_code=code, detail=message)
+    db.commit()
+    db.refresh(session)
+    return session
 
 
 @router.get("/movements", response_model=list[StockMovementRead])

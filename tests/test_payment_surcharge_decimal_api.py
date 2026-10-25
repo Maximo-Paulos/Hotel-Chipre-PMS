@@ -12,9 +12,12 @@ from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
 from app.models.daily_rate import DailyRate
+from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
+from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
+from app.services import payment_service as payment_service_module
 from app.services.payment_service import calculate_payment_surcharge
 
 
@@ -138,5 +141,126 @@ def test_reactivate_deactivated_surcharge_via_patch():
         response = client.patch(f"/api/payment-surcharges/{surcharge.id}", json={"is_active": True})
         assert response.status_code == 200
         assert response.json()["is_active"] is True
+    finally:
+        _cleanup(db, engine)
+
+
+def test_payment_surcharge_quote_endpoint_returns_exact_maximum_and_cash_suggestion(monkeypatch):
+    client, db, engine = _build_client()
+    try:
+        hotel = HotelConfiguration(
+            id=107,
+            subscription_active=True,
+            fx_rounding_policy="round_up",
+            enable_cash=True,
+        )
+        guest = Guest(first_name="Quote", last_name="Guest", email="quote@example.com", hotel_id=107)
+        category = RoomCategory(
+            hotel_id=107,
+            name="Quote Standard",
+            code="QTE107",
+            base_price_per_night=100,
+            max_occupancy=2,
+        )
+        db.add_all([hotel, guest, category])
+        db.flush()
+        reservation = Reservation(
+            hotel_id=107,
+            confirmation_code="QTE-107",
+            guest_id=guest.id,
+            category_id=category.id,
+            check_in_date=date(2026, 11, 1),
+            check_out_date=date(2026, 11, 2),
+            total_amount=Decimal("321.80"),
+            deposit_amount=Decimal("0.00"),
+            currency_code="ARS",
+            status=ReservationStatusEnum.PENDING,
+        )
+        db.add(reservation)
+        db.commit()
+
+        def quote(_db, *, amount, from_currency, to_currency, **_kwargs):
+            assert (from_currency, to_currency) == ("USD", "ARS")
+            return amount * 17.0, 17.0, {"source": "api_quote_test", "applied_rate": 17.0}
+
+        monkeypatch.setattr(payment_service_module, "_convert_amount", quote)
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(107)
+        response = client.post(
+            "/api/payment-surcharges/quote",
+            json={
+                "reservation_id": reservation.id,
+                "payment_method": "cash",
+                "currency_code": "usd",
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert Decimal(str(data["base_amount"])) == Decimal("18.92")
+        assert Decimal(str(data["applied_amount"])) == Decimal("321.64")
+        assert Decimal(str(data["remaining_balance"])) == Decimal("0.16")
+        assert Decimal(str(data["cash_tender_suggestion"])) == Decimal("19")
+        assert data["fx_quote_details"]["source"] == "api_quote_test"
+        assert isinstance(data["payment_quote_token"], str)
+        assert data["payment_quote_token"]
+    finally:
+        _cleanup(db, engine)
+
+
+def test_payment_surcharge_quote_requires_permission_and_tenant_scopes_reservation():
+    client, db, engine = _build_client()
+    try:
+        db.add_all(
+            [
+                HotelConfiguration(id=108, subscription_active=True),
+                HotelConfiguration(id=109, subscription_active=True),
+            ]
+        )
+        guest = Guest(first_name="Scoped", last_name="Guest", email="scoped@example.com", hotel_id=109)
+        category = RoomCategory(
+            hotel_id=109,
+            name="Scoped Standard",
+            code="SCP109",
+            base_price_per_night=100,
+            max_occupancy=2,
+        )
+        db.add_all([guest, category])
+        db.flush()
+        reservation = Reservation(
+            hotel_id=109,
+            confirmation_code="SCP-109",
+            guest_id=guest.id,
+            category_id=category.id,
+            check_in_date=date(2026, 11, 1),
+            check_out_date=date(2026, 11, 2),
+            total_amount=Decimal("100.00"),
+            deposit_amount=Decimal("0.00"),
+            currency_code="ARS",
+            status=ReservationStatusEnum.PENDING,
+        )
+        db.add(reservation)
+        db.commit()
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(108, role="reception")
+        denied = client.post(
+            "/api/payment-surcharges/quote",
+            json={
+                "reservation_id": reservation.id,
+                "payment_method": "cash",
+                "currency_code": "ARS",
+            },
+        )
+        assert denied.status_code == 403
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(108)
+        cross_tenant = client.post(
+            "/api/payment-surcharges/quote",
+            json={
+                "reservation_id": reservation.id,
+                "payment_method": "cash",
+                "currency_code": "ARS",
+            },
+        )
+        assert cross_tenant.status_code == 404
     finally:
         _cleanup(db, engine)

@@ -4,7 +4,7 @@
 
 ### Backend
 - `app/main.py` is the FastAPI entrypoint and also serves the built frontend.
-- Thin routers live in `app/api/`.
+- Most transport routes live in `app/api/`, with business logic primarily in services. The reservation modification route remains a notable exception. The legacy daily report now delegates its query and aggregation to `app/services/daily_report_service.py`; see the [2026-10-22 code-quality and operational-scenario audit](audits/auditoria-thermos-antislop-escenarios-pms-2026-10-22.md).
 - Business logic lives mainly in `app/services/`.
 - Domain models live in `app/models/`.
 - Database setup and settings live in `app/database.py` and `app/config.py`.

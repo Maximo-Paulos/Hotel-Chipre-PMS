@@ -13,7 +13,7 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.models.operations import BillingAdjustment
-from app.models.reservation import Reservation
+from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
 
 
@@ -216,6 +216,50 @@ def has_payment_history_for_cancellation(db: Session, hotel_id: int, reservation
     if completed_payment is not None:
         return True
     return paid_amount_with_legacy_fallback(db, hotel_id, reservation) > Decimal("0.00")
+
+
+def reservation_has_payment_or_deposit(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation: Reservation,
+) -> bool:
+    """Whether reservation pricing is protected by any recorded payment state.
+
+    This shared financial predicate is used by both core reservation updates
+    and operational reservation flows, keeping their dependency direction
+    independent of each other.
+    """
+    has_transactions = reservation_has_any_transaction(
+        db,
+        hotel_id=hotel_id,
+        reservation_id=reservation.id,
+    )
+    return (
+        reservation.status in (ReservationStatusEnum.DEPOSIT_PAID, ReservationStatusEnum.FULLY_PAID)
+        or Decimal(str(reservation.amount_paid or 0)) > Decimal("0")
+        or Decimal(str(reservation.external_paid_amount or 0)) > Decimal("0")
+        or bool(reservation.external_paid_ever_confirmed)
+        or has_transactions
+    )
+
+
+def reservation_has_any_transaction(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation_id: int,
+) -> bool:
+    """Whether any ledger row exists for a reservation, regardless of status."""
+    return (
+        db.query(Transaction.id)
+        .filter(
+            Transaction.hotel_id == hotel_id,
+            Transaction.reservation_id == reservation_id,
+        )
+        .first()
+        is not None
+    )
 
 
 def billing_adjustment_totals_by_reservation(

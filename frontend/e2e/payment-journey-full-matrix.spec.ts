@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+
 import { completeStepUpPrompt, loginAsStepUpOwner } from "./support/step-up-owner";
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -143,7 +144,7 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
   const guestLastName = `QA-Pay-Mix ${suffix}`;
 
   const ownerSession = await loginAsStepUpOwner(page, "cash", testInfo.project.name);
-  let lastTotpStep = ownerSession.lastTotpStep;
+  const lastTotpStep = ownerSession.lastTotpStep;
   await ensureCashSessionOpen(page);
 
   const { reservationTable, reservationRow } = await createReservation(page, guestLastName, suffix, 60, 63);
@@ -179,7 +180,25 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
 
   // 1) Seña manual en efectivo.
   collaborationStage = "cash deposit";
+  const cashReceivedInput = editForm.getByTestId("reservation-payment-cash-received");
+  await expect(cashReceivedInput).toBeVisible();
+  const cashTipToggle = editForm.getByTestId("reservation-payment-cash-received-tip-toggle");
+  await expect(cashTipToggle).not.toBeChecked();
+  const expectedCashTender = Number(await cashReceivedInput.getAttribute("placeholder"));
+  expect(Number.isFinite(expectedCashTender)).toBe(true);
+  await cashReceivedInput.fill((expectedCashTender + 25).toFixed(2));
+  await expect(editForm.getByTestId("reservation-payment-cash-received-change")).toContainText("25");
+  const cashDepositRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/payments" && request.method() === "POST";
+  });
   await editForm.getByRole("button", { name: localizedText("Registrar Seña", "Register deposit") }).click();
+  const cashDepositPayload = await cashDepositRequest.then((request) => request.postDataJSON()) as {
+    cash_received_amount: number;
+    cash_tip_amount?: number;
+  };
+  expect(cashDepositPayload.cash_received_amount).toBeCloseTo(expectedCashTender + 25, 2);
+  expect(cashDepositPayload.cash_tip_amount).toBeUndefined();
   await expect(page.getByText(localizedName("Se registró la Seña", "Deposit registered"))).toBeVisible();
   await expect.poll(() => readStat(editForm, localizedText("Pagado", "Paid"))).toBe(depositRequired);
   await expect.poll(() => readStat(editForm, localizedText("Saldo", "Balance"))).toBe(balanceAfterDeposit);
@@ -222,7 +241,7 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
   page.once("dialog", (dialog) => dialog.accept());
   collaborationStage = "refund";
   await editForm.getByRole("button", { name: localizedName("Registrar devolución", "Register refund") }).click();
-  lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
+  await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
   await expect(page.getByText(localizedName("Devolución registrada", "Refund registered"))).toBeVisible();
   await expect.poll(() => readStat(editForm, localizedText("Pagado", "Paid"))).toBe(250);
   await expect.poll(() => readStat(editForm, localizedText("Saldo", "Balance"))).toBe(50);
@@ -397,6 +416,43 @@ test("cross-currency payment quotes received tender into the reservation currenc
     currency: "USD",
     transaction_type: "full_payment"
   });
+});
+
+test("cross-currency payment offers reservation-currency fallback when no current quote is available", async ({ page }) => {
+  const suffix = `${Date.now()}fxfallback`;
+  const guestLastName = `QA-Pay-FX-Fallback ${suffix}`;
+  const quoteRequests: Array<{ from_currency?: string; to_currency?: string }> = [];
+
+  await page.route("**/api/fx/conversion-quote", async (route) => {
+    quoteRequests.push(route.request().postDataJSON() as { from_currency?: string; to_currency?: string });
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      json: { detail: "Exchange quote unavailable" }
+    });
+  });
+
+  await login(page);
+  await ensureCashSessionOpen(page, "ARS");
+  const { reservationRow } = await createReservation(page, guestLastName, suffix, 76, 78);
+  const { editForm } = await openPaymentsPanel(reservationRow, page);
+  const currencySelect = editForm.getByTestId("payment-tender-currency");
+  await currencySelect.selectOption("USD");
+
+  const quoteError = editForm.getByTestId("payment-fx-error");
+  await expect(quoteError).toBeVisible();
+  await expect(quoteError).toContainText("No hay una cotización vigente para USD");
+  await expect(quoteError).toContainText("cobrá en la moneda de la reserva (ARS)");
+  expect(quoteRequests).toContainEqual({ from_currency: "USD", to_currency: "ARS" });
+
+  const amountInput = editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i);
+  await amountInput.fill("10");
+  await quoteError.getByTestId("payment-fx-switch-to-reservation-currency").click();
+
+  await expect(currencySelect).toHaveValue("ARS");
+  await expect(amountInput).toHaveValue("");
+  await expect(quoteError).toHaveCount(0);
+  await expect(editForm.getByText("Abrí una caja en ARS para registrar ese efectivo y poder arquearlo en su moneda.")).toHaveCount(0);
 });
 
 test("owner rejects a transfer proof with a reason and the proof cannot be approved afterwards", async ({ page }) => {

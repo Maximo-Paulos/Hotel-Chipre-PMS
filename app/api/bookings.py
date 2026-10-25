@@ -17,17 +17,18 @@ from app.dependencies.auth import AuthContext, authorize_permission, get_auth_co
 from app.api.manual_rate_access import authorize_manual_rate_scope
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.audit_log import AuditActionEnum
-from app.models.transaction import Transaction, TransactionStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.guest import Guest
 from app.schemas.booking import BookingCreate, BookingRead, BookingUpdate
+from app.schemas.cancellation_review import (
+    BookingCancellationResponse,
+)
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
 from app.services.reservation_service import (
     ConfirmedReservationPriceLocked,
     ManualRatePolicyError,
     ReservationError,
     ReservationVersionConflict,
-    check_room_availability,
     create_reservation,
     find_available_rooms,
     transition_reservation_status,
@@ -35,8 +36,15 @@ from app.services.reservation_service import (
     validate_reservation_category_compatibility,
     _validate_reservation_occupancy,
 )
+from app.services.reservation_update_plan import build_reservation_update_plan
 from app.services.reservation_quote_service import build_reservation_quote
-from app.services.checkin_service import perform_checkin, perform_checkout, CheckInError
+from app.services.checkin_service import (
+    CheckInConflictError,
+    CheckInError,
+    CheckOutConflictError,
+    perform_checkin,
+    perform_checkout,
+)
 from app.services.guest_restriction_service import (
     GuestProhibitedError,
     RestrictionOverridePermissionError,
@@ -73,6 +81,15 @@ from app.services.reservation_operations_service import (
     reservation_has_payment_or_deposit,
 )
 from app.services.financial_ledger import has_payment_history_for_cancellation
+from app.services.reservation_cancellation_service import (
+    CancellationConfigurationRequired,
+    CancellationReviewConflict,
+    get_pending_cancellation_review,
+    prepare_cancellation_request,
+    process_payment_link_revocations_after_commit,
+    request_reservation_cancellation,
+    review_read_payload,
+)
 
 router = APIRouter(prefix="/api/bookings", tags=["Bookings"])
 logger = logging.getLogger(__name__)
@@ -80,6 +97,7 @@ logger = logging.getLogger(__name__)
 
 def _booking_status_label_es(status_value: ReservationStatusEnum) -> str:
     return {
+        ReservationStatusEnum.PARTIAL_CHECK_IN: "llegadas parciales",
         ReservationStatusEnum.CHECKED_IN: "en curso",
         ReservationStatusEnum.CHECKED_OUT: "finalizada",
         ReservationStatusEnum.CANCELLED: "cancelada",
@@ -364,7 +382,7 @@ def get_booking(
     return _booking_to_read(booking)
 
 
-@router.post("/{booking_id}/cancel", response_model=BookingRead)
+@router.post("/{booking_id}/cancel", response_model=BookingCancellationResponse)
 def cancel_booking(
     booking_id: int,
     request: Request,
@@ -420,7 +438,11 @@ def cancel_booking(
         raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     if booking.company_id is not None:
         authorize_permission(request, db, context, PERMISSION_COMPANY_MANAGE)
-    if booking.status in (ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT):
+    if booking.status in (
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_OUT,
+    ):
         if not permission_allowed:
             raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
         raise HTTPException(
@@ -452,6 +474,7 @@ def cancel_booking(
         if not booking:
             raise HTTPException(status_code=404, detail="No se encontró la reserva.")
         if booking.status in (
+            ReservationStatusEnum.PARTIAL_CHECK_IN,
             ReservationStatusEnum.CHECKED_IN,
             ReservationStatusEnum.CHECKED_OUT,
             ReservationStatusEnum.CANCELLED,
@@ -485,31 +508,50 @@ def cancel_booking(
         raise HTTPException(status_code=403, detail="No tenes permisos para esta accion")
 
     try:
-        # Grant consumption and the protected state transition share this
-        # session transaction; a failed mutation rolls both back together.
-        transition_reservation_status(
+        pending_review = get_pending_cancellation_review(
+            db,
+            hotel_id=context.hotel_id,
+            reservation_id=booking.id,
+            lock=True,
+        )
+        preparation = None
+        if pending_review is None:
+            try:
+                preparation = prepare_cancellation_request(booking, config)
+            except CancellationConfigurationRequired as exc:
+                db.rollback()
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": exc.reason_code,
+                        "message": "Configurá el horario de check-in y la zona horaria del hotel antes de evaluar la cancelación.",
+                    },
+                ) from exc
+        result = request_reservation_cancellation(
             db,
             booking,
-            ReservationStatusEnum.CANCELLED,
-            context.hotel_id,
-            reason_code="cancelled_by_user",
-            changed_by_user_id=context.user_id,
+            user_id=context.user_id,
+            source="bookings_api",
+            preparation=preparation,
         )
-        try:
-            from app.services.payment_link_service import cancel_active_links_for_reservation
-
-            cancel_active_links_for_reservation(
-                db, context.hotel_id, booking.id, reason="reservation cancelled"
-            )
-        except Exception as exc:  # best-effort; never block the cancellation
-            logger.error(
-                "Failed cancelling payment links for reservation %s error_type=%s",
-                booking.id,
-                type(exc).__name__,
-            )
         db.commit()
+        if result.outcome == "cancelled":
+            process_payment_link_revocations_after_commit(
+                db,
+                hotel_id=context.hotel_id,
+                reservation_id=booking.id,
+            )
         db.refresh(booking)
-        return _booking_to_read(booking)
+        return BookingCancellationResponse(
+            **_booking_to_read(booking).model_dump(),
+            cancellation_outcome=result.outcome,
+            cancellation_review=(
+                review_read_payload(result.review, booking) if result.review is not None else None
+            ),
+        )
+    except CancellationReviewConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ReservationError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -529,7 +571,11 @@ def checkin_booking(
         db.commit()
         db.refresh(booking)
         return _booking_to_read(booking)
+    except CheckInConflictError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except CheckInError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -540,11 +586,20 @@ def checkout_booking(
     context: AuthContext = Depends(require_permission(PERMISSION_CHECKOUT_PERFORM)),
 ):
     try:
-        booking = perform_checkout(db, booking_id, hotel_id=context.hotel_id)
+        booking = perform_checkout(
+            db,
+            booking_id,
+            hotel_id=context.hotel_id,
+            actor_user_id=context.user_id,
+        )
         db.commit()
         db.refresh(booking)
         return _booking_to_read(booking)
+    except CheckOutConflictError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except CheckInError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -577,23 +632,20 @@ def update_booking(
         raise HTTPException(status_code=404, detail="No se encontró la reserva.")
 
     data = payload.model_dump(exclude_unset=True)
-    effective_data = {
-        field: value
-        for field, value in data.items()
-        if field not in {"client_version", "status"}
-        and not (field == "room_id" and value is None)
-        and getattr(booking, field, None) != value
-    }
+    update_plan = build_reservation_update_plan(
+        booking,
+        data,
+        control_fields={"client_version", "status"},
+    )
+    effective_data = update_plan.changes
     if booking.company_id is not None and effective_data:
         authorize_permission(request, db, context, PERMISSION_COMPANY_MANAGE)
     metadata_fields = {"arrival_time_hint", "reservation_comment"}
-    terminal_mutation_fields = set(effective_data) - metadata_fields
-    if booking.status in {
-        ReservationStatusEnum.CHECKED_IN,
-        ReservationStatusEnum.CHECKED_OUT,
-        ReservationStatusEnum.CANCELLED,
-        ReservationStatusEnum.NO_SHOW,
-    } and terminal_mutation_fields:
+    status_restricted_fields = update_plan.status_restricted_fields(
+        booking.status,
+        metadata_fields=metadata_fields,
+    )
+    if status_restricted_fields:
         raise HTTPException(
             status_code=400,
             detail=f"No se puede modificar una reserva en estado «{_booking_status_label_es(booking.status)}».",
@@ -614,14 +666,8 @@ def update_booking(
 
     before = audit_log_service.model_snapshot(booking)
     data = effective_data
-    dates_changed = (
-        ("check_in_date" in data and data["check_in_date"] != booking.check_in_date)
-        or ("check_out_date" in data and data["check_out_date"] != booking.check_out_date)
-    )
-    occupancy_changed = (
-        ("num_adults" in data and data["num_adults"] != booking.num_adults)
-        or ("num_children" in data and data["num_children"] != booking.num_children)
-    )
+    dates_changed = update_plan.dates_changed
+    occupancy_changed = update_plan.occupancy_changed
     if (
         (dates_changed or occupancy_changed)
         and reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=booking)
@@ -722,11 +768,7 @@ def update_booking(
                 detail="La habitación asignada no pertenece a la nueva categoría. Cambiá la habitación primero.",
             )
 
-    room_id_changed = (
-        "room_id" in data
-        and data["room_id"] is not None
-        and data["room_id"] != booking.room_id
-    )
+    room_id_changed = update_plan.room_changed
     if room_id_changed:
         room = (
             db.query(Room)
@@ -923,7 +965,11 @@ def delete_booking(
     if not booking:
         raise HTTPException(status_code=404, detail="No se encontró la reserva.")
     # Avoid deleting checked-in/checked-out bookings to preserve history
-    if booking.status in {ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.CHECKED_OUT}:
+    if booking.status in {
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
+        ReservationStatusEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_OUT,
+    }:
         raise HTTPException(status_code=400, detail="No se puede eliminar una reserva en curso o finalizada.")
     if reservation_has_payment_or_deposit(db, hotel_id=context.hotel_id, reservation=booking):
         raise HTTPException(
@@ -942,8 +988,6 @@ def delete_booking(
         date_to=booking.check_out_date,
         reservation_id=booking.id,
     )
-    db.commit()
-    db.refresh(booking)
     audit_log_service.safe_create_audit_log(
         db,
         hotel_id=context.hotel_id,
@@ -954,4 +998,9 @@ def delete_booking(
         payload_before=before,
         payload_after=audit_log_service.model_snapshot(booking),
     )
+    # The audit row must share the reservation mutation's transaction. Writing
+    # it after commit leaves only an uncommitted audit row that PostgreSQL rolls
+    # back when the request session closes.
+    db.commit()
+    db.refresh(booking)
     return {"deleted": True, "id": booking_id}

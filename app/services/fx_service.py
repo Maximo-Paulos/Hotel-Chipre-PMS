@@ -138,6 +138,23 @@ def _quote_matches_conversion_market(
     )
 
 
+def _fresh_cached_conversion_quote(
+    cache_key: str,
+    *,
+    currency: str,
+    market: str,
+) -> dict | None:
+    """Return an exact-market cached quote while its provider timestamp is fresh."""
+    quote = _cached_rate(cache_key, allow_stale=True)
+    if (
+        quote is None
+        or not _quote_matches_conversion_market(quote, currency=currency, market=market)
+        or not quote_is_fresh(quote)
+    ):
+        return None
+    return quote
+
+
 def _derive_blue_equivalent(
     currency: str,
     *,
@@ -382,7 +399,6 @@ def get_conversion_quote_sync(currency_code: str, rate_type: str = "oficial") ->
 
     cache_key = _cache_key(currency, market)
     cached = _cached_rate(cache_key)
-    expected_market = market if currency == "USD" or market == "oficial" else DERIVED_BLUE_MARKET
     if (
         cached
         and _quote_matches_conversion_market(cached, currency=currency, market=market)
@@ -409,33 +425,15 @@ def get_conversion_quote_sync(currency_code: str, rate_type: str = "oficial") ->
     if not dolarapi_rates_enabled():
         return None
 
+    require_dolarapi_rates("DolarAPI FX conversion quote")
+    url = (
+        f"{DOLAR_API_BASE}/dolares/{market}"
+        if currency == "USD"
+        else f"{DOLAR_API_BASE}/cotizaciones"
+    )
     try:
-        require_dolarapi_rates("DolarAPI FX conversion quote")
-        url = (
-            f"{DOLAR_API_BASE}/dolares/{market}"
-            if currency == "USD"
-            else f"{DOLAR_API_BASE}/cotizaciones"
-        )
         response = observed_http_call("dolarapi.quote", httpx.get, url, timeout=10.0)
         response.raise_for_status()
-        payload = response.json()
-        quote = (
-            payload
-            if currency == "USD" and _quote_matches_supported_market(payload, currency="USD", market=market)
-            else None
-        )
-        if currency != "USD":
-            quote = _extract_direct_quotes(payload).get(currency)
-        if not quote_is_fresh(quote) or (
-            not _quote_matches_supported_market(quote, currency=currency, market=expected_market)
-        ):
-            return None
-        _store_rate(cache_key, quote)
-        # One /cotizaciones response is authoritative for all direct currencies.
-        if currency != "USD":
-            for direct_currency, direct_quote in _extract_direct_quotes(payload).items():
-                _store_rate(_cache_key(direct_currency), direct_quote)
-        return quote
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "DolarAPI conversion fetch failed currency=%s rate_type=%s error_type=%s",
@@ -443,7 +441,40 @@ def get_conversion_quote_sync(currency_code: str, rate_type: str = "oficial") ->
             market,
             type(exc).__name__,
         )
+        return _fresh_cached_conversion_quote(cache_key, currency=currency, market=market)
+
+    try:
+        payload = response.json()
+    except Exception as exc:  # noqa: BLE001
+        # A completed HTTP response with an unreadable body is not an outage
+        # eligible for stale-cache fallback.
+        logger.warning(
+            "DolarAPI conversion response invalid currency=%s rate_type=%s error_type=%s",
+            currency,
+            market,
+            type(exc).__name__,
+        )
         return None
+
+    quote = (
+        payload
+        if currency == "USD" and _quote_matches_supported_market(payload, currency="USD", market=market)
+        else None
+    )
+    if currency != "USD":
+        quote = _extract_direct_quotes(payload).get(currency)
+    if not quote_is_fresh(quote) or not _quote_matches_conversion_market(
+        quote,
+        currency=currency,
+        market=market,
+    ):
+        return None
+    _store_rate(cache_key, quote)
+    # One /cotizaciones response is authoritative for all direct currencies.
+    if currency != "USD":
+        for direct_currency, direct_quote in _extract_direct_quotes(payload).items():
+            _store_rate(_cache_key(direct_currency), direct_quote)
+    return quote
 
 
 async def get_usd_official_rate() -> float:

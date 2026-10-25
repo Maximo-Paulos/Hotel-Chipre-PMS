@@ -133,9 +133,10 @@ services:
         value: /var/exports/analytics
     autoDeploy: true
 
-  # One SQL-only scheduler per five-minute interval. It enumerates hotels once,
-  # then processes no-shows, due reports, and bounded notification outboxes
-  # under each hotel's RLS context. No worker, Redis, or NoSQL service required.
+  # One scheduler per five-minute interval. It runs bounded SQL work under
+  # each hotel's RLS context, then attempts at most two pending Mercado Pago
+  # checkout revocations only when both external-connection flags are enabled.
+  # No separate worker, Redis, or NoSQL service is required.
   - type: cron
     name: hotel-chipre-pms-scheduled-hotel-jobs
     runtime: python

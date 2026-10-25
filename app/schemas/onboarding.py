@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.room import RoomCategoryCreate
 from app.schemas.deposit_policy import DepositPolicyRule, validate_deposit_policy_rules
+from app.services.jurisdiction_profile import SUPPORTED_JURISDICTION_CODES
 from app.services.timezones import normalize_timezone
 
 
@@ -37,7 +38,10 @@ class HotelIdentityPayload(BaseModel):
     @field_validator("jurisdiction_code")
     @classmethod
     def normalize_jurisdiction(cls, value: str) -> str:
-        return value.strip().upper()
+        candidate = value.strip().upper()
+        if candidate not in SUPPORTED_JURISDICTION_CODES:
+            raise ValueError(f"La jurisdicción '{candidate}' no está habilitada en el PMS")
+        return candidate
 
     @field_validator("languages")
     @classmethod

@@ -1,11 +1,14 @@
+import re
 from datetime import date
 from decimal import Decimal
-import re
 
 import pytest
 
 from app.models.company import Company
-from app.models.company_document import CompanyDocumentStatusEnum, CompanyDocumentTypeEnum
+from app.models.company_document import (
+    CompanyDocumentStatusEnum,
+    CompanyDocumentTypeEnum,
+)
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.schemas.reservation import ReservationCreate
@@ -176,7 +179,7 @@ def test_company_base_price_applies_as_reservation_default_but_overridable(db, h
     assert overridden.subtotal_amount == Decimal("999.00")
 
 
-def test_corporate_reservation_is_allocation_locked(db, hotel_config, sample_guest, sample_rooms, sample_categories):
+def test_corporate_requirements_do_not_implicitly_lock_allocation(db, hotel_config, sample_guest, sample_rooms, sample_categories):
     deferred_company = _company(db, hotel_id=hotel_config.id, display_name="Deferred Co", payment_deferred=True)
     signature_company = _company(db, hotel_id=hotel_config.id, display_name="Signature Co", requires_signature=True)
     regular_company = _company(db, hotel_id=hotel_config.id, display_name="Regular Co")
@@ -218,6 +221,8 @@ def test_corporate_reservation_is_allocation_locked(db, hotel_config, sample_gue
         hotel_id=hotel_config.id,
     )
 
-    assert deferred.allocation_locked is True
-    assert signature.allocation_locked is True
+    assert deferred.allocation_locked is False
+    assert signature.allocation_locked is False
+    assert deferred.requires_manual_review is True
+    assert signature.requires_manual_review is True
     assert regular.allocation_locked is False

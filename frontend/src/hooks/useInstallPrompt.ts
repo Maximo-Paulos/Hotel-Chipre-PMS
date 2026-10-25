@@ -24,7 +24,7 @@ export const isStandaloneDisplay = (): boolean => {
   return typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)").matches === true;
 };
 
-// ponytail: no offline-queue, no background sync -- just the minimal
+// This implements only the minimal beforeinstallprompt capture; it does not
 // beforeinstallprompt capture the task asked for. iOS Safari never fires
 // this event (no A2HS API), so canInstall stays false there; that's a
 // platform limitation, not a bug here.

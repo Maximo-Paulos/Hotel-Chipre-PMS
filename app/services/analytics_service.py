@@ -1620,10 +1620,33 @@ def build_room_detail_payload(
     stream_details: bool = False,
 ) -> dict[str, Any]:
     window = _analytics_window(db, hotel_id, date_from=date_from, date_to=date_to, compare_previous=compare_previous, compare_yoy=compare_yoy)
-    room = db.query(Room).filter(Room.hotel_id == hotel_id, Room.id == room_id).first()
+    # This detail response needs only room scalars. Loading ORM entities here
+    # also triggers mapper-level selectin relationships for the room's full
+    # reservation history (and the category's room collection), unrelated to
+    # the requested analytics window.
+    room = (
+        db.query(
+            Room.id.label("id"),
+            Room.room_number.label("room_number"),
+            Room.floor.label("floor"),
+            Room.category_id.label("category_id"),
+            Room.status.label("status"),
+            Room.is_active.label("is_active"),
+            Room.notes.label("notes"),
+            RoomCategory.name.label("category_name"),
+        )
+        .outerjoin(
+            RoomCategory,
+            and_(
+                RoomCategory.id == Room.category_id,
+                RoomCategory.hotel_id == Room.hotel_id,
+            ),
+        )
+        .filter(Room.hotel_id == hotel_id, Room.id == room_id)
+        .first()
+    )
     if not room:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room no encontrada")
-    category = db.get(RoomCategory, room.category_id) if room.category_id else None
     facts_query = (
         db.query(FactRoomOccupancyDaily)
         .filter(
@@ -1729,7 +1752,7 @@ def build_room_detail_payload(
                 "room_number": room.room_number,
                 "floor": room.floor,
                 "category_id": room.category_id,
-                "category_name": category.name if category else None,
+                "category_name": room.category_name,
                 "status": room.status.value if hasattr(room.status, "value") else str(room.status),
                 "is_active": room.is_active,
                 "notes": room.notes,

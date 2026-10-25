@@ -7,8 +7,8 @@ import type { TFunction } from "i18next";
 import { ApiError, hasValidSession } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
 import {
-  previewRoomBlockConflicts,
-  previewRoomBlockExtension,
+  previewRoomBlockAllocation,
+  previewRoomBlockExtensionAllocation,
   type RoomBlockCreatePayload,
   type RoomBlockReasonCode
 } from "../../api/roomBlocks";
@@ -72,7 +72,7 @@ export function RoomsPage() {
   const isHousekeeping = session.baseRole === "housekeeping";
   const canManageRoomStatus = ["owner", "co_owner", "manager"].includes(session.baseRole ?? "");
   const canToggleCleaningStatus = hasPermission("room:status_update");
-  const canCreateBlocks = hasPermission("room:block_create");
+  const canCreateBlocks = hasPermission("room:block_create") && hasPermission("reservation:move");
   const canReleaseBlocks = hasPermission("room:block_release");
   const canReadBlocks = hasPermission("room:read") || canCreateBlocks || canReleaseBlocks;
   const showAssignments = !isHousekeeping && hasPermission("occupancy:view");
@@ -105,7 +105,9 @@ export function RoomsPage() {
   const [pendingBlockId, setPendingBlockId] = useState<number | null>(null);
   const [extendingBlockId, setExtendingBlockId] = useState<number | null>(null);
   const [extensionEndDate, setExtensionEndDate] = useState("");
+  const [extensionPreviewRequested, setExtensionPreviewRequested] = useState(false);
   const [blockForm, setBlockForm] = useState<BlockFormValues>(() => emptyBlockForm(businessDate));
+  const [blockPreviewRequested, setBlockPreviewRequested] = useState(false);
   const previousBusinessDateRef = useRef(businessDate);
   useEffect(() => {
     const previousDate = previousBusinessDateRef.current;
@@ -113,6 +115,7 @@ export function RoomsPage() {
     setBlockForm((current) => current.starts_at === previousDate
       ? { ...current, starts_at: businessDate }
       : current);
+    setBlockPreviewRequested(false);
     previousBusinessDateRef.current = businessDate;
   }, [businessDate]);
   const [blockMessage, setBlockMessage] = useState<string | null>(null);
@@ -132,22 +135,24 @@ export function RoomsPage() {
     && blockForm.starts_at
     && (blockForm.is_indefinite || (blockForm.ends_at && blockForm.ends_at > blockForm.starts_at))
   );
-  const blockConflictPreviewQuery = useQuery({
+  const blockAllocationPreviewQuery = useQuery({
     queryKey: [
-      "room-block-conflict-preview",
+      "room-block-allocation-preview",
       session.hotelId,
       selectedBlockRoomId,
       blockForm.starts_at,
       blockForm.is_indefinite ? null : blockForm.ends_at,
       blockForm.is_indefinite
     ],
-    queryFn: () => previewRoomBlockConflicts({
+    queryFn: () => previewRoomBlockAllocation({
       room_id: selectedBlockRoomId,
       starts_at: blockForm.starts_at,
       ends_at: blockForm.is_indefinite ? null : blockForm.ends_at,
-      is_indefinite: blockForm.is_indefinite
+      is_indefinite: blockForm.is_indefinite,
+      reason_code: blockForm.reason_code,
+      reason_note: blockForm.reason_note.trim() || null
     }, session),
-    enabled: canCreateBlocks && !actionsBlocked && blockRangeReady && hasValidSession(session),
+    enabled: canCreateBlocks && !actionsBlocked && blockRangeReady && blockPreviewRequested && hasValidSession(session),
     staleTime: 0,
     retry: false
   });
@@ -157,8 +162,8 @@ export function RoomsPage() {
   );
   const blockExtensionPreviewQuery = useQuery({
     queryKey: ["room-block-extension-preview", session.hotelId, extendingBlockId, extensionEndDate],
-    queryFn: () => previewRoomBlockExtension(extendingBlockId as number, extensionEndDate, session),
-    enabled: canCreateBlocks && !actionsBlocked && extendingBlockId !== null && extensionRangeReady && hasValidSession(session),
+    queryFn: () => previewRoomBlockExtensionAllocation(extendingBlockId as number, extensionEndDate, session),
+    enabled: canCreateBlocks && !actionsBlocked && extendingBlockId !== null && extensionRangeReady && extensionPreviewRequested && hasValidSession(session),
     staleTime: 0,
     retry: false
   });
@@ -181,6 +186,61 @@ export function RoomsPage() {
     rooms.forEach((room) => map.set(room.id, { room_number: room.room_number, floor: room.floor }));
     return map;
   }, [rooms]);
+
+  const reservationById = useMemo(
+    () => new Map((occupancyQuery.data?.reservations ?? []).map((reservation) => [reservation.id, reservation])),
+    [occupancyQuery.data]
+  );
+
+  const proposedBlockAssignments = useMemo(
+    () => (blockAllocationPreviewQuery.data?.allocation_run?.assignments ?? []).filter((assignment) =>
+      assignment.status === "proposed"
+      && assignment.room_id !== assignment.source_room_id
+    ),
+    [blockAllocationPreviewQuery.data]
+  );
+  const proposedBlockMoves = useMemo(
+    () => proposedBlockAssignments.filter((assignment) => assignment.room_id !== null),
+    [proposedBlockAssignments]
+  );
+  const unassignedBlockProposalCount = proposedBlockAssignments.filter((assignment) => assignment.room_id === null).length;
+  const blockPreviewCanBeConfirmed = Boolean(
+    blockPreviewRequested
+    && blockAllocationPreviewQuery.isSuccess
+    && !blockAllocationPreviewQuery.isFetching
+    && !blockAllocationPreviewQuery.isError
+    && blockAllocationPreviewQuery.data
+    && blockAllocationPreviewQuery.data.protected_reservation_count === 0
+    && (blockAllocationPreviewQuery.data.reservation_count === 0
+      || (blockAllocationPreviewQuery.data.allocation_run?.status === "succeeded"
+        && unassignedBlockProposalCount === 0
+        && proposedBlockMoves.length >= blockAllocationPreviewQuery.data.reservation_count))
+  );
+  const proposedExtensionAssignments = useMemo(
+    () => (blockExtensionPreviewQuery.data?.allocation_run?.assignments ?? []).filter((assignment) =>
+      assignment.status === "proposed"
+      && assignment.room_id !== assignment.source_room_id
+    ),
+    [blockExtensionPreviewQuery.data]
+  );
+  const proposedExtensionMoves = useMemo(
+    () => proposedExtensionAssignments.filter((assignment) => assignment.room_id !== null),
+    [proposedExtensionAssignments]
+  );
+  const unassignedExtensionProposalCount = proposedExtensionAssignments.filter((assignment) => assignment.room_id === null).length;
+  const extensionPreviewCanBeConfirmed = Boolean(
+    extensionPreviewRequested
+    && blockExtensionPreviewQuery.isSuccess
+    && !blockExtensionPreviewQuery.isFetching
+    && !blockExtensionPreviewQuery.isError
+    && blockExtensionPreviewQuery.data
+    && blockExtensionPreviewQuery.data.overlapping_block_count === 0
+    && blockExtensionPreviewQuery.data.protected_reservation_count === 0
+    && (blockExtensionPreviewQuery.data.reservation_count === 0
+      || (blockExtensionPreviewQuery.data.allocation_run?.status === "succeeded"
+        && unassignedExtensionProposalCount === 0
+        && proposedExtensionMoves.length >= blockExtensionPreviewQuery.data.reservation_count))
+  );
 
   const assignmentByRoomId = useMemo(() => {
     const map = new Map<number, { confirmation_code: string; guest_name: string; status: string; check_in_date: string }>();
@@ -247,10 +307,12 @@ export function RoomsPage() {
   };
 
   const handleBlockFormChange = <Field extends keyof BlockFormValues>(field: Field, value: BlockFormValues[Field]) => {
+    setBlockPreviewRequested(false);
+    setBlockErrors((current) => { const next = { ...current }; delete next.create; return next; });
     setBlockForm((current) => ({ ...current, [field]: value }));
   };
 
-  const handleCreateBlock = async (event: FormEvent<HTMLFormElement>) => {
+  const handlePreviewBlock = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (actionsBlocked || !canCreateBlocks) return;
     setBlockMessage(null);
@@ -266,24 +328,37 @@ export function RoomsPage() {
       return;
     }
 
+    if (blockPreviewRequested) {
+      void blockAllocationPreviewQuery.refetch();
+    } else {
+      setBlockPreviewRequested(true);
+    }
+  };
+
+  const handleConfirmBlock = async () => {
+    if (actionsBlocked || !canCreateBlocks || !blockPreviewCanBeConfirmed) return;
+    setBlockMessage(null);
+    setBlockErrors((current) => { const next = { ...current }; delete next.create; return next; });
+
     const payload: RoomBlockCreatePayload = {
-      room_id: roomId,
+      room_id: selectedBlockRoomId,
       starts_at: blockForm.starts_at,
       ends_at: blockForm.is_indefinite ? null : blockForm.ends_at,
       is_indefinite: blockForm.is_indefinite,
       reason_code: blockForm.reason_code,
-      reason_note: blockForm.reason_note.trim() || null
+      reason_note: blockForm.reason_note.trim() || null,
+      allocation_run_id: blockAllocationPreviewQuery.data?.allocation_run?.run_id ?? null
     };
 
     try {
       await createBlockMutation.mutateAsync(payload);
       setBlockForm(emptyBlockForm(businessDate));
+      setBlockPreviewRequested(false);
       setBlockMessage(t("blocks.createSuccess"));
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
-        const detail = (error.payload as { detail?: { reservation_ids?: unknown } } | null)?.detail;
-        const count = Array.isArray(detail?.reservation_ids) ? detail.reservation_ids.length : 1;
-        setBlockErrors((current) => ({ ...current, create: t("blocks.protectedConflictRejected", { count }) }));
+        setBlockPreviewRequested(false);
+        setBlockErrors((current) => ({ ...current, create: t("blocks.planChanged") }));
       } else {
         setBlockErrors((current) => ({ ...current, create: error instanceof Error ? error.message : t("blocks.createError") }));
       }
@@ -305,18 +380,39 @@ export function RoomsPage() {
     }
   };
 
+  const handlePreviewBlockExtension = (blockId: number) => {
+    if (actionsBlocked || !canCreateBlocks || extendingBlockId !== blockId || !extensionRangeReady) return;
+    setBlockMessage(null);
+    setBlockErrors((current) => { const next = { ...current }; delete next[`extend-${blockId}`]; return next; });
+    if (extensionPreviewRequested) {
+      void blockExtensionPreviewQuery.refetch();
+    } else {
+      setExtensionPreviewRequested(true);
+    }
+  };
+
   const handleExtendBlock = async (blockId: number) => {
-    if (!extensionEndDate) return;
+    if (actionsBlocked || !canCreateBlocks || extendingBlockId !== blockId || !extensionPreviewCanBeConfirmed) return;
     setPendingBlockId(blockId);
     setBlockMessage(null);
     setBlockErrors((current) => { const next = { ...current }; delete next[`extend-${blockId}`]; return next; });
     try {
-      await extendBlockMutation.mutateAsync({ blockId, endsAt: extensionEndDate });
+      await extendBlockMutation.mutateAsync({
+        blockId,
+        endsAt: extensionEndDate,
+        allocationRunId: blockExtensionPreviewQuery.data?.allocation_run?.run_id ?? null
+      });
       setBlockMessage(t("blocks.extendSuccess"));
       setExtendingBlockId(null);
       setExtensionEndDate("");
+      setExtensionPreviewRequested(false);
     } catch (error) {
-      setBlockErrors((current) => ({ ...current, [`extend-${blockId}`]: error instanceof Error ? error.message : t("blocks.extendError") }));
+      if (error instanceof ApiError && error.status === 409) {
+        setExtensionPreviewRequested(false);
+        setBlockErrors((current) => ({ ...current, [`extend-${blockId}`]: t("blocks.planChanged") }));
+      } else {
+        setBlockErrors((current) => ({ ...current, [`extend-${blockId}`]: error instanceof Error ? error.message : t("blocks.extendError") }));
+      }
     } finally {
       setPendingBlockId(null);
     }
@@ -513,7 +609,7 @@ export function RoomsPage() {
 
         {canCreateBlocks && (
         <>
-        <form className="mt-4 grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:grid-cols-6" onSubmit={handleCreateBlock}>
+        <form className="mt-4 grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:grid-cols-6" onSubmit={handlePreviewBlock}>
           <label className="space-y-1 text-sm lg:col-span-1">
             <span className="text-slate-600">{t("blocks.roomFieldLabel")}</span>
             <select
@@ -585,19 +681,70 @@ export function RoomsPage() {
             />
           </label>
 
-          {blockConflictPreviewQuery.isFetching && (
-            <p role="status" className="text-sm text-slate-600 lg:col-span-6">{t("blocks.conflictsLoading")}</p>
+          {blockPreviewRequested && blockAllocationPreviewQuery.isFetching && (
+            <p role="status" className="text-sm text-slate-600 lg:col-span-6">{t("blocks.allocationPreviewLoading")}</p>
           )}
-          {blockConflictPreviewQuery.isError && (
+          {blockPreviewRequested && blockAllocationPreviewQuery.isError && (
             <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 lg:col-span-6">
-              {t("blocks.conflictVerificationError")}
+              {t("blocks.allocationPreviewError", { message: (blockAllocationPreviewQuery.error as Error).message })}
             </p>
           )}
-          {(blockConflictPreviewQuery.data?.reservation_count ?? 0) > 0 && (
-            <div role="alert" className="space-y-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 lg:col-span-6">
-              <p>{t("blocks.conflictWarning", { count: blockConflictPreviewQuery.data!.reservation_count })}</p>
-              {blockConflictPreviewQuery.data!.protected_reservation_count > 0 && (
-                <p>{t("blocks.protectedConflictWarning", { count: blockConflictPreviewQuery.data!.protected_reservation_count })}</p>
+          {blockPreviewRequested && blockAllocationPreviewQuery.isSuccess && !blockAllocationPreviewQuery.isFetching && blockAllocationPreviewQuery.data && (
+            <div className="space-y-3 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-3 text-sm text-indigo-950 lg:col-span-6" aria-live="polite">
+              <div>
+                {blockAllocationPreviewQuery.data.reservation_count > 0 ? (
+                  <>
+                    <p className="font-semibold">
+                      {t("blocks.allocationPreviewSummary", { count: blockAllocationPreviewQuery.data.reservation_count })}
+                    </p>
+                    <p className="mt-1">{t("blocks.allocationPreviewMoveCount", { count: proposedBlockAssignments.length })}</p>
+                  </>
+                ) : (
+                  <p className="font-semibold">{t("blocks.noAllocationConflicts")}</p>
+                )}
+                {blockAllocationPreviewQuery.data.protected_reservation_count > 0 && (
+                  <p className="mt-1">{t("blocks.protectedConflictWarning", { count: blockAllocationPreviewQuery.data.protected_reservation_count })}</p>
+                )}
+                {blockAllocationPreviewQuery.data.allocation_run?.solver_summary && (
+                  <p className="mt-1 text-xs text-indigo-900">{blockAllocationPreviewQuery.data.allocation_run.solver_summary}</p>
+                )}
+                {blockAllocationPreviewQuery.data.reservation_count > 0 && !blockPreviewCanBeConfirmed && (
+                  <p role="alert" className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950">
+                    {t("blocks.allocationIncomplete")}
+                  </p>
+                )}
+                {unassignedBlockProposalCount > 0 && (
+                  <p role="alert" className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950">
+                    {t("blocks.unassignedProposal", { count: unassignedBlockProposalCount })}
+                  </p>
+                )}
+                <p className="mt-1 text-xs font-medium">{t("blocks.planOnlyAppliedAfterConfirm")}</p>
+              </div>
+              {proposedBlockAssignments.length > 0 && (
+                <ul className="space-y-2" aria-label={t("blocks.proposedMovesLabel")}>
+                  {proposedBlockAssignments.map((assignment) => {
+                    const reservation = reservationById.get(assignment.reservation_id);
+                    const sourceRoomNumber = assignment.source_room_id === null
+                      ? t("blocks.unassignedRoom")
+                      : roomById.get(assignment.source_room_id)?.room_number
+                        ? t("blocks.roomOption", { number: roomById.get(assignment.source_room_id)?.room_number })
+                        : t("blocks.roomIdFallback", { id: assignment.source_room_id });
+                    const targetRoomNumber = assignment.room_id === null
+                      ? t("blocks.unassignedRoom")
+                      : roomById.get(assignment.room_id)?.room_number
+                        ? t("blocks.roomOption", { number: roomById.get(assignment.room_id)?.room_number })
+                        : t("blocks.roomIdFallback", { id: assignment.room_id });
+                    return (
+                      <li key={assignment.reservation_id} className="rounded-md border border-indigo-100 bg-white px-3 py-2">
+                        <p className="font-medium">
+                          {reservation?.confirmation_code ?? t("blocks.reservationFallback", { id: assignment.reservation_id })}
+                          {reservation?.guest_name ? ` · ${reservation.guest_name}` : ""}: {t("blocks.moveSummary", { from: sourceRoomNumber, to: targetRoomNumber })}
+                        </p>
+                        {assignment.explanation_summary && <p className="mt-1 text-xs text-slate-600">{assignment.explanation_summary}</p>}
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
             </div>
           )}
@@ -616,13 +763,37 @@ export function RoomsPage() {
               />
               {t("blocks.indefinite")}
             </label>
-            <button
-              type="submit"
-              disabled={actionsBlocked || createBlockMutation.isPending}
-              className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-            >
-              {createBlockMutation.isPending ? t("blocks.creating") : t("blocks.create")}
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="submit"
+                disabled={actionsBlocked || createBlockMutation.isPending || blockAllocationPreviewQuery.isFetching}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {blockAllocationPreviewQuery.isFetching ? t("blocks.previewing") : t("blocks.previewAllocation")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmBlock()}
+                disabled={!blockPreviewCanBeConfirmed || actionsBlocked || createBlockMutation.isPending}
+                className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+              >
+                {createBlockMutation.isPending
+                  ? t("blocks.applyingAllocation")
+                  : t("blocks.confirmBlockWithAllocation")}
+              </button>
+              {blockPreviewRequested && !createBlockMutation.isPending && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBlockPreviewRequested(false);
+                    setBlockErrors((current) => { const next = { ...current }; delete next.create; return next; });
+                  }}
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  {t("blocks.discardProposal")}
+                </button>
+              )}
+            </div>
           </div>
         </form>
         {blockErrors.create && (
@@ -658,6 +829,7 @@ export function RoomsPage() {
                     onClick={() => {
                       setExtendingBlockId((current) => current === block.id ? null : block.id);
                       setExtensionEndDate("");
+                      setExtensionPreviewRequested(false);
                       setBlockMessage(null);
                       setBlockErrors((current) => { const next = { ...current }; delete next[`extend-${block.id}`]; return next; });
                       }}
@@ -694,24 +866,76 @@ export function RoomsPage() {
                         type="date"
                         value={extensionEndDate}
                         min={block.ends_at ?? undefined}
-                        onChange={(event) => setExtensionEndDate(event.target.value)}
+                        onChange={(event) => {
+                          setExtensionEndDate(event.target.value);
+                          setExtensionPreviewRequested(false);
+                          setBlockErrors((current) => { const next = { ...current }; delete next[`extend-${block.id}`]; return next; });
+                        }}
                         className="mt-1 block min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
                         disabled={extendBlockMutation.isPending}
                       />
                     </label>
-                    {extensionRangeReady && blockExtensionPreviewQuery.isLoading && <p role="status" className="text-xs text-slate-600">{t("blocks.extendPreviewLoading")}</p>}
-                    {extensionRangeReady && blockExtensionPreviewQuery.isError && <p role="alert" className="text-xs text-rose-700">{t("blocks.extendPreviewError")} <button type="button" onClick={() => void blockExtensionPreviewQuery.refetch()} className="font-semibold underline">{t("blocks.retry")}</button></p>}
-                    {extensionRangeReady && blockExtensionPreviewQuery.data && (
-                      <p className="text-xs text-slate-700">
-                        {t("blocks.extendPreviewSummary", {
-                          reservations: blockExtensionPreviewQuery.data.reservation_count,
-                          protected: blockExtensionPreviewQuery.data.protected_reservation_count,
-                          blocks: blockExtensionPreviewQuery.data.overlapping_block_count ?? 0
-                        })}
+                    {extensionRangeReady && extensionPreviewRequested && blockExtensionPreviewQuery.isFetching && (
+                      <p role="status" className="text-xs text-slate-600">{t("blocks.allocationPreviewLoading")}</p>
+                    )}
+                    {extensionRangeReady && extensionPreviewRequested && blockExtensionPreviewQuery.isError && (
+                      <p role="alert" className="text-xs text-rose-700">
+                        {t("blocks.extendPreviewError")} <button type="button" onClick={() => handlePreviewBlockExtension(block.id)} className="font-semibold underline">{t("blocks.retry")}</button>
                       </p>
                     )}
-                    {extensionRangeReady && blockExtensionPreviewQuery.data && (blockExtensionPreviewQuery.data.protected_reservation_count > 0 || (blockExtensionPreviewQuery.data.overlapping_block_count ?? 0) > 0) && (
-                      <p role="alert" className="text-xs text-rose-700">{t("blocks.extendConflict")}</p>
+                    {extensionRangeReady && extensionPreviewRequested && blockExtensionPreviewQuery.isSuccess && !blockExtensionPreviewQuery.isFetching && blockExtensionPreviewQuery.data && (
+                      <div className="space-y-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-950" aria-live="polite">
+                        <p className="font-semibold">
+                          {t("blocks.extendPreviewSummary", {
+                            reservations: blockExtensionPreviewQuery.data.reservation_count,
+                            protected: blockExtensionPreviewQuery.data.protected_reservation_count,
+                            blocks: blockExtensionPreviewQuery.data.overlapping_block_count
+                          })}
+                        </p>
+                        <p>
+                          {blockExtensionPreviewQuery.data.reservation_count > 0
+                            ? t("blocks.extendAllocationMoveCount", { count: proposedExtensionAssignments.length })
+                            : t("blocks.extendNoMoves")}
+                        </p>
+                        {blockExtensionPreviewQuery.data.allocation_run?.solver_summary && (
+                          <p className="text-slate-700">{blockExtensionPreviewQuery.data.allocation_run.solver_summary}</p>
+                        )}
+                        {blockExtensionPreviewQuery.data.reservation_count > 0 && !extensionPreviewCanBeConfirmed && (
+                          <p role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-950">{t("blocks.extendAllocationIncomplete")}</p>
+                        )}
+                        {unassignedExtensionProposalCount > 0 && (
+                          <p role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-950">
+                            {t("blocks.extendUnassignedProposal", { count: unassignedExtensionProposalCount })}
+                          </p>
+                        )}
+                        <p className="font-medium">{t("blocks.extendPlanOnlyAppliedAfterConfirm")}</p>
+                        {proposedExtensionAssignments.length > 0 && (
+                          <ul className="space-y-2" aria-label={t("blocks.proposedMovesLabel")}>
+                            {proposedExtensionAssignments.map((assignment) => {
+                              const reservation = reservationById.get(assignment.reservation_id);
+                              const sourceRoom = assignment.source_room_id === null
+                                ? t("blocks.unassignedRoom")
+                                : roomById.get(assignment.source_room_id)?.room_number
+                                  ? t("blocks.roomOption", { number: roomById.get(assignment.source_room_id)?.room_number })
+                                  : t("blocks.roomIdFallback", { id: assignment.source_room_id });
+                              const targetRoom = assignment.room_id === null
+                                ? t("blocks.unassignedRoom")
+                                : roomById.get(assignment.room_id)?.room_number
+                                  ? t("blocks.roomOption", { number: roomById.get(assignment.room_id)?.room_number })
+                                  : t("blocks.roomIdFallback", { id: assignment.room_id });
+                              return (
+                                <li key={assignment.reservation_id} className="rounded-md border border-indigo-100 bg-white px-3 py-2">
+                                  <p className="font-medium">
+                                    {reservation?.confirmation_code ?? t("blocks.reservationFallback", { id: assignment.reservation_id })}
+                                    {reservation?.guest_name ? ` · ${reservation.guest_name}` : ""}: {t("blocks.moveSummary", { from: sourceRoom, to: targetRoom })}
+                                  </p>
+                                  {assignment.explanation_summary && <p className="mt-1 text-slate-600">{assignment.explanation_summary}</p>}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
                     )}
                     {blockErrors[`extend-${block.id}`] && (
                       <div role="alert" className="flex items-start justify-between gap-3 text-xs text-rose-700">
@@ -721,11 +945,27 @@ export function RoomsPage() {
                     )}
                     <button
                       type="button"
+                      onClick={() => handlePreviewBlockExtension(block.id)}
+                      disabled={actionsBlocked || !extensionRangeReady || blockExtensionPreviewQuery.isFetching || extendBlockMutation.isPending}
+                      className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50"
+                    >
+                      {blockExtensionPreviewQuery.isFetching
+                        ? t("blocks.previewing")
+                        : extensionPreviewRequested
+                          ? t("blocks.recalculateExtensionProposal")
+                          : t("blocks.previewExtensionProposal")}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => void handleExtendBlock(block.id)}
-                      disabled={actionsBlocked || !extensionRangeReady || !blockExtensionPreviewQuery.isSuccess || blockExtensionPreviewQuery.data.protected_reservation_count > 0 || (blockExtensionPreviewQuery.data.overlapping_block_count ?? 0) > 0 || extendBlockMutation.isPending}
+                      disabled={actionsBlocked || !extensionPreviewCanBeConfirmed || extendBlockMutation.isPending}
                       className="min-h-10 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                     >
-                      {extendBlockMutation.isPending ? t("blocks.extending") : t("blocks.confirmExtend")}
+                      {extendBlockMutation.isPending
+                        ? t("blocks.extending")
+                        : blockExtensionPreviewQuery.data?.reservation_count
+                          ? t("blocks.confirmExtendWithAllocation")
+                          : t("blocks.confirmExtend")}
                     </button>
                   </div>
                 )}

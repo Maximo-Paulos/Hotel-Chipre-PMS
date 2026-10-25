@@ -176,9 +176,16 @@ def get_provider_connection_payload(db: Session, hotel_id: int, provider: str) -
     return decrypt_payload(connection.auth_payload)
 
 
-def get_connection_payload(db: Session, hotel_id: int, provider: str) -> Dict[str, Any]:
+def get_connection_payload(
+    db: Session,
+    hotel_id: int,
+    provider: str,
+    *,
+    seed_catalog_entries: bool = True,
+) -> Dict[str, Any]:
     require_external_connections(f"{provider} credential access")
-    seed_catalog(db)
+    if seed_catalog_entries:
+        seed_catalog(db)
     connection = (
         db.execute(
             select(IntegrationConnection)
@@ -371,11 +378,19 @@ def validate_gmail_credentials(payload: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+class ProviderCredentialValidationUnavailable(ValueError):
+    """The generic connection lane cannot verify a provider's credentials."""
+
+
 def validate_provider_credentials(provider: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     if provider == "mercadopago":
         return validate_mercadopago_credentials(payload)
     if provider == "gmail":
         return validate_gmail_credentials(payload)
+    if provider == "expedia":
+        raise ProviderCredentialValidationUnavailable(
+            "Expedia no puede validarse desde esta pantalla. No se guardaron las credenciales."
+        )
     return payload
 
 

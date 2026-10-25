@@ -45,6 +45,30 @@ test("the room-category key has one hotel-scoped canonical prefix", async (conte
   assert.equal(keys.hotelIdForQueryKey(keys.queryKeys.roomCategories(41)), 41);
 });
 
+test("housekeeping checklists are hotel-scoped and refresh with room state", async (context) => {
+  const { keys, invalidation } = await loadQueryModules(context);
+  const hotelId = 41;
+  const client = new QueryClient();
+  const entries = [
+    [keys.queryKeys.housekeepingBoard(hotelId), true],
+    [keys.queryKeys.housekeepingChecklists(hotelId), true],
+    [keys.queryKeys.housekeepingChecklists(hotelId + 1), false]
+  ];
+  entries.forEach(([key]) => client.setQueryData(key, { key }));
+
+  assert.equal(keys.hotelIdForQueryKey(keys.queryKeys.housekeepingChecklists(hotelId)), hotelId);
+  await invalidation.refreshAfterMutation(client, hotelId, ["rooms"]);
+
+  for (const [key, shouldInvalidate] of entries) {
+    assert.equal(
+      client.getQueryState(key)?.isInvalidated ?? false,
+      shouldInvalidate,
+      `unexpected housekeeping invalidation for ${JSON.stringify(key)}`
+    );
+  }
+  client.clear();
+});
+
 test("reservation refresh invalidates only related data and the selected entity", async (context) => {
   const { invalidation } = await loadQueryModules(context);
   const hotelId = 41;

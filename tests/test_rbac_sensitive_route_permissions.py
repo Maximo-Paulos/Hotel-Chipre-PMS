@@ -17,7 +17,7 @@ from app.services import reservation_operations_service
 from app.services.reservation_service import ConfirmedReservationPriceLocked, ReservationPricingResult
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
-from app.models.guest import Guest
+from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
 from app.models.daily_rate import DailyRate
@@ -47,6 +47,7 @@ from app.models.user import User
 from app.schemas.reservation import ReservationUpdate
 from app.services.permission_service import (
     PERMISSION_COMPANY_MANAGE,
+    PERMISSION_GUEST_VIEW,
     PERMISSION_RESERVATION_PAID_TOTAL_ADJUST,
     PERMISSION_RESERVATION_RATE_ADJUST,
     set_role_override,
@@ -200,6 +201,106 @@ def test_reservation_read_and_cancel_follow_individual_overrides_without_data_le
         set_user_override(db, 1, 20, "receptionist", "reservation:cancel", True, actor_user_id=10)
         db.commit()
         assert client.post(f"/api/reservations/{reservation.id}/cancel").status_code == 200
+    finally:
+        _close(db, engine)
+
+
+def test_company_terms_review_requires_reservation_read_even_for_company_managers():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        company = Company(
+            hotel_id=1,
+            legal_name="Sensitive Terms LLC",
+            display_name="Sensitive Terms",
+            payment_deferred=False,
+        )
+        db.add(company)
+        db.flush()
+        reservation.company_id = company.id
+        reservation.company_terms_snapshot = {
+            "terms": {"payment_deferred": False},
+            "applied_economics": {
+                "total_amount": "123456.00",
+                "pricing_snapshot": {"private_test_marker": "terms-financial-secret"},
+            },
+        }
+        db.commit()
+
+        auth.update(user_id=30, role="manager")
+        set_user_override(db, 1, 30, "manager", "company:manage", True, actor_user_id=10)
+        set_user_override(db, 1, 30, "manager", "reservation:read", False, actor_user_id=10)
+        db.commit()
+
+        response = client.get(f"/api/reservations/{reservation.id}/company-terms-review")
+
+        assert response.status_code == 403, response.text
+        assert "terms-financial-secret" not in response.text
+        assert "123456.00" not in response.text
+    finally:
+        _close(db, engine)
+
+
+def test_reservation_responses_redact_guest_documents_without_guest_view_permission():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        primary_guest = db.get(Guest, reservation.guest_id)
+        primary_guest.document_type = DocumentTypeEnum.DNI
+        primary_guest.document_number = "DOC-PRIMARY-SECRET"
+        companion = Guest(
+            hotel_id=1,
+            first_name="Luis",
+            last_name="Companion",
+            document_type=DocumentTypeEnum.PASSPORT,
+            document_number="DOC-COMPANION-SECRET",
+        )
+        db.add(companion)
+        db.flush()
+        reservation.additional_guests.append(companion)
+        set_user_override(
+            db, 1, 20, "receptionist", "reservation:read", True, actor_user_id=10
+        )
+        set_user_override(
+            db, 1, 20, "receptionist", PERMISSION_GUEST_VIEW, False, actor_user_id=10
+        )
+        db.commit()
+
+        denied_detail = client.get(f"/api/reservations/{reservation.id}")
+        denied_list = client.get("/api/reservations/")
+
+        assert denied_detail.status_code == 200, denied_detail.text
+        assert denied_list.status_code == 200, denied_list.text
+        for response, serialized in (
+            (denied_detail, denied_detail.json()),
+            (denied_list, denied_list.json()[0]),
+        ):
+            assert serialized["confirmation_code"] == reservation.confirmation_code
+            assert serialized["guest"]["first_name"] == "Ana"
+            assert serialized["guest"]["last_name"] == "RBAC"
+            assert serialized["guest"]["document_type"] is None
+            assert serialized["guest"]["document_number"] is None
+            assert serialized["additional_guests"][0]["first_name"] == "Luis"
+            assert serialized["additional_guests"][0]["document_type"] is None
+            assert serialized["additional_guests"][0]["document_number"] is None
+            assert "DOC-PRIMARY-SECRET" not in response.text
+            assert "DOC-COMPANION-SECRET" not in response.text
+
+        set_user_override(
+            db, 1, 20, "receptionist", PERMISSION_GUEST_VIEW, True, actor_user_id=10
+        )
+        db.commit()
+
+        allowed_detail = client.get(f"/api/reservations/{reservation.id}")
+        allowed_list = client.get("/api/reservations/")
+
+        assert allowed_detail.status_code == 200, allowed_detail.text
+        assert allowed_list.status_code == 200, allowed_list.text
+        allowed_guest = allowed_detail.json()["guest"]
+        allowed_companion = allowed_detail.json()["additional_guests"][0]
+        assert allowed_guest["document_type"] == DocumentTypeEnum.DNI.value
+        assert allowed_guest["document_number"] == "DOC-PRIMARY-SECRET"
+        assert allowed_companion["document_type"] == DocumentTypeEnum.PASSPORT.value
+        assert allowed_companion["document_number"] == "DOC-COMPANION-SECRET"
+        assert allowed_list.json()[0]["guest"]["document_number"] == "DOC-PRIMARY-SECRET"
     finally:
         _close(db, engine)
 
@@ -1192,6 +1293,160 @@ def test_extension_preview_checks_reservation_read_before_reservation_lookup():
         assert existing.status_code == 403, existing.text
         assert missing.status_code == 403, missing.text
         assert existing.json()["detail"] == missing.json()["detail"]
+    finally:
+        _close(db, engine)
+
+
+def test_extension_preview_returns_minimized_impact_and_apply_requires_matching_fingerprint():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        reservation.status = ReservationStatusEnum.FULLY_PAID
+        reservation.amount_paid = reservation.total_amount
+        destination = Room(
+            hotel_id=1,
+            category_id=reservation.category_id,
+            room_number="102",
+            floor=1,
+            status=RoomStatusEnum.AVAILABLE,
+        )
+        db.add(destination)
+        db.flush()
+        conflict = Reservation(
+            hotel_id=1,
+            guest_id=reservation.guest_id,
+            category_id=reservation.category_id,
+            room_id=reservation.room_id,
+            confirmation_code="RBAC-EXTENSION-FUTURE",
+            check_in_date=reservation.check_out_date,
+            check_out_date=reservation.check_out_date + timedelta(days=3),
+            status=ReservationStatusEnum.PENDING,
+            total_amount=Decimal("300.00"),
+            num_adults=1,
+        )
+        db.add(conflict)
+        db.commit()
+        new_checkout = reservation.check_out_date + timedelta(days=2)
+
+        preview = client.get(
+            f"/api/reservations/{reservation.id}/extend-preview",
+            params={"new_checkout_date": new_checkout.isoformat()},
+        )
+
+        assert preview.status_code == 200, preview.text
+        preview_body = preview.json()
+        plan = preview_body["impact_plan"]
+        assert len(plan["fingerprint"]) == 64
+        assert plan["actions"][0]["action"] == "moved_equivalent"
+        assert plan["actions"][0]["room_label"] == "101 → 102"
+        assert plan["actions"][0]["confirmation_code"] == conflict.confirmation_code
+        assert "guest" not in str(plan).lower()
+
+        payload = {
+            "new_checkout_date": new_checkout.isoformat(),
+            "client_version": reservation.version,
+            "pricing_mode": "original_average",
+            "payment_action": "pending_balance",
+        }
+        missing = client.post(f"/api/reservations/{reservation.id}/extend", json=payload)
+        assert missing.status_code == 409, missing.text
+        assert missing.json()["detail"]["code"] == "impact_confirmation_required"
+        db.refresh(conflict)
+        assert conflict.room_id == reservation.room_id
+
+        payload["confirmed_impact_fingerprint"] = plan["fingerprint"]
+        applied = client.post(f"/api/reservations/{reservation.id}/extend", json=payload)
+
+        assert applied.status_code == 200, applied.text
+        db.refresh(conflict)
+        assert conflict.room_id == destination.id
+    finally:
+        _close(db, engine)
+
+
+def test_company_account_extension_preview_requires_company_management_and_omits_amount():
+    client, db, engine, auth, reservation, _stock_item = _client()
+    try:
+        company = Company(
+            hotel_id=1,
+            legal_name="Deferred Preview Company",
+            display_name="Deferred Preview Company",
+            payment_deferred=True,
+            deferred_days=30,
+        )
+        db.add(company)
+        db.flush()
+        reservation.company_id = company.id
+        reservation.status = ReservationStatusEnum.CHECKED_IN
+        reservation.settlement_status = "deferred"
+        db.commit()
+        params = {
+            "new_checkout_date": (reservation.check_out_date + timedelta(days=1)).isoformat(),
+            "payment_action": "company_account",
+        }
+
+        receptionist_response = client.get(
+            f"/api/reservations/{reservation.id}/extend-preview", params=params
+        )
+        assert receptionist_response.status_code == 403, receptionist_response.text
+
+        auth.update(user_id=30, role="manager")
+        manager_response = client.get(
+            f"/api/reservations/{reservation.id}/extend-preview", params=params
+        )
+
+        assert manager_response.status_code == 200, manager_response.text
+        assert "extension_amount" not in manager_response.json()
+        assert "impact_plan" not in manager_response.json()
+    finally:
+        _close(db, engine)
+
+
+def test_extension_impact_preview_ignores_cross_hotel_reservations():
+    client, db, engine, _auth, reservation, _stock_item = _client()
+    try:
+        reservation.status = ReservationStatusEnum.FULLY_PAID
+        reservation.amount_paid = reservation.total_amount
+        other_hotel = HotelConfiguration(
+            id=2,
+            hotel_name="Other extension tenant",
+            subscription_active=True,
+        )
+        other_category = RoomCategory(
+            hotel_id=2,
+            name="Other extension category",
+            code="EXT-OTHER",
+            base_price_per_night=Decimal("300.00"),
+            max_occupancy=2,
+        )
+        other_guest = Guest(hotel_id=2, first_name="Other", last_name="Tenant")
+        db.add_all([other_hotel, other_category, other_guest])
+        db.flush()
+        foreign_reservation = Reservation(
+            hotel_id=2,
+            guest_id=other_guest.id,
+            category_id=other_category.id,
+            # Adversarial legacy/corrupt linkage: conflict lookup must still
+            # refuse to cross the hotel boundary even if a room id is reused.
+            room_id=reservation.room_id,
+            confirmation_code="FOREIGN-EXTENSION-CONFLICT",
+            check_in_date=reservation.check_out_date,
+            check_out_date=reservation.check_out_date + timedelta(days=3),
+            status=ReservationStatusEnum.PENDING,
+            total_amount=Decimal("300.00"),
+            num_adults=1,
+        )
+        db.add(foreign_reservation)
+        db.commit()
+
+        response = client.get(
+            f"/api/reservations/{reservation.id}/extend-preview",
+            params={
+                "new_checkout_date": (reservation.check_out_date + timedelta(days=2)).isoformat()
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        assert "impact_plan" not in response.json()
     finally:
         _close(db, engine)
 
@@ -2245,8 +2500,8 @@ def test_reservation_date_change_extension_and_room_move_respect_inactive_subscr
         _close(db, engine)
 
 
-def test_legacy_booking_cancel_records_actor_and_disables_active_payment_link():
-    client, db, engine, _auth, reservation, _stock_item = _client()
+def test_legacy_booking_cancel_waits_for_manager_before_disabling_active_payment_link():
+    client, db, engine, auth, reservation, _stock_item = _client()
     try:
         link = PaymentLink(
             hotel_id=1,
@@ -2265,16 +2520,32 @@ def test_legacy_booking_cancel_records_actor_and_disables_active_payment_link():
         response = client.post(f"/api/bookings/{reservation.id}/cancel")
 
         assert response.status_code == 200, response.text
+        assert response.json()["cancellation_outcome"] == "manager_review_required"
+        review_id = response.json()["cancellation_review"]["id"]
         db.refresh(link)
+        assert link.status == "pending"
+        assert link.payable
+        assert reservation.status == ReservationStatusEnum.PENDING
+
+        auth.update(user_id=30, role="manager")
+        decision = client.post(
+            f"/api/reservations/cancellation-reviews/{review_id}/decision",
+            json={"decision": "approve", "reason": "Gerencia revisó la reserva histórica"},
+        )
+
+        assert decision.status_code == 200, decision.text
+        db.refresh(link)
+        db.refresh(reservation)
         assert link.status == "cancelled"
         assert not link.payable
+        assert reservation.status == ReservationStatusEnum.CANCELLED
         history = (
             db.query(ReservationStatusHistory)
             .filter_by(reservation_id=reservation.id, to_status="cancelled")
             .one()
         )
-        assert history.reason_code == "cancelled_by_user"
-        assert history.changed_by_user_id == 20
+        assert history.reason_code == "cancellation_review_approved"
+        assert history.changed_by_user_id == 30
     finally:
         _close(db, engine)
 

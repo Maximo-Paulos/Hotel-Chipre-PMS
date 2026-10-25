@@ -35,7 +35,8 @@ export type WaitlistEntryCreate = {
 };
 
 export type WaitlistPromotePayload = {
-  room_id?: number | null;
+  expected_entry_fingerprint: string;
+  room_id: number;
   notes?: string | null;
 };
 
@@ -44,10 +45,28 @@ export type WaitlistPromoteResponse = {
   reservation: Reservation;
 };
 
+export type WaitlistPromotionSuggestion = {
+  entry_id: number;
+  guest_id: number;
+  guest_name: string;
+  category_id: number;
+  check_in_date: string;
+  check_out_date: string;
+  priority: number;
+  suggested_room_id: number;
+  suggested_room_number: string;
+  expected_entry_fingerprint: string;
+  reason: string;
+  allocation_basis: string;
+};
+
 export const listWaitlistEntries = (statusFilter = "", session?: SessionLike) => {
   const query = statusFilter ? `?status_filter=${encodeURIComponent(statusFilter)}` : "";
   return apiFetch<WaitlistEntry[]>(`/api/waitlist/${query}`, { session });
 };
+
+export const getWaitlistPromotionSuggestions = (session?: SessionLike) =>
+  apiFetch<WaitlistPromotionSuggestion[]>("/api/waitlist/suggestions", { session });
 
 export const createWaitlistEntry = (payload: WaitlistEntryCreate, session?: SessionLike) =>
   apiFetch<WaitlistEntry>("/api/waitlist/", { method: "POST", data: payload, session });

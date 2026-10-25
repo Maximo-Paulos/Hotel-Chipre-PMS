@@ -11,6 +11,7 @@ from app.dependencies.auth import AuthContext, authorize_permission, require_per
 from app.models.operations import RoomMoveEvent, RoomMovementGroup
 from app.services.room_movement_group_service import (
     RoomMovementGroupError,
+    RoomMovementLockConflict,
     get_group,
     group_has_company_reservations,
     list_groups,
@@ -180,6 +181,9 @@ def revert_movement_group(
         db.commit()
         db.refresh(group)
         return _group_to_read(group)
+    except RoomMovementLockConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except RoomMovementGroupError as exc:
         db.rollback()
         raise _not_found_or_bad_request(exc) from exc

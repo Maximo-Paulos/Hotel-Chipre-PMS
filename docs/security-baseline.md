@@ -14,6 +14,7 @@
 - Temporary permission grants are limited to a single reservation cancellation, require owner/co-owner approval, expire after 15 minutes, are consumed once, and can be revoked before use. The plaintext token is returned only to the approver once and must be conveyed directly to the requester; it is not sent by email or stored in audit details.
 - Master Admin remains a separate security boundary with its own MFA policy.
 - Webhook and integration flows use scoped credentials and secret checks.
+- Corporate vouchers and signatures use the separate, role-configurable `company:documents:read` permission for listing and downloading. It is granted by default to Owner, Co-owner, and Manager; upload and status changes retain their existing permissions.
 - Gemma keeps messages, insights, and actions scoped per hotel and user.
 - Demo-only endpoints are separated from normal runtime behavior.
 

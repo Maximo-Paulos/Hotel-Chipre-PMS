@@ -8,6 +8,7 @@ import {
   type PaymentRequest,
   type PaymentSummary
 } from "../api/payments";
+import { quotePaymentSurcharge } from "../api/paymentSurcharges";
 import { hasValidSession } from "../api/client";
 import { invalidateQueriesInBackground, refreshPaymentState } from "../api/queryInvalidation";
 import { queryKeys } from "../api/queryKeys";
@@ -33,9 +34,10 @@ export function usePaymentMutation(reservationId?: number) {
   const { session } = useSession();
   const queryClient = useQueryClient();
   const intentKeysRef = useRef(new Map<string, string>());
+  const quoteTokensRef = useRef(new Map<string, string>());
 
   return useGuardedMutation({
-    mutationFn: (payload: PaymentRequest) => {
+    mutationFn: async (payload: PaymentRequest) => {
       const fingerprint = JSON.stringify(payload);
       let idempotencyKey = intentKeysRef.current.get(fingerprint);
       if (!idempotencyKey) {
@@ -44,11 +46,35 @@ export function usePaymentMutation(reservationId?: number) {
         // onSuccess; failed network attempts remain replayable until evicted.
         if (intentKeysRef.current.size >= 20) {
           const oldest = intentKeysRef.current.keys().next().value;
-          if (oldest) intentKeysRef.current.delete(oldest);
+          if (oldest) {
+            intentKeysRef.current.delete(oldest);
+            quoteTokensRef.current.delete(oldest);
+          }
         }
         intentKeysRef.current.set(fingerprint, idempotencyKey);
       }
-      return makePayment(payload, session, idempotencyKey);
+      // Keep every new individual charge on the signed backend quote path,
+      // including call sites outside ReservationsPage. Refunds and historical
+      // receipts are intentionally excluded because the quote contract only
+      // applies to a new collection.
+      const requiresQuote = payload.transaction_type !== "refund" &&
+        payload.collected_before !== true &&
+        !payload.payment_quote_token;
+      let paymentPayload = payload;
+      if (requiresQuote) {
+        let quoteToken = quoteTokensRef.current.get(fingerprint);
+        if (!quoteToken) {
+          quoteToken = (await quotePaymentSurcharge({
+              reservation_id: payload.reservation_id,
+              payment_method: payload.payment_method,
+              currency_code: payload.currency ?? "ARS",
+              base_amount: payload.amount
+            }, session)).payment_quote_token;
+          quoteTokensRef.current.set(fingerprint, quoteToken);
+        }
+        paymentPayload = { ...payload, payment_quote_token: quoteToken };
+      }
+      return makePayment(paymentPayload, session, idempotencyKey);
     },
     // The payment endpoint has committed before returning. Keep the saved
     // payment visible and reconcile affected views in the background.
@@ -60,6 +86,7 @@ export function usePaymentMutation(reservationId?: number) {
         });
       }
       intentKeysRef.current.delete(JSON.stringify(payload));
+      quoteTokensRef.current.delete(JSON.stringify(payload));
     }
   });
 }

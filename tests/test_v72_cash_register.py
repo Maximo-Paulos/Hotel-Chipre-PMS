@@ -17,7 +17,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Response
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -270,9 +270,20 @@ class TestOpenSession:
         session_h1 = _open_cash_session(db, hotel_id=1)
         _open_cash_session(db, hotel_id=2)
 
-        result = list_cash_sessions(db=db, context=_auth_context(hotel_id=1))
+        response = Response()
+        result = list_cash_sessions(
+            db=db,
+            context=_auth_context(hotel_id=1),
+            response=response,
+            page=1,
+            page_size=100,
+            status_filter=None,
+        )
 
         assert [session.id for session in result] == [session_h1.id]
+        assert response.headers["X-Has-Next-Page"] == "false"
+        assert response.headers["X-Page"] == "1"
+        assert response.headers["X-Page-Size"] == "100"
 
 
 class TestCloseSession:

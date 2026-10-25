@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
@@ -44,6 +44,13 @@ def _quote(currency: str, *, updated_at: datetime | None = None):
         "venta": 110.0,
         "fechaActualizacion": (updated_at or datetime.now(timezone.utc)).isoformat(),
     }
+
+
+def _seed_expired_conversion_cache(cache_key: str, quote: dict) -> None:
+    fx_service._cache["data"][cache_key] = quote
+    fx_service._cache["fetched_at_by_key"][cache_key] = (
+        fx_service.time.monotonic() - fx_service.RATE_CACHE_TTL_SECONDS - 1
+    )
 
 
 def test_conversion_provider_derives_blue_currency_quotes_only_from_supported_inputs(monkeypatch):
@@ -215,6 +222,73 @@ def test_usd_conversion_rejects_provider_quote_for_wrong_currency_or_market(
 
     assert fx_service.get_conversion_quote_sync("USD", rate_type) is None
     assert fx_service._cache["data"] == {}
+
+
+def test_provider_outage_uses_cached_exact_market_quote_up_to_24_hours(monkeypatch):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
+    cached_quote = _quote("USD", updated_at=datetime.now(UTC) - timedelta(minutes=30))
+    _seed_expired_conversion_cache("oficial", cached_quote)
+    requested_urls = []
+
+    def fail_get(url, **_kwargs):
+        requested_urls.append(url)
+        raise RuntimeError("simulated provider outage")
+
+    monkeypatch.setattr(fx_service.httpx, "get", fail_get)
+
+    result = fx_service.get_conversion_quote_sync("USD", "oficial")
+
+    assert result == cached_quote
+    assert requested_urls == ["https://dolarapi.com/v1/dolares/oficial"]
+
+
+@pytest.mark.parametrize(
+    "cached_quote",
+    [
+        pytest.param(
+            _quote("USD", updated_at=datetime.now(UTC) - timedelta(hours=24, minutes=1)),
+            id="older-than-24-hours",
+        ),
+        pytest.param(None, id="no-cached-quote"),
+    ],
+)
+def test_provider_outage_returns_none_without_a_fresh_cached_quote(monkeypatch, cached_quote):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
+    if cached_quote is not None:
+        _seed_expired_conversion_cache("oficial", cached_quote)
+
+    def fail_get(*_args, **_kwargs):
+        raise RuntimeError("simulated provider outage")
+
+    monkeypatch.setattr(fx_service.httpx, "get", fail_get)
+
+    assert fx_service.get_conversion_quote_sync("USD", "oficial") is None
+
+
+@pytest.mark.parametrize("invalid_response", ["malformed", "wrong-market", "stale"])
+def test_successful_invalid_provider_response_does_not_fall_back_to_cache(
+    monkeypatch, invalid_response
+):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
+    cached_quote = _quote("USD", updated_at=datetime.now(UTC) - timedelta(minutes=30))
+    _seed_expired_conversion_cache("oficial", cached_quote)
+
+    if invalid_response == "malformed":
+        payload = {"moneda": "USD", "casa": "oficial", "compra": 100.0, "venta": 110.0}
+    elif invalid_response == "wrong-market":
+        payload = {**_quote("USD"), "casa": "blue"}
+    else:
+        payload = _quote("USD", updated_at=datetime.now(UTC) - timedelta(days=2))
+    monkeypatch.setattr(fx_service.httpx, "get", lambda *_args, **_kwargs: _FakeResponse(payload))
+
+    assert fx_service.get_conversion_quote_sync("USD", "oficial") is None
+    assert fx_service._cache["data"]["oficial"] == cached_quote
 
 
 def test_display_refresh_does_not_cache_usd_payloads_with_wrong_market_or_currency(

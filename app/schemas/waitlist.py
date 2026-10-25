@@ -48,10 +48,26 @@ class WaitlistEntryRead(BaseModel):
 
 
 class WaitlistPromoteRequest(BaseModel):
-    room_id: Optional[int] = None
+    room_id: int = Field(gt=0)
+    expected_entry_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     notes: Optional[str] = None
 
 
 class WaitlistPromoteResponse(BaseModel):
     waitlist_entry: WaitlistEntryRead
     reservation: ReservationRead
+
+
+class WaitlistPromotionSuggestionRead(BaseModel):
+    entry_id: int
+    expected_entry_fingerprint: str
+    guest_id: int
+    guest_name: str
+    category_id: int
+    check_in_date: date
+    check_out_date: date
+    priority: int
+    suggested_room_id: int
+    suggested_room_number: str
+    reason: str
+    allocation_basis: str

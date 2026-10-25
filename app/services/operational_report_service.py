@@ -331,7 +331,12 @@ def filter_pms_revenue_transactions(
         return []
     reservation_ids = {transaction.reservation_id for transaction in transactions}
     reservations = (
-        db.query(Reservation)
+        db.query(
+            Reservation.id,
+            Reservation.hotel_id,
+            Reservation.company_id,
+            Reservation.settlement_status,
+        )
         .filter(Reservation.hotel_id == hotel_id, Reservation.id.in_(reservation_ids))
         .all()
     )

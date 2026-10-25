@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -26,6 +26,7 @@ from app.services.payment_service import (
     MANUAL_REFERENCE_METHODS,
     PaymentError,
     PaymentNotFoundError,
+    _cash_tender_breakdown,
     calculate_payment_surcharge,
     process_payment,
 )
@@ -33,7 +34,13 @@ from app.services.payment_service import (
 CENT = Decimal("0.01")
 
 
-def _canonical_hash(group_id: int, payload: ReservationGroupPaymentCreate, currency: str) -> str:
+def _canonical_hash(
+    group_id: int,
+    payload: ReservationGroupPaymentCreate,
+    currency: str,
+    *,
+    cash_received_amount: Decimal | None = None,
+) -> str:
     normalized = {
         "group_id": group_id,
         "received_amount": str(payload.received_amount.quantize(CENT)),
@@ -50,6 +57,12 @@ def _canonical_hash(group_id: int, payload: ReservationGroupPaymentCreate, curre
             for item in sorted(payload.allocations, key=lambda item: item.reservation_id)
         ],
     }
+    # Keep the old canonical shape for historical batches and non-cash
+    # collections. New cash batches include the actual physical tender so a
+    # retry with a different amount cannot silently replay the old collection.
+    if cash_received_amount is not None:
+        normalized["cash_received_amount"] = str(cash_received_amount.quantize(CENT))
+        normalized["cash_tip_amount"] = str(payload.cash_tip_amount.quantize(CENT))
     serialized = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
@@ -68,6 +81,10 @@ def _read_batch(db: Session, batch: ReservationGroupPaymentBatch) -> dict:
         "id": batch.id,
         "group_id": batch.group_id,
         "received_amount": batch.received_amount,
+        "gross_amount": batch.gross_amount,
+        "cash_received_amount": batch.cash_received_amount,
+        "cash_change_amount": batch.cash_change_amount,
+        "cash_tip_amount": batch.cash_tip_amount,
         "currency": batch.currency,
         "payment_method": batch.payment_method,
         "manual_reference": batch.manual_reference,
@@ -147,7 +164,6 @@ def create_reservation_group_payment(
         raise PaymentError("Las reservas seleccionadas deben usar la misma moneda para un cobro grupal.")
     reservation_currency = next(iter(child_currencies))
     payment_currency = (payload.currency or reservation_currency).strip().upper()
-    digest = _canonical_hash(group.id, payload, payment_currency)
 
     existing = (
         db.query(ReservationGroupPaymentBatch)
@@ -158,9 +174,68 @@ def create_reservation_group_payment(
         .one_or_none()
     )
     if existing is not None:
+        existing_cash_received = getattr(existing, "cash_received_amount", None)
+        existing_cash_change = getattr(existing, "cash_change_amount", None)
+        if payload.payment_method == PaymentMethodEnum.CASH and existing_cash_received is not None:
+            existing_expected_gross = (
+                Decimal(str(existing_cash_received)) - Decimal(str(existing_cash_change or 0))
+            ).quantize(CENT)
+            replay_cash_received = (
+                payload.cash_received_amount.quantize(CENT)
+                if payload.cash_received_amount is not None
+                else existing_expected_gross
+            )
+        else:
+            # ``None`` preserves compatibility with group batches written
+            # before tender/change capture was added.
+            replay_cash_received = payload.cash_received_amount.quantize(CENT) if payload.cash_received_amount is not None else None
+        digest = _canonical_hash(
+            group.id,
+            payload,
+            payment_currency,
+            cash_received_amount=replay_cash_received,
+        )
         if existing.request_hash != digest:
             raise PaymentError("La clave de idempotencia ya fue usada para otro cobro grupal.")
         return _read_batch(db, existing), True
+
+    if payload.cash_received_amount is not None and payload.payment_method != PaymentMethodEnum.CASH:
+        raise PaymentError("El efectivo entregado solo se admite en cobros grupales en efectivo.")
+
+    surcharge_info = calculate_payment_surcharge(
+        db,
+        hotel_id=hotel_id,
+        payment_method=payload.payment_method,
+        base_amount=payload.received_amount,
+        currency_code=payment_currency,
+    )
+    total_surcharge = Decimal(str(surcharge_info["surcharge_amount"])).quantize(CENT)
+    expected_gross_amount = (payload.received_amount + total_surcharge).quantize(CENT)
+    cash_received_amount = None
+    cash_change_amount = None
+    cash_tip_amount = Decimal("0.00")
+    if payload.payment_method == PaymentMethodEnum.CASH:
+        cash_received_amount = (
+            payload.cash_received_amount.quantize(CENT)
+            if payload.cash_received_amount is not None
+            else expected_gross_amount
+        )
+        if cash_received_amount < expected_gross_amount:
+            raise PaymentError(
+                f"El efectivo entregado ({cash_received_amount:.2f} {payment_currency}) es menor "
+                f"al importe total del cobro ({expected_gross_amount:.2f} {payment_currency})."
+            )
+        cash_tip_amount, cash_change_amount = _cash_tender_breakdown(
+            gross_amount=expected_gross_amount,
+            cash_received_amount=cash_received_amount,
+            requested_tip_amount=payload.cash_tip_amount,
+        )
+    digest = _canonical_hash(
+        group.id,
+        payload,
+        payment_currency,
+        cash_received_amount=cash_received_amount,
+    )
 
     if any(
         item.status in {ReservationStatusEnum.CANCELLED, ReservationStatusEnum.CHECKED_OUT}
@@ -181,6 +256,10 @@ def create_reservation_group_payment(
         idempotency_key=idempotency_key,
         request_hash=digest,
         received_amount=payload.received_amount.quantize(CENT),
+        gross_amount=expected_gross_amount if payload.payment_method == PaymentMethodEnum.CASH else None,
+        cash_received_amount=cash_received_amount,
+        cash_change_amount=cash_change_amount,
+        cash_tip_amount=cash_tip_amount,
         currency=payment_currency,
         payment_method=payload.payment_method,
         manual_reference=payload.manual_reference,
@@ -206,13 +285,6 @@ def create_reservation_group_payment(
             raise PaymentError("La clave de idempotencia ya fue usada para otro cobro grupal.")
         raise
 
-    surcharge_info = calculate_payment_surcharge(
-        db,
-        hotel_id=hotel_id,
-        payment_method=payload.payment_method,
-        base_amount=payload.received_amount,
-    )
-    total_surcharge = Decimal(str(surcharge_info["surcharge_amount"])).quantize(CENT)
     total_cents = int((payload.received_amount * 100).to_integral_value())
     surcharge_cents = int((total_surcharge * 100).to_integral_value())
     allocations = list(payload.allocations)
@@ -225,7 +297,7 @@ def create_reservation_group_payment(
         )
         payment = PaymentRequest(
             reservation_id=allocation.reservation_id,
-            amount=float(allocation.received_amount),
+            amount=allocation.received_amount,
             payment_method=payload.payment_method,
             transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
             currency=payment_currency,
@@ -241,6 +313,8 @@ def create_reservation_group_payment(
             idempotency_key=f"group-payment-{batch.id}-{allocation.reservation_id}",
             manual_confirmation=payload.payment_method in MANUAL_REFERENCE_METHODS,
             apply_surcharge=False,
+            capture_cash_receipt=False,
+            surcharge_quote_snapshot=surcharge_info["surcharge_quote_snapshot"],
         )
         if index == len(allocations) - 1:
             fee_cents = surcharge_cents - allocated_fee_cents
@@ -272,7 +346,11 @@ def create_reservation_group_payment(
             if movement is None:
                 raise PaymentError("No se pudo conciliar una asignación del cobro grupal en caja.")
             movement.amount = transaction.gross_amount
+            if index == 0:
+                movement.amount = (Decimal(str(movement.amount)) + cash_tip_amount).quantize(CENT)
             movement.description = f"Cobro grupal #{batch.id} ({len(allocations)} reservas)"
+            if index == 0 and cash_tip_amount > 0:
+                movement.description += f" · propina ${cash_tip_amount}"
             db.add(movement)
 
         db.add(

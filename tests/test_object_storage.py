@@ -5,10 +5,9 @@ import hashlib
 import pytest
 
 from app.services.object_storage import (
+    GCSObjectStorage,
     LocalObjectStorage,
     ObjectStorageError,
-    S3ObjectStorage,
-    GCSObjectStorage,
     get_object_storage,
 )
 
@@ -69,19 +68,47 @@ def test_local_object_storage_rejects_path_traversal_keys(tmp_path, bad_key):
         storage.put_bytes(bad_key, b"data")
 
 
-def test_s3_object_storage_is_an_unwired_stub():
-    storage = S3ObjectStorage(bucket="test-bucket")
-    with pytest.raises(NotImplementedError):
-        storage.put_bytes("key", b"data")
-    with pytest.raises(NotImplementedError):
-        storage.get_bytes("key")
-    with pytest.raises(NotImplementedError):
-        storage.delete("key")
-
-
 def test_gcs_backend_requires_explicit_bucket():
     with pytest.raises(ObjectStorageError, match="GCS_BUCKET"):
         GCSObjectStorage(bucket="")
+
+
+def test_gcs_delete_treats_missing_object_as_success(monkeypatch):
+    class _NotFound(Exception):
+        code = 404
+
+    class _Blob:
+        def delete(self):
+            raise _NotFound()
+
+    class _Bucket:
+        def blob(self, key):
+            assert key == "analytics-exports/1/2026/09/1.xlsx"
+            return _Blob()
+
+    storage = GCSObjectStorage(bucket="test-bucket")
+    monkeypatch.setattr(storage, "_get_bucket", lambda: _Bucket())
+
+    storage.delete("analytics-exports/1/2026/09/1.xlsx")
+
+
+def test_gcs_delete_does_not_hide_transient_failures(monkeypatch):
+    class _Unavailable(Exception):
+        code = 503
+
+    class _Blob:
+        def delete(self):
+            raise _Unavailable()
+
+    class _Bucket:
+        def blob(self, key):
+            return _Blob()
+
+    storage = GCSObjectStorage(bucket="test-bucket")
+    monkeypatch.setattr(storage, "_get_bucket", lambda: _Bucket())
+
+    with pytest.raises(ObjectStorageError, match="GCS delete failed"):
+        storage.delete("analytics-exports/1/2026/09/1.xlsx")
 
 
 def test_get_object_storage_defaults_to_local_backend(monkeypatch, tmp_path):
@@ -96,7 +123,7 @@ def test_get_object_storage_defaults_to_local_backend(monkeypatch, tmp_path):
     assert isinstance(storage, LocalObjectStorage)
 
 
-def test_get_object_storage_s3_backend_builds_s3_storage(monkeypatch):
+def test_get_object_storage_rejects_unimplemented_s3_backend(monkeypatch):
     class _Settings:
         OBJECT_STORAGE_BACKEND = "s3"
         OBJECT_STORAGE_S3_BUCKET = "hotel-chipre-proofs"
@@ -106,8 +133,8 @@ def test_get_object_storage_s3_backend_builds_s3_storage(monkeypatch):
     import app.services.object_storage as object_storage_module
 
     monkeypatch.setattr(object_storage_module, "get_settings", lambda: _Settings())
-    storage = get_object_storage()
-    assert isinstance(storage, S3ObjectStorage)
+    with pytest.raises(ObjectStorageError, match="s3.*not supported yet"):
+        get_object_storage()
 
 
 def test_get_object_storage_rejects_unknown_backend(monkeypatch):

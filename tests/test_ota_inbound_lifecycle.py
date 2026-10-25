@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from app.config import get_settings
+from app.models.audit_log import AuditActionEnum, AuditLog
 from app.models.analytics import FactReservationDaily
 from app.models.guest import Guest
 from app.models.ota import OTAReservationMapping, OTASyncStatusEnum
 from app.models.ota_core import OTAReservationLifecycleEnum, OTAReservationLink
 from app.models.payment import PaymentLink
 from app.models.reservation import Reservation, ReservationStatusEnum
+from app.models.room import RoomHousekeepingStatusEnum, RoomStatusEnum
+from app.schemas.reservation import ReservationCreate
 from app.services.ota_service import OTAIntegrationService
-from app.services.reservation_service import transition_reservation_status
+from app.services.reservation_service import create_reservation, transition_reservation_status
+import app.services.ota_service as ota_service_module
+import app.services.reservation_service as reservation_service_module
 
 
 @pytest.fixture(autouse=True)
@@ -94,6 +101,349 @@ def test_booking_modify_updates_existing_reservation_and_guest(db, sample_rooms,
     updated_facts = db.query(FactReservationDaily).filter_by(reservation_id=reservation_id).all()
     assert len(updated_facts) == 3
     assert sum(float(row.revenue_gross_ars) for row in updated_facts) == pytest.approx(470.0)
+
+
+@pytest.mark.parametrize(
+    ("operational_status", "room_status", "housekeeping_status"),
+    [
+        (
+            ReservationStatusEnum.CHECKED_IN,
+            RoomStatusEnum.OCCUPIED,
+            RoomHousekeepingStatusEnum.CLEAN,
+        ),
+        (
+            ReservationStatusEnum.CHECKED_OUT,
+            RoomStatusEnum.CLEANING,
+            RoomHousekeepingStatusEnum.DIRTY,
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "modification",
+    [
+        {"checkout": "2026-09-04"},
+        {"room_type": "SUP_DBL"},
+    ],
+    ids=["stay-change", "room-category-change"],
+)
+def test_booking_modify_after_checkin_or_checkout_rejects_stay_or_room_changes(
+    db,
+    sample_rooms,
+    sample_categories,
+    hotel_config,
+    operational_status,
+    room_status,
+    housekeeping_status,
+    modification,
+):
+    secret = _seed_booking_secret(db, hotel_config.id)
+    mapping = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, _booking_payload())
+    reservation = db.query(Reservation).filter_by(id=mapping.reservation_id).one()
+    room = reservation.room
+    original_room_id = reservation.room_id
+    original_category_id = reservation.category_id
+    original_check_in = reservation.check_in_date
+    original_check_out = reservation.check_out_date
+    reservation.status = operational_status
+    room.status = room_status
+    room.housekeeping_status = housekeeping_status
+    db.flush()
+
+    rejected_mapping = OTAIntegrationService.process_booking_webhook(
+        db,
+        hotel_config.id,
+        secret,
+        _booking_payload(
+            event="reservation.modified",
+            guest_name="Jane Changed",
+            guest_email="jane.changed@example.com",
+            **modification,
+        ),
+    )
+    db.flush()
+    db.refresh(reservation)
+    db.refresh(room)
+    link = db.query(OTAReservationLink).filter_by(
+        hotel_id=hotel_config.id,
+        external_reservation_id="BKG-LIFECYCLE-001",
+    ).one()
+    audit_entry = (
+        db.query(AuditLog)
+        .filter_by(
+            hotel_id=hotel_config.id,
+            table_name="reservations",
+            record_id=reservation.id,
+            action=AuditActionEnum.UPDATE,
+        )
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+
+    assert rejected_mapping.id == mapping.id
+    assert rejected_mapping.sync_status == OTASyncStatusEnum.CONFLICT
+    assert rejected_mapping.error_message == (
+        "Modification would change stay or room assignment after check-in/checkout"
+    )
+    assert reservation.status == operational_status
+    assert reservation.check_in_date == original_check_in
+    assert reservation.check_out_date == original_check_out
+    assert reservation.room_id == original_room_id
+    assert reservation.category_id == original_category_id
+    assert reservation.requires_manual_review is True
+    assert reservation.guest.first_name == "Jane"
+    assert reservation.guest.last_name == "Doe"
+    assert reservation.guest.email == "jane@example.com"
+    assert link.provider_state == OTAReservationLifecycleEnum.MANUAL_RESOLUTION_REQUIRED
+    assert link.sync_status == "manual_resolution_required"
+    assert audit_entry is not None
+    assert "manual_review" in (audit_entry.payload_after or "")
+    assert room.status == room_status
+    assert room.housekeeping_status == housekeeping_status
+
+
+def test_booking_modify_after_checkin_preserves_room_for_same_stay_and_category(
+    db,
+    sample_rooms,
+    sample_categories,
+    hotel_config,
+):
+    secret = _seed_booking_secret(db, hotel_config.id)
+    mapping = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, _booking_payload())
+    reservation = db.query(Reservation).filter_by(id=mapping.reservation_id).one()
+    room = reservation.room
+    original_room_id = reservation.room_id
+    reservation.status = ReservationStatusEnum.CHECKED_IN
+    room.status = RoomStatusEnum.OCCUPIED
+    db.flush()
+
+    updated_mapping = OTAIntegrationService.process_booking_webhook(
+        db,
+        hotel_config.id,
+        secret,
+        _booking_payload(event="reservation.modified", total_price=470.0),
+    )
+    db.flush()
+    db.refresh(reservation)
+    db.refresh(room)
+
+    assert updated_mapping.sync_status == OTASyncStatusEnum.SYNCED
+    assert reservation.status == ReservationStatusEnum.CHECKED_IN
+    assert reservation.room_id == original_room_id
+    assert reservation.total_amount == 470.0
+    assert room.status == RoomStatusEnum.OCCUPIED
+
+
+@pytest.mark.parametrize("block_all_candidates", [False, True])
+def test_booking_modify_rechecks_locked_room_and_falls_back_or_marks_conflict(
+    db,
+    sample_rooms,
+    sample_categories,
+    hotel_config,
+    monkeypatch,
+    block_all_candidates,
+):
+    secret = _seed_booking_secret(db, hotel_config.id)
+    initial = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, _booking_payload())
+    reservation = db.query(Reservation).filter_by(id=initial.reservation_id).one()
+    original_check_in = reservation.check_in_date
+    original_check_out = reservation.check_out_date
+    original_total_amount = reservation.total_amount
+    original_guest_email = reservation.guest.email
+    reservation.room_id = None
+    db.flush()
+    db.expire(reservation, ["room"])
+
+    original_find_available_rooms = ota_service_module.find_available_rooms
+    injected_competitors: list[int] = []
+
+    def race_after_candidate_scan(*args, **kwargs):
+        candidates = original_find_available_rooms(*args, **kwargs)
+        if candidates and not injected_competitors:
+            selected_candidates = candidates if block_all_candidates else candidates[:1]
+            competitor = Guest(
+                hotel_id=hotel_config.id,
+                first_name="Race",
+                last_name="Competitor",
+            )
+            db.add(competitor)
+            db.flush()
+            for candidate in selected_candidates:
+                create_reservation(
+                    db,
+                    ReservationCreate(
+                        guest_id=competitor.id,
+                        category_id=candidate.category_id,
+                        room_id=candidate.id,
+                        check_in_date=date(2026, 9, 5),
+                        check_out_date=date(2026, 9, 7),
+                    ),
+                    hotel_id=hotel_config.id,
+                )
+                injected_competitors.append(candidate.id)
+        return candidates
+
+    monkeypatch.setattr(ota_service_module, "find_available_rooms", race_after_candidate_scan)
+    modified = OTAIntegrationService.process_booking_webhook(
+        db,
+        hotel_config.id,
+        secret,
+        _booking_payload(
+            event="reservation.modified",
+            checkin="2026-09-05",
+            checkout="2026-09-07",
+        ),
+    )
+    db.flush()
+    db.refresh(reservation)
+
+    assert injected_competitors
+    if block_all_candidates:
+        assert modified.sync_status == OTASyncStatusEnum.CONFLICT
+        assert reservation.room_id is None
+        assert reservation.requires_manual_review is True
+        assert reservation.check_in_date == original_check_in
+        assert reservation.check_out_date == original_check_out
+        assert reservation.total_amount == original_total_amount
+        assert reservation.guest.email == original_guest_email
+    else:
+        assert modified.sync_status == OTASyncStatusEnum.SYNCED
+        assert reservation.room_id is not None
+        assert reservation.room_id not in injected_competitors
+
+
+def test_booking_modify_without_room_keeps_confirmed_stay_and_terms_unchanged(
+    db,
+    sample_rooms,
+    sample_categories,
+    hotel_config,
+    monkeypatch,
+):
+    secret = _seed_booking_secret(db, hotel_config.id)
+    mapping = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, _booking_payload())
+    reservation = db.query(Reservation).filter_by(id=mapping.reservation_id).one()
+    original = {
+        "check_in": reservation.check_in_date,
+        "check_out": reservation.check_out_date,
+        "room_id": reservation.room_id,
+        "category_id": reservation.category_id,
+        "total_amount": reservation.total_amount,
+        "currency_code": reservation.currency_code,
+        "guest_name": (reservation.guest.first_name, reservation.guest.last_name),
+        "guest_email": reservation.guest.email,
+    }
+
+    competitor = Guest(hotel_id=hotel_config.id, first_name="Existing", last_name="Occupant")
+    db.add(competitor)
+    db.flush()
+    create_reservation(
+        db,
+        ReservationCreate(
+            guest_id=competitor.id,
+            category_id=reservation.category_id,
+            room_id=reservation.room_id,
+            check_in_date=date(2026, 9, 5),
+            check_out_date=date(2026, 9, 7),
+        ),
+        hotel_id=hotel_config.id,
+    )
+    monkeypatch.setattr(ota_service_module, "find_available_rooms", lambda *args, **kwargs: [])
+
+    conflict = OTAIntegrationService.process_booking_webhook(
+        db,
+        hotel_config.id,
+        secret,
+        _booking_payload(
+            event="reservation.modified",
+            guest_name="Jane Changed",
+            guest_email="jane.changed@example.com",
+            checkin="2026-09-05",
+            checkout="2026-09-07",
+            total_price=470.0,
+        ),
+    )
+    db.flush()
+    db.refresh(reservation)
+
+    assert conflict.sync_status == OTASyncStatusEnum.CONFLICT
+    assert conflict.error_message == (
+        "OTA modification rejected: no compatible room is available; "
+        "resolve the change in the provider extranet"
+    )
+    assert reservation.requires_manual_review is True
+    assert reservation.check_in_date == original["check_in"]
+    assert reservation.check_out_date == original["check_out"]
+    assert reservation.room_id == original["room_id"]
+    assert reservation.category_id == original["category_id"]
+    assert reservation.total_amount == original["total_amount"]
+    assert reservation.currency_code == original["currency_code"]
+    assert (reservation.guest.first_name, reservation.guest.last_name) == original["guest_name"]
+    assert reservation.guest.email == original["guest_email"]
+
+
+def test_booking_modify_rechecks_current_room_after_lock_and_reassigns_on_conflict(
+    db,
+    sample_rooms,
+    sample_categories,
+    hotel_config,
+    monkeypatch,
+):
+    secret = _seed_booking_secret(db, hotel_config.id)
+    initial = OTAIntegrationService.process_booking_webhook(db, hotel_config.id, secret, _booking_payload())
+    reservation = db.query(Reservation).filter_by(id=initial.reservation_id).one()
+    originally_assigned_room_id = reservation.room_id
+    original_check_room_availability = reservation_service_module.check_room_availability
+    competitor_reservation_ids: list[int] = []
+
+    def race_after_current_room_precheck(*args, **kwargs):
+        available_before_lock = original_check_room_availability(*args, **kwargs)
+        if (
+            available_before_lock
+            and kwargs.get("exclude_reservation_id") == reservation.id
+            and not competitor_reservation_ids
+        ):
+            competitor = Guest(
+                hotel_id=hotel_config.id,
+                first_name="Race",
+                last_name="Competitor",
+            )
+            db.add(competitor)
+            db.flush()
+            competing_reservation = create_reservation(
+                db,
+                ReservationCreate(
+                    guest_id=competitor.id,
+                    category_id=reservation.category_id,
+                    room_id=originally_assigned_room_id,
+                    check_in_date=date(2026, 9, 5),
+                    check_out_date=date(2026, 9, 7),
+                ),
+                hotel_id=hotel_config.id,
+            )
+            competitor_reservation_ids.append(competing_reservation.id)
+        return available_before_lock
+
+    monkeypatch.setattr(
+        reservation_service_module,
+        "check_room_availability",
+        race_after_current_room_precheck,
+    )
+    modified = OTAIntegrationService.process_booking_webhook(
+        db,
+        hotel_config.id,
+        secret,
+        _booking_payload(
+            event="reservation.modified",
+            checkin="2026-09-05",
+            checkout="2026-09-07",
+        ),
+    )
+    db.flush()
+    db.refresh(reservation)
+
+    assert competitor_reservation_ids
+    assert modified.sync_status == OTASyncStatusEnum.SYNCED
+    assert reservation.room_id is not None
+    assert reservation.room_id != originally_assigned_room_id
 
 
 def test_booking_cancel_cancels_existing_pre_checkin_reservation(db, sample_rooms, sample_categories, hotel_config):

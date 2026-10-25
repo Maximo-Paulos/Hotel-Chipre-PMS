@@ -4,8 +4,11 @@ import {
   createPaymentSurcharge,
   deactivatePaymentSurcharge,
   listPaymentSurcharges,
+  quotePaymentSurcharge,
   type PaymentSurcharge,
-  type PaymentSurchargeCreatePayload
+  type PaymentSurchargeCreatePayload,
+  type PaymentSurchargeQuote,
+  type PaymentSurchargeQuoteRequest
 } from "../api/paymentSurcharges";
 import { hasValidSession } from "../api/client";
 import { refreshAfterMutation } from "../api/queryInvalidation";
@@ -22,6 +25,34 @@ export function usePaymentSurcharges(options?: { enabled?: boolean }) {
     queryFn: () => listPaymentSurcharges(session),
     enabled: hasValidSession(session) && (options?.enabled ?? true),
     staleTime: 60 * 1000
+  });
+}
+
+export function usePaymentSurchargeQuote(
+  input: PaymentSurchargeQuoteRequest | null,
+  options?: { enabled?: boolean }
+) {
+  const { session } = useSession();
+  const normalizedInput = input
+    ? { ...input, currency_code: input.currency_code.trim().toUpperCase() }
+    : null;
+  const baseAmountKey = normalizedInput?.base_amount ?? "balance";
+  return useQuery<PaymentSurchargeQuote>({
+    queryKey: [
+      "payment-surcharge-quote",
+      session.hotelId,
+      normalizedInput?.reservation_id ?? null,
+      normalizedInput?.payment_method ?? null,
+      normalizedInput?.currency_code ?? null,
+      baseAmountKey
+    ],
+    queryFn: () => {
+      if (!normalizedInput) throw new Error("Falta la reserva para cotizar el cobro.");
+      return quotePaymentSurcharge(normalizedInput, session);
+    },
+    enabled: hasValidSession(session) && Boolean(normalizedInput) && (options?.enabled ?? true),
+    staleTime: 15_000,
+    retry: false
   });
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-// ponytail: no existing navigator.onLine usage in this codebase to reuse
+// No existing navigator.onLine usage was suitable for reuse
 // (checked AppShell.tsx's "offline" banner -- that's backend-reachability,
 // not network connectivity) -- this is the minimal browser-native check.
 export function useOnlineStatus(): boolean {

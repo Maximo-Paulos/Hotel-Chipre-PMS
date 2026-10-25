@@ -92,6 +92,7 @@ export function CompaniesPage() {
   const queryClient = useQueryClient();
   const { hasPermission, hasAllPermissions, permissionsKnown } = useEffectivePermissions();
   const canManageCompanies = permissionsKnown && hasPermission("company:manage");
+  const canReadCompanyDocuments = permissionsKnown && hasPermission("company:documents:read");
   const canManageNightlyRates = permissionsKnown && hasAllPermissions([
     "company:manage",
     "company:night_rate_manage"
@@ -115,7 +116,7 @@ export function CompaniesPage() {
     () => isCreatingNewCompany ? null : companies.find((company) => company.id === selectedCompanyId) ?? companies[0] ?? null,
     [companies, selectedCompanyId, isCreatingNewCompany]
   );
-  const documentsQuery = useCompanyDocuments(selectedCompany?.id);
+  const documentsQuery = useCompanyDocuments(canReadCompanyDocuments ? selectedCompany?.id : undefined);
   const companyMutations = useCompanyMutations();
   const documentMutations = useCompanyDocumentMutations(selectedCompany?.id);
 
@@ -679,7 +680,7 @@ export function CompaniesPage() {
             </section>
           ) : null}
 
-          <section className="space-y-4 border-t border-slate-200 pt-4">
+          {canReadCompanyDocuments || canManageCompanies ? <section className="space-y-4 border-t border-slate-200 pt-4">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Documentos</p>
               <h3 className="text-base font-semibold text-slate-900">Vouchers y firmas</h3>
@@ -687,7 +688,7 @@ export function CompaniesPage() {
 
             {selectedCompany ? (
               <>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                {canReadCompanyDocuments ? <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   {documentsQuery.isLoading ? (
                     <p className="text-sm text-slate-500">Cargando documentos...</p>
                   ) : documents.length === 0 ? (
@@ -737,7 +738,7 @@ export function CompaniesPage() {
                       ))}
                     </div>
                   )}
-                </div>
+                </div> : null}
 
                 {canManageCompanies ? <form className="grid gap-4 md:grid-cols-2" onSubmit={handleDocumentSubmit}>
                   <label className="space-y-1 text-sm">
@@ -813,7 +814,7 @@ export function CompaniesPage() {
                 Selecciona o crea una empresa para administrar documentos.
               </div>
             )}
-          </section>
+          </section> : null}
         </section>
       </div>
     </div>

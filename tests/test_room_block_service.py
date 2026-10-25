@@ -2,24 +2,30 @@ from datetime import date
 
 import pytest
 
-from app.models.hotel_config import HotelConfiguration
+from app.models.allocation import AllocationAssignment, AllocationAssignmentStatusEnum
 from app.models.guest import DocumentTypeEnum, Guest
+from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.room_block import RoomBlockReasonEnum
 from app.models.user import User
-from app.services.reservation_service import check_room_availability, find_available_rooms
 from app.services.allocation_engine import build_slots_from_db
+from app.services.reservation_service import (
+    check_room_availability,
+    find_available_rooms,
+)
 from app.services.room_block_service import (
     ProtectedReservationConflictError,
-    RoomBlockExtensionConflictError,
     RoomBlockError,
+    RoomBlockExtensionConflictError,
     create_block,
     extend_block,
+    extend_block_with_allocation_plan,
     list_active_blocks,
     preview_block_extension,
-    room_has_active_block,
+    propose_room_block_extension_reassignment,
     resolve_block,
+    room_has_active_block,
 )
 
 
@@ -233,8 +239,29 @@ def test_block_extension_uses_exclusive_end_and_previews_added_nights(db):
     }
     # The original end is exclusive, so the added night is unblocked before extension.
     assert room_has_active_block(db, hotel_id=1, room_id=room.id, start_date=date(2026, 7, 5), end_date=date(2026, 7, 6)) is False
-    extended = extend_block(db, hotel_id=1, block_id=block.id, ends_at=date(2026, 7, 6))
+    with pytest.raises(RoomBlockExtensionConflictError):
+        extend_block(db, hotel_id=1, block_id=block.id, ends_at=date(2026, 7, 6))
+    replacement_room = _room(db, 1, category.id, "102")
+    proposal = propose_room_block_extension_reassignment(
+        db,
+        hotel_id=1,
+        block_id=block.id,
+        ends_at=date(2026, 7, 6),
+    )
+    assert proposal is not None
+    assignment = next(item for item in proposal.assignments if item.reservation_id == reservation.id)
+    assert assignment.status == AllocationAssignmentStatusEnum.PROPOSED
+    assert assignment.room_id == replacement_room.id
+    assert reservation.room_id == room.id
+    extended = extend_block_with_allocation_plan(
+        db,
+        hotel_id=1,
+        block_id=block.id,
+        ends_at=date(2026, 7, 6),
+        allocation_run_id=proposal.run.id,
+    )
     assert extended.ends_at == date(2026, 7, 6)
+    assert reservation.room_id == replacement_room.id
     assert room_has_active_block(db, hotel_id=1, room_id=room.id, start_date=date(2026, 7, 5), end_date=date(2026, 7, 6)) is True
     assert check_room_availability(db, room.id, date(2026, 7, 6), date(2026, 7, 7), hotel_id=1) is True
     assert reservation.check_in_date == date(2026, 7, 5)
@@ -270,6 +297,107 @@ def test_block_extension_rejects_protected_reservation_and_shorter_end(db):
         preview_block_extension(db, hotel_id=1, block_id=block.id, ends_at=date(2026, 7, 5))
 
 
+def test_block_extension_stale_reassignment_plan_does_not_extend_block(db):
+    _hotel(db, 1)
+    category = _category(db, 1)
+    blocked_room = _room(db, 1, category.id, "101")
+    _room(db, 1, category.id, "102")
+    reservation = _reservation(
+        db,
+        hotel_id=1,
+        room_id=blocked_room.id,
+        category_id=category.id,
+        check_in=date(2026, 7, 5),
+        check_out=date(2026, 7, 7),
+    )
+    block = create_block(
+        db,
+        hotel_id=1,
+        room_id=blocked_room.id,
+        starts_at=date(2026, 7, 1),
+        ends_at=date(2026, 7, 5),
+        reason_code=RoomBlockReasonEnum.MAINTENANCE,
+    )
+
+    proposal = propose_room_block_extension_reassignment(
+        db,
+        hotel_id=1,
+        block_id=block.id,
+        ends_at=date(2026, 7, 6),
+    )
+    assert proposal is not None
+    original_room_id = reservation.room_id
+    reservation.check_out_date = date(2026, 7, 8)
+    db.flush()
+
+    with pytest.raises(RoomBlockError, match="changed after this proposal"):
+        extend_block_with_allocation_plan(
+            db,
+            hotel_id=1,
+            block_id=block.id,
+            ends_at=date(2026, 7, 6),
+            allocation_run_id=proposal.run.id,
+        )
+
+    db.refresh(reservation)
+    db.refresh(block)
+    assert reservation.room_id == original_room_id
+    assert block.ends_at == date(2026, 7, 5)
+
+
+def test_block_extension_rejects_unassigned_proposal_target(db):
+    _hotel(db, 1)
+    category = _category(db, 1)
+    blocked_room = _room(db, 1, category.id, "101")
+    _room(db, 1, category.id, "102")
+    reservation = _reservation(
+        db,
+        hotel_id=1,
+        room_id=blocked_room.id,
+        category_id=category.id,
+        check_in=date(2026, 7, 5),
+        check_out=date(2026, 7, 7),
+    )
+    block = create_block(
+        db,
+        hotel_id=1,
+        room_id=blocked_room.id,
+        starts_at=date(2026, 7, 1),
+        ends_at=date(2026, 7, 5),
+        reason_code=RoomBlockReasonEnum.MAINTENANCE,
+    )
+
+    proposal = propose_room_block_extension_reassignment(
+        db,
+        hotel_id=1,
+        block_id=block.id,
+        ends_at=date(2026, 7, 6),
+    )
+    assignment = (
+        db.query(AllocationAssignment)
+        .filter(
+            AllocationAssignment.hotel_id == 1,
+            AllocationAssignment.allocation_run_id == proposal.run.id,
+            AllocationAssignment.reservation_id == reservation.id,
+        )
+        .one()
+    )
+    assignment.room_id = None
+    db.flush()
+
+    with pytest.raises(RoomBlockExtensionConflictError):
+        extend_block_with_allocation_plan(
+            db,
+            hotel_id=1,
+            block_id=block.id,
+            ends_at=date(2026, 7, 6),
+            allocation_run_id=proposal.run.id,
+        )
+
+    assert reservation.room_id == blocked_room.id
+    assert block.ends_at == date(2026, 7, 5)
+
+
 def test_room_blocks_are_hotel_scoped(db):
     _hotel(db, 1)
     _hotel(db, 2)
@@ -292,7 +420,40 @@ def test_room_blocks_are_hotel_scoped(db):
     assert list_active_blocks(db, hotel_id=2, start_date=date(2026, 7, 2), end_date=date(2026, 7, 4)) == []
 
 
-def test_allocation_candidates_exclude_blocked_rooms(db):
+def test_room_block_mutations_reject_resources_from_another_hotel(db):
+    _hotel(db, 1)
+    _hotel(db, 2)
+    category_1 = _category(db, 1)
+    category_2 = _category(db, 2)
+    room_1 = _room(db, 1, category_1.id, "101")
+    room_2 = _room(db, 2, category_2.id, "101")
+    block = create_block(
+        db,
+        hotel_id=1,
+        room_id=room_1.id,
+        starts_at=date(2026, 7, 1),
+        ends_at=date(2026, 7, 5),
+    )
+
+    with pytest.raises(RoomBlockError, match="Room not found"):
+        create_block(
+            db,
+            hotel_id=2,
+            room_id=room_1.id,
+            starts_at=date(2026, 7, 6),
+            ends_at=date(2026, 7, 8),
+        )
+    with pytest.raises(RoomBlockError, match="Room block not found"):
+        extend_block(db, hotel_id=2, block_id=block.id, ends_at=date(2026, 7, 6))
+    with pytest.raises(RoomBlockError, match="Room block not found"):
+        resolve_block(db, hotel_id=2, block_id=block.id)
+
+    assert block.ends_at == date(2026, 7, 5)
+    assert block.resolved_at is None
+    assert room_2.hotel_id == 2
+
+
+def test_allocation_candidates_scope_room_blocks_to_overlapping_stays(db):
     _hotel(db, 1)
     category = _category(db, 1)
     blocked_room = _room(db, 1, category.id, "101")
@@ -307,11 +468,40 @@ def test_allocation_candidates_exclude_blocked_rooms(db):
         reason_code=RoomBlockReasonEnum.MAINTENANCE,
     )
 
-    _, room_slots = build_slots_from_db(
+    guest = _guest(db, 1)
+    overlapping_stay = Reservation(
+        hotel_id=1,
+        confirmation_code="RB-OVERLAP",
+        guest_id=guest.id,
+        room_id=None,
+        category_id=category.id,
+        check_in_date=date(2026, 7, 2),
+        check_out_date=date(2026, 7, 4),
+        status=ReservationStatusEnum.PENDING,
+        total_amount=200,
+    )
+    stay_after_block = Reservation(
+        hotel_id=1,
+        confirmation_code="RB-AFTER-BLOCK",
+        guest_id=guest.id,
+        room_id=None,
+        category_id=category.id,
+        check_in_date=date(2026, 7, 5),
+        check_out_date=date(2026, 7, 7),
+        status=ReservationStatusEnum.PENDING,
+        total_amount=200,
+    )
+    db.add_all([overlapping_stay, stay_after_block])
+    db.flush()
+
+    reservation_slots, room_slots = build_slots_from_db(
         db,
-        start_date=date(2026, 7, 2),
-        end_date=date(2026, 7, 4),
+        start_date=date(2026, 7, 1),
+        end_date=date(2026, 7, 8),
         hotel_id=1,
     )
 
-    assert [slot.room_id for slot in room_slots] == [open_room.id]
+    slots_by_reservation = {slot.reservation_id: slot for slot in reservation_slots}
+    assert sorted(slot.room_id for slot in room_slots) == [blocked_room.id, open_room.id]
+    assert slots_by_reservation[overlapping_stay.id].blocked_room_ids == [blocked_room.id]
+    assert slots_by_reservation[stay_after_block.id].blocked_room_ids == []

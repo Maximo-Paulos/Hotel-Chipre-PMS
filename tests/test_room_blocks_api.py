@@ -6,15 +6,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
+import app.models  # noqa: F401
 from app.api import room_blocks
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
-import app.models  # noqa: F401
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.models.room_block import RoomBlock, RoomBlockReasonEnum
 from app.models.user import User
 from app.services.permission_service import resolve
 
@@ -305,6 +305,65 @@ def test_room_block_extension_preview_and_mutation_keep_end_exclusive(client):
     extended = test_client.post(f"/api/room-blocks/{block_id}/extend", json={"ends_at": "2026-07-08"})
     assert extended.status_code == 200, extended.text
     assert extended.json()["ends_at"] == "2026-07-08"
+
+
+def test_room_block_extension_reassigns_only_after_preview_is_accepted(client):
+    test_client, db, app = client
+    room = _seed_room(db, hotel_id=1)
+    reservation = _seed_reservation(db, room, suffix="extension-move")
+    replacement = Room(
+        hotel_id=1,
+        category_id=room.category_id,
+        room_number="102",
+        floor=1,
+        status=RoomStatusEnum.AVAILABLE,
+        is_active=True,
+    )
+    db.add(replacement)
+    db.commit()
+    app.dependency_overrides[get_auth_context] = _override_auth(1, "manager")
+    created = test_client.post(
+        "/api/room-blocks/",
+        json={
+            "room_id": room.id,
+            "starts_at": "2026-07-01",
+            "ends_at": "2026-07-05",
+            "reason_code": "maintenance",
+        },
+    )
+    assert created.status_code == 201, created.text
+    block_id = created.json()["id"]
+
+    blocked_without_plan = test_client.post(
+        f"/api/room-blocks/{block_id}/extend",
+        json={"ends_at": "2026-07-11"},
+    )
+    assert blocked_without_plan.status_code == 409, blocked_without_plan.text
+    db.refresh(reservation)
+    assert reservation.room_id == room.id
+
+    preview = test_client.post(
+        f"/api/room-blocks/{block_id}/allocation-preview",
+        json={"ends_at": "2026-07-11"},
+    )
+    assert preview.status_code == 200, preview.text
+    preview_body = preview.json()
+    assert preview_body["requires_confirmation"] is True
+    assert preview_body["allocation_run"]["assignments"][0]["room_id"] == replacement.id
+    db.refresh(reservation)
+    assert reservation.room_id == room.id
+
+    extended = test_client.post(
+        f"/api/room-blocks/{block_id}/extend",
+        json={
+            "ends_at": "2026-07-11",
+            "allocation_run_id": preview_body["allocation_run"]["run_id"],
+        },
+    )
+    assert extended.status_code == 200, extended.text
+    db.refresh(reservation)
+    assert reservation.room_id == replacement.id
+    assert extended.json()["ends_at"] == "2026-07-11"
 
 
 def test_receptionist_can_create_but_not_release_room_block_by_default(client):

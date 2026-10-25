@@ -7,8 +7,8 @@ runtime changes.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import enum
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
@@ -22,6 +22,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -147,6 +148,26 @@ class AllocationRun(Base):
     __table_args__ = (
         Index("ix_allocation_runs_hotel_id", "hotel_id"),
         Index("ix_allocation_runs_status", "status"),
+        # Coalesce bursts of booking and reservation changes into one durable
+        # hotel-level proposal request. A running pass releases the pending
+        # slot so later changes can request a follow-up against current state.
+        Index(
+            "uq_allocation_runs_pending_reservation_create_hotel",
+            "hotel_id",
+            unique=True,
+            postgresql_where=text(
+                "status = 'pending' AND trigger_type IN "
+                "('reservation_created_auto_proposal', 'new_reservation', "
+                "'reservation_date_change', 'reservation_update', "
+                "'reservation_room_move', 'reservation_group_created')"
+            ),
+            sqlite_where=text(
+                "status = 'pending' AND trigger_type IN "
+                "('reservation_created_auto_proposal', 'new_reservation', "
+                "'reservation_date_change', 'reservation_update', "
+                "'reservation_room_move', 'reservation_group_created')"
+            ),
+        ),
     )
 
 

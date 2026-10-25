@@ -98,6 +98,15 @@ ADDITIVE_RLS_TABLE_CONTRACT = (
         ("company_night_charges", "company_night_charge_payment_allocations"),
     ),
     (
+        "20261023_housekeeping_checklists.py",
+        ("housekeeping_checklists", "housekeeping_checklist_items"),
+    ),
+    (
+        "20261025_laundry_discrepancy_workflow.py",
+        ("laundry_remito_discrepancies", "laundry_discrepancy_actions"),
+    ),
+    ("20261024_atomic_payment_corrections.py", ("payment_corrections",)),
+    (
         "20261017_analytics_fact_refresh_queue.py",
         ("analytics_fact_refresh_jobs",),
     ),
@@ -349,6 +358,11 @@ def test_rls_migration_covers_every_hotel_scoped_model_table():
         "company_night_charge_payment_allocations",
         "analytics_fact_refresh_jobs",
         "hotel_business_clock",
+        "housekeeping_checklists",
+        "housekeeping_checklist_items",
+        "laundry_remito_discrepancies",
+        "laundry_discrepancy_actions",
+        "payment_corrections",
     }
     assert set(migration.TENANT_TABLES) == expected
     assert "hotel_memberships" not in migration.TENANT_TABLES

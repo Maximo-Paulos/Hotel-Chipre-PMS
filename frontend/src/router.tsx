@@ -85,6 +85,9 @@ const LaundryPage = lazy(() => import("./views/protected/LaundryPage").then((m) 
 const OccupancyPlanningPage = lazy(() =>
   import("./views/protected/OccupancyPlanningPage").then((m) => ({ default: m.OccupancyPlanningPage }))
 );
+const AllocationPage = lazy(() =>
+  import("./views/protected/AllocationPage").then((m) => ({ default: m.AllocationPage }))
+);
 const RateCalendarPage = lazy(() =>
   import("./views/protected/RateCalendarPage").then((m) => ({ default: m.RateCalendarPage }))
 );
@@ -280,8 +283,9 @@ const appRoutes = APP_HOST
           { path: "habitaciones", element: <PermissionGate anyPermission={["room:read"]}><RoomsPage /></PermissionGate> },
           { path: "caja", element: <PermissionGate anyPermission={["cash:view"]}><CashRegisterPage /></PermissionGate> },
           { path: "reportes", element: <PermissionGate anyPermission={["reports:operational:view"]}><ReportsPage /></PermissionGate> },
+          { path: "operacion/asignacion", element: <PermissionGate anyPermission={["reservation:move"]}><AllocationPage /></PermissionGate> },
           { path: "operacion/lista-espera", element: <PermissionGate anyPermission={["waitlist:view"]}><WaitlistPage /></PermissionGate> },
-          { path: "operacion/lavanderia", element: <PermissionGate anyPermission={["laundry:read"]}><LaundryPage /></PermissionGate> },
+          { path: "operacion/lavanderia", element: <PermissionGate anyPermission={["laundry:read", "laundry:discrepancy_approve"]}><LaundryPage /></PermissionGate> },
           { path: "operacion/stock", element: <PermissionGate anyPermission={["stock:read"]}><StockPage /></PermissionGate> },
           { path: "operacion/tarifas", element: <PermissionGate anyPermission={["rates:read"]}><RateCalendarPage /></PermissionGate> },
           { path: "operacion/promociones", element: <PermissionGate anyPermission={["promotions:read"]}><PromotionsPage /></PermissionGate> },

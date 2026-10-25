@@ -5,27 +5,36 @@ import {
   clearReservationManualReview,
   cancelReservation,
   checkInReservation,
+  checkInReservationGuest,
   checkOutReservation,
   createManualOtaReservation,
   createReservation,
   extendReservationStay,
   getOccupancyGrid,
   getReservation,
+  getReservationGuestArrivals,
   getReservationQuote,
   getReservationOperationsSummary,
   listReservations,
   listPendingReservationActions,
+  listPendingCancellationReviews,
+  resolveCancellationReview,
   partialCheckInReservation,
   resolveReservationExternal,
   updateReservation,
   updateCompanyExtensionRequest,
   type CheckInPayload,
+  type ReservationGuestArrivalSummary,
+  type ReservationGuestArrivalResult,
   type ManualOtaReservationPayload,
   type OccupancyGridResponse,
   type ReservationActionResolvePayload,
   type ReservationExternalResolutionResponse,
   type ReservationGuestCreatePayload,
   type Reservation,
+  type CancellationReview,
+  type CancellationDecisionPayload,
+  type CancellationReviewResolutionResponse,
   type ReservationQuote,
   type ReservationQuoteParams,
   type ReservationFilters,
@@ -44,6 +53,7 @@ import { ApiError, hasValidSession } from "../api/client";
 import { refreshReservationCreatedState, refreshReservationGuestState, refreshReservationRecordState } from "../api/queryInvalidation";
 import { EVENT_REFRESHED_QUERY_STALE_TIME_MS } from "../api/queryPolicy";
 import { useSession } from "../state/session";
+import { queryKeys } from "../api/queryKeys";
 
 import { useGuardedMutation } from "./useGuardedMutation";
 
@@ -96,6 +106,19 @@ export function useReservation(reservationId?: number) {
     queryFn: ({ signal }) => getReservation(reservationId!, session, signal),
     enabled: Boolean(reservationId) && hasValidSession(session),
     staleTime: 1000 * 15,
+    retry: false
+  });
+}
+
+export function useReservationGuestArrivals(reservationId?: number) {
+  const { session } = useSession();
+  return useQuery<ReservationGuestArrivalSummary>({
+    queryKey: reservationId
+      ? queryKeys.reservationGuestArrivals(session.hotelId, reservationId)
+      : ["reservation-guest-arrivals", "none"],
+    queryFn: ({ signal }) => getReservationGuestArrivals(reservationId!, session, signal),
+    enabled: Boolean(reservationId) && hasValidSession(session),
+    staleTime: 0,
     retry: false
   });
 }
@@ -164,6 +187,37 @@ export function usePendingReservationActions(limit = 100) {
     enabled: hasValidSession(session),
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
     retry: false
+  });
+}
+
+export function usePendingCancellationReviews(enabled: boolean) {
+  const { session } = useSession();
+
+  return useQuery<CancellationReview[]>({
+    queryKey: queryKeys.reservationCancellationReviews(session.hotelId),
+    queryFn: ({ signal }) => listPendingCancellationReviews(session, signal),
+    enabled: enabled && hasValidSession(session),
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
+    retry: false
+  });
+}
+
+export function useCancellationReviewMutation() {
+  const queryClient = useQueryClient();
+  const { session } = useSession();
+
+  return useGuardedMutation<
+    CancellationReviewResolutionResponse,
+    unknown,
+    { reviewId: number; payload: CancellationDecisionPayload }
+  >({
+    mutationFn: ({ reviewId, payload }) => resolveCancellationReview(reviewId, payload, session),
+    onSuccess: async (result) => refreshReservationRecordState(
+      queryClient,
+      session.hotelId,
+      result.reservation.id,
+      { includePaymentSummary: true, includePaymentLinks: true }
+    )
   });
 }
 
@@ -264,6 +318,16 @@ export function useReservationMutations(filters?: ReservationFilters) {
     onSuccess: async (_, params) => invalidateReservationDetail(normalizeCheckInParams(params).id)
   });
 
+  const checkInGuestMutation = useGuardedMutation<
+    ReservationGuestArrivalResult,
+    unknown,
+    { reservationId: number; guestId: number; payload?: CheckInPayload }
+  >({
+    mutationFn: ({ reservationId, guestId, payload }) =>
+      checkInReservationGuest(reservationId, guestId, payload, session),
+    onSuccess: async (_, variables) => invalidateReservationDetail(variables.reservationId)
+  });
+
   // B3.1: partial check-in (PRE_CHECK_IN) -- same guest-capture payload shape
   // as the final check-in, different target status. restriction_override is
   // accepted by the shared CheckInRequest schema but never acted on here --
@@ -297,6 +361,7 @@ export function useReservationMutations(filters?: ReservationFilters) {
     companyAccountExtensionMutation,
     cancelMutation,
     checkInMutation,
+    checkInGuestMutation,
     partialCheckInMutation,
     checkOutMutation,
     addGuestsMutation

@@ -5,17 +5,22 @@ Amounts stay in their source currency. This module never applies FX.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, raiseload
 
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum, reportable_origin
 from app.models.room import RoomCategory
-from app.models.transaction import Transaction, TransactionStatusEnum, TransactionTypeEnum
+from app.models.transaction import (
+    Transaction,
+    TransactionStatusEnum,
+    TransactionTypeEnum,
+)
+from app.services.analytics_contracts import split_amount_evenly
 from app.services.operational_report_service import (
     billing_adjustment_totals_by_reservation,
     company_night_extra_balances_by_reservation,
@@ -23,23 +28,17 @@ from app.services.operational_report_service import (
     paid_amounts_by_reservation,
 )
 from app.services.reservation_service import deferred_company_reservation_ids
-from app.services.timezones import hotel_today, normalize_timezone
-from app.services.analytics_contracts import split_amount_evenly
-
+from app.services.timezones import (
+    hotel_local_date_bounds,
+    hotel_today,
+    normalize_timezone,
+)
 
 ZERO = Decimal("0.00")
 
 
 def _money(value: object) -> Decimal:
     return Decimal(str(value or 0)).quantize(Decimal("0.01"))
-
-
-def _hotel_bounds(start_date: date, end_date: date, timezone_name: str) -> tuple[datetime, datetime]:
-    zone = ZoneInfo(normalize_timezone(timezone_name))
-    start = datetime.combine(start_date, time.min, tzinfo=zone).astimezone(timezone.utc)
-    end = datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=zone).astimezone(timezone.utc)
-    # Transaction DateTime columns are timezone-naive but store UTC.
-    return start.replace(tzinfo=None), end.replace(tzinfo=None)
 
 
 def _local_day(value: datetime | None, timezone_name: str) -> date | None:
@@ -191,7 +190,7 @@ def build_financial_report(
 
     hotel = db.get(HotelConfiguration, hotel_id)
     timezone_name = normalize_timezone((hotel.hotel_timezone if hotel else None) or "UTC")
-    utc_start, utc_end = _hotel_bounds(start_date, end_date, timezone_name)
+    utc_start, utc_end = hotel_local_date_bounds(start_date, end_date, timezone_name)
     current_date = hotel_today(db, hotel_id)
 
     transaction_date_filter = or_(
@@ -226,6 +225,7 @@ def build_financial_report(
     reservation_ids = {int(item.reservation_id) for item in transactions}
     report_reservations = (
         db.query(Reservation)
+        .options(raiseload("*"))
         .filter(Reservation.hotel_id == hotel_id, Reservation.id.in_(reservation_ids))
         .all()
         if reservation_ids
@@ -234,7 +234,7 @@ def build_financial_report(
     reservations_by_id = {item.id: item for item in report_reservations}
     category_ids = {item.category_id for item in report_reservations if item.category_id is not None}
     categories = (
-        db.query(RoomCategory)
+        db.query(RoomCategory.id, RoomCategory.name)
         .filter(RoomCategory.hotel_id == hotel_id, RoomCategory.id.in_(category_ids))
         .all()
         if category_ids
@@ -311,6 +311,7 @@ def build_financial_report(
     # as a separate reservation measure and group it by the reservation currency.
     booked_reservations = (
         db.query(Reservation)
+        .options(raiseload("*"))
         .filter(
             Reservation.hotel_id == hotel_id,
             Reservation.deleted_at.is_(None),
@@ -395,6 +396,7 @@ def build_financial_report(
     # The report deliberately does not convert amounts between currencies.
     external_rows = (
         db.query(Reservation)
+        .options(raiseload("*"))
         .filter(
             Reservation.hotel_id == hotel_id,
             Reservation.deleted_at.is_(None),
@@ -410,7 +412,7 @@ def build_financial_report(
     }
     if external_category_ids:
         external_categories = (
-            db.query(RoomCategory)
+            db.query(RoomCategory.id, RoomCategory.name)
             .filter(
                 RoomCategory.hotel_id == hotel_id,
                 RoomCategory.id.in_(external_category_ids),
@@ -441,6 +443,7 @@ def build_financial_report(
     # reconstructed from today's transaction state for the selected period.
     receivable_reservations = (
         db.query(Reservation)
+        .options(raiseload("*"))
         .filter(
             Reservation.hotel_id == hotel_id,
             Reservation.deleted_at.is_(None),

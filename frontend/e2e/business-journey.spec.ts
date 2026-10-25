@@ -171,6 +171,9 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   await expect(editForm.getByText("Resumen financiero y acciones rápidas.", { exact: true })).toBeVisible();
   const partialAmount = editForm.getByLabel(/^(Monto a cobrar|Monto del movimiento)$/);
   await expect(partialAmount).toBeVisible();
+  await expect(editForm.getByTestId("payment-partial-hint")).toContainText(
+    "Cualquier importe positivo cuyo equivalente sea menor que el saldo se acepta como cobro parcial"
+  );
   await partialAmount.fill("70000");
   await editForm.getByRole("button", { name: "Cobro parcial", exact: true }).click();
   await expect(page.getByText("Ingresá un importe positivo que no supere el saldo pendiente.", { exact: true })).toBeVisible();

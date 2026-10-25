@@ -126,6 +126,56 @@ export type LaundryMissingFollowUpUpdate = Partial<
   >
 >;
 
+export type LaundryDiscrepancyType = "excess_return" | "short_return";
+export type LaundryDiscrepancyStatus =
+  | "pending_approval"
+  | "pending_identification"
+  | "pending_review"
+  | "pending_resolution"
+  | "pending_claim"
+  | "awaiting_replacement"
+  | "resolved"
+  | "return_to_laundry"
+  | "returned_to_laundry";
+
+export type LaundryDiscrepancy = {
+  id: number;
+  hotel_id: number;
+  remito_id: number;
+  remito_line_id: number;
+  vendor_id: number;
+  linen_item_id: number;
+  discrepancy_type: LaundryDiscrepancyType;
+  quantity: DecimalValue;
+  remaining_quantity: DecimalValue;
+  source_location_id: number;
+  custody_location_id?: number | null;
+  status: LaundryDiscrepancyStatus;
+  created_by_user_id?: number | null;
+  created_at: string;
+  reviewed_by_user_id?: number | null;
+  reviewed_at?: string | null;
+  review_reason?: string | null;
+  resolution_code?: string | null;
+  resolution_reason?: string | null;
+  resolution_amount?: DecimalValue | null;
+  resolution_currency_code?: string | null;
+  resolution_recorded_by_user_id?: number | null;
+  resolution_recorded_at?: string | null;
+  resolved_by_user_id?: number | null;
+  resolved_at?: string | null;
+  returned_by_user_id?: number | null;
+  returned_at?: string | null;
+  return_reason?: string | null;
+};
+
+export type LaundryDiscrepancyAction = { reason: string };
+export type LaundryDiscrepancyResolution = LaundryDiscrepancyAction & {
+  resolution_code: string;
+  resolution_amount?: DecimalValue | null;
+  resolution_currency_code?: string | null;
+};
+
 export type LaundryVendorBalanceLine = {
   linen_item_id: number;
   linen_item_name: string;
@@ -185,6 +235,48 @@ export const updateLaundryMissingFollowUp = (
     data: payload,
     session
   });
+
+export const listLaundryDiscrepancies = (session?: SessionLike) =>
+  apiFetch<LaundryDiscrepancy[]>("/api/laundry/discrepancies", { session });
+
+export const approveLaundryDiscrepancy = (
+  discrepancyId: number,
+  payload: LaundryDiscrepancyAction,
+  idempotencyKey: string,
+  session?: SessionLike
+) => apiFetch<LaundryDiscrepancy>(`/api/laundry/discrepancies/${discrepancyId}/approve`, {
+  method: "POST",
+  data: payload,
+  headers: { "Idempotency-Key": idempotencyKey },
+  session
+});
+
+export const resolveLaundryDiscrepancy = (
+  discrepancyId: number,
+  payload: LaundryDiscrepancyResolution,
+  idempotencyKey: string,
+  session?: SessionLike
+) => apiFetch<LaundryDiscrepancy>(`/api/laundry/discrepancies/${discrepancyId}/resolve`, {
+  method: "POST",
+  data: payload,
+  headers: { "Idempotency-Key": idempotencyKey },
+  session
+});
+
+export const confirmLaundryDiscrepancyReturn = (
+  discrepancyId: number,
+  payload: LaundryDiscrepancyAction,
+  idempotencyKey: string,
+  session?: SessionLike
+) => apiFetch<LaundryDiscrepancy>(
+  `/api/laundry/discrepancies/${discrepancyId}/return-to-laundry`,
+  {
+    method: "POST",
+    data: payload,
+    headers: { "Idempotency-Key": idempotencyKey },
+    session
+  }
+);
 
 export const listLaundryRemitos = (
   filters: { vendorId?: number; dateFrom?: string; dateTo?: string } = {},

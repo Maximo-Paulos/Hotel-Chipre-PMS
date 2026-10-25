@@ -100,6 +100,9 @@ class LinenMovement(Base):
     reason = Column(Text, nullable=True)
     reservation_id = Column(Integer, nullable=True)
     transfer_reference = Column(String(36), nullable=True)
+    # One-shot audited stock actions (currently linen retirement) carry their
+    # own hotel-scoped retry token. Transfers keep using transfer_reference.
+    idempotency_key = Column(String(128), nullable=True)
     created_by_user_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL", name="fk_linen_movements_created_by_user_id"), nullable=True
     )
@@ -110,7 +113,7 @@ class LinenMovement(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "movement_type IN ('in', 'out', 'adjustment', 'adjustment_out')",
+            "movement_type IN ('in', 'out', 'adjustment', 'adjustment_out', 'retirement')",
             name="ck_linen_movements_type_valid",
         ),
         CheckConstraint("quantity > 0", name="ck_linen_movements_quantity_positive"),
@@ -139,6 +142,14 @@ class LinenMovement(Base):
             unique=True,
             sqlite_where=text("transfer_reference IS NOT NULL"),
             postgresql_where=text("transfer_reference IS NOT NULL"),
+        ),
+        Index(
+            "uq_linen_movement_hotel_idempotency_key",
+            "hotel_id",
+            "idempotency_key",
+            unique=True,
+            sqlite_where=text("idempotency_key IS NOT NULL"),
+            postgresql_where=text("idempotency_key IS NOT NULL"),
         ),
     )
 

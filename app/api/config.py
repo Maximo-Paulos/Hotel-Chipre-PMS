@@ -7,26 +7,36 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_permission
+from app.dependencies.auth import (
+    AuthContext,
+    authorize_permission,
+    get_auth_context,
+    require_permission,
+)
 from app.models.audit_log import AuditActionEnum
 from app.models.hotel_config import HotelConfiguration
 from app.schemas.business_clock import BusinessClockRead
-from app.schemas.hotel_config import HotelConfigRead, HotelConfigUpdate, HotelInterfaceLanguageRead
-from app.services.email_service import mailer
-from app.services.payment_service import get_hotel_config
-from app.services.permission_service import (
-    PERMISSION_CONFIG_MANAGE,
-    PERMISSION_HOTEL_SETTINGS_READ,
-    PERMISSION_SETTINGS_FX_MANAGE,
+from app.schemas.hotel_config import (
+    HotelConfigRead,
+    HotelConfigUpdate,
+    HotelInterfaceLanguageRead,
 )
-from app.services.hotel_configuration_service import apply_configuration_update
+from app.services import audit_log_service
 from app.services.business_clock_service import (
     BusinessClockDisabledError,
     advance_business_clock,
     get_business_clock,
 )
-from app.services import audit_log_service
-from app.services.permission_service import PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE
+from app.services.email_service import mailer
+from app.services.hotel_configuration_service import apply_configuration_update
+from app.services.payment_service import get_hotel_config
+from app.services.permission_service import (
+    PERMISSION_CONFIG_MANAGE,
+    PERMISSION_COMPANY_MANAGE,
+    PERMISSION_HOTEL_SETTINGS_READ,
+    PERMISSION_RESERVATION_MANUAL_RATE_POLICY_MANAGE,
+    PERMISSION_SETTINGS_FX_MANAGE,
+)
 
 router = APIRouter(prefix="/api/config", tags=["Hotel Configuration"])
 
@@ -115,9 +125,11 @@ def update_configuration(
         "fx_ars_to_usd_rate_type",
         "fx_usd_to_ars_rate_side",
         "fx_ars_to_usd_rate_side",
+        "fx_rounding_policy",
     )
     fx_before = {field: getattr(config, field) for field in fx_fields}
     fiscal_before = {field: getattr(config, field) for field in fiscal_fields}
+    stock_count_self_approval_before = config.allow_stock_count_self_approval
     changed_fx_fields = {
         field: update_data[field]
         for field in fx_fields
@@ -128,6 +140,21 @@ def update_configuration(
         for field in fiscal_fields
         if field in update_data and update_data[field] != getattr(config, field)
     }
+    changed_stock_count_self_approval = (
+        "allow_stock_count_self_approval" in update_data
+        and update_data["allow_stock_count_self_approval"] != stock_count_self_approval_before
+    )
+    company_terms_checkin_block_before = config.block_checkin_on_company_terms_change
+    changed_company_terms_checkin_block = (
+        "block_checkin_on_company_terms_change" in update_data
+        and update_data["block_checkin_on_company_terms_change"]
+        != company_terms_checkin_block_before
+    )
+    if changed_company_terms_checkin_block:
+        # This global safety gate requires the same Manager+ authority as
+        # individual company-term reviews, even if a hotel grants general
+        # configuration editing to a lower operational role.
+        authorize_permission(request, db, context, PERMISSION_COMPANY_MANAGE)
     if changed_manual_rate_fields:
         # A combined pricing-policy save already requires the stronger owner-only
         # manual-rate permission and its action-bound step-up ticket. For an FX-only
@@ -207,6 +234,32 @@ def update_configuration(
         # Fail closed for this new fiscal-profile write: both the profile and
         # its audit record must be flushed before the caller commits.
         db.flush()
+    if changed_stock_count_self_approval:
+        audit_log_service.create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="hotel_configuration",
+            record_id=config.id,
+            action=AuditActionEnum.UPDATE,
+            actor_user_id=context.user_id,
+            payload_before={"allow_stock_count_self_approval": stock_count_self_approval_before},
+            payload_after={"allow_stock_count_self_approval": config.allow_stock_count_self_approval},
+        )
+    if changed_company_terms_checkin_block:
+        audit_log_service.create_audit_log(
+            db,
+            hotel_id=context.hotel_id,
+            table_name="hotel_configuration",
+            record_id=config.id,
+            action=AuditActionEnum.UPDATE,
+            actor_user_id=context.user_id,
+            payload_before={
+                "block_checkin_on_company_terms_change": company_terms_checkin_block_before
+            },
+            payload_after={
+                "block_checkin_on_company_terms_change": config.block_checkin_on_company_terms_change
+            },
+        )
     db.commit()
     db.refresh(config)
     return config

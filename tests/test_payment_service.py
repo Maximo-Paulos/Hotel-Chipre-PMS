@@ -7,6 +7,8 @@ Tests the complete payment lifecycle including:
 - State transitions triggered by payments
 - Edge cases (overpayment, disabled methods)
 """
+from copy import deepcopy
+
 import pytest
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -464,6 +466,122 @@ class TestPaymentEdgeCases:
         with pytest.raises(PaymentError, match="supera el saldo pendiente"):
             process_payment(db, payment, hotel_id=DEFAULT_HOTEL_ID)
 
+    def test_cash_over_tender_records_change_without_increasing_reservation_payment(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        data = ReservationCreate(
+            guest_id=sample_guest.id,
+            category_id=sample_categories[0].id,
+            check_in_date=date(2026, 7, 1),
+            check_out_date=date(2026, 7, 3),
+        )
+        reservation = create_reservation(db, data, hotel_id=hotel_config.id)
+        _assign_hotel(reservation, DEFAULT_HOTEL_ID, db)
+        due = Decimal(str(reservation.total_amount)).quantize(Decimal("0.01"))
+        payment = PaymentRequest(
+            reservation_id=reservation.id,
+            amount=float(due),
+            cash_received_amount=due + Decimal("50.00"),
+            cash_tip_amount=Decimal("20.00"),
+            payment_method=PaymentMethodEnum.CASH,
+            transaction_type=TransactionTypeEnum.FULL_PAYMENT,
+        )
+
+        transaction = process_payment(
+            db,
+            payment,
+            hotel_id=DEFAULT_HOTEL_ID,
+            idempotency_key="cash-change-individual-001",
+        )
+        replay = process_payment(
+            db,
+            payment,
+            hotel_id=DEFAULT_HOTEL_ID,
+            idempotency_key="cash-change-individual-001",
+        )
+        mismatched_tender = payment.model_copy(
+            update={"cash_received_amount": due + Decimal("60.00")}
+        )
+        mismatched_tip = payment.model_copy(update={"cash_tip_amount": Decimal("21.00")})
+
+        with pytest.raises(PaymentError, match="solicitud de pago diferente"):
+            process_payment(
+                db,
+                mismatched_tender,
+                hotel_id=DEFAULT_HOTEL_ID,
+                idempotency_key="cash-change-individual-001",
+            )
+
+        with pytest.raises(PaymentError, match="solicitud de pago diferente"):
+            process_payment(
+                db,
+                mismatched_tip,
+                hotel_id=DEFAULT_HOTEL_ID,
+                idempotency_key="cash-change-individual-001",
+            )
+
+        movement = db.query(CashMovement).filter_by(transaction_id=transaction.id).one()
+        receipt = payment_service_module.get_payment_receipt_data(
+            db,
+            hotel_id=DEFAULT_HOTEL_ID,
+            transaction_id=transaction.id,
+        )
+        assert transaction.amount == due
+        assert transaction.gross_amount == due
+        assert transaction.cash_received_amount == due + Decimal("50.00")
+        assert transaction.cash_tip_amount == Decimal("20.00")
+        assert transaction.cash_change_amount == Decimal("30.00")
+        assert reservation.amount_paid == float(due)
+        assert movement.amount == due + Decimal("20.00")
+        assert replay.id == transaction.id
+        assert receipt["cash_received_amount"] == due + Decimal("50.00")
+        assert receipt["cash_tip_amount"] == Decimal("20.00")
+        assert receipt["cash_change_amount"] == Decimal("30.00")
+
+        from app.services.cash_daily_summary_service import get_daily_summary
+        from app.services.cash_register_service import get_session_summary
+        from app.services.timezones import hotel_today
+
+        daily = get_daily_summary(
+            db,
+            hotel_id=hotel_config.id,
+            report_date=hotel_today(db, hotel_config.id),
+            currency_code="ARS",
+        )
+        session_summary = get_session_summary(
+            db,
+            hotel_id=hotel_config.id,
+            session_id=movement.session_id,
+        )
+        assert daily["gross_collected"] == due
+        assert daily["cash_tips_total"] == Decimal("20.00")
+        assert daily["physical_cash_net_collected"] == due + Decimal("20.00")
+        assert daily["physical_cash"]["income_total"] == due + Decimal("20.00")
+        assert session_summary["cash_tips_total"] == Decimal("20.00")
+        assert session_summary["income_total"] == due + Decimal("20.00")
+        assert session_summary["by_collector"][0]["cash_tips_total"] == Decimal("20.00")
+
+    def test_cash_tender_breakdown_returns_overage_unless_guest_explicitly_leaves_tip(self):
+        breakdown = payment_service_module._cash_tender_breakdown
+        invoice = Decimal("84650.00")
+        tendered = Decimal("86000.00")
+
+        assert breakdown(gross_amount=invoice, cash_received_amount=tendered) == (
+            Decimal("0.00"),
+            Decimal("1350.00"),
+        )
+        assert breakdown(
+            gross_amount=invoice,
+            cash_received_amount=tendered,
+            requested_tip_amount=Decimal("1350.00"),
+        ) == (Decimal("1350.00"), Decimal("0.00"))
+        with pytest.raises(PaymentError, match="no puede superar el excedente"):
+            breakdown(
+                gross_amount=invoice,
+                cash_received_amount=tendered,
+                requested_tip_amount=Decimal("1350.01"),
+            )
+
     def test_payment_on_cancelled_reservation(self, db, sample_guest, sample_rooms, sample_categories, hotel_config):
         """Cannot pay for a cancelled reservation."""
         data = ReservationCreate(
@@ -694,6 +812,39 @@ class TestPaymentEdgeCases:
         assert summary["recommended_next_action"] == "collect_from_guest"
         assert len(summary["billing_adjustments"]) == 1
 
+    def test_small_positive_payment_below_balance_is_valid_partial_and_leaves_remainder_due(
+        self, db, sample_guest, sample_rooms, sample_categories, hotel_config
+    ):
+        reservation = create_reservation(
+            db,
+            ReservationCreate(
+                guest_id=sample_guest.id,
+                category_id=sample_categories[0].id,
+                check_in_date=date(2026, 8, 24),
+                check_out_date=date(2026, 8, 26),
+            ),
+            hotel_id=hotel_config.id,
+        )
+
+        transaction = process_payment(
+            db,
+            PaymentRequest(
+                reservation_id=reservation.id,
+                amount=0.01,
+                payment_method=PaymentMethodEnum.CASH,
+                transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
+            ),
+            hotel_id=hotel_config.id,
+        )
+        db.flush()
+
+        summary = get_reservation_financial_summary(db, hotel_config.id, reservation.id)
+        assert transaction.transaction_type == TransactionTypeEnum.PARTIAL_PAYMENT
+        assert Decimal(str(transaction.amount)) == Decimal("0.01")
+        assert summary["operational_balance_due"] == (
+            Decimal(str(reservation.total_amount)) - Decimal("0.01")
+        )
+
     def test_payment_does_not_override_reservation_total_from_legacy_category_pricing(
         self,
         db,
@@ -813,9 +964,9 @@ class TestPaymentEdgeCases:
             tender_currency=tender_currency,
         )
 
-        expected_credit = (tender_amount * Decimal(str(direct_rate))).quantize(Decimal("0.01"))
         assert quote_calls == [(tender_currency, reservation_currency)]
         assert applied_rate == pytest.approx(1 / direct_rate)
+        expected_credit = (tender_amount * Decimal(str(direct_rate))).quantize(Decimal("0.01"))
         assert applied_amount == expected_credit
         assert details == quote_details
 
@@ -862,6 +1013,7 @@ class TestPaymentEdgeCases:
         payment_request = PaymentRequest(
             reservation_id=reservation.id,
             amount=0.10,
+            cash_received_amount=Decimal("0.15"),
             payment_method=PaymentMethodEnum.CASH,
             transaction_type=TransactionTypeEnum.PARTIAL_PAYMENT,
             currency="USD",
@@ -885,6 +1037,8 @@ class TestPaymentEdgeCases:
         assert transaction.amount == 148.50
         assert transaction.tender_currency == "USD"
         assert transaction.tender_amount == Decimal("0.10")
+        assert transaction.cash_received_amount == Decimal("0.15")
+        assert transaction.cash_change_amount == Decimal("0.05")
         assert replay.id == transaction.id
         assert transaction.fx_rate_snapshot == pytest.approx(1 / 1485.0)
         assert transaction.fx_quote_details["from_currency"] == "USD"
@@ -893,10 +1047,21 @@ class TestPaymentEdgeCases:
         assert transaction.fx_quote_details["source_quote"]["ars_per_unit"] == 1485.0
         assert transaction.fx_quote_details["configured_ars_to_usd_rate_side"] == "venta"
         assert reservation.amount_paid == 148.50
+        cash_movement = db.query(CashMovement).filter_by(transaction_id=transaction.id).one()
+        assert cash_movement.amount == Decimal("0.10")
         assert Decimal(str(summary["transactions"][0]["amount"])) == Decimal("0.10")
         assert summary["transactions"][0]["currency"] == "USD"
         assert summary["transactions"][0]["applied_amount"] == 148.50
         assert summary["transactions"][0]["applied_currency"] == "ARS"
+
+        persisted_quote_details = deepcopy(transaction.fx_quote_details)
+        persisted_rate = transaction.fx_rate_snapshot
+        hotel_config.fx_usd_to_ars_rate_type = "blue"
+        hotel_config.fx_usd_to_ars_rate_side = "venta"
+        db.flush()
+        db.expire(transaction, ["fx_quote_details", "fx_rate_snapshot"])
+        assert transaction.fx_quote_details == persisted_quote_details
+        assert transaction.fx_rate_snapshot == persisted_rate
 
     def test_foreign_currency_refund_uses_original_rate_and_limits_tender_units(
         self, db, sample_guest, sample_rooms, sample_categories, hotel_config, monkeypatch

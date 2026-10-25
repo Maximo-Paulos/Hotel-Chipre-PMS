@@ -4,8 +4,21 @@ No global/singleton: one row per hotel (id == hotel_id).
 Admin Panel controls: deposit %, enabled gateways, cancellation policy, etc.
 """
 import json
-from sqlalchemy import CheckConstraint, Column, Integer, Float, Boolean, String, Text, DateTime, JSON, Numeric, text
 from datetime import datetime, timezone
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    text,
+)
 
 from app.database import Base
 
@@ -17,6 +30,10 @@ class HotelConfiguration(Base):
         CheckConstraint(
             "checkin_payment_policy IN ('deposit', 'total', 'free')",
             name="ck_hotel_configuration_checkin_payment_policy",
+        ),
+        CheckConstraint(
+            "checkin_reservation_status_policy IN ('partial_checkin', 'checked_in_on_first_guest')",
+            name="ck_hotel_configuration_checkin_reservation_status_policy",
         ),
         CheckConstraint(
             "(manual_rate_min_adjustment_pct IS NULL AND manual_rate_max_adjustment_pct IS NULL) "
@@ -41,6 +58,10 @@ class HotelConfiguration(Base):
             "fx_ars_to_usd_rate_type IN ('oficial', 'blue')",
             name="ck_hotel_configuration_fx_ars_to_usd_rate_type",
         ),
+        CheckConstraint(
+            "fx_rounding_policy IN ('round_up', 'round_down', 'nearest_ten', 'exact', 'keep_remainder')",
+            name="ck_hotel_configuration_fx_rounding_policy",
+        ),
     )
 
     # hotel_id is the primary key; no auto-assigned default to avoid implicit singletons
@@ -61,6 +82,18 @@ class HotelConfiguration(Base):
     # evaluated from their company profile in checkin_service.
     checkin_payment_policy = Column(
         String(16), nullable=False, default="total", server_default=text("'total'")
+    )
+    checkin_reservation_status_policy = Column(
+        String(32),
+        nullable=False,
+        default="partial_checkin",
+        server_default=text("'partial_checkin'"),
+    )
+    block_checkin_on_company_terms_change = Column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    allow_stock_count_self_approval = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
     )
     enable_full_payment = Column(Boolean, nullable=False, default=True)
     enable_deposit_payment = Column(Boolean, nullable=False, default=True)
@@ -130,6 +163,10 @@ class HotelConfiguration(Base):
     )
     fx_ars_to_usd_rate_side = Column(
         String(10), nullable=False, default="venta", server_default=text("'venta'")
+    )
+    # Policy selected by the hotel for converting foreign tender amounts.
+    fx_rounding_policy = Column(
+        String(24), nullable=False, default="keep_remainder", server_default=text("'keep_remainder'")
     )
     # Quotes exposed for operator comparison. Selection never rewrites a
     # reservation's stored price or FX snapshot.

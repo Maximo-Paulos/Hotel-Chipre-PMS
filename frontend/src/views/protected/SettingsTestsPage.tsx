@@ -5,7 +5,6 @@ import {
   cancelPaymentLinkTest,
   createMercadoPagoPaymentLinkTest,
   listPaymentLinkTests,
-  refreshPaymentLinkTest,
   type PaymentLinkTest,
 } from "../../api/paymentLinkTests";
 import { ApiError } from "../../api/client";
@@ -93,24 +92,6 @@ export function SettingsTestsPage() {
     },
   });
 
-  const refreshMutation = useGuardedMutation({
-    mutationFn: (testId: number) => refreshPaymentLinkTest(testId, session),
-    onSuccess: async (test) => {
-      await refreshSettingsState(queryClient, session.hotelId);
-      setError(null);
-      setToast(
-        test.status === "approved"
-          ? "Pago confirmado por Mercado Pago."
-          : "Estado actualizado. Si la persona ya pago, el sistema lo seguirá verificando automáticamente.",
-      );
-    },
-    onError: (err) => {
-      const message = err instanceof ApiError ? err.message : "No se pudo refrescar el estado.";
-      setError(message);
-      setToast(null);
-    },
-  });
-
   const cancelMutation = useGuardedMutation({
     mutationFn: (testId: number) => cancelPaymentLinkTest(testId, session),
     onSuccess: async () => {
@@ -130,14 +111,6 @@ export function SettingsTestsPage() {
   const handleCreate = async () => {
     try {
       await createMutation.mutateAsync();
-    } catch {
-      // The mutation state renders the safe backend error below.
-    }
-  };
-
-  const handleRefresh = async (testId: number) => {
-    try {
-      await refreshMutation.mutateAsync(testId);
     } catch {
       // The mutation state renders the safe backend error below.
     }
@@ -317,10 +290,10 @@ export function SettingsTestsPage() {
                   <button
                     type="button"
                     className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-800 disabled:opacity-60"
-                    onClick={() => void handleRefresh(test.id)}
-                    disabled={refreshMutation.isPending}
+                    onClick={() => void testsQuery.refetch()}
+                    disabled={testsQuery.isFetching}
                   >
-                    Refrescar
+                    Actualizar
                   </button>
                   <div
                     className={`flex items-center justify-center rounded-lg px-3 py-3 text-sm font-semibold ${

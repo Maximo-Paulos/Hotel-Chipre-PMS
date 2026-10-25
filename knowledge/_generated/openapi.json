@@ -2117,6 +2117,155 @@
         }
       }
     },
+    "/api/housekeeping/checklists": {
+      "get": {
+        "tags": [
+          "housekeeping"
+        ],
+        "summary": "Get Housekeeping Checklists",
+        "description": "List open checklists for the caller's hotel without guest data.",
+        "operationId": "get_housekeeping_checklists_api_housekeeping_checklists_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HousekeepingChecklistListRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/housekeeping/checklists/{checklist_id}/items/{item_code}/complete": {
+      "post": {
+        "tags": [
+          "housekeeping"
+        ],
+        "summary": "Complete Housekeeping Checklist Item",
+        "description": "Complete one fixed item; all PostgreSQL state changes commit together.",
+        "operationId": "complete_housekeeping_checklist_item_api_housekeeping_checklists__checklist_id__items__item_code__complete_post",
+        "parameters": [
+          {
+            "name": "checklist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Checklist Id"
+            }
+          },
+          {
+            "name": "item_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HousekeepingChecklistItemCodeEnum"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HousekeepingChecklistRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/guests/": {
       "post": {
         "tags": [
@@ -5370,6 +5519,20 @@
             }
           },
           {
+            "name": "payment_action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "individual",
+                "company_account"
+              ],
+              "type": "string",
+              "default": "individual",
+              "title": "Payment Action"
+            }
+          },
+          {
             "name": "x-hotel-id",
             "in": "header",
             "required": false,
@@ -7728,6 +7891,102 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TransactionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payments/transactions/{transaction_id}/correction": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Correct Payment Transaction",
+        "description": "Reverse a mistaken ledger entry and optionally reassign its payment.",
+        "operationId": "correct_payment_transaction_api_payments_transactions__transaction_id__correction_post",
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Transaction Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 100,
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentCorrectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentCorrectionRead"
                 }
               }
             }
@@ -34029,6 +34288,46 @@
         "operationId": "list_cash_sessions_cash_register_sessions_get",
         "parameters": [
           {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10000,
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 100,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CashSessionStatusEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
             "name": "x-hotel-id",
             "in": "header",
             "required": false,
@@ -34170,6 +34469,46 @@
         "summary": "List Cash Sessions",
         "operationId": "list_cash_sessions_api_cash_register_sessions_get",
         "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10000,
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 100,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CashSessionStatusEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
           {
             "name": "x-hotel-id",
             "in": "header",
@@ -45232,6 +45571,33 @@
             "type": "string",
             "title": "Signed Amount"
           },
+          "cash_received_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Received Amount"
+          },
+          "cash_change_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Amount"
+          },
+          "cash_tip_amount": {
+            "type": "string",
+            "title": "Cash Tip Amount",
+            "default": "0.00"
+          },
           "currency_code": {
             "type": "string",
             "title": "Currency Code"
@@ -45444,6 +45810,33 @@
           "amount": {
             "type": "string",
             "title": "Amount"
+          },
+          "cash_received_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Received Amount"
+          },
+          "cash_change_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Amount"
+          },
+          "cash_tip_amount": {
+            "type": "string",
+            "title": "Cash Tip Amount",
+            "default": "0.00"
           },
           "currency_code": {
             "type": "string",
@@ -45694,6 +46087,16 @@
           "digital_net_collected": {
             "type": "string",
             "title": "Digital Net Collected"
+          },
+          "cash_tips_total": {
+            "type": "string",
+            "title": "Cash Tips Total",
+            "default": "0.00"
+          },
+          "prior_receipt_cash_tips_total": {
+            "type": "string",
+            "title": "Prior Receipt Cash Tips Total",
+            "default": "0.00"
           },
           "by_payment_method": {
             "items": {
@@ -46226,6 +46629,11 @@
             ],
             "title": "Group Payment Reservation Count"
           },
+          "cash_tip_amount": {
+            "type": "string",
+            "title": "Cash Tip Amount",
+            "default": "0.00"
+          },
           "movement_type": {
             "$ref": "#/components/schemas/CashMovementTypeEnum"
           },
@@ -46243,6 +46651,29 @@
               }
             ],
             "title": "Description"
+          },
+          "voided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided At"
+          },
+          "voided_by_payment_correction_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided By Payment Correction Id"
           },
           "recorded_at": {
             "type": "string",
@@ -46353,6 +46784,11 @@
           "net_total": {
             "type": "string",
             "title": "Net Total"
+          },
+          "cash_tips_total": {
+            "type": "string",
+            "title": "Cash Tips Total",
+            "default": "0.00"
           },
           "movement_count": {
             "type": "integer",
@@ -46615,6 +47051,11 @@
           "confirmed_cash_total": {
             "type": "string",
             "title": "Confirmed Cash Total"
+          },
+          "cash_tips_total": {
+            "type": "string",
+            "title": "Cash Tips Total",
+            "default": "0.00"
           },
           "expected_balance": {
             "type": "string",
@@ -52365,6 +52806,18 @@
             "title": "Fx Ars To Usd Rate Side",
             "default": "venta"
           },
+          "fx_rounding_policy": {
+            "type": "string",
+            "enum": [
+              "round_up",
+              "round_down",
+              "nearest_ten",
+              "exact",
+              "keep_remainder"
+            ],
+            "title": "Fx Rounding Policy",
+            "default": "keep_remainder"
+          },
           "fx_display_rate_types": {
             "items": {
               "type": "string",
@@ -52932,6 +53385,24 @@
             ],
             "title": "Fx Ars To Usd Rate Side"
           },
+          "fx_rounding_policy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "round_up",
+                  "round_down",
+                  "nearest_ten",
+                  "exact",
+                  "keep_remainder"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rounding Policy"
+          },
           "fx_display_rate_types": {
             "anyOf": [
               {
@@ -53182,6 +53653,156 @@
           "maintenance_blocked"
         ],
         "title": "HousekeepingBoardRoomRead"
+      },
+      "HousekeepingChecklistItemCodeEnum": {
+        "type": "string",
+        "enum": [
+          "change_sheets",
+          "clean_bathroom",
+          "replenish_towels",
+          "empty_waste",
+          "check_amenities"
+        ],
+        "title": "HousekeepingChecklistItemCodeEnum",
+        "description": "Stable item codes consumed by the housekeeping API and frontend."
+      },
+      "HousekeepingChecklistItemRead": {
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/HousekeepingChecklistItemCodeEnum"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "completed": {
+            "type": "boolean",
+            "title": "Completed"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label",
+          "completed",
+          "completed_at"
+        ],
+        "title": "HousekeepingChecklistItemRead"
+      },
+      "HousekeepingChecklistListRead": {
+        "properties": {
+          "checklists": {
+            "items": {
+              "$ref": "#/components/schemas/HousekeepingChecklistRead"
+            },
+            "type": "array",
+            "title": "Checklists"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checklists"
+        ],
+        "title": "HousekeepingChecklistListRead"
+      },
+      "HousekeepingChecklistRead": {
+        "properties": {
+          "checklist_id": {
+            "type": "integer",
+            "title": "Checklist Id"
+          },
+          "room": {
+            "$ref": "#/components/schemas/HousekeepingChecklistRoomRead"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HousekeepingChecklistStatusEnum"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HousekeepingChecklistItemRead"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checklist_id",
+          "room",
+          "status",
+          "version",
+          "created_at",
+          "completed_at",
+          "items"
+        ],
+        "title": "HousekeepingChecklistRead"
+      },
+      "HousekeepingChecklistRoomRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "operational_status": {
+            "$ref": "#/components/schemas/RoomStatusEnum"
+          },
+          "housekeeping_status": {
+            "$ref": "#/components/schemas/RoomHousekeepingStatusEnum"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "operational_status",
+          "housekeeping_status"
+        ],
+        "title": "HousekeepingChecklistRoomRead"
+      },
+      "HousekeepingChecklistStatusEnum": {
+        "type": "string",
+        "enum": [
+          "open",
+          "completed"
+        ],
+        "title": "HousekeepingChecklistStatusEnum"
       },
       "IntegrationCatalogRead": {
         "properties": {
@@ -58456,6 +59077,125 @@
         "title": "PathAcceptPayload",
         "description": "Request body retained for clients that historically put the token in the path."
       },
+      "PaymentCorrectionRead": {
+        "properties": {
+          "correction_id": {
+            "type": "integer",
+            "title": "Correction Id"
+          },
+          "correction_type": {
+            "type": "string",
+            "enum": [
+              "reassign",
+              "duplicate_reversal"
+            ],
+            "title": "Correction Type"
+          },
+          "source_transaction_id": {
+            "type": "integer",
+            "title": "Source Transaction Id"
+          },
+          "source_reservation_id": {
+            "type": "integer",
+            "title": "Source Reservation Id"
+          },
+          "target_reservation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Reservation Id"
+          },
+          "replacement_transaction_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Transaction Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "correction_id",
+          "correction_type",
+          "source_transaction_id",
+          "source_reservation_id",
+          "reason",
+          "created_at"
+        ],
+        "title": "PaymentCorrectionRead"
+      },
+      "PaymentCorrectionRequest": {
+        "properties": {
+          "correction_type": {
+            "type": "string",
+            "enum": [
+              "reassign",
+              "duplicate_reversal"
+            ],
+            "title": "Correction Type"
+          },
+          "destination_confirmation_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Confirmation Code"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 3,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "correction_type",
+          "reason"
+        ],
+        "title": "PaymentCorrectionRequest",
+        "description": "Reverse an erroneous payment record and optionally reassign it."
+      },
       "PaymentLinkCancel": {
         "properties": {
           "reason": {
@@ -58698,6 +59438,26 @@
             ],
             "title": "Cancelled At"
           },
+          "provider_revocation_status": {
+            "type": "string",
+            "title": "Provider Revocation Status"
+          },
+          "provider_revocation_attempts": {
+            "type": "integer",
+            "title": "Provider Revocation Attempts"
+          },
+          "provider_revocation_last_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Revocation Last Attempt At"
+          },
           "first_payment_at": {
             "anyOf": [
               {
@@ -58742,6 +59502,8 @@
           "status",
           "execution_mode",
           "payable",
+          "provider_revocation_status",
+          "provider_revocation_attempts",
           "created_at"
         ],
         "title": "PaymentLinkRead"
@@ -59439,6 +60201,33 @@
             "type": "string",
             "title": "Fee Amount"
           },
+          "cash_received_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Received Amount"
+          },
+          "cash_change_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Amount"
+          },
+          "cash_tip_amount": {
+            "type": "string",
+            "title": "Cash Tip Amount",
+            "default": "0.00"
+          },
           "currency": {
             "type": "string",
             "title": "Currency"
@@ -59511,6 +60300,34 @@
             "exclusiveMinimum": 0.0,
             "title": "Amount"
           },
+          "cash_received_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Received Amount"
+          },
+          "cash_tip_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Cash Tip Amount",
+            "default": "0.00"
+          },
           "payment_method": {
             "$ref": "#/components/schemas/PaymentMethodEnum"
           },
@@ -59578,6 +60395,15 @@
               }
             ],
             "title": "Refund Reason"
+          },
+          "refund_component": {
+            "type": "string",
+            "enum": [
+              "payment",
+              "rounding_credit"
+            ],
+            "title": "Refund Component",
+            "default": "payment"
           },
           "company_night_charge_ids": {
             "items": {
@@ -61611,6 +62437,26 @@
             ],
             "title": "Cancelled At"
           },
+          "provider_revocation_status": {
+            "type": "string",
+            "title": "Provider Revocation Status"
+          },
+          "provider_revocation_attempts": {
+            "type": "integer",
+            "title": "Provider Revocation Attempts"
+          },
+          "provider_revocation_last_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Revocation Last Attempt At"
+          },
           "first_payment_at": {
             "anyOf": [
               {
@@ -61655,6 +62501,8 @@
           "status",
           "execution_mode",
           "payable",
+          "provider_revocation_status",
+          "provider_revocation_attempts",
           "created_at"
         ],
         "title": "PublicPaymentLinkRead"
@@ -64853,6 +65701,89 @@
         ],
         "title": "ReservationEmailStatus"
       },
+      "ReservationExtensionImpactAction": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "moved_equivalent",
+              "moved_superior",
+              "assignment_released",
+              "blocked"
+            ],
+            "title": "Action"
+          },
+          "room_label": {
+            "type": "string",
+            "maxLength": 50,
+            "title": "Room Label"
+          },
+          "check_in_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Check In Date"
+          },
+          "check_out_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Check Out Date"
+          },
+          "confirmation_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Code"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "room_label",
+          "check_in_date",
+          "check_out_date"
+        ],
+        "title": "ReservationExtensionImpactAction"
+      },
+      "ReservationExtensionImpactPlan": {
+        "properties": {
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Fingerprint"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ReservationExtensionImpactAction"
+            },
+            "type": "array",
+            "title": "Actions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fingerprint",
+          "actions"
+        ],
+        "title": "ReservationExtensionImpactPlan"
+      },
       "ReservationExtensionPreviewResponse": {
         "properties": {
           "reservation_id": {
@@ -64874,7 +65805,14 @@
             "title": "Client Version"
           },
           "extension_amount": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Extension Amount"
           },
           "currency_code": {
@@ -64882,6 +65820,16 @@
             "maxLength": 3,
             "minLength": 3,
             "title": "Currency Code"
+          },
+          "impact_plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReservationExtensionImpactPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -64890,7 +65838,6 @@
           "current_checkout_date",
           "new_checkout_date",
           "client_version",
-          "extension_amount",
           "currency_code"
         ],
         "title": "ReservationExtensionPreviewResponse"
@@ -64922,6 +65869,18 @@
             ],
             "title": "Payment Action",
             "default": "payment_link"
+          },
+          "confirmed_impact_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Impact Fingerprint"
           },
           "immediate_payment": {
             "anyOf": [
@@ -65174,6 +66133,27 @@
             ],
             "title": "Recommended Next Action"
           },
+          "rounding_credit_by_currency": {
+            "items": {
+              "$ref": "#/components/schemas/ReservationRoundingCreditByCurrencyRead"
+            },
+            "type": "array",
+            "title": "Rounding Credit By Currency"
+          },
+          "rounding_credit_sources": {
+            "items": {
+              "$ref": "#/components/schemas/ReservationRoundingCreditSourceRead"
+            },
+            "type": "array",
+            "title": "Rounding Credit Sources"
+          },
+          "payment_corrections": {
+            "items": {
+              "$ref": "#/components/schemas/ReservationPaymentCorrectionSummaryRead"
+            },
+            "type": "array",
+            "title": "Payment Corrections"
+          },
           "transactions": {
             "items": {
               "$ref": "#/components/schemas/ReservationTransactionSummaryRead"
@@ -65375,6 +66355,34 @@
             ],
             "title": "Received Amount"
           },
+          "cash_received_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Received Amount"
+          },
+          "cash_tip_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Cash Tip Amount",
+            "default": "0.00"
+          },
           "currency": {
             "anyOf": [
               {
@@ -65447,6 +66455,44 @@
           "received_amount": {
             "type": "string",
             "title": "Received Amount"
+          },
+          "gross_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gross Amount"
+          },
+          "cash_received_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Received Amount"
+          },
+          "cash_change_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Amount"
+          },
+          "cash_tip_amount": {
+            "type": "string",
+            "title": "Cash Tip Amount",
+            "default": "0.00"
           },
           "currency": {
             "type": "string",
@@ -65894,6 +66940,77 @@
           "open_adjustments"
         ],
         "title": "ReservationOperationsSummaryRead"
+      },
+      "ReservationPaymentCorrectionSummaryRead": {
+        "properties": {
+          "correction_id": {
+            "type": "integer",
+            "title": "Correction Id"
+          },
+          "correction_type": {
+            "type": "string",
+            "title": "Correction Type"
+          },
+          "source_transaction_id": {
+            "type": "integer",
+            "title": "Source Transaction Id"
+          },
+          "source_reservation_id": {
+            "type": "integer",
+            "title": "Source Reservation Id"
+          },
+          "target_reservation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Reservation Id"
+          },
+          "replacement_transaction_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Transaction Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "correction_id",
+          "correction_type",
+          "source_transaction_id",
+          "source_reservation_id",
+          "reason",
+          "created_at"
+        ],
+        "title": "ReservationPaymentCorrectionSummaryRead"
       },
       "ReservationPendingActionRead": {
         "properties": {
@@ -66673,6 +67790,67 @@
         ],
         "title": "ReservationRoomMoveSummaryRead"
       },
+      "ReservationRoundingCreditByCurrencyRead": {
+        "properties": {
+          "currency_code": {
+            "type": "string",
+            "title": "Currency Code"
+          },
+          "issued_amount": {
+            "type": "number",
+            "title": "Issued Amount"
+          },
+          "refunded_amount": {
+            "type": "number",
+            "title": "Refunded Amount"
+          },
+          "open_amount": {
+            "type": "number",
+            "title": "Open Amount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "currency_code",
+          "issued_amount",
+          "refunded_amount",
+          "open_amount"
+        ],
+        "title": "ReservationRoundingCreditByCurrencyRead"
+      },
+      "ReservationRoundingCreditSourceRead": {
+        "properties": {
+          "source_transaction_id": {
+            "type": "integer",
+            "title": "Source Transaction Id"
+          },
+          "currency_code": {
+            "type": "string",
+            "title": "Currency Code"
+          },
+          "issued_amount": {
+            "type": "number",
+            "title": "Issued Amount"
+          },
+          "refunded_amount": {
+            "type": "number",
+            "title": "Refunded Amount"
+          },
+          "open_amount": {
+            "type": "number",
+            "title": "Open Amount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_transaction_id",
+          "currency_code",
+          "issued_amount",
+          "refunded_amount",
+          "open_amount"
+        ],
+        "title": "ReservationRoundingCreditSourceRead"
+      },
       "ReservationSourceEnum": {
         "type": "string",
         "enum": [
@@ -66810,6 +67988,21 @@
               }
             ],
             "title": "Refund Of Transaction Id"
+          },
+          "rounding_credit_amount": {
+            "type": "number",
+            "title": "Rounding Credit Amount",
+            "default": 0.0
+          },
+          "credit_refund_amount": {
+            "type": "number",
+            "title": "Credit Refund Amount",
+            "default": 0.0
+          },
+          "refund_component": {
+            "type": "string",
+            "title": "Refund Component",
+            "default": "payment"
           },
           "collected_before": {
             "type": "boolean",
@@ -71624,6 +72817,33 @@
             ],
             "title": "Tender Currency"
           },
+          "cash_received_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Received Amount"
+          },
+          "cash_change_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Amount"
+          },
+          "cash_tip_amount": {
+            "type": "string",
+            "title": "Cash Tip Amount",
+            "default": "0.00"
+          },
           "fx_rate_snapshot": {
             "anyOf": [
               {
@@ -71698,6 +72918,25 @@
               }
             ],
             "title": "Refund Reason"
+          },
+          "rounding_credit_amount": {
+            "type": "string",
+            "title": "Rounding Credit Amount",
+            "default": "0.00"
+          },
+          "credit_refund_amount": {
+            "type": "string",
+            "title": "Credit Refund Amount",
+            "default": "0.00"
+          },
+          "refund_component": {
+            "type": "string",
+            "enum": [
+              "payment",
+              "rounding_credit"
+            ],
+            "title": "Refund Component",
+            "default": "payment"
           },
           "collected_before": {
             "type": "boolean",
@@ -73655,6 +74894,26 @@
             ],
             "title": "Cancelled At"
           },
+          "provider_revocation_status": {
+            "type": "string",
+            "title": "Provider Revocation Status"
+          },
+          "provider_revocation_attempts": {
+            "type": "integer",
+            "title": "Provider Revocation Attempts"
+          },
+          "provider_revocation_last_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Revocation Last Attempt At"
+          },
           "first_payment_at": {
             "anyOf": [
               {
@@ -73699,6 +74958,8 @@
           "status",
           "execution_mode",
           "payable",
+          "provider_revocation_status",
+          "provider_revocation_attempts",
           "created_at"
         ],
         "title": "WhatsAppPaymentLinkRead"

@@ -4,12 +4,21 @@ FastAPI routes for Payments.
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from email_validator import EmailNotValidError, validate_email
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, authorize_permission, require_all_permissions, require_permission
 from app.schemas.reservation_operations import ReservationFinancialSummaryRead
-from app.schemas.transaction import PaymentReceiptEmailRead, PaymentReceiptRead, PaymentRequest, TransactionRead
+from app.schemas.transaction import (
+    PaymentCorrectionRead,
+    PaymentCorrectionRequest,
+    PaymentReceiptEmailRead,
+    PaymentReceiptRead,
+    PaymentRequest,
+    TransactionRead,
+)
+from app.models.reservation import Reservation
 from app.services.payment_service import (
     process_payment,
     get_reservation_financial_summary,
@@ -23,12 +32,20 @@ from app.services.payment_receipt_email_service import (
     send_payment_receipt_email,
 )
 from app.services.payment_receipt_pdf import generate_payment_receipt_pdf
+from app.services.payment_correction_service import (
+    PaymentCorrectionConflict,
+    PaymentCorrectionError,
+    PaymentCorrectionNotFound,
+    correct_payment,
+)
 from app.services.permission_service import (
     PERMISSION_CASH_OPERATE,
     PERMISSION_RESERVATION_READ,
     PERMISSION_PAYMENT_RECEIPT_EMAIL,
     PERMISSION_CASH_RECORD_PRIOR_RECEIPT,
     PERMISSION_PAYMENT_REFUND,
+    PERMISSION_PAYMENT_CORRECT,
+    resolve,
 )
 from app.services.timezones import hotel_today
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
@@ -146,6 +163,67 @@ def make_payment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post(
+    "/transactions/{transaction_id}/correction",
+    response_model=PaymentCorrectionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def correct_payment_transaction(
+    transaction_id: int,
+    data: PaymentCorrectionRequest,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=100),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_CASH_OPERATE, PERMISSION_PAYMENT_CORRECT)
+    ),
+):
+    """Reverse a mistaken ledger entry and optionally reassign its payment."""
+    target_reservation_id = None
+    if data.correction_type == "reassign":
+        target_reservation_id = (
+            db.query(Reservation.id)
+            .filter(
+                Reservation.hotel_id == context.hotel_id,
+                func.upper(Reservation.confirmation_code) == data.destination_confirmation_code,
+            )
+            .scalar()
+        )
+        if target_reservation_id is None:
+            raise HTTPException(status_code=404, detail="No se encontró la reserva de destino en este hotel.")
+
+    try:
+        outcome = correct_payment(
+            db,
+            hotel_id=context.hotel_id,
+            source_transaction_id=transaction_id,
+            correction_type=data.correction_type,
+            target_reservation_id=target_reservation_id,
+            reason=data.reason,
+            idempotency_key=idempotency_key,
+            actor_user_id=context.user_id,
+        )
+        db.commit()
+        db.refresh(outcome.correction)
+        return PaymentCorrectionRead(
+            correction_id=outcome.correction.id,
+            correction_type=outcome.correction.correction_type,
+            source_transaction_id=outcome.correction.source_transaction_id,
+            source_reservation_id=outcome.correction.source_reservation_id,
+            target_reservation_id=outcome.correction.target_reservation_id,
+            replacement_transaction_id=outcome.correction.replacement_transaction_id,
+            reason=outcome.correction.reason,
+            actor_user_id=outcome.correction.actor_user_id,
+            created_at=outcome.correction.created_at,
+            replayed=outcome.replayed,
+        )
+    except PaymentCorrectionNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PaymentCorrectionConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except PaymentCorrectionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/summary/{reservation_id}", response_model=ReservationFinancialSummaryRead)
 def financial_summary(
     reservation_id: int,
@@ -153,7 +231,19 @@ def financial_summary(
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_READ)),
 ):
     try:
-        return get_reservation_financial_summary(db, context.hotel_id, reservation_id)
+        can_read_payment_correction_audit = resolve(
+            db,
+            context.hotel_id,
+            context.user_role,
+            PERMISSION_PAYMENT_CORRECT,
+            user_id=context.user_id,
+        )
+        return get_reservation_financial_summary(
+            db,
+            context.hotel_id,
+            reservation_id,
+            include_payment_correction_audit=can_read_payment_correction_audit,
+        )
     except PaymentNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except PaymentError as e:

@@ -133,6 +133,8 @@ class CashMovement(Base):
     """
     Individual money movement within an open cash session.
     Linked optionally to a reservation or transaction for reconciliation.
+    A correction void keeps the original row for audit while excluding it from
+    active cash totals; it never invents a physical expense or refund.
     """
     __tablename__ = "cash_movements"
 
@@ -145,6 +147,8 @@ class CashMovement(Base):
     session_id = Column(Integer, nullable=False)
     reservation_id = Column(Integer, nullable=True)
     transaction_id = Column(Integer, nullable=True)
+    voided_at = Column(DateTime, nullable=True)
+    voided_by_payment_correction_id = Column(Integer, nullable=True)
     recorded_by_user_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -170,8 +174,18 @@ class CashMovement(Base):
 
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_cash_movements_amount_positive"),
+        CheckConstraint(
+            "(voided_at IS NULL AND voided_by_payment_correction_id IS NULL) OR "
+            "(voided_at IS NOT NULL AND voided_by_payment_correction_id IS NOT NULL)",
+            name="ck_cash_movements_void_metadata",
+        ),
         # Required as a composite FK target for other hotel-scoped ledgers.
         UniqueConstraint("hotel_id", "id", name="uq_cash_movements_hotel_id_id"),
+        UniqueConstraint(
+            "hotel_id",
+            "voided_by_payment_correction_id",
+            name="uq_cash_movements_hotel_voided_correction",
+        ),
         ForeignKeyConstraint(
             ["hotel_id", "session_id"], ["cash_sessions.hotel_id", "cash_sessions.id"],
             name="fk_cash_movements_hotel_session", ondelete="CASCADE",
@@ -183,6 +197,12 @@ class CashMovement(Base):
         ForeignKeyConstraint(
             ["hotel_id", "transaction_id"], ["transactions.hotel_id", "transactions.id"],
             name="fk_cash_movements_hotel_transaction",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "voided_by_payment_correction_id"],
+            ["payment_corrections.hotel_id", "payment_corrections.id"],
+            name="fk_cash_movements_hotel_payment_correction",
+            ondelete="RESTRICT",
         ),
         Index("ix_cash_movements_session_id", "session_id"),
         Index("ix_cash_movements_hotel_id", "hotel_id"),

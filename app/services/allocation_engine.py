@@ -12,17 +12,30 @@ The solver uses a Constraint Programming (CP-SAT) model where:
 - Hard constraints ensure feasibility
 - Objective function penalizes fragmentation gaps
 """
-from datetime import date, timedelta
 from bisect import bisect_right
-from typing import Mapping, Optional
 from dataclasses import dataclass, field
+from datetime import date, timedelta
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+import time
+from typing import Mapping, Optional
 
-from sqlalchemy.orm import Session, lazyload, load_only, selectinload
+from sqlalchemy.orm import Session, lazyload, load_only
 
-from app.models.room import Room, RoomStatusEnum
-from app.services.room_service import active_rooms
+from app.models.allocation import ReservationAllocationLock
+from app.models.fx_rate_snapshot import FxRateSnapshot
+from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
-from app.services.reservation_service import _active_reservations_without_hotel, active_reservations
+from app.models.room import Room, RoomStatusEnum
+from app.services.reservation_service import (
+    _active_reservations_without_hotel,
+    active_reservations,
+)
+from app.services.room_service import active_rooms
+
+
+# CP-SAT stores objective bounds in signed 64-bit integers. Keep a margin so a
+# large but valid database amount cannot overflow the solver's internal sum.
+_MAX_SAFE_OBJECTIVE_VALUE = (1 << 62) - 1
 
 
 class AllocationError(Exception):
@@ -38,7 +51,7 @@ class ReservationSlot:
     check_in: date
     check_out: date
     current_room_id: Optional[int]
-    is_locked: bool  # True if confirmed/protected (cannot be moved automatically)
+    is_locked: bool  # Checked-in or explicitly pinned; confirmed bookings may be proposed for moves.
     guest_id: Optional[int] = None
     num_guests: int = 1
     mobility_restriction: bool = False
@@ -46,6 +59,11 @@ class ReservationSlot:
     category_priority_by_id: dict[int, int] = field(default_factory=dict)
     prior_stay_room_id: Optional[int] = None
     avoided_room_ids: list[int] = field(default_factory=list)
+    blocked_room_ids: list[int] = field(default_factory=list)
+    net_revenue_minor_units: int = 0
+    currency_code: str = "ARS"
+    source_currency_code: Optional[str] = None
+    fx_conversion_details: dict = field(default_factory=dict)
 
     @property
     def effective_allowed_category_ids(self) -> list[int]:
@@ -103,6 +121,8 @@ class AllocationResult:
     moved_reservations: list[int] = field(default_factory=list)
     objective_value: float = 0.0
     error: Optional[str] = None
+    primary_status: str = "not_run"
+    tie_break_status: str = "not_run"
 
 
 def _check_overlap(slot_a: ReservationSlot, slot_b: ReservationSlot) -> bool:
@@ -200,6 +220,7 @@ def run_allocation(
     optimization_horizon: Optional[tuple[date, date]] = None,
     policy_constraints: Optional[dict] = None,
     policy_weights: Optional[dict] = None,
+    forbidden_room_ids_by_reservation: Optional[Mapping[int, set[int]]] = None,
 ) -> AllocationResult:
     """
     Run the CP-SAT solver to optimally assign rooms to reservations.
@@ -222,6 +243,59 @@ def run_allocation(
         Minimize fragmentation: penalize single-day gaps between reservations
         on the same room (encourages continuous blocks).
     """
+    if not reservations:
+        return AllocationResult(success=True)
+
+    policy_constraints = policy_constraints or {}
+    policy_weights = policy_weights or {}
+    combined_forbidden_room_ids: dict[int, set[int]] = {
+        reservation_id: set(room_ids)
+        for reservation_id, room_ids in (forbidden_room_ids_by_reservation or {}).items()
+    }
+    for reservation in reservations:
+        if reservation.blocked_room_ids:
+            combined_forbidden_room_ids.setdefault(reservation.reservation_id, set()).update(
+                reservation.blocked_room_ids
+            )
+    forbidden_room_ids_by_reservation = combined_forbidden_room_ids
+    objective_mode = str(policy_constraints.get("optimization_objective", "occupied_nights"))
+    if objective_mode not in {"occupied_nights", "net_revenue", "combined"}:
+        return AllocationResult(success=False, error="Unsupported allocation objective mode")
+    revenue_weight = policy_weights.get("combined_revenue_weight")
+    if objective_mode == "combined" and revenue_weight is None:
+        return AllocationResult(
+            success=False,
+            error="Combined allocation objective requires a hotel-configured revenue weight",
+        )
+    if objective_mode == "combined":
+        try:
+            revenue_weight = float(revenue_weight)
+        except (TypeError, ValueError):
+            return AllocationResult(success=False, error="Combined revenue weight is invalid")
+        if not 0 <= revenue_weight <= 1:
+            return AllocationResult(success=False, error="Combined revenue weight must be between 0 and 1")
+    uses_revenue = objective_mode == "net_revenue" or (
+        objective_mode == "combined" and revenue_weight > 0
+    )
+    if uses_revenue:
+        currencies = {str(res.currency_code or "").strip().upper() for res in reservations}
+        if len(currencies) > 1:
+            return AllocationResult(
+                success=False,
+                error=(
+                    "Revenue allocation requires one comparable currency. Mixed-currency "
+                    "reservations need a fresh hotel-scoped FX snapshot."
+                ),
+            )
+        if (
+            objective_mode == "net_revenue"
+            or (objective_mode == "combined" and revenue_weight > 0)
+        ) and not any(res.net_revenue_minor_units > 0 for res in reservations):
+            return AllocationResult(
+                success=False,
+                error="Net-revenue allocation has no positive net-revenue snapshots to compare",
+            )
+
     try:
         from ortools.sat.python import cp_model
     except ImportError:
@@ -231,13 +305,9 @@ def run_allocation(
             optimization_horizon,
             policy_constraints=policy_constraints,
             policy_weights=policy_weights,
+            forbidden_room_ids_by_reservation=forbidden_room_ids_by_reservation,
         )
 
-    if not reservations:
-        return AllocationResult(success=True)
-
-    policy_constraints = policy_constraints or {}
-    policy_weights = policy_weights or {}
     stability_weight = int(policy_weights.get("stability", 5))
     exact_match_weight = int(policy_weights.get("prefer_exact_match", 500))
     room_usage_penalty = int(policy_weights.get("room_usage_penalty", 50))
@@ -259,6 +329,34 @@ def run_allocation(
             max(unassigned_penalty - 1, 0),
         ),
     )
+    total_nights = max(sum(max(0, reservation.nights) for reservation in reservations), 1)
+    total_net_revenue = max(
+        sum(max(0, reservation.net_revenue_minor_units) for reservation in reservations),
+        1,
+    )
+    if objective_mode == "net_revenue" and total_net_revenue > _MAX_SAFE_OBJECTIVE_VALUE:
+        return AllocationResult(
+            success=False,
+            error="Net-revenue objective exceeds the safe integer range for allocation",
+        )
+    combined_weight = Decimal(str(revenue_weight or 0))
+    combined_scale = Decimal(1_000_000_000)
+
+    def primary_objective_coefficient(reservation: ReservationSlot) -> int:
+        if objective_mode == "occupied_nights":
+            return max(0, reservation.nights)
+        if objective_mode == "net_revenue":
+            return max(0, reservation.net_revenue_minor_units)
+        nights_share = (
+            Decimal(max(0, reservation.nights)) * combined_scale / Decimal(total_nights)
+        )
+        revenue_share = (
+            Decimal(max(0, reservation.net_revenue_minor_units))
+            * combined_scale
+            / Decimal(total_net_revenue)
+        )
+        score = (Decimal(1) - combined_weight) * nights_share + combined_weight * revenue_share
+        return int(score.to_integral_value(rounding=ROUND_HALF_UP))
 
     model = cp_model.CpModel()
 
@@ -276,7 +374,10 @@ def run_allocation(
             else None
         )
         compatible_room_indexes: set[int] = set()
+        forbidden_room_ids = forbidden_room_ids_by_reservation.get(res.reservation_id, set())
         for h_idx, room in enumerate(rooms):
+            if room.room_id in forbidden_room_ids:
+                continue
             if room.category_id not in res.effective_allowed_category_ids:
                 continue
             if room.max_occupancy < res.num_guests:
@@ -421,7 +522,7 @@ def run_allocation(
     # Score = sum of occupied days per room (encourages packing)
     # + bonus for keeping current assignments (stability)
     # + bonus for exact category match (avoids unnecessary upgrades)
-    occupancy_score = []
+    primary_objective_score = []
     stability_bonus = []
     category_match_bonus = []
     fallback_penalties = []
@@ -440,8 +541,9 @@ def run_allocation(
         )
         for h_idx in sorted(compatible_room_indexes_by_reservation[r_idx]):
             room = rooms[h_idx]
-            # Occupancy contribution: each night assigned to a room adds to score
-            occupancy_score.append((x[r_idx, h_idx], res.nights))
+            primary_objective_score.append(
+                (x[r_idx, h_idx], primary_objective_coefficient(res))
+            )
 
             # Stability: prefer keeping reservation in current room (if one exists)
             if res.current_room_id == room.room_id and not res.is_locked:
@@ -478,40 +580,78 @@ def run_allocation(
             model.Add(room_has_any == 0)
         room_usage[h_idx] = room_has_any
 
-    # Objective: maximize occupancy score + stability + category match, minimize rooms used
-    # Category match bonus (500) prevents unnecessary upgrades.
-    # Unassigned penalty (10000/res) must dominate everything else to try to fit everyone.
-    model.Maximize(
-        sum(var * coeff for var, coeff in occupancy_score)
-        + sum(var * coeff for var, coeff in stability_bonus)
-        + sum(var * coeff for var, coeff in prior_stay_room_bonus_terms)
-        + sum(var * coeff for var, coeff in category_match_bonus)
-        + sum(var * coeff for var, coeff in room_score_bonus)
-        - sum(room_usage[h_idx] * room_usage_penalty for h_idx in range(len(rooms)))
-        - sum(var * coeff for var, coeff in fallback_penalties)
-        - sum(var * coeff for var, coeff in guest_room_avoidance_penalty_terms)
-        - sum(gap * one_night_gap_penalty for gap in gap_penalties)
-        - sum((1 - is_assigned[r_idx]) * unassigned_penalty for r_idx in range(len(reservations)))
+    primary_objective = sum(var * coeff for var, coeff in primary_objective_score)
+    assigned_count_objective = sum(is_assigned.values())
+    tie_break_terms = [
+        *stability_bonus,
+        *prior_stay_room_bonus_terms,
+        *category_match_bonus,
+        *room_score_bonus,
+        *((room_usage[h_idx], -room_usage_penalty) for h_idx in range(len(rooms))),
+        *((var, -coeff) for var, coeff in fallback_penalties),
+        *((var, -coeff) for var, coeff in guest_room_avoidance_penalty_terms),
+        *((gap, -one_night_gap_penalty) for gap in gap_penalties),
+    ]
+    tie_break_objective = sum(var * coeff for var, coeff in tie_break_terms)
+
+    # The hotel's configured goal always wins. Complete as many reservations
+    # as possible only after the primary objective is fixed, then apply room
+    # preferences as a final tie-break. Every phase shares one bounded budget.
+    solve_started = time.monotonic()
+    total_solve_seconds = 30.0
+
+    def solve_with_remaining_budget():
+        remaining = total_solve_seconds - (time.monotonic() - solve_started)
+        if remaining <= 0.01:
+            return None, None
+        phase_solver = cp_model.CpSolver()
+        phase_solver.parameters.max_time_in_seconds = remaining
+        # Keep the solver bounded for small hotel instances and constrained hosts.
+        phase_solver.parameters.num_workers = 1
+        return phase_solver, phase_solver.Solve(model)
+
+    model.Maximize(primary_objective)
+    solver, status = solve_with_remaining_budget()
+    if solver is None or status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        primary_status = solver.StatusName(status) if solver is not None else "UNKNOWN"
+        return AllocationResult(
+            success=False,
+            error=f"Solver status: {primary_status}. No feasible assignment found.",
+            primary_status=primary_status,
+        )
+
+    primary_status = solver.StatusName(status)
+    tie_break_status = (
+        "not_run_primary_not_proven"
+        if status != cp_model.OPTIMAL
+        else "not_run_budget"
     )
+    selected_solver = solver
+    if status == cp_model.OPTIMAL:
+        best_primary_value = solver.Value(primary_objective)
+        model.Add(primary_objective == best_primary_value)
+        model.Maximize(assigned_count_objective)
+        count_solver, count_status = solve_with_remaining_budget()
+        if count_solver is not None and count_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            selected_solver = count_solver
+            tie_break_status = count_solver.StatusName(count_status)
+            if count_status == cp_model.OPTIMAL:
+                best_assigned_count = count_solver.Value(assigned_count_objective)
+                model.Add(assigned_count_objective == best_assigned_count)
+                model.Maximize(tie_break_objective)
+                preference_solver, preference_status = solve_with_remaining_budget()
+                if preference_solver is not None and preference_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                    selected_solver = preference_solver
+                    tie_break_status = preference_solver.StatusName(preference_status)
 
-    # ── Solve ──
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 30.0
-    # The planned Render Starter instance provides 0.5 CPU and 512 MiB.
-    # Parallel CP-SAT workers multiply solver memory without improving this
-    # small-hotel fixture, so keep the default bounded to one worker.
-    solver.parameters.num_workers = 1
-
-    status = solver.Solve(model)
-
-    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+    if selected_solver is not None:
         assignments = {}
         unassigned = []
         moved = []
         for r_idx, res in enumerate(reservations):
             assigned = False
             for h_idx, room in enumerate(rooms):
-                if solver.Value(assignment_var(r_idx, h_idx)) == 1:
+                if selected_solver.Value(assignment_var(r_idx, h_idx)) == 1:
                     assigned = True
                     assignments[res.reservation_id] = room.room_id
                     if (
@@ -529,12 +669,15 @@ def run_allocation(
             assignments=assignments,
             unassigned_reservations=unassigned,
             moved_reservations=moved,
-            objective_value=solver.ObjectiveValue(),
+            objective_value=float(selected_solver.Value(primary_objective)),
+            primary_status=primary_status,
+            tie_break_status=tie_break_status,
         )
     else:
         return AllocationResult(
             success=False,
             error=f"Solver status: {solver.StatusName(status)}. No feasible assignment found.",
+            primary_status=primary_status,
         )
 
 
@@ -544,6 +687,7 @@ def _run_allocation_greedy(
     optimization_horizon: Optional[tuple[date, date]] = None,
     policy_constraints: Optional[dict] = None,
     policy_weights: Optional[dict] = None,
+    forbidden_room_ids_by_reservation: Optional[Mapping[int, set[int]]] = None,
 ) -> AllocationResult:
     """
     Greedy fallback allocation when OR-Tools is not available.
@@ -552,6 +696,7 @@ def _run_allocation_greedy(
     assignments: dict[int, int] = {}
     moved: list[int] = []
     policy_weights = policy_weights or {}
+    forbidden_room_ids_by_reservation = forbidden_room_ids_by_reservation or {}
     unassigned_penalty = int(policy_weights.get("unassigned_penalty", 10000))
     prior_stay_room_bonus = max(0, int(policy_weights.get("prior_stay_room_bonus", 100)))
     guest_room_avoidance_penalty = max(
@@ -571,10 +716,24 @@ def _run_allocation_greedy(
     room_occupancy: dict[int, list[tuple[date, date]]] = {r.room_id: [] for r in rooms}
     rooms_by_id = {room.room_id: room for room in rooms}
 
-    # Sort reservations: locked first, then by check-in date, then by length (longer first)
+    objective_mode = str((policy_constraints or {}).get("optimization_objective", "occupied_nights"))
+    total_revenue = max(sum(max(0, reservation.net_revenue_minor_units) for reservation in reservations), 1)
+    total_nights = max(sum(max(0, reservation.nights) for reservation in reservations), 1)
+    combined_weight = float(policy_weights.get("combined_revenue_weight", 0))
+
+    def priority(reservation: ReservationSlot) -> float:
+        if objective_mode == "net_revenue":
+            return max(0, reservation.net_revenue_minor_units) / total_revenue
+        if objective_mode == "combined":
+            nights_share = max(0, reservation.nights) / total_nights
+            revenue_share = max(0, reservation.net_revenue_minor_units) / total_revenue
+            return (1 - combined_weight) * nights_share + combined_weight * revenue_share
+        return reservation.nights
+
+    # Sort reservations: locked first, then objective priority, then check-in.
     sorted_reservations = sorted(
         reservations,
-        key=lambda r: (not r.is_locked, r.check_in, -r.nights),
+        key=lambda r: (not r.is_locked, -priority(r), r.check_in, -r.nights),
     )
 
     for res in sorted_reservations:
@@ -593,6 +752,7 @@ def _run_allocation_greedy(
         candidate_rooms = [
             room for room in candidate_rooms
             if room.max_occupancy >= res.num_guests
+            and room.room_id not in forbidden_room_ids_by_reservation.get(res.reservation_id, set())
         ]
         if res.mobility_restriction:
             candidate_rooms = [room for room in candidate_rooms if room.is_accessible]
@@ -643,7 +803,6 @@ def _run_allocation_greedy(
                 ),
             )
 
-        assigned = False
         for room in current_first:
             # Check no overlap with existing assignments on this room
             conflicts = False
@@ -660,7 +819,6 @@ def _run_allocation_greedy(
                     and res.current_room_id != room.room_id
                 ):
                     moved.append(res.reservation_id)
-                assigned = True
                 break
 
     unassigned = list(set(r.reservation_id for r in reservations) - set(assignments.keys()))
@@ -669,6 +827,8 @@ def _run_allocation_greedy(
         assignments=assignments,
         unassigned_reservations=unassigned,
         moved_reservations=moved,
+        primary_status="HEURISTIC",
+        tie_break_status="HEURISTIC",
     )
 
 
@@ -689,7 +849,7 @@ def apply_allocation_result(
     if result.error:
         raise AllocationError(result.error)
 
-    from app.models.operations import RoomMovementGroup, RoomMoveEvent, RoomMoveTypeEnum
+    from app.models.operations import RoomMoveEvent, RoomMovementGroup, RoomMoveTypeEnum
 
     updated = []
     pending_moves: list[tuple[Reservation, int, int | None]] = []
@@ -711,6 +871,18 @@ def apply_allocation_result(
             else {}
         )
 
+    from app.models.allocation import ReservationAllocationLock
+
+    active_lock_query = db.query(ReservationAllocationLock.reservation_id).filter(
+        ReservationAllocationLock.is_active.is_(True),
+        ReservationAllocationLock.reservation_id.in_(result.assignments),
+    )
+    if hotel_id is not None:
+        active_lock_query = active_lock_query.filter(
+            ReservationAllocationLock.hotel_id == hotel_id
+        )
+    active_lock_ids = {row[0] for row in active_lock_query.all()}
+    candidate_moves: list[tuple[Reservation, int, int | None]] = []
     for reservation_id, room_id in result.assignments.items():
         reservation = reservations_by_id.get(reservation_id)
         if (
@@ -720,9 +892,32 @@ def apply_allocation_result(
         ):
             previous_room_id = reservation.room_id
             if previous_room_id != room_id:
-                pending_moves.append((reservation, room_id, previous_room_id))
-            reservation.room_id = room_id
+                status_value = (
+                    reservation.status.value
+                    if hasattr(reservation.status, "value")
+                    else str(reservation.status)
+                )
+                if (
+                    status_value in {
+                        ReservationStatusEnum.PARTIAL_CHECK_IN.value,
+                        ReservationStatusEnum.CHECKED_IN.value,
+                    }
+                    or getattr(reservation, "actual_check_in", None) is not None
+                    or bool(getattr(reservation, "allocation_locked", False))
+                    or reservation.id in active_lock_ids
+                ):
+                    raise AllocationError(
+                        f"Reservation {reservation.id} is checked in or explicitly protected from reassignment"
+                    )
+                candidate_moves.append((reservation, room_id, previous_room_id))
             updated.append(reservation)
+
+    # Validate every proposed mutation before changing any ORM entity. The caller
+    # can therefore preserve the whole transaction if a single protected stay is
+    # included in a forged or stale AllocationResult.
+    for reservation, room_id, previous_room_id in candidate_moves:
+        reservation.room_id = room_id
+        pending_moves.append((reservation, room_id, previous_room_id))
 
     if pending_moves:
         group_hotel_id = hotel_id if hotel_id is not None else pending_moves[0][0].hotel_id
@@ -768,6 +963,7 @@ def build_slots_from_db(
     end_date: Optional[date] = None,
     hotel_id: Optional[int] = None,
     policy_constraints: Optional[dict] = None,
+    policy_weights: Optional[dict] = None,
 ) -> tuple[list[ReservationSlot], list[RoomSlot]]:
     """
     Load reservations and rooms from the database and convert to solver-friendly slots.
@@ -776,18 +972,20 @@ def build_slots_from_db(
         start_date: Only include reservations that overlap with this date or later.
         end_date: Only include reservations that overlap with this date or earlier.
     """
-    from datetime import date as date_type
     import datetime as dt
+    from datetime import date as date_type
 
     if start_date is None:
         start_date = date_type.today()
     if end_date is None:
         end_date = start_date + dt.timedelta(days=90)
     policy_constraints = policy_constraints or {}
-    from app.models.allocation import ReservationAllocationLock
-    from app.models.company import Company
-    from app.models.guest_room_avoidance import GuestRoomAvoidance, GuestRoomAvoidanceStatusEnum
-    from app.services.room_block_service import blocked_room_ids_for_range
+    policy_weights = policy_weights or {}
+    from app.models.guest_room_avoidance import (
+        GuestRoomAvoidance,
+        GuestRoomAvoidanceStatusEnum,
+    )
+    from app.models.room_block import RoomBlock
     has_hotel_context = hotel_id is not None
 
     # Load active reservations in the window
@@ -815,6 +1013,12 @@ def build_slots_from_db(
             Reservation.pre_check_in_at,
             Reservation.allocation_locked,
             Reservation.amount_paid,
+                Reservation.total_amount,
+                Reservation.subtotal_amount,
+                Reservation.tax_amount,
+                Reservation.fee_amount,
+                Reservation.commission_amount,
+                Reservation.currency_code,
         ),
     ).filter(
         Reservation.status.notin_([
@@ -846,6 +1050,12 @@ def build_slots_from_db(
         Reservation.allocation_locked,
         Reservation.amount_paid,
         Reservation.mobility_restriction,
+        Reservation.total_amount,
+        Reservation.subtotal_amount,
+        Reservation.tax_amount,
+        Reservation.fee_amount,
+        Reservation.commission_amount,
+        Reservation.currency_code,
     ).all()
     reservation_ids = [reservation.id for reservation in reservation_rows]
     active_lock_ids: set[int] = set()
@@ -859,21 +1069,6 @@ def build_slots_from_db(
                 ReservationAllocationLock.hotel_id == hotel_id
             )
         active_lock_ids = {row.reservation_id for row in active_lock_query.all()}
-    company_ids = {
-        company_id
-        for company_id in {getattr(reservation, "company_id", None) for reservation in reservation_rows}
-        if company_id is not None
-    }
-    protected_company_ids: set[int] = set()
-    if company_ids:
-        company_query = db.query(Company.id).filter(
-            Company.id.in_(company_ids),
-            Company.requires_signature.is_(True) | Company.payment_deferred.is_(True),
-        )
-        if has_hotel_context:
-            company_query = company_query.filter(Company.hotel_id == hotel_id)
-        protected_company_ids = {company_id for (company_id,) in company_query.all()}
-
     # Discover allowed categories intelligently
     from app.models.commercial import ProductRoomCompatibility, SellableProduct
     from app.models.room import RoomCategory
@@ -1023,7 +1218,6 @@ def build_slots_from_db(
             is_locked=_is_protected_reservation(
                 res,
                 active_lock_ids=active_lock_ids,
-                protected_company_ids=protected_company_ids,
             ),
             guest_id=res.guest_id,
             num_guests=max(1, int((res.num_adults or 0) + (res.num_children or 0))),
@@ -1032,10 +1226,35 @@ def build_slots_from_db(
             category_priority_by_id=priority_by_category,
             prior_stay_room_id=prior_stay_room_id,
             avoided_room_ids=sorted(avoided_room_ids),
+            net_revenue_minor_units=_reservation_net_revenue_minor_units(res),
+            currency_code=str(res.currency_code or "ARS").strip().upper(),
+            source_currency_code=str(res.currency_code or "ARS").strip().upper(),
         )
         reservation_slots.append(slot)
 
-    # Load all active rooms — EXCLUDE maintenance, blocked, but include CLEANING as it's a temporary state
+    if has_hotel_context:
+        active_block_rows = (
+            db.query(RoomBlock.room_id, RoomBlock.starts_at, RoomBlock.ends_at)
+            .filter(
+                RoomBlock.hotel_id == hotel_id,
+                RoomBlock.resolved_at.is_(None),
+                RoomBlock.starts_at < end_date,
+                (RoomBlock.ends_at.is_(None) | (RoomBlock.ends_at > start_date)),
+            )
+            .all()
+        )
+        for slot in reservation_slots:
+            slot.blocked_room_ids = sorted(
+                {
+                    room_id
+                    for room_id, block_start, block_end in active_block_rows
+                    if block_start < slot.check_out
+                    and (block_end is None or block_end > slot.check_in)
+                }
+            )
+
+    # Keep rooms with blocks in the solver; a block excludes that room only
+    # for reservations whose stay overlaps the block's half-open date range.
     rooms_query = active_rooms(db, hotel_id).filter(
         Room.is_active == True,
         Room.status.in_([RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED, RoomStatusEnum.CLEANING]),
@@ -1057,12 +1276,6 @@ def build_slots_from_db(
         )
         .all()
     )
-    blocked_room_ids = (
-        blocked_room_ids_for_range(db, hotel_id=hotel_id, start_date=start_date, end_date=end_date)
-        if has_hotel_context
-        else set()
-    )
-
     room_slots = [
         RoomSlot(
             room_id=room_id,
@@ -1074,10 +1287,220 @@ def build_slots_from_db(
             is_accessible=bool(is_accessible),
         )
         for room_id, room_number, category_id, floor, score, is_accessible, max_occupancy in rooms
-        if room_id not in blocked_room_ids
     ]
 
+    objective_mode = str(policy_constraints.get("optimization_objective", "occupied_nights"))
+    revenue_weight = float(policy_weights.get("combined_revenue_weight", 0) or 0)
+    if (
+        has_hotel_context
+        and objective_mode in {"net_revenue", "combined"}
+        and (objective_mode == "net_revenue" or revenue_weight > 0)
+    ):
+        _normalize_revenue_to_hotel_currency(
+            db,
+            hotel_id=hotel_id,
+            reservations=reservation_slots,
+        )
+
     return reservation_slots, room_slots
+
+
+def _normalize_revenue_to_hotel_currency(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservations: list[ReservationSlot],
+) -> None:
+    """Normalize mixed-currency revenue using only fresh, hotel-scoped snapshots.
+
+    Allocation recalculation is a deterministic local operation: it never fetches
+    market data. If a required snapshot is missing or stale, currencies remain
+    distinct so the solver rejects a revenue comparison instead of guessing.
+    """
+    currencies = {str(slot.currency_code or "").strip().upper() for slot in reservations}
+    if len(currencies) <= 1:
+        return
+
+    hotel = db.query(HotelConfiguration).filter(HotelConfiguration.id == hotel_id).first()
+    if hotel is None:
+        return
+    base_currency = str(hotel.default_currency or "ARS").strip().upper()
+    try:
+        from app.services.fx_service import SUPPORTED_CONVERSION_CURRENCIES, quote_is_fresh
+        from app.models.commercial import FxPolicy
+    except ImportError:
+        return
+    if base_currency not in SUPPORTED_CONVERSION_CURRENCIES:
+        return
+
+    market_default = str(getattr(hotel, "fx_conversion_rate_type", "oficial") or "oficial").lower()
+    if market_default not in {"oficial", "blue"}:
+        return
+    usd_to_ars_market = str(
+        getattr(hotel, "fx_usd_to_ars_rate_type", market_default) or market_default
+    ).lower()
+    ars_to_usd_market = str(
+        getattr(hotel, "fx_ars_to_usd_rate_type", market_default) or market_default
+    ).lower()
+    usd_to_ars_side = str(getattr(hotel, "fx_usd_to_ars_rate_side", "venta") or "venta").lower()
+    ars_to_usd_side = str(getattr(hotel, "fx_ars_to_usd_rate_side", "venta") or "venta").lower()
+    if (
+        usd_to_ars_market not in {"oficial", "blue"}
+        or ars_to_usd_market not in {"oficial", "blue"}
+        or usd_to_ars_side not in {"compra", "venta"}
+        or ars_to_usd_side not in {"compra", "venta"}
+    ):
+        return
+
+    fx_policy = (
+        db.query(FxPolicy)
+        .filter(FxPolicy.hotel_id == hotel_id, FxPolicy.is_active.is_(True))
+        .order_by(FxPolicy.id.asc())
+        .first()
+    )
+    try:
+        spread = Decimal(str(getattr(fx_policy, "spread_pct", 0) or 0))
+    except (InvalidOperation, TypeError, ValueError):
+        return
+    if not spread.is_finite() or spread < 0:
+        return
+
+    snapshot_cache: dict[tuple[str, str], tuple[Decimal, FxRateSnapshot] | None] = {}
+
+    def selected_market_and_side(currency: str, *, source: bool) -> tuple[str, str]:
+        if currency == "USD":
+            return (
+                (usd_to_ars_market, usd_to_ars_side)
+                if source
+                else (ars_to_usd_market, ars_to_usd_side)
+            )
+        return market_default, "venta" if source else "compra"
+
+    def fresh_rate(currency: str, market: str, side: str) -> tuple[Decimal, FxRateSnapshot] | None:
+        key = (currency, market)
+        if key in snapshot_cache:
+            cached = snapshot_cache[key]
+            if cached is None:
+                return None
+            return (Decimal(str(cached[1].compra if side == "compra" else cached[1].venta)), cached[1])
+
+        selected_type = market if currency == "USD" else f"{currency.lower()}_{market}"
+        expected_provider_market = (
+            market if currency == "USD" or market == "oficial" else "blue_derivado"
+        )
+        snapshots = (
+            db.query(FxRateSnapshot)
+            .filter(
+                FxRateSnapshot.hotel_id == hotel_id,
+                FxRateSnapshot.rate_type == selected_type,
+                FxRateSnapshot.moneda == currency,
+            )
+            .order_by(FxRateSnapshot.provider_updated_at.desc(), FxRateSnapshot.fetched_at.desc())
+            .limit(20)
+            .all()
+        )
+        for snapshot in snapshots:
+            updated_at = snapshot.provider_updated_at or snapshot.fetched_at
+            quote = {
+                "compra": snapshot.compra,
+                "venta": snapshot.venta,
+                "fechaActualizacion": updated_at.isoformat() if updated_at else None,
+            }
+            if (
+                str(snapshot.provider_market or expected_provider_market).lower()
+                != expected_provider_market
+                or not quote_is_fresh(quote)
+            ):
+                continue
+            try:
+                selected_rate = Decimal(
+                    str(snapshot.compra if side == "compra" else snapshot.venta)
+                )
+            except (InvalidOperation, TypeError, ValueError):
+                continue
+            if not selected_rate.is_finite() or selected_rate <= 0:
+                continue
+            snapshot_cache[key] = (selected_rate, snapshot)
+            return selected_rate, snapshot
+        snapshot_cache[key] = None
+        return None
+
+    converted: list[tuple[ReservationSlot, int, dict]] = []
+    for slot in reservations:
+        source_currency = str(slot.currency_code or "").strip().upper()
+        if source_currency not in SUPPORTED_CONVERSION_CURRENCIES:
+            return
+        if source_currency == base_currency:
+            converted.append(
+                (
+                    slot,
+                    max(0, slot.net_revenue_minor_units),
+                    {
+                        "source_currency": source_currency,
+                        "allocation_currency": base_currency,
+                        "applied_rate": "1",
+                        "snapshot_ids": [],
+                        "snapshot_updated_at": [],
+                    },
+                )
+            )
+            continue
+        source_rate = Decimal(1)
+        target_rate = Decimal(1)
+        snapshots_used: list[FxRateSnapshot] = []
+        source_market = source_side = target_market = target_side = None
+
+        if source_currency != "ARS":
+            source_market, source_side = selected_market_and_side(source_currency, source=True)
+            source_quote = fresh_rate(source_currency, source_market, source_side)
+            if source_quote is None:
+                return
+            source_rate, source_snapshot = source_quote
+            snapshots_used.append(source_snapshot)
+
+        if base_currency != "ARS":
+            target_market, target_side = selected_market_and_side(base_currency, source=False)
+            target_quote = fresh_rate(base_currency, target_market, target_side)
+            if target_quote is None:
+                return
+            target_rate, target_snapshot = target_quote
+            snapshots_used.append(target_snapshot)
+
+        effective_rate = (source_rate / target_rate) * (Decimal(1) + spread / Decimal(100))
+        if not effective_rate.is_finite() or effective_rate <= 0:
+            return
+        base_amount = (
+            Decimal(max(0, slot.net_revenue_minor_units)) * effective_rate
+        ).to_integral_value(rounding=ROUND_HALF_UP)
+        details = {
+            "source_currency": source_currency,
+            "allocation_currency": base_currency,
+            "source_ars_per_unit": str(source_rate),
+            "target_ars_per_unit": str(target_rate),
+            "applied_rate": str(effective_rate),
+            "source_market": source_market,
+            "source_side": source_side,
+            "target_market": target_market,
+            "target_side": target_side,
+            "spread_pct": str(spread),
+            "snapshot_ids": sorted({snapshot.id for snapshot in snapshots_used}),
+            "snapshot_updated_at": sorted(
+                {
+                    (snapshot.provider_updated_at or snapshot.fetched_at).isoformat()
+                    for snapshot in snapshots_used
+                    if snapshot.provider_updated_at or snapshot.fetched_at
+                }
+            ),
+        }
+        converted.append((slot, int(base_amount), details))
+
+    # Apply only after every source has a valid quote, so one missing quote can
+    # never leave the in-memory set partially normalized.
+    for slot, amount, details in converted:
+        slot.source_currency_code = str(slot.currency_code or "").strip().upper()
+        slot.net_revenue_minor_units = amount
+        slot.currency_code = base_currency
+        slot.fx_conversion_details = details
 
 
 def _lowest_compatible_floor(reservation: ReservationSlot, rooms: list[RoomSlot]) -> int | None:
@@ -1116,24 +1539,44 @@ def _is_protected_reservation(
     reservation: Reservation,
     *,
     active_lock_ids: set[int],
-    protected_company_ids: set[int],
 ) -> bool:
-    has_assigned_payment = bool(
-        reservation.status in {
-            ReservationStatusEnum.DEPOSIT_PAID,
-            ReservationStatusEnum.FULLY_PAID,
-        }
-        or (getattr(reservation, "amount_paid", None) or 0) > 0
-    )
     return bool(
-        reservation.status in {ReservationStatusEnum.CHECKED_IN, ReservationStatusEnum.PRE_CHECK_IN}
+        reservation.status in {
+            ReservationStatusEnum.PARTIAL_CHECK_IN,
+            ReservationStatusEnum.CHECKED_IN,
+        }
         or getattr(reservation, "actual_check_in", None) is not None
-        or getattr(reservation, "pre_check_in_at", None) is not None
         or getattr(reservation, "allocation_locked", False)
-        or (reservation.room_id is not None and has_assigned_payment)
         or reservation.id in active_lock_ids
-        or (
-            getattr(reservation, "company_id", None) is not None
-            and reservation.company_id in protected_company_ids
-        )
     )
+
+
+def _reservation_net_revenue_minor_units(reservation) -> int:
+    """Return net room revenue in cents, before tax and after commission.
+
+    The persisted subtotal is already after discounts. Older/manual records may
+    not have a subtotal snapshot, so derive it from the final amount minus tax
+    and fees only when the subtotal is absent.
+    """
+
+    def money(value) -> Decimal:
+        try:
+            amount = Decimal(str(value or 0))
+            return amount if amount.is_finite() else Decimal("0")
+        except (InvalidOperation, TypeError, ValueError):
+            return Decimal("0")
+
+    total = money(getattr(reservation, "total_amount", 0))
+    subtotal = money(getattr(reservation, "subtotal_amount", 0))
+    if subtotal <= 0 < total:
+        subtotal = max(
+            total
+            - money(getattr(reservation, "tax_amount", 0))
+            - money(getattr(reservation, "fee_amount", 0)),
+            Decimal("0"),
+        )
+    net_revenue = max(
+        subtotal - money(getattr(reservation, "commission_amount", 0)),
+        Decimal("0"),
+    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return int((net_revenue * 100).to_integral_value(rounding=ROUND_HALF_UP))

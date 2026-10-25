@@ -4,8 +4,8 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from datetime import datetime, timezone
 import unicodedata
+from datetime import datetime, timezone
 from uuid import uuid4
 from weakref import WeakSet
 
@@ -16,11 +16,11 @@ from sqlalchemy.orm import Session
 
 from app.models.hotel_membership import HotelMembership
 from app.models.hotel_role import HotelRole
-from app.models.invitation import StaffInvitation
 from app.models.hotel_role_visibility_window import (
-    HotelRoleVisibilityWindow,
     VISIBILITY_WINDOW_HOURS,
+    HotelRoleVisibilityWindow,
 )
+from app.models.invitation import StaffInvitation
 from app.models.permission import (
     HotelPermissionOverride,
     Permission,
@@ -28,7 +28,6 @@ from app.models.permission import (
     UserPermissionOverride,
 )
 from app.models.security_audit_log import SecurityAuditLog
-
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +87,8 @@ PERMISSION_RESERVATION_PAID_TOTAL_ADJUST = "reservation:paid_total_adjust"
 PERMISSION_RESERVATION_RATE_ADJUST = "reservation:rate_adjust"
 PERMISSION_RESERVATION_CANCEL = "reservation:cancel"
 PERMISSION_RESERVATION_CANCEL_PAID = "reservation:cancel_paid"
+PERMISSION_RESERVATION_CANCEL_PENALTY_APPROVE = "reservation:cancel_penalty_approve"
+PERMISSION_RESERVATION_ROOM_DIRTY_OVERRIDE = "reservation:room_dirty_override"
 PERMISSION_RESERVATION_DELETE = "reservation:delete"
 PERMISSION_RESERVATION_DEMO_SEED = "reservation:demo_seed"
 PERMISSION_RESERVATION_CHARGE = "reservation:charge"
@@ -112,11 +113,13 @@ PERMISSION_STOCK_READ = "stock:read"
 PERMISSION_STOCK_MOVE = "stock:movement"
 PERMISSION_STOCK_ADJUST = "stock:adjust"
 PERMISSION_STOCK_ADMIN = "stock:admin"
+PERMISSION_STOCK_COUNT_CONFIRM = "stock:count_confirm"
 PERMISSION_LAUNDRY_READ = "laundry:read"
 PERMISSION_LAUNDRY_MOVE = "laundry:movement"
 PERMISSION_LAUNDRY_VENDOR_MANAGE = "laundry:vendor_manage"
 PERMISSION_LAUNDRY_REMITO_MANAGE = "laundry:remito_manage"
 PERMISSION_LAUNDRY_PRICE_MANAGE = "laundry:price_manage"
+PERMISSION_LAUNDRY_DISCREPANCY_APPROVE = "laundry:discrepancy_approve"
 PERMISSION_RATES_READ = "rates:read"
 PERMISSION_RATES_UPDATE = "rates:update"
 PERMISSION_PROMOTIONS_READ = "promotions:read"
@@ -128,6 +131,7 @@ PERMISSION_HOTEL_SECURITY_MANAGE = "hotel_settings:security_manage"
 
 # Existing capabilities outside the split modules stay canonical.
 PERMISSION_COMPANY_MANAGE = "company:manage"
+PERMISSION_COMPANY_DOCUMENTS_READ = "company:documents:read"
 PERMISSION_COMPANY_NIGHT_RATE_MANAGE = "company:night_rate_manage"
 PERMISSION_CASH_OPERATE = "cash:operate"
 PERMISSION_CASH_ADJUSTMENT_MANAGE = "cash:adjustment_manage"
@@ -145,6 +149,7 @@ PERMISSION_REPORTS_FINANCIAL_VIEW = "reports:financial:view"
 PERMISSION_PAYMENT_PROOF_VIEW = "payment:proof:view"
 PERMISSION_PAYMENT_PROOF_REVIEW = "payment:proof:review"
 PERMISSION_PAYMENT_REFUND = "payment:refund"
+PERMISSION_PAYMENT_CORRECT = "payment:correct"
 PERMISSION_OTA_PAYMENT_CONFIRM = "payment:ota_confirm"
 PERMISSION_PAYMENT_RECEIPT_EMAIL = "payment:receipt_email"
 PERMISSION_APIKEY_MANAGE = "apikey:manage"
@@ -312,6 +317,14 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "reservations", "Cancel reservations with completed payments",
         "Permite cancelar una reserva con historial de pagos completados. Requiere el permiso habitual de cancelación y, si la cuenta tiene MFA activado, MFA reciente.",
     ),
+    PERMISSION_RESERVATION_CANCEL_PENALTY_APPROVE: (
+        "reservations", "Approve reservation cancellation penalties",
+        "Permite aprobar o rechazar una solicitud de cancelación con penalidad y revisar casos históricos sin condiciones guardadas. La penalidad queda como registro de auditoría y no crea un cobro, deuda ni devolución.",
+    ),
+    PERMISSION_RESERVATION_ROOM_DIRTY_OVERRIDE: (
+        "reservations", "Move an in-house guest into a room with an open housekeeping checklist",
+        "Permite a Gerencia autorizar un traslado de emergencia a una habitación con checklist de limpieza abierto. Requiere un motivo y deja auditoría; no habilita check-in ni movimientos futuros sobre esa habitación.",
+    ),
     PERMISSION_RESERVATION_DELETE: (
         "reservations", "Delete eligible bookings",
         "Permite eliminar lógicamente reservas que todavía no fueron marcadas como ingresadas o finalizadas. No reemplaza la cancelación ni borra el historial de reservas activas o concluidas.",
@@ -408,6 +421,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "stock", "Manage stock catalog and locations",
         "Permite administrar artículos y ubicaciones de stock. No permite ajustar existencias salvo que tengas el permiso específico.",
     ),
+    PERMISSION_STOCK_COUNT_CONFIRM: (
+        "stock", "Confirm physical stock counts",
+        "Permite confirmar diferencias de un conteo físico y aplicar sus ajustes auditados. Se puede configurar por rol desde Permisos.",
+    ),
     PERMISSION_LAUNDRY_READ: (
         "laundry", "Read laundry operation",
         "Permite consultar la operación de lavandería y la ropa blanca. No permite registrar movimientos ni administrar proveedores.",
@@ -427,6 +444,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     PERMISSION_LAUNDRY_PRICE_MANAGE: (
         "laundry", "Manage vendor prices",
         "Permite administrar precios de proveedores de lavandería. No permite crear o recibir remitos.",
+    ),
+    PERMISSION_LAUNDRY_DISCREPANCY_APPROVE: (
+        "laundry", "Approve and reconcile laundry discrepancies",
+        "Permite revisar diferencias de remitos, definir su resolución y confirmar bajas, reposiciones o créditos. No permite crear remitos.",
     ),
     PERMISSION_RATES_READ: (
         "rates", "Read hotel rates",
@@ -491,6 +512,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     PERMISSION_PAYMENT_REFUND: (
         "payments", "Issue reservation refunds",
         "Permite devolver un cobro registrado. Además del permiso para operar cobros, si la cuenta tiene MFA activado requiere MFA reciente.",
+    ),
+    PERMISSION_PAYMENT_CORRECT: (
+        "payments", "Correct a recorded payment",
+        "Permite revertir un cobro mal imputado o duplicado con motivo y auditoría, y reasignarlo a otra reserva cuando corresponda. No devuelve dinero; requiere permiso de caja y, si la cuenta tiene MFA activado, MFA reciente. Solo Gerencia o superior.",
     ),
     PERMISSION_OTA_PAYMENT_CONFIRM: (
         "payments", "Confirm an external OTA prepayment",
@@ -587,6 +612,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     PERMISSION_COMPANY_VIEW: (
         "companies", "Read companies and documents",
         "Permite consultar empresas y sus documentos. No permite crearlos, editarlos ni administrarlos.",
+    ),
+    PERMISSION_COMPANY_DOCUMENTS_READ: (
+        "companies", "Read company vouchers and signatures",
+        "Permite listar y descargar vouchers y firmas corporativas vinculados a empresas o reservas. No permite cargar, cambiar el estado ni eliminar documentos; esas acciones conservan sus permisos actuales.",
     ),
     PERMISSION_SETTINGS_USERS_VIEW: (
         "settings", "Read staff users and roles",
@@ -787,6 +816,8 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_COMPANY_NIGHT_RATE_MANAGE,
         PERMISSION_RESERVATION_CANCEL,
         PERMISSION_RESERVATION_CANCEL_PAID,
+        PERMISSION_RESERVATION_CANCEL_PENALTY_APPROVE,
+        PERMISSION_RESERVATION_ROOM_DIRTY_OVERRIDE,
         PERMISSION_RESERVATION_DELETE, PERMISSION_RESERVATION_DEMO_SEED,
         PERMISSION_RESERVATION_MOVE, PERMISSION_RESERVATION_MOVE_CATEGORY,
         PERMISSION_RESERVATION_MOVE_CAPACITY, PERMISSION_RESERVATION_MOVEMENT_GROUP_REVERT,
@@ -796,18 +827,22 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_ROOM_BLOCK_CREATE, PERMISSION_ROOM_BLOCK_RELEASE,
         PERMISSION_CHECKIN_PERFORM, PERMISSION_CHECKOUT_PERFORM,
         PERMISSION_STOCK_READ, PERMISSION_STOCK_MOVE, PERMISSION_STOCK_ADMIN,
+        PERMISSION_STOCK_COUNT_CONFIRM,
         PERMISSION_LAUNDRY_READ, PERMISSION_LAUNDRY_MOVE,
         PERMISSION_LAUNDRY_VENDOR_MANAGE, PERMISSION_LAUNDRY_REMITO_MANAGE,
+        PERMISSION_LAUNDRY_DISCREPANCY_APPROVE,
         PERMISSION_RATES_READ,
         PERMISSION_RATES_UPDATE, PERMISSION_PROMOTIONS_READ,
         PERMISSION_PROMOTIONS_MANAGE, PERMISSION_REPORTS_OPERATIONAL_VIEW,
         PERMISSION_COMPANY_MANAGE, PERMISSION_COMPANY_VIEW,
+        PERMISSION_COMPANY_DOCUMENTS_READ,
         PERMISSION_PAYMENT_PROOF_VIEW, PERMISSION_PAYMENT_PROOF_REVIEW,
         PERMISSION_RESERVATION_CHARGE, PERMISSION_CASH_OPERATE,
         PERMISSION_CASH_EXPENSE,
         PERMISSION_CASH_EXPENSE_APPROVE,
         PERMISSION_CASH_RECORD_PRIOR_RECEIPT,
         PERMISSION_PAYMENT_REFUND,
+        PERMISSION_PAYMENT_CORRECT,
         PERMISSION_OTA_PAYMENT_CONFIRM,
         PERMISSION_PAYMENT_RECEIPT_EMAIL,
         PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
@@ -870,6 +905,7 @@ _STEP_UP_REQUIRED = _CRITICAL_PERMISSION_CODES | frozenset(
         PERMISSION_CASH_ADJUSTMENT_MANAGE,
         PERMISSION_CASH_EXPENSE_APPROVE,
         PERMISSION_PAYMENT_REFUND,
+        PERMISSION_PAYMENT_CORRECT,
         PERMISSION_OTA_PAYMENT_CONFIRM,
         PERMISSION_GUEST_EXPORT,
         PERMISSION_RESERVATION_EXPORT,
@@ -907,6 +943,7 @@ _ROLE_SCOPES: dict[str, frozenset[str]] = {
     PERMISSION_CASH_APPROVE_DIFFERENCE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_CASH_CUSTODY_RECEIVE: frozenset({ROLE_OWNER, ROLE_CO_OWNER}),
     PERMISSION_CASH_EXPENSE_APPROVE: frozenset({ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER}),
+    PERMISSION_PAYMENT_CORRECT: frozenset({ROLE_OWNER, ROLE_CO_OWNER, ROLE_MANAGER}),
 }
 _CO_OWNER_ADMIN_ACCESS_PERMISSIONS = frozenset(
     {
@@ -1142,7 +1179,10 @@ def publish_permission_invalidation(hotel_id: int) -> None:
     """Best-effort tenant signal after commit; never roll back the RBAC write."""
 
     try:
-        from app.services.domain_events import RealtimeEventsUnavailable, publish_domain_event
+        from app.services.domain_events import (
+            RealtimeEventsUnavailable,
+            publish_domain_event,
+        )
 
         publish_domain_event(
             hotel_id=hotel_id,

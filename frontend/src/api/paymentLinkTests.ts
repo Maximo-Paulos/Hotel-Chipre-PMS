@@ -54,12 +54,6 @@ export const createMercadoPagoPaymentLinkTest = (payload: PaymentLinkTestCreateP
     session,
   });
 
-export const refreshPaymentLinkTest = (testId: number, session?: SessionLike) =>
-  apiFetch<PaymentLinkTest>(`/api/payment-link-tests/${testId}/refresh`, {
-    method: "POST",
-    session,
-  });
-
 export const cancelPaymentLinkTest = (testId: number, session?: SessionLike) =>
   apiFetch<PaymentLinkTest>(`/api/payment-link-tests/${testId}/cancel`, {
     method: "POST",

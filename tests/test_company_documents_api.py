@@ -14,10 +14,11 @@ from app.models.company import Company
 from app.models.company_document import CompanyDocumentTypeEnum
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.permission import HotelPermissionOverride
 from app.models.room import Room, RoomCategory, RoomStatusEnum
-from app.services.object_storage import ObjectStat
 from app.models.user import User
 from app.schemas.reservation import ReservationCreate
+from app.services.object_storage import ObjectStat
 from app.services.reservation_service import create_reservation
 
 
@@ -185,6 +186,9 @@ def test_receptionist_cannot_manage_company_by_default():
             },
         )
         assert document_response.status_code == 403
+
+        listed = client.get(f"/api/company-documents/reservation/{reservation.id}")
+        assert listed.status_code == 403
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()
@@ -320,6 +324,84 @@ def test_uploaded_company_voucher_is_private_signature_aware_and_tenant_scoped(m
         assert document["requires_signature"] is True
         assert document["status"] == "pending"
 
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "receptionist", user_id=10)
+        receptionist_list = client.get(f"/api/company-documents/reservation/{reservation.id}")
+        assert receptionist_list.status_code == 403
+        receptionist_file = client.get(f"/api/company-documents/{document['id']}/file")
+        assert receptionist_file.status_code == 403
+        receptionist_detail = client.get(f"/api/company-documents/{document['id']}")
+        assert receptionist_detail.status_code == 403
+        receptionist_sign = client.post(f"/api/company-documents/{document['id']}/mark-signed")
+        assert receptionist_sign.status_code == 403
+
+        db.add(
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="receptionist",
+                permission_code="company:view",
+                allowed=True,
+                updated_by_user_id=55,
+            )
+        )
+        db.commit()
+        company_list_without_document_grant = client.get(f"/api/company-documents/company/{company.id}")
+        assert company_list_without_document_grant.status_code == 403
+
+        receptionist_upload = client.post(
+            "/api/company-documents/upload",
+            json={
+                "reservation_id": reservation.id,
+                "company_id": company.id,
+                "doc_type": CompanyDocumentTypeEnum.VOUCHER_PDF.value,
+                "file_name": "unauthorized.pdf",
+                "content_base64": base64.b64encode(pdf).decode("ascii"),
+            },
+        )
+        assert receptionist_upload.status_code == 403
+
+        db.add(
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="receptionist",
+                permission_code="company:documents:read",
+                allowed=True,
+                updated_by_user_id=55,
+            )
+        )
+        db.commit()
+        granted_list = client.get(f"/api/company-documents/reservation/{reservation.id}")
+        assert granted_list.status_code == 200
+        assert [item["id"] for item in granted_list.json()] == [document["id"]]
+        granted_company_list = client.get(f"/api/company-documents/company/{company.id}")
+        assert granted_company_list.status_code == 200
+        assert [item["id"] for item in granted_company_list.json()] == [document["id"]]
+        granted_detail = client.get(f"/api/company-documents/{document['id']}")
+        assert granted_detail.status_code == 200
+        assert granted_detail.json()["id"] == document["id"]
+        granted_file = client.get(f"/api/company-documents/{document['id']}/file")
+        assert granted_file.status_code == 200
+        assert granted_file.content == pdf
+        granted_sign = client.post(f"/api/company-documents/{document['id']}/mark-signed")
+        assert granted_sign.status_code == 200
+        assert granted_sign.json()["status"] == "signed"
+        still_forbidden_upload = client.post(
+            "/api/company-documents/upload",
+            json={
+                "reservation_id": reservation.id,
+                "company_id": company.id,
+                "doc_type": CompanyDocumentTypeEnum.VOUCHER_PDF.value,
+                "file_name": "still-unauthorized.pdf",
+                "content_base64": base64.b64encode(pdf).decode("ascii"),
+            },
+        )
+        assert still_forbidden_upload.status_code == 403
+        still_forbidden_status_change = client.patch(
+            f"/api/company-documents/{document['id']}/status",
+            json={"status": "signed"},
+        )
+        assert still_forbidden_status_change.status_code == 403
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "manager", user_id=55)
         file_response = client.get(f"/api/company-documents/{document['id']}/file")
         assert file_response.status_code == 200
         assert file_response.content == pdf

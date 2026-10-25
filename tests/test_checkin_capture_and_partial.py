@@ -7,6 +7,7 @@ endpoint -- no new backend, just a regression guard here.
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -15,11 +16,14 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
+from app.api import bookings as bookings_api
+from app.api import checkin as checkin_api
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services import checkin_service
+from app.services.checkin_service import CheckOutConflictError
 
 HOTEL_ID = 7301
 
@@ -95,6 +99,28 @@ def _seed_fully_paid_reservation(db, *, guest_kwargs=None, max_occupancy=2) -> R
     return reservation
 
 
+def _assert_reservation_response(response, reservation, *, status, balance_due):
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    expected_contract = {
+        "id",
+        "confirmation_code",
+        "guest_id",
+        "check_in_date",
+        "check_out_date",
+        "status",
+        "balance_due",
+        "nights",
+    }
+    assert expected_contract <= payload.keys()
+    assert payload["id"] == reservation.id
+    assert payload["confirmation_code"] == reservation.confirmation_code
+    assert payload["guest_id"] == reservation.guest_id
+    assert payload["status"] == status.value
+    assert payload["balance_due"] == float(balance_due)
+    assert payload["nights"] == 2
+
+
 def test_checkin_without_new_fields_fails_with_clear_message(monkeypatch):
     """Red case: guest missing the 4 new mandatory fields cannot check in."""
     client, db, engine = _client_with_db()
@@ -131,8 +157,12 @@ def test_checkin_captures_missing_fields_in_same_request(monkeypatch):
                 }
             },
         )
-        assert response.status_code == 200, response.text
-        assert response.json()["status"] == ReservationStatusEnum.CHECKED_IN.value
+        _assert_reservation_response(
+            response,
+            reservation,
+            status=ReservationStatusEnum.CHECKED_IN,
+            balance_due=Decimal("0.00"),
+        )
 
         db.refresh(reservation)
         guest = db.query(Guest).filter(Guest.id == reservation.guest_id).first()
@@ -159,15 +189,77 @@ def test_partial_checkin_reaches_pre_check_in_then_final_checkin(monkeypatch):
         }
 
         partial = client.post(f"/api/checkin/{reservation.id}/partial", json=guest_patch)
-        assert partial.status_code == 200, partial.text
-        assert partial.json()["status"] == ReservationStatusEnum.PRE_CHECK_IN.value
+        _assert_reservation_response(
+            partial,
+            reservation,
+            status=ReservationStatusEnum.PRE_CHECK_IN,
+            balance_due=Decimal("0.00"),
+        )
 
         db.refresh(reservation)
         assert reservation.pre_check_in_at is not None
 
         final = client.post(f"/api/checkin/{reservation.id}")
-        assert final.status_code == 200, final.text
-        assert final.json()["status"] == ReservationStatusEnum.CHECKED_IN.value
+        _assert_reservation_response(
+            final,
+            reservation,
+            status=ReservationStatusEnum.CHECKED_IN,
+            balance_due=Decimal("0.00"),
+        )
+
+        reservation.amount_paid = Decimal("175.00")
+        db.commit()
+        checkout = client.post(f"/api/checkin/checkout/{reservation.id}?force=true")
+        _assert_reservation_response(
+            checkout,
+            reservation,
+            status=ReservationStatusEnum.CHECKED_OUT,
+            balance_due=Decimal("25.00"),
+        )
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+        engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("route_name", "api_module"),
+    [("checkin", checkin_api), ("legacy_bookings", bookings_api)],
+)
+def test_checkout_room_lock_conflict_returns_409_and_rolls_back(monkeypatch, route_name, api_module):
+    client, db, engine = _client_with_db()
+    try:
+        reservation = _seed_fully_paid_reservation(db)
+        reservation.status = ReservationStatusEnum.CHECKED_IN
+        db.commit()
+        rollback = db.rollback
+        rollback_calls = []
+
+        def tracked_rollback():
+            rollback_calls.append(True)
+            rollback()
+
+        def conflicting_checkout(session, reservation_id, **_kwargs):
+            target = session.get(Reservation, reservation_id)
+            target.status = ReservationStatusEnum.CHECKED_OUT
+            session.flush()
+            raise CheckOutConflictError("La habitación está ocupada por otra operación; reintentá el check-out.")
+
+        monkeypatch.setattr(db, "rollback", tracked_rollback)
+        monkeypatch.setattr(api_module, "perform_checkout", conflicting_checkout)
+
+        path = (
+            f"/api/checkin/checkout/{reservation.id}?force=true"
+            if route_name == "checkin"
+            else f"/api/bookings/{reservation.id}/checkout"
+        )
+        response = client.post(path)
+
+        assert response.status_code == 409
+        assert "reintentá el check-out" in response.json()["detail"]
+        assert rollback_calls == [True]
+        db.refresh(reservation)
+        assert reservation.status == ReservationStatusEnum.CHECKED_IN
     finally:
         fastapi_app.dependency_overrides.clear()
         db.close()

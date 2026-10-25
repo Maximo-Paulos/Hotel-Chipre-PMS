@@ -13,6 +13,7 @@ import {
   getCashSessionCloseReport,
   getCashDailySummary,
   listCashMovements,
+  listCashSessionPage,
   listCashSessions,
   listPendingCashCloseReports,
   listPendingCashCustodyReports,
@@ -25,6 +26,8 @@ import {
   type CashMovement,
   type CashMovementPayload,
   type CashSession,
+  type CashSessionPage,
+  type CashSessionStatus,
   type CashSessionClosePayload,
   type CashSessionOpenPayload,
   type CashSessionSummary,
@@ -55,11 +58,21 @@ export function invalidateCashRegisterQueries(queryClient: QueryClient, hotelId:
   return refreshCashState(queryClient, hotelId);
 }
 
-export function useCashSessions(options?: { enabled?: boolean }) {
+export function useCashSessions(options?: { enabled?: boolean; status?: CashSessionStatus }) {
   const { session } = useSession();
   return useQuery<CashSession[]>({
-    queryKey: cashSessionsKey(session.hotelId),
-    queryFn: () => listCashSessions(session),
+    queryKey: [...cashSessionsKey(session.hotelId), options?.status ?? "all"],
+    queryFn: () => listCashSessions(session, options?.status),
+    enabled: hasValidSession(session) && (options?.enabled ?? true),
+    staleTime: 15 * 1000
+  });
+}
+
+export function useCashSessionPage(page: number, options?: { enabled?: boolean }) {
+  const { session } = useSession();
+  return useQuery<CashSessionPage>({
+    queryKey: [...cashSessionsKey(session.hotelId), "page", page],
+    queryFn: () => listCashSessionPage(page, session),
     enabled: hasValidSession(session) && (options?.enabled ?? true),
     staleTime: 15 * 1000
   });

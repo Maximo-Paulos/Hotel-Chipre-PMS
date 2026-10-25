@@ -1,8 +1,9 @@
-"""Canonical room status transition service.
+"""Canonical, transaction-local room state mutation and orchestration.
 
-Every room status mutation must pass through this module so the operational
-event projection and persisted reallocation cannot be skipped by a generic
-API caller.
+``mutate_room_state`` changes a tenant-owned room and writes its strict audit
+row in the caller's transaction. It deliberately does not commit, publish,
+invalidate caches, or run allocation. ``change_room_status`` remains the
+compatibility boundary for callers that need those orchestration effects.
 """
 from __future__ import annotations
 
@@ -14,8 +15,15 @@ from app.models.audit_log import AuditActionEnum
 from app.models.room import Room, RoomHousekeepingStatusEnum, RoomStatusEnum
 from app.services import audit_log_service
 from app.services.allocation_runtime_service import run_persisted_allocation
+from app.services.housekeeping_checklist_policy import (
+    open_housekeeping_checklist_exists,
+)
 from app.services.read_model_cache import invalidate_hotel_operational_caches
 from app.services.timeseries_projection import project_room_state_event
+
+
+class RoomStateTransitionError(ValueError):
+    """A requested room status conflicts with its operational checklist."""
 
 
 UNAVAILABLE_STATUSES = {
@@ -23,6 +31,109 @@ UNAVAILABLE_STATUSES = {
     RoomStatusEnum.MAINTENANCE,
     RoomStatusEnum.BLOCKED,
 }
+
+
+def mutate_room_state(
+    db: Session,
+    *,
+    room: Room,
+    hotel_id: int,
+    status: RoomStatusEnum | None = None,
+    housekeeping_status: RoomHousekeepingStatusEnum | None = None,
+    notes: str | None = None,
+    actor_user_id: int | None = None,
+    audit_on_noop: bool = False,
+    allow_open_checklist_occupancy_override: bool = False,
+    checklist_override_reason: str | None = None,
+) -> bool:
+    """Mutate one tenant-scoped room and audit the change without committing.
+
+    Callers own the transaction and must acquire any required room lock before
+    calling this function. Release/occupancy and housekeeping-ready transitions
+    are blocked while a fixed post-checkout checklist remains open. The only
+    override is an explicitly authorized in-house room move to OCCUPIED with a
+    nonblank reason. The strict audit row is flushed in the same transaction
+    as the room mutation.
+
+    Returns whether the persisted room state changed. ``audit_on_noop`` exists
+    for the legacy status endpoint, which historically records each explicit
+    status command even when its requested value already matches the room.
+    """
+    if room.id is None or room not in db or room.hotel_id != hotel_id:
+        raise RoomStateTransitionError("La habitación no pertenece al hotel solicitado.")
+    if status is None and housekeeping_status is None and notes is None:
+        raise RoomStateTransitionError("Se requiere un cambio de estado de habitación.")
+
+    # Recheck ownership against persisted data without flushing unrelated
+    # changes staged by the caller. The ORM object itself must also be attached
+    # to this session so an untrusted detached object cannot be mutated here.
+    with db.no_autoflush:
+        tenant_room_exists = (
+            db.query(Room.id)
+            .filter(Room.id == room.id, Room.hotel_id == hotel_id)
+            .one_or_none()
+        )
+    if tenant_room_exists is None:
+        raise RoomStateTransitionError("La habitación no pertenece al hotel solicitado.")
+
+    release_or_occupancy = status in {RoomStatusEnum.AVAILABLE, RoomStatusEnum.OCCUPIED}
+    normalized_override_reason = (checklist_override_reason or "").strip()
+    if allow_open_checklist_occupancy_override and (
+        status != RoomStatusEnum.OCCUPIED or not normalized_override_reason
+    ):
+        raise RoomStateTransitionError(
+            "El override de checklist requiere ocupar la habitación y registrar un motivo."
+        )
+    housekeeping_ready = housekeeping_status in {
+        RoomHousekeepingStatusEnum.CLEAN,
+        RoomHousekeepingStatusEnum.INSPECTED,
+    }
+    checklist_open = open_housekeeping_checklist_exists(
+        db,
+        hotel_id=hotel_id,
+        room_id=room.id,
+    )
+    checklist_override_active = (
+        checklist_open and allow_open_checklist_occupancy_override
+    )
+    if (release_or_occupancy or housekeeping_ready) and checklist_open and not checklist_override_active:
+        if release_or_occupancy:
+            detail = "No se puede liberar ni ocupar la habitación mientras tenga un checklist de limpieza pendiente."
+        else:
+            detail = "Completá los cinco puntos del checklist antes de marcar la habitación como limpia."
+        raise RoomStateTransitionError(detail)
+
+    before = audit_log_service.model_snapshot(room)
+    if status is not None:
+        room.status = status
+    if housekeeping_status is not None:
+        room.housekeeping_status = housekeeping_status
+    if status == RoomStatusEnum.CLEANING:
+        room.housekeeping_status = RoomHousekeepingStatusEnum.DIRTY
+    if notes is not None:
+        room.notes = notes
+    after = audit_log_service.model_snapshot(room)
+    changed = before != after
+    audit_after = after
+    if checklist_override_active:
+        audit_after = {
+            **after,
+            "checklist_override": True,
+            "checklist_override_reason": normalized_override_reason,
+        }
+
+    if changed or audit_on_noop or checklist_override_active:
+        audit_log_service.create_audit_log(
+            db,
+            hotel_id=hotel_id,
+            table_name="rooms",
+            record_id=room.id,
+            action=AuditActionEnum.STATUS_CHANGE,
+            actor_user_id=actor_user_id,
+            payload_before=before,
+            payload_after=audit_after,
+        )
+    return changed
 
 
 def change_room_status(
@@ -41,22 +152,14 @@ def change_room_status(
     the new state does not require reallocation. Allocation failures retain the
     existing API contract and are returned as a safe error payload.
     """
-    before = audit_log_service.model_snapshot(room)
-    room.status = status
-    if status == RoomStatusEnum.CLEANING:
-        room.housekeeping_status = RoomHousekeepingStatusEnum.DIRTY
-    if notes is not None:
-        room.notes = notes
-
-    audit_log_service.create_audit_log(
+    mutate_room_state(
         db,
+        room=room,
         hotel_id=hotel_id,
-        table_name="rooms",
-        record_id=room.id,
-        action=AuditActionEnum.STATUS_CHANGE,
+        status=status,
+        notes=notes,
         actor_user_id=actor_user_id,
-        payload_before=before,
-        payload_after=audit_log_service.model_snapshot(room),
+        audit_on_noop=True,
     )
     db.commit()
     db.refresh(room)

@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -6,6 +8,7 @@ import app.main as main_module
 from app.schemas.hotel_config import HotelConfigUpdate
 from app.schemas.onboarding import HotelIdentityPayload
 from app.services import timezones as timezones_service
+from app.services.timezones import hotel_local_date_bounds
 
 
 def test_timezone_catalog_is_cached(monkeypatch):
@@ -100,3 +103,16 @@ def test_hotel_config_rejects_unsupported_interface_language():
 
 def test_hotel_config_normalizes_interface_language():
     assert HotelConfigUpdate(interface_language="EN").interface_language == "en"
+
+
+@pytest.mark.parametrize(
+    ("business_date", "expected_hours"),
+    [(date(2026, 3, 8), 23), (date(2026, 11, 1), 25)],
+)
+def test_hotel_local_date_bounds_respect_daylight_saving_transitions(business_date, expected_hours):
+    timezones_service.get_timezone_catalog.cache_clear()
+    start, end = hotel_local_date_bounds(business_date, business_date, "America/New_York")
+
+    assert start.tzinfo is None
+    assert end.tzinfo is None
+    assert end - start == timedelta(hours=expected_hours)

@@ -30,6 +30,7 @@ test("individual extension quotes before confirmation and supports payment reque
   const initialCheckout = localIsoDate(3);
   const extensionOneCheckout = localIsoDate(4);
   const extensionTwoCheckout = localIsoDate(5);
+  const blockedExtensionCheckout = localIsoDate(6);
   let currentReservation: Record<string, unknown> = {
     id: reservationId,
     confirmation_code: "E2E-EXT-9001",
@@ -58,6 +59,7 @@ test("individual extension quotes before confirmation and supports payment reque
     version: 4
   };
   let previewRequests = 0;
+  const previewRequestsByAction: string[] = [];
   const extensionRequests: Array<Record<string, unknown>> = [];
   const externalOrEmailWrites: string[] = [];
 
@@ -116,16 +118,41 @@ test("individual extension quotes before confirmation and supports payment reque
   await page.route(new RegExp(`/api/payments/summary/${reservationId}$`), (route) =>
     fulfillJson(route, financialSummary())
   );
+  await page.route("**/api/payment-surcharges", (route) => fulfillJson(route, []));
   await page.route(new RegExp(`/api/reservations/${reservationId}/extend-preview(?:\\?.*)?$`), async (route) => {
     previewRequests += 1;
     const url = new URL(route.request().url());
+    const newCheckoutDate = url.searchParams.get("new_checkout_date") || "";
+    const paymentAction = url.searchParams.get("payment_action") || "";
+    previewRequestsByAction.push(paymentAction);
+    const isBlocked = newCheckoutDate === blockedExtensionCheckout;
+    const fingerprint = newCheckoutDate === extensionOneCheckout
+      ? "a".repeat(64)
+      : newCheckoutDate === extensionTwoCheckout
+        ? "b".repeat(64)
+        : "c".repeat(64);
     return fulfillJson(route, {
       reservation_id: reservationId,
       current_checkout_date: currentReservation.check_out_date,
-      new_checkout_date: url.searchParams.get("new_checkout_date"),
+      new_checkout_date: newCheckoutDate,
       client_version: currentReservation.version,
       extension_amount: 15000,
-      currency_code: "ARS"
+      currency_code: "ARS",
+      impact_plan: {
+        fingerprint,
+        actions: [{
+          action: isBlocked
+            ? "blocked"
+            : newCheckoutDate === extensionTwoCheckout
+              ? "moved_superior"
+              : "moved_equivalent",
+          room_label: "Habitación 12",
+          check_in_date: localIsoDate(4),
+          check_out_date: localIsoDate(6),
+          confirmation_code: "QA-FUTURE-EXT-9002",
+          ...(isBlocked ? { reason_code: "future_reservation_has_payment" } : {})
+        }]
+      }
     });
   });
   await page.route(new RegExp(`/api/reservations/${reservationId}/extend$`), async (route) => {
@@ -202,6 +229,12 @@ test("individual extension quotes before confirmation and supports payment reque
   const confirmation = page.getByRole("alertdialog", { name: "Confirmar extensión y cobro" });
   await expect(confirmation).toContainText(extensionOneCheckout);
   await expect(confirmation).toContainText("15.000");
+  await expect(confirmation).toContainText("Impacto en otras reservas");
+  await expect(confirmation).toContainText("Habitación 12");
+  await expect(confirmation).toContainText("Se moverá a una habitación equivalente");
+  await expect(confirmation).toContainText("reserva QA-FUTURE-EXT-9002");
+  await expect(confirmation).not.toContainText("Huésped Extensión E2E");
+  expect(previewRequestsByAction[0]).toBe("individual");
   await confirmation.getByRole("button", { name: "Volver" }).click();
   await expect(confirmation).toHaveCount(0);
   expect(extensionRequests).toHaveLength(0);
@@ -225,6 +258,7 @@ test("individual extension quotes before confirmation and supports payment reque
     client_version: 4,
     pricing_mode: "current_rate",
     payment_action: "payment_link",
+    confirmed_impact_fingerprint: "a".repeat(64),
     payment_link: {
       reservation_id: reservationId,
       requested_amount: 15000,
@@ -232,24 +266,27 @@ test("individual extension quotes before confirmation and supports payment reque
       recipient_email: "extension-e2e@example.test"
     }
   });
+  await expect(checkout).toHaveValue(extensionTwoCheckout);
   await expect(panel.getByTestId("individual-extension-payment-link")).toContainText(
     "Solicitud guardada localmente; no se puede pagar ni se envió al huésped."
   );
   expect(externalOrEmailWrites).toEqual([]);
 
-  await expect(checkout).toHaveValue(extensionTwoCheckout);
   await panel.getByLabel("Cómo cobrar la extensión").selectOption("immediate_payment");
-  await panel.getByLabel("Método de pago recibido").selectOption("bank_transfer");
+  await panel.getByLabel("Método de pago recibido").selectOption("cash");
   await panel.getByRole("button", { name: "Ver importe y confirmar" }).click();
-  await expect(drawer.getByText("Ingresá el cupón o número de operación del pago recibido.", { exact: true })).toBeVisible();
   expect(previewRequests).toBe(2);
 
-  await panel.getByLabel("Cupón u operación de referencia").fill("QA-TRANSFER-001");
   const thirdPreview = page.waitForResponse((response) =>
     new URL(response.url()).pathname.endsWith(`/api/reservations/${reservationId}/extend-preview`)
   );
   await panel.getByRole("button", { name: "Ver importe y confirmar" }).click();
   expect((await thirdPreview).ok()).toBeTruthy();
+  const cashTenderInput = panel.getByTestId("individual-extension-cash-received");
+  const expectedCashAmount = Number(await cashTenderInput.getAttribute("placeholder"));
+  await cashTenderInput.fill(String(expectedCashAmount + 15));
+  await expect(panel.getByTestId("individual-extension-cash-received-change")).toContainText("15");
+  await panel.getByTestId("individual-extension-cash-confirm").click();
   const immediateExtensionResponse = page.waitForResponse((response) =>
     new URL(response.url()).pathname.endsWith(`/api/reservations/${reservationId}/extend`) &&
     response.request().method() === "POST"
@@ -262,16 +299,31 @@ test("individual extension quotes before confirmation and supports payment reque
     client_version: 5,
     pricing_mode: "current_rate",
     payment_action: "immediate_payment",
+    confirmed_impact_fingerprint: "b".repeat(64),
     immediate_payment: {
       reservation_id: reservationId,
       amount: 15000,
-      payment_method: "bank_transfer",
+      payment_method: "cash",
       transaction_type: "balance_payment",
       currency: "ARS",
-      manual_reference: "QA-TRANSFER-001"
+      cash_received_amount: expectedCashAmount + 15
     }
   });
   await expect(drawer.getByText("Extensión aplicada y pago presencial registrado.", { exact: true })).toBeVisible();
+  expect(previewRequestsByAction).toEqual(["individual", "individual", "individual"]);
+
+  await checkout.fill(blockedExtensionCheckout);
+  await panel.getByLabel("Cómo cobrar la extensión").selectOption("pending_balance");
+  const blockedPreview = page.waitForResponse((response) =>
+    new URL(response.url()).pathname.endsWith(`/api/reservations/${reservationId}/extend-preview`)
+  );
+  await panel.getByRole("button", { name: "Ver importe y confirmar" }).click();
+  expect((await blockedPreview).ok()).toBeTruthy();
+  const blockedImpact = panel.getByTestId("individual-extension-impact-plan");
+  await expect(blockedImpact).toContainText("requiere una resolución manual");
+  await expect(blockedImpact).toContainText("Habitación 12");
+  await expect(blockedImpact).toContainText("QA-FUTURE-EXT-9002");
+  await expect(page.getByRole("alertdialog", { name: "Confirmar extensión y cobro" })).toHaveCount(0);
   expect(extensionRequests).toHaveLength(2);
   expect(externalOrEmailWrites).toEqual([]);
 });

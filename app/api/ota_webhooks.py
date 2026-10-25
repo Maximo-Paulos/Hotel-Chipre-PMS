@@ -1,12 +1,21 @@
 """
 FastAPI Webhook endpoints for OTA integrations.
 """
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.services.ota_service import OTAIntegrationService, OTAError, OTAAuthError
+from app.services.ota_service import (
+    OTAIntegrationService,
+    OTAError,
+    OTAAuthError,
+    OTAProcessingError,
+    OTA_CONFLICT_ERROR_MESSAGE,
+    OTA_PROCESSING_ERROR_MESSAGE,
+)
 from app.api.webhook_payloads import read_bounded_body
 from app.services.external_effects_policy import (
     InboundProviderEventsDisabled,
@@ -14,6 +23,16 @@ from app.services.external_effects_policy import (
 )
 
 router = APIRouter(prefix="/api/webhooks", tags=["OTA Webhooks"])
+logger = logging.getLogger(__name__)
+
+
+def _log_ota_processing_failure(provider: str, error: Exception) -> None:
+    # Keep diagnostics useful without writing webhook content, credentials, or
+    # exception messages that may contain provider or guest data.
+    logger.error(
+        "OTA webhook processing failed",
+        extra={"provider": provider, "exception_type": type(error).__name__},
+    )
 
 
 def _handle_ota_webhook(provider: str, hotel_id: int, webhook_secret: str, payload: dict, db: Session):
@@ -30,18 +49,51 @@ def _handle_ota_webhook(provider: str, hotel_id: int, webhook_secret: str, paylo
             mapping = OTAIntegrationService.process_despegar_webhook(db, hotel_id, webhook_secret, payload)
         else:
             raise OTAError(f"Unsupported OTA provider: {provider}")
+        reservation_id = mapping.reservation_id
+        sync_status = mapping.sync_status.value
         db.commit()
+        try:
+            from app.services.payment_link_service import process_payment_link_revocations
+
+            process_payment_link_revocations(db, hotel_id, reservation_id=reservation_id)
+            db.commit()
+        except Exception as exc:  # noqa: BLE001 - OTA cancellation is already durable
+            db.rollback()
+            logger.warning(
+                "payment_link.revocation_attempt_unavailable hotel_id=%s reservation_id=%s error_type=%s",
+                hotel_id,
+                reservation_id,
+                type(exc).__name__,
+            )
         return {
             "status": "ok",
-            "sync_status": mapping.sync_status.value,
-            "reservation_id": mapping.reservation_id,
+            "sync_status": sync_status,
+            "reservation_id": reservation_id,
         }
     except OTAAuthError as e:
         db.rollback()
         raise HTTPException(status_code=401, detail=str(e))
-    except OTAError as e:
+    except OTAProcessingError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail=str(e))
+        _log_ota_processing_failure(provider, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=OTA_PROCESSING_ERROR_MESSAGE,
+        ) from exc
+    except OTAError as exc:
+        db.rollback()
+        logger.warning(
+            "OTA webhook rejected",
+            extra={"provider": provider, "exception_type": type(exc).__name__},
+        )
+        raise HTTPException(status_code=409, detail=OTA_CONFLICT_ERROR_MESSAGE) from exc
+    except Exception as exc:
+        db.rollback()
+        _log_ota_processing_failure(provider, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=OTA_PROCESSING_ERROR_MESSAGE,
+        ) from exc
 
 
 @router.post("/booking/{hotel_id}/{webhook_secret}")

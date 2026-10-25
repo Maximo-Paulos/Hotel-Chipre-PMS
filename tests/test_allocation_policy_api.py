@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,11 +11,17 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
-from app.models.hotel_config import HotelConfiguration
-from app.models.guest import Guest
-from app.models.reservation import Reservation, ReservationSourceEnum, ReservationStatusEnum
-from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.models.allocation import ReservationAllocationLock
 from app.models.commercial import ProductRoomCompatibility, SellableProduct
+from app.models.guest import Guest
+from app.models.hotel_config import HotelConfiguration
+from app.models.reservation import (
+    Reservation,
+    ReservationSourceEnum,
+    ReservationStatusEnum,
+)
+from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.models.security_audit_log import SecurityAuditLog
 from app.services.allocation_policy_service import record_manual_override_feedback
 from app.services.allocation_runtime_service import run_persisted_allocation
 
@@ -91,6 +97,8 @@ def test_allocation_policy_api_exposes_active_policy_and_versions():
                     "unassigned_penalty": 15000,
                     "fallback_priority_penalty": 40,
                 },
+                "optimization_objective": "combined",
+                "combined_revenue_weight": 0.35,
                 "prompt_summary": "Version mas estricta para upgrades",
             },
         )
@@ -98,6 +106,8 @@ def test_allocation_policy_api_exposes_active_policy_and_versions():
         version_body = version_resp.json()
         assert version_body["version_number"] == 2
         assert version_body["constraints"]["allow_category_fallback"] is False
+        assert version_body["optimization_objective"] == "combined"
+        assert version_body["combined_revenue_weight"] == 0.35
 
         publish_resp = client.post(f"/api/allocation/policy/versions/{version_body['id']}/publish")
         assert publish_resp.status_code == 200, publish_resp.text
@@ -418,5 +428,83 @@ def test_allocation_policy_api_exposes_latest_run_details():
         detail_resp = client.get(f"/api/allocation/policy/runs/{run.run.id}")
         assert detail_resp.status_code == 200, detail_resp.text
         assert detail_resp.json()["run_id"] == run.run.id
+    finally:
+        _cleanup_client(db, engine)
+
+
+def test_explicit_reassignment_lock_is_audited_authorized_and_hotel_scoped():
+    client, db, engine = _build_client()
+    try:
+        db.add_all(
+            [
+                HotelConfiguration(id=1, owner_email="owner1@test.com", subscription_active=True),
+                HotelConfiguration(id=2, owner_email="owner2@test.com", subscription_active=True),
+            ]
+        )
+        category = RoomCategory(
+            hotel_id=1,
+            name="Standard",
+            code="STD",
+            base_price_per_night=100,
+            max_occupancy=2,
+        )
+        guest = Guest(first_name="Ana", last_name="Lock", hotel_id=1)
+        db.add_all([category, guest])
+        db.flush()
+        room = Room(
+            room_number="101",
+            floor=1,
+            category_id=category.id,
+            status=RoomStatusEnum.AVAILABLE,
+            hotel_id=1,
+        )
+        db.add(room)
+        db.flush()
+        reservation = Reservation(
+            confirmation_code="LOCK-API-1",
+            hotel_id=1,
+            guest_id=guest.id,
+            room_id=room.id,
+            category_id=category.id,
+            check_in_date=date(2026, 11, 1),
+            check_out_date=date(2026, 11, 3),
+            total_amount=100,
+            status=ReservationStatusEnum.PENDING,
+            num_adults=2,
+            num_children=0,
+        )
+        db.add(reservation)
+        db.commit()
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+        locked = client.patch(
+            f"/api/allocation/policy/reservations/{reservation.id}/reassignment-lock",
+            json={"locked": True, "reason": "La empresa requiere esta habitación"},
+        )
+        assert locked.status_code == 200, locked.text
+        assert locked.json()["allocation_locked"] is True
+        lock_row = (
+            db.query(ReservationAllocationLock)
+            .filter(ReservationAllocationLock.reservation_id == reservation.id)
+            .one()
+        )
+        assert lock_row.is_active is True
+        assert db.query(SecurityAuditLog).filter(
+            SecurityAuditLog.action == "reservation.reassignment_lock.updated"
+        ).count() == 1
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(2, "owner")
+        cross_hotel = client.patch(
+            f"/api/allocation/policy/reservations/{reservation.id}/reassignment-lock",
+            json={"locked": False},
+        )
+        assert cross_hotel.status_code == 404, cross_hotel.text
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping")
+        denied = client.patch(
+            f"/api/allocation/policy/reservations/{reservation.id}/reassignment-lock",
+            json={"locked": False},
+        )
+        assert denied.status_code == 403, denied.text
     finally:
         _cleanup_client(db, engine)

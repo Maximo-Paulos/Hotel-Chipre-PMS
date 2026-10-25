@@ -1,0 +1,117 @@
+{
+  "page": {
+    "eyebrow": "Hotel operations",
+    "title": "Smart allocation",
+    "description": "The engine proposes room assignments to improve occupancy and revenue. Review each move before applying it.",
+    "reviewBeforeApply": "Nothing moves without approval",
+    "actionFailed": "The operation could not be completed: {{message}}",
+    "genericFailure": "The operation could not be completed.",
+    "staleProposal": "Reservations changed after this calculation. The proposal was not applied. Reject it and generate a new proposal to review the current state."
+  },
+  "policy": {
+    "eyebrow": "Hotel preferences",
+    "title": "Allocation objective",
+    "description": "Choose what the engine should prioritize. The policy applies to future proposals.",
+    "version": "Version {{version}}",
+    "loading": "Loading allocation settings…",
+    "loadFailed": "Could not load settings: {{message}}",
+    "objective": "Priority",
+    "objectives": {
+      "occupiedNights": "Maximize occupied nights",
+      "netRevenue": "Maximize net revenue",
+      "combined": "Combine occupancy and net revenue"
+    },
+    "revenueWeight": "Net revenue weight",
+    "revenueWeightHelp": "The remaining weight goes to occupied nights.",
+    "combinedNote": "This percentage sets the net revenue weight; the remainder goes to occupancy. The engine needs comparable values across reservations. If currencies differ without a current saved FX quote, it will stop and explain why.",
+    "revenueCurrencyNote": "Net revenue is compared when reservations use a comparable currency. If the data cannot be compared, the engine stops and explains the issue.",
+    "save": "Save and activate",
+    "saving": "Saving…",
+    "saved": "The new policy version is active.",
+    "saveFailed": "Could not save the policy."
+  },
+  "proposal": {
+    "eyebrow": "Engine review",
+    "title": "Latest proposal",
+    "description": "Review the current room, suggested room, and reason. Accept applies the changes explicitly; reject keeps current assignments.",
+    "recalculate": "Generate a new proposal",
+    "recalculating": "Calculating…",
+    "recalculateHelp": "Calculation does not change rooms. It creates a proposal for review first.",
+    "resolveBeforeRecalculate": "Accept or reject the pending proposal before generating another.",
+    "loading": "Loading the latest proposal…",
+    "loadFailed": "Could not load the proposal: {{message}}",
+    "empty": "There are no proposals yet. Generate one to evaluate current availability.",
+    "run": "Proposal #{{id}}",
+    "status": {
+      "pending": "Pending",
+      "running": "Calculating",
+      "succeeded": "Ready for review",
+      "failed": "Calculation stopped",
+      "partial": "Partial result"
+    },
+    "noAssignments": "This calculation did not produce room assignments.",
+    "reservationId": "Reservation #{{id}}",
+    "currentRoom": "Current room",
+    "proposedRoom": "Proposed room",
+    "unassigned": "No room assigned",
+    "room": "Room {{room}}",
+    "roomId": "Room #{{id}}",
+    "reason": "Reason",
+    "reasons": {
+      "exactCategory": "Matches the requested category",
+      "compatibleCategory": "Uses a compatible category",
+      "optimizesRoomUse": "Rearranges rooms to make better use of inventory",
+      "returningGuest": "Keeps a room used during a previous stay",
+      "guestPreference": "Considers the guest's room preferences",
+      "noDetails": "The engine did not provide an additional reason"
+    },
+    "assignmentStatus": {
+      "proposed": "Proposal pending",
+      "applied": "Applied",
+      "locked": "Protected by hotel",
+      "rejected": "Rejected",
+      "manual_review": "Manual review"
+    },
+    "accept": "Accept proposal",
+    "reject": "Reject proposal",
+    "acceptRequiresSuccess": "This calculation did not complete successfully. You can reject its proposal, but cannot apply it.",
+    "confirmAction": "Confirm decision",
+    "confirmAccept": "Confirming will move the {{count}} proposed reservations. Continue?",
+    "confirmReject": "Confirming will discard the {{count}} suggestions and keep current rooms. Continue?",
+    "confirmationLabel": "Proposal confirmation",
+    "keepReviewing": "Keep reviewing",
+    "reviewed": "There are no pending moves in this proposal.",
+    "solverErrors": {
+      "mixedCurrency": "The engine could not compare net revenue because it found different currencies without a current saved FX quote. Update the comparison basis or temporarily choose occupied nights; no changes were applied.",
+      "combinedUnavailable": "The engine could not compare occupancy and net revenue with the current data. Review the scale and saved quotes; no changes were applied."
+    }
+  },
+  "locks": {
+    "eyebrow": "Manual control",
+    "title": "Protected reservations",
+    "description": "Pin a room when it must remain with a reservation. The engine will exclude it from future automatic reassignment.",
+    "readPermissionRequired": "Your role cannot view reservations. You can review proposals, but cannot manage protected reservations.",
+    "loading": "Loading upcoming reservations…",
+    "loadFailed": "Could not load reservations: {{message}}",
+    "empty": "There are no upcoming reservations to show.",
+    "room": "Room {{room}}",
+    "roomId": "Room #{{id}}",
+    "noRoom": "No room assigned",
+    "locked": "Do not reassign",
+    "unlocked": "May be reassigned",
+    "lockAction": "Do not reassign",
+    "unlockAction": "Allow reassignment",
+    "saving": "Saving…",
+    "lockNotAvailable": "Only an assigned reservation before check-in can be protected.",
+    "updatePermissionRequired": "You need reservation update permission.",
+    "page": "Page {{page}}",
+    "previous": "Previous",
+    "next": "Next",
+    "status": {
+      "pending": "Pending",
+      "deposit_paid": "Deposit paid",
+      "fully_paid": "Paid",
+      "pre_check_in": "Check-in started"
+    }
+  }
+}

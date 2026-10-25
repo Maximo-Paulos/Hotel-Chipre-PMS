@@ -266,12 +266,53 @@ test("company check-in records and applies a deferred extension without register
   };
   page.on("request", onFinancialWrite);
   const writesBeforeExtension = financialWrites.length;
+  const extensionPreviewResponsePromise = page.waitForResponse((response) =>
+    new URL(response.url()).pathname.endsWith(`/api/reservations/${reservation.id}/extend-preview`) &&
+    response.request().method() === "GET"
+  );
+  await extensionApplyPanel.getByRole("button", { name: "Aplicar extensión" }).click();
+  const extensionPreviewResponse = await extensionPreviewResponsePromise;
+  expect(extensionPreviewResponse.ok()).toBeTruthy();
+  const extensionPreview = await extensionPreviewResponse.json() as {
+    reservation_id: number;
+    current_checkout_date: string;
+    new_checkout_date: string;
+    client_version: number;
+    impact_plan?: {
+      fingerprint: string;
+      actions: Array<{
+        action: "moved_equivalent" | "moved_superior" | "assignment_released" | "blocked";
+        room_label: string;
+        check_in_date: string;
+        check_out_date: string;
+        confirmation_code?: string | null;
+      }>;
+    } | null;
+  };
+  expect(extensionPreview.reservation_id).toBe(reservation.id);
+  expect(extensionPreview.new_checkout_date).toBe(extendedCheckoutDate);
+  expect(new URL(extensionPreviewResponse.url()).searchParams.get("payment_action")).toBe("company_account");
+  if (extensionPreview.impact_plan?.actions.length) {
+    expect(extensionPreview.impact_plan.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+  }
+
+  const confirmation = page.getByRole("alertdialog", { name: "Confirmar extensión de estadía" });
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation).toContainText("Impacto en otras reservas");
+  if (extensionPreview.impact_plan?.actions.length) {
+    for (const action of extensionPreview.impact_plan.actions) {
+      await expect(confirmation).toContainText(action.room_label);
+      await expect(confirmation).toContainText(action.check_in_date);
+      await expect(confirmation).toContainText(action.check_out_date);
+      if (action.confirmation_code) await expect(confirmation).toContainText(action.confirmation_code);
+    }
+  } else {
+    await expect(confirmation).toContainText("No hace falta mover otras reservas.");
+  }
+
   const extensionResponsePromise = page.waitForResponse((response) =>
     response.url().endsWith(`/api/reservations/${reservation.id}/extend`) && response.request().method() === "POST"
   );
-  await extensionApplyPanel.getByRole("button", { name: "Aplicar extensión" }).click();
-  const confirmation = page.getByRole("alertdialog", { name: "Confirmar extensión de estadía" });
-  await expect(confirmation).toBeVisible();
   await confirmation.getByRole("button", { name: "Confirmar extensión" }).click();
   const extensionResponse = await extensionResponsePromise;
   expect(extensionResponse.status()).toBe(200, await extensionResponse.text());
@@ -281,11 +322,20 @@ test("company check-in records and applies a deferred extension without register
     transaction: null;
     payment_link: null;
   };
-  expect(extensionResponse.request().postDataJSON()).toMatchObject({
+  const extensionPayload = extensionResponse.request().postDataJSON() as Record<string, unknown>;
+  expect(extensionPayload).toMatchObject({
     new_checkout_date: extendedCheckoutDate,
     pricing_mode: "current_rate",
     payment_action: "company_account"
   });
+  const hasMutatingImpact = extensionPreview.impact_plan?.actions.some((action) =>
+    ["moved_equivalent", "moved_superior", "assignment_released"].includes(action.action)
+  ) ?? false;
+  if (hasMutatingImpact) {
+    expect(extensionPayload.confirmed_impact_fingerprint).toBe(extensionPreview.impact_plan?.fingerprint);
+  } else {
+    expect(extensionPayload).not.toHaveProperty("confirmed_impact_fingerprint");
+  }
   expect(extensionResult.transaction).toBeNull();
   expect(extensionResult.payment_link).toBeNull();
   expect(Number(extensionResult.extension_amount)).toBe(0);

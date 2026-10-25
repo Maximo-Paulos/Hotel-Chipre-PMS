@@ -6,13 +6,12 @@ must be tenant-scoped, deduplicated, and auditable.
 from __future__ import annotations
 
 import json
-from decimal import Decimal
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.services.row_locks import lock_query
 from app.models.reservation import (
     Reservation,
     ReservationChannelCodeEnum,
@@ -25,14 +24,18 @@ from app.models.user import User
 from app.models.waitlist import WaitlistEntry, WaitlistStatusEnum
 from app.schemas.ota_manual import ManualOTAReservationCreate
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
+from app.services.financial_ledger import (
+    completed_paid_amount,
+    external_paid_balance_credit,
+)
 from app.services.reservation_service import (
     ReservationError,
     create_reservation,
     transition_reservation_status,
     update_reservation_fields,
 )
-from app.services.waitlist_service import promote_from_waitlist
-from app.services.financial_ledger import completed_paid_amount, external_paid_balance_credit
+from app.services.row_locks import lock_query
+from app.services.waitlist_service import WaitlistError, suggest_waitlist_promotion
 
 
 class OTAManualReservationError(Exception):
@@ -177,6 +180,7 @@ def release_no_guarantee(
     if collection_model not in _NO_GUARANTEE_MODELS:
         raise OTAManualReservationError("OTA reservation has a payment guarantee")
     if reservation.status in (
+        ReservationStatusEnum.PARTIAL_CHECK_IN,
         ReservationStatusEnum.CHECKED_IN,
         ReservationStatusEnum.CHECKED_OUT,
         ReservationStatusEnum.CANCELLED,
@@ -207,7 +211,7 @@ def release_no_guarantee(
         reservation.id,
         reason="OTA reservation internally released as no-guarantee",
     )
-    _attempt_waitlist_promotion_after_release(
+    _suggest_waitlist_promotion_after_release(
         db,
         reservation=reservation,
         actor_user_id=actor_user_id,
@@ -229,7 +233,7 @@ def release_no_guarantee(
     return reservation
 
 
-def _attempt_waitlist_promotion_after_release(
+def _suggest_waitlist_promotion_after_release(
     db: Session,
     *,
     reservation: Reservation,
@@ -248,7 +252,7 @@ def _attempt_waitlist_promotion_after_release(
         .first()
     )
     if entry is None:
-        _audit_waitlist_promotion(
+        _audit_waitlist_suggestion(
             db,
             reservation=reservation,
             user_id=actor_user_id,
@@ -256,38 +260,20 @@ def _attempt_waitlist_promotion_after_release(
         )
         return
 
+    details = {"outcome": "suggested", "waitlist_entry_id": entry.id}
     try:
-        with db.begin_nested():
-            promoted_entry, promoted_reservation = promote_from_waitlist(
-                db,
-                reservation.hotel_id,
-                entry.id,
-                room_id=reservation.room_id,
-                notes=f"Promoted after OTA no-guarantee release {reservation.id}",
-            )
-    except Exception as exc:
-        _audit_waitlist_promotion(
+        suggestion = suggest_waitlist_promotion(
             db,
-            reservation=reservation,
-            user_id=actor_user_id,
-            details={
-                "outcome": "failed",
-                "waitlist_entry_id": entry.id,
-                "error": str(exc),
-            },
+            hotel_id=reservation.hotel_id,
+            entry_id=entry.id,
         )
-        return
-
-    _audit_waitlist_promotion(
-        db,
-        reservation=reservation,
-        user_id=actor_user_id,
-        details={
-            "outcome": "promoted",
-            "waitlist_entry_id": promoted_entry.id,
-            "promoted_reservation_id": promoted_reservation.id,
-        },
-    )
+        if suggestion is None:
+            details["outcome"] = "no_compatible_room"
+        else:
+            details["suggested_room_id"] = suggestion["suggested_room_id"]
+    except WaitlistError:
+        details["outcome"] = "suggestion_failed"
+    _audit_waitlist_suggestion(db, reservation=reservation, user_id=actor_user_id, details=details)
 
 
 def _update_existing_manual_ota_reservation(
@@ -458,7 +444,7 @@ def _audit(
     )
 
 
-def _audit_waitlist_promotion(
+def _audit_waitlist_suggestion(
     db: Session,
     *,
     reservation: Reservation,
@@ -469,7 +455,7 @@ def _audit_waitlist_promotion(
         db,
         hotel_id=reservation.hotel_id,
         user_id=user_id,
-        action="ota.no_guarantee.waitlist_promotion",
+        action="ota.no_guarantee.waitlist_suggestion",
         reservation=reservation,
         details=details,
     )

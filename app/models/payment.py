@@ -87,6 +87,15 @@ class PaymentLink(Base):
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     expires_at = Column(DateTime, nullable=True)
     cancelled_at = Column(DateTime, nullable=True)
+    # The provider-side checkout has its own lifecycle. Local cancellation must
+    # commit even if the external preference cannot be invalidated.
+    provider_revocation_status = Column(
+        String(20), nullable=False, default="not_required", server_default="not_required"
+    )
+    provider_revocation_attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    provider_revocation_last_attempt_at = Column(DateTime, nullable=True)
+    # Store a bounded classification only, never the raw provider response.
+    provider_revocation_error = Column(String(80), nullable=True)
     first_payment_at = Column(DateTime, nullable=True)
     last_payment_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
@@ -107,6 +116,14 @@ class PaymentLink(Base):
             "NOT payable OR execution_mode = 'provider'",
             name="ck_payment_link_payable_provider_mode",
         ),
+        CheckConstraint(
+            "provider_revocation_status IN ('not_required', 'pending', 'processing', 'succeeded', 'failed')",
+            name="ck_payment_link_provider_revocation_status",
+        ),
+        CheckConstraint(
+            "provider_revocation_attempts >= 0",
+            name="ck_payment_link_provider_revocation_attempts_nonnegative",
+        ),
         ForeignKeyConstraint(
             ["hotel_id", "reservation_id"],
             ["reservations.hotel_id", "reservations.id"],
@@ -122,6 +139,10 @@ class PaymentLink(Base):
         UniqueConstraint(
             "hotel_id", "idempotency_key",
             name="uq_payment_link_idempotency_per_hotel",
+        ),
+        Index(
+            "ix_payment_links_provider_revocation_work",
+            "hotel_id", "provider_revocation_status", "id",
         ),
     )
 

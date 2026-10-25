@@ -3,6 +3,8 @@
 import base64
 import json
 import stat
+from datetime import datetime, timezone
+from decimal import Decimal
 from email import policy
 from email.parser import BytesParser
 
@@ -20,6 +22,48 @@ from app.models.transaction import (
 from app.services.permission_service import PERMISSION_CASH_OPERATE, set_override
 from app.services.action_step_up_service import create_action_step_up_ticket
 from tests.test_payment_links_api import _reservation, client_with_db
+
+
+def test_receipt_pdf_and_email_body_show_cash_tender_and_change_when_present():
+    from app.services.payment_receipt_email_service import _receipt_email_content
+    from app.services.payment_receipt_pdf import generate_payment_receipt_pdf
+
+    receipt = {
+        "id": 42,
+        "confirmation_code": "CASH-CHANGE-42",
+        "guest_name": "Huésped de prueba",
+        "hotel_name": "Hotel Chipre",
+        "hotel_timezone": "America/Argentina/Buenos_Aires",
+        "created_at": datetime(2026, 10, 23, 12, 0, tzinfo=timezone.utc),
+        "status": TransactionStatusEnum.COMPLETED,
+        "method": PaymentMethodEnum.CASH,
+        "type": TransactionTypeEnum.PARTIAL_PAYMENT,
+        "currency": "ARS",
+        "amount": Decimal("46000.00"),
+        "applied_amount": Decimal("46000.00"),
+        "applied_currency": "ARS",
+        "gross_amount": Decimal("46000.00"),
+        "fee_amount": Decimal("0.00"),
+        "cash_received_amount": Decimal("50000.00"),
+        "cash_tip_amount": Decimal("1000.00"),
+        "cash_change_amount": Decimal("3000.00"),
+        "fx_rate_snapshot": None,
+        "manual_reference": None,
+        "refund_of_transaction_id": None,
+    }
+
+    _subject, email_body = _receipt_email_content(receipt)
+    pdf = generate_payment_receipt_pdf(receipt)
+
+    assert "Efectivo entregado: 50000.00 ARS" in email_body
+    assert "Propina: 1000.00 ARS" in email_body
+    assert "Vuelto: 3000.00 ARS" in email_body
+    assert b"Efectivo entregado:" in pdf
+    assert b"50000.00 ARS" in pdf
+    assert b"Vuelto:" in pdf
+    assert b"Propina:" in pdf
+    assert b"1000.00 ARS" in pdf
+    assert b"3000.00 ARS" in pdf
 
 
 @pytest.fixture

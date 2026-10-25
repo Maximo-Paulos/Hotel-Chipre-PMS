@@ -40,6 +40,10 @@ class StockItem(Base):
     unit_cost = Column(Numeric(12, 2), nullable=True)
     deleted_at = Column(DateTime, nullable=True)
     deleted_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    # Incremented while the item row is locked for every successful ledger
+    # movement. A physical count records this version and must be repeated if
+    # any movement occurs before an authorized person confirms the count.
+    movement_version = Column(Integer, nullable=False, default=0, server_default="0")
 
     movements = relationship("StockMovement", back_populates="item", lazy="selectin")
 
@@ -152,4 +156,101 @@ class StockMovement(Base):
             postgresql_where=text("transfer_reference IS NOT NULL"),
         ),
         Index("ix_stock_movements_hotel_id", "hotel_id"),
+    )
+
+
+class StockCountSession(Base):
+    """Hotel-scoped physical count awaiting authorized confirmation."""
+
+    __tablename__ = "stock_count_sessions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    hotel_id = Column(Integer, ForeignKey("hotel_configuration.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(20), nullable=False, default="open", server_default="open")
+    reason = Column(Text, nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    counter_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    confirmed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    confirmation_reason = Column(Text, nullable=True)
+    confirmed_at = Column(DateTime, nullable=True)
+    self_approved = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    cancelled_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    cancellation_reason = Column(Text, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
+
+    counts = relationship(
+        "StockCountLine",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        lazy="select",
+        order_by="StockCountLine.id",
+        overlaps="item,location",
+    )
+
+    __table_args__ = (
+        CheckConstraint("status IN ('open', 'confirmed', 'cancelled')", name="ck_stock_count_session_status"),
+        UniqueConstraint("hotel_id", "id", name="uq_stock_count_sessions_hotel_id_id"),
+        Index("ix_stock_count_sessions_hotel_created", "hotel_id", "created_at", "id"),
+    )
+
+
+class StockCountLine(Base):
+    """One observed quantity for an item, either hotel-wide or by location."""
+
+    __tablename__ = "stock_count_lines"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    hotel_id = Column(Integer, nullable=False)
+    session_id = Column(Integer, nullable=False)
+    item_id = Column(Integer, nullable=False)
+    location_id = Column(Integer, nullable=True)
+    system_quantity_at_count = Column(Numeric(12, 2), nullable=False)
+    counted_quantity = Column(Numeric(12, 2), nullable=False)
+    movement_version = Column(Integer, nullable=False)
+    counted_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    counted_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    applied_adjustment = Column(Numeric(12, 2), nullable=True)
+    adjusted_at = Column(DateTime, nullable=True)
+
+    session = relationship("StockCountSession", back_populates="counts", lazy="select", overlaps="item,location")
+    item = relationship("StockItem", lazy="joined", overlaps="counts,session,location")
+    location = relationship("StockLocation", lazy="joined", overlaps="counts,item,session")
+
+    __table_args__ = (
+        CheckConstraint("system_quantity_at_count >= 0", name="ck_stock_count_line_system_nonnegative"),
+        CheckConstraint("counted_quantity >= 0", name="ck_stock_count_line_counted_nonnegative"),
+        ForeignKeyConstraint(
+            ["hotel_id", "session_id"],
+            ["stock_count_sessions.hotel_id", "stock_count_sessions.id"],
+            name="fk_stock_count_line_hotel_session",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "item_id"],
+            ["stock_items.hotel_id", "stock_items.id"],
+            name="fk_stock_count_line_hotel_item",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["hotel_id", "location_id"],
+            ["stock_locations.hotel_id", "stock_locations.id"],
+            name="fk_stock_count_line_hotel_location",
+            ondelete="RESTRICT",
+        ),
+        # NULL location_id means a whole-hotel count; the partial index keeps
+        # it unique too, which ordinary nullable UNIQUE constraints do not do
+        # on PostgreSQL or SQLite.
+        UniqueConstraint(
+            "hotel_id", "session_id", "item_id", "location_id",
+            name="uq_stock_count_line_location",
+        ),
+        Index(
+            "uq_stock_count_line_unlocated",
+            "hotel_id", "session_id", "item_id",
+            unique=True,
+            sqlite_where=text("location_id IS NULL"),
+            postgresql_where=text("location_id IS NULL"),
+        ),
+        Index("ix_stock_count_lines_hotel_session", "hotel_id", "session_id", "id"),
     )

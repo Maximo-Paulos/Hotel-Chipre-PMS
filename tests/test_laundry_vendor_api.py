@@ -24,7 +24,10 @@ from app.models.permission import HotelPermissionOverride
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.services.linen_service import create_linen_item, create_location, current_stock, register_movement
-from app.services.permission_service import PERMISSION_LAUNDRY_PRICE_MANAGE
+from app.services.permission_service import (
+    PERMISSION_LAUNDRY_DISCREPANCY_APPROVE,
+    PERMISSION_LAUNDRY_PRICE_MANAGE,
+)
 from app.services.permission_service import ROLE_HOUSEKEEPING, create_custom_role
 
 
@@ -795,23 +798,24 @@ def test_inbound_remito_api_persists_missing_quantity_and_returns_warning():
         assert inbound.status_code == 201, inbound.text
         response_body = inbound.json()
         assert response_body["remito"]["lines"][0]["missing_quantity"] == "2.00"
-        assert any("faltante de 2.00" in warning for warning in response_body["warnings"])
+        assert any("Faltante de 2.00" in warning for warning in response_body["warnings"])
 
         history = client.get("/api/laundry/remitos")
         assert history.status_code == 200
         assert history.json()[0]["lines"][0]["missing_quantity"] == "2.00"
         vendor_location_id = client.get("/api/laundry/vendors").json()[0]["linen_location_id"]
-        adjustment = (
-            db.query(LinenMovement)
-            .filter_by(hotel_id=1, item_id=item.id, location_id=vendor_location_id, movement_type="adjustment_out")
-            .one()
-        )
-        assert adjustment.created_by_user_id == 10
+        discrepancy = client.get("/api/laundry/discrepancies?status_filter=pending_review").json()[0]
+        assert discrepancy["quantity"] == "2.00"
+        assert discrepancy["remaining_quantity"] == "2.00"
+        assert discrepancy["custody_location_id"] is None
+        assert db.query(LinenMovement).filter_by(
+            hotel_id=1, item_id=item.id, location_id=vendor_location_id, movement_type="adjustment_out"
+        ).count() == 0
     finally:
         _teardown(db, engine)
 
 
-def test_inbound_remito_without_vendor_balance_reconciles_and_warns():
+def test_inbound_remito_without_vendor_balance_records_excess_for_approval():
     client, db, engine = _client_with_db()
     try:
         fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
@@ -835,20 +839,94 @@ def test_inbound_remito_without_vendor_balance_reconciles_and_warns():
         assert response.status_code == 201, response.text
         response_body = response.json()
         assert response_body["remito"]["lines"][0]["quantity"] == "2.00"
-        assert any("Entrega mayor a lo registrado" in warning for warning in response_body["warnings"])
+        assert any("Excedente de 2.00" in warning for warning in response_body["warnings"])
         assert len(client.get("/api/laundry/remitos").json()) == 1
         vendor_location_id = client.get("/api/laundry/vendors").json()[0]["linen_location_id"]
-        adjustment = db.query(LinenMovement).filter_by(
-            hotel_id=1,
-            item_id=item.id,
-            location_id=vendor_location_id,
-            movement_type="adjustment",
-        ).one()
-        assert adjustment.quantity == Decimal("2.00")
-        assert adjustment.created_by_user_id == 10
-        assert "R-API-SIN-SALDO" in adjustment.reason
-        assert current_stock(db, hotel_id=1, item_id=item.id, location_id=house.id) == Decimal("2.00")
+        discrepancy = client.get("/api/laundry/discrepancies?discrepancy_type=excess_return").json()[0]
+        assert discrepancy["status"] == "pending_approval"
+        assert discrepancy["quantity"] == "2.00"
+        assert discrepancy["custody_location_id"] == house.id
+        assert current_stock(db, hotel_id=1, item_id=item.id, location_id=house.id) == Decimal("0.00")
         assert current_stock(db, hotel_id=1, item_id=item.id, location_id=vendor_location_id) == Decimal("0.00")
+        assert db.query(LinenMovement).filter_by(item_id=item.id, movement_type="adjustment").count() == 0
+    finally:
+        _teardown(db, engine)
+
+
+def test_discrepancy_approval_permission_is_separate_from_remito_creation_and_configurable():
+    client, db, engine = _client_with_db()
+    try:
+        db.add_all(
+            [
+                User(id=10, email="laundry-owner@example.test", password_hash="test"),
+                User(id=11, email="laundry-housekeeping@example.test", password_hash="test"),
+            ]
+        )
+        db.commit()
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=10)
+        vendor = client.post("/api/laundry/vendors", json={"name": "Lavadero permiso"})
+        assert vendor.status_code == 201, vendor.text
+        item = create_linen_item(db, hotel_id=1, name="Sábanas permiso", unit="unidad", min_quantity=None, active=True)
+        house = create_location(db, hotel_id=1, name="Depósito permiso")
+        register_movement(
+            db, hotel_id=1, item_id=item.id, location_id=house.id, movement_type="in",
+            quantity=Decimal("10"), reason="Conteo inicial", created_by_user_id=10,
+        )
+        price = client.post(
+            f"/api/laundry/vendors/{vendor.json()['id']}/prices",
+            json={"linen_item_id": item.id, "unit_price": "100.00", "effective_from": "2026-07-01"},
+        )
+        assert price.status_code == 201, price.text
+        outbound = client.post(
+            "/api/laundry/remitos",
+            json={
+                "vendor_id": vendor.json()["id"],
+                "direction": "outbound",
+                "remito_number": "AUTH-OUT",
+                "remito_date": "2026-07-01T00:00:00+00:00",
+                "house_location_id": house.id,
+                "lines": [{"linen_item_id": item.id, "quantity": "6.00"}],
+            },
+        )
+        assert outbound.status_code == 201, outbound.text
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping", user_id=11)
+        inbound = client.post(
+            "/api/laundry/remitos",
+            json={
+                "vendor_id": vendor.json()["id"],
+                "direction": "inbound",
+                "remito_number": "AUTH-IN",
+                "remito_date": "2026-07-02T00:00:00+00:00",
+                "house_location_id": house.id,
+                "lines": [{"linen_item_id": item.id, "quantity": "4.00", "missing_quantity": "2.00"}],
+            },
+        )
+        assert inbound.status_code == 201, inbound.text
+        discrepancy_id = client.get("/api/laundry/discrepancies?status_filter=pending_review").json()[0]["id"]
+        denied = client.post(
+            f"/api/laundry/discrepancies/{discrepancy_id}/approve",
+            headers={"Idempotency-Key": "permission-approval"},
+            json={"reason": "No tengo permiso para aprobar."},
+        )
+        assert denied.status_code == 403
+
+        db.add(
+            HotelPermissionOverride(
+                hotel_id=1,
+                role="housekeeping",
+                permission_code=PERMISSION_LAUNDRY_DISCREPANCY_APPROVE,
+                allowed=True,
+            )
+        )
+        db.commit()
+        allowed = client.post(
+            f"/api/laundry/discrepancies/{discrepancy_id}/approve",
+            headers={"Idempotency-Key": "permission-approval"},
+            json={"reason": "El dueño habilitó la conciliación para este rol."},
+        )
+        assert allowed.status_code == 200, allowed.text
+        assert allowed.json()["status"] == "pending_resolution"
     finally:
         _teardown(db, engine)
 

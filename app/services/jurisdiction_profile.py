@@ -75,11 +75,21 @@ PROFILES = {
     UY_PROFILE.code: UY_PROFILE,
     CL_PROFILE.code: CL_PROFILE,
 }
+SUPPORTED_JURISDICTION_CODES = frozenset(PROFILES)
+
+
+class UnsupportedJurisdictionError(ValueError):
+    """Raised when a hotel is configured for a jurisdiction without a profile."""
 
 
 def get_profile(code: str | None) -> JurisdictionProfile:
     normalized = (code or AR_PROFILE.code).strip().upper()
-    return PROFILES.get(normalized, AR_PROFILE)
+    profile = PROFILES.get(normalized)
+    if profile is None:
+        raise UnsupportedJurisdictionError(
+            f"La jurisdicción '{normalized}' no está habilitada en el PMS."
+        )
+    return profile
 
 
 def compute_missing_guest_fields(

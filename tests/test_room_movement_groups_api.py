@@ -9,11 +9,11 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
+from app.models.company import Company
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
-from app.models.company import Company
 from app.models.hotel_membership import HotelMembership
-from app.models.operations import RoomMoveEvent, RoomMoveTypeEnum, RoomMovementGroup
+from app.models.operations import RoomMoveEvent, RoomMovementGroup, RoomMoveTypeEnum
 from app.models.permission import HotelPermissionOverride, UserPermissionOverride
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
@@ -92,7 +92,7 @@ def test_revert_movement_group_marks_reservations_protected():
         assert reservation.room_id == from_room.id
         assert reservation.category_id == from_room.category_id
         assert reservation.version == version_before_revert + 1
-        assert reservation.allocation_locked is True
+        assert reservation.allocation_locked is False
         assert group.reverted_by_user_id == 10
         audit = db.query(SecurityAuditLog).filter(SecurityAuditLog.hotel_id == 1).one()
         assert audit.action == "room_movement_group.reverted"
