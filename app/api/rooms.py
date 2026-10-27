@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, joinedload, raiseload
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
 from app.models.audit_log import AuditActionEnum
+from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
@@ -32,7 +33,10 @@ from app.schemas.room import (
     RoomUpdate,
 )
 from app.services import audit_log_service
-from app.services.allocation_runtime_service import run_persisted_allocation
+from app.services.allocation_runtime_service import (
+    auto_apply_safe_allocation_run,
+    run_persisted_allocation,
+)
 from app.services.analytics_service import record_hotel_audit_event
 from app.services.distributed_lock import (
     DistributedLockBusy,
@@ -106,6 +110,32 @@ def _serialize_reallocation_result(result, *, include_message: bool = False) -> 
 _DUPLICATE_CATEGORY_DETAIL = "Ya existe una categoría con ese código o nombre en este hotel"
 # rooms is unique on (hotel_id, room_number).
 _DUPLICATE_ROOM_DETAIL = "Ya existe una habitación con ese número en este hotel"
+
+
+def _validate_room_allocation_preferences(
+    db: Session,
+    *,
+    hotel_id: int,
+    channel_groups: list[str] | None,
+    company_ids: list[int] | None,
+) -> None:
+    if channel_groups is not None and len(channel_groups) != len(set(channel_groups)):
+        raise HTTPException(status_code=422, detail="No repitas canales prioritarios para la habitación.")
+    if company_ids is not None:
+        if len(company_ids) != len(set(company_ids)):
+            raise HTTPException(status_code=422, detail="No repitas empresas prioritarias para la habitación.")
+        if company_ids:
+            valid_company_ids = {
+                row[0]
+                for row in db.query(Company.id)
+                .filter(Company.hotel_id == hotel_id, Company.id.in_(company_ids))
+                .all()
+            }
+            if valid_company_ids != set(company_ids):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Cada empresa prioritaria debe pertenecer a este hotel.",
+                )
 
 
 @router.post("/categories", response_model=RoomCategoryRead, status_code=status.HTTP_201_CREATED)
@@ -230,6 +260,12 @@ def create_room(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_HOTEL_SETTINGS_UPDATE)),
 ):
+    _validate_room_allocation_preferences(
+        db,
+        hotel_id=context.hotel_id,
+        channel_groups=data.allocation_priority_channel_groups,
+        company_ids=data.allocation_priority_company_ids,
+    )
     category = db.query(RoomCategory).filter(RoomCategory.id == data.category_id, RoomCategory.hotel_id == context.hotel_id).first()
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -464,6 +500,18 @@ def update_room(
 
     before = audit_log_service.model_snapshot(room)
     payload = data.model_dump(exclude_unset=True)
+    if any(
+        payload.get(field) is None
+        for field in ("allocation_priority_channel_groups", "allocation_priority_company_ids")
+        if field in payload
+    ):
+        raise HTTPException(status_code=422, detail="Las prioridades deben enviarse como listas; usá una lista vacía para quitarlas.")
+    _validate_room_allocation_preferences(
+        db,
+        hotel_id=context.hotel_id,
+        channel_groups=payload.get("allocation_priority_channel_groups"),
+        company_ids=payload.get("allocation_priority_company_ids"),
+    )
     if "category_id" in payload and payload["category_id"] is not None:
         category = db.query(RoomCategory).filter(RoomCategory.id == payload["category_id"], RoomCategory.hotel_id == context.hotel_id).first()
         if not category:
@@ -475,7 +523,18 @@ def update_room(
         ensure_room_within_limit(db, room.hotel_id)
 
     status_changed = "status" in payload and payload["status"] != room.status
-    for field in ("room_number", "floor", "status", "is_active", "score", "is_accessible", "description", "notes"):
+    for field in (
+        "room_number",
+        "floor",
+        "status",
+        "is_active",
+        "score",
+        "is_accessible",
+        "allocation_priority_channel_groups",
+        "allocation_priority_company_ids",
+        "description",
+        "notes",
+    ):
         if field in payload:
             if status_changed and field in {"status", "notes"}:
                 continue
@@ -680,10 +739,7 @@ def trigger_reallocation(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
-    """Manually trigger the allocation engine to optimally redistribute all reservations.
-    This maximizes availability and profitability by packing rooms tightly and
-    relocating reservations away from cleaning/maintenance rooms.
-    Returns unassigned reservations (to be shown in yellow in the UI)."""
+    """Recalculate and automatically apply a complete, revalidated safe plan."""
     
     _require_manager_room_lane(context)
     try:
@@ -693,6 +749,10 @@ def trigger_reallocation(
             trigger_type="rooms_manual_reallocate",
             apply=True,
         )
+        if result.solver_result.success:
+            auto_apply_safe_allocation_run(
+                db, hotel_id=context.hotel_id, run_id=result.run.id
+            )
         db.commit()
         if not result.solver_result.assignments and not result.solver_result.unassigned_reservations:
             return {

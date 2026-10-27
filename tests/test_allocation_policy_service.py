@@ -75,33 +75,30 @@ def test_policy_version_publish_switches_active_version(db):
     assert settings.constraints["allow_category_fallback"] is False
 
 
-def test_combined_objective_requires_hotel_weight_and_persists_it(db):
+def test_pricing_objective_is_rejected_and_legacy_version_runs_on_occupancy(db):
     db.add(HotelConfiguration(id=63, hotel_name="Weighted Policy Hotel", subscription_active=True))
     db.flush()
     profile = ensure_default_policy_profile(db, 63)
 
-    with pytest.raises(AllocationPolicyError, match="revenue weight"):
+    with pytest.raises(AllocationPolicyError, match="pricing decisions"):
         create_policy_version(
             db,
             hotel_id=63,
             profile_id=profile.id,
             constraints={"optimization_objective": "combined"},
-            weights={},
+            weights={"combined_revenue_weight": 0.35},
         )
 
-    version = create_policy_version(
-        db,
-        hotel_id=63,
-        profile_id=profile.id,
-        constraints={"optimization_objective": "combined"},
-        weights={"combined_revenue_weight": 0.35},
-        publish=True,
-    )
+    version = ensure_default_policy_version(db, 63)
+    version.constraints_json = json.dumps({"optimization_objective": "combined"})
+    version.weights_json = json.dumps({"combined_revenue_weight": 0.35})
+    db.flush()
     settings = get_active_policy_settings(db, 63)
 
     assert version.is_published is True
-    assert settings.constraints["optimization_objective"] == "combined"
-    assert settings.weights["combined_revenue_weight"] == 0.35
+    assert settings.constraints["optimization_objective"] == "occupied_nights"
+    assert settings.constraints["legacy_objective_ignored"] == "combined"
+    assert "combined_revenue_weight" not in settings.weights
 
 
 def test_record_manual_override_feedback_creates_reason_and_feedback(db, hotel_config, sample_guest, sample_categories):

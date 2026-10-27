@@ -35,6 +35,8 @@ export type RateChangeDraftInput = {
       price_expedia?: number | null;
       priority: number;
       is_active: boolean;
+      comparable_season_key?: string | null;
+      is_high_demand_event: boolean;
     };
   };
 };
@@ -43,6 +45,32 @@ export type RateChangeImpact = {
   reservations_impacted: number;
   reservation_nights: number;
   dates_with_reservations: string[];
+  recommendation?: {
+    engine?: string;
+    trigger?: string;
+    currency_code?: string;
+    fx_market?: string | null;
+    fx_side?: string | null;
+    fx_ars_per_usd?: number | null;
+    fx_quote_as_of?: string | null;
+    method?: string;
+    suggestions?: Array<{
+      date: string;
+      direction: "up" | "down";
+      signal: string;
+      event_name?: string | null;
+      current_amount: number;
+      suggested_amount: number;
+      current_usd: number;
+      suggested_usd: number;
+      comparable_average_usd: number;
+      current_vs_comparable_pct?: number;
+      occupancy_pct: number;
+      pickup_change_pct: number | null;
+      adjustment_pct?: number;
+      max_step_pct: number;
+    }>;
+  };
 };
 
 export type RateChangeDraft = {
@@ -93,6 +121,17 @@ export const createRateChangeDraft = (payload: RateChangeDraftInput, session?: S
 
 export const getRateChangeDraft = (draftId: number, session?: SessionLike) =>
   apiFetch<RateChangeDraft>(`/api/rate-change-drafts/${draftId}`, { session });
+
+export const editRateRecommendationDraft = (
+  draftId: number,
+  expectedVersion: number,
+  changes: Array<{ date: string; values: { price: number } }>,
+  session?: SessionLike
+) => apiFetch<RateChangeDraft>(`/api/rate-change-drafts/${draftId}`, {
+  method: "PATCH",
+  data: { expected_version: expectedVersion, changes },
+  session
+});
 
 export const confirmRateChangeDraft = (draftId: number, expectedVersion: number, session?: SessionLike) =>
   apiFetch<RateChangeDraft>(`/api/rate-change-drafts/${draftId}/confirm`, {

@@ -5,6 +5,7 @@ import { RateCalendarGrid } from "../../components/RateCalendarGrid";
 import { RateEditorGrid, type PriceField } from "../../components/RateEditorGrid";
 import { RateEditorMobileCards } from "../../components/RateEditorMobileCards";
 import type { RateChangeDraft, RateChangeValues } from "../../api/rateChangeDrafts";
+import type { TariffRecommendationRunResult } from "../../api/tariff-recommendations";
 import { useCategories } from "../../hooks/useCategories";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
 import {
@@ -15,6 +16,7 @@ import {
   type PricePeriodInput
 } from "../../hooks/useRateCalendar";
 import { useRateChangeDrafts } from "../../hooks/useRateChangeDrafts";
+import { useTariffRecommendations } from "../../hooks/useTariffRecommendations";
 import { useBusinessDate } from "../../hooks/useBusinessClock";
 
 const RANGE_LABEL = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short", year: "numeric" });
@@ -36,6 +38,24 @@ const PRICE_FIELD_LABEL: Record<PriceField, string> = {
   price_mercadopago: "Mercado Pago",
   price_paypal: "PayPal",
   price_credit_card: "Tarjeta de crédito"
+};
+
+const TARIFF_SKIP_REASON_LABEL: Record<string, string> = {
+  no_active_price_period: "no hay una temporada activa para esa fecha",
+  season_not_marked_comparable: "la temporada no tiene grupo comparable",
+  insufficient_published_history: "faltan tres fechas históricas publicadas comparables",
+  current_rate_unavailable: "no se pudo obtener una tarifa vigente en USD",
+  comparable_usd_average_unavailable: "no hay promedio comparable en USD verificable",
+  pickup_history_unavailable: "falta historial comparable de pickup",
+  no_remaining_inventory: "no quedan habitaciones vendibles",
+  signals_do_not_agree: "la ocupación y el pickup no confirman la misma tendencia",
+  rounds_to_current_rate: "el ajuste se redondea a la tarifa actual"
+};
+
+const TARIFF_SIGNAL_LABEL: Record<string, string> = {
+  hotel_marked_high_demand_event: "evento de alta demanda marcado por el hotel",
+  high_occupancy_and_pickup: "ocupación alta y pickup por encima del histórico comparable",
+  low_occupancy_and_pickup: "ocupación baja y pickup por debajo del histórico comparable"
 };
 
 const BULK_FIELD_OPTIONS: Array<{ value: PriceField; label: string }> = [
@@ -153,6 +173,29 @@ export function RateCalendarPage() {
     [visiblePriceFields]
   );
   const rateDraftMutations = useRateChangeDrafts(categoryId);
+  const tariffEngine = useTariffRecommendations(categoryId);
+  const canManageTariffPolicy = hasPermission("config:manage");
+  const [tariffSettingsForm, setTariffSettingsForm] = useState({
+    enabled: false,
+    high_occupancy_pct: 80,
+    low_occupancy_pct: 40,
+    pickup_change_pct: 20,
+    max_step_pct: 5
+  });
+  const [tariffSettingsMessage, setTariffSettingsMessage] = useState<string | null>(null);
+  const [tariffRunMessage, setTariffRunMessage] = useState<string | null>(null);
+  const [tariffRunResult, setTariffRunResult] = useState<TariffRecommendationRunResult | null>(null);
+  useEffect(() => {
+    const settings = tariffEngine.settingsQuery.data;
+    if (!settings) return;
+    setTariffSettingsForm({
+      enabled: settings.enabled,
+      high_occupancy_pct: settings.high_occupancy_pct,
+      low_occupancy_pct: settings.low_occupancy_pct,
+      pickup_change_pct: settings.pickup_change_pct,
+      max_step_pct: settings.max_step_pct
+    });
+  }, [tariffEngine.settingsQuery.data]);
   const [stagedChangesByDate, setStagedChangesByDate] = useState<Record<string, RateChangeValues>>({});
   const stagedChanges = useMemo(
     () => Object.entries(stagedChangesByDate).sort(([left], [right]) => left.localeCompare(right)).map(([date, values]) => ({ date, values })),
@@ -162,7 +205,38 @@ export function RateCalendarPage() {
     () => (rateDraftMutations.draftsQuery.data ?? []).find((draft) => draft.status === "draft") ?? null,
     [rateDraftMutations.draftsQuery.data]
   );
-  const rateDraftBusy = rateDraftMutations.create.isPending || rateDraftMutations.confirm.isPending || rateDraftMutations.cancel.isPending;
+  const [tariffDraftAmounts, setTariffDraftAmounts] = useState<Record<string, string>>({});
+  const hasRecommendationDraft = Boolean(openDraft?.impact_at_creation.recommendation);
+  useEffect(() => {
+    if (!openDraft?.impact_at_creation.recommendation) {
+      setTariffDraftAmounts({});
+      return;
+    }
+    setTariffDraftAmounts(Object.fromEntries(
+      openDraft.changes.map((change) => [change.date, String(change.values.price ?? "")])
+    ));
+  }, [
+    openDraft?.id,
+    openDraft?.version,
+    openDraft?.changes,
+    openDraft?.impact_at_creation.recommendation
+  ]);
+  const recommendationDraftEdits = hasRecommendationDraft && openDraft
+    ? openDraft.changes.flatMap((change) => {
+        const raw = tariffDraftAmounts[change.date] ?? String(change.values.price ?? "");
+        const amount = Number(raw);
+        if (!Number.isFinite(amount) || amount <= 0 || amount === Number(change.values.price)) return [];
+        return [{ date: change.date, values: { price: amount } }];
+      })
+    : [];
+  const recommendationDraftEditsValid = hasRecommendationDraft && openDraft
+    ? openDraft.changes.every((change) => {
+        const raw = tariffDraftAmounts[change.date] ?? String(change.values.price ?? "");
+        const amount = Number(raw);
+        return Number.isFinite(amount) && amount > 0;
+      })
+    : false;
+  const rateDraftBusy = rateDraftMutations.create.isPending || rateDraftMutations.editRecommendation.isPending || rateDraftMutations.confirm.isPending || rateDraftMutations.cancel.isPending;
   const editorDisabled = !canEditRates || Boolean(openDraft) || rateDraftBusy;
   const periodsQuery = usePricePeriods(categoryId);
   const [periodForm, setPeriodForm] = useState<Omit<PricePeriodInput, "category_id">>({
@@ -171,7 +245,9 @@ export function RateCalendarPage() {
     end_date: dateTo,
     price_per_night: 0,
     priority: 0,
-    is_active: true
+    is_active: true,
+    comparable_season_key: "",
+    is_high_demand_event: false
   });
   const [editingPeriodId, setEditingPeriodId] = useState<number | null>(null);
   const [periodError, setPeriodError] = useState<string | null>(null);
@@ -222,7 +298,7 @@ export function RateCalendarPage() {
     setToDate(dateTo);
     setEditingPeriodId(null);
     setPeriodError(null);
-    setPeriodForm({ name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true });
+    setPeriodForm({ name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true, comparable_season_key: "", is_high_demand_event: false });
   }, [dateFrom, dateTo, categoryId]);
 
   const handleSavePeriod = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -243,7 +319,7 @@ export function RateCalendarPage() {
           : { action: "update", period_id: editingPeriodId, values }
       });
       setEditingPeriodId(null);
-      setPeriodForm({ name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true });
+      setPeriodForm({ name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true, comparable_season_key: "", is_high_demand_event: false });
     } catch (error: unknown) {
       setPeriodError(error instanceof Error ? error.message : "No se pudo preparar el cambio de temporada.");
     }
@@ -280,7 +356,9 @@ export function RateCalendarPage() {
       price_booking: period.price_booking,
       price_expedia: period.price_expedia,
       priority: period.priority,
-      is_active: period.is_active
+      is_active: period.is_active,
+      comparable_season_key: period.comparable_season_key ?? "",
+      is_high_demand_event: period.is_high_demand_event
     });
   };
 
@@ -451,6 +529,53 @@ export function RateCalendarPage() {
     }
   };
 
+  const handleSaveRecommendationDraft = async (draft: RateChangeDraft) => {
+    if (!recommendationDraftEditsValid || recommendationDraftEdits.length === 0) return;
+    try {
+      await rateDraftMutations.editRecommendation.mutateAsync({
+        id: draft.id,
+        version: draft.version,
+        changes: recommendationDraftEdits
+      });
+      setCellError(null);
+    } catch (err: unknown) {
+      setCellError(err instanceof Error ? err.message : "No se pudieron guardar los importes editados.");
+    }
+  };
+
+  const handleSaveTariffSettings = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setTariffSettingsMessage(null);
+    try {
+      await tariffEngine.saveSettings.mutateAsync(tariffSettingsForm);
+      setTariffSettingsMessage("Preferencias guardadas. Las tarifas solo cambiarán si alguien confirma un borrador.");
+    } catch (error: unknown) {
+      setTariffSettingsMessage(error instanceof Error ? error.message : "No se pudieron guardar las preferencias.");
+    }
+  };
+
+  const handleRunTariffRecommendations = async () => {
+    setTariffRunMessage(null);
+    setTariffRunResult(null);
+    try {
+      const result = await tariffEngine.generate.mutateAsync({ dateFrom, dateTo });
+      setTariffRunResult(result);
+      setTariffRunMessage(result.created
+        ? `Se preparó el borrador #${result.draft_id}. Revisá el motivo y el importe antes de confirmarlo.`
+        : result.reason === "engine_disabled"
+          ? "Activá el motor de recomendaciones para iniciar la evaluación."
+          : result.reason === "open_rate_draft"
+            ? "Ya hay un borrador pendiente para esta categoría. Revisalo antes de generar otro."
+        : result.reason === "fresh_usd_conversion_unavailable"
+              ? "No hay una cotización USD reciente seleccionada para el hotel; no se generó ninguna sugerencia."
+              : result.reason === "no_future_dates"
+                ? "El rango seleccionado no contiene noches futuras para evaluar."
+                : "No se encontraron fechas con datos suficientes y señales concordantes para sugerir un cambio.");
+    } catch (error: unknown) {
+      setTariffRunMessage(error instanceof Error ? error.message : "No se pudo evaluar la tarifa.");
+    }
+  };
+
   const inputClass =
     "h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm shadow-sm outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-100";
   const labelClass = "flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500";
@@ -550,6 +675,46 @@ export function RateCalendarPage() {
 
       {selectedCategory && dailyRatesQuery.data ? (
         <main className="space-y-4">
+          <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200" data-testid="tariff-recommendation-engine">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Recomendaciones de tarifa · experimental</h2>
+                <p className="mt-1 max-w-3xl text-sm text-slate-600">Compara en USD la tarifa vigente y el promedio de tarifas confirmadas para la misma categoría y los grupos de temporada que marques. Necesita al menos tres fechas históricas con conversión verificable; tarifas antiguas en ARS sin una cotización guardada no se convierten hacia atrás. Las consultas de disponibilidad todavía no se usan. Solo prepara borradores: la publicación requiere confirmación humana.</p>
+              </div>
+              <Pill tone={tariffSettingsForm.enabled ? "green" : "amber"}>{tariffSettingsForm.enabled ? "Activo para sugerir" : "Desactivado"}</Pill>
+            </div>
+            {tariffEngine.settingsQuery.isError ? <p role="alert" className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">No se pudieron cargar las preferencias del motor.</p> : null}
+            <form onSubmit={handleSaveTariffSettings} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <label className={`${labelClass} flex-row items-center gap-2 self-end pb-3 normal-case tracking-normal lg:col-span-2`}>
+                <input type="checkbox" checked={tariffSettingsForm.enabled} onChange={(event) => setTariffSettingsForm((current) => ({ ...current, enabled: event.target.checked }))} disabled={!canManageTariffPolicy || tariffEngine.settingsQuery.isLoading || tariffEngine.saveSettings.isPending} />
+                Habilitar recomendaciones experimentales
+              </label>
+              <label className={labelClass}>Ocupación alta (%)<input type="number" min={0} max={100} step="1" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={tariffSettingsForm.high_occupancy_pct} onChange={(event) => setTariffSettingsForm((current) => ({ ...current, high_occupancy_pct: Number(event.target.value) }))} disabled={!canManageTariffPolicy || tariffEngine.settingsQuery.isLoading || tariffEngine.saveSettings.isPending} /></label>
+              <label className={labelClass}>Ocupación baja (%)<input type="number" min={0} max={100} step="1" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={tariffSettingsForm.low_occupancy_pct} onChange={(event) => setTariffSettingsForm((current) => ({ ...current, low_occupancy_pct: Number(event.target.value) }))} disabled={!canManageTariffPolicy || tariffEngine.settingsQuery.isLoading || tariffEngine.saveSettings.isPending} /></label>
+              <label className={labelClass}>Pickup para señal (%)<input type="number" min={0.01} max={500} step="1" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={tariffSettingsForm.pickup_change_pct} onChange={(event) => setTariffSettingsForm((current) => ({ ...current, pickup_change_pct: Number(event.target.value) }))} disabled={!canManageTariffPolicy || tariffEngine.settingsQuery.isLoading || tariffEngine.saveSettings.isPending} /></label>
+              <label className={labelClass}>Paso máximo (%)<input type="number" min={0.01} max={5} step="0.25" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={tariffSettingsForm.max_step_pct} onChange={(event) => setTariffSettingsForm((current) => ({ ...current, max_step_pct: Number(event.target.value) }))} disabled={!canManageTariffPolicy || tariffEngine.settingsQuery.isLoading || tariffEngine.saveSettings.isPending} /></label>
+              {!canManageTariffPolicy ? <p className="text-xs text-slate-500 sm:col-span-2 lg:col-span-6">Solo un usuario con permiso para administrar la configuración del hotel puede cambiar estos parámetros.</p> : null}
+              <p className="text-xs text-slate-500 sm:col-span-2 lg:col-span-6">Valores piloto: 80%/40%, pickup ±20% y hasta 5% de ajuste. No hay piso ni tope absoluto; el promedio es una referencia y no garantiza cubrir costos.</p>
+              {tariffSettingsMessage ? <p role="status" className="text-sm text-slate-700 sm:col-span-2 lg:col-span-6">{tariffSettingsMessage}</p> : null}
+              {canManageTariffPolicy ? <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-6">
+                <button type="submit" disabled={tariffEngine.settingsQuery.isLoading || tariffEngine.saveSettings.isPending || tariffSettingsForm.low_occupancy_pct >= tariffSettingsForm.high_occupancy_pct} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{tariffEngine.saveSettings.isPending ? "Guardando..." : "Guardar parámetros"}</button>
+              </div> : null}
+            </form>
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
+              <button type="button" onClick={() => void handleRunTariffRecommendations()} disabled={!canEditRates || !tariffSettingsForm.enabled || Boolean(openDraft) || tariffEngine.generate.isPending || !categoryId} className="rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{tariffEngine.generate.isPending ? "Evaluando fechas..." : "Evaluar fechas y preparar borrador"}</button>
+              {tariffRunMessage ? <p role="status" className="text-sm text-slate-700">{tariffRunMessage}</p> : null}
+              {tariffRunResult && Object.keys(tariffRunResult.skipped).length > 0 ? (
+                <div className="w-full text-xs text-slate-500">
+                  <p>Fechas sin sugerencia: {Object.values(tariffRunResult.skipped).reduce((sum, value) => sum + value, 0)}.</p>
+                  <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                    {Object.entries(tariffRunResult.skipped).map(([reason, count]) => (
+                      <li key={reason}>{count} {TARIFF_SKIP_REASON_LABEL[reason] ?? reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </section>
           <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200" data-testid="rate-editor-section">
             <div className="grid gap-3 border-b border-slate-200 p-4 lg:grid-cols-[1fr_auto] lg:items-start">
               <div className="min-w-0">
@@ -619,6 +784,26 @@ export function RateCalendarPage() {
                 <p className="text-sm text-amber-950">
                   Impacto actual: {openDraft.impact.reservations_impacted} reservas · {openDraft.impact.reservation_nights} noches · {openDraft.impact.dates_with_reservations.length} fechas con reservas.
                 </p>
+                {openDraft.impact_at_creation.recommendation ? (
+                  <div className="space-y-2 rounded-xl border border-violet-200 bg-white p-3 text-sm" data-testid="tariff-recommendation-explanation">
+                    <p className="font-semibold text-violet-950">Motivo de la recomendación automática</p>
+                    <p className="text-slate-700">{openDraft.impact_at_creation.recommendation.method ?? "Evaluación de demanda y tarifas comparables."}</p>
+                    {openDraft.impact_at_creation.recommendation.fx_ars_per_usd ? <p className="text-xs text-slate-600">Conversión usada: {openDraft.impact_at_creation.recommendation.fx_market} · {openDraft.impact_at_creation.recommendation.fx_side} · {openDraft.impact_at_creation.recommendation.fx_ars_per_usd.toFixed(4)} ARS/USD · {openDraft.impact_at_creation.recommendation.fx_quote_as_of ?? "fecha no disponible"}</p> : null}
+                    <ul className="max-h-48 space-y-1 overflow-auto text-xs text-slate-700">
+                      {(openDraft.impact_at_creation.recommendation.suggestions ?? []).map((suggestion) => (
+                        <li key={suggestion.date} className="rounded-lg bg-violet-50 p-2">
+                          {suggestion.date}: {suggestion.direction === "up" ? "Sugerir suba" : "Sugerir baja"}{" "}
+                          {suggestion.adjustment_pct === undefined ? "" : `(${suggestion.adjustment_pct > 0 ? "+" : ""}${suggestion.adjustment_pct.toFixed(1)}%)`}{" · "}
+                          {TARIFF_SIGNAL_LABEL[suggestion.signal] ?? suggestion.signal}
+                          {suggestion.event_name ? ` (${suggestion.event_name})` : ""}{" · USD "}
+                          {suggestion.current_usd.toFixed(2)} → USD {suggestion.suggested_usd.toFixed(2)} · promedio comparable USD {suggestion.comparable_average_usd.toFixed(2)}
+                          {suggestion.current_vs_comparable_pct === undefined ? "" : ` · tarifa vigente ${suggestion.current_vs_comparable_pct > 0 ? "+" : ""}${suggestion.current_vs_comparable_pct.toFixed(1)}% frente al promedio`}
+                          {` · ocupación ${suggestion.occupancy_pct.toFixed(1)}% · pickup ${suggestion.pickup_change_pct === null ? "sin señal" : `${suggestion.pickup_change_pct.toFixed(1)}%`}`}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 {openPeriodOperation ? (
                   <div className="space-y-2 rounded-xl border border-amber-200 bg-white p-3 text-sm">
                     <p className="font-semibold text-slate-900">Temporada · {openPeriodOperation.action === "create" ? "alta" : openPeriodOperation.action === "update" ? "edición" : "baja"}</p>
@@ -641,17 +826,59 @@ export function RateCalendarPage() {
                         <p className="font-semibold text-slate-900">{change.date}</p>
                         <ul className="mt-1 space-y-1 text-xs text-slate-700">
                           {Object.keys(change.values).map((field) => (
-                            <li key={field}>{PRICE_FIELD_LABEL[field as PriceField]}: {formatRateAmount(change.before[field as PriceField], currencyCode)} → {formatRateAmount(change.after[field as PriceField], currencyCode)}</li>
+                            <li key={field}>
+                              {hasRecommendationDraft && field === "price" ? (
+                                <label className="flex flex-wrap items-center gap-2">
+                                  <span>Tarifa vigente {formatRateAmount(change.before.price, currencyCode)} · importe para confirmar:</span>
+                                  <input
+                                    aria-label={`Importe sugerido para ${change.date}`}
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={tariffDraftAmounts[change.date] ?? String(change.values.price ?? "")}
+                                    onChange={(event) => setTariffDraftAmounts((current) => ({
+                                      ...current,
+                                      [change.date]: event.target.value
+                                    }))}
+                                    className="w-36 rounded-lg border border-slate-300 px-2 py-1 text-sm font-semibold text-slate-900"
+                                  />
+                                </label>
+                              ) : (
+                                <>{PRICE_FIELD_LABEL[field as PriceField]}: {formatRateAmount(change.before[field as PriceField], currencyCode)} → {formatRateAmount(change.after[field as PriceField], currencyCode)}</>
+                              )}
+                            </li>
                           ))}
                         </ul>
                       </li>
                     ))}
                   </ul>
                 )}
+                {hasRecommendationDraft && (
+                  <p className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+                    Podés ajustar los importes sugeridos antes de aprobar. La tarifa publicada cambia únicamente cuando confirmás el borrador.
+                  </p>
+                )}
                 {cellError && <div role="alert" className="flex items-start justify-between gap-3 text-sm text-rose-700"><p>{cellError}</p><button type="button" aria-label="Cerrar error" onClick={() => setCellError(null)} className="shrink-0 font-semibold underline">Cerrar</button></div>}
                 <div className="flex flex-wrap justify-end gap-2">
                   <button type="button" onClick={() => void handleCancelDraft(openDraft)} disabled={!canEditRates || rateDraftBusy} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-50">Cancelar borrador</button>
-                  <button type="button" onClick={() => void handleConfirmDraft(openDraft)} disabled={!canEditRates || rateDraftBusy} className="min-h-11 rounded-xl bg-brand-700 px-4 text-sm font-semibold text-white disabled:opacity-50">{rateDraftMutations.confirm.isPending ? "Confirmando..." : openPeriodOperation ? "Confirmar temporada" : "Confirmar tarifas"}</button>
+                  {hasRecommendationDraft && recommendationDraftEdits.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveRecommendationDraft(openDraft)}
+                      disabled={!canEditRates || rateDraftBusy || !recommendationDraftEditsValid}
+                      className="min-h-11 rounded-xl border border-brand-300 bg-white px-4 text-sm font-semibold text-brand-800 disabled:opacity-50"
+                    >
+                      {rateDraftMutations.editRecommendation.isPending ? "Guardando importes..." : "Guardar importes editados"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleConfirmDraft(openDraft)}
+                    disabled={!canEditRates || rateDraftBusy || (hasRecommendationDraft && (!recommendationDraftEditsValid || recommendationDraftEdits.length > 0))}
+                    className="min-h-11 rounded-xl bg-brand-700 px-4 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {rateDraftMutations.confirm.isPending ? "Confirmando..." : openPeriodOperation ? "Confirmar temporada" : "Confirmar tarifas"}
+                  </button>
                 </div>
               </section>
             ) : stagedChanges.length > 0 ? (
@@ -957,6 +1184,8 @@ export function RateCalendarPage() {
                   <div>
                     <p className="font-semibold text-slate-900">{period.name} · {period.price_per_night} {currencyCode}</p>
                     <p className="text-xs text-slate-500">{period.start_date} → {period.end_date} · prioridad {period.priority} · {period.is_active ? "Activa" : "Inactiva"}</p>
+                    {period.comparable_season_key ? <p className="text-xs text-slate-500">Grupo comparable: {period.comparable_season_key}</p> : null}
+                    {period.is_high_demand_event ? <p className="text-xs font-medium text-amber-700">Fecha marcada como evento de alta demanda</p> : null}
                   </div>
                   {canEditRates ? (
                     <div className="flex flex-wrap gap-2">
@@ -974,10 +1203,12 @@ export function RateCalendarPage() {
               <label className={labelClass}>Hasta<input required type="date" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.end_date} onChange={(event) => setPeriodForm((current) => ({ ...current, end_date: event.target.value }))} disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /></label>
               <label className={labelClass}>Precio por noche<input required min={0} step="0.01" type="number" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.price_per_night} onChange={(event) => setPeriodForm((current) => ({ ...current, price_per_night: Number(event.target.value) }))} disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /></label>
               <label className={labelClass}>Prioridad<input min={-100000} type="number" className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.priority} onChange={(event) => setPeriodForm((current) => ({ ...current, priority: Number(event.target.value) }))} disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /></label>
+              <label className={labelClass}>Grupo comparable<input maxLength={80} className={`${inputClass} normal-case tracking-normal text-slate-900`} value={periodForm.comparable_season_key ?? ""} onChange={(event) => setPeriodForm((current) => ({ ...current, comparable_season_key: event.target.value }))} placeholder="verano-alta" disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /><span className="font-normal normal-case tracking-normal">Usá el mismo nombre en temporadas que querés comparar entre años.</span></label>
               <label className={`${labelClass} flex-row items-center gap-2 self-end pb-3 normal-case tracking-normal`}><input type="checkbox" checked={periodForm.is_active} onChange={(event) => setPeriodForm((current) => ({ ...current, is_active: event.target.checked }))} disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /> Activa</label>
+              <label className={`${labelClass} flex-row items-center gap-2 self-end pb-3 normal-case tracking-normal`}><input type="checkbox" checked={periodForm.is_high_demand_event} onChange={(event) => setPeriodForm((current) => ({ ...current, is_high_demand_event: event.target.checked }))} disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy} /> Evento de alta demanda</label>
               {periodError && <div role="alert" className="flex items-start justify-between gap-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700 md:col-span-2 xl:col-span-6"><p>{periodError}</p><button type="button" aria-label="Cerrar error de temporada" onClick={() => setPeriodError(null)} className="shrink-0 font-semibold underline">Cerrar</button></div>}
               <div className="flex flex-wrap justify-end gap-2 md:col-span-2 xl:col-span-6">
-                {editingPeriodId !== null && <button type="button" className="self-end rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => { setEditingPeriodId(null); setPeriodError(null); setPeriodForm({ name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true }); }}>Descartar edición</button>}
+                {editingPeriodId !== null && <button type="button" className="self-end rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => { setEditingPeriodId(null); setPeriodError(null); setPeriodForm({ name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true, comparable_season_key: "", is_high_demand_event: false }); }}>Descartar edición</button>}
                 <button type="submit" className="self-end rounded-2xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={!canEditRates || Boolean(openDraft) || rateDraftBusy || !categoryId}>{rateDraftMutations.create.isPending ? "Preparando borrador..." : editingPeriodId === null ? "Preparar alta" : "Preparar edición"}</button>
               </div>
             </form>

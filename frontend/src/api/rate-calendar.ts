@@ -139,10 +139,12 @@ export type PricePeriod = {
   price_expedia?: number | null;
   priority: number;
   is_active: boolean;
+  comparable_season_key: string | null;
+  is_high_demand_event: boolean;
   created_at: string;
 };
 
-export type PricePeriodInput = Omit<Pick<PricePeriod, "category_id" | "name" | "start_date" | "end_date" | "price_per_night" | "price_cash" | "price_transfer" | "price_mercadopago" | "price_paypal" | "price_credit_card" | "price_debit_card" | "price_booking" | "price_expedia" | "priority" | "is_active">, "category_id"> & {
+export type PricePeriodInput = Omit<Pick<PricePeriod, "category_id" | "name" | "start_date" | "end_date" | "price_per_night" | "price_cash" | "price_transfer" | "price_mercadopago" | "price_paypal" | "price_credit_card" | "price_debit_card" | "price_booking" | "price_expedia" | "priority" | "is_active" | "comparable_season_key" | "is_high_demand_event">, "category_id"> & {
   category_id: number;
 };
 

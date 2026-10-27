@@ -1,9 +1,9 @@
 # Alembic head
 
-Generado: 2026-10-24T17:06:32.966035+00:00
-Commit: `563ddc01d4b71ee63fce3a7115e02e83600d2ec3`
+Generado: 2026-10-27T17:04:35.008669+00:00
+Commit: `5a603f66364fa3ba4f3796359d1942c31d90fb1c`
 
 ```text
-20261024_cash_movement_voids (head)
+20261027_alloc_room_prefs (head)
 ```
 Fuente: `alembic.ini` y `alembic/versions/`.

@@ -1995,7 +1995,7 @@
           "Rooms"
         ],
         "summary": "Trigger Reallocation",
-        "description": "Manually trigger the allocation engine to optimally redistribute all reservations.\nThis maximizes availability and profitability by packing rooms tightly and\nrelocating reservations away from cleaning/maintenance rooms.\nReturns unassigned reservations (to be shown in yellow in the UI).",
+        "description": "Recalculate and automatically apply a complete, revalidated safe plan.",
         "operationId": "trigger_reallocation_api_rooms_reallocate_post",
         "parameters": [
           {
@@ -3809,6 +3809,164 @@
         }
       }
     },
+    "/api/reservations/{reservation_id}/company-terms-review": {
+      "get": {
+        "tags": [
+          "Reservations"
+        ],
+        "summary": "Read Company Terms Review",
+        "description": "Read the company terms snapshot and current profile drift for managers.",
+        "operationId": "read_company_terms_review_api_reservations__reservation_id__company_terms_review_get",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyReservationTermsReviewRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Reservations"
+        ],
+        "summary": "Decide Company Terms Review",
+        "description": "Record an auditable keep-snapshot or accept-current-config decision.",
+        "operationId": "decide_company_terms_review_api_reservations__reservation_id__company_terms_review_post",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyReservationTermsReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyReservationTermsReviewRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/reservations/": {
       "post": {
         "tags": [
@@ -4278,6 +4436,172 @@
                     "$ref": "#/components/schemas/ReservationPendingActionRead"
                   },
                   "title": "Response List Pending Actions Api Reservations Actions Pending Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reservations/cancellation-reviews/pending": {
+      "get": {
+        "tags": [
+          "Reservations"
+        ],
+        "summary": "List Pending Cancellation Reviews Endpoint",
+        "description": "Return the current hotel's cancellation decisions awaiting review.",
+        "operationId": "list_pending_cancellation_reviews_endpoint_api_reservations_cancellation_reviews_pending_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 250,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CancellationReviewRead"
+                  },
+                  "title": "Response List Pending Cancellation Reviews Endpoint Api Reservations Cancellation Reviews Pending Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reservations/cancellation-reviews/{review_id}/decision": {
+      "post": {
+        "tags": [
+          "Reservations"
+        ],
+        "summary": "Decide Cancellation Review",
+        "operationId": "decide_cancellation_review_api_reservations_cancellation_reviews__review_id__decision_post",
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Review Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancellationReviewDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancellationReviewResolutionResponse"
                 }
               }
             }
@@ -5042,7 +5366,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReservationRead"
+                  "$ref": "#/components/schemas/ReservationCancellationResponse"
                 }
               }
             }
@@ -6233,6 +6557,85 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReservationGroupPaymentRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/waitlist/suggestions": {
+      "get": {
+        "tags": [
+          "Waitlist"
+        ],
+        "summary": "Get Waitlist Promotion Suggestions",
+        "operationId": "get_waitlist_promotion_suggestions_api_waitlist_suggestions_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WaitlistPromotionSuggestionRead"
+                  },
+                  "title": "Response Get Waitlist Promotion Suggestions Api Waitlist Suggestions Get"
                 }
               }
             }
@@ -7592,7 +7995,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BookingRead"
+                  "$ref": "#/components/schemas/BookingCancellationResponse"
                 }
               }
             }
@@ -8396,6 +8799,180 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReservationRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/checkin/{reservation_id}/guest-arrivals": {
+      "get": {
+        "tags": [
+          "Check-in"
+        ],
+        "summary": "Get Guest Arrivals",
+        "operationId": "get_guest_arrivals_api_checkin__reservation_id__guest_arrivals_get",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationGuestArrivalListRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/checkin/{reservation_id}/guests/{guest_id}": {
+      "post": {
+        "tags": [
+          "Check-in"
+        ],
+        "summary": "Checkin Guest",
+        "operationId": "checkin_guest_api_checkin__reservation_id__guests__guest_id__post",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "guest_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Guest Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CheckInRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationGuestArrivalMutationRead"
                 }
               }
             }
@@ -15397,6 +15974,82 @@
         }
       }
     },
+    "/api/payment-surcharges/quote": {
+      "post": {
+        "tags": [
+          "Payment Surcharges"
+        ],
+        "summary": "Quote Payment Surcharge",
+        "description": "Return the exact amount to collect and any FX/cash suggestion details.",
+        "operationId": "quote_payment_surcharge_api_payment_surcharges_quote_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentSurchargeQuoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentSurchargeQuoteRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/payment-surcharges/{surcharge_id}": {
       "patch": {
         "tags": [
@@ -17900,6 +18553,108 @@
       }
     },
     "/api/whatsapp/conversations/{conversation_id}/messages": {
+      "get": {
+        "tags": [
+          "WhatsApp CRM"
+        ],
+        "summary": "Conversation Messages",
+        "description": "Read a bounded, cursor-paginated page of a hotel's WhatsApp history.",
+        "operationId": "conversation_messages_api_whatsapp_conversations__conversation_id__messages_get",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "before_message_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Message Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppMessagePageRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "WhatsApp CRM"
@@ -18130,7 +18885,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppConversationSummaryRead"
+                }
               }
             }
           },
@@ -18213,7 +18970,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WhatsAppConversationRead"
+                  "$ref": "#/components/schemas/WhatsAppConversationSummaryRead"
                 }
               }
             }
@@ -22169,6 +22926,478 @@
         }
       }
     },
+    "/api/laundry/discrepancies": {
+      "get": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Get Laundry Discrepancies",
+        "operationId": "get_laundry_discrepancies_api_laundry_discrepancies_get",
+        "parameters": [
+          {
+            "name": "status_filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Filter"
+            }
+          },
+          {
+            "name": "discrepancy_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Discrepancy Type"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LaundryDiscrepancyRead"
+                  },
+                  "title": "Response Get Laundry Discrepancies Api Laundry Discrepancies Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/laundry/discrepancies/{discrepancy_id}/approve": {
+      "post": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Approve Laundry Discrepancy",
+        "operationId": "approve_laundry_discrepancy_api_laundry_discrepancies__discrepancy_id__approve_post",
+        "parameters": [
+          {
+            "name": "discrepancy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Discrepancy Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LaundryDiscrepancyAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LaundryDiscrepancyRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/laundry/discrepancies/{discrepancy_id}/resolve": {
+      "post": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Resolve Laundry Discrepancy",
+        "operationId": "resolve_laundry_discrepancy_api_laundry_discrepancies__discrepancy_id__resolve_post",
+        "parameters": [
+          {
+            "name": "discrepancy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Discrepancy Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LaundryDiscrepancyResolve"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LaundryDiscrepancyRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/laundry/discrepancies/{discrepancy_id}/return-to-laundry": {
+      "post": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Return Laundry Discrepancy To Vendor",
+        "operationId": "return_laundry_discrepancy_to_vendor_api_laundry_discrepancies__discrepancy_id__return_to_laundry_post",
+        "parameters": [
+          {
+            "name": "discrepancy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Discrepancy Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LaundryDiscrepancyAction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LaundryDiscrepancyRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/laundry/retirements": {
+      "post": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Retire Laundry Linen",
+        "operationId": "retire_laundry_linen_api_laundry_retirements_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinenRetirementCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinenRetirementRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/laundry/vendors/{vendor_id}/balance": {
       "get": {
         "tags": [
@@ -23760,6 +24989,497 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StockMovementRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stock/count-sessions": {
+      "post": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Start Stock Count Session",
+        "operationId": "start_stock_count_session_api_stock_count_sessions_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockCountSessionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockCountSessionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Get Stock Count Sessions",
+        "operationId": "get_stock_count_sessions_api_stock_count_sessions_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StockCountSessionRead"
+                  },
+                  "title": "Response Get Stock Count Sessions Api Stock Count Sessions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stock/count-sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Get Stock Count Session Detail",
+        "operationId": "get_stock_count_session_detail_api_stock_count_sessions__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockCountSessionDetailRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stock/count-sessions/{session_id}/counts": {
+      "post": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Record Stock Count Line",
+        "operationId": "record_stock_count_line_api_stock_count_sessions__session_id__counts_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockCountRecordCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockCountLineRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stock/count-sessions/{session_id}/confirm": {
+      "post": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Confirm Stock Count",
+        "operationId": "confirm_stock_count_api_stock_count_sessions__session_id__confirm_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockCountConfirmation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockCountSessionDetailRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stock/count-sessions/{session_id}/cancel": {
+      "post": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Cancel Stock Count",
+        "operationId": "cancel_stock_count_api_stock_count_sessions__session_id__cancel_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockCountConfirmation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockCountSessionRead"
                 }
               }
             }
@@ -25775,6 +27495,255 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AllocationRunDetailRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/allocation/policy/runs/{run_id}/accept": {
+      "post": {
+        "tags": [
+          "Allocation Policy"
+        ],
+        "summary": "Accept Run",
+        "operationId": "accept_run_api_allocation_policy_runs__run_id__accept_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AllocationRunAcceptRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllocationRunDetailRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/allocation/policy/runs/{run_id}/reject": {
+      "post": {
+        "tags": [
+          "Allocation Policy"
+        ],
+        "summary": "Reject Run",
+        "operationId": "reject_run_api_allocation_policy_runs__run_id__reject_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllocationRunDetailRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/allocation/policy/reservations/{reservation_id}/reassignment-lock": {
+      "patch": {
+        "tags": [
+          "Allocation Policy"
+        ],
+        "summary": "Update Reassignment Lock",
+        "operationId": "update_reassignment_lock_api_allocation_policy_reservations__reservation_id__reassignment_lock_patch",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReservationReassignmentLockRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationReassignmentLockRead"
                 }
               }
             }
@@ -29003,6 +30972,72 @@
         }
       }
     },
+    "/api/companies/hotel-currency": {
+      "get": {
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Get Company Hotel Currency",
+        "description": "Return only the hotel's configured currency for company screens.",
+        "operationId": "get_company_hotel_currency_api_companies_hotel_currency_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyHotelCurrencyRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/companies/options": {
       "get": {
         "tags": [
@@ -32016,6 +34051,88 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": [
+          "Rate Change Drafts"
+        ],
+        "summary": "Edit Draft",
+        "operationId": "edit_draft_api_rate_change_drafts__draft_id__patch",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateChangeDraftEditIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateChangeDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/rate-change-drafts/{draft_id}/confirm": {
@@ -32169,6 +34286,219 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RateChangeDraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tariff-recommendations/settings": {
+      "get": {
+        "tags": [
+          "Tariff Recommendations"
+        ],
+        "summary": "Read Settings",
+        "operationId": "read_settings_api_tariff_recommendations_settings_get",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TariffRecommendationSettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Tariff Recommendations"
+        ],
+        "summary": "Update Settings",
+        "operationId": "update_settings_api_tariff_recommendations_settings_put",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TariffRecommendationSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TariffRecommendationSettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tariff-recommendations/generate": {
+      "post": {
+        "tags": [
+          "Tariff Recommendations"
+        ],
+        "summary": "Generate Recommendation",
+        "operationId": "generate_recommendation_api_tariff_recommendations_generate_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TariffRecommendationRunIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TariffRecommendationRunOut"
                 }
               }
             }
@@ -33330,6 +35660,81 @@
         }
       }
     },
+    "/api/room-blocks/allocation-preview": {
+      "post": {
+        "tags": [
+          "Room Blocks"
+        ],
+        "summary": "Preview Room Block Allocation",
+        "operationId": "preview_room_block_allocation_api_room_blocks_allocation_preview_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomBlockCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomBlockAllocationPreviewRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/room-blocks/conflicts/preview": {
       "get": {
         "tags": [
@@ -33667,6 +36072,90 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RoomBlockRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/room-blocks/{block_id}/allocation-preview": {
+      "post": {
+        "tags": [
+          "Room Blocks"
+        ],
+        "summary": "Preview Room Block Extension Allocation",
+        "operationId": "preview_room_block_extension_allocation_api_room_blocks__block_id__allocation_preview_post",
+        "parameters": [
+          {
+            "name": "block_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Block Id"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomBlockExtensionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomBlockExtensionAllocationPreviewRead"
                 }
               }
             }
@@ -41942,6 +44431,67 @@
         ],
         "title": "ActiveRoomBlockItem"
       },
+      "AllocationAssignmentRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "reservation_id": {
+            "type": "integer",
+            "title": "Reservation Id"
+          },
+          "source_room_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Room Id"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "explanation_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation Summary"
+          },
+          "requires_explicit_approval": {
+            "type": "boolean",
+            "title": "Requires Explicit Approval",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "reservation_id",
+          "status"
+        ],
+        "title": "AllocationAssignmentRead"
+      },
       "AllocationExplanationRead": {
         "properties": {
           "id": {
@@ -42242,6 +44792,21 @@
             "type": "object",
             "title": "Weights"
           },
+          "optimization_objective": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "occupied_nights"
+                ],
+                "const": "occupied_nights"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optimization Objective"
+          },
           "prompt_summary": {
             "anyOf": [
               {
@@ -42297,6 +44862,27 @@
             },
             "type": "object",
             "title": "Weights"
+          },
+          "optimization_objective": {
+            "type": "string",
+            "enum": [
+              "occupied_nights",
+              "net_revenue",
+              "combined"
+            ],
+            "title": "Optimization Objective",
+            "default": "occupied_nights"
+          },
+          "combined_revenue_weight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Combined Revenue Weight"
           },
           "prompt_summary": {
             "anyOf": [
@@ -42403,6 +44989,21 @@
         ],
         "title": "AllocationQuestionnaireDraftRequest"
       },
+      "AllocationRunAcceptRequest": {
+        "properties": {
+          "explicitly_approved_locked_reservation_ids": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Explicitly Approved Locked Reservation Ids"
+          }
+        },
+        "type": "object",
+        "title": "AllocationRunAcceptRequest"
+      },
       "AllocationRunDetailRead": {
         "properties": {
           "run_id": {
@@ -42503,6 +45104,13 @@
             },
             "type": "array",
             "title": "Metrics"
+          },
+          "assignments": {
+            "items": {
+              "$ref": "#/components/schemas/AllocationAssignmentRead"
+            },
+            "type": "array",
+            "title": "Assignments"
           }
         },
         "type": "object",
@@ -44351,6 +46959,225 @@
         "type": "object",
         "title": "BookedValueRead"
       },
+      "BookingCancellationResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "confirmation_code": {
+            "type": "string",
+            "title": "Confirmation Code"
+          },
+          "guest_id": {
+            "type": "integer",
+            "title": "Guest Id"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "category_id": {
+            "type": "integer",
+            "title": "Category Id"
+          },
+          "check_in_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Check In Date"
+          },
+          "check_out_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Check Out Date"
+          },
+          "total_amount": {
+            "type": "number",
+            "title": "Total Amount"
+          },
+          "amount_paid": {
+            "type": "number",
+            "title": "Amount Paid"
+          },
+          "deposit_amount": {
+            "type": "number",
+            "title": "Deposit Amount"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReservationStatusEnum"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ReservationSourceEnum"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
+          "num_adults": {
+            "type": "integer",
+            "title": "Num Adults"
+          },
+          "num_children": {
+            "type": "integer",
+            "title": "Num Children"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
+          "reservation_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Comment"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "actual_check_in": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Check In"
+          },
+          "actual_check_out": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Check Out"
+          },
+          "balance_due": {
+            "type": "number",
+            "title": "Balance Due",
+            "default": 0.0
+          },
+          "nights": {
+            "type": "integer",
+            "title": "Nights",
+            "default": 0
+          },
+          "additional_guests": {
+            "items": {
+              "$ref": "#/components/schemas/GuestSummary"
+            },
+            "type": "array",
+            "title": "Additional Guests",
+            "default": []
+          },
+          "cancellation_outcome": {
+            "type": "string",
+            "enum": [
+              "cancelled",
+              "approval_required",
+              "manager_review_required"
+            ],
+            "title": "Cancellation Outcome"
+          },
+          "cancellation_review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CancellationReviewRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "confirmation_code",
+          "guest_id",
+          "room_id",
+          "category_id",
+          "check_in_date",
+          "check_out_date",
+          "total_amount",
+          "amount_paid",
+          "deposit_amount",
+          "status",
+          "source",
+          "external_id",
+          "num_adults",
+          "num_children",
+          "notes",
+          "created_at",
+          "updated_at",
+          "cancellation_outcome"
+        ],
+        "title": "BookingCancellationResponse"
+      },
       "BookingCreate": {
         "properties": {
           "guest_id": {
@@ -45103,6 +47930,257 @@
           "simulation_enabled"
         ],
         "title": "BusinessClockRead"
+      },
+      "CancellationReviewDecisionRequest": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject"
+            ],
+            "title": "Decision"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "title": "CancellationReviewDecisionRequest"
+      },
+      "CancellationReviewRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "reservation_id": {
+            "type": "integer",
+            "title": "Reservation Id"
+          },
+          "confirmation_code": {
+            "type": "string",
+            "title": "Confirmation Code"
+          },
+          "check_in_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Check In Date"
+          },
+          "check_out_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Check Out Date"
+          },
+          "reservation_total": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Total"
+          },
+          "reservation_currency_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Currency Code"
+          },
+          "review_type": {
+            "type": "string",
+            "enum": [
+              "penalty",
+              "historical_policy_missing",
+              "policy_needs_review"
+            ],
+            "title": "Review Type"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "reason_code": {
+            "type": "string",
+            "title": "Reason Code"
+          },
+          "policy_snapshot": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Snapshot"
+          },
+          "free_cancellation_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Cancellation Hours"
+          },
+          "check_in_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check In Time"
+          },
+          "hotel_timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotel Timezone"
+          },
+          "cancellation_cutoff_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Cutoff At"
+          },
+          "penalty_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Penalty Amount"
+          },
+          "penalty_currency_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Penalty Currency Code"
+          },
+          "requested_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By User Id"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          },
+          "reviewed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed By User Id"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "review_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "reservation_id",
+          "confirmation_code",
+          "check_in_date",
+          "check_out_date",
+          "review_type",
+          "status",
+          "reason_code",
+          "requested_at"
+        ],
+        "title": "CancellationReviewRead"
+      },
+      "CancellationReviewResolutionResponse": {
+        "properties": {
+          "cancellation_review": {
+            "$ref": "#/components/schemas/CancellationReviewRead"
+          },
+          "reservation": {
+            "$ref": "#/components/schemas/ReservationRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cancellation_review",
+          "reservation"
+        ],
+        "title": "CancellationReviewResolutionResponse"
       },
       "CashCloseReportRead": {
         "properties": {
@@ -47704,6 +50782,19 @@
         ],
         "title": "CompanyExtensionRequestUpdate"
       },
+      "CompanyHotelCurrencyRead": {
+        "properties": {
+          "default_currency": {
+            "type": "string",
+            "title": "Default Currency"
+          }
+        },
+        "type": "object",
+        "required": [
+          "default_currency"
+        ],
+        "title": "CompanyHotelCurrencyRead"
+      },
       "CompanyNightChargeAmountAdjustmentRead": {
         "properties": {
           "id": {
@@ -48303,6 +51394,230 @@
           "updated_at"
         ],
         "title": "CompanyRead"
+      },
+      "CompanyReservationTermsReviewEventRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "keep_snapshot",
+              "accept_current"
+            ],
+            "title": "Action"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Changed Fields"
+          },
+          "actor_user_id": {
+            "type": "integer",
+            "title": "Actor User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "reason",
+          "changed_fields",
+          "actor_user_id",
+          "created_at"
+        ],
+        "title": "CompanyReservationTermsReviewEventRead"
+      },
+      "CompanyReservationTermsReviewRead": {
+        "properties": {
+          "reservation_id": {
+            "type": "integer",
+            "title": "Reservation Id"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Id"
+          },
+          "company_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_applicable",
+              "captured",
+              "hold_for_manager_review",
+              "snapshot_missing",
+              "manager_kept_snapshot",
+              "manager_accepted_current"
+            ],
+            "title": "Status"
+          },
+          "needs_review": {
+            "type": "boolean",
+            "title": "Needs Review"
+          },
+          "blocks_checkin": {
+            "type": "boolean",
+            "title": "Blocks Checkin"
+          },
+          "block_checkin_on_change": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Checkin On Change"
+          },
+          "current_terms": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Terms"
+          },
+          "reviewed_config": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed Config"
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot"
+          },
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Changed Fields"
+          },
+          "current_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Fingerprint"
+          },
+          "reviewed_config_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed Config Fingerprint"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyReservationTermsReviewEventRead"
+            },
+            "type": "array",
+            "title": "History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reservation_id",
+          "company_id",
+          "status",
+          "needs_review",
+          "blocks_checkin",
+          "changed_fields"
+        ],
+        "title": "CompanyReservationTermsReviewRead"
+      },
+      "CompanyReservationTermsReviewRequest": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "keep_snapshot",
+              "accept_current"
+            ],
+            "title": "Action"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "expected_config_fingerprint": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Config Fingerprint"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "reason",
+          "expected_config_fingerprint",
+          "idempotency_key"
+        ],
+        "title": "CompanyReservationTermsReviewRequest"
       },
       "CompanyUpdate": {
         "properties": {
@@ -52578,6 +55893,25 @@
             ],
             "title": "Checkin Payment Policy"
           },
+          "checkin_reservation_status_policy": {
+            "type": "string",
+            "enum": [
+              "partial_checkin",
+              "checked_in_on_first_guest"
+            ],
+            "title": "Checkin Reservation Status Policy",
+            "default": "partial_checkin"
+          },
+          "block_checkin_on_company_terms_change": {
+            "type": "boolean",
+            "title": "Block Checkin On Company Terms Change",
+            "default": true
+          },
+          "allow_stock_count_self_approval": {
+            "type": "boolean",
+            "title": "Allow Stock Count Self Approval",
+            "default": false
+          },
           "enable_full_payment": {
             "type": "boolean",
             "title": "Enable Full Payment"
@@ -52645,6 +55979,17 @@
           "hotel_name": {
             "type": "string",
             "title": "Hotel Name"
+          },
+          "has_elevator": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Elevator"
           },
           "fiscal_legal_name": {
             "anyOf": [
@@ -52979,6 +56324,43 @@
             ],
             "title": "Checkin Payment Policy"
           },
+          "checkin_reservation_status_policy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "partial_checkin",
+                  "checked_in_on_first_guest"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkin Reservation Status Policy"
+          },
+          "block_checkin_on_company_terms_change": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Checkin On Company Terms Change"
+          },
+          "allow_stock_count_self_approval": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Stock Count Self Approval"
+          },
           "enable_full_payment": {
             "anyOf": [
               {
@@ -53168,6 +56550,17 @@
               }
             ],
             "title": "Hotel Name"
+          },
+          "has_elevator": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Elevator"
           },
           "fiscal_legal_name": {
             "anyOf": [
@@ -53637,6 +57030,13 @@
           "maintenance_blocked": {
             "type": "boolean",
             "title": "Maintenance Blocked"
+          },
+          "active_block_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/RoomBlockReasonEnum"
+            },
+            "type": "array",
+            "title": "Active Block Reasons"
           }
         },
         "type": "object",
@@ -54253,6 +57653,319 @@
         ],
         "title": "LaundryBatchRead"
       },
+      "LaundryDiscrepancyAction": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "LaundryDiscrepancyAction"
+      },
+      "LaundryDiscrepancyRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "remito_id": {
+            "type": "integer",
+            "title": "Remito Id"
+          },
+          "remito_line_id": {
+            "type": "integer",
+            "title": "Remito Line Id"
+          },
+          "vendor_id": {
+            "type": "integer",
+            "title": "Vendor Id"
+          },
+          "linen_item_id": {
+            "type": "integer",
+            "title": "Linen Item Id"
+          },
+          "discrepancy_type": {
+            "type": "string",
+            "title": "Discrepancy Type"
+          },
+          "quantity": {
+            "type": "string",
+            "title": "Quantity"
+          },
+          "remaining_quantity": {
+            "type": "string",
+            "title": "Remaining Quantity"
+          },
+          "source_location_id": {
+            "type": "integer",
+            "title": "Source Location Id"
+          },
+          "custody_location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custody Location Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "reviewed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed By User Id"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "review_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Reason"
+          },
+          "resolution_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Code"
+          },
+          "resolution_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Reason"
+          },
+          "resolution_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Amount"
+          },
+          "resolution_currency_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Currency Code"
+          },
+          "resolution_recorded_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Recorded By User Id"
+          },
+          "resolution_recorded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Recorded At"
+          },
+          "resolved_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved By User Id"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "returned_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Returned By User Id"
+          },
+          "returned_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Returned At"
+          },
+          "return_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "hotel_id",
+          "remito_id",
+          "remito_line_id",
+          "vendor_id",
+          "linen_item_id",
+          "discrepancy_type",
+          "quantity",
+          "remaining_quantity",
+          "source_location_id",
+          "status",
+          "created_at"
+        ],
+        "title": "LaundryDiscrepancyRead"
+      },
+      "LaundryDiscrepancyResolve": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "resolution_code": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Resolution Code"
+          },
+          "resolution_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Amount"
+          },
+          "resolution_currency_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z]{3}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Currency Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason",
+          "resolution_code"
+        ],
+        "title": "LaundryDiscrepancyResolve"
+      },
       "LaundryItemCreate": {
         "properties": {
           "item_type": {
@@ -54544,6 +58257,16 @@
           "current_quantity": {
             "type": "string",
             "title": "Current Quantity"
+          },
+          "ledger_quantity": {
+            "type": "string",
+            "title": "Ledger Quantity",
+            "default": "0.00"
+          },
+          "pending_excess_quantity": {
+            "type": "string",
+            "title": "Pending Excess Quantity",
+            "default": "0.00"
           },
           "has_movements": {
             "type": "boolean",
@@ -54841,6 +58564,116 @@
         ],
         "title": "LinenParLevelUpsert"
       },
+      "LinenRetirementCreate": {
+        "properties": {
+          "linen_item_id": {
+            "type": "integer",
+            "title": "Linen Item Id"
+          },
+          "location_id": {
+            "type": "integer",
+            "title": "Location Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "linen_item_id",
+          "location_id",
+          "quantity",
+          "reason"
+        ],
+        "title": "LinenRetirementCreate"
+      },
+      "LinenRetirementRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "item_id": {
+            "type": "integer",
+            "title": "Item Id"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "movement_type": {
+            "type": "string",
+            "title": "Movement Type"
+          },
+          "quantity": {
+            "type": "string",
+            "title": "Quantity"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "hotel_id",
+          "item_id",
+          "movement_type",
+          "quantity",
+          "created_at"
+        ],
+        "title": "LinenRetirementRead"
+      },
       "LinenSummaryEntry": {
         "properties": {
           "item": {
@@ -54849,6 +58682,21 @@
           "current_quantity": {
             "type": "string",
             "title": "Current Quantity"
+          },
+          "ledger_quantity": {
+            "type": "string",
+            "title": "Ledger Quantity",
+            "default": "0.00"
+          },
+          "pending_excess_quantity": {
+            "type": "string",
+            "title": "Pending Excess Quantity",
+            "default": "0.00"
+          },
+          "pending_shortage_quantity": {
+            "type": "string",
+            "title": "Pending Shortage Quantity",
+            "default": "0.00"
           },
           "min_quantity": {
             "anyOf": [
@@ -60296,8 +64144,15 @@
             "title": "Reservation Id"
           },
           "amount": {
-            "type": "number",
-            "exclusiveMinimum": 0.0,
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
             "title": "Amount"
           },
           "cash_received_amount": {
@@ -60346,6 +64201,18 @@
               }
             ],
             "title": "Currency"
+          },
+          "payment_quote_token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 24000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Quote Token"
           },
           "description": {
             "anyOf": [
@@ -60499,6 +64366,214 @@
           "amount"
         ],
         "title": "PaymentSurchargeCreate"
+      },
+      "PaymentSurchargeQuoteRead": {
+        "properties": {
+          "reservation_id": {
+            "type": "integer",
+            "title": "Reservation Id"
+          },
+          "reservation_currency_code": {
+            "type": "string",
+            "title": "Reservation Currency Code"
+          },
+          "reservation_balance": {
+            "type": "string",
+            "title": "Reservation Balance"
+          },
+          "applied_amount": {
+            "type": "string",
+            "title": "Applied Amount"
+          },
+          "remaining_balance": {
+            "type": "string",
+            "title": "Remaining Balance"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentMethodEnum"
+          },
+          "currency_code": {
+            "type": "string",
+            "title": "Currency Code"
+          },
+          "base_amount": {
+            "type": "string",
+            "title": "Base Amount"
+          },
+          "surcharge_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surcharge Type"
+          },
+          "surcharge_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surcharge Value"
+          },
+          "surcharge_currency_code": {
+            "type": "string",
+            "title": "Surcharge Currency Code"
+          },
+          "surcharge_amount": {
+            "type": "string",
+            "title": "Surcharge Amount"
+          },
+          "final_amount": {
+            "type": "string",
+            "title": "Final Amount"
+          },
+          "surcharge_fx_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surcharge Fx Rate"
+          },
+          "surcharge_fx_quote_details": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surcharge Fx Quote Details"
+          },
+          "fx_rate_snapshot": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rate Snapshot"
+          },
+          "fx_quote_details": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Quote Details"
+          },
+          "cash_tender_rounding_policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Tender Rounding Policy"
+          },
+          "cash_tender_suggestion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Tender Suggestion"
+          },
+          "cash_tender_suggestion_difference": {
+            "type": "string",
+            "title": "Cash Tender Suggestion Difference"
+          },
+          "payment_quote_token": {
+            "type": "string",
+            "title": "Payment Quote Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reservation_id",
+          "reservation_currency_code",
+          "reservation_balance",
+          "applied_amount",
+          "remaining_balance",
+          "payment_method",
+          "currency_code",
+          "base_amount",
+          "surcharge_type",
+          "surcharge_value",
+          "surcharge_currency_code",
+          "surcharge_amount",
+          "final_amount",
+          "surcharge_fx_rate",
+          "surcharge_fx_quote_details",
+          "fx_rate_snapshot",
+          "fx_quote_details",
+          "cash_tender_rounding_policy",
+          "cash_tender_suggestion",
+          "cash_tender_suggestion_difference",
+          "payment_quote_token"
+        ],
+        "title": "PaymentSurchargeQuoteRead"
+      },
+      "PaymentSurchargeQuoteRequest": {
+        "properties": {
+          "reservation_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Reservation Id"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentMethodEnum"
+          },
+          "currency_code": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code"
+          },
+          "base_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Amount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reservation_id",
+          "payment_method",
+          "currency_code"
+        ],
+        "title": "PaymentSurchargeQuoteRequest"
       },
       "PaymentSurchargeRead": {
         "properties": {
@@ -60850,6 +64925,23 @@
             "type": "boolean",
             "title": "Is Active",
             "default": true
+          },
+          "comparable_season_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparable Season Key"
+          },
+          "is_high_demand_event": {
+            "type": "boolean",
+            "title": "Is High Demand Event",
+            "default": false
           }
         },
         "type": "object",
@@ -60990,6 +65082,21 @@
             "type": "boolean",
             "title": "Is Active"
           },
+          "comparable_season_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparable Season Key"
+          },
+          "is_high_demand_event": {
+            "type": "boolean",
+            "title": "Is High Demand Event"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -61007,6 +65114,7 @@
           "price_per_night",
           "priority",
           "is_active",
+          "is_high_demand_event",
           "created_at"
         ],
         "title": "PricePeriodOut"
@@ -61179,6 +65287,29 @@
               }
             ],
             "title": "Is Active"
+          },
+          "comparable_season_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparable Season Key"
+          },
+          "is_high_demand_event": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is High Demand Event"
           }
         },
         "type": "object",
@@ -63620,6 +67751,30 @@
         ],
         "title": "RateChangeDecisionIn"
       },
+      "RateChangeDraftEditIn": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Version"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/RateChangeItemIn"
+            },
+            "type": "array",
+            "maxItems": 366,
+            "minItems": 1,
+            "title": "Changes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "expected_version",
+          "changes"
+        ],
+        "title": "RateChangeDraftEditIn"
+      },
       "RateChangeDraftIn": {
         "properties": {
           "category_id": {
@@ -65082,6 +69237,605 @@
         ],
         "title": "ReservationBillingAdjustmentSummaryRead"
       },
+      "ReservationCancellationResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "confirmation_code": {
+            "type": "string",
+            "title": "Confirmation Code"
+          },
+          "guest_id": {
+            "type": "integer",
+            "title": "Guest Id"
+          },
+          "guest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GuestSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "room_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Number"
+          },
+          "category_id": {
+            "type": "integer",
+            "title": "Category Id"
+          },
+          "category_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Id"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "sellable_product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sellable Product Id"
+          },
+          "rate_plan_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Plan Id"
+          },
+          "tax_policy_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Policy Id"
+          },
+          "check_in_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Check In Date"
+          },
+          "check_out_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Check Out Date"
+          },
+          "reserved_nights": {
+            "type": "integer",
+            "title": "Reserved Nights",
+            "default": 0
+          },
+          "used_nights": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used Nights"
+          },
+          "actual_check_in": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Check In"
+          },
+          "actual_check_out": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Check Out"
+          },
+          "total_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Amount"
+          },
+          "amount_paid": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Paid"
+          },
+          "external_paid_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Paid Amount",
+            "default": 0.0
+          },
+          "external_paid_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Paid Currency"
+          },
+          "external_paid_balance_credit_applied": {
+            "type": "boolean",
+            "title": "External Paid Balance Credit Applied",
+            "default": false
+          },
+          "external_paid_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Paid Reference"
+          },
+          "external_paid_confirmed": {
+            "type": "boolean",
+            "title": "External Paid Confirmed",
+            "default": false
+          },
+          "deposit_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposit Amount"
+          },
+          "subtotal_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtotal Amount",
+            "default": 0.0
+          },
+          "tax_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Amount",
+            "default": 0.0
+          },
+          "fee_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fee Amount",
+            "default": 0.0
+          },
+          "commission_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commission Amount",
+            "default": 0.0
+          },
+          "net_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Amount",
+            "default": 0.0
+          },
+          "currency_code": {
+            "type": "string",
+            "title": "Currency Code",
+            "default": "ARS"
+          },
+          "fx_rate_snapshot": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rate Snapshot"
+          },
+          "quoted_amount_ars": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted Amount Ars"
+          },
+          "quoted_amount_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quoted Amount Usd"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReservationStatusEnum"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ReservationSourceEnum"
+          },
+          "source_provider_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Provider Code"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
+          "external_confirmation_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Confirmation Code"
+          },
+          "payment_collection_model": {
+            "type": "string",
+            "title": "Payment Collection Model",
+            "default": "hotel_collect"
+          },
+          "settlement_status": {
+            "type": "string",
+            "title": "Settlement Status",
+            "default": "not_applicable"
+          },
+          "company_billing_deferred": {
+            "type": "boolean",
+            "title": "Company Billing Deferred",
+            "default": false
+          },
+          "num_adults": {
+            "type": "integer",
+            "title": "Num Adults"
+          },
+          "num_children": {
+            "type": "integer",
+            "title": "Num Children"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "arrival_time_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Time Hint"
+          },
+          "reservation_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Comment"
+          },
+          "company_extension_request_pending": {
+            "type": "boolean",
+            "title": "Company Extension Request Pending",
+            "default": false
+          },
+          "company_extension_request_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Extension Request Note"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "balance_due": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance Due",
+            "default": 0.0
+          },
+          "nights": {
+            "type": "integer",
+            "title": "Nights",
+            "default": 0
+          },
+          "additional_guests": {
+            "items": {
+              "$ref": "#/components/schemas/GuestSummary"
+            },
+            "type": "array",
+            "title": "Additional Guests",
+            "default": []
+          },
+          "allocation_status": {
+            "type": "string",
+            "title": "Allocation Status",
+            "default": "unassigned"
+          },
+          "allocation_locked": {
+            "type": "boolean",
+            "title": "Allocation Locked",
+            "default": false
+          },
+          "requires_manual_review": {
+            "type": "boolean",
+            "title": "Requires Manual Review",
+            "default": false
+          },
+          "mobility_restriction": {
+            "type": "boolean",
+            "title": "Mobility Restriction",
+            "default": false
+          },
+          "is_wait_listed": {
+            "type": "boolean",
+            "title": "Is Wait Listed",
+            "default": false
+          },
+          "wait_list_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait List Reason"
+          },
+          "manual_rate_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Rate Reason"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 0
+          },
+          "cancellation_outcome": {
+            "type": "string",
+            "enum": [
+              "cancelled",
+              "approval_required",
+              "manager_review_required"
+            ],
+            "title": "Cancellation Outcome"
+          },
+          "cancellation_review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CancellationReviewRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "confirmation_code",
+          "guest_id",
+          "room_id",
+          "category_id",
+          "check_in_date",
+          "check_out_date",
+          "actual_check_in",
+          "actual_check_out",
+          "total_amount",
+          "amount_paid",
+          "deposit_amount",
+          "status",
+          "source",
+          "external_id",
+          "num_adults",
+          "num_children",
+          "notes",
+          "created_at",
+          "updated_at",
+          "cancellation_outcome"
+        ],
+        "title": "ReservationCancellationResponse"
+      },
       "ReservationChannelCodeEnum": {
         "type": "string",
         "enum": [
@@ -65184,6 +69938,11 @@
               }
             ],
             "title": "Room Id"
+          },
+          "allocation_locked": {
+            "type": "boolean",
+            "title": "Allocation Locked",
+            "default": false
           },
           "sellable_product_id": {
             "anyOf": [
@@ -66717,6 +71476,172 @@
         ],
         "title": "ReservationGroupRead"
       },
+      "ReservationGuestArrivalListRead": {
+        "properties": {
+          "reservation_id": {
+            "type": "integer",
+            "title": "Reservation Id"
+          },
+          "reservation_status": {
+            "$ref": "#/components/schemas/ReservationStatusEnum"
+          },
+          "status_policy": {
+            "type": "string",
+            "enum": [
+              "partial_checkin",
+              "checked_in_on_first_guest"
+            ],
+            "title": "Status Policy"
+          },
+          "expected_guest_count": {
+            "type": "integer",
+            "title": "Expected Guest Count"
+          },
+          "registered_guest_count": {
+            "type": "integer",
+            "title": "Registered Guest Count"
+          },
+          "arrived_guest_count": {
+            "type": "integer",
+            "title": "Arrived Guest Count"
+          },
+          "missing_profile_count": {
+            "type": "integer",
+            "title": "Missing Profile Count"
+          },
+          "arrivals": {
+            "items": {
+              "$ref": "#/components/schemas/ReservationGuestArrivalRead"
+            },
+            "type": "array",
+            "title": "Arrivals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reservation_id",
+          "reservation_status",
+          "status_policy",
+          "expected_guest_count",
+          "registered_guest_count",
+          "arrived_guest_count",
+          "missing_profile_count",
+          "arrivals"
+        ],
+        "title": "ReservationGuestArrivalListRead"
+      },
+      "ReservationGuestArrivalMutationRead": {
+        "properties": {
+          "reservation_id": {
+            "type": "integer",
+            "title": "Reservation Id"
+          },
+          "reservation_status": {
+            "$ref": "#/components/schemas/ReservationStatusEnum"
+          },
+          "status_policy": {
+            "type": "string",
+            "enum": [
+              "partial_checkin",
+              "checked_in_on_first_guest"
+            ],
+            "title": "Status Policy"
+          },
+          "expected_guest_count": {
+            "type": "integer",
+            "title": "Expected Guest Count"
+          },
+          "registered_guest_count": {
+            "type": "integer",
+            "title": "Registered Guest Count"
+          },
+          "arrived_guest_count": {
+            "type": "integer",
+            "title": "Arrived Guest Count"
+          },
+          "missing_profile_count": {
+            "type": "integer",
+            "title": "Missing Profile Count"
+          },
+          "already_recorded": {
+            "type": "boolean",
+            "title": "Already Recorded"
+          },
+          "arrival": {
+            "$ref": "#/components/schemas/ReservationGuestArrivalRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reservation_id",
+          "reservation_status",
+          "status_policy",
+          "expected_guest_count",
+          "registered_guest_count",
+          "arrived_guest_count",
+          "missing_profile_count",
+          "already_recorded",
+          "arrival"
+        ],
+        "title": "ReservationGuestArrivalMutationRead"
+      },
+      "ReservationGuestArrivalRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "guest_id": {
+            "type": "integer",
+            "title": "Guest Id"
+          },
+          "guest_name": {
+            "type": "string",
+            "title": "Guest Name"
+          },
+          "arrived_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Arrived At"
+          },
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "actor_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Display Name"
+          },
+          "actor_role": {
+            "type": "string",
+            "title": "Actor Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "guest_id",
+          "guest_name",
+          "arrived_at",
+          "actor_user_id",
+          "actor_role"
+        ],
+        "title": "ReservationGuestArrivalRead"
+      },
       "ReservationManualReviewResponse": {
         "properties": {
           "reservation_id": {
@@ -67649,6 +72574,11 @@
             "title": "Allocation Status",
             "default": "unassigned"
           },
+          "allocation_locked": {
+            "type": "boolean",
+            "title": "Allocation Locked",
+            "default": false
+          },
           "requires_manual_review": {
             "type": "boolean",
             "title": "Requires Manual Review",
@@ -67716,6 +72646,60 @@
           "updated_at"
         ],
         "title": "ReservationRead"
+      },
+      "ReservationReassignmentLockRead": {
+        "properties": {
+          "reservation_id": {
+            "type": "integer",
+            "title": "Reservation Id"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "allocation_locked": {
+            "type": "boolean",
+            "title": "Allocation Locked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reservation_id",
+          "allocation_locked"
+        ],
+        "title": "ReservationReassignmentLockRead"
+      },
+      "ReservationReassignmentLockRequest": {
+        "properties": {
+          "locked": {
+            "type": "boolean",
+            "title": "Locked"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "locked"
+        ],
+        "title": "ReservationReassignmentLockRequest"
       },
       "ReservationRoomMoveSummaryRead": {
         "properties": {
@@ -67868,6 +72852,7 @@
           "deposit_paid",
           "fully_paid",
           "pre_check_in",
+          "partial_checkin",
           "checked_in",
           "checked_out",
           "cancelled",
@@ -68068,6 +73053,17 @@
               }
             ],
             "title": "Room Id"
+          },
+          "allocation_locked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Locked"
           },
           "check_in_date": {
             "anyOf": [
@@ -68944,6 +73940,67 @@
         ],
         "title": "RoleResponse"
       },
+      "RoomBlockAllocationPreviewRead": {
+        "properties": {
+          "room_id": {
+            "type": "integer",
+            "title": "Room Id"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Starts At"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "is_indefinite": {
+            "type": "boolean",
+            "title": "Is Indefinite"
+          },
+          "reservation_count": {
+            "type": "integer",
+            "title": "Reservation Count"
+          },
+          "protected_reservation_count": {
+            "type": "integer",
+            "title": "Protected Reservation Count"
+          },
+          "requires_confirmation": {
+            "type": "boolean",
+            "title": "Requires Confirmation"
+          },
+          "allocation_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AllocationRunDetailRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "room_id",
+          "starts_at",
+          "is_indefinite",
+          "reservation_count",
+          "protected_reservation_count",
+          "requires_confirmation"
+        ],
+        "title": "RoomBlockAllocationPreviewRead"
+      },
       "RoomBlockConflictPreview": {
         "properties": {
           "reservation_count": {
@@ -69005,6 +74062,18 @@
               }
             ],
             "title": "Reason Note"
+          },
+          "allocation_run_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Run Id"
           }
         },
         "type": "object",
@@ -69013,6 +74082,66 @@
           "starts_at"
         ],
         "title": "RoomBlockCreate"
+      },
+      "RoomBlockExtensionAllocationPreviewRead": {
+        "properties": {
+          "block_id": {
+            "type": "integer",
+            "title": "Block Id"
+          },
+          "room_id": {
+            "type": "integer",
+            "title": "Room Id"
+          },
+          "previous_ends_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Previous Ends At"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date",
+            "title": "Ends At"
+          },
+          "reservation_count": {
+            "type": "integer",
+            "title": "Reservation Count"
+          },
+          "protected_reservation_count": {
+            "type": "integer",
+            "title": "Protected Reservation Count"
+          },
+          "overlapping_block_count": {
+            "type": "integer",
+            "title": "Overlapping Block Count"
+          },
+          "requires_confirmation": {
+            "type": "boolean",
+            "title": "Requires Confirmation"
+          },
+          "allocation_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AllocationRunDetailRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "block_id",
+          "room_id",
+          "previous_ends_at",
+          "ends_at",
+          "reservation_count",
+          "protected_reservation_count",
+          "overlapping_block_count",
+          "requires_confirmation"
+        ],
+        "title": "RoomBlockExtensionAllocationPreviewRead"
       },
       "RoomBlockExtensionConflictPreview": {
         "properties": {
@@ -69043,6 +74172,18 @@
             "type": "string",
             "format": "date",
             "title": "Ends At"
+          },
+          "allocation_run_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Run Id"
           }
         },
         "type": "object",
@@ -69513,6 +74654,28 @@
             "type": "boolean",
             "title": "Is Accessible",
             "default": false
+          },
+          "allocation_priority_channel_groups": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "direct",
+                "ota",
+                "company"
+              ]
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Allocation Priority Channel Groups"
+          },
+          "allocation_priority_company_ids": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Allocation Priority Company Ids"
           },
           "description": {
             "anyOf": [
@@ -70072,6 +75235,28 @@
             "title": "Is Accessible",
             "default": false
           },
+          "allocation_priority_channel_groups": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "direct",
+                "ota",
+                "company"
+              ]
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Allocation Priority Channel Groups"
+          },
+          "allocation_priority_company_ids": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Allocation Priority Company Ids"
+          },
           "description": {
             "anyOf": [
               {
@@ -70430,6 +75615,42 @@
               }
             ],
             "title": "Is Accessible"
+          },
+          "allocation_priority_channel_groups": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "direct",
+                    "ota",
+                    "company"
+                  ]
+                },
+                "type": "array",
+                "maxItems": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Priority Channel Groups"
+          },
+          "allocation_priority_company_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0.0
+                },
+                "type": "array",
+                "maxItems": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation Priority Company Ids"
           },
           "description": {
             "anyOf": [
@@ -71661,6 +76882,473 @@
         ],
         "title": "StockConsumptionReportRead"
       },
+      "StockCountConfirmation": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "StockCountConfirmation"
+      },
+      "StockCountLineRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "item_id": {
+            "type": "integer",
+            "title": "Item Id"
+          },
+          "item_name": {
+            "type": "string",
+            "title": "Item Name"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "system_quantity_at_count": {
+            "type": "string",
+            "title": "System Quantity At Count"
+          },
+          "counted_quantity": {
+            "type": "string",
+            "title": "Counted Quantity"
+          },
+          "movement_version": {
+            "type": "integer",
+            "title": "Movement Version"
+          },
+          "current_movement_version": {
+            "type": "integer",
+            "title": "Current Movement Version"
+          },
+          "recount_required": {
+            "type": "boolean",
+            "title": "Recount Required"
+          },
+          "counted_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counted By User Id"
+          },
+          "counted_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Counted At"
+          },
+          "applied_adjustment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Adjustment"
+          },
+          "adjusted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjusted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "item_id",
+          "item_name",
+          "location_id",
+          "location_name",
+          "system_quantity_at_count",
+          "counted_quantity",
+          "movement_version",
+          "current_movement_version",
+          "recount_required",
+          "counted_by_user_id",
+          "counted_at",
+          "applied_adjustment",
+          "adjusted_at"
+        ],
+        "title": "StockCountLineRead"
+      },
+      "StockCountRecordCreate": {
+        "properties": {
+          "item_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Item Id"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "counted_quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 9999999999.99,
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Counted Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "counted_quantity"
+        ],
+        "title": "StockCountRecordCreate"
+      },
+      "StockCountSessionCreate": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "StockCountSessionCreate"
+      },
+      "StockCountSessionDetailRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "counter_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counter User Id"
+          },
+          "confirmed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By User Id"
+          },
+          "confirmation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Reason"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "self_approved": {
+            "type": "boolean",
+            "title": "Self Approved"
+          },
+          "cancelled_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled By User Id"
+          },
+          "cancellation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Reason"
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "counts": {
+            "items": {
+              "$ref": "#/components/schemas/StockCountLineRead"
+            },
+            "type": "array",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "hotel_id",
+          "status",
+          "reason",
+          "created_by_user_id",
+          "created_at",
+          "counter_user_id",
+          "confirmed_by_user_id",
+          "confirmation_reason",
+          "confirmed_at",
+          "self_approved",
+          "cancelled_by_user_id",
+          "cancellation_reason",
+          "cancelled_at",
+          "counts"
+        ],
+        "title": "StockCountSessionDetailRead"
+      },
+      "StockCountSessionRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "counter_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counter User Id"
+          },
+          "confirmed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By User Id"
+          },
+          "confirmation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Reason"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "self_approved": {
+            "type": "boolean",
+            "title": "Self Approved"
+          },
+          "cancelled_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled By User Id"
+          },
+          "cancellation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Reason"
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "hotel_id",
+          "status",
+          "reason",
+          "created_by_user_id",
+          "created_at",
+          "counter_user_id",
+          "confirmed_by_user_id",
+          "confirmation_reason",
+          "confirmed_at",
+          "self_approved",
+          "cancelled_by_user_id",
+          "cancellation_reason",
+          "cancelled_at"
+        ],
+        "title": "StockCountSessionRead"
+      },
       "StockItemCreate": {
         "properties": {
           "name": {
@@ -72249,6 +77937,200 @@
           "plan_code"
         ],
         "title": "SubscriptionChoicePayload"
+      },
+      "TariffRecommendationRunIn": {
+        "properties": {
+          "category_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Category Id"
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Date To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category_id",
+          "date_from",
+          "date_to"
+        ],
+        "title": "TariffRecommendationRunIn"
+      },
+      "TariffRecommendationRunOut": {
+        "properties": {
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "draft_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Id"
+          },
+          "suggestions": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Suggestions"
+          },
+          "skipped": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Skipped"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created",
+          "suggestions"
+        ],
+        "title": "TariffRecommendationRunOut"
+      },
+      "TariffRecommendationSettings": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "high_occupancy_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "High Occupancy Pct"
+          },
+          "low_occupancy_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Low Occupancy Pct"
+          },
+          "pickup_change_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 500.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Pickup Change Pct"
+          },
+          "max_step_pct": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 5.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Max Step Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "high_occupancy_pct",
+          "low_occupancy_pct",
+          "pickup_change_pct",
+          "max_step_pct"
+        ],
+        "title": "TariffRecommendationSettings"
+      },
+      "TariffRecommendationSettingsOut": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "high_occupancy_pct": {
+            "type": "string",
+            "title": "High Occupancy Pct"
+          },
+          "low_occupancy_pct": {
+            "type": "string",
+            "title": "Low Occupancy Pct"
+          },
+          "pickup_change_pct": {
+            "type": "string",
+            "title": "Pickup Change Pct"
+          },
+          "max_step_pct": {
+            "type": "string",
+            "title": "Max Step Pct"
+          },
+          "hotel_id": {
+            "type": "integer",
+            "title": "Hotel Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "high_occupancy_pct",
+          "low_occupancy_pct",
+          "pickup_change_pct",
+          "max_step_pct",
+          "hotel_id"
+        ],
+        "title": "TariffRecommendationSettingsOut"
       },
       "TaxPolicyCreate": {
         "properties": {
@@ -73296,6 +79178,16 @@
           "quantity": {
             "type": "string",
             "title": "Quantity"
+          },
+          "ledger_quantity": {
+            "type": "string",
+            "title": "Ledger Quantity",
+            "default": "0.00"
+          },
+          "pending_shortage_quantity": {
+            "type": "string",
+            "title": "Pending Shortage Quantity",
+            "default": "0.00"
           }
         },
         "type": "object",
@@ -73987,15 +79879,14 @@
       "WaitlistPromoteRequest": {
         "properties": {
           "room_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
             "title": "Room Id"
+          },
+          "expected_entry_fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Entry Fingerprint"
           },
           "notes": {
             "anyOf": [
@@ -74010,6 +79901,10 @@
           }
         },
         "type": "object",
+        "required": [
+          "room_id",
+          "expected_entry_fingerprint"
+        ],
         "title": "WaitlistPromoteRequest"
       },
       "WaitlistPromoteResponse": {
@@ -74027,6 +79922,76 @@
           "reservation"
         ],
         "title": "WaitlistPromoteResponse"
+      },
+      "WaitlistPromotionSuggestionRead": {
+        "properties": {
+          "entry_id": {
+            "type": "integer",
+            "title": "Entry Id"
+          },
+          "expected_entry_fingerprint": {
+            "type": "string",
+            "title": "Expected Entry Fingerprint"
+          },
+          "guest_id": {
+            "type": "integer",
+            "title": "Guest Id"
+          },
+          "guest_name": {
+            "type": "string",
+            "title": "Guest Name"
+          },
+          "category_id": {
+            "type": "integer",
+            "title": "Category Id"
+          },
+          "check_in_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Check In Date"
+          },
+          "check_out_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Check Out Date"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority"
+          },
+          "suggested_room_id": {
+            "type": "integer",
+            "title": "Suggested Room Id"
+          },
+          "suggested_room_number": {
+            "type": "string",
+            "title": "Suggested Room Number"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "allocation_basis": {
+            "type": "string",
+            "title": "Allocation Basis"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entry_id",
+          "expected_entry_fingerprint",
+          "guest_id",
+          "guest_name",
+          "category_id",
+          "check_in_date",
+          "check_out_date",
+          "priority",
+          "suggested_room_id",
+          "suggested_room_number",
+          "reason",
+          "allocation_basis"
+        ],
+        "title": "WaitlistPromotionSuggestionRead"
       },
       "WaitlistStatusEnum": {
         "type": "string",
@@ -74277,7 +80242,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/WhatsAppConversationRead"
+              "$ref": "#/components/schemas/WhatsAppConversationSummaryRead"
             },
             "type": "array",
             "title": "Items"
@@ -74289,7 +80254,30 @@
         ],
         "title": "WhatsAppConversationListResponse"
       },
-      "WhatsAppConversationRead": {
+      "WhatsAppConversationStatusEnum": {
+        "type": "string",
+        "enum": [
+          "new",
+          "open",
+          "assigned",
+          "pending",
+          "closed"
+        ],
+        "title": "WhatsAppConversationStatusEnum"
+      },
+      "WhatsAppConversationStatusUpdate": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/WhatsAppConversationStatusEnum"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "WhatsAppConversationStatusUpdate"
+      },
+      "WhatsAppConversationSummaryRead": {
         "properties": {
           "id": {
             "type": "integer",
@@ -74381,13 +80369,6 @@
           },
           "contact": {
             "$ref": "#/components/schemas/WhatsAppContactRead"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/WhatsAppMessageRead"
-            },
-            "type": "array",
-            "title": "Messages"
           }
         },
         "type": "object",
@@ -74399,30 +80380,7 @@
           "human_active",
           "contact"
         ],
-        "title": "WhatsAppConversationRead"
-      },
-      "WhatsAppConversationStatusEnum": {
-        "type": "string",
-        "enum": [
-          "new",
-          "open",
-          "assigned",
-          "pending",
-          "closed"
-        ],
-        "title": "WhatsAppConversationStatusEnum"
-      },
-      "WhatsAppConversationStatusUpdate": {
-        "properties": {
-          "status": {
-            "$ref": "#/components/schemas/WhatsAppConversationStatusEnum"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "title": "WhatsAppConversationStatusUpdate"
+        "title": "WhatsAppConversationSummaryRead"
       },
       "WhatsAppMessageCreate": {
         "properties": {
@@ -74445,6 +80403,38 @@
           "text"
         ],
         "title": "WhatsAppMessageCreate"
+      },
+      "WhatsAppMessagePageRead": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WhatsAppMessageRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          },
+          "next_before_message_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Before Message Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "has_more"
+        ],
+        "title": "WhatsAppMessagePageRead"
       },
       "WhatsAppMessageRead": {
         "properties": {

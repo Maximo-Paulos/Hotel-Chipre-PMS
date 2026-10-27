@@ -6,6 +6,7 @@
 - `app/main.py` is the FastAPI entrypoint and also serves the built frontend.
 - Most transport routes live in `app/api/`, with business logic primarily in services. The reservation modification route remains a notable exception. The legacy daily report now delegates its query and aggregation to `app/services/daily_report_service.py`; see the [2026-10-22 code-quality and operational-scenario audit](audits/auditoria-thermos-antislop-escenarios-pms-2026-10-22.md).
 - Business logic lives mainly in `app/services/`.
+- Room allocation is kept independent of tariffs and FX; legacy revenue objectives are normalized to room occupancy and continuity while remaining visible in version history.
 - Domain models live in `app/models/`.
 - Database setup and settings live in `app/database.py` and `app/config.py`.
 - Migrations live in `alembic/`.
@@ -31,7 +32,8 @@
 
 ## Current gaps visible in the repo
 - OTA lifecycle is not yet fully closed operationally.
-- Allocation still needs stronger pilot behavior around gaps, manual review, and operator control.
+- Allocation applies complete, revalidated safe moves automatically. A better move for a reassignment-locked reservation remains pending for one-time approval; any partial/full check-in remains immovable. Channel/company room priorities are soft tie-breakers after the occupancy/continuity objective; floor preference requires an explicit no-elevator setting. PostgreSQL integration and cloud QA remain pending.
+- Experimental pricing advice now prepares editable, auditable drafts from demand signals and comparable published USD rates. The rate calendar remains authoritative and changes require human confirmation; backtest and cloud QA remain pending.
 - Guest and check-in UX is not yet a full first-class workflow.
 - Gemma is intentionally bounded and still needs a tighter feedback/runtime loop.
 

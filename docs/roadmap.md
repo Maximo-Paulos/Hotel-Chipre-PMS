@@ -10,7 +10,7 @@ This repository is currently in the pilot-to-public transition described in `doc
 ## Current direction
 1. Close the operational core for pilot use.
    - OTA inbound lifecycle: new, modified, cancelled, duplicate.
-   - Allocation behavior: fragmentation, manual review, policy/runtime loop.
+   - Allocation behavior: auto-apply complete, safe reassignments before check-in; preserve explicit locks and request one-time approval for exceptions; measure room-level gaps.
    - Operator UI: room moves, rebook, recalculation, conflict review.
    - Guests and check-in workflows.
 2. Harden the pilot.
@@ -22,6 +22,7 @@ This repository is currently in the pilot-to-public transition described in `doc
    - Observability, backup/restore, deployment hardening.
    - Final security/config review.
 4. Close the operational and capacity work already in the master development spec.
+   - TECH-0064: first local vertical slice is implemented: comparable season/event tags, USD publication history, configurable pilot thresholds and daily/operator-created review drafts. Pure policy tests, docs baseline, frontend typecheck and production build pass; PostgreSQL migration/integration validation, cloud QA and backtest remain release gates.
    - TECH-0150: duration-based deposit rules and full-payment check-in gate.
    - TECH-0151: reserved versus used nights with manual company settlement.
    - TECH-0152: pending-balance extensions, company account handling and read-only financial visibility.

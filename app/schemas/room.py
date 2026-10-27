@@ -3,7 +3,7 @@ Pydantic schemas for Room and RoomCategory.
 """
 from datetime import date
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Annotated, Literal, Optional
 from app.models.room import RoomHousekeepingStatusEnum, RoomStatusEnum
 from app.models.room_block import RoomBlockReasonEnum
 
@@ -68,6 +68,12 @@ class RoomBase(BaseModel):
     is_active: bool = True
     score: int = Field(default=5, ge=1, le=10)
     is_accessible: bool = False
+    allocation_priority_channel_groups: list[Literal["direct", "ota", "company"]] = Field(
+        default_factory=list, max_length=3
+    )
+    allocation_priority_company_ids: list[Annotated[int, Field(gt=0)]] = Field(
+        default_factory=list, max_length=200
+    )
     description: Optional[str] = None
     notes: Optional[str] = None
 
@@ -110,6 +116,12 @@ class RoomUpdate(BaseModel):
     is_active: Optional[bool] = None
     score: Optional[int] = Field(default=None, ge=1, le=10)
     is_accessible: Optional[bool] = None
+    allocation_priority_channel_groups: Optional[
+        list[Literal["direct", "ota", "company"]]
+    ] = Field(default=None, max_length=3)
+    allocation_priority_company_ids: Optional[list[Annotated[int, Field(gt=0)]]] = Field(
+        default=None, max_length=200
+    )
     description: Optional[str] = None
     notes: Optional[str] = None
 

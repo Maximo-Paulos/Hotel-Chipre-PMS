@@ -2,8 +2,8 @@
   "page": {
     "eyebrow": "Hotel operations",
     "title": "Smart allocation",
-    "description": "The engine proposes room assignments to improve occupancy and revenue. Review each move before applying it.",
-    "reviewBeforeApply": "Nothing moves without approval",
+    "description": "The engine assigns rooms and automatically reorganizes future reservations without check-in to reduce gaps by room. Constraints and exceptions remain protected for review.",
+    "reviewBeforeApply": "Eligible moves apply automatically · exceptions stay reviewable",
     "actionFailed": "The operation could not be completed: {{message}}",
     "genericFailure": "The operation could not be completed.",
     "staleProposal": "Reservations changed after this calculation. The proposal was not applied. Reject it and generate a new proposal to review the current state."
@@ -11,41 +11,34 @@
   "policy": {
     "eyebrow": "Hotel preferences",
     "title": "Allocation objective",
-    "description": "Choose what the engine should prioritize. The policy applies to future proposals.",
+    "description": "Room allocation arranges future reservations to improve continuous occupancy by room.",
     "version": "Version {{version}}",
     "loading": "Loading allocation settings…",
     "loadFailed": "Could not load settings: {{message}}",
     "objective": "Priority",
     "objectives": {
-      "occupiedNights": "Maximize occupied nights",
-      "netRevenue": "Maximize net revenue",
-      "combined": "Combine occupancy and net revenue"
+      "occupiedNights": "Reduce gaps and maximize occupied nights by room"
     },
-    "revenueWeight": "Net revenue weight",
-    "revenueWeightHelp": "The remaining weight goes to occupied nights.",
-    "combinedNote": "This percentage sets the net revenue weight; the remainder goes to occupancy. The engine needs comparable values across reservations. If currencies differ without a current saved FX quote, it will stop and explain why.",
-    "revenueCurrencyNote": "Net revenue is compared when reservations use a comparable currency. If the data cannot be compared, the engine stops and explains the issue.",
-    "save": "Save and activate",
-    "saving": "Saving…",
-    "saved": "The new policy version is active.",
-    "saveFailed": "Could not save the policy."
+    "assignmentObjectiveNote": "Room allocation does not change rates. Price recommendations are reviewed and approved separately.",
+    "legacyObjectiveNormalized": "The historical version requested {{objective}} priority. It remains in history; current runs prioritize occupancy and continuity."
   },
   "proposal": {
     "eyebrow": "Engine review",
     "title": "Latest proposal",
-    "description": "Review the current room, suggested room, and reason. Accept applies the changes explicitly; reject keeps current assignments.",
-    "recalculate": "Generate a new proposal",
+    "description": "Recalculation automatically applies complete, safe moves. Check-ins and explicit locks stay protected; an exception requires one-time approval.",
+    "recalculate": "Recalculate and apply safe moves",
     "recalculating": "Calculating…",
-    "recalculateHelp": "Calculation does not change rooms. It creates a proposal for review first.",
+    "recalculateHelp": "The engine applies only complete, revalidated plans. Locked cases remain for review.",
     "resolveBeforeRecalculate": "Accept or reject the pending proposal before generating another.",
     "loading": "Loading the latest proposal…",
     "loadFailed": "Could not load the proposal: {{message}}",
-    "empty": "There are no proposals yet. Generate one to evaluate current availability.",
+    "empty": "There are no runs yet. Recalculate to optimize current assignments.",
     "run": "Proposal #{{id}}",
     "status": {
       "pending": "Pending",
       "running": "Calculating",
       "succeeded": "Ready for review",
+      "automaticComplete": "Automatic optimization completed",
       "failed": "Calculation stopped",
       "partial": "Partial result"
     },
@@ -77,14 +70,18 @@
     "acceptRequiresSuccess": "This calculation did not complete successfully. You can reject its proposal, but cannot apply it.",
     "confirmAction": "Confirm decision",
     "confirmAccept": "Confirming will move the {{count}} proposed reservations. Continue?",
+    "confirmAcceptLocked": "The PMS will apply {{count}} moves: you authorize {{approvedCount}} protected move(s) once, and {{preservedCount}} will remain unapplied. Locks stay active. Confirm?",
+    "confirmAcceptWithLockedLeft": "The PMS will apply {{count}} eligible moves. {{preservedCount}} protected moves will remain unapplied with their locks active. Confirm?",
     "confirmReject": "Confirming will discard the {{count}} suggestions and keep current rooms. Continue?",
+    "approveLockedMoveOnce": "Authorize this move once; keep the lock for future runs",
+    "lockedMoveLeftUnchanged": "This move was not authorized. The reservation stays in its current room and remains locked.",
+    "lockedMoveApprovedOnce": "Move authorized once. The lock remains active for future runs.",
+    "lockedMovesRemain": "Protected moves without approval were left unapplied and remain locked.",
     "confirmationLabel": "Proposal confirmation",
     "keepReviewing": "Keep reviewing",
     "reviewed": "There are no pending moves in this proposal.",
-    "solverErrors": {
-      "mixedCurrency": "The engine could not compare net revenue because it found different currencies without a current saved FX quote. Update the comparison basis or temporarily choose occupied nights; no changes were applied.",
-      "combinedUnavailable": "The engine could not compare occupancy and net revenue with the current data. Review the scale and saved quotes; no changes were applied."
-    }
+    "automaticApplied": "The engine applied {{count}} safe moves. Moves on locked reservations need approval, and reservations with check-in do not move.",
+    "automaticNoChanges": "The engine completed its review and found no safe moves to apply."
   },
   "locks": {
     "eyebrow": "Manual control",

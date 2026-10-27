@@ -4,6 +4,7 @@ import {
   cancelRateChangeDraft,
   confirmRateChangeDraft,
   createRateChangeDraft,
+  editRateRecommendationDraft,
   listRateChangeDrafts,
   type RateChangeDraftInput
 } from "../api/rateChangeDrafts";
@@ -48,6 +49,18 @@ export function useRateChangeDrafts(categoryId: number | null) {
     mutationFn: ({ id, version }: { id: number; version: number }) => cancelRateChangeDraft(id, version, session),
     onSuccess: invalidateDrafts
   });
+  const editRecommendation = useGuardedMutation({
+    mutationFn: ({
+      id,
+      version,
+      changes
+    }: {
+      id: number;
+      version: number;
+      changes: Array<{ date: string; values: { price: number } }>;
+    }) => editRateRecommendationDraft(id, version, changes, session),
+    onSuccess: invalidateDrafts
+  });
 
-  return { draftsQuery, create, confirm, cancel };
+  return { draftsQuery, create, editRecommendation, confirm, cancel };
 }

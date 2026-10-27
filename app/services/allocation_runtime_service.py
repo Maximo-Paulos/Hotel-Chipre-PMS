@@ -10,7 +10,6 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation
 from functools import wraps
 from typing import Optional
 
@@ -27,9 +26,6 @@ from app.models.allocation import (
     ReservationAllocationLock,
     SolverMetric,
 )
-from app.models.commercial import FxPolicy
-from app.models.fx_rate_snapshot import FxRateSnapshot
-from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
@@ -131,7 +127,6 @@ def run_persisted_allocation(
 
     policy_settings = get_active_policy_settings(db, hotel_id)
     policy_version = policy_settings.version
-    fx_configuration_snapshot = _allocation_fx_configuration_snapshot(db, hotel_id)
     if queued_run_id is None:
         allocation_run = AllocationRun(
             hotel_id=hotel_id,
@@ -168,6 +163,10 @@ def run_persisted_allocation(
         hotel_id=hotel_id,
         policy_constraints=policy_settings.constraints,
         policy_weights=policy_settings.weights,
+        # Let the solver find a better target for an explicitly locked
+        # reservation, but persist it only as a one-time approval request.
+        # Physical check-in remains a hard lock in build_slots_from_db.
+        allow_locked_moves_for_review=proposal_context is None,
     )
     reservation_slot_by_id = {slot.reservation_id: slot for slot in reservations}
     room_slot_by_id = {slot.room_id: slot for slot in rooms}
@@ -207,9 +206,10 @@ def run_persisted_allocation(
             continue
         used_rooms.add(room_id)
         is_changed = reservation.room_id != room_id
-        # Existing assignments are recommendations only. The explicit ``apply``
-        # flag remains available for first-time room assignment, but can never
-        # silently move a guest who already has a room.
+        # Persist proposed changes first. Automatic callers pass them through
+        # the same fresh-state acceptance workflow; preview callers leave them
+        # pending for an operator. That workflow rechecks check-in, locks,
+        # room capacity, accessibility and overlapping stays before movement.
         is_proposal = is_changed and (reservation.room_id is not None or not apply)
         assignment_status = (
             AllocationAssignmentStatusEnum.PROPOSED
@@ -418,8 +418,8 @@ def run_persisted_allocation(
                     {
                         "success": solver_result.success,
                         "requires_manual_review": not solver_result.success,
-                        "weights": _load_json_dict(policy_version.weights_json),
-                        "constraints": _load_json_dict(policy_version.constraints_json),
+                        "weights": policy_settings.weights,
+                        "constraints": policy_settings.constraints,
                         "moved_reservations": solver_result.moved_reservations,
                         "unassigned_reservations": solver_result.unassigned_reservations,
                         "primary_objective_status": solver_result.primary_status,
@@ -427,7 +427,6 @@ def run_persisted_allocation(
                             solver_result.primary_status
                         ),
                         "tie_break_status": solver_result.tie_break_status,
-                        "allocation_fx_configuration": fx_configuration_snapshot,
                     },
                     ensure_ascii=True,
                     sort_keys=True,
@@ -513,63 +512,6 @@ def _primary_objective_label(status: str | None) -> str:
     if normalized == "HEURISTIC":
         return "HEURISTIC (optimality not proven)"
     return f"{normalized} (optimality not proven)"
-
-
-def _normalized_decimal(value: object) -> str:
-    try:
-        amount = Decimal(str(value if value is not None else 0))
-    except (InvalidOperation, TypeError, ValueError):
-        return "invalid"
-    if not amount.is_finite():
-        return "invalid"
-    return format(amount.normalize(), "f")
-
-
-def _allocation_fx_configuration_snapshot(
-    db: Session,
-    hotel_id: int,
-    *,
-    lock: bool = False,
-) -> dict:
-    """Read the hotel FX inputs that can affect an allocation objective.
-
-    Locking the hotel row serializes acceptance with edits to the hotel-level
-    markets and sides. The active FxPolicy row is locked as well so its spread
-    cannot change between validation and applying a proposal.
-    """
-    hotel_query = (
-        db.query(HotelConfiguration)
-        .filter(HotelConfiguration.id == hotel_id)
-        .populate_existing()
-    )
-    if lock:
-        hotel_query = lock_query(hotel_query, HotelConfiguration)
-    hotel = hotel_query.one_or_none()
-    if hotel is None:
-        raise AllocationRuntimeError("Hotel FX configuration is unavailable; recalculate allocation")
-
-    fx_policy_query = (
-        db.query(FxPolicy)
-        .filter(
-            FxPolicy.hotel_id == hotel_id,
-            FxPolicy.is_active.is_(True),
-        )
-        .order_by(FxPolicy.id.asc())
-        .populate_existing()
-    )
-    if lock:
-        fx_policy_query = lock_query(fx_policy_query, FxPolicy)
-    fx_policy = fx_policy_query.first()
-
-    return {
-        "base_currency": str(hotel.default_currency or "").strip().upper(),
-        "market_default": str(hotel.fx_conversion_rate_type or "").strip().lower(),
-        "usd_to_ars_market": str(hotel.fx_usd_to_ars_rate_type or "").strip().lower(),
-        "ars_to_usd_market": str(hotel.fx_ars_to_usd_rate_type or "").strip().lower(),
-        "usd_to_ars_side": str(hotel.fx_usd_to_ars_rate_side or "").strip().lower(),
-        "ars_to_usd_side": str(hotel.fx_ars_to_usd_rate_side or "").strip().lower(),
-        "spread_pct": _normalized_decimal(getattr(fx_policy, "spread_pct", 0)),
-    }
 
 
 def _lock_and_validate_initial_assignments(
@@ -769,64 +711,6 @@ def _active_policy_version_id_for_acceptance(db: Session, hotel_id: int) -> int:
     return version.id
 
 
-def _validate_allocation_fx_snapshots(
-    db: Session,
-    *,
-    hotel_id: int,
-    assignment_explanations: list[AllocationExplanation],
-) -> None:
-    """Reject conversion proposals whose quote evidence is absent or stale."""
-    referenced_snapshot_ids: set[int] = set()
-    for explanation in assignment_explanations:
-        details = _load_json_dict(explanation.details_json)
-        if "allocation_fx_conversion" not in details:
-            continue
-        conversion = details.get("allocation_fx_conversion")
-        if not isinstance(conversion, dict):
-            raise AllocationRuntimeError("An allocation FX quote snapshot is invalid; recalculate allocation")
-        source_currency = str(conversion.get("source_currency") or "").strip().upper()
-        target_currency = str(conversion.get("allocation_currency") or "").strip().upper()
-        raw_snapshot_ids = conversion.get("snapshot_ids")
-        if not isinstance(raw_snapshot_ids, list):
-            raise AllocationRuntimeError("An allocation FX quote snapshot is missing; recalculate allocation")
-        if source_currency and target_currency and source_currency != target_currency and not raw_snapshot_ids:
-            raise AllocationRuntimeError("An allocation FX quote snapshot is missing; recalculate allocation")
-        for snapshot_id in raw_snapshot_ids:
-            if type(snapshot_id) is not int or snapshot_id <= 0:
-                raise AllocationRuntimeError("An allocation FX quote snapshot is invalid; recalculate allocation")
-            referenced_snapshot_ids.add(snapshot_id)
-
-    if not referenced_snapshot_ids:
-        return
-
-    snapshot_query = (
-        db.query(FxRateSnapshot)
-        .filter(
-            FxRateSnapshot.hotel_id == hotel_id,
-            FxRateSnapshot.id.in_(sorted(referenced_snapshot_ids)),
-        )
-        .order_by(FxRateSnapshot.id.asc())
-        .populate_existing()
-    )
-    snapshots = lock_query(snapshot_query, FxRateSnapshot).all()
-    snapshots_by_id = {snapshot.id: snapshot for snapshot in snapshots}
-    if set(snapshots_by_id) != referenced_snapshot_ids:
-        raise AllocationRuntimeError("An allocation FX quote is missing or belongs to another hotel; recalculate allocation")
-
-    from app.services.fx_service import quote_is_fresh
-
-    now = datetime.now(timezone.utc)
-    for snapshot in snapshots:
-        quote_updated_at = snapshot.provider_updated_at or snapshot.fetched_at
-        quote = {
-            "compra": snapshot.compra,
-            "venta": snapshot.venta,
-            "fechaActualizacion": quote_updated_at.isoformat() if quote_updated_at else None,
-        }
-        if not quote_is_fresh(quote, now=now):
-            raise AllocationRuntimeError("An allocation FX quote is older than 24 hours; recalculate allocation")
-
-
 def get_allocation_run_details(db: Session, *, hotel_id: int, run_id: int) -> AllocationRunDetails | None:
     run = (
         db.query(AllocationRun)
@@ -879,6 +763,8 @@ def accept_allocation_run(
     run_id: int,
     user_id: int | None,
     allow_room_block_plan: bool = False,
+    automatic: bool = False,
+    explicitly_approved_locked_reservation_ids: set[int] | None = None,
 ) -> AllocationRunDetails:
     """Accept the proposed room moves from a fresh, tenant-scoped solver run.
 
@@ -942,24 +828,6 @@ def accept_allocation_run(
     if active_policy_version_id != run.policy_version_id:
         raise AllocationRuntimeError("The active allocation policy changed after this proposal; recalculate allocation")
 
-    summary_row = (
-        db.query(AllocationExplanation)
-        .filter(
-            AllocationExplanation.hotel_id == hotel_id,
-            AllocationExplanation.allocation_run_id == run_id,
-            AllocationExplanation.explanation_type == "summary",
-        )
-        .order_by(AllocationExplanation.id.desc())
-        .first()
-    )
-    run_summary = _load_json_dict(summary_row.details_json) if summary_row else {}
-    fx_configuration_snapshot = run_summary.get("allocation_fx_configuration")
-    if not isinstance(fx_configuration_snapshot, dict):
-        raise AllocationRuntimeError("This allocation run has no FX configuration snapshot; recalculate allocation")
-    current_fx_configuration = _allocation_fx_configuration_snapshot(db, hotel_id, lock=True)
-    if fx_configuration_snapshot != current_fx_configuration:
-        raise AllocationRuntimeError("The hotel FX configuration changed after this proposal; recalculate allocation")
-
     proposal_ids = {item.reservation_id for item in proposed}
     plan_ids = {item.reservation_id for item in assignments if item.room_id is not None}
     reservation_query = (
@@ -987,6 +855,31 @@ def accept_allocation_run(
     explanation_by_reservation: dict[int, dict] = {}
     for item in explanation_rows:
         explanation_by_reservation[item.reservation_id] = _load_json_dict(item.details_json)
+    required_locked_move_approvals = {
+        assignment.reservation_id
+        for assignment in proposed
+        if (
+            isinstance(
+                explanation_by_reservation.get(assignment.reservation_id, {}).get(
+                    "room_assignment_signal"
+                ),
+                dict,
+            )
+            and explanation_by_reservation[assignment.reservation_id][
+                "room_assignment_signal"
+            ].get("requires_explicit_approval") is True
+        )
+    }
+    approved_locked_move_ids = set(explicitly_approved_locked_reservation_ids or set())
+    if not approved_locked_move_ids.issubset(required_locked_move_approvals):
+        raise AllocationRuntimeError(
+            "The one-time locked-move approval does not match this proposal"
+        )
+    if approved_locked_move_ids and (automatic or user_id is None):
+        raise AllocationRuntimeError(
+            "Locked reservation moves require explicit approval from an authenticated user"
+        )
+    locked_moves_left_unchanged = required_locked_move_approvals - approved_locked_move_ids
 
     all_assignment_explanations = (
         db.query(AllocationExplanation)
@@ -999,24 +892,26 @@ def accept_allocation_run(
         .order_by(AllocationExplanation.id.asc())
         .all()
     )
-    fx_explanation_rows = (
+    plan_explanation_by_reservation = {
+        item.reservation_id: _load_json_dict(item.details_json)
+        for item in all_assignment_explanations
+    }
+    already_applied_rows = (
         db.query(AllocationExplanation)
         .filter(
             AllocationExplanation.hotel_id == hotel_id,
             AllocationExplanation.allocation_run_id == run_id,
-            AllocationExplanation.explanation_type.in_(["assignment", "manual_review"]),
+            AllocationExplanation.explanation_type.in_(
+                ["proposal_auto_applied", "proposal_accepted"]
+            ),
+            AllocationExplanation.reservation_id.in_(plan_ids),
         )
         .order_by(AllocationExplanation.id.asc())
         .all()
     )
-    _validate_allocation_fx_snapshots(
-        db,
-        hotel_id=hotel_id,
-        assignment_explanations=fx_explanation_rows,
-    )
-    plan_explanation_by_reservation = {
+    already_applied_by_reservation = {
         item.reservation_id: _load_json_dict(item.details_json)
-        for item in all_assignment_explanations
+        for item in already_applied_rows
     }
     assignment_by_reservation = {item.reservation_id: item for item in assignments}
     for reservation_id, reservation in reservations_by_id.items():
@@ -1028,15 +923,23 @@ def accept_allocation_run(
         # intake trigger. Their recorded source was intentionally unassigned;
         # their current state is valid only while it still matches the run's
         # chosen destination and dates/category remain in the fingerprint.
+        applied_explanation = already_applied_by_reservation.get(reservation_id)
+        applied_target_matches = bool(
+            applied_explanation
+            and applied_explanation.get("target_room_id") == assignment.room_id
+        )
+        was_initially_assigned = plan_explanation.get("source_room_id") is None
+        was_moved_by_this_run = applied_target_matches and not was_initially_assigned
         if (
             assignment.status == AllocationAssignmentStatusEnum.APPLIED
-            and plan_explanation.get("source_room_id") is None
             and reservation.room_id == assignment.room_id
+            and (was_initially_assigned or was_moved_by_this_run)
         ):
             expected_state = plan_explanation.get("source_state")
             current_state = _reservation_state_payload(reservation)
             if not isinstance(expected_state, dict):
                 raise AllocationRuntimeError("The allocation plan is missing its source-state snapshot")
+            expected_state = dict(expected_state)
             expected_state.pop("room_id", None)
             current_state.pop("room_id", None)
             if expected_state != current_state:
@@ -1055,7 +958,12 @@ def accept_allocation_run(
         )
         .all()
     }
-    target_room_ids = {item.room_id for item in proposed if item.room_id is not None}
+    target_room_ids = {
+        item.room_id
+        for item in proposed
+        if item.room_id is not None
+        and item.reservation_id not in locked_moves_left_unchanged
+    }
     target_room_query = (
         db.query(Room)
         .filter(
@@ -1075,21 +983,37 @@ def accept_allocation_run(
     proposed_target_windows: list[tuple[int, date, date, int]] = []
     for assignment in proposed:
         reservation = reservations_by_id[assignment.reservation_id]
+        explanation = explanation_by_reservation.get(reservation.id)
+        if not explanation or not explanation.get("source_state_fingerprint"):
+            raise AllocationRuntimeError("The proposal is missing its source-state snapshot")
+        if explanation["source_state_fingerprint"] != _reservation_state_fingerprint(reservation):
+            raise AllocationRuntimeError("Reservation changed after this proposal; recalculate allocation")
+        room_assignment_signal = explanation.get("room_assignment_signal")
+        expected_explicit_lock = bool(
+            isinstance(room_assignment_signal, dict)
+            and room_assignment_signal.get("explicitly_locked") is True
+        )
+        current_explicit_lock = bool(
+            reservation.allocation_locked or reservation.id in active_lock_ids
+        )
+        if current_explicit_lock != expected_explicit_lock:
+            raise AllocationRuntimeError(
+                "A reservation lock changed after this proposal; recalculate allocation"
+            )
         if (
             reservation.status in {
                 ReservationStatusEnum.PARTIAL_CHECK_IN,
                 ReservationStatusEnum.CHECKED_IN,
             }
             or reservation.actual_check_in is not None
-            or reservation.allocation_locked
-            or reservation.id in active_lock_ids
         ):
-            raise AllocationRuntimeError("A proposed reservation is checked in or explicitly locked")
-        explanation = explanation_by_reservation.get(reservation.id)
-        if not explanation or not explanation.get("source_state_fingerprint"):
-            raise AllocationRuntimeError("The proposal is missing its source-state snapshot")
-        if explanation["source_state_fingerprint"] != _reservation_state_fingerprint(reservation):
-            raise AllocationRuntimeError("Reservation changed after this proposal; recalculate allocation")
+            raise AllocationRuntimeError("A proposed reservation has already checked in")
+        if current_explicit_lock and reservation.id not in approved_locked_move_ids:
+            if reservation.id not in locked_moves_left_unchanged:
+                raise AllocationRuntimeError(
+                    "Explicit one-time approval is required for this locked reservation move"
+                )
+            continue
         if assignment.room_id is None:
             raise AllocationRuntimeError("A proposed reassignment has no destination room")
         room = rooms_by_id[assignment.room_id]
@@ -1120,11 +1044,19 @@ def accept_allocation_run(
         )
         .all()
     )
-    all_plan_assignments = {
-        item.reservation_id: item.room_id
-        for item in assignments
-        if item.room_id is not None
-    }
+    all_plan_assignments: dict[int, int] = {}
+    for item in assignments:
+        if item.room_id is None:
+            continue
+        if item.reservation_id in locked_moves_left_unchanged:
+            source_room_id = plan_explanation_by_reservation[item.reservation_id].get(
+                "source_room_id"
+            )
+            if source_room_id is None:
+                continue
+            all_plan_assignments[item.reservation_id] = source_room_id
+        else:
+            all_plan_assignments[item.reservation_id] = item.room_id
     plan_reservations_by_id = reservations_by_id
     for room_id, check_in, check_out, reservation_id in proposed_target_windows:
         for other_id, other_room_id in all_plan_assignments.items():
@@ -1157,26 +1089,91 @@ def accept_allocation_run(
                 hotel_id=hotel_id,
                 reservations_by_id=reservations_by_id,
                 trigger_reason=run.trigger_type,
-                trigger_event="allocation_proposal_accepted",
+                trigger_event=(
+                    "allocation_auto_applied"
+                    if automatic
+                    else "allocation_locked_move_approved"
+                    if approved_locked_move_ids
+                    else "allocation_proposal_accepted"
+                ),
                 created_by_user_id=user_id,
+                one_time_locked_move_approvals=approved_locked_move_ids,
             )
+            approved_lock_rows = (
+                db.query(ReservationAllocationLock)
+                .filter(
+                    ReservationAllocationLock.hotel_id == hotel_id,
+                    ReservationAllocationLock.reservation_id.in_(approved_locked_move_ids),
+                    ReservationAllocationLock.is_active.is_(True),
+                )
+                .order_by(ReservationAllocationLock.reservation_id.asc())
+                .all()
+                if approved_locked_move_ids
+                else []
+            )
+            for lock in approved_lock_rows:
+                # A one-time approval moves the pin to the newly accepted room;
+                # it never releases the lock or permits a later automatic move.
+                lock.locked_room_id = moves[lock.reservation_id]
             for assignment in proposed:
+                explanation = explanation_by_reservation[assignment.reservation_id]
+                if assignment.reservation_id in locked_moves_left_unchanged:
+                    if not automatic:
+                        assignment.status = AllocationAssignmentStatusEnum.MANUAL_REVIEW
+                    db.add(
+                        AllocationExplanation(
+                            hotel_id=hotel_id,
+                            allocation_run_id=run_id,
+                            reservation_id=assignment.reservation_id,
+                            explanation_type=(
+                                "proposal_lock_pending_approval"
+                                if automatic
+                                else "proposal_lock_preserved"
+                            ),
+                            summary=(
+                                "Automatic allocation kept the reservation in its current room; one-time approval is required to apply this proposed move"
+                                if automatic
+                                else "No one-time approval was given; the reservation stayed in its current room and remains locked"
+                            ),
+                            details_json=json.dumps(
+                                {
+                                    "source_room_id": explanation.get("source_room_id"),
+                                    "suggested_room_id": assignment.room_id,
+                                    "one_time_lock_override": False,
+                                    "lock_preserved": True,
+                                },
+                                ensure_ascii=True,
+                                sort_keys=True,
+                            ),
+                        )
+                    )
+                    continue
                 assignment.status = AllocationAssignmentStatusEnum.APPLIED
                 assignment.applied_at = datetime.now(timezone.utc)
-                explanation = explanation_by_reservation[assignment.reservation_id]
                 db.add(
                     AllocationExplanation(
                         hotel_id=hotel_id,
                         allocation_run_id=run_id,
                         reservation_id=assignment.reservation_id,
-                        explanation_type="proposal_accepted",
-                        summary="Reception accepted the proposed room reassignment",
+                        explanation_type=(
+                            "proposal_auto_applied" if automatic else "proposal_accepted"
+                        ),
+                        summary=(
+                            "Allocation engine automatically applied the eligible room reassignment"
+                            if automatic
+                            else "Reception approved a one-time move; the reassignment lock remains active"
+                            if assignment.reservation_id in approved_locked_move_ids
+                            else "Reception accepted the proposed room reassignment"
+                        ),
                         details_json=json.dumps(
                             {
                                 "source_room_id": explanation.get("source_room_id"),
                                 "target_room_id": assignment.room_id,
-                                "accepted_by_user_id": user_id,
-                                "accepted_at": datetime.now(timezone.utc).isoformat(),
+                                "applied_by": "allocation_engine" if automatic else "user",
+                                "accepted_by_user_id": None if automatic else user_id,
+                                "one_time_lock_override": assignment.reservation_id in approved_locked_move_ids,
+                                "lock_preserved": assignment.reservation_id in approved_locked_move_ids,
+                                "applied_at": datetime.now(timezone.utc).isoformat(),
                             },
                             ensure_ascii=True,
                             sort_keys=True,
@@ -1187,11 +1184,25 @@ def accept_allocation_run(
                 SecurityAuditLog(
                     hotel_id=hotel_id,
                     user_id=user_id,
-                    action="allocation.proposal.accepted",
+                    action=(
+                        "allocation.proposal.auto_applied"
+                        if automatic
+                        else "allocation.proposal.accepted"
+                    ),
                     resource_type="allocation_run",
                     resource_id=str(run_id),
                     details=json.dumps(
-                        {"reservation_ids": sorted(moves), "room_block_plan": allow_room_block_plan},
+                        {
+                            "reservation_ids": sorted(moves),
+                            "room_block_plan": allow_room_block_plan,
+                            "applied_by": "allocation_engine" if automatic else "user",
+                            "one_time_locked_move_approval_ids": sorted(approved_locked_move_ids),
+                            "one_time_lock_target_rooms": {
+                                str(reservation_id): moves[reservation_id]
+                                for reservation_id in sorted(approved_locked_move_ids)
+                            },
+                            "locked_moves_left_unchanged": sorted(locked_moves_left_unchanged),
+                        },
                         sort_keys=True,
                     ),
                 )
@@ -1203,6 +1214,89 @@ def accept_allocation_run(
     details = get_allocation_run_details(db, hotel_id=hotel_id, run_id=run_id)
     assert details is not None
     return details
+
+
+def auto_apply_safe_allocation_run(
+    db: Session,
+    *,
+    hotel_id: int,
+    run_id: int,
+) -> AllocationRunDetails | None:
+    """Apply a complete successful run through the locked acceptance workflow.
+
+    Room-block plans keep their dedicated atomic acceptance path. Explicit
+    reservation locks and check-in state are revalidated by
+    ``accept_allocation_run`` and cannot be bypassed here.
+    """
+    run = (
+        db.query(AllocationRun)
+        .filter(AllocationRun.id == run_id, AllocationRun.hotel_id == hotel_id)
+        .one_or_none()
+    )
+    if run is None:
+        raise AllocationRuntimeError("Allocation run not found for this hotel")
+
+    details = get_allocation_run_details(db, hotel_id=hotel_id, run_id=run_id)
+    if details is None or run.status != AllocationRunStatusEnum.SUCCEEDED:
+        return details
+
+    context_row = (
+        db.query(AllocationExplanation)
+        .filter(
+            AllocationExplanation.hotel_id == hotel_id,
+            AllocationExplanation.allocation_run_id == run_id,
+            AllocationExplanation.explanation_type == "proposal_context",
+        )
+        .order_by(AllocationExplanation.id.asc())
+        .first()
+    )
+    proposal_context = _load_json_dict(context_row.details_json) if context_row else {}
+    if proposal_context.get("kind") in {"room_block", "room_block_extension"}:
+        return details
+
+    pending_moves = (
+        db.query(AllocationAssignment.id)
+        .filter(
+            AllocationAssignment.hotel_id == hotel_id,
+            AllocationAssignment.allocation_run_id == run_id,
+            AllocationAssignment.status == AllocationAssignmentStatusEnum.PROPOSED,
+        )
+        .count()
+    )
+    if not pending_moves:
+        return details
+
+    assignment_explanations = {
+        item.reservation_id: _load_json_dict(item.details_json)
+        for item in details.explanations
+        if item.explanation_type == "assignment"
+    }
+    safe_moves = []
+    for assignment in details.assignments:
+        if assignment.status != AllocationAssignmentStatusEnum.PROPOSED:
+            continue
+        room_signal = assignment_explanations.get(
+            assignment.reservation_id, {}
+        ).get("room_assignment_signal")
+        if not isinstance(room_signal, dict) or room_signal.get(
+            "requires_explicit_approval"
+        ) is not True:
+            safe_moves.append(assignment)
+    if not safe_moves:
+        # Keep locked moves visible in the successful run so an authenticated
+        # operator can approve each exception once from the review screen.
+        return details
+
+    # No room changes escape this savepoint unless the full acceptance
+    # validation passes. A stale plan is returned to the caller for retry.
+    with db.begin_nested():
+        return accept_allocation_run(
+            db,
+            hotel_id=hotel_id,
+            run_id=run_id,
+            user_id=None,
+            automatic=True,
+        )
 
 
 def reject_allocation_run(
@@ -1391,13 +1485,16 @@ def _create_assignment_explanation(
         "source_state_fingerprint": _reservation_state_fingerprint(reservation),
     }
     if reservation_slot is not None:
-        details["net_revenue_minor_units"] = reservation_slot.net_revenue_minor_units
-        details["revenue_currency_code"] = reservation_slot.currency_code
-        details["source_currency_code"] = (
-            reservation_slot.source_currency_code or reservation_slot.currency_code
-        )
-        if reservation_slot.fx_conversion_details:
-            details["allocation_fx_conversion"] = reservation_slot.fx_conversion_details
+        details["room_assignment_signal"] = {
+            "mobility_restriction": reservation_slot.mobility_restriction,
+            "prior_stay_room_id": reservation_slot.prior_stay_room_id,
+            "avoided_room_ids": sorted(reservation_slot.avoided_room_ids),
+            "explicitly_locked": reservation_slot.explicitly_locked,
+            "requires_explicit_approval": bool(
+                reservation_slot.explicitly_locked
+                and reservation_slot.current_room_id != room_id
+            ),
+        }
     return AllocationExplanation(
         hotel_id=hotel_id,
         allocation_run_id=allocation_run_id,
@@ -1418,15 +1515,6 @@ def _reservation_state_fingerprint(reservation: Reservation) -> str:
 def _reservation_state_payload(reservation: Reservation) -> dict:
     status = reservation.status.value if hasattr(reservation.status, "value") else str(reservation.status)
 
-    def money_fingerprint(value) -> str:
-        try:
-            amount = Decimal(str(value or 0))
-            if amount.is_finite():
-                return format(amount.normalize(), "f")
-        except (InvalidOperation, TypeError, ValueError):
-            pass
-        return "0"
-
     return {
         "hotel_id": reservation.hotel_id,
         "reservation_id": reservation.id,
@@ -1436,15 +1524,6 @@ def _reservation_state_payload(reservation: Reservation) -> dict:
         "check_out_date": reservation.check_out_date.isoformat() if reservation.check_out_date else None,
         "category_id": reservation.category_id,
         "sellable_product_id": reservation.sellable_product_id,
-        # Net-revenue proposals depend on the saved price/currency inputs. A
-        # rate or channel-commission edit after preview must invalidate that
-        # proposal just like a date or room edit does.
-        "currency_code": getattr(reservation, "currency_code", None),
-        "total_amount": money_fingerprint(getattr(reservation, "total_amount", 0)),
-        "subtotal_amount": money_fingerprint(getattr(reservation, "subtotal_amount", 0)),
-        "tax_amount": money_fingerprint(getattr(reservation, "tax_amount", 0)),
-        "fee_amount": money_fingerprint(getattr(reservation, "fee_amount", 0)),
-        "commission_amount": money_fingerprint(getattr(reservation, "commission_amount", 0)),
         "num_adults": reservation.num_adults,
         "num_children": reservation.num_children,
         "mobility_restriction": bool(getattr(reservation, "mobility_restriction", False)),
@@ -1481,14 +1560,6 @@ def _create_unassigned_explanation(
         "allowed_category_ids": reservation_slot.effective_allowed_category_ids if reservation_slot else [reservation.category_id],
         "requires_manual_review": True,
     }
-    if reservation_slot is not None:
-        details["net_revenue_minor_units"] = reservation_slot.net_revenue_minor_units
-        details["revenue_currency_code"] = reservation_slot.currency_code
-        details["source_currency_code"] = (
-            reservation_slot.source_currency_code or reservation_slot.currency_code
-        )
-        if reservation_slot.fx_conversion_details:
-            details["allocation_fx_conversion"] = reservation_slot.fx_conversion_details
     db.add(
         AllocationExplanation(
             hotel_id=hotel_id,

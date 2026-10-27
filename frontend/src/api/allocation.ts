@@ -27,8 +27,7 @@ export type ActiveAllocationPolicy = {
 export type AllocationPolicyVersionCreate = {
   constraints: Record<string, unknown>;
   weights: Record<string, number>;
-  optimization_objective: AllocationObjective;
-  combined_revenue_weight?: number;
+  optimization_objective: "occupied_nights";
   prompt_summary?: string;
   source: "manual";
   publish: true;
@@ -51,6 +50,7 @@ export type AllocationAssignment = {
   room_id: number | null;
   status: "proposed" | "applied" | "locked" | "rejected" | "manual_review" | string;
   explanation_summary: string | null;
+  requires_explicit_approval: boolean;
 };
 
 export type AllocationRunDetail = {
@@ -91,8 +91,15 @@ export const getLatestAllocationRun = (session?: SessionLike) =>
 export const getAllocationRun = (runId: number, session?: SessionLike) =>
   apiFetch<AllocationRunDetail>(`/api/allocation/policy/runs/${runId}`, { session });
 
-export const acceptAllocationRun = (runId: number, session?: SessionLike) =>
-  apiFetch<AllocationRunDetail>(`/api/allocation/policy/runs/${runId}/accept`, { method: "POST", session });
+export const acceptAllocationRun = (
+  runId: number,
+  explicitlyApprovedLockedReservationIds: number[],
+  session?: SessionLike
+) => apiFetch<AllocationRunDetail>(`/api/allocation/policy/runs/${runId}/accept`, {
+  method: "POST",
+  data: { explicitly_approved_locked_reservation_ids: explicitlyApprovedLockedReservationIds },
+  session
+});
 
 export const rejectAllocationRun = (runId: number, session?: SessionLike) =>
   apiFetch<AllocationRunDetail>(`/api/allocation/policy/runs/${runId}/reject`, { method: "POST", session });

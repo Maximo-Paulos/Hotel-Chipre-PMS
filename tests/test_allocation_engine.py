@@ -1,14 +1,20 @@
 """
 Tests for the Allocation Engine (OR-Tools CP-SAT + greedy fallback).
 """
-import pytest
 from datetime import date, timedelta
-import app.services.allocation_engine as allocation_engine
+
+import pytest
+
 from app.services.allocation_engine import (
-    ReservationSlot, RoomSlot, run_allocation,
-    _run_allocation_greedy, _check_overlap,
-    _overlapping_reservation_pairs, _reservation_indexes_by_horizon_day,
+    ReservationSlot,
+    RoomSlot,
+    _check_overlap,
+    _overlapping_reservation_pairs,
+    _reservation_indexes_by_horizon_day,
+    _run_allocation_greedy,
+    run_allocation,
 )
+
 
 def make_rooms(cat_id, count, start_id=1):
     return [RoomSlot(room_id=start_id+i, room_number=f"R{start_id+i}", category_id=cat_id) for i in range(count)]
@@ -123,40 +129,34 @@ class TestGreedyAllocation:
 
 
 class TestCPSATAllocation:
-    def test_non_mobility_reservations_skip_floor_search(self, monkeypatch):
+    def test_non_mobility_reservations_ignore_no_elevator_floor_preference(self):
         pytest.importorskip("ortools.sat.python.cp_model")
-        checked_reservation_ids = []
-        original = allocation_engine._lowest_available_compatible_floor
-
-        def capture(reservation, rooms, reservations):
-            checked_reservation_ids.append(reservation.reservation_id)
-            return original(reservation, rooms, reservations)
-
-        monkeypatch.setattr(allocation_engine, "_lowest_available_compatible_floor", capture)
-        start = date(2026, 4, 1)
-        reservations = [
-            make_res(index, 1, start + timedelta(days=index * 3), start + timedelta(days=index * 3 + 2))
-            for index in range(1, 5)
-        ]
-        reservations[-1].mobility_restriction = True
-
-        rooms = make_rooms(1, 3) + [
+        reservation = make_res(1, 1, date(2026, 4, 1), date(2026, 4, 3))
+        rooms = [
             RoomSlot(
-                room_id=4,
-                room_number="R4",
+                room_id=1,
+                room_number="R1",
                 category_id=1,
-                floor=1,
-                is_accessible=True,
-            )
+                floor=0,
+                score=1,
+            ),
+            RoomSlot(
+                room_id=2,
+                room_number="R2",
+                category_id=1,
+                floor=2,
+                score=10,
+            ),
         ]
 
-        result = run_allocation(reservations, rooms)
+        result = run_allocation(
+            [reservation],
+            rooms,
+            policy_constraints={"hotel_has_elevator": False},
+        )
 
         assert result.success is True
-        assert checked_reservation_ids == [reservations[-1].reservation_id]
-        assigned_room = next(room for room in rooms if room.room_id == result.assignments[4])
-        assert assigned_room.is_accessible is True
-        assert assigned_room.floor == 1
+        assert result.assignments[reservation.reservation_id] == 2
 
     def test_cpsat_builds_only_compatible_room_and_gap_variables(self, monkeypatch):
         cp_model = pytest.importorskip("ortools.sat.python.cp_model")

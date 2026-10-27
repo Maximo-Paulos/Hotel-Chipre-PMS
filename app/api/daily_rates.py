@@ -153,6 +153,8 @@ class PricePeriodIn(BaseModel):
     price_expedia: Optional[float] = Field(None, ge=0)
     priority: int = Field(0, ge=-100000)
     is_active: bool = True
+    comparable_season_key: Optional[str] = Field(None, max_length=80)
+    is_high_demand_event: bool = False
 
 
 class PricePeriodPatch(BaseModel):
@@ -170,6 +172,8 @@ class PricePeriodPatch(BaseModel):
     price_expedia: Optional[float] = Field(None, ge=0)
     priority: Optional[int] = Field(None, ge=-100000)
     is_active: Optional[bool] = None
+    comparable_season_key: Optional[str] = Field(None, max_length=80)
+    is_high_demand_event: Optional[bool] = None
 
 
 class PricePeriodOut(BaseModel):
@@ -190,6 +194,8 @@ class PricePeriodOut(BaseModel):
     price_expedia: Optional[float] = None
     priority: int
     is_active: bool
+    comparable_season_key: Optional[str] = None
+    is_high_demand_event: bool
     created_at: datetime
 
     class Config:
@@ -646,6 +652,8 @@ def create_price_period(
         price_expedia=payload.price_expedia,
         priority=payload.priority,
         is_active=payload.is_active,
+        comparable_season_key=(payload.comparable_season_key or "").strip().casefold() or None,
+        is_high_demand_event=payload.is_high_demand_event,
     )
     db.add(period)
     db.flush()
@@ -705,6 +713,10 @@ def update_price_period(
         period.priority = payload.priority
     if payload.is_active is not None:
         period.is_active = payload.is_active
+    if payload.comparable_season_key is not None:
+        period.comparable_season_key = payload.comparable_season_key.strip().casefold() or None
+    if payload.is_high_demand_event is not None:
+        period.is_high_demand_event = payload.is_high_demand_event
 
     # Validate after update
     if period.end_date < period.start_date:

@@ -260,7 +260,7 @@ test.describe("F-027 reservation creation in English with an English browser loc
 test.describe("F-027 with an English browser locale", () => {
   test.use({ locale: "en-US" });
 
-  test("Spanish interface keeps recalculation in preview until reception confirms applying changes", async ({ page }) => {
+  test("Spanish interface applies eligible moves by default and keeps preview explicit", async ({ page }) => {
     const allocationRequests: Array<{ apply: boolean }> = [];
     const unexpectedDialogs: string[] = [];
     const dismissUnexpectedDialog = async (dialog: { message(): string; dismiss(): Promise<void> }) => {
@@ -296,33 +296,20 @@ test.describe("F-027 with an English browser locale", () => {
 
     const main = page.locator("main");
     await expect(main.getByRole("heading", { name: "Reservas", exact: true })).toBeVisible();
-    const applyChanges = main.getByRole("checkbox", { name: "Aplicar cambios" });
+    const applyChanges = main.getByRole("checkbox", { name: "Aplicar automáticamente movimientos seguros" });
     const recalculate = main.getByRole("button", { name: "Recalcular asignación", exact: true });
-    await expect(applyChanges).not.toBeChecked();
+    await expect(applyChanges).toBeChecked();
 
     await recalculate.click();
     await expect.poll(() => allocationRequests.length).toBe(1);
-    expect(allocationRequests[0]?.apply).toBe(false);
+    expect(allocationRequests[0]?.apply).toBe(true);
     expect(unexpectedDialogs).toEqual([]);
 
-    page.off("dialog", dismissUnexpectedDialog);
-    await applyChanges.check();
-    const cancelledConfirmation = page.waitForEvent("dialog");
-    const cancelledClick = recalculate.click();
-    const cancelledDialog = await cancelledConfirmation;
-    expect(cancelledDialog.message()).toBe("¿Querés aplicar estos cambios de asignación? El sistema puede mover reservas entre habitaciones.");
-    await cancelledDialog.dismiss();
-    await cancelledClick;
-    expect(allocationRequests).toHaveLength(1);
-
-    const confirmation = page.waitForEvent("dialog");
-    const applyClick = recalculate.click();
-    const dialog = await confirmation;
-    expect(dialog.message()).toBe("¿Querés aplicar estos cambios de asignación? El sistema puede mover reservas entre habitaciones.");
-    await dialog.accept();
-    await applyClick;
+    await applyChanges.uncheck();
+    await recalculate.click();
     await expect.poll(() => allocationRequests.length).toBe(2);
-    expect(allocationRequests[1]?.apply).toBe(true);
+    expect(allocationRequests[1]?.apply).toBe(false);
+    expect(unexpectedDialogs).toEqual([]);
   });
 });
 

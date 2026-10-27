@@ -12,6 +12,7 @@ from app.schemas.allocation_policy import (
     AllocationAssignmentRead,
     AllocationExplanationRead,
     AllocationFeedbackDraftRequest,
+    AllocationRunAcceptRequest,
     AllocationPolicySuggestionApplyRequest,
     AllocationPolicySuggestionApplyResponse,
     AllocationPolicySuggestionCreate,
@@ -57,9 +58,17 @@ from app.services.permission_service import (
 router = APIRouter(prefix="/api/allocation/policy", tags=["Allocation Policy"])
 
 
-def _serialize_policy_version(version) -> AllocationPolicyVersionRead:
-    constraints = _load_json_dict(version.constraints_json)
-    weights = {key: float(value) for key, value in _load_json_dict(version.weights_json).items()}
+def _serialize_policy_version(
+    version,
+    *,
+    constraints_override: dict | None = None,
+    weights_override: dict | None = None,
+) -> AllocationPolicyVersionRead:
+    constraints = constraints_override or _load_json_dict(version.constraints_json)
+    weights = {
+        key: float(value)
+        for key, value in (weights_override or _load_json_dict(version.weights_json)).items()
+    }
     return AllocationPolicyVersionRead(
         id=version.id,
         profile_id=version.profile_id,
@@ -99,6 +108,16 @@ def _serialize_run_details(details) -> AllocationRunDetailRead:
         for item in details.explanations
         if item.explanation_type == "assignment"
     }
+    assignment_approval_requirements = {}
+    for item in details.explanations:
+        if item.explanation_type != "assignment":
+            continue
+        explanation = _load_json_dict(item.details_json)
+        room_signal = explanation.get("room_assignment_signal")
+        assignment_approval_requirements[item.reservation_id] = bool(
+            isinstance(room_signal, dict)
+            and room_signal.get("requires_explicit_approval") is True
+        )
     return AllocationRunDetailRead(
         run_id=run.id,
         status=run.status.value if hasattr(run.status, "value") else str(run.status),
@@ -134,6 +153,7 @@ def _serialize_run_details(details) -> AllocationRunDetailRead:
                 room_id=item.room_id,
                 status=item.status.value if hasattr(item.status, "value") else str(item.status),
                 explanation_summary=item.explanation_summary,
+                requires_explicit_approval=assignment_approval_requirements.get(item.reservation_id, False),
             )
             for item in details.assignments
         ],
@@ -150,7 +170,11 @@ def get_active_policy(
         profile_id=settings.profile.id,
         profile_code=settings.profile.code,
         profile_name=settings.profile.name,
-        version=_serialize_policy_version(settings.version),
+        version=_serialize_policy_version(
+            settings.version,
+            constraints_override=settings.constraints,
+            weights_override=settings.weights,
+        ),
     )
 
 
@@ -176,8 +200,6 @@ def create_version(
         weights = dict(payload.weights)
         if payload.optimization_objective is not None:
             constraints["optimization_objective"] = payload.optimization_objective
-        if payload.combined_revenue_weight is not None:
-            weights["combined_revenue_weight"] = payload.combined_revenue_weight
         version = create_policy_version(
             db,
             hotel_id=context.hotel_id,
@@ -364,6 +386,7 @@ def get_run(
 @router.post("/runs/{run_id}/accept", response_model=AllocationRunDetailRead)
 def accept_run(
     run_id: int,
+    payload: AllocationRunAcceptRequest | None = None,
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
@@ -373,6 +396,9 @@ def accept_run(
             hotel_id=context.hotel_id,
             run_id=run_id,
             user_id=context.user_id,
+            explicitly_approved_locked_reservation_ids=set(
+                payload.explicitly_approved_locked_reservation_ids if payload else []
+            ),
         )
         db.commit()
         return _serialize_run_details(details)

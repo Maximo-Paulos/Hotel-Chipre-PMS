@@ -1,6 +1,5 @@
 import json
-from dataclasses import replace
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 
 import pytest
 from sqlalchemy import event as sqlalchemy_event
@@ -17,12 +16,12 @@ from app.models.allocation import (
 from app.models.commercial import FxPolicy
 from app.models.company import Company
 from app.models.domain_event_outbox import DomainEventOutbox
-from app.models.fx_rate_snapshot import FxRateSnapshot
 from app.models.guest import DocumentTypeEnum, Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.operations import RoomMoveEvent, RoomMovementGroup
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
+from app.models.user import User
 from app.services.allocation_engine import (
     AllocationResult,
     ReservationSlot,
@@ -49,17 +48,96 @@ def _slot(reservation_id: int, *, mobility: bool = False, room_id: int | None = 
     )
 
 
-def test_mobility_restriction_prefers_lowest_compatible_floor():
+def test_mobility_restriction_prefers_lower_floor_only_if_hotel_has_no_elevator():
     rooms = [
-        RoomSlot(room_id=1, room_number="001", category_id=1, floor=0, score=1, is_accessible=True),
+        RoomSlot(room_id=1, room_number="001", category_id=1, floor=0, score=10, is_accessible=True),
         RoomSlot(room_id=2, room_number="201", category_id=1, floor=2, score=10, is_accessible=True),
         RoomSlot(room_id=3, room_number="101", category_id=1, floor=1, score=10, is_accessible=False),
     ]
 
-    result = run_allocation([_slot(1, mobility=True)], rooms)
+    result = run_allocation(
+        [_slot(1, mobility=True)],
+        rooms,
+        policy_constraints={"hotel_has_elevator": False},
+    )
 
     assert result.success is True
     assert result.assignments[1] == 1
+
+
+@pytest.mark.parametrize("has_elevator", [None, True])
+def test_unknown_or_present_elevator_does_not_apply_floor_preference(has_elevator):
+    rooms = [
+        RoomSlot(room_id=1, room_number="001", category_id=1, floor=0, score=1, is_accessible=True),
+        RoomSlot(room_id=2, room_number="201", category_id=1, floor=2, score=10, is_accessible=True),
+    ]
+
+    result = run_allocation(
+        [_slot(1, mobility=True)],
+        rooms,
+        policy_constraints={"hotel_has_elevator": has_elevator},
+    )
+
+    assert result.success is True
+    assert result.assignments[1] == 2
+
+
+def test_company_room_preferences_break_an_existing_solver_tie():
+    reservation = ReservationSlot(
+        reservation_id=12,
+        category_id=1,
+        check_in=date(2026, 7, 1),
+        check_out=date(2026, 7, 4),
+        current_room_id=None,
+        is_locked=False,
+        company_id=7,
+        channel_code="company",
+        source="direct",
+    )
+    rooms = [
+        RoomSlot(room_id=1, room_number="101", category_id=1, score=5),
+        RoomSlot(
+            room_id=2,
+            room_number="102",
+            category_id=1,
+            score=5,
+            allocation_priority_channel_groups=["company"],
+            allocation_priority_company_ids=[7],
+        ),
+    ]
+
+    result = run_allocation([reservation], rooms)
+
+    assert result.success is True
+    assert result.assignments[12] == 2
+
+
+def test_despegar_reservations_match_ota_room_preferences():
+    reservation = ReservationSlot(
+        reservation_id=13,
+        category_id=1,
+        check_in=date(2026, 7, 1),
+        check_out=date(2026, 7, 4),
+        current_room_id=None,
+        is_locked=False,
+        channel_code="despegar",
+        source="other_ota",
+    )
+    rooms = [
+        RoomSlot(room_id=1, room_number="101", category_id=1, score=5),
+        RoomSlot(
+            room_id=2,
+            room_number="102",
+            category_id=1,
+            score=5,
+            allocation_priority_channel_groups=["ota"],
+        ),
+    ]
+
+    result = run_allocation([reservation], rooms)
+
+    assert result.success is True
+    assert result.assignments[13] == 2
 
 
 def test_score_only_breaks_equivalent_room_tie():
@@ -74,103 +152,16 @@ def test_score_only_breaks_equivalent_room_tie():
     assert result.assignments[1] == 2
 
 
-def test_net_revenue_objective_prioritizes_after_discount_commission_value():
-    reservations = [
-        ReservationSlot(
-            reservation_id=11,
-            category_id=1,
-            check_in=date(2026, 7, 1),
-            check_out=date(2026, 7, 5),
-            current_room_id=None,
-            is_locked=False,
-            net_revenue_minor_units=10_000,
-            currency_code="ARS",
-        ),
-        ReservationSlot(
-            reservation_id=12,
-            category_id=1,
-            check_in=date(2026, 7, 1),
-            check_out=date(2026, 7, 5),
-            current_room_id=None,
-            is_locked=False,
-            net_revenue_minor_units=30_000,
-            currency_code="ARS",
-        ),
-    ]
-    room = RoomSlot(room_id=101, room_number="101", category_id=1)
-
+@pytest.mark.parametrize("objective", ["net_revenue", "combined"])
+def test_room_assignment_rejects_pricing_objectives(objective):
     result = run_allocation(
-        reservations,
-        [room],
-        policy_constraints={"optimization_objective": "net_revenue"},
-    )
-
-    assert result.assignments == {12: 101}
-    assert result.unassigned_reservations == [11]
-
-
-def test_net_revenue_objective_fails_closed_before_int64_overflow():
-    oversized = replace(_slot(19), net_revenue_minor_units=2**63)
-
-    result = run_allocation(
-        [oversized],
+        [_slot(19)],
         [RoomSlot(room_id=101, room_number="101", category_id=1)],
-        policy_constraints={"optimization_objective": "net_revenue"},
+        policy_constraints={"optimization_objective": objective},
     )
 
     assert result.success is False
-    assert "safe integer range" in result.error
-
-
-def test_combined_objective_uses_configured_weight_and_net_revenue_rejects_mixed_currencies():
-    reservations = [
-        ReservationSlot(
-            reservation_id=21,
-            category_id=1,
-            check_in=date(2026, 7, 1),
-            check_out=date(2026, 7, 5),
-            current_room_id=None,
-            is_locked=False,
-            net_revenue_minor_units=10_000,
-            currency_code="ARS",
-        ),
-        ReservationSlot(
-            reservation_id=22,
-            category_id=1,
-            check_in=date(2026, 7, 1),
-            check_out=date(2026, 7, 3),
-            current_room_id=None,
-            is_locked=False,
-            net_revenue_minor_units=30_000,
-            currency_code="ARS",
-        ),
-    ]
-    room = RoomSlot(room_id=101, room_number="101", category_id=1)
-
-    occupancy_weighted = run_allocation(
-        reservations,
-        [room],
-        policy_constraints={"optimization_objective": "combined"},
-        policy_weights={"combined_revenue_weight": 0.2},
-    )
-    revenue_weighted = run_allocation(
-        reservations,
-        [room],
-        policy_constraints={"optimization_objective": "combined"},
-        policy_weights={"combined_revenue_weight": 0.8},
-    )
-    mixed_currency = run_allocation(
-        [reservations[0], replace(reservations[1], reservation_id=23, currency_code="USD")],
-        [room],
-        policy_constraints={"optimization_objective": "net_revenue"},
-    )
-
-    assert occupancy_weighted.assignments == {21: 101}
-    assert revenue_weighted.assignments == {22: 101}
-    assert occupancy_weighted.primary_status == "OPTIMAL"
-    assert revenue_weighted.primary_status == "OPTIMAL"
-    assert mixed_currency.success is False
-    assert "Mixed-currency" in mixed_currency.error
+    assert "only supports occupied nights" in result.error
 
 
 def test_configured_primary_objective_cannot_be_overridden_by_room_preferences():
@@ -181,8 +172,6 @@ def test_configured_primary_objective_cannot_be_overridden_by_room_preferences()
         check_out=date(2026, 7, 3),
         current_room_id=None,
         is_locked=False,
-        net_revenue_minor_units=10_000_000,
-        currency_code="ARS",
         allowed_category_ids=[2],
     )
     longer_fallback = ReservationSlot(
@@ -192,8 +181,6 @@ def test_configured_primary_objective_cannot_be_overridden_by_room_preferences()
         check_out=date(2026, 7, 4),
         current_room_id=None,
         is_locked=False,
-        net_revenue_minor_units=10_000_001,
-        currency_code="ARS",
         allowed_category_ids=[2],
         category_priority_by_id={2: 10},
     )
@@ -202,11 +189,11 @@ def test_configured_primary_objective_cannot_be_overridden_by_room_preferences()
     result = run_allocation(
         [short_exact, longer_fallback],
         [room],
-        policy_constraints={"optimization_objective": "net_revenue"},
+        policy_constraints={"optimization_objective": "occupied_nights"},
     )
 
     assert result.assignments == {32: 101}
-    assert result.objective_value == 10_000_001
+    assert result.objective_value == 3
     assert result.primary_status == "OPTIMAL"
 
 
@@ -302,7 +289,7 @@ def test_paid_reservation_with_room_is_still_eligible_for_reassignment(db):
     assert set(result.assignments.values()) == {rooms[0].id, rooms[1].id}
 
 
-def test_solver_loads_net_revenue_before_tax_after_commission(db):
+def test_allocation_slots_exclude_pricing_data(db):
     hotel, category, rooms, guests = _seed_hotel_rooms_guests(db, room_count=1)
     reservation = _reservation(
         db,
@@ -310,7 +297,7 @@ def test_solver_loads_net_revenue_before_tax_after_commission(db):
         guests[0].id,
         category.id,
         rooms[0].id,
-        "NET-SNAPSHOT",
+        "NO-PRICING-SNAPSHOT",
     )
     reservation.total_amount = 110
     reservation.subtotal_amount = 100
@@ -325,82 +312,9 @@ def test_solver_loads_net_revenue_before_tax_after_commission(db):
         end_date=date(2026, 7, 5),
     )
 
-    assert slots[0].net_revenue_minor_units == 9_275
-    assert slots[0].currency_code == "ARS"
-
-
-def test_mixed_currency_revenue_uses_fresh_hotel_fx_snapshot_only(db):
-    hotel, category, rooms, guests = _seed_hotel_rooms_guests(db, room_count=1)
-    ars_reservation = _reservation(
-        db,
-        hotel.id,
-        guests[0].id,
-        category.id,
-        rooms[0].id,
-        "ARS-REVENUE",
-    )
-    usd_reservation = _reservation(
-        db,
-        hotel.id,
-        guests[1].id,
-        category.id,
-        rooms[0].id,
-        "USD-REVENUE",
-    )
-    ars_reservation.total_amount = 10_000
-    ars_reservation.subtotal_amount = 10_000
-    usd_reservation.total_amount = 100
-    usd_reservation.subtotal_amount = 100
-    usd_reservation.currency_code = "USD"
-    db.flush()
-
-    slots, _rooms = build_slots_from_db(
-        db,
-        hotel_id=hotel.id,
-        start_date=date(2026, 7, 1),
-        end_date=date(2026, 7, 5),
-        policy_constraints={"optimization_objective": "net_revenue"},
-    )
-    assert {slot.currency_code for slot in slots} == {"ARS", "USD"}
-    missing_quote = run_allocation(
-        slots,
-        [RoomSlot(room_id=101, room_number="101", category_id=category.id)],
-        policy_constraints={"optimization_objective": "net_revenue"},
-    )
-    assert missing_quote.success is False
-    assert "fresh hotel-scoped FX snapshot" in missing_quote.error
-
-    now = datetime.now(timezone.utc)
-    snapshot = FxRateSnapshot(
-        hotel_id=hotel.id,
-        rate_type="oficial",
-        provider_market="oficial",
-        moneda="USD",
-        compra=1_000,
-        venta=1_100,
-        fetched_at=now,
-        provider_updated_at=now,
-        selected_side="venta",
-        base_currency="ARS",
-        quote_currency="USD",
-        applied_rate=1_100,
-        source="synthetic-test",
-    )
-    db.add(snapshot)
-    db.flush()
-
-    normalized_slots, _rooms = build_slots_from_db(
-        db,
-        hotel_id=hotel.id,
-        start_date=date(2026, 7, 1),
-        end_date=date(2026, 7, 5),
-        policy_constraints={"optimization_objective": "net_revenue"},
-    )
-    by_source_currency = {slot.source_currency_code: slot for slot in normalized_slots}
-    assert {slot.currency_code for slot in normalized_slots} == {"ARS"}
-    assert by_source_currency["ARS"].net_revenue_minor_units == 1_000_000
-    assert by_source_currency["USD"].net_revenue_minor_units == 11_000_000
-    assert by_source_currency["USD"].fx_conversion_details["snapshot_ids"] == [snapshot.id]
+    assert slots[0].nights == 3
+    assert not hasattr(slots[0], "net_revenue_minor_units")
+    assert not hasattr(slots[0], "currency_code")
 
 
 def test_allocation_run_creates_movement_group_and_events(db):
@@ -453,7 +367,7 @@ def test_allocation_run_creates_movement_group_and_events(db):
     ("field", "value"),
     [
         ("check_out_date", date(2026, 7, 5)),
-        ("commission_amount", 1),
+        ("mobility_restriction", True),
     ],
 )
 def test_stale_allocation_proposal_cannot_move_reservation_after_source_change(db, field, value):
@@ -501,8 +415,8 @@ def test_stale_allocation_proposal_cannot_move_reservation_after_source_change(d
         horizon_end=date(2026, 7, 6),
     )
     original_room_id = mover.room_id
-    # The fingerprint covers assignment fields and financial inputs because
-    # the solver can rank reservations using net revenue.
+    # Stale proposals are invalidated when an assignment-relevant input changes.
+    # Pricing fields are deliberately excluded from the occupancy optimizer.
     setattr(mover, field, value)
     db.flush()
 
@@ -719,7 +633,7 @@ def test_allocation_run_exposes_solver_proof_status_without_overclaiming(
         ("spread_pct", 2.5),
     ],
 )
-def test_allocation_proposal_is_rejected_after_fx_configuration_changes(db, field, value):
+def test_allocation_proposal_is_not_blocked_by_pricing_configuration_changes(db, field, value):
     hotel, mover, result = _create_pending_reallocation_proposal(db)
     original_room_id = mover.room_id
     if field == "spread_pct":
@@ -736,11 +650,10 @@ def test_allocation_proposal_is_rejected_after_fx_configuration_changes(db, fiel
         setattr(hotel, field, value)
     db.flush()
 
-    with pytest.raises(AllocationRuntimeError, match="FX configuration changed"):
-        accept_allocation_run(db, hotel_id=hotel.id, run_id=result.run.id, user_id=None)
+    accept_allocation_run(db, hotel_id=hotel.id, run_id=result.run.id, user_id=None)
 
     db.refresh(mover)
-    assert mover.room_id == original_room_id
+    assert mover.room_id != original_room_id
 
 
 def test_allocation_proposal_is_rejected_when_policy_version_is_no_longer_active(db):
@@ -772,39 +685,9 @@ def test_allocation_proposal_is_rejected_when_policy_version_is_no_longer_active
     assert mover.room_id == original_room_id
 
 
-@pytest.mark.parametrize("snapshot_state", ["stale", "missing", "other_hotel"])
-def test_allocation_proposal_requires_fresh_hotel_scoped_fx_snapshot(db, snapshot_state):
+def test_allocation_proposal_ignores_legacy_fx_metadata(db):
     hotel, mover, result = _create_pending_reallocation_proposal(db)
     original_room_id = mover.room_id
-    other_hotel_id = None
-    if snapshot_state == "other_hotel":
-        other_hotel_id = 999
-        db.add(HotelConfiguration(id=other_hotel_id, subscription_active=True))
-        db.flush()
-
-    snapshot = None
-    snapshot_id = 999999
-    if snapshot_state != "missing":
-        age = timedelta(hours=25) if snapshot_state == "stale" else timedelta(minutes=5)
-        now = datetime.now(timezone.utc)
-        snapshot = FxRateSnapshot(
-            hotel_id=other_hotel_id or hotel.id,
-            rate_type="oficial",
-            provider_market="oficial",
-            moneda="USD",
-            compra=1000,
-            venta=1100,
-            fetched_at=now - age,
-            provider_updated_at=now - age,
-            selected_side="venta",
-            base_currency="ARS",
-            quote_currency="USD",
-            applied_rate=1100,
-            source="synthetic-test",
-        )
-        db.add(snapshot)
-        db.flush()
-        snapshot_id = snapshot.id
 
     assignment_explanation = (
         db.query(AllocationExplanation)
@@ -820,21 +703,90 @@ def test_allocation_proposal_requires_fresh_hotel_scoped_fx_snapshot(db, snapsho
     explanation_details["allocation_fx_conversion"] = {
         "source_currency": "USD",
         "allocation_currency": "ARS",
-        "snapshot_ids": [snapshot_id],
+        "snapshot_ids": [999999],
     }
     assignment_explanation.details_json = json.dumps(explanation_details)
     db.flush()
 
-    expected_reason = {
-        "stale": "older than 24 hours",
-        "missing": "missing or belongs to another hotel",
-        "other_hotel": "missing or belongs to another hotel",
-    }[snapshot_state]
-    with pytest.raises(AllocationRuntimeError, match=expected_reason):
-        accept_allocation_run(db, hotel_id=hotel.id, run_id=result.run.id, user_id=None)
+    accept_allocation_run(db, hotel_id=hotel.id, run_id=result.run.id, user_id=None)
 
     db.refresh(mover)
-    assert mover.room_id == original_room_id
+    assert mover.room_id != original_room_id
+
+
+def test_locked_move_needs_one_time_approval_and_keeps_the_lock(db):
+    hotel, category, rooms, guests = _seed_hotel_rooms_guests(db, room_count=2)
+    db.add(
+        User(
+            id=9901,
+            email="allocation-approver@example.test",
+            password_hash="synthetic-only",
+        )
+    )
+    first = _reservation(
+        db, hotel.id, guests[0].id, category.id, rooms[0].id, "LOCKED-FIRST",
+        date(2026, 7, 1), date(2026, 7, 3), allocation_locked=True,
+    )
+    second = _reservation(
+        db, hotel.id, guests[1].id, category.id, rooms[0].id, "LOCKED-SECOND",
+        date(2026, 7, 4), date(2026, 7, 6), allocation_locked=True,
+    )
+    mover = _reservation(
+        db, hotel.id, guests[2].id, category.id, rooms[1].id, "LOCKED-MOVER",
+        date(2026, 7, 3), date(2026, 7, 4), allocation_locked=True,
+    )
+    db.flush()
+
+    result = run_persisted_allocation(
+        db,
+        hotel_id=hotel.id,
+        trigger_type="manual_api_recalculate",
+        apply=False,
+        horizon_start=date(2026, 7, 1),
+        horizon_end=date(2026, 7, 6),
+    )
+    explanations = (
+        db.query(AllocationExplanation)
+        .filter(
+            AllocationExplanation.hotel_id == hotel.id,
+            AllocationExplanation.allocation_run_id == result.run.id,
+            AllocationExplanation.explanation_type == "assignment",
+        )
+        .all()
+    )
+    required_approvals = {
+        explanation.reservation_id
+        for explanation in explanations
+        if json.loads(explanation.details_json)
+        .get("room_assignment_signal", {})
+        .get("requires_explicit_approval") is True
+    }
+    assert mover.id in required_approvals
+
+    original_rooms = {first.id: first.room_id, second.id: second.room_id, mover.id: mover.room_id}
+    accept_allocation_run(
+        db,
+        hotel_id=hotel.id,
+        run_id=result.run.id,
+        user_id=9901,
+        explicitly_approved_locked_reservation_ids={mover.id},
+    )
+
+    for reservation in (first, second, mover):
+        db.refresh(reservation)
+        assert reservation.allocation_locked is True
+    assert mover.room_id != original_rooms[mover.id]
+    assignments = {
+        assignment.reservation_id: assignment
+        for assignment in db.query(AllocationAssignment)
+        .filter(AllocationAssignment.allocation_run_id == result.run.id)
+        .all()
+    }
+    for reservation_id in required_approvals - {mover.id}:
+        assert assignments[reservation_id].status == AllocationAssignmentStatusEnum.MANUAL_REVIEW
+        reservation = next(item for item in (first, second) if item.id == reservation_id)
+        db.refresh(reservation)
+        assert reservation.room_id == original_rooms[reservation_id]
 
 
 def test_persisted_allocation_batches_reservation_entity_reads(db):

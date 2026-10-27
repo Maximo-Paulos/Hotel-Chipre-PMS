@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-25T23:42:51.941Z",
+  "generatedAt": "2026-10-27T17:04:14.030Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -6045,6 +6045,28 @@
       "warnings": []
     },
     {
+      "id": "flow:api_rooms_create_room",
+      "name": "create_room",
+      "entryPoint": "api_rooms_create_room",
+      "entryPointId": "api_rooms_create_room",
+      "path": [
+        "api_rooms_create_room",
+        "api_rooms_validate_room_allocation_preferences"
+      ],
+      "qualifiedPath": [
+        "api_rooms_create_room",
+        "api_rooms_validate_room_allocation_preferences"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/rooms.py"
+      ],
+      "criticality": 0.285,
+      "warnings": []
+    },
+    {
       "id": "flow:services_mfa_service_disable_user_mfa",
       "name": "disable_user_mfa",
       "entryPoint": "services_mfa_service_disable_user_mfa",
@@ -9093,6 +9115,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_rate_change_drafts_edit_draft",
+      "name": "edit_draft",
+      "entryPoint": "api_rate_change_drafts_edit_draft",
+      "entryPointId": "api_rate_change_drafts_edit_draft",
+      "path": [
+        "api_rate_change_drafts_edit_draft",
+        "api_rate_change_drafts_raise_draft_http",
+        "api_rate_change_drafts_safe_rollback"
+      ],
+      "qualifiedPath": [
+        "api_rate_change_drafts_edit_draft",
+        "api_rate_change_drafts_raise_draft_http",
+        "api_rate_change_drafts_safe_rollback"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/rate_change_drafts.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
       "id": "flow:services_invitation_service_issue_invitation",
       "name": "issue_invitation",
       "entryPoint": "services_invitation_service_issue_invitation",
@@ -9304,6 +9350,30 @@
       "fileCount": 1,
       "files": [
         "app/api/whatsapp_crm.py"
+      ],
+      "criticality": 0.2433,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_rooms_update_room",
+      "name": "update_room",
+      "entryPoint": "api_rooms_update_room",
+      "entryPointId": "api_rooms_update_room",
+      "path": [
+        "api_rooms_update_room",
+        "api_rooms_require_manager_room_lane",
+        "api_rooms_validate_room_allocation_preferences"
+      ],
+      "qualifiedPath": [
+        "api_rooms_update_room",
+        "api_rooms_require_manager_room_lane",
+        "api_rooms_validate_room_allocation_preferences"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/rooms.py"
       ],
       "criticality": 0.2433,
       "warnings": []
@@ -12757,6 +12827,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_rate_change_draft_service_edit_tariff_recommendation_draft",
+      "name": "edit_tariff_recommendation_draft",
+      "entryPoint": "services_rate_change_draft_service_edit_tariff_recommendation_draft",
+      "entryPointId": "services_rate_change_draft_service_edit_tariff_recommendation_draft",
+      "path": [
+        "services_rate_change_draft_service_edit_tariff_recommendation_draft",
+        "services_rate_change_draft_service_audit_payload",
+        "services_rate_change_draft_service_check_draft_version",
+        "services_rate_change_draft_service_draft_for_update",
+        "services_rate_change_draft_service_ratedrafterror",
+        "services_rate_change_draft_service_validate_changes",
+        "services_rate_change_draft_service_money"
+      ],
+      "qualifiedPath": [
+        "services_rate_change_draft_service_edit_tariff_recommendation_draft",
+        "services_rate_change_draft_service_audit_payload",
+        "services_rate_change_draft_service_check_draft_version",
+        "services_rate_change_draft_service_draft_for_update",
+        "services_rate_change_draft_service_ratedrafterror",
+        "services_rate_change_draft_service_validate_changes",
+        "services_rate_change_draft_service_money"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/rate_change_draft_service.py"
+      ],
+      "criticality": 0.2057,
+      "warnings": []
+    },
+    {
       "id": "flow:perf_benchmark_pg_main",
       "name": "main",
       "entryPoint": "perf_benchmark_pg_main",
@@ -13120,6 +13222,48 @@
         "app/services/reservation_service.py"
       ],
       "criticality": 0.2012,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_allocation_runtime_service_auto_apply_safe_allocation_run",
+      "name": "auto_apply_safe_allocation_run",
+      "entryPoint": "services_allocation_runtime_service_auto_apply_safe_allocation_run",
+      "entryPointId": "services_allocation_runtime_service_auto_apply_safe_allocation_run",
+      "path": [
+        "services_allocation_runtime_service_auto_apply_safe_allocation_run",
+        "services_allocation_runtime_service_accept_allocation_run",
+        "services_allocation_runtime_service_allocationruntimeerror",
+        "services_allocation_runtime_service_get_allocation_run_details",
+        "services_allocation_runtime_service_load_json_dict",
+        "services_allocation_runtime_service_active_policy_version_id_for_acceptance",
+        "services_allocation_runtime_service_allocation_fx_configuration_snapshot",
+        "services_allocation_runtime_service_reservation_state_fingerprint",
+        "services_allocation_runtime_service_reservation_state_payload",
+        "services_allocation_runtime_service_validate_allocation_fx_snapshots",
+        "services_allocation_runtime_service_allocationrundetails",
+        "services_allocation_runtime_service_normalized_decimal"
+      ],
+      "qualifiedPath": [
+        "services_allocation_runtime_service_auto_apply_safe_allocation_run",
+        "services_allocation_runtime_service_accept_allocation_run",
+        "services_allocation_runtime_service_allocationruntimeerror",
+        "services_allocation_runtime_service_get_allocation_run_details",
+        "services_allocation_runtime_service_load_json_dict",
+        "services_allocation_runtime_service_active_policy_version_id_for_acceptance",
+        "services_allocation_runtime_service_allocation_fx_configuration_snapshot",
+        "services_allocation_runtime_service_reservation_state_fingerprint",
+        "services_allocation_runtime_service_reservation_state_payload",
+        "services_allocation_runtime_service_validate_allocation_fx_snapshots",
+        "services_allocation_runtime_service_allocationrundetails",
+        "services_allocation_runtime_service_normalized_decimal"
+      ],
+      "depth": 3,
+      "nodeCount": 12,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_runtime_service.py"
+      ],
+      "criticality": 0.2008,
       "warnings": []
     },
     {
@@ -14263,46 +14407,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_allocation_runtime_service_accept_allocation_run",
-      "name": "accept_allocation_run",
-      "entryPoint": "services_allocation_runtime_service_accept_allocation_run",
-      "entryPointId": "services_allocation_runtime_service_accept_allocation_run",
-      "path": [
-        "services_allocation_runtime_service_accept_allocation_run",
-        "services_allocation_runtime_service_active_policy_version_id_for_acceptance",
-        "services_allocation_runtime_service_allocation_fx_configuration_snapshot",
-        "services_allocation_runtime_service_allocationruntimeerror",
-        "services_allocation_runtime_service_get_allocation_run_details",
-        "services_allocation_runtime_service_load_json_dict",
-        "services_allocation_runtime_service_reservation_state_fingerprint",
-        "services_allocation_runtime_service_reservation_state_payload",
-        "services_allocation_runtime_service_validate_allocation_fx_snapshots",
-        "services_allocation_runtime_service_normalized_decimal",
-        "services_allocation_runtime_service_allocationrundetails"
-      ],
-      "qualifiedPath": [
-        "services_allocation_runtime_service_accept_allocation_run",
-        "services_allocation_runtime_service_active_policy_version_id_for_acceptance",
-        "services_allocation_runtime_service_allocation_fx_configuration_snapshot",
-        "services_allocation_runtime_service_allocationruntimeerror",
-        "services_allocation_runtime_service_get_allocation_run_details",
-        "services_allocation_runtime_service_load_json_dict",
-        "services_allocation_runtime_service_reservation_state_fingerprint",
-        "services_allocation_runtime_service_reservation_state_payload",
-        "services_allocation_runtime_service_validate_allocation_fx_snapshots",
-        "services_allocation_runtime_service_normalized_decimal",
-        "services_allocation_runtime_service_allocationrundetails"
-      ],
-      "depth": 2,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/allocation_runtime_service.py"
-      ],
-      "criticality": 0.1927,
-      "warnings": []
-    },
-    {
       "id": "flow:services_notification_service_generate_due_daily_reports",
       "name": "generate_due_daily_reports",
       "entryPoint": "services_notification_service_generate_due_daily_reports",
@@ -14378,46 +14482,6 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_exports.py"
-      ],
-      "criticality": 0.1927,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_allocation_engine_run_allocation",
-      "name": "run_allocation",
-      "entryPoint": "services_allocation_engine_run_allocation",
-      "entryPointId": "services_allocation_engine_run_allocation",
-      "path": [
-        "services_allocation_engine_run_allocation",
-        "services_allocation_engine_allocationresult",
-        "services_allocation_engine_check_overlap",
-        "services_allocation_engine_lowest_available_compatible_floor",
-        "services_allocation_engine_overlapping_reservation_pairs",
-        "services_allocation_engine_reservationslot_category_priority",
-        "services_allocation_engine_run_allocation_greedy",
-        "services_allocation_engine_lowest_compatible_floor",
-        "services_allocation_engine_adjacency_bonus_for_room",
-        "services_allocation_engine_guest_room_signal_score",
-        "services_allocation_engine_one_night_gap_penalty_for_room"
-      ],
-      "qualifiedPath": [
-        "services_allocation_engine_run_allocation",
-        "services_allocation_engine_allocationresult",
-        "services_allocation_engine_check_overlap",
-        "services_allocation_engine_lowest_available_compatible_floor",
-        "services_allocation_engine_overlapping_reservation_pairs",
-        "services_allocation_engine_reservationslot_category_priority",
-        "services_allocation_engine_run_allocation_greedy",
-        "services_allocation_engine_lowest_compatible_floor",
-        "services_allocation_engine_adjacency_bonus_for_room",
-        "services_allocation_engine_guest_room_signal_score",
-        "services_allocation_engine_one_night_gap_penalty_for_room"
-      ],
-      "depth": 2,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/allocation_engine.py"
       ],
       "criticality": 0.1927,
       "warnings": []
@@ -15139,6 +15203,50 @@
       "warnings": []
     },
     {
+      "id": "flow:services_allocation_engine_run_allocation",
+      "name": "run_allocation",
+      "entryPoint": "services_allocation_engine_run_allocation",
+      "entryPointId": "services_allocation_engine_run_allocation",
+      "path": [
+        "services_allocation_engine_run_allocation",
+        "services_allocation_engine_allocation_source_preference_score",
+        "services_allocation_engine_allocationresult",
+        "services_allocation_engine_check_overlap",
+        "services_allocation_engine_lowest_available_compatible_floor",
+        "services_allocation_engine_overlapping_reservation_pairs",
+        "services_allocation_engine_reservationslot_category_priority",
+        "services_allocation_engine_run_allocation_greedy",
+        "services_allocation_engine_reservation_channel_group",
+        "services_allocation_engine_lowest_compatible_floor",
+        "services_allocation_engine_adjacency_bonus_for_room",
+        "services_allocation_engine_guest_room_signal_score",
+        "services_allocation_engine_one_night_gap_penalty_for_room"
+      ],
+      "qualifiedPath": [
+        "services_allocation_engine_run_allocation",
+        "services_allocation_engine_allocation_source_preference_score",
+        "services_allocation_engine_allocationresult",
+        "services_allocation_engine_check_overlap",
+        "services_allocation_engine_lowest_available_compatible_floor",
+        "services_allocation_engine_overlapping_reservation_pairs",
+        "services_allocation_engine_reservationslot_category_priority",
+        "services_allocation_engine_run_allocation_greedy",
+        "services_allocation_engine_reservation_channel_group",
+        "services_allocation_engine_lowest_compatible_floor",
+        "services_allocation_engine_adjacency_bonus_for_room",
+        "services_allocation_engine_guest_room_signal_score",
+        "services_allocation_engine_one_night_gap_penalty_for_room"
+      ],
+      "depth": 2,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_engine.py"
+      ],
+      "criticality": 0.1892,
+      "warnings": []
+    },
+    {
       "id": "flow:agent_ops_qa_evidence_attestation_verify_attestation",
       "name": "verify_attestation",
       "entryPoint": "agent_ops_qa_evidence_attestation_verify_attestation",
@@ -15681,6 +15789,7 @@
         "services_rate_change_draft_service_money",
         "services_rate_change_draft_service_ratedrafterror",
         "services_rate_change_draft_service_daily_rate_scope_snapshot",
+        "services_rate_change_draft_service_normalize_period_snapshots",
         "services_rate_change_draft_service_period_snapshot_rows",
         "services_rate_change_draft_service_period_values"
       ],
@@ -15696,11 +15805,12 @@
         "services_rate_change_draft_service_money",
         "services_rate_change_draft_service_ratedrafterror",
         "services_rate_change_draft_service_daily_rate_scope_snapshot",
+        "services_rate_change_draft_service_normalize_period_snapshots",
         "services_rate_change_draft_service_period_snapshot_rows",
         "services_rate_change_draft_service_period_values"
       ],
       "depth": 3,
-      "nodeCount": 13,
+      "nodeCount": 14,
       "fileCount": 1,
       "files": [
         "app/services/rate_change_draft_service.py"
@@ -15808,6 +15918,56 @@
       "fileCount": 1,
       "files": [
         "app/services/subscription_service.py"
+      ],
+      "criticality": 0.18,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_tariff_recommendation_service_generate_daily_rate_recommendations",
+      "name": "generate_daily_rate_recommendations",
+      "entryPoint": "services_tariff_recommendation_service_generate_daily_rate_recommendations",
+      "entryPointId": "services_tariff_recommendation_service_generate_daily_rate_recommendations",
+      "path": [
+        "services_tariff_recommendation_service_generate_daily_rate_recommendations",
+        "services_tariff_recommendation_service_generate_category_rate_recommendations",
+        "services_tariff_recommendation_service_current_occupancy_and_pickup",
+        "services_tariff_recommendation_service_current_rate_in_usd",
+        "services_tariff_recommendation_service_decimal",
+        "services_tariff_recommendation_service_effective_rate_adjustment_pct",
+        "services_tariff_recommendation_service_high_demand_event_for_date",
+        "services_tariff_recommendation_service_historical_pickup_average",
+        "services_tariff_recommendation_service_historical_pickups_by_date",
+        "services_tariff_recommendation_service_latest_comparable_rates",
+        "services_tariff_recommendation_service_recommend_rate_direction",
+        "services_tariff_recommendation_service_season_period_for_date",
+        "services_tariff_recommendation_service_suggest_rate_amount",
+        "services_tariff_recommendation_service_utc",
+        "services_tariff_recommendation_service_consecutive_date_runs",
+        "services_tariff_recommendation_service_naive_utc"
+      ],
+      "qualifiedPath": [
+        "services_tariff_recommendation_service_generate_daily_rate_recommendations",
+        "services_tariff_recommendation_service_generate_category_rate_recommendations",
+        "services_tariff_recommendation_service_current_occupancy_and_pickup",
+        "services_tariff_recommendation_service_current_rate_in_usd",
+        "services_tariff_recommendation_service_decimal",
+        "services_tariff_recommendation_service_effective_rate_adjustment_pct",
+        "services_tariff_recommendation_service_high_demand_event_for_date",
+        "services_tariff_recommendation_service_historical_pickup_average",
+        "services_tariff_recommendation_service_historical_pickups_by_date",
+        "services_tariff_recommendation_service_latest_comparable_rates",
+        "services_tariff_recommendation_service_recommend_rate_direction",
+        "services_tariff_recommendation_service_season_period_for_date",
+        "services_tariff_recommendation_service_suggest_rate_amount",
+        "services_tariff_recommendation_service_utc",
+        "services_tariff_recommendation_service_consecutive_date_runs",
+        "services_tariff_recommendation_service_naive_utc"
+      ],
+      "depth": 3,
+      "nodeCount": 16,
+      "fileCount": 1,
+      "files": [
+        "app/services/tariff_recommendation_service.py"
       ],
       "criticality": 0.18,
       "warnings": []
@@ -19993,6 +20153,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_tariff_recommendations_read_settings",
+      "name": "read_settings",
+      "entryPoint": "api_tariff_recommendations_read_settings",
+      "entryPointId": "api_tariff_recommendations_read_settings",
+      "path": [
+        "api_tariff_recommendations_read_settings",
+        "api_tariff_recommendations_settings_out",
+        "api_tariff_recommendations_tariffrecommendationsettingsout"
+      ],
+      "qualifiedPath": [
+        "api_tariff_recommendations_read_settings",
+        "api_tariff_recommendations_settings_out",
+        "api_tariff_recommendations_tariffrecommendationsettingsout"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/tariff_recommendations.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_reservation_operations_service_rebook_ota_reservation_as_direct",
       "name": "rebook_ota_reservation_as_direct",
       "entryPoint": "services_reservation_operations_service_rebook_ota_reservation_as_direct",
@@ -21442,6 +21626,30 @@
       "fileCount": 1,
       "files": [
         "app/services/commercial_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_tariff_recommendations_update_settings",
+      "name": "update_settings",
+      "entryPoint": "api_tariff_recommendations_update_settings",
+      "entryPointId": "api_tariff_recommendations_update_settings",
+      "path": [
+        "api_tariff_recommendations_update_settings",
+        "api_tariff_recommendations_settings_out",
+        "api_tariff_recommendations_tariffrecommendationsettingsout"
+      ],
+      "qualifiedPath": [
+        "api_tariff_recommendations_update_settings",
+        "api_tariff_recommendations_settings_out",
+        "api_tariff_recommendations_tariffrecommendationsettingsout"
+      ],
+      "depth": 2,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/api/tariff_recommendations.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -26481,6 +26689,28 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20261027_tariff_history_and_policy_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20261027_tariff_history_and_policy_downgrade",
+      "entryPointId": "versions_20261027_tariff_history_and_policy_downgrade",
+      "path": [
+        "versions_20261027_tariff_history_and_policy_downgrade",
+        "versions_20261027_tariff_history_and_policy_remove_history_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261027_tariff_history_and_policy_downgrade",
+        "versions_20261027_tariff_history_and_policy_remove_history_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261027_tariff_history_and_policy.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:versions_3bc5882f756d_add_role_visibility_windows_downgrade",
       "name": "downgrade",
       "entryPoint": "versions_3bc5882f756d_add_role_visibility_windows_downgrade",
@@ -27128,6 +27358,28 @@
       "fileCount": 1,
       "files": [
         "app/services/payment_receipt_pdf.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_tariff_recommendations_generate_recommendation",
+      "name": "generate_recommendation",
+      "entryPoint": "api_tariff_recommendations_generate_recommendation",
+      "entryPointId": "api_tariff_recommendations_generate_recommendation",
+      "path": [
+        "api_tariff_recommendations_generate_recommendation",
+        "api_tariff_recommendations_tariffrecommendationrunout"
+      ],
+      "qualifiedPath": [
+        "api_tariff_recommendations_generate_recommendation",
+        "api_tariff_recommendations_tariffrecommendationrunout"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "app/api/tariff_recommendations.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -29923,6 +30175,36 @@
       "warnings": []
     },
     {
+      "id": "flow:services_published_rate_history_service_record_published_rate_history",
+      "name": "record_published_rate_history",
+      "entryPoint": "services_published_rate_history_service_record_published_rate_history",
+      "entryPointId": "services_published_rate_history_service_record_published_rate_history",
+      "path": [
+        "services_published_rate_history_service_record_published_rate_history",
+        "services_published_rate_history_service_comparable_season_key",
+        "services_published_rate_history_service_decimal",
+        "services_published_rate_history_service_get_fresh_ars_per_usd_snapshot",
+        "services_published_rate_history_service_published_base_rates",
+        "services_published_rate_history_service_utc"
+      ],
+      "qualifiedPath": [
+        "services_published_rate_history_service_record_published_rate_history",
+        "services_published_rate_history_service_comparable_season_key",
+        "services_published_rate_history_service_decimal",
+        "services_published_rate_history_service_get_fresh_ars_per_usd_snapshot",
+        "services_published_rate_history_service_published_base_rates",
+        "services_published_rate_history_service_utc"
+      ],
+      "depth": 1,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/published_rate_history_service.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:services_guest_restriction_service_record_restriction_override",
       "name": "record_restriction_override",
       "entryPoint": "services_guest_restriction_service_record_restriction_override",
@@ -31867,28 +32149,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_rooms_update_room",
-      "name": "update_room",
-      "entryPoint": "api_rooms_update_room",
-      "entryPointId": "api_rooms_update_room",
-      "path": [
-        "api_rooms_update_room",
-        "api_rooms_require_manager_room_lane"
-      ],
-      "qualifiedPath": [
-        "api_rooms_update_room",
-        "api_rooms_require_manager_room_lane"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "app/api/rooms.py"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
       "id": "flow:api_rooms_update_room_category",
       "name": "update_room_category",
       "entryPoint": "api_rooms_update_room_category",
@@ -32874,6 +33134,28 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20261025_reservation_cancellation_review.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20261027_tariff_history_and_policy_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20261027_tariff_history_and_policy_upgrade",
+      "entryPointId": "versions_20261027_tariff_history_and_policy_upgrade",
+      "path": [
+        "versions_20261027_tariff_history_and_policy_upgrade",
+        "versions_20261027_tariff_history_and_policy_install_history_rls"
+      ],
+      "qualifiedPath": [
+        "versions_20261027_tariff_history_and_policy_upgrade",
+        "versions_20261027_tariff_history_and_policy_install_history_rls"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261027_tariff_history_and_policy.py"
       ],
       "criticality": 0.16,
       "warnings": []

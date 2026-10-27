@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -9,8 +9,7 @@ from pydantic import BaseModel, Field
 class AllocationPolicyVersionCreate(BaseModel):
     constraints: dict[str, Any] = Field(default_factory=dict)
     weights: dict[str, float] = Field(default_factory=dict)
-    optimization_objective: Literal["occupied_nights", "net_revenue", "combined"] | None = None
-    combined_revenue_weight: float | None = Field(default=None, ge=0, le=1)
+    optimization_objective: Literal["occupied_nights"] | None = None
     prompt_summary: Optional[str] = None
     source: str = Field(default="manual", min_length=1, max_length=30)
     publish: bool = False
@@ -121,6 +120,13 @@ class AllocationRunDetailRead(BaseModel):
     assignments: list["AllocationAssignmentRead"] = Field(default_factory=list)
 
 
+class AllocationRunAcceptRequest(BaseModel):
+    explicitly_approved_locked_reservation_ids: list[Annotated[int, Field(gt=0)]] = Field(
+        default_factory=list,
+        max_length=500,
+    )
+
+
 class AllocationAssignmentRead(BaseModel):
     id: int
     reservation_id: int
@@ -128,6 +134,7 @@ class AllocationAssignmentRead(BaseModel):
     room_id: Optional[int] = None
     status: str
     explanation_summary: Optional[str] = None
+    requires_explicit_approval: bool = False
 
 
 class ReservationReassignmentLockRequest(BaseModel):

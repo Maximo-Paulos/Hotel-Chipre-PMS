@@ -3,6 +3,7 @@ import { apiFetch, type SessionLike } from "./client";
 export type RoomStatus = "available" | "occupied" | "maintenance" | "blocked" | "cleaning";
 export type HousekeepingStatus = "dirty" | "in_progress" | "clean" | "inspected";
 export type RoomBlockReason = "maintenance" | "deep_cleaning" | "owner_use" | "vip_hold" | "overbooking_buffer" | "other";
+export type AllocationPriorityChannelGroup = "direct" | "ota" | "company";
 export const HOUSEKEEPING_CHECKLIST_ITEM_CODES = [
   "change_sheets",
   "clean_bathroom",
@@ -68,6 +69,8 @@ export type Room = {
   status: RoomStatus;
   housekeeping_status: HousekeepingStatus;
   is_active: boolean;
+  allocation_priority_channel_groups: AllocationPriorityChannelGroup[];
+  allocation_priority_company_ids: number[];
   notes?: string | null;
   category?: RoomCategory | null;
 };
@@ -119,13 +122,31 @@ export const updateRoomCategory = (
 ) => apiFetch<RoomCategory>(`/api/rooms/categories/${categoryId}`, { method: "PATCH", data: category, session });
 
 export const createRoom = (
-  room: { room_number: string; floor: number; category_id: number; status?: RoomStatus; is_active?: boolean; notes?: string },
+  room: {
+    room_number: string;
+    floor: number;
+    category_id: number;
+    status?: RoomStatus;
+    is_active?: boolean;
+    notes?: string;
+    allocation_priority_channel_groups?: AllocationPriorityChannelGroup[];
+    allocation_priority_company_ids?: number[];
+  },
   session?: SessionLike
 ) => apiFetch<Room>("/api/rooms/", { method: "POST", data: room, session });
 
 export const updateRoom = (
   roomId: number,
-  room: Partial<{ room_number: string; floor: number; category_id: number; status: RoomStatus; is_active: boolean; notes: string }>,
+  room: Partial<{
+    room_number: string;
+    floor: number;
+    category_id: number;
+    status: RoomStatus;
+    is_active: boolean;
+    notes: string;
+    allocation_priority_channel_groups: AllocationPriorityChannelGroup[];
+    allocation_priority_company_ids: number[];
+  }>,
   session?: SessionLike
 ) => apiFetch<Room>(`/api/rooms/${roomId}`, { method: "PATCH", data: room, session });
 

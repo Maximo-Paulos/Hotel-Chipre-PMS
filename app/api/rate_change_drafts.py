@@ -11,20 +11,23 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies.auth import AuthContext, require_permission
-from app.models.daily_rate import DailyRate
-from app.services.permission_service import PERMISSION_RATES_READ, PERMISSION_RATES_UPDATE
-from app.services.read_model_cache import invalidate_hotel_operational_caches
+from app.services.permission_service import (
+    PERMISSION_RATES_READ,
+    PERMISSION_RATES_UPDATE,
+)
 from app.services.rate_change_draft_service import (
     MAX_DRAFT_DATES,
     RateDraftError,
     cancel_rate_change_draft,
     confirm_rate_change_draft,
-    create_rate_change_draft,
     create_price_period_draft,
+    create_rate_change_draft,
+    edit_tariff_recommendation_draft,
     get_rate_change_draft,
     list_rate_change_drafts,
     serialize_draft,
 )
+from app.services.read_model_cache import invalidate_hotel_operational_caches
 from app.services.timeseries_projection import project_daily_rate_change
 
 logger = logging.getLogger(__name__)
@@ -45,6 +48,11 @@ class RateChangeDraftIn(BaseModel):
 
 class RateChangeDecisionIn(BaseModel):
     expected_version: int = Field(..., ge=1)
+
+
+class RateChangeDraftEditIn(BaseModel):
+    expected_version: int = Field(..., ge=1)
+    changes: list[RateChangeItemIn] = Field(..., min_length=1, max_length=MAX_DRAFT_DATES)
 
 
 class RateChangeDraftOut(BaseModel):
@@ -147,6 +155,33 @@ def get_draft(
         return serialize_draft(db, draft)
     except RateDraftError as exc:
         _raise_draft_http(exc)
+
+
+@router.patch("/{draft_id}", response_model=RateChangeDraftOut)
+def edit_draft(
+    draft_id: int,
+    payload: RateChangeDraftEditIn,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_RATES_UPDATE)),
+):
+    try:
+        draft = edit_tariff_recommendation_draft(
+            db,
+            hotel_id=context.hotel_id,
+            draft_id=draft_id,
+            expected_version=payload.expected_version,
+            user_id=context.user_id,
+            changes=[item.model_dump() for item in payload.changes],
+        )
+        db.commit()
+        db.refresh(draft)
+        return serialize_draft(db, draft)
+    except RateDraftError as exc:
+        _safe_rollback(db)
+        _raise_draft_http(exc)
+    except Exception:
+        _safe_rollback(db)
+        raise
 
 
 @router.post("/{draft_id}/confirm", response_model=RateChangeDraftOut)

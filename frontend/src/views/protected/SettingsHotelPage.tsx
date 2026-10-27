@@ -13,8 +13,10 @@ import {
   type RoomDeleteBlockedDetail,
   type RoomDeleteBlockingReservation,
   type RoomCategory,
+  type AllocationPriorityChannelGroup,
   type RoomStatus
 } from "../../api/rooms";
+import { listCompanyOptions, type CompanyOption } from "../../api/companies";
 import { moveReservationRoom } from "../../api/reservations";
 import { useSession } from "../../state/session";
 import { ApiError, hasValidSession } from "../../api/client";
@@ -34,6 +36,11 @@ import { TaxPoliciesCard } from "./TaxPoliciesCard";
 import { LocalBusinessClockCard } from "./LocalBusinessClockCard";
 
 const roomStatuses: RoomStatus[] = ["available", "occupied", "maintenance", "blocked", "cleaning"];
+const allocationChannelGroups: Array<{ value: AllocationPriorityChannelGroup; label: string }> = [
+  { value: "direct", label: "Venta directa" },
+  { value: "ota", label: "OTA" },
+  { value: "company", label: "Empresas" }
+];
 
 type RoomDeleteState = {
   roomId: number;
@@ -101,6 +108,12 @@ export function SettingsHotelPage() {
   const timezonesQuery = useTimezones();
   const countriesQuery = useCountries();
   const { categoriesQuery, roomsQuery } = useRooms({ includeCategories: true });
+  const companiesQuery = useQuery<CompanyOption[]>({
+    queryKey: ["company-options", session.hotelId],
+    queryFn: () => listCompanyOptions(session),
+    enabled: hasValidSession(session) && permissionsKnown && hasPermission("company:read"),
+    staleTime: 60_000
+  });
   const [form, setForm] = useState<Partial<HotelConfig>>({});
   const [error, setError] = useState<string | null>(null);
   const [fiscalPreviewOpen, setFiscalPreviewOpen] = useState(false);
@@ -116,11 +129,27 @@ export function SettingsHotelPage() {
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
   const [categoryEdit, setCategoryEdit] = useState<Partial<Omit<RoomCategory, "id">>>({});
 
-  const [roomForm, setRoomForm] = useState<{ room_number: string; floor: number; category_id: number; notes?: string }>(
-    { room_number: "", floor: 1, category_id: 0, notes: "" }
+  const [roomForm, setRoomForm] = useState<{
+    room_number: string;
+    floor: number;
+    category_id: number;
+    notes?: string;
+    allocation_priority_channel_groups: AllocationPriorityChannelGroup[];
+    allocation_priority_company_ids: number[];
+  }>(
+    { room_number: "", floor: 1, category_id: 0, notes: "", allocation_priority_channel_groups: [], allocation_priority_company_ids: [] }
   );
   const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
-  const [roomEdit, setRoomEdit] = useState<Partial<{ room_number: string; floor: number; category_id: number; status: RoomStatus; is_active: boolean; notes?: string }>>({});
+  const [roomEdit, setRoomEdit] = useState<Partial<{
+    room_number: string;
+    floor: number;
+    category_id: number;
+    status: RoomStatus;
+    is_active: boolean;
+    notes?: string;
+    allocation_priority_channel_groups: AllocationPriorityChannelGroup[];
+    allocation_priority_company_ids: number[];
+  }>>({});
   const [roomDeleteState, setRoomDeleteState] = useState<RoomDeleteState | null>(null);
   const [roomMoveDestinations, setRoomMoveDestinations] = useState<Record<number, string>>({});
   const [movingReservationId, setMovingReservationId] = useState<number | null>(null);
@@ -193,18 +222,34 @@ export function SettingsHotelPage() {
   });
 
   const createRoomMutation = useGuardedMutation({
-    mutationFn: (payload: { room_number: string; floor: number; category_id: number; notes?: string }) =>
+    mutationFn: (payload: {
+      room_number: string;
+      floor: number;
+      category_id: number;
+      notes?: string;
+      allocation_priority_channel_groups: AllocationPriorityChannelGroup[];
+      allocation_priority_company_ids: number[];
+    }) =>
       createRoom({ ...payload, status: "available", is_active: true }, session),
     onSuccess: async () => {
       await refreshRoomState(qc, session.hotelId);
-      setRoomForm({ room_number: "", floor: 1, category_id: 0, notes: "" });
+      setRoomForm({ room_number: "", floor: 1, category_id: 0, notes: "", allocation_priority_channel_groups: [], allocation_priority_company_ids: [] });
       setError(null);
     },
     onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo crear la habitación")
   });
 
   const updateRoomMutation = useGuardedMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: Partial<{ room_number: string; floor: number; category_id: number; status: RoomStatus; is_active: boolean; notes?: string }> }) =>
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<{
+      room_number: string;
+      floor: number;
+      category_id: number;
+      status: RoomStatus;
+      is_active: boolean;
+      notes?: string;
+      allocation_priority_channel_groups: AllocationPriorityChannelGroup[];
+      allocation_priority_company_ids: number[];
+    }> }) =>
       updateRoom(id, payload, session),
     onSuccess: async () => {
       await refreshRoomState(qc, session.hotelId);
@@ -352,6 +397,12 @@ export function SettingsHotelPage() {
         if (roomEdit.is_active !== undefined && roomEdit.is_active !== editingRoom?.is_active) {
           operationalChanges.is_active = roomEdit.is_active;
         }
+        if (roomEdit.allocation_priority_channel_groups !== undefined) {
+          operationalChanges.allocation_priority_channel_groups = roomEdit.allocation_priority_channel_groups;
+        }
+        if (roomEdit.allocation_priority_company_ids !== undefined) {
+          operationalChanges.allocation_priority_company_ids = roomEdit.allocation_priority_company_ids;
+        }
         if (Object.keys(operationalChanges).length > 0) {
           await updateRoomMutation.mutateAsync({ id: roomId, payload: operationalChanges });
         } else {
@@ -372,6 +423,12 @@ export function SettingsHotelPage() {
         }
         if (roomEdit.is_active !== undefined && roomEdit.is_active !== editingRoom?.is_active) {
           operationalChanges.is_active = roomEdit.is_active;
+        }
+        if (roomEdit.allocation_priority_channel_groups !== undefined) {
+          operationalChanges.allocation_priority_channel_groups = roomEdit.allocation_priority_channel_groups;
+        }
+        if (roomEdit.allocation_priority_company_ids !== undefined) {
+          operationalChanges.allocation_priority_company_ids = roomEdit.allocation_priority_company_ids;
         }
         if (Object.keys(operationalChanges).length > 0) {
           await updateRoomMutation.mutateAsync({ id: roomId, payload: operationalChanges });
@@ -438,6 +495,24 @@ export function SettingsHotelPage() {
             <label className="text-sm font-semibold text-slate-700">
               Nombre del hotel
               <input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.hotel_name ?? ""} onChange={(e) => handleChange("hotel_name", e.target.value)} />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              ¿El hotel tiene ascensor?
+              <select
+                value={form.has_elevator == null ? "unknown" : form.has_elevator ? "yes" : "no"}
+                onChange={(event) => handleChange(
+                  "has_elevator",
+                  event.target.value === "unknown" ? null : event.target.value === "yes"
+                )}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              >
+                <option value="unknown">Sin configurar</option>
+                <option value="yes">Sí</option>
+                <option value="no">No</option>
+              </select>
+              <span className="mt-1 block text-xs font-normal text-slate-500">
+                Solo si elegís “No”, el motor puede preferir pisos bajos para reservas con restricción de movilidad. La accesibilidad compatible sigue siendo obligatoria.
+              </span>
             </label>
             <label className="text-sm font-semibold text-slate-700">
               País (define la zona horaria)
@@ -1009,6 +1084,47 @@ export function SettingsHotelPage() {
                 ))}
               </select>
               <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2" placeholder="Notas" value={roomForm.notes ?? ""} onChange={(e) => setRoomForm((p) => ({ ...p, notes: e.target.value }))} />
+              <fieldset className="space-y-2 rounded-lg border border-slate-200 p-3 md:col-span-4">
+                <legend className="px-1 text-xs font-semibold text-slate-700">Prioridad blanda de asignación</legend>
+                <p className="text-xs text-slate-500">Estas preferencias solo desempatan después de ocupación y continuidad; no bloquean la habitación para otros huéspedes.</p>
+                <div className="flex flex-wrap gap-3">
+                  {allocationChannelGroups.map((option) => (
+                    <label key={option.value} className="flex items-center gap-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={roomForm.allocation_priority_channel_groups.includes(option.value)}
+                        onChange={(event) => setRoomForm((current) => ({
+                          ...current,
+                          allocation_priority_channel_groups: event.target.checked
+                            ? [...new Set([...current.allocation_priority_channel_groups, option.value])]
+                            : current.allocation_priority_channel_groups.filter((group) => group !== option.value)
+                        }))}
+                      />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+                {permissionsKnown && hasPermission("company:read") && (
+                  <div className="flex max-h-24 flex-wrap gap-3 overflow-auto border-t border-slate-100 pt-2">
+                    {(companiesQuery.data ?? []).map((company) => (
+                      <label key={company.id} className="flex items-center gap-2 text-xs text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={roomForm.allocation_priority_company_ids.includes(company.id)}
+                          onChange={(event) => setRoomForm((current) => ({
+                            ...current,
+                            allocation_priority_company_ids: event.target.checked
+                              ? [...new Set([...current.allocation_priority_company_ids, company.id])]
+                              : current.allocation_priority_company_ids.filter((id) => id !== company.id)
+                          }))}
+                        />
+                        {company.display_name}
+                      </label>
+                    ))}
+                    {companiesQuery.isError && <p className="text-xs text-rose-700">No se pudieron cargar las empresas.</p>}
+                  </div>
+                )}
+              </fieldset>
               <button type="button" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 md:col-span-2" disabled={createRoomMutation.isPending || !roomForm.room_number || !roomForm.category_id} onClick={() => void createRoomMutation.mutateAsync(roomForm).catch(() => undefined)}>
                 {createRoomMutation.isPending ? "Guardando..." : "Agregar habitación"}
               </button>
@@ -1038,6 +1154,51 @@ export function SettingsHotelPage() {
                           Activa
                         </label>
                       </div>
+                      <fieldset className="space-y-2 rounded-lg border border-slate-200 p-2">
+                        <legend className="px-1 text-xs font-semibold text-slate-700">Prioridad blanda</legend>
+                        <div className="flex flex-wrap gap-3">
+                          {allocationChannelGroups.map((option) => (
+                            <label key={option.value} className="flex items-center gap-2 text-xs text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={(roomEdit.allocation_priority_channel_groups ?? r.allocation_priority_channel_groups ?? []).includes(option.value)}
+                                onChange={(event) => setRoomEdit((current) => {
+                                  const groups = current.allocation_priority_channel_groups ?? r.allocation_priority_channel_groups ?? [];
+                                  return {
+                                    ...current,
+                                    allocation_priority_channel_groups: event.target.checked
+                                      ? [...new Set([...groups, option.value])]
+                                      : groups.filter((group) => group !== option.value)
+                                  };
+                                })}
+                              />
+                              {option.label}
+                            </label>
+                          ))}
+                        </div>
+                        {permissionsKnown && hasPermission("company:read") && (
+                          <div className="flex max-h-24 flex-wrap gap-3 overflow-auto border-t border-slate-100 pt-2">
+                            {(companiesQuery.data ?? []).map((company) => (
+                              <label key={company.id} className="flex items-center gap-2 text-xs text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={(roomEdit.allocation_priority_company_ids ?? r.allocation_priority_company_ids ?? []).includes(company.id)}
+                                  onChange={(event) => setRoomEdit((current) => {
+                                    const ids = current.allocation_priority_company_ids ?? r.allocation_priority_company_ids ?? [];
+                                    return {
+                                      ...current,
+                                      allocation_priority_company_ids: event.target.checked
+                                        ? [...new Set([...ids, company.id])]
+                                        : ids.filter((id) => id !== company.id)
+                                    };
+                                  })}
+                                />
+                                {company.display_name}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </fieldset>
                       <input className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" placeholder="Notas" value={String(collaborativeRoom.draftValues.notes ?? roomEdit.notes ?? r.notes ?? "")} onChange={(e) => handleRoomEditField("notes", e.target.value || null)} onFocus={() => collaborativeRoom.focusField("notes")} onBlur={() => collaborativeRoom.blurField("notes")} />
                       {collaborativeRoom.status !== "idle" && (
                         <div className="rounded-lg border border-sky-200 bg-sky-50 p-2 text-xs text-sky-900" role="status">
@@ -1080,6 +1241,11 @@ export function SettingsHotelPage() {
                           <p className="font-semibold text-slate-900">Hab {r.room_number} · Piso {r.floor}</p>
                           {r.category && <p className="text-xs text-slate-600">Categoría: {r.category.name}</p>}
                           <p className="text-xs text-slate-500">Estado: {r.status}</p>
+                          {(r.allocation_priority_channel_groups.length > 0 || r.allocation_priority_company_ids.length > 0) && (
+                            <p className="text-xs text-indigo-700">
+                              Prioridad de reserva: {[...r.allocation_priority_channel_groups, ...r.allocation_priority_company_ids.map((id) => (companiesQuery.data ?? []).find((company) => company.id === id)?.display_name).filter((name): name is string => Boolean(name))].join(", ")}
+                            </p>
+                          )}
                           {r.notes && <p className="text-xs text-slate-500">Notas: {r.notes}</p>}
                         </div>
                         <div className="flex shrink-0 gap-2">

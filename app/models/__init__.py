@@ -91,6 +91,7 @@ from app.models.guest_room_avoidance import (
 )
 from app.models.hotel_api_key import APIKeyPurposeEnum, HotelAPIKey
 from app.models.hotel_config import HotelConfiguration
+from app.models.published_rate_history import PublishedRateHistory
 from app.models.hotel_membership import HotelMembership
 from app.models.hotel_role import HotelRole
 from app.models.hotel_role_visibility_window import HotelRoleVisibilityWindow
@@ -312,6 +313,7 @@ __all__ = [
     "CategoryPricing",
     "DailyRate",
     "PricePeriod",
+    "PublishedRateHistory",
     "SellableProduct",
     "ProductRoomCompatibility",
     "RatePlan",

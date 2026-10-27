@@ -12,7 +12,7 @@
 A multi-tenant SaaS Property Management System for hotels, covering reservations, rooms, guests, check-in/out, payments, OTA integration, and AI-assisted operations. Each subscribed hotel runs in isolated tenant scope (`hotel_id`) on a shared platform.
 
 ### 1.2 What it is NOT (platform-level non-goals)
-TODO(owner) confirm/extend. Default non-goals unless owner says otherwise: full accounting, marketing automation, CRM campaigns, public booking-engine for the hotel website, housekeeping mobile app, revenue-management beyond allocation advice, on-prem/self-hosted deployment model.
+TODO(owner) confirm/extend. Default non-goals unless owner says otherwise: full accounting, marketing automation, CRM campaigns, public booking-engine for the hotel website, housekeeping mobile app, automated price changes, competitor-price optimization, on-prem/self-hosted deployment model. The approved experimental pricing scope is recommendation-only and requires human approval before any tariff change.
 
 ### 1.3 Product vs per-hotel scope line
 - **Product / platform**: architecture, tenancy, subscription tiers, default policies, AI guardrails, integrations catalogue, UI, security, operations.
@@ -167,7 +167,8 @@ For each module, state what the **platform** provides and what each **hotel** co
 | Payments | Platform-wide: MercadoPago + PayPal (all tiers) + cash/transfer/manual. Stripe available on `pro`/`ultra` only. Card-brand support follows whatever Stripe supports for that merchant + geography — not modeled as separate product integrations. Positive payments below the outstanding balance are valid partials; the remainder stays due. | Which of the enabled methods to turn on + own gateway credentials; exchange market, buy/sell side, and foreign-tender rounding policy (`round_up`, `round_down`, `nearest_ten`, `exact`, or `keep_remainder`). `exact` uses the converted tender amount to cent precision and settles the displayed balance; the default `keep_remainder` leaves any residual available to collect in another currency. Rounding applies when the tender and reservation currencies differ; same-currency payments keep the entered amount. Any excess created by a rounding-up policy is a reservation-scoped credit in the tender currency, separate from the amount paid and revenue. Its manual cash refund requires `payment:refund` (Owner, Co-owner, and Manager by default); credit cannot currently be applied to another reservation. |
 | OTA inbound | Booking / Expedia / Despegar adapters | Which channels connected + credentials |
 | OTA outbound | Future (post-launch) | TODO(owner) |
-| Allocation engine | OR-Tools solver, draft/apply policy | Policy weights within allowed bounds |
+| Allocation engine | Automatically assign/rearrange eligible future reservations when the complete plan is safe; reduce room-level gaps; never move a reservation after any guest checks in; allow a person to approve a locked move once while keeping its lock | Room/category/channel/company priorities and operational preferences within platform safety bounds |
+| Experimental pricing advice | Daily and configured high-demand-date recommendations with an exact category/night price; save as a reviewable tariff draft | Comparable season labels, event dates and per-hotel pilot thresholds; a person with permission approves every change |
 | Gemma / AI | Orchestrator, guardrails, draft/apply | Opt-in features per tier, feedback retention |
 | Reports | Report catalogue | Filters, saved views (TODO) |
 | Onboarding | AI-assisted wizard | Their hotel profile |
@@ -188,6 +189,7 @@ TODO(owner) refine row by row where more detail is needed.
 - OTA channels connected (from platform catalogue).
 - Deposit % and cancellation policy (within tier bounds).
 - Allocation policy weights (drafted; applied by owner after review).
+- High-demand dates for experimental tariff advice; suggested prices remain drafts until approved.
 - AI feature opt-ins (within tier).
 - Check-in legal fields (from platform catalogue).
 - Staff roster + role assignment.
@@ -288,6 +290,7 @@ TODO(owner):
 
 Allowed (observable): insights, drafts of allocation policy, onboarding assistant, chat, feedback capture.
 Forbidden (hard lines per AGENTS.md §21): silent policy application, mutation of business data, auth bypass, PII cross-tenant leak, unaudited actions.
+The experimental tariff engine is advisory; it can prepare an exact rate-change draft but cannot approve or apply it.
 Per-tier exposure: TODO(owner).
 Feedback retention: TODO(owner).
 
@@ -426,4 +429,5 @@ Platform terms:
 | 2026-10-15 | Codex | Added local remediation backlog for analytics query budgets, export resource bounds, atomic AI quotas, no-show rounding and trial/comped transitions; see TECH-0153–TECH-0157. No-show, export range and subscription-expiry semantics remain owner decisions. |
 | 2026-10-15 | Codex | Applied two query-shape fixes: one-capability guards use selective fresh permission reads, and guest list/search no longer hydrates unused reservations/tags; see TECH-0158–TECH-0159. |
 | 2026-10-18 | Owner + Codex | Exportaciones conservan el rango histórico completo sin corte por antigüedad. Se aplicaron consultas frontend diferidas/agrupadas para búsqueda global, tarifas, lavandería móvil y recuperación entre pestañas; TECH-0154 y TECH-0160–TECH-0162 documentan límites pendientes y aceptación. |
+| 2026-10-27 | Owner + Codex | Separa la autoasignación segura de reservas futuras del asesor experimental de tarifas. El hotel marca temporadas comparables y eventos de alta demanda; el piloto usa ocupación 80/40, pickup ±20% y un paso máximo configurable de 5%. La demanda define la dirección y la brecha frente al promedio USD comparable modula el porcentaje aplicado a la tarifa actual. Las tarifas publicadas se comparan con FX verificable; cada sugerencia queda en borrador hasta la aprobación humana. Véase TECH-0062 y TECH-0064. |
 | TODO(owner) | | |

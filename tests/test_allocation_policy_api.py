@@ -82,32 +82,38 @@ def test_allocation_policy_api_exposes_active_policy_and_versions():
         assert active_body["profile_code"] == "default"
         assert active_body["version"]["weights"]["prefer_exact_match"] == 500.0
 
+        version_payload = {
+            "constraints": {
+                "no_overlap": True,
+                "respect_locked_assignments": True,
+                "allow_category_fallback": False,
+            },
+            "weights": {
+                "prefer_exact_match": 900,
+                "stability": 8,
+                "room_usage_penalty": 30,
+                "unassigned_penalty": 15000,
+                "fallback_priority_penalty": 40,
+            },
+            "optimization_objective": "occupied_nights",
+            "prompt_summary": "Version mas estricta para upgrades",
+        }
+        unsupported_resp = client.post(
+            "/api/allocation/policy/versions",
+            json={**version_payload, "optimization_objective": "combined"},
+        )
+        assert unsupported_resp.status_code == 422, unsupported_resp.text
+
         version_resp = client.post(
             "/api/allocation/policy/versions",
-            json={
-                "constraints": {
-                    "no_overlap": True,
-                    "respect_locked_assignments": True,
-                    "allow_category_fallback": False,
-                },
-                "weights": {
-                    "prefer_exact_match": 900,
-                    "stability": 8,
-                    "room_usage_penalty": 30,
-                    "unassigned_penalty": 15000,
-                    "fallback_priority_penalty": 40,
-                },
-                "optimization_objective": "combined",
-                "combined_revenue_weight": 0.35,
-                "prompt_summary": "Version mas estricta para upgrades",
-            },
+            json=version_payload,
         )
         assert version_resp.status_code == 201, version_resp.text
         version_body = version_resp.json()
         assert version_body["version_number"] == 2
         assert version_body["constraints"]["allow_category_fallback"] is False
-        assert version_body["optimization_objective"] == "combined"
-        assert version_body["combined_revenue_weight"] == 0.35
+        assert version_body["optimization_objective"] == "occupied_nights"
+        assert version_body["combined_revenue_weight"] is None
 
         publish_resp = client.post(f"/api/allocation/policy/versions/{version_body['id']}/publish")
         assert publish_resp.status_code == 200, publish_resp.text

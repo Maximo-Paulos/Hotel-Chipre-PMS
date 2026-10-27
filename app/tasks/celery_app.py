@@ -34,6 +34,7 @@ celery_app.conf.update(
         "domain_events.publish_outbox": {"queue": "critical"},
         "notifications.process_outbox": {"queue": "critical"},
         "allocation.process_recalculation_requests": {"queue": "heavy"},
+        "tariff_recommendations.generate_daily": {"queue": "heavy"},
         "notifications.generate_daily_reports": {"queue": "heavy"},
         "reports.*": {"queue": "heavy"},
         "analytics.*": {"queue": "heavy"},
@@ -112,6 +113,10 @@ def build_beat_schedule(runtime_settings: Settings) -> dict:
             "task": "allocation.process_recalculation_requests",
             "schedule": 30.0,
         },
+        "tariff-recommendations-daily-review": {
+            "task": "tariff_recommendations.generate_daily",
+            "schedule": crontab(hour=9, minute=15),
+        },
     }
     if not external_connections_enabled(runtime_settings):
         if _sandbox_domain_event_replay_enabled(runtime_settings):
@@ -169,6 +174,10 @@ def build_beat_schedule(runtime_settings: Settings) -> dict:
             "task": "allocation.process_recalculation_requests",
             "schedule": 30.0,
         },
+        "tariff-recommendations-daily-review": {
+            "task": "tariff_recommendations.generate_daily",
+            "schedule": crontab(hour=9, minute=15),
+        },
     }
 
 
@@ -184,3 +193,4 @@ import app.tasks.no_show_tasks  # noqa: F401,E402
 import app.tasks.notification_tasks  # noqa: F401,E402
 import app.tasks.ota_tasks  # noqa: F401,E402
 import app.tasks.report_tasks  # noqa: F401,E402
+import app.tasks.tariff_recommendation_tasks  # noqa: F401,E402

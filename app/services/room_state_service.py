@@ -14,7 +14,10 @@ from sqlalchemy.orm import Session
 from app.models.audit_log import AuditActionEnum
 from app.models.room import Room, RoomHousekeepingStatusEnum, RoomStatusEnum
 from app.services import audit_log_service
-from app.services.allocation_runtime_service import run_persisted_allocation
+from app.services.allocation_runtime_service import (
+    auto_apply_safe_allocation_run,
+    run_persisted_allocation,
+)
 from app.services.housekeeping_checklist_policy import (
     open_housekeeping_checklist_exists,
 )
@@ -182,6 +185,10 @@ def change_room_status(
             trigger_type=f"room_status_{status.value}",
             apply=True,
         )
+        if result.solver_result.success:
+            auto_apply_safe_allocation_run(
+                db, hotel_id=hotel_id, run_id=result.run.id
+            )
         if result.solver_result.assignments or result.solver_result.unassigned_reservations:
             db.commit()
             return {

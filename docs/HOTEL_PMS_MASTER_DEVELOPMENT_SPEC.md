@@ -410,10 +410,61 @@ Priority: `P1`
 
 ### TECH-0062 — Optimización de asignación de habitaciones
 
-Status: `VERIFY`
+Status: `IN_PROGRESS`
 Priority: `P1`
 
-**Required:** auditar OR-Tools/Celery/Redis actuales; separar asignación rápida de reoptimización completa; jobs asíncronos; categoría/capacidad/huecos/reservas/asignaciones fijas; idempotencia, retries, concurrencia, explicabilidad y auditoría; no bloquear API.
+**Objetivo confirmado por el dueño:** asignar habitaciones automáticamente y reordenar reservas futuras elegibles para reducir noches aisladas y huecos por habitación. Este motor organiza reservas existentes; no decide tarifas ni debe cambiar precios.
+
+**Required:** jobs asíncronos; categoría/capacidad/producto/huecos/reservas/asignaciones fijas; compatibilidad de movilidad y accesibilidad; reglas explícitas de prioridad por canal/empresa cuando el hotel las configure; idempotencia, retries, concurrencia, explicabilidad y auditoría; no bloquear API. Aplicar un plan automático solo si está completo y sigue válido al confirmar. Cualquier check-in real, incluso parcial de una reserva con varios huéspedes, protege toda la reserva. Un bloqueo explícito de reasignación requiere autorización humana para ese movimiento puntual y el bloqueo debe seguir activo después. Los bloqueos físicos, la capacidad, accesibilidad requerida, disponibilidad y categoría compatible no se pueden anular desde el optimizador.
+
+El motor aplica automáticamente los movimientos completos y revalidados de reservas elegibles sin check-in ni bloqueo explícito. También puede detectar que mover una reserva bloqueada mejoraría el empaquetado, pero deja ese movimiento pendiente para aprobación humana; nunca lo aplica automáticamente. La aprobación autoriza solo ese movimiento y conserva el bloqueo apuntando a la habitación nueva. Esta excepción nunca aplica a reservas con check-in parcial o completo, que no se mueven.
+
+El objetivo efectivo de las versiones de asignación es noches ocupadas y continuidad. Versiones históricas que pedían ingreso neto o un objetivo combinado se conservan, pero se ejecutan con el objetivo operativo de asignación; los importes, monedas y cotizaciones FX no son entradas para elegir habitación ni para aceptar una propuesta.
+
+No usar edad o nacionalidad como puntajes de asignación por defecto. Priorizar necesidades operativas explícitas, preferencias informadas y reglas comerciales configuradas por el hotel. Confirmar la política final de datos antes de ampliar los atributos usados por el solver.
+
+La iteración local aplica categoría, capacidad, accesibilidad/movilidad, habitación de una estadía previa, habitaciones que el huésped pidió evitar, estabilidad y bloqueos explícitos. El hotel puede marcar habitaciones prioritarias para reservas directas, OTA, empresas o empresas específicas. Esas marcas solo se evalúan después de fijar las noches ocupadas, cantidad de reservas asignadas, continuidad y penalización de gaps; nunca hacen una habitación inelegible ni desplazan esos objetivos. La configuración hotelera `has_elevator` es nullable y empieza desconocida. Solo el valor explícito `false` agrega, al final de los desempates, una preferencia por pisos bajos para reservas con restricción de movilidad. La accesibilidad compatible se mantiene como condición dura. Edad y nacionalidad no participan como puntajes.
+
+**Acceptance:**
+- [ ] minimizar huecos/noches aisladas sin reducir noches vendibles ni violar una restricción dura;
+- [ ] autoaplicar solo corridas completas y revalidadas; no mover reservas con check-in parcial/completo ni movimientos bloqueados sin aprobación;
+- [ ] ofrecer aprobación de un solo movimiento para una reserva bloqueada y conservar su bloqueo;
+- [ ] mantener manuales los preestrenos, las propuestas incompletas y los casos que requieren permiso;
+- [ ] explicar cambios y registrar antes/después, motivo, política y actor automático/humano;
+- [ ] medir huecos, noches vendibles, noches ocupadas y estabilidad antes/después.
+- [x] admitir prioridades blandas configurables por habitación para canal directo, OTA y empresas;
+- [x] usar el piso como preferencia solo cuando el hotel declaró que no tiene ascensor; con el dato desconocido, no aplicar puntaje de piso.
+
+### TECH-0064 — Recomendaciones experimentales de tarifa por demanda
+
+Status: `IN_PROGRESS` (implementación local sin QA de navegador ni revisión del dueño)
+Priority: `P1`
+Depends on: `TECH-0061`, `TECH-0070`
+
+**Objetivo confirmado por el dueño:** recomendar el precio exacto por categoría y noche para mejorar la facturación neta. La demanda determina la dirección del cambio y la distancia entre la tarifa vigente y el promedio publicado de temporadas comparables, expresado en USD, modula el tamaño del porcentaje. Ese porcentaje se aplica sobre la tarifa vigente de esa noche y se intenta redondear a un importe entero. La persona puede editar ese importe en el borrador antes de aprobarlo. El motor nunca escribe ni aplica la tarifa por sí solo.
+
+La evaluación corre diariamente y también considera fechas/eventos de alta demanda configurados por el hotel. Para esas noches, el objetivo será orientar la tarifa sugerida hacia un aumento. Puede combinar disponibilidad/ocupación futura, pickup y cancelaciones por anticipación, consultas de disponibilidad agregadas por fecha/categoría/canal, calendario de eventos e histórico comparable. Las consultas web/PMS aún no se guardan como señal analítica, por lo que ese dato requiere instrumentación antes de usarlo; no inferir demanda a partir de búsquedas no observadas.
+
+Cada recomendación debe mostrar hotel/categoría/noches, promedio de referencia en USD, tarifa vigente, tarifa sugerida exacta por noche, conversión monetaria aplicada, razón, datos y período usados, confianza/limitaciones e impacto estimado en ingreso neto. Debe convertirse en un borrador revisable usando el flujo de cambios de tarifa. Solo una aprobación humana con permiso puede confirmar el borrador y escribir la tarifa. La recomendación no cambia reservas ya confirmadas ni congela tarifas futuras.
+
+**Aclaración del dueño (2026-10-27):** no se usará un piso mínimo ni un precio máximo absoluto. El promedio de tarifas publicadas de la categoría en temporadas comparables se calcula en USD y modula el porcentaje: reduce el paso cuando el cambio recomendado alejaría aún más la tarifa vigente del promedio. La demanda define la dirección; el importe resultante se calcula sobre la tarifa vigente de cada noche. Una fecha configurada como de alta demanda debe orientar la sugerencia al alza. La persona puede modificar o redondear manualmente el importe entero antes de aprobarlo. Toda publicación requiere aprobación humana.
+
+**Moneda y serie de referencia:** las tarifas publicadas continúan en la moneda principal del hotel. Al confirmar un borrador, el PMS registra la tarifa base por categoría/noche, moneda, grupo comparable, borrador fuente y cotización USD utilizada. Para ARS usa una cotización ya guardada, fresca (máximo 24 horas), del mercado y lado seleccionados por el hotel; confirmar una tarifa nunca llama a un proveedor externo. Sin esa cotización, guarda el importe original y excluye su equivalente USD del promedio. Los registros anteriores sin conversión verificable no se convierten al tipo de cambio de hoy. El hotel escribe la misma clave en las temporadas que desea comparar; la clave se normaliza sin distinguir mayúsculas. Cada período también puede marcarse como fecha/evento de alta demanda. Ambas opciones se editan mediante borradores de temporada.
+
+**Valores piloto aprobados por el dueño (2026-10-27):** ocupación alta 80%, ocupación baja 40%, pickup ±20% contra el pickup histórico comparable y paso máximo 5% por recomendación. Owner/Manager con `config:manage` pueden habilitar el motor y ajustar los cuatro valores por hotel; queda deshabilitado por defecto. Un evento marcado en un período dirige la recomendación hacia arriba aunque las otras señales no acompañen. Sin evento, la suba requiere ocupación y pickup altos a la vez; la baja requiere ambos bajos; señales mezcladas producen abstención. El cálculo actual usa reservas confirmadas/futuras, creación/cancelación de reservas y tarifas publicadas; búsquedas de disponibilidad todavía no están persistidas.
+
+**Implementación actual:** el motor calcula ocupación comprometida por categoría/noche y pickup de 7 días comparado con ventanas históricas al mismo plazo de anticipación. Usa el promedio de las últimas tarifas USD publicadas para la misma categoría y grupo comparable, con un máximo de cinco años y un mínimo de tres fechas publicadas únicas. La dirección sale de la señal de demanda o del evento configurado. El paso máximo (hasta 5%) se modula con el cociente entre la tarifa vigente y el promedio USD: una suba se reduce si la tarifa ya está por encima del promedio, y una baja se reduce si ya está por debajo. La tarifa vigente sigue siendo la base del cálculo; el importe final intenta quedar en unidades enteras de la moneda y se puede editar manualmente dentro del borrador versionado y auditado. La evidencia incluye la diferencia porcentual entre tarifa vigente y promedio comparable. El resultado se guarda como borrador diario en el flujo existente de Tarifas; la tarea diaria corre a las 09:15 de la zona configurada para Celery, y el operador también puede solicitar una evaluación desde el calendario. No se confirma ni publica automáticamente. Para evitar recomendaciones con evidencia insuficiente, se abstiene si faltan muestras USD, una cotización ARS reciente o inventario vendible; sin un evento marcado también necesita pickup histórico comparable para decidir dirección. El piloto no garantiza cubrir costos ni evitar pérdidas; los 5% son un paso máximo de ajuste, no un tope absoluto al precio. Aún falta backtest reproducible, QA cloud y evaluar el impacto en ingreso neto, ADR, conversión y noches vendidas. La ocupación observada en reservas no equivale a una previsión estadística, y las consultas web/PMS no participan hasta instrumentarse.
+
+**Acceptance:**
+- [x] evaluación diaria/manual e inclusión de períodos marcados como alta demanda;
+- [x] recomendación exacta por categoría y noche con evidencia USD, ocupación, pickup, cotización y paso visible en el borrador;
+- [x] el promedio utiliza tarifas publicadas con cotización FX fresca y trazable; los registros antiguos no verificables quedan excluidos;
+- [x] las fechas marcadas de alta demanda orientan la sugerencia al alza;
+- [x] la tarifa vigente solo cambia al confirmar el borrador por una persona autorizada;
+- [x] las aprobaciones reutilizan la fuente de verdad y auditoría del flujo de Tarifas;
+- [ ] consultas capturadas de forma agregada, con retención y minimización de datos definidas;
+- [x] el motor se abstiene cuando no encuentra evidencia suficiente;
+- [ ] pruebas focales, migración aplicada en PostgreSQL aislado, QA cloud y backtest reproducible.
 
 ---
 

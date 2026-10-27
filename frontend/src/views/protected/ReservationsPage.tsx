@@ -360,7 +360,7 @@ export function ReservationsPage() {
   const [noShowNotes, setNoShowNotes] = useState("");
   const [guestIdOpen, setGuestIdOpen] = useState<number | null>(null);
   const [allocationForm, setAllocationForm] = useState({
-    apply: false,
+    apply: true,
     horizon_start: businessDate,
     horizon_end: ""
   });
@@ -1623,8 +1623,6 @@ export function ReservationsPage() {
       setAllocationError(t("page.errors.horizonInvalid"));
       return;
     }
-
-    if (allocationForm.apply && !window.confirm(t("page.allocation.confirmApply"))) return;
 
     try {
       const run = await allocationRunMutation.mutateAsync(allocationForm);

@@ -44,6 +44,8 @@ PERIOD_FIELDS = (
     *PERIOD_PRICE_FIELDS,
     "priority",
     "is_active",
+    "comparable_season_key",
+    "is_high_demand_event",
 )
 
 
@@ -146,6 +148,8 @@ def _period_values(period: PricePeriod) -> dict[str, Any]:
         **{field: _money(getattr(period, field)) for field in PERIOD_PRICE_FIELDS},
         "priority": period.priority,
         "is_active": bool(period.is_active),
+        "comparable_season_key": period.comparable_season_key,
+        "is_high_demand_event": bool(period.is_high_demand_event),
     }
 
 
@@ -189,6 +193,18 @@ def _validate_period_values(raw_values: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(active, bool):
         raise RateDraftError("El estado de la temporada no es válido.")
     normalized["is_active"] = active
+    comparable_key = raw_values.get("comparable_season_key")
+    if comparable_key is not None:
+        if not isinstance(comparable_key, str):
+            raise RateDraftError("El grupo de temporada comparable debe ser texto.")
+        comparable_key = comparable_key.strip().casefold()
+        if len(comparable_key) > 80:
+            raise RateDraftError("El grupo comparable no puede superar 80 caracteres.")
+    normalized["comparable_season_key"] = comparable_key or None
+    is_high_demand_event = raw_values.get("is_high_demand_event", False)
+    if not isinstance(is_high_demand_event, bool):
+        raise RateDraftError("La marca de fecha de alta demanda no es válida.")
+    normalized["is_high_demand_event"] = is_high_demand_event
     return normalized
 
 
@@ -220,6 +236,17 @@ def _period_snapshot_rows(
     if lock_rows:
         query = lock_query(query, PricePeriod)
     return [{"id": period.id, "values": _period_values(period)} for period in query.all()]
+
+
+def _normalize_period_snapshots(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep pending drafts created before the season metadata migration valid."""
+    normalized = []
+    for row in rows:
+        values = dict(row.get("values") or {})
+        values.setdefault("comparable_season_key", None)
+        values.setdefault("is_high_demand_event", False)
+        normalized.append({**row, "values": values})
+    return normalized
 
 
 def _daily_rate_scope_snapshot(
@@ -416,6 +443,7 @@ def create_rate_change_draft(
     user_id: int | None,
     category_id: int,
     changes: list[dict[str, Any]],
+    impact_metadata: dict[str, Any] | None = None,
 ) -> RateChangeDraft:
     category = _category_or_error(db, hotel_id, category_id)
     existing_draft = db.query(RateChangeDraft.id).filter(
@@ -461,6 +489,8 @@ def create_rate_change_draft(
         })
     dates = [item["date"] for item in normalized]
     impact = _impact_for_dates(db, hotel_id=hotel_id, category_id=category_id, dates=dates)
+    if impact_metadata:
+        impact.update(impact_metadata)
     now = datetime.now(timezone.utc)
     draft = RateChangeDraft(
         hotel_id=hotel_id,
@@ -697,7 +727,7 @@ def _confirm_price_period_draft(
         end_date=scope_end,
         lock_rows=True,
     )
-    if current_snapshots != operation.get("periods_before", []):
+    if current_snapshots != _normalize_period_snapshots(operation.get("periods_before", [])):
         raise RateDraftError(
             "Las temporadas del rango cambiaron desde la vista previa. Cancelá este borrador y prepará uno nuevo.",
             status_code=409,
@@ -747,6 +777,8 @@ def _confirm_price_period_draft(
             **{field: values.get(field) for field in PERIOD_PRICE_FIELDS},
             priority=values["priority"],
             is_active=values["is_active"],
+            comparable_season_key=values.get("comparable_season_key"),
+            is_high_demand_event=values.get("is_high_demand_event", False),
         )
         db.add(period)
         db.flush()
@@ -761,6 +793,8 @@ def _confirm_price_period_draft(
             setattr(period, field, values.get(field))
         period.priority = values["priority"]
         period.is_active = values["is_active"]
+        period.comparable_season_key = values.get("comparable_season_key")
+        period.is_high_demand_event = values.get("is_high_demand_event", False)
         db.flush()
         audit_action = AuditActionEnum.UPDATE
     elif action == "delete":
@@ -814,13 +848,17 @@ def confirm_rate_change_draft(
     category = _category_or_error(db, hotel_id, draft.category_id, lock=True)
     if draft.draft_type == "price_period":
         db.refresh(category, attribute_names=["base_price_per_night"])
-        return _confirm_price_period_draft(
+        confirmed, touched = _confirm_price_period_draft(
             db,
             draft=draft,
             hotel_id=hotel_id,
             user_id=user_id,
             category=category,
         )
+        from app.services.published_rate_history_service import record_published_rate_history
+
+        record_published_rate_history(db, confirmed)
+        return confirmed, touched
     target_dates = [date.fromisoformat(item["date"]) for item in draft.changes]
     rows, resolved = _load_rate_state(
         db,
@@ -886,7 +924,68 @@ def confirm_rate_change_draft(
         payload_before=before_draft,
         payload_after=_audit_payload(draft),
     )
+    from app.services.published_rate_history_service import record_published_rate_history
+
+    record_published_rate_history(db, draft)
     return draft, touched
+
+
+def edit_tariff_recommendation_draft(
+    db: Session,
+    *,
+    hotel_id: int,
+    draft_id: int,
+    expected_version: int,
+    user_id: int | None,
+    changes: list[dict[str, Any]],
+) -> RateChangeDraft:
+    """Allow an operator to adjust suggested base prices before confirmation."""
+    draft = _draft_for_update(db, hotel_id=hotel_id, draft_id=draft_id)
+    _check_draft_version(draft, expected_version)
+    if (
+        draft.status != "draft"
+        or draft.draft_type != "daily_rates"
+        or not isinstance(draft.impact, dict)
+        or not isinstance(draft.impact.get("recommendation"), dict)
+    ):
+        raise RateDraftError("Solo se pueden editar recomendaciones tarifarias pendientes.", status_code=409)
+
+    normalized = _validate_changes(changes)
+    existing_by_date = {item["date"]: item for item in draft.changes}
+    if not normalized or any(item["date"].isoformat() not in existing_by_date for item in normalized):
+        raise RateDraftError("La edición debe referirse a noches incluidas en la recomendación.")
+
+    before = _audit_payload(draft)
+    updated_by_date = {key: dict(value) for key, value in existing_by_date.items()}
+    for item in normalized:
+        date_key = item["date"].isoformat()
+        values = item["values"]
+        if set(values) != {"price"} or values["price"] is None or values["price"] <= 0:
+            raise RateDraftError("Editá únicamente una tarifa base positiva por noche.")
+        previous = updated_by_date[date_key]
+        if set(previous.get("values", {})) != {"price"}:
+            raise RateDraftError("La recomendación tiene un formato de tarifa que no se puede editar.", status_code=409)
+        replacement = dict(previous)
+        replacement["values"] = {"price": values["price"]}
+        replacement["effective_after"] = {"price": values["price"]}
+        updated_by_date[date_key] = replacement
+
+    now = datetime.now(timezone.utc)
+    draft.changes = [updated_by_date[item["date"]] for item in draft.changes]
+    draft.version += 1
+    draft.updated_at = now
+    db.flush()
+    audit_log_service.create_audit_log(
+        db,
+        hotel_id=hotel_id,
+        table_name="rate_change_drafts",
+        record_id=draft.id,
+        action=AuditActionEnum.UPDATE,
+        actor_user_id=user_id,
+        payload_before=before,
+        payload_after=_audit_payload(draft),
+    )
+    return draft
 
 
 def cancel_rate_change_draft(

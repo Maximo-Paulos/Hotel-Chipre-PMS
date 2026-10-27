@@ -134,8 +134,16 @@ def get_active_policy_settings(db: Session, hotel_id: int) -> AllocationPolicySe
             profile = version.profile
 
     constraints = DEFAULT_ALLOCATION_CONSTRAINTS | _load_json_dict(version.constraints_json)
+    configured_objective = str(constraints.get("optimization_objective", "occupied_nights"))
+    # Keep historical versions intact, but always run room allocation on its
+    # operational objective. Revenue management belongs to the separate,
+    # approval-based pricing recommendation workflow.
+    constraints["optimization_objective"] = "occupied_nights"
+    if configured_objective != "occupied_nights":
+        constraints["legacy_objective_ignored"] = configured_objective
     weights_raw = DEFAULT_ALLOCATION_WEIGHTS | _load_json_dict(version.weights_json)
     weights = {key: float(value) for key, value in weights_raw.items()}
+    weights.pop("combined_revenue_weight", None)
     return AllocationPolicySettings(
         profile=profile,
         version=version,
@@ -203,20 +211,12 @@ def create_policy_version(
 
     resolved_constraints = dict(constraints or DEFAULT_ALLOCATION_CONSTRAINTS)
     resolved_weights = dict(weights or DEFAULT_ALLOCATION_WEIGHTS)
+    resolved_weights.pop("combined_revenue_weight", None)
     objective_mode = resolved_constraints.get("optimization_objective", "occupied_nights")
-    if objective_mode not in {"occupied_nights", "net_revenue", "combined"}:
-        raise AllocationPolicyError("Unsupported allocation objective mode")
-    if objective_mode == "combined":
-        combined_revenue_weight = resolved_weights.get("combined_revenue_weight")
-        try:
-            combined_revenue_weight = float(combined_revenue_weight)
-        except (TypeError, ValueError):
-            raise AllocationPolicyError(
-                "Combined allocation objective requires a hotel-configured revenue weight"
-            ) from None
-        if not 0 <= combined_revenue_weight <= 1:
-            raise AllocationPolicyError("Combined revenue weight must be between 0 and 1")
-        resolved_weights["combined_revenue_weight"] = combined_revenue_weight
+    if objective_mode != "occupied_nights":
+        raise AllocationPolicyError(
+            "Room allocation only supports occupied nights; pricing decisions belong to rate recommendations"
+        )
 
     current_version = (
         db.query(AllocationPolicyVersion)

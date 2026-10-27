@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { AllocationAssignment, AllocationRunDetail } from "../api/allocation";
@@ -19,15 +19,20 @@ type AllocationProposalReviewProps = {
   canRecalculate: boolean;
   recalculationDisabledReason: string | null;
   onRecalculate: () => Promise<unknown>;
-  onAccept: (runId: number) => Promise<unknown>;
+  onAccept: (runId: number, explicitlyApprovedLockedReservationIds: number[]) => Promise<unknown>;
   onReject: (runId: number) => Promise<unknown>;
 };
 
-function allocationErrorKey(error: string) {
-  if (/mixed|currency|moneda|cotizaci[oó]n|\bfx\b/iu.test(error)) return "proposal.solverErrors.mixedCurrency";
-  if (/combined|comparable scale|escala comparable/iu.test(error)) return "proposal.solverErrors.combinedUnavailable";
-  return null;
-}
+const automaticAllocationTriggers = new Set([
+  "reservation_created_auto_proposal",
+  "new_reservation",
+  "reservation_date_change",
+  "reservation_update",
+  "reservation_room_move",
+  "reservation_group_created",
+  "manual_api_recalculate",
+  "rooms_manual_reallocate"
+]);
 
 function assignmentReason(assignment: AllocationAssignment, run: AllocationRunDetail, translate: (key: string) => string) {
   const explanation = run.explanations.find((item) => item.reservation_id === assignment.reservation_id && item.explanation_type === "assignment");
@@ -64,10 +69,28 @@ export function AllocationProposalReview({
 }: AllocationProposalReviewProps) {
   const { t, i18n } = useTranslation("allocation");
   const [confirmation, setConfirmation] = useState<"accept" | "reject" | null>(null);
+  const [selectedLockedMoveApprovals, setSelectedLockedMoveApprovals] = useState<Set<number>>(new Set());
   const proposed = run?.assignments.filter((assignment) => assignment.status.toLowerCase() === "proposed") ?? [];
+  const lockedMoveCandidates = proposed.filter((assignment) => assignment.requires_explicit_approval);
+  const lockedMoveCandidateIds = new Set(lockedMoveCandidates.map((assignment) => assignment.reservation_id));
+  const lockedMoveApprovalIds = [...selectedLockedMoveApprovals].filter((id) => lockedMoveCandidateIds.has(id));
+  const lockedMovePreservedCount = lockedMoveCandidates.length - lockedMoveApprovalIds.length;
+  const assignmentsToApplyCount = proposed.length - lockedMovePreservedCount;
   const reviewable = proposed.length > 0;
   const canAccept = run?.status.toLowerCase() === "succeeded";
-  const solverErrorKey = run?.error_message ? allocationErrorKey(run.error_message) : null;
+  const automaticRunComplete = Boolean(
+    run &&
+    run.status.toLowerCase() === "succeeded" &&
+    automaticAllocationTriggers.has(run.trigger_type)
+  );
+  const automaticMoveCount = run?.explanations.filter(
+    (explanation) => explanation.explanation_type === "proposal_auto_applied"
+  ).length ?? 0;
+
+  useEffect(() => {
+    setSelectedLockedMoveApprovals(new Set());
+    setConfirmation(null);
+  }, [run?.run_id]);
 
   const roomLabel = (id: number | null | undefined) => {
     if (!id) return t("proposal.unassigned");
@@ -79,7 +102,11 @@ export function AllocationProposalReview({
     if (!run || !confirmation) return;
     const action = confirmation;
     setConfirmation(null);
-    await (action === "accept" ? onAccept(run.run_id) : onReject(run.run_id));
+    await (
+      action === "accept"
+        ? onAccept(run.run_id, lockedMoveApprovalIds)
+        : onReject(run.run_id)
+    );
   };
 
   return (
@@ -117,12 +144,22 @@ export function AllocationProposalReview({
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">{t("proposal.run", { id: run.run_id })}</span>
             <span className={`rounded-full px-3 py-1 font-semibold ${run.status.toLowerCase() === "succeeded" ? "bg-emerald-100 text-emerald-800" : run.status.toLowerCase() === "failed" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-900"}`}>
-              {t(`proposal.status.${run.status.toLowerCase()}`, { defaultValue: run.status })}
+              {automaticRunComplete
+                ? t("proposal.status.automaticComplete")
+                : t(`proposal.status.${run.status.toLowerCase()}`, { defaultValue: run.status })}
             </span>
             <time className="text-slate-500" dateTime={run.created_at}>{new Intl.DateTimeFormat(i18n.language === "en" ? "en-US" : "es-AR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(run.created_at))}</time>
           </div>
 
-          {run.error_message ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">{solverErrorKey ? t(solverErrorKey) : run.error_message}</p> : null}
+          {run.error_message ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">{run.error_message}</p> : null}
+
+          {automaticRunComplete ? (
+            <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
+              {automaticMoveCount > 0
+                ? t("proposal.automaticApplied", { count: automaticMoveCount })
+                : t("proposal.automaticNoChanges")}
+            </p>
+          ) : null}
 
           {run.assignments.length === 0 ? (
             <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{t("proposal.noAssignments")}</p>
@@ -157,6 +194,35 @@ export function AllocationProposalReview({
                       </div>
                     </div>
                     <p className="mt-3 text-sm text-slate-600"><span className="font-medium text-slate-700">{t("proposal.reason")}: </span>{assignmentReason(assignment, run, (key) => t(key))}</p>
+                    {assignment.status.toLowerCase() === "proposed" && assignment.requires_explicit_approval ? (
+                      <label className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                        <input
+                          type="checkbox"
+                          checked={selectedLockedMoveApprovals.has(assignment.reservation_id)}
+                          onChange={(event) => {
+                            setSelectedLockedMoveApprovals((current) => {
+                              const next = new Set(current);
+                              if (event.target.checked) next.add(assignment.reservation_id);
+                              else next.delete(assignment.reservation_id);
+                              return next;
+                            });
+                          }}
+                          disabled={!canAccept || isAccepting || isRejecting}
+                          className="mt-0.5 size-4 accent-amber-700"
+                        />
+                        <span>{t("proposal.approveLockedMoveOnce")}</span>
+                      </label>
+                    ) : null}
+                    {assignment.status.toLowerCase() === "manual_review" && assignment.requires_explicit_approval ? (
+                      <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+                        {t("proposal.lockedMoveLeftUnchanged")}
+                      </p>
+                    ) : null}
+                    {assignment.status.toLowerCase() === "applied" && assignment.requires_explicit_approval ? (
+                      <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
+                        {t("proposal.lockedMoveApprovedOnce")}
+                      </p>
+                    ) : null}
                   </article>
                 );
               })}
@@ -167,7 +233,20 @@ export function AllocationProposalReview({
             <div className="border-t border-slate-200 pt-4">
               {confirmation ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3" role="group" aria-label={t("proposal.confirmationLabel")}>
-                  <p className="text-sm font-medium text-amber-950">{t(confirmation === "accept" ? "proposal.confirmAccept" : "proposal.confirmReject", { count: proposed.length })}</p>
+                  <p className="text-sm font-medium text-amber-950">
+                    {confirmation === "accept" && lockedMoveApprovalIds.length > 0
+                      ? t("proposal.confirmAcceptLocked", {
+                        count: assignmentsToApplyCount,
+                        approvedCount: lockedMoveApprovalIds.length,
+                        preservedCount: lockedMovePreservedCount
+                      })
+                      : confirmation === "accept" && lockedMovePreservedCount > 0
+                        ? t("proposal.confirmAcceptWithLockedLeft", {
+                          count: assignmentsToApplyCount,
+                          preservedCount: lockedMovePreservedCount
+                        })
+                      : t(confirmation === "accept" ? "proposal.confirmAccept" : "proposal.confirmReject", { count: proposed.length })}
+                  </p>
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                     <button type="button" onClick={() => void handleAction()} disabled={isAccepting || isRejecting} className="min-h-10 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:opacity-50">{t("proposal.confirmAction")}</button>
                     <button type="button" onClick={() => setConfirmation(null)} className="min-h-10 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">{t("proposal.keepReviewing")}</button>
@@ -181,8 +260,12 @@ export function AllocationProposalReview({
               )}
               {!canAccept ? <p className="mt-2 text-xs text-slate-600">{t("proposal.acceptRequiresSuccess")}</p> : null}
             </div>
-          ) : run.status.toLowerCase() === "succeeded" && run.assignments.length > 0 ? (
-            <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{t("proposal.reviewed")}</p>
+          ) : !automaticRunComplete && run.status.toLowerCase() === "succeeded" && run.assignments.length > 0 ? (
+            run.assignments.some((assignment) => assignment.status.toLowerCase() === "manual_review") ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t("proposal.lockedMovesRemain")}</p>
+            ) : (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{t("proposal.reviewed")}</p>
+            )
           ) : null}
         </div>
       ) : null}

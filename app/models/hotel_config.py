@@ -62,6 +62,15 @@ class HotelConfiguration(Base):
             "fx_rounding_policy IN ('round_up', 'round_down', 'nearest_ten', 'exact', 'keep_remainder')",
             name="ck_hotel_configuration_fx_rounding_policy",
         ),
+        CheckConstraint(
+            "tariff_low_occupancy_pct >= 0 AND tariff_low_occupancy_pct < tariff_high_occupancy_pct "
+            "AND tariff_high_occupancy_pct <= 100",
+            name="ck_hotel_configuration_tariff_occupancy_thresholds",
+        ),
+        CheckConstraint(
+            "tariff_pickup_change_pct > 0 AND tariff_max_step_pct > 0 AND tariff_max_step_pct <= 5",
+            name="ck_hotel_configuration_tariff_recommendation_bounds",
+        ),
     )
 
     # hotel_id is the primary key; no auto-assigned default to avoid implicit singletons
@@ -132,6 +141,9 @@ class HotelConfiguration(Base):
 
     # General
     hotel_name = Column(String(200), nullable=False, default="Mi Hotel")
+    # Nullable by design: floor preference is used only when the hotel has
+    # explicitly confirmed that it has no elevator.
+    has_elevator = Column(Boolean, nullable=True)
     # Informational fiscal issuer profile. It is deliberately separate from
     # electronic invoicing; these values never imply an ARCA-issued document.
     fiscal_legal_name = Column(String(200), nullable=True)
@@ -180,6 +192,25 @@ class HotelConfiguration(Base):
     check_out_time = Column(String(5), nullable=True)
     manual_rate_min_adjustment_pct = Column(Numeric(7, 2), nullable=True)
     manual_rate_max_adjustment_pct = Column(Numeric(7, 2), nullable=True)
+
+    # Experimental recommendation-only tariff engine. New hotels remain
+    # opted out until an owner enables recommendations; its pilot thresholds
+    # are explicit and configurable per hotel.
+    tariff_recommendations_enabled = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    tariff_high_occupancy_pct = Column(
+        Numeric(5, 2), nullable=False, default=80, server_default=text("80")
+    )
+    tariff_low_occupancy_pct = Column(
+        Numeric(5, 2), nullable=False, default=40, server_default=text("40")
+    )
+    tariff_pickup_change_pct = Column(
+        Numeric(6, 2), nullable=False, default=20, server_default=text("20")
+    )
+    tariff_max_step_pct = Column(
+        Numeric(5, 2), nullable=False, default=5, server_default=text("5")
+    )
 
     # Identity fields collected by onboarding and edited in Settings.
     languages = Column(JSON, nullable=False, default=lambda: ["es"])

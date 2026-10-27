@@ -91,12 +91,12 @@ def request_reservation_created_allocation(
     db: Session,
     reservation: Reservation,
 ) -> AllocationRun | None:
-    """Queue one hotel-scoped proposal run for an eligible new reservation.
+    """Queue one hotel-scoped automatic optimization run for a new reservation.
 
     The request is a pending AllocationRun row in the reservation's transaction.
-    A periodic worker claims it after commit and runs the solver with
-    ``apply=False``. This preserves the first-fit booking assignment as the
-    fallback and never moves a confirmed reservation automatically.
+    A periodic worker reoptimizes after commit and automatically applies only a
+    complete, revalidated plan for reservations without an explicit lock or
+    check-in. The first-fit assignment remains in place if optimization fails.
     """
     hotel_id = reservation.hotel_id
     if (

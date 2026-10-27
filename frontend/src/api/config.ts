@@ -6,6 +6,7 @@ export type FxRoundingPolicy = "round_up" | "round_down" | "nearest_ten" | "exac
 export type HotelConfig = {
   id: number;
   hotel_name: string;
+  has_elevator?: boolean | null;
   fiscal_legal_name?: string | null;
   fiscal_tax_id?: string | null;
   fiscal_vat_condition?: "responsable_inscripto" | "monotributo" | "exento" | "consumidor_final" | "no_responsable" | "otro" | null;

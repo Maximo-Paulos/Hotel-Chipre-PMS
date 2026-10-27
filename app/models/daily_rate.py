@@ -104,6 +104,11 @@ class PricePeriod(Base):
     price_expedia = Column(Float, nullable=True)
     priority = Column(Integer, nullable=False, default=0)  # higher wins on overlap
     is_active = Column(Boolean, nullable=False, default=True)
+    # Explicit hotel-managed cohort for USD rate comparisons across seasons.
+    # Free-form names are normalized by the rate-draft service.
+    comparable_season_key = Column(String(80), nullable=True)
+    # Marks date ranges that the hotel identifies as high-demand events.
+    is_high_demand_event = Column(Boolean, nullable=False, default=False)
     created_at = Column(
         DateTime,
         nullable=False,

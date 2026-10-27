@@ -2,14 +2,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   acceptAllocationRun,
-  createAndPublishAllocationPolicy,
   getActiveAllocationPolicy,
   getAllocationRun,
   getLatestAllocationRun,
   rejectAllocationRun,
-  setReservationReassignmentLock,
-  type AllocationObjective,
-  type AllocationPolicyVersionCreate
+  setReservationReassignmentLock
 } from "../api/allocation";
 import { triggerAllocationRecalculation } from "../api/allocationRuns";
 import { hasValidSession } from "../api/client";
@@ -69,7 +66,7 @@ export function useAllocationWorkspace(reservationSkip: number) {
 
   const recalculateMutation = useGuardedMutation({
     mutationFn: async () => {
-      const triggered = await triggerAllocationRecalculation({ apply: false }, session);
+      const triggered = await triggerAllocationRecalculation({ apply: true }, session);
       return getAllocationRun(triggered.run_id, session);
     },
     onSuccess: async (run) => {
@@ -79,7 +76,8 @@ export function useAllocationWorkspace(reservationSkip: number) {
   });
 
   const acceptMutation = useGuardedMutation({
-    mutationFn: (runId: number) => acceptAllocationRun(runId, session),
+    mutationFn: ({ runId, explicitlyApprovedLockedReservationIds }: { runId: number; explicitlyApprovedLockedReservationIds: number[] }) =>
+      acceptAllocationRun(runId, explicitlyApprovedLockedReservationIds, session),
     onSuccess: async (run) => {
       queryClient.setQueryData(allocationLatestKey(session.hotelId ?? null), run);
       await Promise.all([
@@ -110,38 +108,6 @@ export function useAllocationWorkspace(reservationSkip: number) {
     }
   });
 
-  const savePolicyMutation = useGuardedMutation({
-    mutationFn: (payload: AllocationPolicyVersionCreate) => createAndPublishAllocationPolicy(payload, session),
-    onSuccess: async (version) => {
-      const policy = policyQuery.data;
-      if (policy) {
-        queryClient.setQueryData(allocationPolicyKey(session.hotelId ?? null), {
-          ...policy,
-          version
-        });
-      }
-      await queryClient.invalidateQueries({ queryKey: allocationPolicyKey(session.hotelId ?? null) });
-    }
-  });
-
-  const savePolicy = (objective: AllocationObjective, revenueWeight: number) => {
-    const activeVersion = policyQuery.data?.version;
-    if (!activeVersion) return Promise.reject(new Error("No hay una política activa para actualizar."));
-
-    const constraints = { ...activeVersion.constraints, optimization_objective: objective };
-    const weights = { ...activeVersion.weights };
-    if (objective === "combined") weights.combined_revenue_weight = revenueWeight;
-
-    return savePolicyMutation.mutateAsync({
-      constraints,
-      weights,
-      optimization_objective: objective,
-      ...(objective === "combined" ? { combined_revenue_weight: revenueWeight } : {}),
-      source: "manual",
-      publish: true
-    });
-  };
-
   return {
     permissions,
     canMoveReservations,
@@ -155,8 +121,6 @@ export function useAllocationWorkspace(reservationSkip: number) {
     recalculateMutation,
     acceptMutation,
     rejectMutation,
-    reassignmentLockMutation,
-    savePolicyMutation,
-    savePolicy
+    reassignmentLockMutation
   };
 }

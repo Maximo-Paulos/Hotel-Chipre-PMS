@@ -124,6 +124,8 @@ from app.services.financial_ledger import (
     has_payment_history_for_cancellation,
 )
 from app.services.allocation_runtime_service import (
+    AllocationRuntimeError,
+    auto_apply_safe_allocation_run,
     reservation_overlaps_default_horizon,
     run_persisted_allocation,
 )
@@ -2353,14 +2355,27 @@ def recalculate_allocation(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
-    result = run_persisted_allocation(
-        db,
-        hotel_id=context.hotel_id,
-        trigger_type="manual_api_recalculate",
-        apply=payload.apply,
-        horizon_start=payload.horizon_start,
-        horizon_end=payload.horizon_end,
-    )
+    try:
+        result = run_persisted_allocation(
+            db,
+            hotel_id=context.hotel_id,
+            trigger_type=(
+                "manual_api_recalculate" if payload.apply else "manual_api_preview"
+            ),
+            apply=payload.apply,
+            horizon_start=payload.horizon_start,
+            horizon_end=payload.horizon_end,
+        )
+        if payload.apply and result.solver_result.success:
+            auto_apply_safe_allocation_run(
+                db, hotel_id=context.hotel_id, run_id=result.run.id
+            )
+    except AllocationRuntimeError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="La reserva o la disponibilidad cambió durante el cálculo. Volvé a ejecutar la asignación.",
+        ) from exc
     db.commit()
     return AllocationRunResponse(
         run_id=result.run.id,

@@ -10,7 +10,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
 from app.database import get_engine
-from app.models.allocation import AllocationRun, AllocationRunStatusEnum
+from app.models.allocation import (
+    AllocationAssignment,
+    AllocationAssignmentStatusEnum,
+    AllocationRun,
+    AllocationRunStatusEnum,
+)
 from app.services.allocation_trigger_service import (
     ALLOCATION_PROPOSAL_TRIGGER_TYPES,
 )
@@ -86,7 +91,7 @@ def _process_hotel_request(
     allocation_runner: Callable | None = None,
     origin_key: str | None = None,
 ) -> dict[str, int]:
-    """Process at most one queued proposal for a tenant, with safe retry state."""
+    """Process one queued run and auto-apply only its safe, complete moves."""
     now = now or datetime.now(timezone.utc)
     set_tenant_hotel_context(db, hotel_id)
     claimed = _claim_request(db, hotel_id=hotel_id, now=now)
@@ -111,10 +116,30 @@ def _process_hotel_request(
             db,
             hotel_id=hotel_id,
             trigger_type=trigger_type,
-            apply=False,
+            apply=True,
             queued_run_id=request_id,
             origin_key=normalized_origin_key,
         )
+        if result.run.status == AllocationRunStatusEnum.SUCCEEDED:
+            pending_moves = (
+                db.query(AllocationAssignment.id)
+                .filter(
+                    AllocationAssignment.hotel_id == hotel_id,
+                    AllocationAssignment.allocation_run_id == request_id,
+                    AllocationAssignment.status == AllocationAssignmentStatusEnum.PROPOSED,
+                )
+                .count()
+            )
+            if pending_moves:
+                from app.services.allocation_runtime_service import accept_allocation_run
+
+                accept_allocation_run(
+                    db,
+                    hotel_id=hotel_id,
+                    run_id=request_id,
+                    user_id=None,
+                    automatic=True,
+                )
         db.commit()
         succeeded = int(result.run.status == AllocationRunStatusEnum.SUCCEEDED)
         failed = int(not succeeded)
@@ -182,7 +207,7 @@ def process_recalculation_requests(
     hotel_id: int | None = None,
     origin_key: str | None = None,
 ) -> dict[str, int]:
-    """Process one pending optimizer proposal per active hotel, without providers."""
+    """Process one pending optimizer run per active hotel, without providers."""
     totals = {"selected": 0, "succeeded": 0, "failed": 0, "deferred": 0}
     if hotel_id is not None and (type(hotel_id) is not int or hotel_id <= 0):
         logger.warning("allocation_tasks.invalid_hotel_id")

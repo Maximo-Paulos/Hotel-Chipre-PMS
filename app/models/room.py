@@ -5,6 +5,7 @@ import enum
 
 from sqlalchemy import (
     Column,
+    JSON,
     Numeric,
     Integer,
     String,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     Enum,
     Text,
+    text,
     CheckConstraint,
     ForeignKeyConstraint,
     UniqueConstraint,
@@ -105,6 +107,15 @@ class Room(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     score = Column(Integer, nullable=True)        # 1-10 preference score for allocation
     is_accessible = Column(Boolean, nullable=False, default=False)
+    # Optional source preferences are soft allocation tie-breakers. Keep them
+    # explicit per physical room so operators can reserve preferred inventory
+    # for direct, OTA, or selected corporate bookings without blocking others.
+    allocation_priority_channel_groups = Column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
+    allocation_priority_company_ids = Column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
     description = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
     deleted_at = Column(DateTime, nullable=True)

@@ -5,7 +5,6 @@ import { AllocationPolicySettings } from "../../components/AllocationPolicySetti
 import { AllocationProposalReview } from "../../components/AllocationProposalReview";
 import { AllocationReservationLocks } from "../../components/AllocationReservationLocks";
 import { ApiError } from "../../api/client";
-import type { AllocationObjective } from "../../api/allocation";
 import { useAllocationWorkspace } from "../../hooks/useAllocationWorkspace";
 
 function messageFor(error: unknown, fallback: string, staleProposalMessage: string) {
@@ -30,9 +29,7 @@ export function AllocationPage() {
     recalculateMutation,
     acceptMutation,
     rejectMutation,
-    reassignmentLockMutation,
-    savePolicyMutation,
-    savePolicy
+    reassignmentLockMutation
   } = workspace;
 
   const run = latestRunQuery.data;
@@ -58,10 +55,10 @@ export function AllocationPage() {
     }
   };
 
-  const acceptRun = async (runId: number) => {
+  const acceptRun = async (runId: number, explicitlyApprovedLockedReservationIds: number[]) => {
     setActionError(null);
     try {
-      await acceptMutation.mutateAsync(runId);
+      await acceptMutation.mutateAsync({ runId, explicitlyApprovedLockedReservationIds });
     } catch (error) {
       setActionError(messageFor(error, t("page.genericFailure"), staleProposalMessage));
     }
@@ -84,8 +81,6 @@ export function AllocationPage() {
       setActionError(messageFor(error, t("page.genericFailure"), staleProposalMessage));
     }
   };
-
-  const saveActivePolicy = (objective: AllocationObjective, revenueWeight: number) => savePolicy(objective, revenueWeight);
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-5 pb-8">
@@ -161,8 +156,6 @@ export function AllocationPage() {
           policy={policyQuery.data}
           isLoading={policyQuery.isLoading}
           error={policyError}
-          isSaving={savePolicyMutation.isPending}
-          onSave={saveActivePolicy}
         />
       ) : null}
     </div>

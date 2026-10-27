@@ -2,8 +2,8 @@
   "page": {
     "eyebrow": "Operación hotelera",
     "title": "Asignación inteligente",
-    "description": "El motor propone cómo acomodar las reservas para mejorar la ocupación y la facturación. Revisá cada movimiento antes de aplicarlo.",
-    "reviewBeforeApply": "Nada se mueve sin aceptación",
+    "description": "El motor asigna reservas y reorganiza automáticamente las futuras que todavía no tuvieron check-in para reducir huecos por habitación. Las restricciones y excepciones quedan protegidas para revisión.",
+    "reviewBeforeApply": "Movimientos elegibles automáticos · excepciones revisables",
     "actionFailed": "No se pudo completar la operación: {{message}}",
     "genericFailure": "No se pudo completar la operación.",
     "staleProposal": "Las reservas cambiaron después del cálculo. No se aplicó la propuesta. Rechazá esta propuesta y generá otra para revisar el estado actual."
@@ -11,41 +11,34 @@
   "policy": {
     "eyebrow": "Preferencias del hotel",
     "title": "Objetivo del motor",
-    "description": "Elegí qué resultado prioriza el motor. La política queda activa para las próximas propuestas.",
+    "description": "La asignación ordena reservas futuras para mejorar la continuidad de ocupación por habitación.",
     "version": "Versión {{version}}",
     "loading": "Cargando la configuración del motor…",
     "loadFailed": "No se pudo cargar la configuración: {{message}}",
     "objective": "Prioridad",
     "objectives": {
-      "occupiedNights": "Maximizar noches ocupadas",
-      "netRevenue": "Maximizar ingreso neto",
-      "combined": "Combinar ocupación e ingreso neto"
+      "occupiedNights": "Reducir huecos y maximizar noches ocupadas por habitación"
     },
-    "revenueWeight": "Peso del ingreso neto",
-    "revenueWeightHelp": "El resto del peso se asigna a noches ocupadas.",
-    "combinedNote": "El porcentaje define el peso del ingreso neto; el resto corresponde a ocupación. El motor necesita valores comparables entre reservas. Si mezcla monedas sin cotización FX vigente guardada, no generará una propuesta y mostrará el motivo.",
-    "revenueCurrencyNote": "El ingreso neto se compara cuando las reservas usan una moneda comparable. Si no se puede comparar, el motor detiene el cálculo y explica el problema.",
-    "save": "Guardar y activar",
-    "saving": "Guardando…",
-    "saved": "La nueva versión de la política quedó activa.",
-    "saveFailed": "No se pudo guardar la política."
+    "assignmentObjectiveNote": "La asignación no cambia tarifas. Las recomendaciones de precio se revisan y aprueban por separado.",
+    "legacyObjectiveNormalized": "La versión histórica pedía priorizar {{objective}}. Se conserva en el historial; el cálculo actual prioriza ocupación y continuidad."
   },
   "proposal": {
     "eyebrow": "Revisión del motor",
     "title": "Última propuesta",
-    "description": "Revisá habitación actual, habitación sugerida y motivo. Aceptar aplica los cambios de forma explícita; rechazar conserva las asignaciones actuales.",
-    "recalculate": "Generar nueva propuesta",
+    "description": "Recalcular aplica automáticamente los movimientos completos y seguros. Los check-ins y bloqueos explícitos se respetan; una excepción requiere aprobación puntual.",
+    "recalculate": "Recalcular y aplicar movimientos seguros",
     "recalculating": "Calculando…",
-    "recalculateHelp": "El cálculo no cambia habitaciones. Primero genera una propuesta para revisión.",
+    "recalculateHelp": "El motor aplica solo planes completos y revalidados. Los casos bloqueados permanecen para revisión.",
     "resolveBeforeRecalculate": "Aceptá o rechazá la propuesta pendiente antes de generar otra.",
     "loading": "Cargando la propuesta más reciente…",
     "loadFailed": "No se pudo cargar la propuesta: {{message}}",
-    "empty": "Todavía no hay propuestas. Generá una para que el motor evalúe la disponibilidad actual.",
+    "empty": "Todavía no hay corridas. Recalculá para optimizar las asignaciones actuales.",
     "run": "Propuesta #{{id}}",
     "status": {
       "pending": "Pendiente",
       "running": "En cálculo",
       "succeeded": "Lista para revisar",
+      "automaticComplete": "Optimización automática completada",
       "failed": "Cálculo detenido",
       "partial": "Resultado parcial"
     },
@@ -77,14 +70,18 @@
     "acceptRequiresSuccess": "Este cálculo no terminó correctamente. Podés rechazar la propuesta, pero no aplicarla.",
     "confirmAction": "Confirmar decisión",
     "confirmAccept": "Al confirmar, el PMS moverá las {{count}} asignaciones propuestas. ¿Querés continuar?",
+    "confirmAcceptLocked": "El PMS aplicará {{count}} movimientos: autorizás {{approvedCount}} movimiento(s) protegido(s) solo esta vez y {{preservedCount}} quedarán sin aplicar. Los bloqueos se mantienen. ¿Confirmás?",
+    "confirmAcceptWithLockedLeft": "El PMS aplicará {{count}} movimientos elegibles. {{preservedCount}} movimientos protegidos quedarán sin aplicar y conservarán su bloqueo. ¿Confirmás?",
     "confirmReject": "Al confirmar, se descartan las {{count}} sugerencias y se conservan las habitaciones actuales. ¿Querés continuar?",
+    "approveLockedMoveOnce": "Autorizar este movimiento una sola vez; conservar el bloqueo para futuras corridas",
+    "lockedMoveLeftUnchanged": "No se autorizó este movimiento. La reserva permanece en su habitación y el bloqueo sigue activo.",
+    "lockedMoveApprovedOnce": "Movimiento autorizado una sola vez. El bloqueo sigue activo para futuras corridas.",
+    "lockedMovesRemain": "Los movimientos protegidos sin autorización quedaron sin aplicar y mantienen sus bloqueos.",
     "confirmationLabel": "Confirmación de la propuesta",
     "keepReviewing": "Volver a revisar",
     "reviewed": "Esta propuesta ya no tiene movimientos pendientes.",
-    "solverErrors": {
-      "mixedCurrency": "El motor no pudo comparar el ingreso neto porque encontró monedas distintas sin cotización FX vigente guardada. Actualizá la base de comparación o elegí temporalmente una prioridad por noches ocupadas; no se aplicó ningún cambio.",
-      "combinedUnavailable": "El motor no pudo comparar ocupación e ingreso neto con los datos actuales. Revisá la escala y las cotizaciones guardadas; no se aplicó ningún cambio."
-    }
+    "automaticApplied": "El motor aplicó {{count}} movimientos seguros. Los movimientos con bloqueo esperan aprobación y las reservas con check-in no se mueven.",
+    "automaticNoChanges": "El motor terminó la revisión y no encontró movimientos seguros para aplicar."
   },
   "locks": {
     "eyebrow": "Control manual",

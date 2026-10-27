@@ -56,6 +56,7 @@ class HotelConfigRead(BaseModel):
     require_document_for_checkin: bool
     require_terms_acceptance: bool
     hotel_name: str
+    has_elevator: Optional[bool] = None
     fiscal_legal_name: Optional[str] = None
     fiscal_tax_id: Optional[str] = None
     fiscal_vat_condition: Optional[Literal[
@@ -113,6 +114,7 @@ class HotelConfigUpdate(BaseModel):
     require_document_for_checkin: Optional[bool] = None
     require_terms_acceptance: Optional[bool] = None
     hotel_name: Optional[str] = None
+    has_elevator: Optional[bool] = None
     fiscal_legal_name: Optional[str] = Field(default=None, max_length=200)
     fiscal_tax_id: Optional[str] = Field(default=None, max_length=20)
     fiscal_vat_condition: Optional[Literal[
