@@ -52837,6 +52837,30 @@
             "type": "string",
             "title": "Configured Market"
           },
+          "quote_status": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "outage_fallback_24h",
+              "not_required"
+            ],
+            "title": "Quote Status"
+          },
+          "warning_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fx.lastSuccessFallback24h"
+                ],
+                "const": "fx.lastSuccessFallback24h"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning Code"
+          },
           "quote_details": {
             "anyOf": [
               {
@@ -52855,7 +52879,8 @@
           "to_currency",
           "rate",
           "provider",
-          "configured_market"
+          "configured_market",
+          "quote_status"
         ],
         "title": "FxConversionQuoteRead"
       },
@@ -53228,6 +53253,16 @@
               }
             ],
             "title": "Fechaactualizacion"
+          },
+          "quote_status": {
+            "type": "string",
+            "enum": [
+              "fresh",
+              "outage_fallback_24h",
+              "stale"
+            ],
+            "title": "Quote Status",
+            "default": "fresh"
           }
         },
         "type": "object",
@@ -61287,6 +61322,10 @@
             "type": "integer",
             "title": "Id"
           },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
           "room_id": {
             "anyOf": [
               {
@@ -61336,6 +61375,7 @@
         "type": "object",
         "required": [
           "id",
+          "version",
           "confirmation_code",
           "check_in_date",
           "check_out_date",

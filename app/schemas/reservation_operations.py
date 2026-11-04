@@ -353,6 +353,7 @@ class OccupancyGridRoomRead(BaseModel):
 
 class OccupancyGridReservationRead(BaseModel):
     id: int
+    version: int
     room_id: Optional[int] = None
     confirmation_code: str
     check_in_date: date
