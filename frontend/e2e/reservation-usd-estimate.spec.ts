@@ -118,7 +118,7 @@ test("reservation form shows an indicative USD estimate without changing its ARS
   const estimate = form.getByTestId("reservation-usd-estimate");
   await expect(estimate).toContainText("Estimación orientativa en USD");
   await expect(form.getByTestId("reservation-usd-estimate-value")).toContainText("50");
-  await expect(estimate).toContainText("1 ARS = 0,001 USD");
+  await expect(estimate).toContainText("1 USD = 1.000 ARS");
   await expect(estimate).toContainText("Blue");
   await expect(estimate).toContainText("USD venta");
   await expect(estimate).toContainText("spread 5%");

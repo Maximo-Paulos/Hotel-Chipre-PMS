@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 
 import type { PaymentSurchargeQuote } from "../api/paymentSurcharges";
-import { formatMoney } from "../utils/currency";
+import { formatFxRate, formatMoney } from "../utils/currency";
 
 type PaymentQuoteSummaryProps = {
   quote: PaymentSurchargeQuote;
@@ -18,10 +18,13 @@ const detailLabel = (details: Record<string, unknown> | null): string | null => 
 };
 
 export function PaymentQuoteSummary({ quote, showCashSuggestion = false }: PaymentQuoteSummaryProps) {
-  const { t } = useTranslation("reservations");
+  const { t, i18n } = useTranslation("reservations");
   const currency = quote.currency_code.toUpperCase();
   const reservationCurrency = quote.reservation_currency_code.toUpperCase();
   const fxRate = quote.fx_rate_snapshot === null ? null : Number(quote.fx_rate_snapshot);
+  const fxRateLabel = currency !== reservationCurrency && fxRate !== null
+    ? formatFxRate(reservationCurrency, currency, fxRate, i18n.language)
+    : null;
   const suggestion = quote.cash_tender_suggestion === null ? null : Number(quote.cash_tender_suggestion);
   const hasCashSuggestion = showCashSuggestion && suggestion !== null &&
     Math.abs(suggestion - Number(quote.final_amount)) >= 0.005;
@@ -58,12 +61,10 @@ export function PaymentQuoteSummary({ quote, showCashSuggestion = false }: Payme
           <dd>{formatMoney(quote.remaining_balance, reservationCurrency)}</dd>
         </div>
       </dl>
-      {currency !== reservationCurrency && fxRate !== null && Number.isFinite(fxRate) ? (
+      {fxRateLabel ? (
         <p className="mt-1">
           {t("page.form.paymentQuoteFxRate", {
-            fromCurrency: reservationCurrency,
-            rate: fxRate.toLocaleString(undefined, { maximumFractionDigits: 8 }),
-            toCurrency: currency
+            rate: fxRateLabel
           })}
           {fxSource ? ` · ${fxSource}` : ""}
         </p>

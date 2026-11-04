@@ -37,6 +37,35 @@ export function formatMoney(amount: number | string | null | undefined, currency
   return getFormatter(locale, currencyCode).format(safeAmount);
 }
 
+export function formatFxRate(
+  fromCurrency: string,
+  toCurrency: string,
+  rate: number | string | null | undefined,
+  locale = "es-AR",
+): string | null {
+  const numericRate = Number(rate);
+  if (!Number.isFinite(numericRate) || numericRate <= 0) return null;
+
+  const from = normalizeCurrencyCode(fromCurrency);
+  const to = normalizeCurrencyCode(toCurrency);
+  const baseCurrency = to === "USD" && from !== "USD" ? "USD" : from;
+  const quoteCurrency = baseCurrency === "USD" && to === "USD" ? from : to;
+  const quoteRate = baseCurrency === "USD" && from !== "USD" ? 1 / numericRate : numericRate;
+
+  if (!Number.isFinite(quoteRate) || quoteRate <= 0) return null;
+
+  const numberLocale = locale.toLowerCase().startsWith("en")
+    ? "en-US"
+    : locale.toLowerCase().startsWith("es")
+      ? "es-AR"
+      : locale;
+  const formattedRate = new Intl.NumberFormat(numberLocale, {
+    maximumFractionDigits: 6,
+  }).format(quoteRate);
+
+  return `1 ${baseCurrency} = ${formattedRate} ${quoteCurrency}`;
+}
+
 export function resolveSingleCurrencyCode(
   currencyCodes: Array<string | null | undefined>,
 ): string | null {
