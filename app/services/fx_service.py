@@ -75,11 +75,14 @@ def _store_rate(key: str, quote: dict) -> None:
 
 
 def parse_provider_updated_at(value: object) -> datetime | None:
-    if not isinstance(value, str) or not value.strip():
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
-    except ValueError:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str) and value.strip():
+        try:
+            parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
         return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
@@ -100,10 +103,34 @@ def quote_is_fresh(quote: object, *, now: datetime | None = None) -> bool:
     if updated_at is None:
         return False
     current = now or datetime.now(timezone.utc)
-    return (
-        buy <= sell
-        and current - MAX_PROVIDER_QUOTE_AGE <= updated_at <= current + MAX_PROVIDER_FUTURE_SKEW
-    )
+    observed_at = parse_provider_updated_at(quote.get("_observed_at"))
+    if observed_at is not None:
+        # DolarAPI may repeat Friday's market timestamp during the weekend.
+        # Freshness is based on when the PMS received the valid response.
+        return (
+            buy <= sell
+            and current - MAX_PROVIDER_QUOTE_AGE
+            <= observed_at
+            <= current + MAX_PROVIDER_FUTURE_SKEW
+            and updated_at <= current + MAX_PROVIDER_FUTURE_SKEW
+        )
+    return buy <= sell and current - MAX_PROVIDER_QUOTE_AGE <= updated_at <= current + MAX_PROVIDER_FUTURE_SKEW
+
+
+def _with_observed_at(payload: object, observed_at: datetime | None = None) -> object:
+    """Stamp a successful provider response with trusted PMS receipt time."""
+    received_at = observed_at or datetime.now(timezone.utc)
+    if received_at.tzinfo is None:
+        received_at = received_at.replace(tzinfo=timezone.utc)
+    timestamp = received_at.astimezone(timezone.utc).isoformat()
+    if isinstance(payload, dict):
+        return {**payload, "_observed_at": timestamp}
+    if isinstance(payload, list):
+        return [
+            {**item, "_observed_at": timestamp} if isinstance(item, dict) else item
+            for item in payload
+        ]
+    return payload
 
 
 def _quote_matches_supported_market(
@@ -136,23 +163,6 @@ def _quote_matches_conversion_market(
         and str(quote.get("casa") or "").strip().lower() == DERIVED_BLUE_MARKET
         and str(quote.get("_selected_market") or "blue").strip().lower() == "blue"
     )
-
-
-def _fresh_cached_conversion_quote(
-    cache_key: str,
-    *,
-    currency: str,
-    market: str,
-) -> dict | None:
-    """Return an exact-market cached quote while its provider timestamp is fresh."""
-    quote = _cached_rate(cache_key, allow_stale=True)
-    if (
-        quote is None
-        or not _quote_matches_conversion_market(quote, currency=currency, market=market)
-        or not quote_is_fresh(quote)
-    ):
-        return None
-    return quote
 
 
 def _derive_blue_equivalent(
@@ -191,14 +201,23 @@ def _derive_blue_equivalent(
     if any(not math.isfinite(value) or value <= 0 for value in inputs):
         return None
 
+    source_quotes = (direct_quote, usd_official_quote, usd_blue_quote)
     update_times = [
         parse_provider_updated_at(item.get("fechaActualizacion") or item.get("fecha"))
-        for item in (direct_quote, usd_official_quote, usd_blue_quote)
+        for item in source_quotes
     ]
     if any(item is None for item in update_times):
         return None
+    observed_times = [
+        parse_provider_updated_at(item.get("_observed_at")) for item in source_quotes
+    ]
     # A derived quote is only as current as its oldest input.
     effective_update = min(item for item in update_times if item is not None)
+    effective_observed = (
+        min(item for item in observed_times if item is not None)
+        if all(item is not None for item in observed_times)
+        else None
+    )
     derived_buy = direct_buy * blue_buy / official_buy
     derived_sell = direct_sell * blue_sell / official_sell
     if not math.isfinite(derived_buy) or not math.isfinite(derived_sell) or derived_buy <= 0 or derived_sell <= 0:
@@ -212,6 +231,7 @@ def _derive_blue_equivalent(
         "compra": derived_buy,
         "venta": derived_sell,
         "fechaActualizacion": effective_update.isoformat(),
+        "_observed_at": effective_observed.isoformat() if effective_observed else None,
         "_selected_market": "blue",
         "_rate_type": f"{currency.lower()}_blue",
         "_derived_blue": True,
@@ -245,7 +265,7 @@ async def _get_async(url: str) -> Optional[dict | list]:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await observed_async_http_call("dolarapi.rates_async", client.get, url)
             response.raise_for_status()
-            return response.json()
+            return _with_observed_at(response.json())
     except Exception as exc:  # noqa: BLE001
         logger.warning("DolarAPI fetch failed error_type=%s", type(exc).__name__)
         return None
@@ -323,6 +343,35 @@ async def _cached_supported_rates() -> dict[str, dict]:
     for key in SUPPORTED_DISPLAY_RATE_TYPES:
         cached = _cached_rate(_cache_key_for_display_rate(key), allow_stale=True)
         if _cached_quote_matches(key, cached):
+            result[key] = _as_cached_fallback_quote(cached)
+    return result
+
+
+def _as_cached_fallback_quote(quote: dict) -> dict:
+    """Mark display data returned without a successful current provider fetch."""
+    result = dict(quote)
+    observed_at = parse_provider_updated_at(
+        result.get("_observed_at")
+        or result.get("fechaActualizacion")
+        or result.get("fecha")
+    )
+    age = datetime.now(timezone.utc) - observed_at if observed_at is not None else None
+    within_fallback_window = (
+        age is not None
+        and age >= -MAX_PROVIDER_FUTURE_SKEW
+        and age <= MAX_PROVIDER_QUOTE_AGE
+    )
+    result["_cache_fallback"] = True
+    result["quote_status"] = "outage_fallback_24h" if within_fallback_window else "stale"
+    return result
+
+
+def get_cached_supported_rates() -> dict[str, dict]:
+    """Return valid process-cached rates to persist with an on-demand refresh."""
+    result: dict[str, dict] = {}
+    for key in SUPPORTED_DISPLAY_RATE_TYPES:
+        cached = _cached_rate(_cache_key_for_display_rate(key), allow_stale=True)
+        if _cached_quote_matches(key, cached) and quote_is_fresh(cached):
             result[key] = cached
     return result
 
@@ -362,7 +411,11 @@ async def fetch_rate(rate_type: str) -> Optional[dict]:
             return cached
         if not dolarapi_rates_enabled():
             stale = _cached_rate(cache_key, allow_stale=True)
-            return stale if _cached_quote_matches(normalized, stale) else None
+            return (
+                _as_cached_fallback_quote(stale)
+                if _cached_quote_matches(normalized, stale)
+                else None
+            )
         return (await _refresh_supported_rates()).get(normalized)
     else:
         return None
@@ -372,7 +425,11 @@ async def fetch_rate(rate_type: str) -> Optional[dict]:
         return cached
     if not dolarapi_rates_enabled():
         stale = _cached_rate(cache_key, allow_stale=True)
-        return stale if _cached_quote_matches(normalized, stale) else None
+        return (
+            _as_cached_fallback_quote(stale)
+            if _cached_quote_matches(normalized, stale)
+            else None
+        )
     payload = await _get_async(url)
     if currency == "USD":
         quote = payload if _quote_matches_supported_market(payload, currency="USD", market=normalized) else None
@@ -398,13 +455,9 @@ def get_conversion_quote_sync(currency_code: str, rate_type: str = "oficial") ->
         return None
 
     cache_key = _cache_key(currency, market)
-    cached = _cached_rate(cache_key)
-    if (
-        cached
-        and _quote_matches_conversion_market(cached, currency=currency, market=market)
-        and quote_is_fresh(cached)
-    ):
-        return cached
+    # Financial conversions must verify that the provider responds now. The
+    # durable PostgreSQL cache is the bounded outage fallback; process memory
+    # is intentionally not allowed to mask a live provider outage here.
 
     if currency != "USD" and market == "blue":
         if not dolarapi_rates_enabled():
@@ -441,10 +494,10 @@ def get_conversion_quote_sync(currency_code: str, rate_type: str = "oficial") ->
             market,
             type(exc).__name__,
         )
-        return _fresh_cached_conversion_quote(cache_key, currency=currency, market=market)
+        return None
 
     try:
-        payload = response.json()
+        payload = _with_observed_at(response.json())
     except Exception as exc:  # noqa: BLE001
         # A completed HTTP response with an unreadable body is not an outage
         # eligible for stale-cache fallback.
@@ -536,6 +589,7 @@ def get_rate_sync(rate_type: str = "oficial") -> Optional[float]:
         data = response.json()
         if not _quote_matches_supported_market(data, currency="USD", market=normalized):
             return None
+        data = _with_observed_at(data)
         _store_rate(normalized, data)
         return data.get("venta")
     except Exception as exc:  # noqa: BLE001

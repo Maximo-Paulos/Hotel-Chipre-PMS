@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
@@ -36,6 +36,12 @@ ALLOWED_RATE_IDENTIFIERS = {
 ALLOWED_SNAPSHOT_TYPES = ALLOWED_RATE_IDENTIFIERS | {
     f"{currency.lower()}_oficial" for currency in DIRECT_CURRENCY_CODES
 }
+FX_DISPLAY_QUOTE_STATUSES = {"fresh", "outage_fallback_24h", "stale"}
+
+
+def _fx_display_quote_status(data: dict) -> str:
+    status_value = data.get("quote_status")
+    return status_value if status_value in FX_DISPLAY_QUOTE_STATUSES else "fresh"
 
 
 class FxRateItem(BaseModel):
@@ -46,6 +52,7 @@ class FxRateItem(BaseModel):
     compra: Optional[float] = None
     venta: Optional[float] = None
     fechaActualizacion: Optional[str] = None
+    quote_status: Literal["fresh", "outage_fallback_24h", "stale"] = "fresh"
 
 
 class FxRateUsdOficial(BaseModel):
@@ -97,6 +104,8 @@ class FxConversionQuoteRead(BaseModel):
     rate: float
     provider: str
     configured_market: str
+    quote_status: Literal["fresh", "outage_fallback_24h", "not_required"]
+    warning_code: Optional[Literal["fx.lastSuccessFallback24h"]] = None
     quote_details: Optional[dict] = None
 
 
@@ -130,6 +139,7 @@ async def get_all_rates(
                 compra=data.get("compra"),
                 venta=data.get("venta"),
                 fechaActualizacion=data.get("fechaActualizacion"),
+                quote_status=_fx_display_quote_status(data),
             )
         )
     return items
@@ -165,15 +175,37 @@ def get_conversion_quote(
             else status.HTTP_502_BAD_GATEWAY
         )
         raise HTTPException(status_code=error_status, detail=message) from exc
+    # The shared quote cache is reference data, not a financial ledger entry.
+    # Persist it even for this read-only preview so the next worker can reuse
+    # the same provider response.
+    db.commit()
     market = str((details or {}).get("configured_usd_market") or "oficial").lower()
     if market not in {"oficial", "blue"}:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="La cotización configurada no es válida.")
+    quote_details = details or {}
+    fallback_used = bool(
+        quote_details.get("fallback_used") or quote_details.get("uses_outage_fallback")
+    )
+    quote_status = quote_details.get("quote_status")
+    if quote_status not in {"fresh", "outage_fallback_24h", "not_required"}:
+        quote_status = (
+            "not_required"
+            if payload.from_currency == payload.to_currency
+            else "outage_fallback_24h" if fallback_used else "fresh"
+        )
+    warning_code = quote_details.get("warning_code")
+    if quote_status == "outage_fallback_24h":
+        warning_code = "fx.lastSuccessFallback24h"
+    else:
+        warning_code = None
     return FxConversionQuoteRead(
         from_currency=payload.from_currency,
         to_currency=payload.to_currency,
         rate=float(rate),
         provider="dolarapi.com",
         configured_market=market,
+        quote_status=quote_status,
+        warning_code=warning_code,
         quote_details=details,
     )
 
@@ -220,6 +252,7 @@ async def get_single_rate(
         compra=data.get("compra"),
         venta=data.get("venta"),
         fechaActualizacion=data.get("fechaActualizacion"),
+        quote_status=_fx_display_quote_status(data),
     )
 
 

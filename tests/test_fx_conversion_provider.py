@@ -53,6 +53,31 @@ def _seed_expired_conversion_cache(cache_key: str, quote: dict) -> None:
     )
 
 
+def test_conversion_checks_provider_even_when_process_cache_is_recent(monkeypatch):
+    monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
+    monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
+    get_settings.cache_clear()
+    cached_quote = _quote("USD")
+    cached_quote["venta"] = 1200.0
+    fx_service._store_rate("oficial", cached_quote)
+    requested_urls = []
+    provider_quote = _quote("USD")
+    provider_quote["venta"] = 1230.0
+
+    def fake_get(url, **_kwargs):
+        requested_urls.append(url)
+        return _FakeResponse(provider_quote)
+
+    monkeypatch.setattr(fx_service.httpx, "get", fake_get)
+
+    result = fx_service.get_conversion_quote_sync("USD", "oficial")
+
+    assert result is not None
+    assert result["venta"] == 1230.0
+    assert result["_observed_at"]
+    assert requested_urls == ["https://dolarapi.com/v1/dolares/oficial"]
+
+
 def test_conversion_provider_derives_blue_currency_quotes_only_from_supported_inputs(monkeypatch):
     monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
     monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
@@ -109,6 +134,8 @@ def test_conversion_provider_derives_blue_currency_quotes_only_from_supported_in
         "https://dolarapi.com/v1/dolares/blue",
         "https://dolarapi.com/v1/cotizaciones",
         "https://dolarapi.com/v1/dolares/oficial",
+        "https://dolarapi.com/v1/dolares/blue",
+        "https://dolarapi.com/v1/cotizaciones",
     ]
     assert fx_service.get_conversion_quote_sync("USD", "tarjeta") is None
 
@@ -119,6 +146,28 @@ def test_fresh_quote_rejects_crossed_buy_sell_values():
     quote["venta"] = 110.0
 
     assert not fx_service.quote_is_fresh(quote)
+
+
+def test_recent_provider_response_with_friday_market_timestamp_is_current():
+    received_at = datetime.now(timezone.utc)
+    quote = {
+        **_quote("USD", updated_at=received_at - timedelta(days=2)),
+        "_observed_at": received_at.isoformat(),
+    }
+
+    assert fx_service.quote_is_fresh(quote, now=received_at)
+
+
+def test_provider_response_cannot_supply_its_own_receipt_timestamp():
+    received_at = datetime.now(timezone.utc)
+    quote = {
+        **_quote("USD"),
+        "_observed_at": (received_at - timedelta(days=3)).isoformat(),
+    }
+
+    stamped = fx_service._with_observed_at(quote, received_at)
+
+    assert stamped["_observed_at"] == received_at.isoformat()
 
 
 @pytest.mark.parametrize("currency", fx_service.DIRECT_CURRENCY_CODES)
@@ -150,7 +199,10 @@ def test_blue_equivalent_for_non_usd_currency_is_explicitly_derived(currency):
 
 
 def test_blue_equivalent_fails_closed_when_any_source_quote_is_stale():
-    stale = _quote("USD", updated_at=datetime.now(timezone.utc) - timedelta(days=3))
+    stale = {
+        **_quote("USD", updated_at=datetime.now(timezone.utc) - timedelta(days=3)),
+        "casa": "blue",
+    }
 
     assert fx_service._derive_blue_equivalent(
         "EUR",
@@ -185,14 +237,17 @@ def test_display_refresh_includes_direct_and_derived_quote_for_each_currency(mon
     assert all(rates[f"{currency.lower()}_blue"]["casa"] == "blue_derivado" for currency in fx_service.DIRECT_CURRENCY_CODES)
 
 
-def test_stale_selected_usd_quote_fails_closed_without_requesting_official_fallback(monkeypatch):
+def test_successful_weekend_response_keeps_old_market_timestamp_as_current(monkeypatch):
     monkeypatch.setenv("EXTERNAL_EFFECTS_ENABLED", "true")
     monkeypatch.setenv("CONNECTIONS_ENABLED", "true")
     get_settings.cache_clear()
     fx_service._cache.clear()
     fx_service._cache.update({"data": {}, "fetched_at_by_key": {}})
     requested_urls = []
-    stale = _quote("USD", updated_at=datetime.now(timezone.utc) - timedelta(days=3))
+    stale = {
+        **_quote("USD", updated_at=datetime.now(timezone.utc) - timedelta(days=3)),
+        "casa": "blue",
+    }
 
     def fake_get(url, **_kwargs):
         requested_urls.append(url)
@@ -200,7 +255,11 @@ def test_stale_selected_usd_quote_fails_closed_without_requesting_official_fallb
 
     monkeypatch.setattr(fx_service.httpx, "get", fake_get)
 
-    assert fx_service.get_conversion_quote_sync("USD", "blue") is None
+    result = fx_service.get_conversion_quote_sync("USD", "blue")
+
+    assert result is not None
+    assert result["casa"] == "blue"
+    assert result["_observed_at"]
     assert requested_urls == ["https://dolarapi.com/v1/dolares/blue"]
 
 
@@ -240,7 +299,10 @@ def test_provider_outage_uses_cached_exact_market_quote_up_to_24_hours(monkeypat
 
     result = fx_service.get_conversion_quote_sync("USD", "oficial")
 
-    assert result == cached_quote
+    # Only the durable PostgreSQL cache is allowed to authorize fallback; a
+    # process-local value may disappear on restart and is not the source of truth.
+    assert result is None
+    assert fx_service._cache["data"]["oficial"] == cached_quote
     assert requested_urls == ["https://dolarapi.com/v1/dolares/oficial"]
 
 
@@ -269,7 +331,7 @@ def test_provider_outage_returns_none_without_a_fresh_cached_quote(monkeypatch, 
     assert fx_service.get_conversion_quote_sync("USD", "oficial") is None
 
 
-@pytest.mark.parametrize("invalid_response", ["malformed", "wrong-market", "stale"])
+@pytest.mark.parametrize("invalid_response", ["malformed", "wrong-market"])
 def test_successful_invalid_provider_response_does_not_fall_back_to_cache(
     monkeypatch, invalid_response
 ):
@@ -283,8 +345,6 @@ def test_successful_invalid_provider_response_does_not_fall_back_to_cache(
         payload = {"moneda": "USD", "casa": "oficial", "compra": 100.0, "venta": 110.0}
     elif invalid_response == "wrong-market":
         payload = {**_quote("USD"), "casa": "blue"}
-    else:
-        payload = _quote("USD", updated_at=datetime.now(UTC) - timedelta(days=2))
     monkeypatch.setattr(fx_service.httpx, "get", lambda *_args, **_kwargs: _FakeResponse(payload))
 
     assert fx_service.get_conversion_quote_sync("USD", "oficial") is None

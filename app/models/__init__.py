@@ -77,6 +77,7 @@ from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.domain_event_outbox import DomainEventOutbox
 from app.models.domain_event_retention_watermark import DomainEventRetentionWatermark
 from app.models.fx_rate_snapshot import FxRateSnapshot
+from app.models.fx_rate_cache import FxRateCache
 from app.models.guest import (
     Guest,
     GuestCompanion,
@@ -431,6 +432,7 @@ __all__ = [
     "RoomBlock",
     "RoomBlockReasonEnum",
     "FxRateSnapshot",
+    "FxRateCache",
     "CompanyDocument",
     "CompanyDocumentTypeEnum",
     "CompanyDocumentStatusEnum",

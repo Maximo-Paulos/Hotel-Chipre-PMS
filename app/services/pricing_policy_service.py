@@ -20,9 +20,16 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.ota_core import OTACommissionRule, OTAProvider
 from app.services.fx_service import (
     SUPPORTED_CONVERSION_CURRENCIES,
+    get_cached_supported_rates,
     get_conversion_quote_sync,
     parse_provider_updated_at,
     quote_is_fresh,
+)
+from app.services.fx_rate_cache_service import (
+    FRESH_FX_CACHE_AGE,
+    MAX_FX_CACHE_AGE,
+    get_fx_rate_cache_quote,
+    store_supported_fx_rates,
 )
 
 
@@ -477,6 +484,12 @@ def _convert_amount(
         effective_rate = raw_rate * (1 + (spread_pct / 100.0))
         if not math.isfinite(effective_rate) or effective_rate <= 0:
             raise PricingPolicyError("La tasa FX resultante no es válida")
+        quote_observed_times = [
+            parsed
+            for quote in (source_quote, target_quote)
+            if quote is not None
+            if (parsed := parse_provider_updated_at(quote.get("_observed_at"))) is not None
+        ]
         details = {
             "provider": "dolarapi.com",
             "configured_usd_market": selected_usd_market,
@@ -495,6 +508,13 @@ def _convert_amount(
             "target_ars_per_unit": target_ars_per_unit,
             "spread_pct": spread_pct,
             "applied_rate": effective_rate,
+            "fallback_used": any(
+                bool(quote and quote.get("_cache_fallback"))
+                for quote in (source_quote, target_quote)
+            ),
+            "quote_observed_at": min(quote_observed_times).isoformat()
+            if quote_observed_times
+            else None,
             "source_updated_at": source_quote.get("_provider_updated_at") if source_quote else None,
             "target_updated_at": target_quote.get("_provider_updated_at") if target_quote else None,
             "source_quote": _quote_provenance(source_quote, from_code, source_side, source_market) if source_quote else None,
@@ -511,14 +531,58 @@ def _resolve_conversion_quote(
     market: str,
 ) -> dict:
     selected_type = market if currency == "USD" else f"{currency.lower()}_{market}"
-    quote = get_conversion_quote_sync(currency, market)
     expected_market = market if currency == "USD" or market == "oficial" else "blue_derivado"
-    if (
-        not quote_is_fresh(quote)
-        or not isinstance(quote, dict)
-        or str(quote.get("casa") or "").strip().lower() != expected_market
-    ):
-        quote = None
+    # Reuse the shared PostgreSQL quote while it is inside DolarAPI's
+    # recommended three-hour refresh interval. This keeps reservation
+    # estimates and payment previews fast across users and app workers.
+    quote = get_fx_rate_cache_quote(
+        db,
+        currency=currency,
+        market=market,
+        max_age=FRESH_FX_CACHE_AGE,
+        fallback_used=False,
+    )
+    if quote is None:
+        provider_quote = get_conversion_quote_sync(currency, market)
+        if isinstance(provider_quote, dict):
+            candidate = dict(provider_quote)
+            observed_at = parse_provider_updated_at(candidate.get("_observed_at"))
+            if observed_at is None:
+                # The adapter stamps real responses; this also keeps alternate
+                # adapters and deterministic test doubles on the same contract.
+                observed_at = datetime.now(timezone.utc)
+                candidate["_observed_at"] = observed_at.isoformat()
+            if (
+                quote_is_fresh(candidate, now=observed_at)
+                and str(candidate.get("casa") or "").strip().lower() == expected_market
+            ):
+                quote = candidate
+                quote["_quote_source"] = "live_api"
+                quote["_cache_fallback"] = False
+                cache_rates = get_cached_supported_rates()
+                if currency == "USD":
+                    rate_key = market
+                elif market == "oficial":
+                    rate_key = currency.lower()
+                else:
+                    rate_key = f"{currency.lower()}_blue"
+                cache_rates[rate_key] = quote
+                store_supported_fx_rates(
+                    db,
+                    cache_rates,
+                    cache_source="on_demand",
+                    observed_at=observed_at,
+                )
+    if quote is None:
+        quote = get_fx_rate_cache_quote(
+            db,
+            currency=currency,
+            market=market,
+            max_age=MAX_FX_CACHE_AGE,
+            fallback_used=True,
+        )
+        if quote is not None:
+            quote["_fallback_reason"] = "provider_unavailable"
 
     if quote is None:
         snapshot = (
@@ -528,28 +592,40 @@ def _resolve_conversion_quote(
                 FxRateSnapshot.rate_type == selected_type,
                 FxRateSnapshot.moneda == currency,
             )
-            .order_by(FxRateSnapshot.provider_updated_at.desc(), FxRateSnapshot.fetched_at.desc())
+            .order_by(FxRateSnapshot.fetched_at.desc())
             .first()
         )
         if snapshot is not None:
-            candidate_time = snapshot.provider_updated_at or snapshot.fetched_at
+            observed_at = parse_provider_updated_at(snapshot.fetched_at)
+            provider_updated_at = parse_provider_updated_at(snapshot.provider_updated_at)
             candidate = {
                 "compra": snapshot.compra,
                 "venta": snapshot.venta,
-                "fechaActualizacion": candidate_time.isoformat() if candidate_time else None,
+                "fechaActualizacion": provider_updated_at.isoformat()
+                if provider_updated_at
+                else None,
+                "_observed_at": observed_at.isoformat() if observed_at else None,
                 "casa": snapshot.provider_market or expected_market,
+                "_quote_source": "hotel_snapshot",
+                "_cache_fallback": True,
+                "_fallback_reason": "provider_unavailable",
             }
             if quote_is_fresh(candidate) and candidate["casa"] == expected_market:
                 quote = candidate
 
     if quote is None:
         raise PricingPolicyError(
-            f"No hay una cotización fresca de {selected_type} para {currency}; no se usará otro mercado."
+            f"No hay cotización actual ni un respaldo de menos de 24 horas para {currency} ({selected_type}). "
+            "La conversión automática está bloqueada; cobrá en la moneda de la reserva. No se usará una tasa sin verificar."
         )
 
     provider_updated_at = parse_provider_updated_at(quote.get("fechaActualizacion") or quote.get("fecha"))
     quote = dict(quote)
     quote["_provider_updated_at"] = provider_updated_at.isoformat() if provider_updated_at else None
+    observed_at = parse_provider_updated_at(quote.get("_observed_at"))
+    quote["_observed_at"] = observed_at.isoformat() if observed_at else None
+    quote.setdefault("_quote_source", "persisted_cache")
+    quote.setdefault("_cache_fallback", False)
     quote["_rate_type"] = selected_type
     if currency != "USD" and market == "blue":
         quote["_selected_market"] = "blue"
@@ -569,6 +645,7 @@ def _record_conversion_snapshot(
     provider_updated_at = parse_provider_updated_at(
         quote.get("fechaActualizacion") or quote.get("fecha")
     )
+    observed_at = parse_provider_updated_at(quote.get("_observed_at"))
     rate_type = market if currency == "USD" else f"{currency.lower()}_{market}"
     db.add(
         FxRateSnapshot(
@@ -578,7 +655,7 @@ def _record_conversion_snapshot(
             moneda=currency,
             compra=float(quote["compra"]),
             venta=float(quote["venta"]),
-            fetched_at=datetime.now(timezone.utc),
+            fetched_at=observed_at or datetime.now(timezone.utc),
             provider_updated_at=provider_updated_at,
             selected_side=side,
             base_currency="ARS",
@@ -605,6 +682,9 @@ def _quote_provenance(quote: dict, currency: str, side: str, selected_market: st
         "side": side,
         "ars_per_unit": float(quote[side]),
         "provider_updated_at": quote.get("_provider_updated_at"),
+        "observed_at": quote.get("_observed_at"),
+        "source": quote.get("_quote_source"),
+        "fallback_used": bool(quote.get("_cache_fallback")),
     }
 
 

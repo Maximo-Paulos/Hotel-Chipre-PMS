@@ -6,7 +6,10 @@ from urllib.parse import urlsplit
 from celery import Celery
 from celery.schedules import crontab
 from app.config import Settings, get_settings, validate_runtime_security
-from app.services.external_effects_policy import external_connections_enabled
+from app.services.external_effects_policy import (
+    dolarapi_rates_enabled,
+    external_connections_enabled,
+)
 
 settings = get_settings()
 # FastAPI validates the runtime during application startup. Workers and beat do
@@ -118,6 +121,15 @@ def build_beat_schedule(runtime_settings: Settings) -> dict:
             "schedule": crontab(hour=9, minute=15),
         },
     }
+    if dolarapi_rates_enabled(runtime_settings):
+        # Celery's configured HOTEL_TIMEZONE is America/Argentina/Buenos_Aires
+        # by default. DolarAPI recommends retaining local responses and says a
+        # three-hour query cadence is adequate; the daily 08:00 run guarantees
+        # a durable start-of-day fallback independent of other integrations.
+        internal_schedule["fx-daily-rate-cache"] = {
+            "task": "fx.refresh_daily_rate_cache",
+            "schedule": crontab(hour=8, minute=0),
+        }
     if not external_connections_enabled(runtime_settings):
         if _sandbox_domain_event_replay_enabled(runtime_settings):
             return {
@@ -189,6 +201,7 @@ celery_app.conf.beat_schedule = build_beat_schedule(settings)
 import app.tasks.allocation_tasks  # noqa: F401,E402
 import app.tasks.analytics_tasks  # noqa: F401,E402
 import app.tasks.domain_event_tasks  # noqa: F401,E402
+import app.tasks.fx_tasks  # noqa: F401,E402
 import app.tasks.no_show_tasks  # noqa: F401,E402
 import app.tasks.notification_tasks  # noqa: F401,E402
 import app.tasks.ota_tasks  # noqa: F401,E402
