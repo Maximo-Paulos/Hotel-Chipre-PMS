@@ -105,7 +105,7 @@ def seed_catalog(db: Session):
             "https://developers.booking.com/connectivity",
         ),
         ("expedia", "Expedia", "signature", "content,availability", "https://developers.expediagroup.com/"),
-        ("mercadopago", "MercadoPago", "oauth_code", "payments,offline_access", "https://www.mercadopago.com.ar/developers/en"),
+        ("mercadopago", "MercadoPago", "oauth_code", "offline_access payments write", "https://www.mercadopago.com.ar/developers/es"),
         ("paypal", "PayPal", "oauth_code", "payments,openid,email,offline_access", "https://developer.paypal.com/docs/api/overview/"),
         (
             "gmail",
@@ -152,28 +152,7 @@ def list_catalog_with_status(db: Session, hotel_id: int) -> tuple[List[Integrati
 
 def get_provider_connection_payload(db: Session, hotel_id: int, provider: str) -> Dict[str, Any]:
     require_external_connections(f"{provider} credential access")
-    seed_catalog(db)
-    integration = (
-        db.execute(select(IntegrationCatalog).where(IntegrationCatalog.provider == provider))
-        .scalars()
-        .first()
-    )
-    if not integration:
-        return {}
-    connection = (
-        db.execute(
-            select(IntegrationConnection).where(
-                IntegrationConnection.hotel_id == hotel_id,
-                IntegrationConnection.integration_id == integration.id,
-                IntegrationConnection.status == "connected",
-            )
-        )
-        .scalars()
-        .first()
-    )
-    if not connection:
-        return {}
-    return decrypt_payload(connection.auth_payload)
+    return get_connection_payload(db, hotel_id, provider)
 
 
 def get_connection_payload(
@@ -186,7 +165,7 @@ def get_connection_payload(
     require_external_connections(f"{provider} credential access")
     if seed_catalog_entries:
         seed_catalog(db)
-    connection = (
+    connection_query = (
         db.execute(
             select(IntegrationConnection)
             .join(IntegrationCatalog, IntegrationCatalog.id == IntegrationConnection.integration_id)
@@ -197,20 +176,82 @@ def get_connection_payload(
             )
         )
         .scalars()
-        .first()
     )
+    connection = connection_query.first()
     if not connection:
         return {}
-    return decrypt_payload(connection.auth_payload)
+    payload = decrypt_payload(connection.auth_payload)
+    if provider != "mercadopago" or not _connection_token_expires_soon(connection, payload):
+        return payload
+
+    # Refresh only near expiry. Lock and re-read so concurrent payment/webhook
+    # requests cannot rotate the same OAuth refresh token at once.
+    locked_connection = (
+        db.execute(
+            select(IntegrationConnection)
+            .join(IntegrationCatalog, IntegrationCatalog.id == IntegrationConnection.integration_id)
+            .where(
+                IntegrationConnection.hotel_id == hotel_id,
+                IntegrationConnection.status == "connected",
+                IntegrationCatalog.provider == provider,
+            )
+            .with_for_update(of=IntegrationConnection)
+            .execution_options(populate_existing=True)
+        )
+        .scalars()
+        .first()
+    )
+    if not locked_connection:
+        return {}
+    payload = decrypt_payload(locked_connection.auth_payload)
+    if not _connection_token_expires_soon(locked_connection, payload):
+        return payload
+
+    refreshed = refresh_mercadopago_access_token(payload)
+    locked_connection.auth_payload = encrypt_payload(refreshed)
+    locked_connection.expires_at = derive_expires_at(refreshed)
+    locked_connection.last_checked_at = datetime.now(timezone.utc)
+    locked_connection.last_error = None
+    db.flush()
+    return refreshed
 
 
 def derive_expires_at(payload: Optional[Dict[str, Any]]) -> Optional[datetime]:
     if not payload:
         return None
+    existing_expiry = _parse_datetime(payload.get("expires_at"))
+    if existing_expiry:
+        return existing_expiry
     expires_in = payload.get("expires_in")
     if isinstance(expires_in, (int, float)) and expires_in > 0:
-        return datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))
+        issued_at = _parse_datetime(payload.get("issued_at")) or datetime.now(timezone.utc)
+        return issued_at + timedelta(seconds=int(expires_in))
     return None
+
+
+def stamp_token_lifetime(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach stable issue/expiry timestamps to a provider token response."""
+    stamped = dict(payload or {})
+    if isinstance(stamped.get("expires_in"), (int, float)) and stamped["expires_in"] > 0:
+        issued_at = datetime.now(timezone.utc)
+        stamped["issued_at"] = issued_at.isoformat()
+        stamped["expires_at"] = (
+            issued_at + timedelta(seconds=int(stamped["expires_in"]))
+        ).isoformat()
+    return stamped
+
+
+def _connection_token_expires_soon(
+    connection: IntegrationConnection,
+    payload: Dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> bool:
+    current = now or datetime.now(timezone.utc)
+    expires_at = _parse_datetime(connection.expires_at) or _parse_datetime(payload.get("expires_at"))
+    if expires_at is None:
+        return _is_expired(payload, skew_seconds=300)
+    return expires_at <= current + timedelta(minutes=5)
 
 
 def _is_expired(payload: Dict[str, Any], skew_seconds: int = 120) -> bool:
@@ -335,6 +376,69 @@ def refresh_gmail_access_token(payload: Dict[str, Any]) -> Dict[str, Any]:
     if expires_at:
         merged["expires_at"] = expires_at.isoformat()
     return merged
+
+
+class MercadoPagoReauthorizationRequired(ValueError):
+    """The hotel must reconnect Mercado Pago through the PMS OAuth button."""
+
+
+def refresh_mercadopago_access_token(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Rotate a hotel-authorized Mercado Pago token before it expires."""
+    require_external_connections("Mercado Pago token refresh")
+    refresh_token = str(payload.get("refresh_token") or "").strip()
+    if not refresh_token:
+        raise MercadoPagoReauthorizationRequired(
+            "La autorización de Mercado Pago venció. El Owner debe volver a conectar la cuenta desde el PMS."
+        )
+    settings = get_settings()
+    if not settings.MERCADOPAGO_CLIENT_ID or not settings.MERCADOPAGO_CLIENT_SECRET:
+        raise ValueError("La renovación de Mercado Pago no está habilitada en este entorno.")
+
+    try:
+        response = observed_http_call(
+            "mercadopago.oauth_refresh",
+            requests.post,
+            "https://api.mercadopago.com/oauth/token",
+            data={
+                "client_id": settings.MERCADOPAGO_CLIENT_ID,
+                "client_secret": settings.MERCADOPAGO_CLIENT_SECRET,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            },
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        raise ValueError("No se pudo renovar Mercado Pago en este momento. Volvé a intentar.") from exc
+
+    if not response.ok:
+        error_code = ""
+        try:
+            body = response.json()
+            if isinstance(body, dict):
+                error_code = str(body.get("error") or body.get("code") or "")
+        except Exception:
+            pass
+        if response.status_code in {400, 401, 403} and error_code in {
+            "invalid_grant",
+            "unauthorized_client",
+        }:
+            raise MercadoPagoReauthorizationRequired(
+                "Mercado Pago requiere una nueva autorización. El Owner debe volver a conectar la cuenta desde el PMS."
+            )
+        raise ValueError("Mercado Pago no pudo renovar la conexión. Volvé a intentar.")
+
+    try:
+        refreshed = response.json()
+    except Exception as exc:
+        raise ValueError("Mercado Pago devolvió una respuesta de renovación inválida.") from exc
+    if not isinstance(refreshed, dict) or not refreshed.get("access_token"):
+        raise ValueError("Mercado Pago devolvió una respuesta de renovación inválida.")
+    if not refreshed.get("refresh_token"):
+        raise ValueError("Mercado Pago no devolvió el nuevo permiso de renovación.")
+
+    merged = dict(payload)
+    merged.update(refreshed)
+    return stamp_token_lifetime(merged)
 
 
 def validate_gmail_credentials(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -487,6 +591,7 @@ def verify_connection_health(
 
     if integration.provider == "mercadopago":
         try:
+            payload = get_connection_payload(db, hotel_id, "mercadopago")
             enriched = validate_mercadopago_credentials(payload)
             connection.auth_payload = encrypt_payload(enriched)
             connection.status = "connected"
@@ -620,7 +725,7 @@ def build_redirect_url(
     if integration.provider == "mercadopago":
         if not settings.MERCADOPAGO_CLIENT_ID or not settings.MERCADOPAGO_CLIENT_SECRET:
             raise ValueError(
-                "OAuth de Mercado Pago no esta configurado en este entorno. Usa access_token manual o configura la app del PMS."
+                "La conexión con Mercado Pago todavía no está habilitada. El equipo de Hotels-PMS debe completar la configuración de la plataforma."
             )
         target_redirect = redirect_uri or settings.MERCADOPAGO_REDIRECT_URI
         params = {
@@ -628,6 +733,7 @@ def build_redirect_url(
             "response_type": "code",
             "platform_id": "mp",
             "redirect_uri": target_redirect,
+            "scope": integration.scopes or "offline_access payments write",
         }
         if state:
             params["state"] = state
@@ -690,7 +796,19 @@ def exchange_token(provider: str, code: str) -> Dict[str, Any]:
             timeout=15,
         )
         resp.raise_for_status()
-        return resp.json()
+        token_payload = resp.json()
+        if not isinstance(token_payload, dict):
+            raise ValueError("Mercado Pago devolvió una respuesta de autorización inválida.")
+        if not token_payload.get("access_token") or not token_payload.get("refresh_token"):
+            raise ValueError(
+                "Mercado Pago no otorgó los permisos para mantener la conexión. El Owner debe autorizar el acceso offline."
+            )
+        granted_scopes = set(str(token_payload.get("scope") or "").split())
+        if "offline_access" not in granted_scopes:
+            raise ValueError(
+                "Mercado Pago no otorgó el permiso de acceso offline. El Owner debe volver a autorizar la conexión."
+            )
+        return stamp_token_lifetime(token_payload)
     if provider == "paypal":
         token_url = "https://api-m.sandbox.paypal.com/v1/oauth2/token" if settings.PAYPAL_MODE == "sandbox" else "https://api-m.paypal.com/v1/oauth2/token"
         resp = observed_http_call("paypal.oauth_exchange", requests.post,

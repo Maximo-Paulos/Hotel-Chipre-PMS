@@ -176,11 +176,11 @@ for (const persona of personas) {
       await expect(roomStatusSelects.first()).toBeVisible();
       await expect(roomStatusSelects.first().locator("option")).toHaveCount(5);
       await expect(housekeepingStatusSelects).toHaveCount(0);
-      await expect(main.getByRole("button", { name: /Crear bloqueo/ })).toBeVisible();
+      await expect(main.getByRole("button", { name: "Calcular propuesta", exact: true })).toBeVisible();
     } else if (persona.label === "receptionist") {
       await expect(roomStatusSelects).toHaveCount(0);
       await expect(housekeepingStatusSelects).toHaveCount(0);
-      await expect(main.getByRole("button", { name: /Crear bloqueo/ })).toBeVisible();
+      await expect(main.getByRole("button", { name: "Calcular propuesta", exact: true })).toBeVisible();
     } else {
       const roomListResponse = page.waitForResponse((response) =>
         response.request().method() === "GET" && new URL(response.url()).pathname === "/api/rooms/"
@@ -208,7 +208,7 @@ for (const persona of personas) {
       const updated = await (await updateResponse).json();
       expect(updated.room.status).toBe(room!.status);
       expect(updated.room.housekeeping_status).toBe("clean");
-      await expect(main.getByRole("button", { name: /Crear bloqueo/ })).toHaveCount(0);
+      await expect(main.getByRole("button", { name: "Calcular propuesta", exact: true })).toHaveCount(0);
       await expect(main.getByText("Tarifa hoy:", { exact: false })).toHaveCount(0);
     }
   });

@@ -181,11 +181,6 @@ class CashMovement(Base):
         ),
         # Required as a composite FK target for other hotel-scoped ledgers.
         UniqueConstraint("hotel_id", "id", name="uq_cash_movements_hotel_id_id"),
-        UniqueConstraint(
-            "hotel_id",
-            "voided_by_payment_correction_id",
-            name="uq_cash_movements_hotel_voided_correction",
-        ),
         ForeignKeyConstraint(
             ["hotel_id", "session_id"], ["cash_sessions.hotel_id", "cash_sessions.id"],
             name="fk_cash_movements_hotel_session", ondelete="CASCADE",

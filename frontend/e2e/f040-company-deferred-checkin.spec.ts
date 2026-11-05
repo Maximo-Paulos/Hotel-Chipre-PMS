@@ -75,6 +75,17 @@ test("company check-in records and applies a deferred extension without register
   const category = categories.find((item) => item.name === "Standard E2E");
   expect(category).toBeTruthy();
 
+  // Give this journey its own ready-to-use room so earlier housekeeping tests
+  // in the shared E2E hotel cannot make check-in depend on run order.
+  const roomNumber = `C${suffix.slice(-8)}`;
+  const roomResponse = await request.post(`${backendURL}/api/rooms/`, {
+    headers,
+    data: { room_number: roomNumber, floor: 1, category_id: category!.id, status: "available" }
+  });
+  expect(roomResponse.status(), await roomResponse.text()).toBe(201);
+  const room = await roomResponse.json() as { id: number; housekeeping_status: string };
+  expect(room.housekeeping_status).toBe("clean");
+
   const checkIn = localIsoDate(0);
   const checkOut = localIsoDate(1);
   const quoteResponse = await request.get(`${backendURL}/api/bookings/price-quote`, {
@@ -110,6 +121,7 @@ test("company check-in records and applies a deferred extension without register
     data: {
       guest_id: guest.id,
       category_id: category!.id,
+      room_id: room.id,
       company_id: company.id,
       check_in_date: checkIn,
       check_out_date: checkOut,

@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date, datetime, time, timedelta, timezone
-from typing import Iterable
+from collections.abc import Iterable
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_
@@ -47,6 +47,8 @@ from app.services.permission_service import (
     PERMISSION_RESERVATION_READ,
     PERMISSION_STOCK_READ,
     PERMISSION_WHATSAPP_INBOX_VIEW,
+)
+from app.services.permission_service import (
     resolve as resolve_permission,
 )
 
@@ -73,7 +75,7 @@ class NotificationServiceError(ValueError):
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _validate_payload(payload: dict | None) -> dict:
@@ -560,16 +562,20 @@ def process_pending_outbox(db: Session, *, now: datetime | None = None, batch_si
     now = now or _utcnow()
     counts = {"processed": 0, "sent": 0, "failed": 0, "expired": 0, "retried": 0, "deferred": 0}
 
-    rows = (
-        db.query(NotificationOutbox)
-        .filter(
-            NotificationOutbox.status == NotificationOutboxStatusEnum.PENDING,
-            or_(NotificationOutbox.next_retry_at.is_(None), NotificationOutbox.next_retry_at <= now),
-        )
-        .order_by(NotificationOutbox.created_at.asc())
-        .limit(max(batch_size, 1))
-        .all()
+    query = db.query(NotificationOutbox).filter(
+        NotificationOutbox.status == NotificationOutboxStatusEnum.PENDING,
+        or_(NotificationOutbox.next_retry_at.is_(None), NotificationOutbox.next_retry_at <= now),
     )
+    # Multiple Celery workers may drain this queue at once. Claim PostgreSQL
+    # rows for the duration of this transaction so another worker skips them
+    # instead of concurrently delivering the same notification. This keeps
+    # provider calls serialized per outbox row; delivery remains at-least-once
+    # if a worker crashes after the provider accepts a message but before the
+    # transaction commits.
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        query = query.with_for_update(skip_locked=True, of=NotificationOutbox)
+    rows = query.order_by(NotificationOutbox.created_at.asc()).limit(max(batch_size, 1)).all()
 
     for row in rows:
         counts["processed"] += 1
@@ -609,7 +615,7 @@ def process_pending_outbox(db: Session, *, now: datetime | None = None, batch_si
                 _deliver_email(db, row)
             else:  # pragma: no cover - defensive, enum-constrained column
                 _mark_terminal(row, status=NotificationOutboxStatusEnum.FAILED, reason="unknown_channel")
-        except Exception as exc:  # a single bad row must never abort the batch
+        except Exception as exc:  # noqa: BLE001 - one bad row must not abort the batch
             logger.warning(
                 "notification_outbox.delivery_error",
                 extra={"hotel_id": row.hotel_id, "outbox_id": row.id, "channel": row.channel.value},
@@ -720,7 +726,7 @@ def _build_daily_report_body(db: Session, *, hotel_id: int, report_date: date, s
     if "laundry_outbound" in sections:
         from app.services.laundry_vendor_service import list_remitos
 
-        window_start = datetime.combine(report_date - timedelta(days=14), time.min, tzinfo=timezone.utc)
+        window_start = datetime.combine(report_date - timedelta(days=14), time.min, tzinfo=UTC)
         outbound = [r for r in list_remitos(db, hotel_id=hotel_id, date_from=window_start) if r.direction == "outbound"]
         lines.append(f"Laundry outbound remitos (last 14 days): {len(outbound)}")
     if "critical_alerts" in sections:

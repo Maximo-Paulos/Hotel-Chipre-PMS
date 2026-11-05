@@ -240,6 +240,10 @@ async function installMocks(page: Page, options: {
       await json({ hotel_id: 1, matrix: matrixForRoles });
       return;
     }
+    if (pathname === "/api/permissions/temporary-grants/active" && method === "GET") {
+      await json({ hotel_id: 1, grants: [] });
+      return;
+    }
     if (pathname.endsWith("/api/permissions/role-overrides") && method === "GET") {
       await json({ hotel_id: 1, matrix: profilesForRoles });
       return;

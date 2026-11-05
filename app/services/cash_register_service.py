@@ -267,12 +267,24 @@ def add_movement(
 
             if transaction.status != TransactionStatusEnum.COMPLETED or transaction.payment_method != PaymentMethodEnum.CASH:
                 raise CashRegisterError("Solo las transacciones completadas en efectivo pueden generar movimientos de caja vinculados")
+            is_cross_currency_change = (
+                transaction.transaction_type != TransactionTypeEnum.REFUND
+                and movement_type == CashMovementTypeEnum.EXPENSE
+                and (transaction.tender_currency or transaction.currency or "ARS").strip().upper()
+                != (session.currency_code or "ARS").strip().upper()
+                and (getattr(transaction, "cash_change_settled_currency", None) or "").strip().upper()
+                == (session.currency_code or "ARS").strip().upper()
+                and _money(getattr(transaction, "cash_change_settled_amount", None) or 0)
+                > Decimal("0.00")
+                and _money(amount)
+                == _money(getattr(transaction, "cash_change_settled_amount", None) or 0)
+            )
             expected_movement_type = (
                 CashMovementTypeEnum.EXPENSE
                 if transaction.transaction_type == TransactionTypeEnum.REFUND
                 else CashMovementTypeEnum.INCOME
             )
-            if movement_type != expected_movement_type:
+            if movement_type != expected_movement_type and not is_cross_currency_change:
                 raise CashRegisterError("El tipo de movimiento de caja no coincide con la transacción de pago")
 
     movement = CashMovement(
@@ -379,11 +391,28 @@ def record_cash_payment_movement(
     is_refund = transaction.transaction_type == TransactionTypeEnum.REFUND
     movement_type = CashMovementTypeEnum.EXPENSE if is_refund else CashMovementTypeEnum.INCOME
     label = "Devolución" if is_refund else "Cobro"
-    # The caja holds the amount retained from the tender: the gross amount
-    # including any surcharge, plus an explicitly accepted tip. It excludes
-    # returned change. Fall back to the base amount when no surcharge exists.
+    tender_currency = str(transaction.tender_currency or transaction.currency or "ARS").strip().upper()
+    change_currency = str(
+        getattr(transaction, "cash_change_settled_currency", None) or tender_currency
+    ).strip().upper()
+    settled_change = getattr(transaction, "cash_change_settled_amount", None)
+    if settled_change is None:
+        settled_change = getattr(transaction, "cash_change_amount", None)
+    settled_change = _money(settled_change or 0)
+
+    # When change is returned in another currency, retain all cash received
+    # in the tender drawer and post the actual change as an expense from the
+    # hotel's base-currency drawer. For same-currency change the drawer keeps
+    # only the amount retained, preserving the established cash ledger.
     cash_amount = transaction.gross_amount if transaction.gross_amount is not None else transaction.amount
     cash_amount = _money(cash_amount + _money(getattr(transaction, "cash_tip_amount", 0) or 0))
+    if (
+        not is_refund
+        and transaction.cash_received_amount is not None
+        and change_currency != tender_currency
+        and settled_change > 0
+    ):
+        cash_amount = _money(transaction.cash_received_amount)
     surcharge = _money(transaction.fee_amount or 0)
     description = f"{label} reserva #{transaction.reservation_id} (tx #{transaction.id})"
     if surcharge > 0:
@@ -392,7 +421,7 @@ def record_cash_payment_movement(
     if tip > 0:
         description += f" · propina ${tip}"
 
-    return add_movement(
+    income_movement = add_movement(
         db,
         hotel_id=transaction.hotel_id,
         session_id=session.id,
@@ -404,6 +433,33 @@ def record_cash_payment_movement(
         transaction_id=transaction.id,
         _from_payment_transaction=True,
     )
+    if (
+        not is_refund
+        and transaction.cash_received_amount is not None
+        and change_currency != tender_currency
+        and settled_change > 0
+    ):
+        change_session = require_open_session_for_currency(
+            db,
+            hotel_id=transaction.hotel_id,
+            currency_code=change_currency,
+        )
+        add_movement(
+            db,
+            hotel_id=transaction.hotel_id,
+            session_id=change_session.id,
+            recorded_by_user_id=recorded_by_user_id,
+            movement_type=CashMovementTypeEnum.EXPENSE,
+            amount=settled_change,
+            description=(
+                f"Vuelto reserva #{transaction.reservation_id} "
+                f"(tx #{transaction.id}) · convertido desde {tender_currency}"
+            ),
+            reservation_id=transaction.reservation_id,
+            transaction_id=transaction.id,
+            _from_payment_transaction=True,
+        )
+    return income_movement
 
 
 def _movement_sign(movement_type: CashMovementTypeEnum) -> Decimal:
@@ -866,6 +922,24 @@ def list_movements(db: Session, *, hotel_id: int, session_id: int) -> list[CashM
             if transaction is not None and hasattr(transaction.status, "value")
             else str(transaction.status) if transaction is not None else None
         )
+        is_cash_income = (
+            transaction is not None
+            and transaction.payment_method == PaymentMethodEnum.CASH
+            and transaction.transaction_type != TransactionTypeEnum.REFUND
+            and movement.movement_type == CashMovementTypeEnum.INCOME
+        )
+        movement.cash_received_amount = transaction.cash_received_amount if is_cash_income else None
+        movement.cash_change_amount = transaction.cash_change_amount if is_cash_income else None
+        movement.cash_change_settled_amount = (
+            transaction.cash_change_settled_amount if is_cash_income else None
+        )
+        movement.cash_change_settled_currency = (
+            transaction.cash_change_settled_currency if is_cash_income else None
+        )
+        movement.cash_change_fx_rate_snapshot = (
+            transaction.cash_change_fx_rate_snapshot if is_cash_income else None
+        )
+        movement.cash_tip_amount = transaction.cash_tip_amount if is_cash_income else ZERO
     batch_ids = {
         getattr(transaction, "group_payment_batch_id", None)
         for transaction in transactions

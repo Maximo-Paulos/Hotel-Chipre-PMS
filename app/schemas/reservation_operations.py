@@ -184,6 +184,12 @@ class ReservationTransactionSummaryRead(BaseModel):
     fx_rate_snapshot: Optional[float] = None
     gross_amount: Optional[float] = None
     fee_amount: Optional[float] = None
+    cash_received_amount: Optional[Decimal] = None
+    cash_change_amount: Optional[Decimal] = None
+    cash_change_settled_amount: Optional[Decimal] = None
+    cash_change_settled_currency: Optional[str] = None
+    cash_change_fx_rate_snapshot: Optional[Decimal] = None
+    cash_tip_amount: Decimal = Decimal("0.00")
     currency: str
     method: str
     type: str
@@ -353,6 +359,7 @@ class OccupancyGridRoomRead(BaseModel):
 
 class OccupancyGridReservationRead(BaseModel):
     id: int
+    version: int
     room_id: Optional[int] = None
     confirmation_code: str
     check_in_date: date

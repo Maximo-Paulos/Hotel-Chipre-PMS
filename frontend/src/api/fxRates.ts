@@ -32,6 +32,8 @@ export type FxConversionQuote = {
     configured_usd_market?: "oficial" | "blue";
     configured_ars_to_usd_rate_side?: "compra" | "venta" | null;
     spread_pct?: number | null;
+    fallback_used?: boolean;
+    quote_observed_at?: string | null;
     source_updated_at?: string | null;
     target_updated_at?: string | null;
     source_quote?: {
@@ -39,12 +41,18 @@ export type FxConversionQuote = {
       side?: "compra" | "venta";
       is_derived_blue?: boolean;
       provider_updated_at?: string | null;
+      observed_at?: string | null;
+      source?: string;
+      fallback_used?: boolean;
     } | null;
     target_quote?: {
       currency?: FxCurrencyCode;
       side?: "compra" | "venta";
       is_derived_blue?: boolean;
       provider_updated_at?: string | null;
+      observed_at?: string | null;
+      source?: string;
+      fallback_used?: boolean;
     } | null;
   } | null;
 };

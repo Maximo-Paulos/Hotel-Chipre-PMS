@@ -23,6 +23,7 @@ from app.models.company_night_charge import (
 )
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
+from app.models.manual_fx_payment_quote import ManualFxPaymentQuote
 from app.models.operations import BillingAdjustment, ReservationStatusHistory
 from app.models.payment_correction import PaymentCorrection
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
@@ -64,6 +65,7 @@ from app.services.reservation_service import (
     reservation_has_deferred_company_billing,
     transition_reservation_status,
 )
+from app.services.row_locks import lock_query
 from app.services.timezones import hotel_business_now, utc_naive
 
 
@@ -174,6 +176,8 @@ def _same_idempotent_payment(
         == getattr(request, "refund_component", RefundComponentEnum.PAYMENT.value)
         and (existing.tender_currency or existing.currency) == currency
         and existing.manual_reference == request.manual_reference
+        and (getattr(existing, "fx_quote_details", None) or {}).get("manual_fx_quote_id")
+        == getattr(request, "manual_fx_quote_id", None)
         and existing.refund_of_transaction_id == request.refund_of_transaction_id
         and existing.refund_reason == request.refund_reason
         and bool(existing.collected_before) == request.collected_before
@@ -392,7 +396,7 @@ def _verify_payment_quote_token(
     payment_method,
     currency_code: str,
     base_amount: Decimal,
-) -> tuple[dict, Decimal, dict | None, Decimal]:
+) -> tuple[dict, Decimal, dict | None, Decimal, int | None, str | None, Decimal | None, dict | None]:
     """Verify and bind a short-lived server quote to the submitted collection."""
     try:
         payload = verify_quote_token(token)
@@ -433,11 +437,44 @@ def _verify_payment_quote_token(
     payment_fx_quote_details = payload.get("payment_fx_quote_details")
     if payment_fx_quote_details is not None and not isinstance(payment_fx_quote_details, dict):
         raise PaymentError("La procedencia de la cotización guardada no es válida.")
+    cash_change_currency_code = payload.get("cash_change_currency_code")
+    if cash_change_currency_code is not None:
+        cash_change_currency_code = str(cash_change_currency_code).strip().upper()
+        if len(cash_change_currency_code) != 3 or not cash_change_currency_code.isascii() or not cash_change_currency_code.isalpha():
+            raise PaymentError("La moneda de vuelto guardada no es válida.")
+    raw_cash_change_fx_rate = payload.get("cash_change_fx_rate")
+    try:
+        cash_change_fx_rate = (
+            Decimal(str(raw_cash_change_fx_rate))
+            if raw_cash_change_fx_rate is not None
+            else None
+        )
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise PaymentError("La cotización de vuelto guardada no es válida.") from exc
+    if cash_change_fx_rate is not None and (
+        not cash_change_fx_rate.is_finite() or cash_change_fx_rate <= Decimal("0.00")
+    ):
+        raise PaymentError("La cotización de vuelto guardada no es válida.")
+    cash_change_fx_quote_details = payload.get("cash_change_fx_quote_details")
+    if cash_change_fx_quote_details is not None and not isinstance(cash_change_fx_quote_details, dict):
+        raise PaymentError("La procedencia de la cotización del vuelto no es válida.")
+    manual_fx_quote_id = payload.get("manual_fx_quote_id")
+    if manual_fx_quote_id is not None:
+        try:
+            manual_fx_quote_id = int(manual_fx_quote_id)
+        except (TypeError, ValueError) as exc:
+            raise PaymentError("La autorización manual de conversión no es válida.") from exc
+        if manual_fx_quote_id <= 0:
+            raise PaymentError("La autorización manual de conversión no es válida.")
     return (
         surcharge_quote_snapshot,
         payment_fx_rate,
         payment_fx_quote_details,
         quoted_applied_amount,
+        manual_fx_quote_id,
+        cash_change_currency_code,
+        cash_change_fx_rate,
+        cash_change_fx_quote_details,
     )
 
 
@@ -449,6 +486,8 @@ def calculate_payment_surcharge(
     base_amount,
     currency_code: str = "ARS",
     surcharge_quote_snapshot: dict | None = None,
+    manual_fx_conversion_rate: Decimal | None = None,
+    manual_fx_conversion_from_currency: str | None = None,
 ) -> dict:
     base = Decimal(str(base_amount or 0)).quantize(Decimal("0.01"))
     target_currency = str(currency_code or "ARS").strip().upper()
@@ -517,12 +556,19 @@ def calculate_payment_surcharge(
             if surcharge_currency_code == target_currency:
                 surcharge_amount = fixed_amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             else:
-                surcharge_fx_rate, surcharge_fx_quote_details = _payment_conversion_rate(
-                    db,
-                    hotel_id=hotel_id,
-                    from_currency=surcharge_currency_code,
-                    to_currency=target_currency,
-                )
+                if (
+                    manual_fx_conversion_rate is None
+                    or surcharge_currency_code != manual_fx_conversion_from_currency
+                ):
+                    surcharge_fx_rate, surcharge_fx_quote_details = _payment_conversion_rate(
+                        db,
+                        hotel_id=hotel_id,
+                        from_currency=surcharge_currency_code,
+                        to_currency=target_currency,
+                    )
+                else:
+                    surcharge_fx_rate = manual_fx_conversion_rate
+                    surcharge_fx_quote_details = {"source": "authorized_manual_reservation_fx"}
                 surcharge_amount = (fixed_amount * surcharge_fx_rate).quantize(
                     Decimal("0.01"), rounding=ROUND_HALF_UP
                 )
@@ -610,6 +656,10 @@ def quote_reservation_payment_surcharge(
     payment_method,
     currency_code: str,
     base_amount: Decimal | None = None,
+    manual_payment_fx_rate: Decimal | None = None,
+    manual_payment_fx_quote_details: dict | None = None,
+    manual_fx_quote_id: int | None = None,
+    surcharge_quote_snapshot_override: dict | None = None,
 ) -> dict:
     """Quote a reservation payment without rounding its ledger principal.
 
@@ -637,12 +687,47 @@ def quote_reservation_payment_surcharge(
     payment_fx_rate = Decimal("1")
     payment_fx_quote_details = None
     if target_currency != reservation_currency:
-        payment_fx_rate, payment_fx_quote_details = _payment_conversion_rate(
-            db,
-            hotel_id=hotel_id,
-            from_currency=target_currency,
-            to_currency=reservation_currency,
-        )
+        if manual_payment_fx_rate is None:
+            payment_fx_rate, payment_fx_quote_details = _payment_conversion_rate(
+                db,
+                hotel_id=hotel_id,
+                from_currency=target_currency,
+                to_currency=reservation_currency,
+            )
+        else:
+            payment_fx_rate = Decimal(str(manual_payment_fx_rate))
+            payment_fx_quote_details = manual_payment_fx_quote_details
+            if not payment_fx_rate.is_finite() or payment_fx_rate <= 0:
+                raise PaymentError("La cotización manual de conversión no es válida.")
+    elif manual_payment_fx_rate is not None:
+        raise PaymentError("Un importe FX manual requiere una moneda distinta de la reserva.")
+
+    hotel_currency = str(get_hotel_config(db, hotel_id).default_currency or "ARS").strip().upper()
+    cash_change_fx_rate: Decimal | None = None
+    cash_change_fx_quote_details: dict | None = None
+    if _payment_method_value(payment_method) == PaymentMethodEnum.CASH.value:
+        if target_currency == hotel_currency:
+            cash_change_fx_rate = Decimal("1")
+        elif hotel_currency == reservation_currency:
+            # The payment quote already freezes this exact tender-to-reservation
+            # rate, which is also the tender-to-hotel-currency rate here.
+            cash_change_fx_rate = payment_fx_rate
+            cash_change_fx_quote_details = payment_fx_quote_details
+        else:
+            # The reservation can be priced in a third currency. Quote the
+            # physical cash change separately into the hotel's base currency.
+            # A missing quote is non-blocking for an exact tender; the payment
+            # path rejects a positive over-tender until it can value the change.
+            try:
+                cash_change_fx_rate, cash_change_fx_quote_details = _payment_conversion_rate(
+                    db,
+                    hotel_id=hotel_id,
+                    from_currency=target_currency,
+                    to_currency=hotel_currency,
+                )
+            except PaymentError:
+                cash_change_fx_rate = None
+                cash_change_fx_quote_details = None
 
     exact_base_amount = base_amount is None
     if base_amount is None:
@@ -702,6 +787,15 @@ def quote_reservation_payment_surcharge(
         payment_method=payment_method,
         base_amount=resolved_base,
         currency_code=target_currency,
+        surcharge_quote_snapshot=surcharge_quote_snapshot_override,
+        manual_fx_conversion_rate=(
+            (Decimal("1") / payment_fx_rate)
+            if manual_payment_fx_rate is not None and target_currency != reservation_currency
+            else None
+        ),
+        manual_fx_conversion_from_currency=(
+            reservation_currency if manual_payment_fx_rate is not None else None
+        ),
     )
     policy = _rounding_policy_for_hotel(db, hotel_id) if _payment_method_value(payment_method) == PaymentMethodEnum.CASH.value else None
     cash_suggestion = _rounding_tender_amount(surcharge_info["final_amount"], policy) if policy else None
@@ -718,6 +812,12 @@ def quote_reservation_payment_surcharge(
                 "applied_amount": str(applied_amount),
                 "payment_fx_rate": str(payment_fx_rate),
                 "payment_fx_quote_details": payment_fx_quote_details,
+                "cash_change_currency_code": hotel_currency,
+                "cash_change_fx_rate": (
+                    str(cash_change_fx_rate) if cash_change_fx_rate is not None else None
+                ),
+                "cash_change_fx_quote_details": cash_change_fx_quote_details,
+                "manual_fx_quote_id": manual_fx_quote_id,
                 "surcharge_quote_snapshot": surcharge_info["surcharge_quote_snapshot"],
             },
             ttl_seconds=900,
@@ -733,6 +833,8 @@ def quote_reservation_payment_surcharge(
         "remaining_balance": max(Decimal("0.00"), balance - applied_amount).quantize(Decimal("0.01")),
         "fx_rate_snapshot": fx_rate_snapshot,
         "fx_quote_details": fx_quote_details,
+        "cash_change_currency_code": hotel_currency,
+        "cash_change_fx_rate": cash_change_fx_rate,
         "cash_tender_rounding_policy": policy,
         "cash_tender_suggestion": cash_suggestion,
         "cash_tender_suggestion_difference": (
@@ -741,7 +843,197 @@ def quote_reservation_payment_surcharge(
             else Decimal("0.00")
         ),
         "payment_quote_token": payment_quote_token,
+        "manual_fx_quote_id": manual_fx_quote_id,
     }
+
+
+_NO_AUTOMATIC_FX_QUOTE_PREFIX = (
+    "No hay cotización actual ni un respaldo de menos de 24 horas para "
+)
+
+
+def _manual_fx_quote_details(quote: ManualFxPaymentQuote) -> dict:
+    reservation_amount = Decimal(str(quote.reservation_amount)).quantize(Decimal("0.01"))
+    tender_amount = Decimal(str(quote.tender_amount)).quantize(Decimal("0.01"))
+    return {
+        "source": "authorized_manual_reservation_fx",
+        "manual_fx_quote_id": quote.id,
+        "manual_fx_reason": quote.reason,
+        "manual_fx_created_at": quote.created_at.isoformat(),
+        "manual_fx_created_by_user_id": quote.created_by_user_id,
+        "manual_reservation_amount": str(reservation_amount),
+        "manual_tender_amount": str(tender_amount),
+        "from_currency": quote.tender_currency_code,
+        "to_currency": quote.reservation_currency_code,
+    }
+
+
+def create_manual_fx_payment_quote(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation_id: int,
+    payment_method,
+    currency_code: str,
+    reservation_amount: Decimal,
+    tender_amount: Decimal,
+    reason: str,
+    actor_user_id: int | None,
+) -> dict:
+    """Approve and persist one reservation-specific amount after FX expires."""
+    if actor_user_id is None:
+        raise PaymentError("No se pudo identificar a la persona que autoriza el importe manual.")
+    reservation = lock_query(
+        db.query(Reservation).filter(
+            Reservation.id == reservation_id,
+            Reservation.hotel_id == hotel_id,
+        ),
+        Reservation,
+    ).first()
+    if reservation is None:
+        raise PaymentNotFoundError("No se encontró la reserva para autorizar el importe manual.")
+
+    reservation_currency = (reservation.currency_code or "ARS").strip().upper()
+    tender_currency = _resolve_payment_currency(reservation, currency_code)
+    if tender_currency == reservation_currency:
+        raise PaymentError("El importe manual solo se usa para cobrar en otra moneda distinta a la reserva.")
+
+    try:
+        _payment_conversion_rate(
+            db,
+            hotel_id=hotel_id,
+            from_currency=tender_currency,
+            to_currency=reservation_currency,
+        )
+    except PaymentError as exc:
+        if not str(exc).startswith(_NO_AUTOMATIC_FX_QUOTE_PREFIX):
+            raise
+    else:
+        raise PaymentError(
+            "Hay una cotización automática vigente para esta conversión. Usá la cotización del sistema."
+        )
+
+    available_balance = Decimal(
+        str(operational_balance_due(db, hotel_id=hotel_id, reservation=reservation))
+    ).quantize(Decimal("0.01"))
+    authorized_reservation_amount = Decimal(str(reservation_amount)).quantize(Decimal("0.01"))
+    authorized_tender_amount = Decimal(str(tender_amount)).quantize(Decimal("0.01"))
+    if authorized_reservation_amount <= 0 or authorized_tender_amount <= 0:
+        raise PaymentError("Los importes de la cotización manual deben ser mayores a cero.")
+    if authorized_reservation_amount > available_balance:
+        raise PaymentError(
+            f"El importe que se imputará ({authorized_reservation_amount:.2f} {reservation_currency}) "
+            f"supera el saldo actual ({available_balance:.2f} {reservation_currency})."
+        )
+    normalized_reason = str(reason or "").strip()
+    if not normalized_reason or len(normalized_reason) > 240:
+        raise PaymentError("El motivo del importe manual es obligatorio y no puede superar 240 caracteres.")
+
+    active_quotes = (
+        db.query(ManualFxPaymentQuote)
+        .filter(
+            ManualFxPaymentQuote.hotel_id == hotel_id,
+            ManualFxPaymentQuote.reservation_id == reservation.id,
+            ManualFxPaymentQuote.payment_method == _payment_method_value(payment_method),
+            ManualFxPaymentQuote.tender_currency_code == tender_currency,
+            ManualFxPaymentQuote.consumed_at.is_(None),
+            ManualFxPaymentQuote.superseded_at.is_(None),
+        )
+        .with_for_update()
+        .all()
+    )
+    now = datetime.now(timezone.utc)
+    for active_quote in active_quotes:
+        active_quote.superseded_at = now
+
+    manual_quote = ManualFxPaymentQuote(
+        hotel_id=hotel_id,
+        reservation_id=reservation.id,
+        payment_method=_payment_method_value(payment_method),
+        reservation_currency_code=reservation_currency,
+        tender_currency_code=tender_currency,
+        reservation_amount=authorized_reservation_amount,
+        tender_amount=authorized_tender_amount,
+        reason=normalized_reason,
+        created_by_user_id=actor_user_id,
+        created_at=now,
+    )
+    db.add(manual_quote)
+    db.flush()
+
+    rate = authorized_reservation_amount / authorized_tender_amount
+    if not rate.is_finite() or rate <= 0:
+        raise PaymentError("No se pudo calcular el importe manual aprobado.")
+    details = _manual_fx_quote_details(manual_quote)
+    quote = quote_reservation_payment_surcharge(
+        db,
+        hotel_id=hotel_id,
+        reservation_id=reservation.id,
+        payment_method=payment_method,
+        currency_code=tender_currency,
+        base_amount=authorized_tender_amount,
+        manual_payment_fx_rate=rate,
+        manual_payment_fx_quote_details=details,
+        manual_fx_quote_id=manual_quote.id,
+    )
+    manual_quote.surcharge_quote_snapshot = quote["surcharge_quote_snapshot"]
+    db.flush()
+    quote["manual_fx_reason"] = manual_quote.reason
+    quote["manual_fx_created_at"] = manual_quote.created_at.isoformat()
+    return quote
+
+
+def get_active_manual_fx_payment_quote(
+    db: Session,
+    *,
+    hotel_id: int,
+    reservation_id: int,
+    payment_method,
+    currency_code: str,
+) -> dict | None:
+    """Reissue a short-lived signed token for the one active manual amount."""
+    reservation = (
+        db.query(Reservation)
+        .filter(Reservation.id == reservation_id, Reservation.hotel_id == hotel_id)
+        .first()
+    )
+    if reservation is None:
+        raise PaymentNotFoundError("No se encontró la reserva para consultar el importe autorizado.")
+    target_currency = _resolve_payment_currency(reservation, currency_code)
+    quote_row = (
+        db.query(ManualFxPaymentQuote)
+        .filter(
+            ManualFxPaymentQuote.hotel_id == hotel_id,
+            ManualFxPaymentQuote.reservation_id == reservation_id,
+            ManualFxPaymentQuote.payment_method == _payment_method_value(payment_method),
+            ManualFxPaymentQuote.tender_currency_code == target_currency,
+            ManualFxPaymentQuote.consumed_at.is_(None),
+            ManualFxPaymentQuote.superseded_at.is_(None),
+        )
+        .first()
+    )
+    if quote_row is None:
+        return None
+    if quote_row.reservation_currency_code != (reservation.currency_code or "ARS").strip().upper():
+        raise PaymentError("La autorización guardada no coincide con la moneda de la reserva.")
+
+    rate = Decimal(str(quote_row.reservation_amount)) / Decimal(str(quote_row.tender_amount))
+    details = _manual_fx_quote_details(quote_row)
+    quote = quote_reservation_payment_surcharge(
+        db,
+        hotel_id=hotel_id,
+        reservation_id=reservation_id,
+        payment_method=payment_method,
+        currency_code=target_currency,
+        base_amount=Decimal(str(quote_row.tender_amount)),
+        manual_payment_fx_rate=rate,
+        manual_payment_fx_quote_details=details,
+        manual_fx_quote_id=quote_row.id,
+        surcharge_quote_snapshot_override=quote_row.surcharge_quote_snapshot,
+    )
+    quote["manual_fx_reason"] = quote_row.reason
+    quote["manual_fx_created_at"] = quote_row.created_at.isoformat()
+    return quote
 
 
 def process_payment(
@@ -826,6 +1118,10 @@ def process_payment(
     payment_fx_rate = None
     payment_fx_quote_details = None
     quoted_applied_amount = None
+    verified_manual_fx_quote_id = None
+    verified_cash_change_currency = None
+    verified_cash_change_fx_rate = None
+    verified_cash_change_fx_quote_details = None
     if request.payment_quote_token:
         if is_refund or request.collected_before or not apply_surcharge:
             raise PaymentError("La cotización solo se admite para un cobro nuevo.")
@@ -836,6 +1132,10 @@ def process_payment(
             payment_fx_rate,
             payment_fx_quote_details,
             quoted_applied_amount,
+            verified_manual_fx_quote_id,
+            verified_cash_change_currency,
+            verified_cash_change_fx_rate,
+            verified_cash_change_fx_quote_details,
         ) = _verify_payment_quote_token(
             request.payment_quote_token,
             hotel_id=resolved_hotel_id,
@@ -844,6 +1144,8 @@ def process_payment(
             currency_code=transaction_currency,
             base_amount=tender_amount,
         )
+    if request.manual_fx_quote_id != verified_manual_fx_quote_id:
+        raise PaymentError("El importe manual no coincide con la autorización firmada.")
     requested_cash_received = getattr(request, "cash_received_amount", None)
     requested_cash_tip = getattr(request, "cash_tip_amount", Decimal("0.00"))
     normalized_cash_received = None
@@ -896,6 +1198,43 @@ def process_payment(
             ):
                 raise PaymentError("La clave de idempotencia ya se usó para una solicitud de pago diferente.")
             return existing_by_key
+
+    manual_fx_quote = None
+    if request.manual_fx_quote_id is not None:
+        if not request.payment_quote_token or is_refund or request.collected_before:
+            raise PaymentError("La autorización manual solo se admite en un cobro nuevo cotizado.")
+        manual_fx_quote = (
+            db.query(ManualFxPaymentQuote)
+            .filter(
+                ManualFxPaymentQuote.id == request.manual_fx_quote_id,
+                ManualFxPaymentQuote.hotel_id == resolved_hotel_id,
+                ManualFxPaymentQuote.reservation_id == request.reservation_id,
+            )
+            .with_for_update()
+            .first()
+        )
+        if (
+            manual_fx_quote is None
+            or manual_fx_quote.consumed_at is not None
+            or manual_fx_quote.superseded_at is not None
+        ):
+            raise PaymentError("El importe manual ya fue usado o reemplazado. Solicitá una nueva autorización.")
+        if (
+            manual_fx_quote.payment_method != _payment_method_value(request.payment_method)
+            or manual_fx_quote.tender_currency_code != transaction_currency
+            or manual_fx_quote.reservation_currency_code
+            != (reservation.currency_code or "ARS").strip().upper()
+            or Decimal(str(manual_fx_quote.tender_amount)).quantize(Decimal("0.01")) != tender_amount
+            or Decimal(str(manual_fx_quote.reservation_amount)).quantize(Decimal("0.01"))
+            != quoted_applied_amount
+            or surcharge_quote_snapshot != manual_fx_quote.surcharge_quote_snapshot
+        ):
+            raise PaymentError("La autorización manual no coincide con el medio, moneda o importe aprobado.")
+        payment_fx_rate = (
+            Decimal(str(manual_fx_quote.reservation_amount))
+            / Decimal(str(manual_fx_quote.tender_amount))
+        )
+        payment_fx_quote_details = _manual_fx_quote_details(manual_fx_quote)
 
     if request.manual_reference and (is_refund or request.payment_method not in MANUAL_REFERENCE_METHODS):
         raise PaymentError("Las referencias manuales solo se admiten para pagos presenciales con tarjeta o débito, y para transferencias bancarias.")
@@ -1137,18 +1476,6 @@ def process_payment(
                 f"El pago total debe cubrir el saldo pendiente (${Decimal(str(balance)):.2f})."
             )
 
-    if request.payment_method == PaymentMethodEnum.CASH and not request.collected_before:
-        from app.services import cash_register_service
-
-        try:
-            cash_register_service.require_open_session_for_currency(
-                db,
-                hotel_id=resolved_hotel_id,
-                currency_code=transaction_currency,
-            )
-        except cash_register_service.CashRegisterError as exc:
-            raise PaymentError(str(exc)) from exc
-
     # 4. Create transaction
     tx_status = TransactionStatusEnum.PENDING
     external_payment_id = None
@@ -1176,6 +1503,9 @@ def process_payment(
 
     cash_received_amount = None
     cash_change_amount = None
+    cash_change_settled_amount = None
+    cash_change_settled_currency = None
+    cash_change_fx_rate_snapshot = None
     cash_tip_amount = Decimal("0.00")
     if normalized_cash_received is not None and tx_status != TransactionStatusEnum.COMPLETED:
         raise PaymentError("El efectivo entregado solo se registra para cobros completados.")
@@ -1191,6 +1521,89 @@ def process_payment(
             cash_received_amount=cash_received_amount,
             requested_tip_amount=normalized_cash_tip,
         )
+
+        hotel_currency = str(get_hotel_config(db, resolved_hotel_id).default_currency or "ARS").strip().upper()
+        if verified_cash_change_currency and verified_cash_change_currency != hotel_currency:
+            raise PaymentError("La moneda base del hotel cambió; volvé a cotizar el cobro.")
+        cash_change_settled_currency = hotel_currency
+        cash_change_fx_rate_snapshot = verified_cash_change_fx_rate
+        if transaction_currency == hotel_currency:
+            cash_change_fx_rate_snapshot = Decimal("1")
+        elif cash_change_fx_rate_snapshot is None and request.payment_quote_token is None:
+            reservation_currency = (reservation.currency_code or "ARS").strip().upper()
+            if hotel_currency == reservation_currency and payment_fx_rate is not None:
+                cash_change_fx_rate_snapshot = payment_fx_rate
+                verified_cash_change_fx_quote_details = payment_fx_quote_details
+            elif hotel_currency == reservation_currency and fx_rate_snapshot:
+                cash_change_fx_rate_snapshot = Decimal("1") / Decimal(str(fx_rate_snapshot))
+            elif cash_change_amount > 0:
+                cash_change_fx_rate_snapshot, verified_cash_change_fx_quote_details = _payment_conversion_rate(
+                    db,
+                    hotel_id=resolved_hotel_id,
+                    from_currency=transaction_currency,
+                    to_currency=hotel_currency,
+                )
+        if cash_change_fx_rate_snapshot is not None:
+            # Persist and calculate with the same precision as the snapshot
+            # column so the database check and displayed change agree.
+            cash_change_fx_rate_snapshot = cash_change_fx_rate_snapshot.quantize(
+                Decimal("0.000000000001"), rounding=ROUND_HALF_UP
+            )
+            if cash_change_fx_rate_snapshot <= Decimal("0.00"):
+                cash_change_fx_rate_snapshot = None
+        if cash_change_amount > 0 and cash_change_fx_rate_snapshot is None:
+            raise PaymentError(
+                f"No hay una cotización vigente para calcular el vuelto en {hotel_currency}. "
+                "Cobrá el importe exacto o solicitá una cotización autorizada."
+            )
+        if cash_change_fx_rate_snapshot is not None:
+            cash_change_settled_amount = (
+                cash_change_amount * cash_change_fx_rate_snapshot
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if cash_change_amount > 0 and cash_change_settled_amount <= Decimal("0.00"):
+                raise PaymentError(
+                    f"El excedente es menor al mínimo que se puede devolver en {hotel_currency}. "
+                    "Ingresá el importe exacto para evitar diferencias."
+                )
+        else:
+            cash_change_settled_amount = Decimal("0.00")
+
+    if request.payment_method == PaymentMethodEnum.CASH and not request.collected_before:
+        from app.services import cash_register_service
+
+        cash_currencies_to_lock = {transaction_currency}
+        if (
+            cash_change_settled_amount is not None
+            and cash_change_settled_amount > Decimal("0.00")
+            and cash_change_settled_currency != transaction_currency
+        ):
+            cash_currencies_to_lock.add(cash_change_settled_currency)
+        try:
+            # Acquire multi-currency drawers in a stable order to avoid
+            # deadlocks when two payments return change in opposite currencies.
+            for currency_to_lock in sorted(cash_currencies_to_lock):
+                cash_register_service.require_open_session_for_currency(
+                    db,
+                    hotel_id=resolved_hotel_id,
+                    currency_code=currency_to_lock,
+                )
+        except cash_register_service.CashRegisterError as exc:
+            raise PaymentError(str(exc)) from exc
+
+    if cash_change_settled_amount is not None:
+        fx_quote_details = {
+            **(fx_quote_details or {}),
+            "cash_change_quote": {
+                "from_currency": transaction_currency,
+                "to_currency": cash_change_settled_currency,
+                "rate": (
+                    str(cash_change_fx_rate_snapshot)
+                    if cash_change_fx_rate_snapshot is not None
+                    else None
+                ),
+                "quote_details": verified_cash_change_fx_quote_details,
+            },
+        }
 
     # idempotency_key is set AT CONSTRUCTION (before the INSERT) so a concurrent
     # duplicate delivery collides on the partial unique index
@@ -1212,6 +1625,9 @@ def process_payment(
         gross_amount=gross_amount,
         cash_received_amount=cash_received_amount,
         cash_change_amount=cash_change_amount,
+        cash_change_settled_amount=cash_change_settled_amount,
+        cash_change_settled_currency=cash_change_settled_currency,
+        cash_change_fx_rate_snapshot=cash_change_fx_rate_snapshot,
         cash_tip_amount=cash_tip_amount,
         fee_amount=surcharge_amount,
         currency=(reservation.currency_code or "ARS").strip().upper(),
@@ -1347,6 +1763,11 @@ def process_payment(
                 # Without this translation a cash charge with no open caja
                 # crashed as an unhandled 500 instead of blocking clearly.
                 raise PaymentError(str(exc)) from exc
+
+    if manual_fx_quote is not None:
+        manual_fx_quote.consumed_transaction_id = transaction.id
+        manual_fx_quote.consumed_at = datetime.now(timezone.utc)
+        db.flush()
 
     return transaction
 
@@ -1909,6 +2330,9 @@ def get_reservation_financial_summary(
                 "gross_amount": t.gross_amount if t.gross_amount is not None else t.amount,
                 "cash_received_amount": t.cash_received_amount,
                 "cash_change_amount": t.cash_change_amount,
+                "cash_change_settled_amount": t.cash_change_settled_amount,
+                "cash_change_settled_currency": t.cash_change_settled_currency,
+                "cash_change_fx_rate_snapshot": t.cash_change_fx_rate_snapshot,
                 "cash_tip_amount": t.cash_tip_amount,
                 "fee_amount": t.fee_amount or 0,
                 "currency": t.tender_currency or t.currency,
@@ -2005,6 +2429,9 @@ def get_payment_receipt_data(db: Session, hotel_id: Optional[int], transaction_i
         "gross_amount": transaction.gross_amount if transaction.gross_amount is not None else transaction.amount,
         "cash_received_amount": transaction.cash_received_amount,
         "cash_change_amount": transaction.cash_change_amount,
+        "cash_change_settled_amount": transaction.cash_change_settled_amount,
+        "cash_change_settled_currency": transaction.cash_change_settled_currency,
+        "cash_change_fx_rate_snapshot": transaction.cash_change_fx_rate_snapshot,
         "cash_tip_amount": transaction.cash_tip_amount,
         "fee_amount": transaction.fee_amount or Decimal("0.00"),
         "currency": transaction.tender_currency or transaction.currency,

@@ -206,6 +206,8 @@ export function HousekeepingTodayPage() {
               {floorRooms.map((room) => {
                 const checklist = checklistsByRoom.get(room.room_id);
                 const completedCount = checklist?.items.filter((item) => item.completed).length ?? 0;
+                const activeBlockReasons = room.active_block_reasons ?? [];
+                const hasUnspecifiedBlock = room.operational_status === "blocked" && activeBlockReasons.length === 0;
                 return (
                 <article key={room.room_id} className="flex min-w-0 flex-col gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
@@ -220,12 +222,20 @@ export function HousekeepingTodayPage() {
                       {room.has_departure_today && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-orange-800">{t("housekeepingToday.departure")}</span>}
                       {room.has_arrival_today && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-800">{t("housekeepingToday.arrival")}</span>}
                       {room.has_stayover_today && <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-800">{t("housekeepingToday.stayover")}</span>}
-                      {room.active_block_reasons.map((reason) => (
+                      {activeBlockReasons.map((reason) => (
                         <span key={reason} className="rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-800">
                           {t(`housekeepingToday.blockReasons.${reason}`)}
                         </span>
                       ))}
-                      {!room.has_arrival_today && !room.has_departure_today && !room.has_stayover_today && room.active_block_reasons.length === 0 && (
+                      {hasUnspecifiedBlock && (
+                        <span className="rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-800">
+                          {room.maintenance_blocked
+                            ? t("housekeepingToday.maintenanceBlocked")
+                            : t("housekeepingToday.blockReasons.other")}
+                        </span>
+                      )}
+                      {!room.has_arrival_today && !room.has_departure_today && !room.has_stayover_today
+                        && activeBlockReasons.length === 0 && !hasUnspecifiedBlock && (
                         <span className="text-slate-500">{t("housekeepingToday.noSpecialEvents")}</span>
                       )}
                     </div>

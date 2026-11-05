@@ -315,6 +315,11 @@ def connect_integration(
     if integration.auth_type == "oauth_code":
         oauth_payload = payload.payload or {}
         manual_keys = {"access_token", "refresh_token", "public_key", "user_id", "merchant_id"}
+        if integration.provider == "mercadopago" and any(oauth_payload.get(key) for key in manual_keys):
+            raise HTTPException(
+                status_code=409,
+                detail="Conectá Mercado Pago desde el botón de autorización. El PMS no pide tokens ni IDs manuales.",
+            )
         if any(oauth_payload.get(key) for key in manual_keys):
             try:
                 oauth_payload = validate_provider_credentials(integration.provider, oauth_payload)

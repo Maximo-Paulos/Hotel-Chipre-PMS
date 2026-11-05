@@ -38,20 +38,21 @@ if (!pythonExecutablePath) {
   throw new Error("Local E2E requires Python >= 3.10. Set E2E_PYTHON to a supported interpreter.");
 }
 const pythonExecutable = JSON.stringify(pythonExecutablePath);
-const e2eDbPath = path.join(repoRoot, "_e2e.db").replace(/\\/g, "/");
-const e2eDatabaseURL = process.env.E2E_DATABASE_URL || `sqlite:///${e2eDbPath}`;
+const e2eDatabaseURL = process.env.E2E_DATABASE_URL || "";
 const postgresE2eEnabled = process.env.E2E_POSTGRES_ISOLATED === "true";
 const explicitPostgresE2eDatabaseURL = process.env.E2E_POSTGRES_DATABASE_URL_EXPLICIT || "";
 const postgresE2eSeedDatabaseURL = process.env.E2E_POSTGRES_SEED_DATABASE_URL || "";
 const explicitPostgresE2eSeedDatabaseURL = process.env.E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT || "";
+const postgresE2eSeedURL = postgresE2eSeedDatabaseURL.startsWith("postgresql://") || postgresE2eSeedDatabaseURL.startsWith("postgresql+psycopg2://");
 const postgresE2eURL = /^postgresql(?:\+psycopg2)?:\/\//.test(e2eDatabaseURL);
 if (
-  (postgresE2eURL && (!postgresE2eEnabled || explicitPostgresE2eDatabaseURL !== e2eDatabaseURL)) ||
-  (!postgresE2eURL && postgresE2eEnabled) ||
-  (postgresE2eURL && (!postgresE2eSeedDatabaseURL || explicitPostgresE2eSeedDatabaseURL !== postgresE2eSeedDatabaseURL)) ||
-  (!postgresE2eURL && (postgresE2eSeedDatabaseURL || explicitPostgresE2eSeedDatabaseURL))
+  !postgresE2eURL ||
+  !postgresE2eEnabled ||
+  explicitPostgresE2eDatabaseURL !== e2eDatabaseURL ||
+  !postgresE2eSeedURL ||
+  explicitPostgresE2eSeedDatabaseURL !== postgresE2eSeedDatabaseURL
 ) {
-  throw new Error("PostgreSQL E2E requires matching explicit app and seed database URLs for the isolated test target.");
+  throw new Error("Local E2E requires matching explicit PostgreSQL 16 app and seed database URLs for an isolated test target.");
 }
 const jwtSecret =
   process.env.E2E_JWT_SECRET || "e2e-local-jwt-secret-change-me-32chars";

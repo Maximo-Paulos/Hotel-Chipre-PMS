@@ -26,6 +26,7 @@ from app.models.allocation import (
     ReservationAllocationLock,
     SolverMetric,
 )
+from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
@@ -127,6 +128,7 @@ def run_persisted_allocation(
 
     policy_settings = get_active_policy_settings(db, hotel_id)
     policy_version = policy_settings.version
+    fx_configuration_snapshot = _allocation_fx_configuration_snapshot(db, hotel_id)
     if queued_run_id is None:
         allocation_run = AllocationRun(
             hotel_id=hotel_id,
@@ -279,6 +281,7 @@ def run_persisted_allocation(
                 room_slot=room_slot_by_id.get(room_id),
                 room_id=room_id,
                 was_moved=is_changed,
+                fx_configuration_snapshot=fx_configuration_snapshot,
             )
         )
         if not is_proposal and not is_changed:
@@ -881,6 +884,12 @@ def accept_allocation_run(
         )
     locked_moves_left_unchanged = required_locked_move_approvals - approved_locked_move_ids
 
+    current_fx_configuration = _allocation_fx_configuration_snapshot(
+        db,
+        hotel_id,
+        lock=True,
+    )
+
     all_assignment_explanations = (
         db.query(AllocationExplanation)
         .filter(
@@ -918,6 +927,10 @@ def accept_allocation_run(
         plan_explanation = plan_explanation_by_reservation.get(reservation_id)
         if not plan_explanation or not plan_explanation.get("source_state_fingerprint"):
             raise AllocationRuntimeError("The allocation plan is missing a source-state snapshot")
+        if plan_explanation.get("fx_configuration_snapshot") != current_fx_configuration:
+            raise AllocationRuntimeError(
+                "FX configuration changed after this proposal; recalculate allocation"
+            )
         assignment = assignment_by_reservation[reservation_id]
         # First-time assignments may already have been applied by a direct/OTA
         # intake trigger. Their recorded source was intentionally unassigned;
@@ -1448,6 +1461,7 @@ def _create_assignment_explanation(
     room_slot,
     room_id: int,
     was_moved: bool,
+    fx_configuration_snapshot: dict,
 ) -> AllocationExplanation:
     assigned_category_id = room_slot.category_id if room_slot is not None else None
     requested_category_id = reservation.category_id
@@ -1483,6 +1497,7 @@ def _create_assignment_explanation(
         "source_room_id": reservation.room_id,
         "source_state": _reservation_state_payload(reservation),
         "source_state_fingerprint": _reservation_state_fingerprint(reservation),
+        "fx_configuration_snapshot": fx_configuration_snapshot,
     }
     if reservation_slot is not None:
         details["room_assignment_signal"] = {
@@ -1510,6 +1525,39 @@ def _reservation_state_fingerprint(reservation: Reservation) -> str:
     state = _reservation_state_payload(reservation)
     serialized = json.dumps(state, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _allocation_fx_configuration_snapshot(
+    db: Session,
+    hotel_id: int,
+    *,
+    lock: bool = False,
+) -> dict:
+    """Capture the hotel's currency policy and serialize it with each proposal.
+
+    The room solver does not optimize on price or FX. This snapshot makes
+    pending operator decisions stale when the hotel's currency-conversion
+    settings change, so the proposal can be reviewed against current settings.
+    """
+    query = (
+        db.query(HotelConfiguration)
+        .filter(HotelConfiguration.id == hotel_id)
+        .populate_existing()
+    )
+    if lock:
+        query = lock_query(query, HotelConfiguration)
+    config = query.one_or_none()
+    if config is None:
+        raise AllocationRuntimeError("Hotel FX configuration is unavailable")
+    return {
+        "default_currency": str(config.default_currency or "ARS").strip().upper(),
+        "fx_conversion_rate_type": str(config.fx_conversion_rate_type or "oficial").strip().lower(),
+        "fx_usd_to_ars_rate_type": str(config.fx_usd_to_ars_rate_type or "oficial").strip().lower(),
+        "fx_usd_to_ars_rate_side": str(config.fx_usd_to_ars_rate_side or "venta").strip().lower(),
+        "fx_ars_to_usd_rate_type": str(config.fx_ars_to_usd_rate_type or "oficial").strip().lower(),
+        "fx_ars_to_usd_rate_side": str(config.fx_ars_to_usd_rate_side or "venta").strip().lower(),
+        "fx_rounding_policy": str(config.fx_rounding_policy or "exact").strip().lower(),
+    }
 
 
 def _reservation_state_payload(reservation: Reservation) -> dict:

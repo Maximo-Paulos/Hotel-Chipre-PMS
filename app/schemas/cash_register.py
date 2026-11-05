@@ -55,6 +55,11 @@ class CashMovementRead(BaseModel):
     group_payment_batch_id: Optional[int] = None
     group_payment_total: Optional[Decimal] = None
     group_payment_reservation_count: Optional[int] = None
+    cash_received_amount: Optional[Decimal] = None
+    cash_change_amount: Optional[Decimal] = None
+    cash_change_settled_amount: Optional[Decimal] = None
+    cash_change_settled_currency: Optional[str] = None
+    cash_change_fx_rate_snapshot: Optional[Decimal] = None
     cash_tip_amount: Decimal = Decimal("0.00")
     movement_type: CashMovementTypeEnum
     amount: Decimal
@@ -140,6 +145,9 @@ class CashDailyEntryRead(BaseModel):
     signed_amount: Decimal
     cash_received_amount: Optional[Decimal] = None
     cash_change_amount: Optional[Decimal] = None
+    cash_change_settled_amount: Optional[Decimal] = None
+    cash_change_settled_currency: Optional[str] = None
+    cash_change_fx_rate_snapshot: Optional[Decimal] = None
     cash_tip_amount: Decimal = Decimal("0.00")
     currency_code: str
     payment_method: Optional[str] = None
@@ -190,6 +198,9 @@ class CashDailyPriorReceiptRead(BaseModel):
     amount: Decimal
     cash_received_amount: Optional[Decimal] = None
     cash_change_amount: Optional[Decimal] = None
+    cash_change_settled_amount: Optional[Decimal] = None
+    cash_change_settled_currency: Optional[str] = None
+    cash_change_fx_rate_snapshot: Optional[Decimal] = None
     cash_tip_amount: Decimal = Decimal("0.00")
     currency_code: str
     collected_on: date

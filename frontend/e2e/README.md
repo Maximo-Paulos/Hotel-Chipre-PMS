@@ -1,8 +1,13 @@
 # Playwright E2E
 
-These specs use the real Vite frontend on `http://127.0.0.1:5173` and the real FastAPI backend on `http://127.0.0.1:8040`.
+These specs use the real Vite frontend on `http://127.0.0.1:5173` and the real FastAPI backend on `http://127.0.0.1:8040`. Every database-backed E2E run requires a fresh, isolated PostgreSQL 16 database in Colima; SQLite is not supported.
 
 ## Managed run
+
+Before starting Playwright, prepare a fresh Colima PostgreSQL 16 database and
+the dedicated app/seed roles described below, then export all five explicit
+E2E PostgreSQL variables. The config exits before starting either server if
+any variable is missing or does not match the isolated target.
 
 From `frontend/`:
 
@@ -30,7 +35,7 @@ E2E_WEBKIT_BUSINESS=true E2E_PYTHON=/absolute/path/to/python3.12 npx playwright 
 ```
 
 The WebKit business project is opt-in because the Chromium and WebKit
-journeys both mutate the same isolated SQLite database. Run it as a separate
+journeys both mutate the same isolated PostgreSQL database. Run it as a separate
 command after the default suite, never concurrently with another mutating
 project.
 
@@ -42,13 +47,13 @@ legacy Python 3.9 environment, pass the interpreter explicitly:
 E2E_PYTHON=/absolute/path/to/python3.12 npm run e2e
 ```
 
-It resets and seeds `../_e2e.db`, starts `uvicorn app.main:app --port 8040`,
-then starts Vite with `VITE_PUBLIC_APP_HOSTNAME=127.0.0.1`. The business
-journey mutates this isolated database, and the managed runner resets it on
-each invocation so an old open cash session cannot contaminate a fresh run.
+It migrates and seeds the explicitly selected PostgreSQL database, starts
+`uvicorn app.main:app --port 8040`, then starts Vite with
+`VITE_PUBLIC_APP_HOSTNAME=127.0.0.1`. The runner refuses missing, remote,
+reused, or non-PostgreSQL database targets before migration or seeding.
 For reliable isolation, existing servers are not reused by default. Set
 `E2E_REUSE_SERVER=true` only when intentionally connecting to already-running
-servers; in that mode the runner does not reset or own their database state.
+servers; in that mode the runner does not own their database state.
 
 ### PostgreSQL 16 browser runs
 
@@ -87,27 +92,16 @@ active hotel policy.
 
 ## Manual boot
 
-From the repository root:
-
-```bash
-APP_ENV=test DATABASE_URL=sqlite:///./_e2e.db JWT_SECRET=e2e-local-jwt-secret-change-me-32chars python scripts/seed_e2e_backend.py
-APP_ENV=test DATABASE_URL=sqlite:///./_e2e.db JWT_SECRET=e2e-local-jwt-secret-change-me-32chars uvicorn app.main:app --host 127.0.0.1 --port 8040
-```
-
-Or use the single-command wrapper:
-
-```bash
-APP_ENV=test DATABASE_URL=sqlite:///./_e2e.db python scripts/serve_e2e_backend.py
-```
+Set the five explicit PostgreSQL variables described above, then run
+`python scripts/serve_e2e_backend.py` from the repository root. The wrapper
+performs the same PostgreSQL target checks as the managed Playwright run.
 
 ### F-003 concurrent-user load fixture
 
 `f003-concurrent-user-load.spec.ts` is an opt-in 30-minute PostgreSQL load run. Set `E2E_F003_LOAD=true` only with a fresh, loopback PostgreSQL 16 database named `hotel_chipre_e2e_f003_load_*`, plus its matching `_app_runner` and `_seed_runner` roles and explicit isolated database URL settings. The dedicated seed then creates the synthetic Hotel Mirador del Lago with 30 rooms and 45 reservations. It refuses SQLite, other database names, non-isolated targets, or a database that does not contain the untouched base E2E fixture. The shared E2E seed remains unchanged.
 
-El seed/wrapper admite SQLite sólo en el path exacto `_e2e.db` del repositorio,
-o PostgreSQL 16 local con la opt-in y el nombre de base/rol desechables
-descritos arriba. Rechaza destinos remotos, otros esquemas y cualquier
-`APP_ENV` distinto de `test` antes de importar Alembic/FastAPI.
+El seed/wrapper rechaza SQLite, destinos remotos, bases reutilizadas y
+cualquier `APP_ENV` distinto de `test` antes de importar Alembic/FastAPI.
 
 In another shell from `frontend/`:
 

@@ -316,7 +316,7 @@ test.describe("F-027 with an English browser locale", () => {
 test.describe("F-027 task due date with an English browser locale", () => {
   test.use({ locale: "en-US", timezoneId: "America/Argentina/Buenos_Aires" });
 
-  test("shows day-first 24-hour input and sends the selected local time as UTC", async ({ page }) => {
+  test("shows day-first 24-hour input and sends the selected hotel-local wall time", async ({ page }) => {
     const housekeeping = {
       email: process.env.E2E_HOUSEKEEPING_EMAIL || "housekeeping@e2e.com",
       password: process.env.E2E_HOUSEKEEPING_PASSWORD || "E2eHousekeeping1234!"
@@ -351,7 +351,7 @@ test.describe("F-027 task due date with an English browser locale", () => {
     await page.waitForURL("**/habitaciones");
     await page.goto("/operacion/tareas");
 
-    const dueAt = page.getByLabel("Vencimiento (opcional)", { exact: true });
+    const dueAt = page.getByLabel("Vencimiento (hora del hotel, opcional)", { exact: true });
     await expect(dueAt).toHaveAttribute("placeholder", "DD/MM/AAAA HH:MM");
     await dueAt.fill("02/11/2026 16:25");
     await expect(dueAt).toHaveValue("02/11/2026 16:25");
@@ -359,7 +359,7 @@ test.describe("F-027 task due date with an English browser locale", () => {
     await page.getByRole("button", { name: "Agregar", exact: true }).click();
 
     await expect.poll(() => createdTask).not.toBeNull();
-    expect(createdTask?.due_at).toBe("2026-11-02T19:25:00.000Z");
+    expect(createdTask?.due_at).toBe("2026-11-02T16:25");
   });
 });
 

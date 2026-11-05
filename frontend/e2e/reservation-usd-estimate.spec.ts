@@ -140,8 +140,8 @@ test("FX provider failure leaves the ARS reservation available to create", async
 
   const form = await openReservationForm(page);
   const estimate = form.getByTestId("reservation-usd-estimate");
-  await expect(estimate).toContainText("No se pudo obtener una cotización vigente");
-  await expect(estimate).toContainText("La reserva puede guardarse en ARS");
+  await expect(estimate).toContainText("No hay cotización actual ni respaldo guardado dentro de las últimas 24 horas");
+  await expect(estimate).toContainText("La reserva puede guardarse en su moneda original");
   await expect(form.getByTestId("reservation-quote-total")).toContainText("50.000");
   await expect(form.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
 });

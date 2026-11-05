@@ -104,7 +104,10 @@ def test_production_sandbox_can_read_dolarapi_without_enabling_integrations(monk
 
     monkeypatch.setattr(fx_service.httpx, "get", lambda *_args, **_kwargs: FakeResponse())
 
-    assert fx_service.get_conversion_quote_sync("USD", "oficial") == expected_quote
+    result = fx_service.get_conversion_quote_sync("USD", "oficial")
+    assert result is not None
+    assert {key: value for key, value in result.items() if key != "_observed_at"} == expected_quote
+    assert result["_observed_at"]
 
 
 def test_explicitly_disabled_dolarapi_reads_stay_closed_in_production(monkeypatch):

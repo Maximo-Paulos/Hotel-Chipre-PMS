@@ -156,7 +156,9 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   });
   await cashReceivedInput.fill("99");
   await drawer.getByRole("button", { name: "Registrar cobro", exact: true }).click();
-  await expect(drawer.getByText(/El efectivo entregado debe cubrir al menos/)).toBeVisible();
+  await expect(
+    drawer.getByRole("alert").filter({ hasText: "El efectivo entregado debe cubrir al menos" })
+  ).toContainText("El efectivo entregado debe cubrir al menos");
   expect(cashPaymentRequestCount).toBe(0);
   await cashReceivedInput.fill("120");
   await expect(drawer.getByTestId("reservation-drawer-cash-received-change")).toContainText("20");

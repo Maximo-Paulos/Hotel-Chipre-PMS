@@ -274,14 +274,12 @@ test("individual extension quotes before confirmation and supports payment reque
 
   await panel.getByLabel("Cómo cobrar la extensión").selectOption("immediate_payment");
   await panel.getByLabel("Método de pago recibido").selectOption("cash");
-  await panel.getByRole("button", { name: "Ver importe y confirmar" }).click();
-  expect(previewRequests).toBe(2);
-
   const thirdPreview = page.waitForResponse((response) =>
     new URL(response.url()).pathname.endsWith(`/api/reservations/${reservationId}/extend-preview`)
   );
   await panel.getByRole("button", { name: "Ver importe y confirmar" }).click();
   expect((await thirdPreview).ok()).toBeTruthy();
+  expect(previewRequests).toBe(3);
   const cashTenderInput = panel.getByTestId("individual-extension-cash-received");
   const expectedCashAmount = Number(await cashTenderInput.getAttribute("placeholder"));
   await cashTenderInput.fill(String(expectedCashAmount + 15));

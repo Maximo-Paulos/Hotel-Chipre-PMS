@@ -286,7 +286,7 @@ def export_cash_ledger_csv(
         "usuario_id", "reserva_id", "transaccion_id", "movimiento_id", "lote_grupal_id",
         "sesion_id", "importe", "importe_neto", "efectivo_entregado", "vuelto", "propina", "medio_pago", "tipo_transaccion",
         "tipo_movimiento", "proveedor", "descripcion", "apertura", "esperado",
-        "contado", "diferencia", "estado_turno", "registrado_el",
+        "contado", "diferencia", "estado_turno", "registrado_el", "vuelto_monto_real", "moneda_vuelto",
     ]
     output = StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=columns, delimiter=";", lineterminator="\r\n")
@@ -351,6 +351,10 @@ def export_cash_ledger_csv(
             "importe_neto": entry.get("signed_amount"),
             "efectivo_entregado": entry.get("cash_received_amount"),
             "vuelto": entry.get("cash_change_amount"),
+            "vuelto_monto_real": entry.get("cash_change_settled_amount")
+            if entry.get("cash_change_settled_amount") is not None
+            else entry.get("cash_change_amount"),
+            "moneda_vuelto": entry.get("cash_change_settled_currency") or entry_currency,
             "propina": entry.get("cash_tip_amount"),
             "medio_pago": entry.get("payment_method"),
             "tipo_transaccion": entry.get("transaction_type"),
@@ -369,6 +373,14 @@ def export_cash_ledger_csv(
         safe_row["importe_neto"] = _csv_decimal(entry.get("signed_amount"))
         safe_row["efectivo_entregado"] = _csv_decimal(entry.get("cash_received_amount"))
         safe_row["vuelto"] = _csv_decimal(entry.get("cash_change_amount"))
+        safe_row["vuelto_monto_real"] = _csv_decimal(
+            entry.get("cash_change_settled_amount")
+            if entry.get("cash_change_settled_amount") is not None
+            else entry.get("cash_change_amount")
+        )
+        safe_row["moneda_vuelto"] = spreadsheet_safe_row({
+            "currency": str(entry.get("cash_change_settled_currency") or entry_currency).upper()
+        })["currency"]
         safe_row["propina"] = _csv_decimal(entry.get("cash_tip_amount"))
         writer.writerow(safe_row)
 
@@ -397,6 +409,8 @@ def export_cash_ledger_csv(
                 "importe_neto": "",
                 "efectivo_entregado": "",
                 "vuelto": "",
+                "vuelto_monto_real": "",
+                "moneda_vuelto": "",
                 "propina": "",
                 "medio_pago": "",
                 "tipo_transaccion": "",
@@ -442,6 +456,12 @@ def export_cash_ledger_csv(
             "importe_neto": transaction.tender_amount if transaction.tender_amount is not None else transaction.amount,
             "efectivo_entregado": transaction.cash_received_amount,
             "vuelto": transaction.cash_change_amount,
+            "vuelto_monto_real": (
+                transaction.cash_change_settled_amount
+                if transaction.cash_change_settled_amount is not None
+                else transaction.cash_change_amount
+            ),
+            "moneda_vuelto": transaction.cash_change_settled_currency or receipt_currency,
             "propina": transaction.cash_tip_amount,
             "medio_pago": "cash",
             "tipo_transaccion": "",
@@ -461,6 +481,14 @@ def export_cash_ledger_csv(
         safe_row["importe_neto"] = _csv_decimal(amount)
         safe_row["efectivo_entregado"] = _csv_decimal(transaction.cash_received_amount)
         safe_row["vuelto"] = _csv_decimal(transaction.cash_change_amount)
+        safe_row["vuelto_monto_real"] = _csv_decimal(
+            transaction.cash_change_settled_amount
+            if transaction.cash_change_settled_amount is not None
+            else transaction.cash_change_amount
+        )
+        safe_row["moneda_vuelto"] = spreadsheet_safe_row({
+            "currency": str(transaction.cash_change_settled_currency or receipt_currency).upper()
+        })["currency"]
         safe_row["propina"] = _csv_decimal(transaction.cash_tip_amount)
         writer.writerow(safe_row)
 

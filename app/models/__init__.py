@@ -77,6 +77,7 @@ from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.domain_event_outbox import DomainEventOutbox
 from app.models.domain_event_retention_watermark import DomainEventRetentionWatermark
 from app.models.fx_rate_snapshot import FxRateSnapshot
+from app.models.fx_rate_cache import FxRateCache
 from app.models.guest import (
     Guest,
     GuestCompanion,
@@ -174,6 +175,7 @@ from app.models.payment import (
     PaymentWebhookEvent,
 )
 from app.models.payment_correction import PaymentCorrection
+from app.models.manual_fx_payment_quote import ManualFxPaymentQuote
 from app.models.payment_link_test import PaymentLinkTest
 from app.models.payment_proof import (
     PaymentProof,
@@ -355,6 +357,7 @@ __all__ = [
     "IntegrationConnection",
     "IntegrationEvent",
     "PaymentLinkTest",
+    "ManualFxPaymentQuote",
     "PaymentSurcharge",
     "PaymentSurchargeTypeEnum",
     "Payment",
@@ -431,6 +434,7 @@ __all__ = [
     "RoomBlock",
     "RoomBlockReasonEnum",
     "FxRateSnapshot",
+    "FxRateCache",
     "CompanyDocument",
     "CompanyDocumentTypeEnum",
     "CompanyDocumentStatusEnum",

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 // Functional journey for the receptionist role: create -> pay -> check-in -> add
 // a consumption charge -> check-out blocked by the new pending balance -> pay it
@@ -8,6 +8,10 @@ import { expect, test, type Page } from "@playwright/test";
 const receptionist = {
   email: process.env.E2E_RECEPTIONIST_EMAIL || "receptionist@e2e.com",
   password: process.env.E2E_RECEPTIONIST_PASSWORD || "E2eReception1234!"
+};
+const owner = {
+  email: process.env.E2E_OWNER_EMAIL || "owner@e2e.com",
+  password: process.env.E2E_OWNER_PASSWORD || "E2ePass1234!"
 };
 
 const localIsoDate = (offsetDays: number) => {
@@ -26,11 +30,46 @@ async function login(page: Page) {
   await expect(page.getByTestId("session-role")).toHaveText("Recepción");
 }
 
-test("receptionist runs the full check-in / checkout journey with a pending-balance charge", async ({ page }) => {
+async function createJourneyRoom(request: APIRequestContext, suffix: string) {
+  const loginResponse = await request.post(`${process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040"}/api/auth/login`, {
+    data: owner
+  });
+  expect(loginResponse.ok(), await loginResponse.text()).toBeTruthy();
+  const session = await loginResponse.json() as {
+    hotel_id: number;
+    access_token: string;
+    csrf_token?: string;
+    user: { email: string };
+  };
+  const headers = {
+    "X-Hotel-Id": String(session.hotel_id),
+    "X-User-Id": session.user.email,
+    Authorization: `Bearer ${session.access_token}`,
+    "X-CSRF-Token": String(session.csrf_token || ""),
+    "Content-Type": "application/json"
+  };
+  const categoriesResponse = await request.get(`${process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040"}/api/rooms/categories`, { headers });
+  expect(categoriesResponse.ok(), await categoriesResponse.text()).toBeTruthy();
+  const categories = await categoriesResponse.json() as Array<{ id: number; name: string }>;
+  const category = categories.find((item) => item.name === "Standard E2E");
+  expect(category).toBeTruthy();
+  const roomNumber = `R${suffix.slice(-8)}`;
+  const roomResponse = await request.post(`${process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040"}/api/rooms/`, {
+    headers,
+    data: { room_number: roomNumber, floor: 1, category_id: category!.id, status: "available" }
+  });
+  expect(roomResponse.status(), await roomResponse.text()).toBe(201);
+  const room = await roomResponse.json() as { id: number; room_number: string; housekeeping_status: string };
+  expect(room.housekeeping_status).toBe("clean");
+  return room;
+}
+
+test("receptionist runs the full check-in / checkout journey with a pending-balance charge", async ({ page, request }) => {
   const suffix = Date.now().toString();
   const guestLastName = `QA-Recepcion ${suffix}`;
   const checkIn = localIsoDate(0);
   const checkOut = localIsoDate(1);
+  const room = await createJourneyRoom(request, suffix);
 
   await login(page);
 
@@ -89,7 +128,7 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await reservationForm.getByLabel("Check-out", { exact: true }).fill(checkOut);
 
   const roomSelect = reservationForm.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
-  const roomOption = roomSelect.locator("option").filter({ hasText: "102" });
+  const roomOption = roomSelect.locator("option").filter({ hasText: room.room_number });
   await expect(roomOption).toHaveCount(1);
   const roomValue = await roomOption.getAttribute("value");
   expect(roomValue).toBeTruthy();
@@ -168,7 +207,8 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await drawer.getByLabel("Nombre del acompañante").fill("Acompañante");
   await drawer.getByLabel("Apellido del acompañante").fill(guestLastName);
   await drawer.getByRole("button", { name: "Agregar", exact: true }).click();
-  await expect(drawer.getByText(`Acompañante ${guestLastName}`, { exact: false })).toBeVisible();
+  const guestArrivalPanel = drawer.getByTestId("reservation-guest-arrivals");
+  await expect(guestArrivalPanel.getByText(`Acompañante ${guestLastName}`, { exact: true })).toBeVisible();
 
   await drawer.getByRole("button", { name: "Check-in parcial", exact: true }).click();
   await expect(drawer.getByText("Check-in parcial registrado.", { exact: true })).toBeVisible();

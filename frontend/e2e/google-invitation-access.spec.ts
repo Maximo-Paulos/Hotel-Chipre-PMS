@@ -93,6 +93,10 @@ const installApiMocks = async (
       calls.push({ path, body });
       return json(authResponse);
     }
+    if (method === "POST" && path === "/api/invitations/accept/mfa") {
+      calls.push({ path, body });
+      return json(authResponse);
+    }
     if (method === "POST" && path === "/api/invitations/accept") {
       calls.push({ path, body });
       return json(authResponse);
@@ -153,13 +157,15 @@ test("Google invitation waits for MFA, then accepts the original invitation with
 
   expect(calls.map((call) => call.path)).toEqual([
     "/api/invitations/accept/google",
-    "/api/auth/login/mfa",
-    "/api/invitations/accept"
+    "/api/invitations/accept/mfa"
   ]);
   expect(calls.every((call) => !call.path.includes(invitationToken))).toBe(true);
   expect(calls[0]?.body).toEqual({ token: invitationToken, id_token: syntheticGoogleIdToken });
-  expect(calls[1]?.body).toEqual({ mfa_token: "synthetic-mfa-challenge", code: "123456" });
-  expect(calls[2]?.body).toEqual({ token: invitationToken, email: invitedEmail });
+  expect(calls[1]?.body).toEqual({
+    token: invitationToken,
+    mfa_token: "synthetic-mfa-challenge",
+    code: "123456"
+  });
   expect(pageErrors).toEqual([]);
 });
 

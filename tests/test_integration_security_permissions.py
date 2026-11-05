@@ -143,3 +143,34 @@ def test_generic_whatsapp_connection_mutations_are_rejected_before_writing(monke
         assert error.value.status_code == 409
 
     assert mutation_calls == []
+
+
+def test_mercadopago_manual_credentials_are_rejected_before_validation_or_persistence(monkeypatch):
+    integration = SimpleNamespace(id=1, provider="mercadopago", auth_type="oauth_code")
+    context = AuthContext(
+        hotel_id=1,
+        user_id=10,
+        user_email="owner@example.test",
+        user_role="owner",
+        is_verified=True,
+        permissions=set(),
+    )
+    monkeypatch.setattr(integrations, "_ensure_enabled", lambda: None)
+    monkeypatch.setattr(integrations, "_find_integration", lambda *_args, **_kwargs: (integration, []))
+    monkeypatch.setattr(
+        integrations,
+        "validate_provider_credentials",
+        lambda *_args, **_kwargs: pytest.fail("manual Mercado Pago credentials must not be validated"),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        integrations.connect_integration(
+            1,
+            IntegrationConnectRequest(payload={"access_token": "synthetic-token", "user_id": "123"}),
+            None,
+            _DB(),
+            context,
+        )
+
+    assert error.value.status_code == 409
+    assert "no pide tokens ni IDs manuales" in error.value.detail

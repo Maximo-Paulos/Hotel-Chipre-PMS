@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models.audit_log import AuditActionEnum
 from app.models.cash_register import (
     CashMovement,
+    CashMovementTypeEnum,
     CashSession,
     CashSessionStatusEnum,
 )
@@ -272,22 +273,23 @@ def correct_payment(
                     "Este pago ya tiene una devolución; primero debe conciliarse ese movimiento."
                 )
 
-            movement = None
+            movements: list[CashMovement] = []
             if source.payment_method == PaymentMethodEnum.CASH:
                 must_find_movement = (
                     correction_type == "duplicate_reversal" or not source.collected_before
                 )
                 if must_find_movement:
-                    movement_ref = (
+                    movement_refs = (
                         db.query(CashMovement)
                         .filter(
                             CashMovement.hotel_id == hotel_id,
                             CashMovement.transaction_id == source.id,
                         )
                         .with_entities(CashMovement.id, CashMovement.session_id)
-                        .one_or_none()
+                        .order_by(CashMovement.session_id.asc(), CashMovement.id.asc())
+                        .all()
                     )
-                    if movement_ref is None:
+                    if not movement_refs:
                         if correction_type == "duplicate_reversal":
                             raise PaymentCorrectionConflict(
                                 "No se encontró un movimiento asociado a una caja abierta. "
@@ -299,50 +301,57 @@ def correct_payment(
                             )
                     else:
                         # Cash close locks the session before calculating its
-                        # expected balance. Take the same lock before changing
-                        # the movement so close and correction see one ledger
-                        # state. Duplicate reversals are allowed only while
-                        # that session is still open; reassignments preserve
-                        # the physical income and can update the attribution
-                        # after close.
-                        cash_session = (
+                        # expected balance. Lock every affected currency drawer
+                        # in a stable order before changing its movement so close
+                        # and correction see one ledger state. Duplicate reversals
+                        # require all associated drawers to remain open.
+                        session_ids = sorted({ref.session_id for ref in movement_refs})
+                        cash_sessions = (
                             db.query(CashSession)
                             .filter(
                                 CashSession.hotel_id == hotel_id,
-                                CashSession.id == movement_ref.session_id,
+                                CashSession.id.in_(session_ids),
                             )
+                            .order_by(CashSession.id.asc())
                             .with_for_update(of=CashSession)
                             .populate_existing()
-                            .one_or_none()
+                            .all()
                         )
-                        if cash_session is None:
+                        sessions_by_id = {cash_session.id: cash_session for cash_session in cash_sessions}
+                        if len(sessions_by_id) != len(session_ids):
                             raise PaymentCorrectionError(
-                                "No se encontró la sesión de caja del pago asociado."
+                                "No se encontraron todas las sesiones de caja asociadas al pago."
                             )
                         if (
                             correction_type == "duplicate_reversal"
-                            and cash_session.status != CashSessionStatusEnum.OPEN
+                            and any(
+                                cash_session.status != CashSessionStatusEnum.OPEN
+                                for cash_session in cash_sessions
+                            )
                         ):
                             raise PaymentCorrectionConflict(
                                 "El movimiento duplicado solo se puede anular mientras la caja está abierta. "
                                 "La sesión ya cerró o está pendiente de aprobación; solicitá una conciliación autorizada."
                             )
-                        movement = (
+                        movements = (
                             db.query(CashMovement)
                             .filter(
                                 CashMovement.hotel_id == hotel_id,
-                                CashMovement.id == movement_ref.id,
+                                CashMovement.id.in_([ref.id for ref in movement_refs]),
                                 CashMovement.transaction_id == source.id,
                             )
+                            .order_by(CashMovement.id.asc())
                             .with_for_update(of=CashMovement)
                             .populate_existing()
-                            .one_or_none()
+                            .all()
                         )
-                        if movement is None or movement.session_id != cash_session.id:
+                        if len(movements) != len(movement_refs) or any(
+                            movement.session_id not in sessions_by_id for movement in movements
+                        ):
                             raise PaymentCorrectionConflict(
                                 "El movimiento de caja cambió durante la corrección. Volvé a intentar."
                             )
-                        if movement.voided_at is not None:
+                        if any(movement.voided_at is not None for movement in movements):
                             raise PaymentCorrectionConflict(
                                 "El movimiento de caja ya fue anulado; revisá la conciliación antes de continuar."
                             )
@@ -403,6 +412,9 @@ def correct_payment(
                     tender_currency=source.tender_currency,
                     cash_received_amount=source.cash_received_amount,
                     cash_change_amount=source.cash_change_amount,
+                    cash_change_settled_amount=source.cash_change_settled_amount,
+                    cash_change_settled_currency=source.cash_change_settled_currency,
+                    cash_change_fx_rate_snapshot=source.cash_change_fx_rate_snapshot,
                     cash_tip_amount=source.cash_tip_amount,
                     rounding_credit_amount=source.rounding_credit_amount,
                     credit_refund_amount=Decimal("0.00"),
@@ -428,7 +440,7 @@ def correct_payment(
                 db.add(replacement)
                 db.flush()
 
-                if movement is not None:
+                for movement in movements:
                     movement_before = {
                         "reservation_id": movement.reservation_id,
                         "transaction_id": movement.transaction_id,
@@ -436,8 +448,15 @@ def correct_payment(
                     }
                     movement.reservation_id = target_reservation.id
                     movement.transaction_id = replacement.id
+                    movement_label = (
+                        "Ingreso"
+                        if movement.movement_type == CashMovementTypeEnum.INCOME
+                        else "Vuelto"
+                        if movement.movement_type == CashMovementTypeEnum.EXPENSE
+                        else "Movimiento"
+                    )
                     movement.description = (
-                        f"Cobro corregido para reserva #{target_reservation.id} "
+                        f"{movement_label} corregido para reserva #{target_reservation.id} "
                         f"(tx #{replacement.id}; origen tx #{source.id})"
                     )[:300]
                     movement_after = {
@@ -470,30 +489,31 @@ def correct_payment(
             db.add(correction)
             db.flush()
 
-            if correction_type == "duplicate_reversal" and movement is not None:
-                movement_before = {
-                    "voided_at": movement.voided_at,
-                    "voided_by_payment_correction_id": movement.voided_by_payment_correction_id,
-                    "transaction_id": movement.transaction_id,
-                }
-                movement.voided_at = datetime.now(timezone.utc).replace(tzinfo=None)
-                movement.voided_by_payment_correction_id = correction.id
-                db.flush()
-                audit_log_service.create_audit_log(
-                    db,
-                    hotel_id=hotel_id,
-                    table_name="cash_movements",
-                    record_id=movement.id,
-                    action=AuditActionEnum.UPDATE,
-                    actor_user_id=actor_user_id,
-                    payload_before=movement_before,
-                    payload_after={
+            if correction_type == "duplicate_reversal":
+                for movement in movements:
+                    movement_before = {
                         "voided_at": movement.voided_at,
-                        "voided_by_payment_correction_id": correction.id,
+                        "voided_by_payment_correction_id": movement.voided_by_payment_correction_id,
                         "transaction_id": movement.transaction_id,
-                        "reason": reason,
-                    },
-                )
+                    }
+                    movement.voided_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                    movement.voided_by_payment_correction_id = correction.id
+                    db.flush()
+                    audit_log_service.create_audit_log(
+                        db,
+                        hotel_id=hotel_id,
+                        table_name="cash_movements",
+                        record_id=movement.id,
+                        action=AuditActionEnum.UPDATE,
+                        actor_user_id=actor_user_id,
+                        payload_before=movement_before,
+                        payload_after={
+                            "voided_at": movement.voided_at,
+                            "voided_by_payment_correction_id": correction.id,
+                            "transaction_id": movement.transaction_id,
+                            "reason": reason,
+                        },
+                    )
 
             audit_log_service.create_audit_log(
                 db,
@@ -540,7 +560,8 @@ def correct_payment(
                     "source_reservation_id": source_reservation.id,
                     "target_reservation_id": correction.target_reservation_id,
                     "replacement_transaction_id": correction.replacement_transaction_id,
-                    "cash_movement_id": movement.id if movement is not None else None,
+                    "cash_movement_id": movements[0].id if len(movements) == 1 else None,
+                    "cash_movement_ids": [movement.id for movement in movements],
                     "correction_type": correction_type,
                     "reason": reason,
                     "actor_user_id": actor_user_id,

@@ -277,6 +277,7 @@ TODO(owner):
 - Extensions are available to direct and company reservations. Direct extensions may leave the additional amount outstanding. Deferred company extensions are recorded to the company account.
 - A physical move of a company guest from a double to a triple room preserves the contracted category and base tariff; a configured extra-person/night charge is tracked separately. Individual room/category re-pricing follows the selected operational rule.
 - `reservation:read` may read the reservation balance and payment history. Registering payments, refunds, or cash movements remains protected by their action permissions.
+- In reservation collection, an operator may select the tender currency and see the server-quoted amount before recording it. Cash change is returned and recorded in the hotel's base currency; the transaction keeps the received amount, actual returned amount/currency, and conversion-rate snapshot. If the rate or required cash drawer is unavailable, the PMS blocks an over-tendered cash payment and still allows exact tender.
 
 ### 8.9 Individual guest arrivals (2026-10-25)
 

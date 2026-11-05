@@ -140,7 +140,7 @@ test("reception can operate company check-in and collect existing extras but can
   await expect(ownerRow).toBeVisible();
   await expect(ownerRow.getByRole("button", { name: "Editar", exact: true })).toBeVisible();
   await expect(ownerRow.getByRole("button", { name: "Cancelar", exact: true })).toBeVisible();
-  await ownerRow.getByRole("button", { name: "Ficha", exact: true }).click();
+  await ownerRow.getByRole("button", { name: "Check-in", exact: true }).click();
   const ownerDrawer = page.getByRole("dialog", { name: reservation.confirmation_code });
   await expect(ownerDrawer.getByText("Documentación de la empresa")).toBeVisible();
   await ownerDrawer.getByRole("button", { name: "Cerrar detalle de reserva" }).click();

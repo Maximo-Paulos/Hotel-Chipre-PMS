@@ -101,7 +101,10 @@ test("MFA enrollment renders its QR without a React runtime error", async ({ pag
   expect(pageErrors).toEqual([]);
 });
 
-test("owner can enroll, manage recovery codes, and disable MFA from security settings", async ({ page }) => {
+test("owner can enroll, manage recovery codes, and disable MFA from security settings", async ({ page }, testInfo) => {
+  // Enrollment, recovery-code regeneration and disable each consume a distinct
+  // TOTP step. The next code may be up to 30 seconds away, twice in this flow.
+  testInfo.setTimeout(120_000);
   await login(page);
   await page.goto("/settings/security");
   await expect(page.getByTestId("mfa-settings-card")).toBeVisible();
@@ -176,7 +179,7 @@ test("step-up prompt sends an unenrolled owner to MFA enrollment", async ({ page
   await page.goto("/settings/permissions");
   const dialog = page.getByRole("dialog", { name: "Confirmá que sos vos" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText(/todavía no tiene un autenticador activo/i)).toBeVisible();
+  await expect(dialog.getByText(/Tu cuenta no tiene un autenticador activo/i)).toBeVisible();
   await dialog.getByTestId("step-up-activate-mfa").click();
 
   await page.waitForURL((url) => url.pathname === "/settings/security" && url.searchParams.has("mfaReturnTo"));

@@ -1,26 +1,26 @@
 # Resumen Graphify
 
-Generado: 2026-10-27T17:04:36.956368+00:00
-Commit: `5a603f66364fa3ba4f3796359d1942c31d90fb1c`
+Generado: 2026-11-05T02:42:26.675060+00:00
+Commit: `654deaa43255512d27a0aec11fbd95a6a6ff623e`
 
 `graphify summary .graphify/graph.json`:
 ```text
 Graphify First-Hop Summary
-Graph: 18537 nodes, 74288 edges, 749 communities, density 0.0004, average degree 8.0151, undirected
+Graph: 18785 nodes, 77151 edges, 789 communities, density 0.0004, average degree 8.2141, undirected
 
 Top hubs:
-  1. Reservation (degree 1530, community 16 Community 16, app/models/reservation.py)
-  2. HotelConfiguration (degree 1450, community 0 Community 0, app/models/hotel_config.py)
-  3. ReservationStatusEnum (degree 1405, community 8 Community 8, app/models/reservation.py)
-  4. Room (degree 1145, community 8 Community 8, app/models/room.py)
-  5. RoomCategory (degree 935, community 0 Community 0, app/models/room.py)
+  1. Reservation (degree 1577, community 0 Community 0, app/models/reservation.py)
+  2. HotelConfiguration (degree 1498, community 3 Community 3, app/models/hotel_config.py)
+  3. ReservationStatusEnum (degree 1452, community 0 Community 0, app/models/reservation.py)
+  4. Room (degree 1161, community 0 Community 0, app/models/room.py)
+  5. RoomCategory (degree 945, community 0 Community 0, app/models/room.py)
 
 Key communities:
-  1. Community 0 - Community 0: 453 nodes, 3784 internal edges, density 0.037; top nodes: HotelConfiguration, RoomCategory, Guest
-  2. Community 1 - Community 1: 447 nodes, 694 internal edges, density 0.007; top nodes: database.py, ca694f7 feat(rbac,config,perf): permission-driven visibility, dedup sweep and infra readiness, 0ddeb59 Fix day 2 hotel simulation findings (#114)
-  3. Community 2 - Community 2: 429 nodes, 6773 internal edges, density 0.0738; top nodes: AuditActionEnum, ReservationError, PaymentError
-  4. Community 3 - Community 3: 419 nodes, 671 internal edges, density 0.0077; top nodes: d908400 Merge pull request #107 from Maximo-Paulos/fix/hotel-sim-day0-day1, bf4a21f Fix day 0 and day 1 hotel simulation findings, f45e8eb Implement Google onboarding and staff aliases
-  5. Community 4 - Community 4: 419 nodes, 595 internal edges, density 0.0068; top nodes: ef0aa41 Merge PR #125: week-two remediation [skip render], 9e4b357 Reduce PMS request load and complete simulation remediation, d96fa51 Fix week two hotel simulation failures
+  1. Community 0 - Community 0: 539 nodes, 2735 internal edges, density 0.0189; top nodes: Reservation, ReservationStatusEnum, Room
+  2. Community 1 - Community 1: 471 nodes, 746 internal edges, density 0.0067; top nodes: d908400 Merge pull request #107 from Maximo-Paulos/fix/hotel-sim-day0-day1, bf4a21f Fix day 0 and day 1 hotel simulation findings, 9e4b357 Reduce PMS request load and complete simulation remediation
+  3. Community 2 - Community 2: 468 nodes, 645 internal edges, density 0.0059; top nodes: database.py, main.py, 81a7ffe Fix hotel simulation day 0 and day 1 findings
+  4. Community 3 - Community 3: 430 nodes, 3494 internal edges, density 0.0379; top nodes: HotelConfiguration, Guest, PricingPolicyError
+  5. Community 4 - Community 4: 429 nodes, 6773 internal edges, density 0.0738; top nodes: AuditActionEnum, ReservationError, PaymentError
 
 Next best action: Start with get_neighbors on "Reservation", then use query_graph for the user's specific question.
 ```

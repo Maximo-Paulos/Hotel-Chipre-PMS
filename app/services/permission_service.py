@@ -152,6 +152,7 @@ PERMISSION_PAYMENT_REFUND = "payment:refund"
 PERMISSION_PAYMENT_CORRECT = "payment:correct"
 PERMISSION_OTA_PAYMENT_CONFIRM = "payment:ota_confirm"
 PERMISSION_PAYMENT_RECEIPT_EMAIL = "payment:receipt_email"
+PERMISSION_PAYMENT_FX_MANUAL_SET = "payment:fx_manual_set"
 PERMISSION_APIKEY_MANAGE = "apikey:manage"
 
 # Section visibility and management permissions used by the next frontend
@@ -525,6 +526,10 @@ _CANONICAL_DEFINITIONS: dict[str, tuple[str, str, str]] = {
         "payments", "Send a payment receipt by email",
         "Permite enviar el comprobante de un pago confirmado a una dirección ingresada por el operador. Requiere confirmación explícita del operador y, si la cuenta tiene MFA activado, MFA reciente.",
     ),
+    PERMISSION_PAYMENT_FX_MANUAL_SET: (
+        "payments", "Set a manual FX amount for one reservation",
+        "Permite aprobar manualmente cuánto se imputará a una reserva al cobrar en otra moneda cuando no haya una cotización automática válida. Guarda el importe, el motivo y quién lo autorizó; no permite registrar el cobro ni cambiar precios generales.",
+    ),
     PERMISSION_CASH_APPROVE_DIFFERENCE: (
         "cash", "Approve cash close differences",
         "Permite a owner y co-owner aprobar diferencias al cerrar caja. Si la cuenta tiene MFA activado, cada aprobación requiere MFA reciente y un ticket de un solo uso ligado a la sesión, el permiso y la ruta. No permite operar sesiones ni registrar movimientos por sí solo.",
@@ -845,6 +850,7 @@ DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
         PERMISSION_PAYMENT_CORRECT,
         PERMISSION_OTA_PAYMENT_CONFIRM,
         PERMISSION_PAYMENT_RECEIPT_EMAIL,
+        PERMISSION_PAYMENT_FX_MANUAL_SET,
         PERMISSION_DASHBOARD_VIEW, PERMISSION_OCCUPANCY_VIEW,
         PERMISSION_WAITLIST_VIEW, PERMISSION_WAITLIST_MANAGE,
         PERMISSION_CASH_VIEW,

@@ -12,16 +12,17 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies.auth import AuthContext, require_permission
+from app.dependencies.auth import AuthContext, require_all_permissions, require_permission
 from app.models.audit_log import AuditActionEnum
 from app.models.daily_rate import DailyRate, PricePeriod
 from app.models.payment_surcharge import PaymentSurcharge, PaymentSurchargeTypeEnum
 from app.schemas.payment_surcharge import (
+    ManualFxPaymentQuoteCreate,
     PaymentSurchargeQuoteRead,
     PaymentSurchargeQuoteRequest,
 )
@@ -30,10 +31,14 @@ from app.services.fx_service import SUPPORTED_CONVERSION_CURRENCIES
 from app.services.payment_service import (
     PaymentError,
     PaymentNotFoundError,
+    create_manual_fx_payment_quote,
+    get_active_manual_fx_payment_quote,
     quote_reservation_payment_surcharge,
 )
 from app.services.permission_service import (
     PERMISSION_CASH_OPERATE,
+    PERMISSION_PAYMENT_FX_MANUAL_SET,
+    PERMISSION_RESERVATION_READ,
     PERMISSION_REPORTS_FINANCIAL_VIEW,
 )
 
@@ -180,10 +185,70 @@ def quote_payment_surcharge(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PaymentError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return PaymentSurchargeQuoteRead(
+    response = PaymentSurchargeQuoteRead(
         **quote,
         payment_method=payload.payment_method,
     )
+    # Conversion previews can refresh the shared public FX cache; persist that
+    # reference-data update without recording a financial transaction.
+    db.commit()
+    return response
+
+
+@router.post("/manual-fx-quote", response_model=PaymentSurchargeQuoteRead, status_code=status.HTTP_201_CREATED)
+def create_manual_fx_quote(
+    payload: ManualFxPaymentQuoteCreate,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(
+        require_all_permissions(PERMISSION_RESERVATION_READ, PERMISSION_PAYMENT_FX_MANUAL_SET)
+    ),
+) -> PaymentSurchargeQuoteRead:
+    """Set a fixed, audited amount for one reservation after automatic FX expires."""
+    try:
+        quote = create_manual_fx_payment_quote(
+            db,
+            hotel_id=context.hotel_id,
+            reservation_id=payload.reservation_id,
+            payment_method=payload.payment_method,
+            currency_code=payload.currency_code,
+            reservation_amount=payload.reservation_amount,
+            tender_amount=payload.tender_amount,
+            reason=payload.reason,
+            actor_user_id=context.user_id,
+        )
+    except PaymentNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PaymentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    response = PaymentSurchargeQuoteRead(**quote, payment_method=payload.payment_method)
+    db.commit()
+    return response
+
+
+@router.get("/manual-fx-quote/{reservation_id}", response_model=PaymentSurchargeQuoteRead | None)
+def get_manual_fx_quote(
+    reservation_id: int,
+    payment_method: str = Query(..., min_length=1, max_length=50),
+    currency_code: str = Query(..., min_length=3, max_length=3),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_CASH_OPERATE)),
+) -> PaymentSurchargeQuoteRead | None:
+    """Return the active manager-approved amount to an authorized collector."""
+    try:
+        quote = get_active_manual_fx_payment_quote(
+            db,
+            hotel_id=context.hotel_id,
+            reservation_id=reservation_id,
+            payment_method=payment_method,
+            currency_code=currency_code,
+        )
+    except PaymentNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PaymentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if quote is None:
+        return None
+    return PaymentSurchargeQuoteRead(**quote, payment_method=payment_method)
 
 
 @router.post("", response_model=PaymentSurchargeRead, status_code=status.HTTP_201_CREATED)

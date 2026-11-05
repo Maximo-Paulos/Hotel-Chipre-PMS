@@ -39,6 +39,9 @@ export type CashMovement = {
   group_payment_reservation_count?: number | null;
   cash_received_amount?: number | null;
   cash_change_amount?: number | null;
+  cash_change_settled_amount?: number | null;
+  cash_change_settled_currency?: string | null;
+  cash_change_fx_rate_snapshot?: number | null;
   cash_tip_amount?: number | null;
   movement_type: CashMovementType;
   amount: number;
@@ -139,6 +142,9 @@ export type CashDailyPriorReceipt = {
   amount: number;
   cash_received_amount?: number | null;
   cash_change_amount?: number | null;
+  cash_change_settled_amount?: number | null;
+  cash_change_settled_currency?: string | null;
+  cash_change_fx_rate_snapshot?: number | null;
   cash_tip_amount?: number | null;
   currency_code: string;
   collected_on: string;
@@ -166,6 +172,9 @@ export type CashDailyEntry = {
   signed_amount: number;
   cash_received_amount?: number | null;
   cash_change_amount?: number | null;
+  cash_change_settled_amount?: number | null;
+  cash_change_settled_currency?: string | null;
+  cash_change_fx_rate_snapshot?: number | null;
   cash_tip_amount?: number | null;
   currency_code: string;
   payment_method?: string | null;

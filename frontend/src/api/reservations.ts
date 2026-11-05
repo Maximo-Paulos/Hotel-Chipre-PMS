@@ -176,6 +176,9 @@ export type ReservationTransactionSummary = {
   amount: number;
   cash_received_amount?: number | null;
   cash_change_amount?: number | null;
+  cash_change_settled_amount?: number | null;
+  cash_change_settled_currency?: string | null;
+  cash_change_fx_rate_snapshot?: number | string | null;
   cash_tip_amount?: number | null;
   currency: string;
   method: string;

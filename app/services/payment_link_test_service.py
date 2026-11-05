@@ -46,6 +46,19 @@ _PAYMENT_TEST_PROVIDER_RESPONSE_FIELDS = (
 )
 
 
+def mercadopago_checkout_url(
+    response_payload: dict[str, Any],
+    *,
+    access_token: str,
+    live_mode: bool | None = None,
+) -> str | None:
+    """Select the checkout host matching the token environment."""
+    sandbox = access_token.startswith("TEST-") or live_mode is False
+    if sandbox:
+        return response_payload.get("sandbox_init_point")
+    return response_payload.get("init_point") or response_payload.get("sandbox_init_point")
+
+
 def _validate_email(email: str) -> str:
     normalized = (email or "").strip().lower()
     if "@" not in normalized or "." not in normalized.split("@")[-1]:
@@ -370,7 +383,7 @@ def create_mercadopago_payment_link_test(db: Session, hotel_id: int, payload: Pa
         raise PaymentLinkTestError(_friendly_mercadopago_error(detail, response.status_code))
 
     data = response.json()
-    payment_url = data.get("init_point") or data.get("sandbox_init_point")
+    payment_url = mercadopago_checkout_url(data, access_token=access_token)
     if not payment_url:
         raise PaymentLinkTestError("Mercado Pago no devolvio un link de pago.")
 

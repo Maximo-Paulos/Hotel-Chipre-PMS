@@ -29,6 +29,17 @@ export type PaymentSurchargeQuoteRequest = {
   base_amount?: number;
 };
 
+export type ManualFxPaymentQuoteCreate = {
+  reservation_id: number;
+  payment_method: PaymentMethod;
+  currency_code: string;
+  /** Amount applied to the reservation's balance, in its original currency. */
+  reservation_amount: number;
+  /** Approved tender amount before the hotel's configured surcharge. */
+  tender_amount: number;
+  reason: string;
+};
+
 export type PaymentSurchargeQuote = {
   reservation_id: number;
   reservation_currency_code: string;
@@ -47,10 +58,15 @@ export type PaymentSurchargeQuote = {
   surcharge_fx_quote_details: Record<string, unknown> | null;
   fx_rate_snapshot: number | string | null;
   fx_quote_details: Record<string, unknown> | null;
+  cash_change_currency_code?: string;
+  cash_change_fx_rate?: number | string | null;
   cash_tender_rounding_policy: string | null;
   cash_tender_suggestion: number | string | null;
   cash_tender_suggestion_difference: number | string;
   payment_quote_token: string;
+  manual_fx_quote_id?: number | null;
+  manual_fx_reason?: string | null;
+  manual_fx_created_at?: string | null;
 };
 
 export const listPaymentSurcharges = (session?: SessionLike) =>
@@ -70,6 +86,25 @@ export const quotePaymentSurcharge = (
   data: payload,
   session
 });
+
+export const createManualFxPaymentQuote = (
+  payload: ManualFxPaymentQuoteCreate,
+  session?: SessionLike
+) => apiFetch<PaymentSurchargeQuote>("/api/payment-surcharges/manual-fx-quote", {
+  method: "POST",
+  data: payload,
+  session
+});
+
+export const getManualFxPaymentQuote = (
+  reservationId: number,
+  paymentMethod: PaymentMethod,
+  currencyCode: string,
+  session?: SessionLike
+) => apiFetch<PaymentSurchargeQuote | null>(
+  `/api/payment-surcharges/manual-fx-quote/${reservationId}?payment_method=${encodeURIComponent(paymentMethod)}&currency_code=${encodeURIComponent(currencyCode)}`,
+  { session }
+);
 
 /** Compute the gross amount (base + surcharge) for a base amount and an active surcharge. */
 export const grossWithSurcharge = (base: number, surcharge?: PaymentSurcharge | null): number => {

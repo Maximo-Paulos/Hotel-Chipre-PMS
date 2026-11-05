@@ -61,6 +61,11 @@ async function ensureCashSessionOpen(page: Page, currencyCode = "ARS") {
     .locator("form")
     .filter({ hasText: localizedText("Saldo inicial", "Opening balance") })
     .filter({ hasText: localizedText("Abrir caja", "Open cash register") });
+  await openingForm
+    .locator("label")
+    .filter({ hasText: localizedText("Moneda", "Currency") })
+    .locator("select")
+    .selectOption(currencyCode);
   const openButton = openingForm.getByRole("button", { name: localizedName("Abrir caja", "Open cash register") });
   if (hasOpenDefaultCurrencySession) {
     // The response promise resolves before React commits the updated session
@@ -71,7 +76,6 @@ async function ensureCashSessionOpen(page: Page, currencyCode = "ARS") {
     ).toBeDisabled();
   } else {
     await expect(openButton).toBeEnabled();
-    await openingForm.locator("label").filter({ hasText: localizedText("Moneda", "Currency") }).locator("select").selectOption(currencyCode);
     await openingForm.getByText(localizedName("Saldo inicial", "Opening balance")).locator("..").locator("input").fill("0");
     await openButton.click();
     await expect(page.getByText(localizedName("Caja abierta.", "Cash register opened."))).toBeVisible();
@@ -105,13 +109,20 @@ async function createReservation(page: Page, guestLastName: string, suffix: stri
 
   const createButton = reservationForm.getByRole("button", { name: localizedName("Crear", "Create") });
   await expect(createButton).toBeEnabled();
+  const createResponsePromise = page.waitForResponse((response) =>
+    response.url().includes("/api/reservations/") && response.request().method() === "POST" && response.status() === 201
+  );
   await createButton.click();
+  const created = await createResponsePromise.then((response) => response.json()) as {
+    id: number;
+    confirmation_code: string;
+  };
   await expect(page.getByText(localizedName("Reserva creada", "Reservation created"))).toBeVisible();
 
   const reservationTable = page.locator("table").filter({ hasText: localizedText("Código", "Code") });
   const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
   await expect(reservationRow).toHaveCount(1);
-  return { reservationTable, reservationRow };
+  return { reservationTable, reservationRow, reservationId: created.id, confirmationCode: created.confirmation_code };
 }
 
 async function openPaymentsPanel(row: ReturnType<Page["locator"]>, page: Page) {
@@ -205,9 +216,19 @@ test("owner pays deposit in cash, blocks an overpayment, settles the rest by app
 
   // 12) Intento de sobrepago: pedir más que el saldo pendiente debe rechazarse
   // client-side, sin llegar a cobrar nada de más.
+  let overchargePaymentPosts = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/payments" && request.method() === "POST") {
+      overchargePaymentPosts += 1;
+    }
+  });
   await editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i).fill("999999");
-  await editForm.getByRole("button", { name: localizedName("Cobro parcial", "Partial payment") }).click();
+  await expect(editForm.getByTestId("payment-amount-balance-error")).toContainText(
+    localizedText("Ingresá un importe positivo que no supere el saldo pendiente.", "Enter a positive amount that does not exceed the pending balance.")
+  );
+  await expect(editForm.getByRole("button", { name: localizedName("Cobro parcial", "Partial payment") })).toBeDisabled();
   await expect(page.getByText(localizedName("Ingresá un importe positivo que no supere el saldo pendiente.", "Enter a positive amount that does not exceed the pending balance."))).toBeVisible();
+  expect(overchargePaymentPosts).toBe(0);
   expect(await readStat(editForm, localizedText("Pagado", "Paid"))).toBe(depositRequired);
 
   // 9) Saldo final con un método DISTINTO al de la seña: transferencia + comprobante.
@@ -321,8 +342,11 @@ test("owner registers the entered deposit amount with confirmation and keeps the
 
   // An amount above the remaining balance is rejected before any payment request.
   await amountInput.fill("999999");
-  await depositButton.click();
-  await expect(page.getByText(localizedName("Ingresá un importe positivo que no supere el saldo pendiente.", "Enter a positive amount that does not exceed the pending balance."))).toBeVisible();
+  await expect(editForm.getByTestId("payment-amount-balance-error")).toContainText(
+    localizedText("Ingresá un importe positivo que no supere el saldo pendiente.", "Enter a positive amount that does not exceed the pending balance.")
+  );
+  await expect(depositButton).toBeDisabled();
+  await expect(editForm.getByRole("button", { name: localizedName("Cobro parcial", "Partial payment") })).toBeDisabled();
   expect(paymentRequests).toHaveLength(1);
   expect(await readStat(editForm, localizedText("Pagado", "Paid"))).toBe(enteredDeposit);
 
@@ -354,81 +378,388 @@ test("owner registers the entered deposit amount with confirmation and keeps the
 test("cross-currency payment quotes received tender into the reservation currency", async ({ page }) => {
   const suffix = `${Date.now()}fx`;
   const guestLastName = `QA-Pay-FX ${suffix}`;
-  const quoteRequests: Array<{ from_currency?: string; to_currency?: string }> = [];
-
-  await page.route("**/api/fx/conversion-quote", async (route) => {
-    quoteRequests.push(route.request().postDataJSON() as { from_currency?: string; to_currency?: string });
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      json: {
-        from_currency: "USD",
-        to_currency: "ARS",
-        rate: 1535,
-        provider: "dolarapi.com",
-        configured_market: "oficial",
-        quote_details: {
-          configured_usd_market: "oficial",
-          source_quote: { currency: "USD", side: "venta" },
-          target_quote: { currency: "ARS", side: null }
-        }
-      }
-    });
-  });
-  await page.route("**/api/payments", async (route) => {
-    const request = route.request();
-    if (request.method() !== "POST" || new URL(request.url()).pathname !== "/api/payments") {
-      await route.continue();
-      return;
-    }
-    await route.fulfill({ status: 201, contentType: "application/json", json: { id: 999 } });
-  });
 
   await login(page);
   await ensureCashSessionOpen(page, "USD");
   const { reservationRow } = await createReservation(page, guestLastName, suffix, 72, 75);
   const { editForm } = await openPaymentsPanel(reservationRow, page);
+  await editForm.locator("label").filter({ hasText: localizedText("Medio de pago", "Payment method") }).locator("select").selectOption("cash");
   const currencySelect = editForm.getByTestId("payment-tender-currency");
+  const balanceQuoteResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    if (url.pathname !== "/api/payment-surcharges/quote" || response.request().method() !== "POST" || response.status() !== 200) {
+      return false;
+    }
+    const payload = response.request().postDataJSON() as { currency_code?: string; base_amount?: number | null };
+    return payload.currency_code === "USD" && payload.base_amount == null;
+  });
   await currencySelect.selectOption("USD");
 
-  const quotePanel = editForm.getByTestId("payment-fx-quote");
+  const balanceQuoteResponse = await balanceQuoteResponsePromise;
+  const balanceQuote = await balanceQuoteResponse.json() as {
+    applied_amount: number | string;
+    base_amount: number | string;
+    currency_code: string;
+    fx_quote_details: { fallback_used?: boolean; provider?: string } | null;
+    fx_rate_snapshot: number | string | null;
+    remaining_balance: number | string;
+    reservation_currency_code: string;
+  };
+  const quotePanel = editForm.getByTestId("payment-backend-quote");
   await expect(quotePanel).toBeVisible();
-  await expect(quotePanel).toContainText("1 USD = 1.535 ARS");
-  await expect(quotePanel).toContainText("USD Venta");
-  expect(quoteRequests).toContainEqual({ from_currency: "USD", to_currency: "ARS" });
+  await expect(quotePanel).toContainText("Cotización confirmada por el servidor");
+  await expect(quotePanel).toContainText(/Tipo fijado: 1 USD = [\d.,]+ ARS/);
+  expect(balanceQuote).toMatchObject({ currency_code: "USD", reservation_currency_code: "ARS" });
+  expect(Number(balanceQuote.base_amount)).toBeGreaterThan(0);
+  expect(Number(balanceQuote.fx_rate_snapshot)).toBeGreaterThan(0);
+  expect(balanceQuote.fx_quote_details?.provider).toBe("dolarapi.com");
+  expect(balanceQuote.fx_quote_details?.fallback_used).toBe(false);
 
   const amountInput = editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i);
-  await amountInput.fill("10");
-  await expect(quotePanel).toContainText("15.350");
+  const partialTenderAmount = Math.max(
+    0.01,
+    Math.floor(Number(balanceQuote.base_amount) * 100 / 2) / 100
+  );
+  const partialQuoteResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    if (url.pathname !== "/api/payment-surcharges/quote" || response.request().method() !== "POST" || response.status() !== 200) {
+      return false;
+    }
+    const payload = response.request().postDataJSON() as { currency_code?: string; base_amount?: number };
+    return payload.currency_code === "USD" && Number(payload.base_amount) === partialTenderAmount;
+  });
+  await amountInput.fill(partialTenderAmount.toFixed(2));
+  const partialQuoteResponse = await partialQuoteResponsePromise;
+  const partialQuote = await partialQuoteResponse.json() as {
+    applied_amount: number | string;
+    base_amount: number | string;
+    fx_rate_snapshot: number | string;
+  };
+  expect(Number(partialQuote.base_amount)).toBe(partialTenderAmount);
+  expect(Number(partialQuote.applied_amount)).toBeCloseTo(
+    partialTenderAmount / Number(partialQuote.fx_rate_snapshot),
+    2
+  );
 
-  const balance = await readStat(editForm, localizedText("Saldo", "Balance"));
-  const expectedTenderAmount = Number((balance / 1535).toFixed(2));
-  await editForm.locator("label").filter({ hasText: localizedText("Medio de pago", "Payment method") }).locator("select").selectOption("cash");
+  const paymentResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/payments" && response.request().method() === "POST";
+  });
+  const summaryResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname.startsWith("/api/payments/summary/") && response.request().method() === "GET" && response.status() === 200;
+  });
   const paymentRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === "/api/payments" && request.method() === "POST";
   });
   await editForm.getByRole("button", { name: localizedName("Pago total", "Full payment") }).click();
   const submittedRequest = await paymentRequest;
+  const paymentResponse = await paymentResponsePromise;
+  expect(paymentResponse.status()).toBe(201);
+  const summaryResponse = await summaryResponsePromise;
+  const summary = await summaryResponse.json() as {
+    amount_paid: number | string;
+    balance_due: number | string;
+  };
+  expect(Number(summary.amount_paid)).toBe(Number(balanceQuote.applied_amount));
+  expect(Number(summary.balance_due)).toBe(Number(balanceQuote.remaining_balance));
 
   expect(submittedRequest.postDataJSON()).toMatchObject({
-    amount: expectedTenderAmount,
+    amount: Number(balanceQuote.base_amount),
     currency: "USD",
-    transaction_type: "full_payment"
+    transaction_type: Number(balanceQuote.remaining_balance) > 0.01 ? "partial_payment" : "full_payment"
   });
+});
+
+test("reservation detail drawer quotes and records an editable USD cash payment with ARS change", async ({ page }) => {
+  const suffix = `${Date.now()}drawerfx`;
+  const guestLastName = `QA-Pay-Drawer-FX ${suffix}`;
+
+  await login(page);
+  await ensureCashSessionOpen(page, "ARS");
+  await ensureCashSessionOpen(page, "USD");
+  const { reservationId, confirmationCode } = await createReservation(page, guestLastName, suffix, 80, 83);
+  await page.goto(`/dashboard?reserva=${reservationId}`);
+
+  const drawer = page.getByRole("dialog", { name: confirmationCode });
+  await expect(drawer).toBeVisible();
+  const currencySelect = drawer.getByTestId("reservation-drawer-payment-currency");
+  await expect(currencySelect).toBeVisible();
+  await expect(currencySelect).toHaveValue("ARS");
+
+  const balanceQuoteResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    if (url.pathname !== "/api/payment-surcharges/quote" || response.request().method() !== "POST" || response.status() !== 200) {
+      return false;
+    }
+    const payload = response.request().postDataJSON() as { currency_code?: string; base_amount?: number | null };
+    return payload.currency_code === "USD" && payload.base_amount == null;
+  });
+  await currencySelect.selectOption("USD");
+  const balanceQuote = await balanceQuoteResponsePromise.then((response) => response.json()) as {
+    base_amount: number | string;
+    cash_change_currency_code: string;
+    cash_change_fx_rate: number | string | null;
+    final_amount: number | string;
+  };
+  expect(balanceQuote.cash_change_currency_code).toBe("ARS");
+  expect(Number(balanceQuote.cash_change_fx_rate)).toBeGreaterThan(0);
+  await expect(drawer.getByTestId("payment-quote-fx-rate")).toContainText(/1 USD = [\d.,]+ ARS/);
+  const amountInput = drawer.getByLabel("Importe a cobrar");
+  await expect(amountInput).toHaveValue(Number(balanceQuote.base_amount).toFixed(2));
+
+  const partialTenderAmount = Math.max(0.01, Math.floor(Number(balanceQuote.base_amount) * 100 / 2) / 100);
+  const partialQuoteResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    if (url.pathname !== "/api/payment-surcharges/quote" || response.request().method() !== "POST" || response.status() !== 200) {
+      return false;
+    }
+    const payload = response.request().postDataJSON() as { currency_code?: string; base_amount?: number | null };
+    return payload.currency_code === "USD" && Number(payload.base_amount) === partialTenderAmount;
+  });
+  await amountInput.fill(partialTenderAmount.toFixed(2));
+  const partialQuote = await partialQuoteResponsePromise.then((response) => response.json()) as {
+    final_amount: number | string;
+    cash_change_currency_code: string;
+    cash_change_fx_rate: number | string | null;
+  };
+  const receivedAmount = Number((Number(partialQuote.final_amount) + 5).toFixed(2));
+  const expectedChange = Math.round((
+    (receivedAmount - Number(partialQuote.final_amount)) * Number(partialQuote.cash_change_fx_rate) + Number.EPSILON
+  ) * 100) / 100;
+  const cashReceivedInput = drawer.getByTestId("reservation-drawer-cash-received");
+  await cashReceivedInput.fill(receivedAmount.toFixed(2));
+  const changeDisplay = drawer.getByTestId("reservation-drawer-cash-received-change");
+  await expect(changeDisplay).toContainText("ARS");
+  await expect(changeDisplay).toContainText(expectedChange.toLocaleString("es-AR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }));
+
+  const paymentRequestPromise = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/payments" && request.method() === "POST";
+  });
+  const paymentResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/payments" && response.request().method() === "POST";
+  });
+  await drawer.getByRole("button", { name: localizedName("Registrar cobro", "Register payment") }).click();
+  const [paymentRequest, paymentResponse] = await Promise.all([paymentRequestPromise, paymentResponsePromise]);
+  expect(paymentResponse.status()).toBe(201);
+  expect(paymentRequest.postDataJSON()).toMatchObject({
+    amount: partialTenderAmount,
+    currency: "USD",
+    cash_received_amount: receivedAmount
+  });
+  const transaction = await paymentResponse.json() as {
+    cash_change_settled_amount: number | string;
+    cash_change_settled_currency: string;
+  };
+  expect(transaction.cash_change_settled_currency).toBe("ARS");
+  expect(Number(transaction.cash_change_settled_amount)).toBe(expectedChange);
+  await expect(drawer.getByText(localizedName("Pago registrado.", "Payment registered."))).toBeVisible();
+});
+
+test("cross-currency cash change is calculated in hotel currency and posted to both cash drawers", async ({ page }) => {
+  const suffix = `${Date.now()}fxchange`;
+  const guestLastName = `QA-Pay-FX-Change ${suffix}`;
+
+  await login(page);
+  await ensureCashSessionOpen(page, "ARS");
+  await ensureCashSessionOpen(page, "USD");
+  const { reservationRow } = await createReservation(page, guestLastName, suffix, 76, 77);
+  const { editForm } = await openPaymentsPanel(reservationRow, page);
+  await editForm.locator("label")
+    .filter({ hasText: localizedText("Medio de pago", "Payment method") })
+    .locator("select")
+    .selectOption("cash");
+
+  const quoteResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    if (url.pathname !== "/api/payment-surcharges/quote" || response.request().method() !== "POST" || response.status() !== 200) {
+      return false;
+    }
+    const payload = response.request().postDataJSON() as { currency_code?: string; base_amount?: number | null };
+    return payload.currency_code === "USD" && payload.base_amount == null;
+  });
+  await editForm.getByTestId("payment-tender-currency").selectOption("USD");
+  const quoteResponse = await quoteResponsePromise;
+  const quote = await quoteResponse.json() as {
+    final_amount: number | string;
+    cash_change_currency_code: string;
+    cash_change_fx_rate: number | string | null;
+  };
+  expect(quote.cash_change_currency_code).toBe("ARS");
+  expect(Number(quote.cash_change_fx_rate)).toBeGreaterThan(0);
+  await expect(editForm.getByTestId("payment-quote-cash-change-rate")).toContainText(/1 USD = [\d.,]+ ARS/);
+
+  const receivedAmount = Number(quote.final_amount) + 10;
+  const expectedChange = Math.round((10 * Number(quote.cash_change_fx_rate) + Number.EPSILON) * 100) / 100;
+  const cashReceivedInput = editForm.getByTestId("reservation-payment-cash-received");
+  await cashReceivedInput.fill(receivedAmount.toFixed(2));
+  const changeDisplay = editForm.getByTestId("reservation-payment-cash-received-change");
+  await expect(changeDisplay).toContainText("ARS");
+  await expect(changeDisplay).toContainText(expectedChange.toLocaleString("es-AR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }));
+
+  const paymentResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/payments" && response.request().method() === "POST";
+  });
+  const paymentRequestPromise = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/payments" && request.method() === "POST";
+  });
+  await editForm.getByRole("button", { name: localizedName("Pago total", "Full payment") }).click();
+  const paymentRequest = await paymentRequestPromise;
+  const paymentResponse = await paymentResponsePromise;
+  expect(paymentResponse.status()).toBe(201);
+  const paymentRequestHeaders = await paymentRequest.allHeaders();
+  const authenticatedApiHeaders = {
+    Authorization: paymentRequestHeaders.authorization ?? "",
+    "X-Hotel-Id": paymentRequestHeaders["x-hotel-id"] ?? "",
+    "X-User-Id": paymentRequestHeaders["x-user-id"] ?? "",
+    "X-CSRF-Token": paymentRequestHeaders["x-csrf-token"] ?? ""
+  };
+  expect(authenticatedApiHeaders.Authorization).toMatch(/^Bearer\s+\S+/);
+  expect(authenticatedApiHeaders["X-Hotel-Id"]).not.toBe("");
+  expect(authenticatedApiHeaders["X-User-Id"]).not.toBe("");
+  const transaction = await paymentResponse.json() as {
+    id: number;
+    cash_change_settled_amount: number | string;
+    cash_change_settled_currency: string;
+    cash_change_fx_rate_snapshot: number | string;
+  };
+  expect(transaction.cash_change_settled_currency).toBe("ARS");
+  expect(Number(transaction.cash_change_settled_amount)).toBe(expectedChange);
+  expect(Number(transaction.cash_change_fx_rate_snapshot)).toBe(Number(quote.cash_change_fx_rate));
+
+  const sessionsResponse = await page.request.get("/api/cash-register/sessions?status=open", {
+    headers: authenticatedApiHeaders
+  });
+  expect(sessionsResponse.status()).toBe(200);
+  const sessions = await sessionsResponse.json() as Array<{ id: number; currency_code: string }>;
+  const usdSession = sessions.find((session) => session.currency_code === "USD");
+  const arsSession = sessions.find((session) => session.currency_code === "ARS");
+  expect(usdSession).toBeTruthy();
+  expect(arsSession).toBeTruthy();
+  const [usdMovementsResponse, arsMovementsResponse] = await Promise.all([
+    page.request.get(`/api/cash-register/sessions/${usdSession?.id}/movements`, { headers: authenticatedApiHeaders }),
+    page.request.get(`/api/cash-register/sessions/${arsSession?.id}/movements`, { headers: authenticatedApiHeaders })
+  ]);
+  const usdMovements = await usdMovementsResponse.json() as Array<{
+    transaction_id: number | null;
+    movement_type: string;
+    amount: number | string;
+    cash_received_amount?: number | string | null;
+    cash_change_settled_amount?: number | string | null;
+    cash_change_settled_currency?: string | null;
+  }>;
+  const arsMovements = await arsMovementsResponse.json() as Array<{
+    transaction_id: number | null;
+    movement_type: string;
+    amount: number | string;
+  }>;
+  const usdIncomeMovement = usdMovements.find((movement) => movement.transaction_id === transaction.id);
+  expect(usdIncomeMovement).toBeTruthy();
+  expect(usdIncomeMovement?.movement_type).toBe("income");
+  expect(Number(usdIncomeMovement?.amount)).toBe(receivedAmount);
+  expect(Number(usdIncomeMovement?.cash_received_amount)).toBe(receivedAmount);
+  expect(Number(usdIncomeMovement?.cash_change_settled_amount)).toBe(expectedChange);
+  expect(usdIncomeMovement?.cash_change_settled_currency).toBe("ARS");
+
+  const arsChangeMovement = arsMovements.find((movement) => movement.transaction_id === transaction.id);
+  expect(arsChangeMovement).toBeTruthy();
+  expect(arsChangeMovement?.movement_type).toBe("expense");
+  expect(Number(arsChangeMovement?.amount)).toBe(expectedChange);
+
+  const businessDate = localIsoDate(0);
+  const dailySummaryResponse = await page.request.get(
+    `/api/cash-register/daily-summary?date=${businessDate}&currency=USD`,
+    { headers: authenticatedApiHeaders }
+  );
+  expect(dailySummaryResponse.status()).toBe(200);
+  const dailySummary = await dailySummaryResponse.json() as {
+    entries: Array<{
+      transaction_id?: number | null;
+      cash_change_settled_amount?: number | string | null;
+      cash_change_settled_currency?: string | null;
+    }>;
+  };
+  const dailyPaymentEntry = dailySummary.entries.find((entry) => entry.transaction_id === transaction.id);
+  expect(dailyPaymentEntry).toBeTruthy();
+  expect(Number(dailyPaymentEntry?.cash_change_settled_amount)).toBe(expectedChange);
+  expect(dailyPaymentEntry?.cash_change_settled_currency).toBe("ARS");
+
+  const csvResponse = await page.request.get(
+    `/api/cash-register/export.csv?date=${businessDate}&currency=USD`,
+    { headers: authenticatedApiHeaders }
+  );
+  expect(csvResponse.status()).toBe(200);
+  const cashCsv = await csvResponse.text();
+  expect(cashCsv).toContain("vuelto_monto_real");
+  expect(cashCsv).toContain("moneda_vuelto");
+  expect(cashCsv.split(/\r?\n/).some((line) =>
+    line.includes(String(transaction.id)) &&
+    line.includes("ARS") &&
+    line.includes(expectedChange.toFixed(2).replace(".", ","))
+  )).toBe(true);
+
+  const correctionResponse = await page.request.post(
+    `/api/payments/transactions/${transaction.id}/correction`,
+    {
+      data: {
+        correction_type: "duplicate_reversal",
+        reason: "Regresión sintética de vuelto en moneda base"
+      },
+      headers: {
+        ...authenticatedApiHeaders,
+        "Idempotency-Key": `fx-change-correction-${suffix}`
+      }
+    }
+  );
+  expect(correctionResponse.status()).toBe(201);
+  const correction = await correctionResponse.json() as { correction_id: number };
+  const [reversedUsdResponse, reversedArsResponse] = await Promise.all([
+    page.request.get(`/api/cash-register/sessions/${usdSession?.id}/movements`, { headers: authenticatedApiHeaders }),
+    page.request.get(`/api/cash-register/sessions/${arsSession?.id}/movements`, { headers: authenticatedApiHeaders })
+  ]);
+  const reversedUsdMovements = await reversedUsdResponse.json() as Array<{
+    transaction_id: number | null;
+    voided_by_payment_correction_id?: number | null;
+  }>;
+  const reversedArsMovements = await reversedArsResponse.json() as Array<{
+    transaction_id: number | null;
+    voided_by_payment_correction_id?: number | null;
+  }>;
+  expect(reversedUsdMovements.find((movement) => movement.transaction_id === transaction.id)
+    ?.voided_by_payment_correction_id).toBe(correction.correction_id);
+  expect(reversedArsMovements.find((movement) => movement.transaction_id === transaction.id)
+    ?.voided_by_payment_correction_id).toBe(correction.correction_id);
 });
 
 test("cross-currency payment offers reservation-currency fallback when no current quote is available", async ({ page }) => {
   const suffix = `${Date.now()}fxfallback`;
   const guestLastName = `QA-Pay-FX-Fallback ${suffix}`;
-  const quoteRequests: Array<{ from_currency?: string; to_currency?: string }> = [];
+  const quoteRequests: Array<{ currency_code?: string }> = [];
 
-  await page.route("**/api/fx/conversion-quote", async (route) => {
-    quoteRequests.push(route.request().postDataJSON() as { from_currency?: string; to_currency?: string });
+  await page.route("**/api/payment-surcharges/quote", async (route) => {
+    const payload = route.request().postDataJSON() as { currency_code?: string };
+    if (payload.currency_code !== "USD") {
+      await route.continue();
+      return;
+    }
+    quoteRequests.push(payload);
     await route.fulfill({
-      status: 503,
+      status: 422,
       contentType: "application/json",
-      json: { detail: "Exchange quote unavailable" }
+      json: {
+        detail: "No hay cotización actual ni un respaldo de menos de 24 horas para USD. La conversión automática está bloqueada."
+      }
     });
   });
 
@@ -439,11 +770,10 @@ test("cross-currency payment offers reservation-currency fallback when no curren
   const currencySelect = editForm.getByTestId("payment-tender-currency");
   await currencySelect.selectOption("USD");
 
-  const quoteError = editForm.getByTestId("payment-fx-error");
+  const quoteError = editForm.getByTestId("payment-quote-error");
   await expect(quoteError).toBeVisible();
-  await expect(quoteError).toContainText("No hay una cotización vigente para USD");
-  await expect(quoteError).toContainText("cobrá en la moneda de la reserva (ARS)");
-  expect(quoteRequests).toContainEqual({ from_currency: "USD", to_currency: "ARS" });
+  await expect(quoteError).toContainText("No se pudo confirmar la cotización del cobro");
+  expect(quoteRequests.some((payload) => payload.currency_code === "USD")).toBe(true);
 
   const amountInput = editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i);
   await amountInput.fill("10");
@@ -500,6 +830,9 @@ test("a rapid double-click on a cash partial payment must not double the charge"
 
   expect(await readStat(editForm, localizedText("Total", "Total"))).toBe(300);
   await editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i).fill("50");
+  const partialPaymentButton = editForm.getByRole("button", { name: localizedName("Cobro parcial", "Partial payment") });
+  await expect(editForm.getByTestId("payment-backend-quote")).toBeVisible();
+  await expect(partialPaymentButton).toBeEnabled();
 
   // Fire two native clicks back-to-back in the SAME JS turn (no await between
   // them), before React has a chance to re-render the button as disabled from
@@ -508,7 +841,7 @@ test("a rapid double-click on a cash partial payment must not double the charge"
   // so the backend's idempotency-key dedup cannot catch two distinct clicks --
   // only a same-amount-exceeds-balance guard could, and $50 + $50 is still
   // within the $300 balance, so nothing else stops a silent double charge.
-  await editForm.getByRole("button", { name: localizedName("Cobro parcial", "Partial payment") }).evaluate((button) => {
+  await partialPaymentButton.evaluate((button) => {
     button.click();
     button.click();
   });

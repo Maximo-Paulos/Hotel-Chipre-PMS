@@ -165,6 +165,10 @@ def get_conversion_quote(
             else status.HTTP_502_BAD_GATEWAY
         )
         raise HTTPException(status_code=error_status, detail=message) from exc
+    # The shared quote cache is reference data, not a financial ledger entry.
+    # Persist it even for this read-only preview so the next worker can reuse
+    # the same provider response.
+    db.commit()
     market = str((details or {}).get("configured_usd_market") or "oficial").lower()
     if market not in {"oficial", "blue"}:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="La cotización configurada no es válida.")

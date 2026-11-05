@@ -72,7 +72,13 @@ class Transaction(Base):
     # Optional cash drawer detail. NULL preserves historical rows and child
     # transactions allocated from a group-level receipt.
     cash_received_amount = Column(Numeric(12, 2), nullable=True)
+    # cash_change_amount keeps the tender-currency equivalent for compatibility
+    # and validates the physical over-tender. The settled fields record the
+    # actual currency and amount handed back to the guest.
     cash_change_amount = Column(Numeric(12, 2), nullable=True)
+    cash_change_settled_amount = Column(Numeric(12, 2), nullable=True)
+    cash_change_settled_currency = Column(String(3), nullable=True)
+    cash_change_fx_rate_snapshot = Column(Numeric(24, 12), nullable=True)
     # Explicit gratuity retained from cash over-tender. It is separate from
     # amount/gross_amount so it never becomes reservation lodging revenue.
     cash_tip_amount = Column(Numeric(12, 2), nullable=False, default=0, server_default="0")
@@ -183,6 +189,22 @@ class Transaction(Base):
             "ROUND(cash_received_amount - COALESCE(gross_amount, amount) - cash_tip_amount, 2) "
             "AND payment_method = 'cash' AND transaction_type != 'refund')",
             name="ck_transaction_cash_received_change_consistent",
+        ),
+        CheckConstraint(
+            "(cash_received_amount IS NULL AND cash_change_settled_amount IS NULL "
+            "AND cash_change_settled_currency IS NULL AND cash_change_fx_rate_snapshot IS NULL) OR "
+            "(cash_received_amount IS NOT NULL AND cash_change_settled_amount IS NOT NULL "
+            "AND cash_change_settled_currency IS NOT NULL "
+            "AND cash_change_settled_currency = UPPER(cash_change_settled_currency) "
+            "AND LENGTH(cash_change_settled_currency) = 3 "
+            "AND cash_change_settled_amount >= 0 "
+            "AND ((cash_change_amount = 0 AND cash_change_settled_amount = 0 "
+            "AND (cash_change_fx_rate_snapshot IS NULL OR cash_change_fx_rate_snapshot > 0)) "
+            "OR (cash_change_amount > 0 AND cash_change_fx_rate_snapshot > 0 "
+            "AND ROUND(cash_change_amount * cash_change_fx_rate_snapshot, 2) = "
+            "ROUND(cash_change_settled_amount, 2))) "
+            "AND payment_method = 'cash' AND transaction_type != 'refund')",
+            name="ck_transaction_cash_change_settlement_consistent",
         ),
         CheckConstraint(
             "amount != 0 OR (transaction_type = 'refund' AND "

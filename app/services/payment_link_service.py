@@ -64,7 +64,10 @@ def _create_mercadopago_preference(db: Session, hotel_id: int, link: PaymentLink
     # Imported lazily so the local-only path never pulls in network code.
     import requests
 
-    from app.services.payment_link_test_service import _mercadopago_connection_payload
+    from app.services.payment_link_test_service import (
+        _mercadopago_connection_payload,
+        mercadopago_checkout_url,
+    )
 
     connection_payload = _mercadopago_connection_payload(db, hotel_id)
     access_token = str(connection_payload["access_token"])
@@ -121,7 +124,11 @@ def _create_mercadopago_preference(db: Session, hotel_id: int, link: PaymentLink
     if not response.ok:
         raise PaymentLinkError("Mercado Pago rechazo la creacion del link.")
     data = response.json()
-    checkout_url = data.get("init_point") or data.get("sandbox_init_point")
+    checkout_url = mercadopago_checkout_url(
+        data,
+        access_token=access_token,
+        live_mode=connection_payload.get("live_mode"),
+    )
     if not checkout_url:
         raise PaymentLinkError("Mercado Pago no devolvio un link de pago.")
     return {

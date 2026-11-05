@@ -2,11 +2,28 @@ import { useTranslation } from "react-i18next";
 
 import { calculateCashTender, calculateCashTip, formatCashTenderAmount } from "../utils/cashTender.mjs";
 
+const formatSettledChangeAmount = (amount: number, currency: string, locale: string) => {
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+      currencyDisplay: "code",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
+  } catch {
+    return formatCashTenderAmount(amount, currency, locale);
+  }
+};
+
 type Props = {
   amount: string;
   tipAmount: string;
   expectedAmount: number;
   currency: string;
+  changeCurrency?: string;
+  changeRate?: number | null;
+  changeRateUnavailableMessage?: string;
   label: string;
   hint: string;
   changeLabel: string;
@@ -27,6 +44,9 @@ export function CashTenderField({
   tipAmount,
   expectedAmount,
   currency,
+  changeCurrency = currency,
+  changeRate = 1,
+  changeRateUnavailableMessage,
   label,
   hint,
   changeLabel,
@@ -46,6 +66,12 @@ export function CashTenderField({
   const tender = calculateCashTender(amount, expectedAmount);
   const changeBeforeTip = tender.valid ? tender.changeAmount ?? 0 : 0;
   const tip = calculateCashTip(tipAmount, changeBeforeTip);
+  const normalizedChangeRate = changeRate === null || !Number.isFinite(Number(changeRate)) || Number(changeRate) <= 0
+    ? null
+    : Number(changeRate);
+  const settledChange = tip.valid && tip.changeAmount !== null && normalizedChangeRate !== null
+    ? Math.round((tip.changeAmount * normalizedChangeRate + Number.EPSILON) * 100) / 100
+    : null;
   const tipSelected = Number(tipAmount) > 0;
   const errorMessage = tender.reason === "insufficient"
     ? insufficientMessage
@@ -110,10 +136,15 @@ export function CashTenderField({
         {!tip.valid ? <p id={tipErrorId} className="text-rose-700" role="alert">{tipInvalidMessage}</p> : null}
       </div>
       <p className="font-semibold text-emerald-800" aria-live="polite" data-testid={`${testId}-change`}>
-        {changeLabel}: {tender.valid && tip.valid && tip.changeAmount !== null
-          ? formatCashTenderAmount(tip.changeAmount, currency, locale)
+        {changeLabel}: {tender.valid && settledChange !== null
+          ? changeCurrency === currency
+            ? formatCashTenderAmount(settledChange, changeCurrency, locale)
+            : formatSettledChangeAmount(settledChange, changeCurrency, locale)
           : "—"}
       </p>
+      {tender.valid && changeCurrency !== currency && settledChange === null && changeRateUnavailableMessage ? (
+        <p className="text-amber-900" role="status">{changeRateUnavailableMessage}</p>
+      ) : null}
     </div>
   );
 }
