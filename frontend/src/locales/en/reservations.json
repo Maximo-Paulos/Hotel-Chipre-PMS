@@ -1493,6 +1493,7 @@
       "paymentFailed": "Could not register the payment",
       "paymentFxQuoteUnavailable": "Could not get a current exchange rate.",
       "paymentQuoteUnavailable": "Could not confirm this payment quote. Refresh it and try again.",
+      "paymentQuoteExceedsBalance": "The amount exceeds the outstanding balance. Lower it or enter the exact balance to quote the payment.",
       "invalidPartialAmount": "Enter a positive amount that does not exceed the pending balance.",
       "priorReceiptPermissionRequired": "Your role cannot record prior cash receipts.",
       "priorReceiptDetailsRequired": "Enter the collection date and reason for this prior receipt.",

@@ -53,6 +53,7 @@ import { useBusinessClock } from "../hooks/useBusinessClock";
 import { useSession } from "../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../utils/currency";
 import { calculateCashTender, calculateCashTip } from "../utils/cashTender.mjs";
+import { isPaymentQuoteOverBalanceError } from "../utils/paymentQuoteError.mjs";
 import {
   canCancelReservation,
   canCheckInReservation,
@@ -2535,7 +2536,12 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                     </p>
                   ) : paymentQuoteQuery.isError && !paymentQuote ? (
                     <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert" data-testid="reservation-drawer-payment-quote-error">
-                      <p>{t("page.errors.paymentQuoteUnavailable")}</p>
+                      <p>{isPaymentQuoteOverBalanceError(
+                        paymentQuoteQuery.error instanceof ApiError ? paymentQuoteQuery.error.status : undefined,
+                        paymentQuoteQuery.error instanceof Error ? paymentQuoteQuery.error.message : undefined
+                      )
+                        ? t("page.errors.paymentQuoteExceedsBalance")
+                        : t("page.errors.paymentQuoteUnavailable")}</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <button
                           type="button"

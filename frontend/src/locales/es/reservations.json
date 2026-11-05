@@ -1493,6 +1493,7 @@
       "paymentFailed": "No se pudo registrar el pago",
       "paymentFxQuoteUnavailable": "No se pudo obtener una cotización vigente.",
       "paymentQuoteUnavailable": "No se pudo confirmar la cotización del cobro. Actualizala e intentá de nuevo.",
+      "paymentQuoteExceedsBalance": "El importe supera el saldo pendiente. Reducilo o ingresá el saldo exacto para cotizar el cobro.",
       "invalidPartialAmount": "Ingresá un importe positivo que no supere el saldo pendiente.",
       "priorReceiptPermissionRequired": "Tu rol no tiene permiso para registrar cobros previos.",
       "priorReceiptDetailsRequired": "Indicá la fecha y el motivo del cobro previo.",
