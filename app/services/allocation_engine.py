@@ -31,6 +31,12 @@ from app.services.reservation_service import (
 from app.services.room_service import active_rooms
 
 
+# Leave time for database persistence and API serialization after a recalculation.
+# The interactive operator flow is synchronous, so CP-SAT must not consume the
+# whole request window before its result can be reviewed.
+ALLOCATION_SOLVER_TIME_BUDGET_SECONDS = 15.0
+
+
 # CP-SAT stores objective bounds in signed 64-bit integers. Keep a margin so a
 # large but valid database amount cannot overflow the solver's internal sum.
 class AllocationError(Exception):
@@ -588,7 +594,7 @@ def run_allocation(
     # lower-floor preference for hotels that explicitly report no elevator.
     # Every phase shares one bounded budget.
     solve_started = time.monotonic()
-    total_solve_seconds = 30.0
+    total_solve_seconds = ALLOCATION_SOLVER_TIME_BUDGET_SECONDS
 
     def solve_with_remaining_budget():
         remaining = total_solve_seconds - (time.monotonic() - solve_started)
@@ -604,6 +610,25 @@ def run_allocation(
     solver, status = solve_with_remaining_budget()
     if solver is None or status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         primary_status = solver.StatusName(status) if solver is not None else "UNKNOWN"
+        if status == cp_model.UNKNOWN:
+            # A time-bounded solve can expire before CP-SAT finds a feasible
+            # plan. Return a deterministic, hard-constraint-checked proposal
+            # when possible; existing reservations still require an operator
+            # to approve any room move.
+            fallback = _run_allocation_greedy(
+                reservations,
+                rooms,
+                optimization_horizon,
+                policy_constraints=policy_constraints,
+                policy_weights=policy_weights,
+                forbidden_room_ids_by_reservation=forbidden_room_ids_by_reservation,
+            )
+            fallback.error = None if fallback.success else (
+                f"Solver status: {primary_status}. No feasible assignment found."
+            )
+            fallback.primary_status = "HEURISTIC"
+            fallback.tie_break_status = "HEURISTIC"
+            return fallback
         return AllocationResult(
             success=False,
             error=f"Solver status: {primary_status}. No feasible assignment found.",
@@ -744,7 +769,19 @@ def _run_allocation_greedy(
         # If locked, assign to current room
         if res.is_locked and res.current_room_id is not None:
             current_room = rooms_by_id.get(res.current_room_id)
-            if current_room is not None and current_room.max_occupancy >= res.num_guests:
+            locked_room_is_compatible = bool(
+                current_room
+                and current_room.category_id in res.effective_allowed_category_ids
+                and current_room.max_occupancy >= res.num_guests
+                and (not res.mobility_restriction or current_room.is_accessible)
+                and current_room.room_id
+                not in forbidden_room_ids_by_reservation.get(res.reservation_id, set())
+                and not any(
+                    res.check_in < occupied_until and occupied_from < res.check_out
+                    for occupied_from, occupied_until in room_occupancy[current_room.room_id]
+                )
+            )
+            if locked_room_is_compatible:
                 assignments[res.reservation_id] = res.current_room_id
                 room_occupancy[res.current_room_id].append((res.check_in, res.check_out))
             continue

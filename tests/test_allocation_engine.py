@@ -213,6 +213,56 @@ class TestCPSATAllocation:
         assert result.success is True
         assert observed["num_workers"] == 1
 
+    def test_cpsat_timeout_returns_only_a_feasible_heuristic_plan(self, monkeypatch):
+        cp_model = pytest.importorskip("ortools.sat.python.cp_model")
+        original_solver = cp_model.CpSolver
+        observed = {}
+
+        class TimedOutSolver(original_solver):
+            def Solve(self, model, *args, **kwargs):
+                observed["budget_seconds"] = self.parameters.max_time_in_seconds
+                return cp_model.UNKNOWN
+
+        monkeypatch.setattr(cp_model, "CpSolver", TimedOutSolver)
+        start = date(2026, 4, 1)
+        reservations = [
+            make_res(1, 1, start, start + timedelta(days=2)),
+            make_res(2, 1, start, start + timedelta(days=2)),
+        ]
+
+        result = run_allocation(reservations, make_rooms(1, 2))
+
+        assert result.success is True
+        assert len(result.assignments) == 2
+        assert result.primary_status == "HEURISTIC"
+        assert result.tie_break_status == "HEURISTIC"
+        assert observed["budget_seconds"] == pytest.approx(15.0, abs=0.01)
+
+    def test_greedy_fallback_does_not_assign_locked_reservation_to_incompatible_room(self):
+        start = date(2026, 4, 1)
+        reservation = make_res(1, 1, start, start + timedelta(days=2), room=10, locked=True)
+        incompatible_room = RoomSlot(room_id=10, room_number="R10", category_id=2)
+
+        result = _run_allocation_greedy([reservation], [incompatible_room])
+
+        assert result.success is False
+        assert result.assignments == {}
+        assert result.unassigned_reservations == [1]
+
+    def test_greedy_fallback_does_not_keep_overlapping_locked_reservations_in_one_room(self):
+        start = date(2026, 4, 1)
+        reservations = [
+            make_res(1, 1, start, start + timedelta(days=3), room=10, locked=True),
+            make_res(2, 1, start + timedelta(days=1), start + timedelta(days=4), room=10, locked=True),
+        ]
+        room = RoomSlot(room_id=10, room_number="R10", category_id=1)
+
+        result = _run_allocation_greedy(reservations, [room])
+
+        assert result.success is False
+        assert len(result.assignments) == 1
+        assert result.unassigned_reservations == [2]
+
     def test_cpsat_simple(self):
         rooms = make_rooms(1, 3)
         reservations = [make_res(1,1,date(2026,4,1),date(2026,4,5)), make_res(2,1,date(2026,4,1),date(2026,4,3))]

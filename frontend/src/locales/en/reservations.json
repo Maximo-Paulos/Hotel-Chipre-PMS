@@ -65,6 +65,7 @@
       "title": "Complete check-in details",
       "loading": "Validating the required check-in details…",
       "loadFailed": "Guest details could not be validated. Check-in remains blocked.",
+      "clockLoadFailed": "The hotel's business date could not be verified. Check-in remains blocked.",
       "retry": "Retry",
       "documentType": "Document type",
       "documentTypeUnspecified": "Not specified",
@@ -361,6 +362,8 @@
       "checkInFailed": "Could not check in.",
       "checkInPaymentRequired": "Check-in could not be confirmed under the hotel's payment policy. Operational balance due: {{balance}}. Review the payment before retrying.",
       "checkInDepartureDatePassed": "The reservation departure date has passed. Extend the stay before checking in.",
+      "checkInBeforeArrival": "Check-in is only available from the reservation arrival date.",
+      "checkInBeforeArrivalOn": "Check-in is only available from the reservation arrival date ({{date}}).",
       "voucherFinancialSummaryUnavailable": "The operational balance could not be verified. Try again before exporting the voucher."
     },
     "messages": {

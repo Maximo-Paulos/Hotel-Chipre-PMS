@@ -49,6 +49,7 @@ import {
 } from "../hooks/usePaymentSurcharges";
 import { useRestrictionOverridePrompt } from "../hooks/useRestrictionOverridePrompt";
 import { useGuardedMutation } from "../hooks/useGuardedMutation";
+import { useBusinessClock } from "../hooks/useBusinessClock";
 import { useSession } from "../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../utils/currency";
 import { calculateCashTender, calculateCashTip } from "../utils/cashTender.mjs";
@@ -184,6 +185,11 @@ const getCheckinActionErrorMessage = (
   }
   if (/after the reservation departure date|después de la fecha de salida/i.test(message)) {
     return t("drawer.errors.checkInDepartureDatePassed");
+  }
+  const beforeArrivalMatch = message.match(/(?:before the reservation arrival date|antes de la fecha de llegada de la reserva)\s*\(?([0-9]{4}-[0-9]{2}-[0-9]{2})\)?/i);
+  if (beforeArrivalMatch) return t("drawer.errors.checkInBeforeArrivalOn", { date: beforeArrivalMatch[1] });
+  if (/before the reservation arrival date|antes de la fecha de llegada/i.test(message)) {
+    return t("drawer.errors.checkInBeforeArrival");
   }
   return t("drawer.errors.checkInFailed");
 };
@@ -440,6 +446,8 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const restrictionOverridePrompt = useRestrictionOverridePrompt();
 
   const open = Boolean(reservationId);
+  const businessClockQuery = useBusinessClock({ enabled: open });
+  const businessDate = businessClockQuery.data?.business_date ?? null;
   const reservation = reservationQuery.data;
   const operations = operationsQuery.data;
   const summary = summaryQuery.data;
@@ -473,6 +481,29 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     const key = checkinValidationErrorKeys[error];
     return key ? t(key) : t("drawer.checkinCapture.requiredFields.unknown");
   });
+  const checkinFieldValues: Record<string, string | boolean> = {
+    first_name: guestQuery.data?.first_name ?? "",
+    last_name: guestQuery.data?.last_name ?? "",
+    document_type: captureForm.document_type,
+    document_number: captureForm.document_number,
+    nationality: captureForm.nationality,
+    country: captureForm.country,
+    birth_place: captureForm.birth_place,
+    birth_country: captureForm.birth_country,
+    marital_status: captureForm.marital_status,
+    occupation: captureForm.occupation,
+    terms_accepted: captureForm.terms_accepted
+  };
+  const checkinCaptureErrors = checkinValidation.data?.errors ?? [];
+  const checkinCaptureComplete = checkinCaptureErrors.length > 0 && checkinCaptureErrors.every((error) => {
+    const key = checkinValidationErrorKeys[error];
+    const field = Object.entries(checkinFieldKeysByName).find(([, value]) => value === key)?.[0];
+    if (!field) return false;
+    const value = checkinFieldValues[field];
+    return typeof value === "boolean" ? value : value.trim().length > 0;
+  });
+  const checkinBeforeArrival = Boolean(reservation?.check_in_date && businessDate && reservation.check_in_date > businessDate);
+  const checkinDateUnknown = checkinDataRelevant && !businessDate;
   const pendingActionMessage = individualExtensionMutation.isPending
     ? t("drawer.individualExtension.applying")
     : paymentMutation.isPending
@@ -2677,6 +2708,19 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   </button>
                 </div>
               ) : null}
+              {checkinDateUnknown ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">
+                  {t("drawer.checkinCapture.clockLoadFailed")}
+                  <button type="button" onClick={() => void businessClockQuery.refetch()} className="ml-2 font-semibold underline">
+                    {t("drawer.checkinCapture.retry")}
+                  </button>
+                </div>
+              ) : null}
+              {checkinBeforeArrival ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status" data-testid="checkin-date-blocker">
+                  {t("drawer.errors.checkInBeforeArrivalOn", { date: reservation.check_in_date })}
+                </p>
+              ) : null}
 
               <section className="flex flex-wrap gap-2 border-t border-slate-200 pt-3">
                 {canPartialCheckIn(reservation.status) && (
@@ -2697,7 +2741,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                 )}
                 <button
                   type="button"
-                  disabled={!canCheckInReservation(reservation.status) || checkInMutation.isPending || !checkinDataReady}
+                  disabled={!canCheckInReservation(reservation.status) || checkInMutation.isPending || !checkinDataReady || checkinDateUnknown || checkinBeforeArrival || (needsCheckinCapture && !checkinCaptureComplete)}
                   onClick={() => void submitCheckIn()}
                   className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
                 >

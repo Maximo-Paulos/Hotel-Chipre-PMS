@@ -687,6 +687,22 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   await expect(page.getByText("US$ 42")).toBeVisible();
 
   const rateEditor = page.getByTestId("rate-editor");
+  // Selecting one grid cell must constrain the bulk editor to that exact
+  // date. This guards against a mismatch where the selected date was shown
+  // in the controls but the local preview included the rest of the calendar.
+  const selectedDatePrice = rateEditorGrid.getByLabel("Precio base 2026-05-09");
+  await selectedDatePrice.click();
+  await expect(rateEditor.getByLabel("Desde")).toHaveValue("2026-05-09");
+  await expect(rateEditor.getByLabel("Hasta")).toHaveValue("2026-05-09");
+  await expect(rateEditor).toContainText("1 fechas afectadas");
+  await rateEditor.getByLabel("Precio base *").fill("46000");
+  await page.getByTestId("rate-editor-save").click();
+  const ratePreview = page.getByTestId("rate-change-local-preview");
+  await expect(ratePreview).toContainText("Vista previa local · 1 fechas");
+  await expect(ratePreview).toContainText("2026-05-09");
+  await expect(ratePreview).not.toContainText("2026-05-07");
+  await page.getByRole("button", { name: "Descartar cambios locales" }).click();
+
   await rateEditor.getByLabel("Desde").fill("2026-05-07");
   await rateEditor.getByLabel("Hasta").fill("2026-05-09");
   await page.getByRole("button", { name: "Días de semana" }).click();

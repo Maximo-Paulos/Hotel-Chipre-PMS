@@ -296,6 +296,8 @@ export function RateCalendarPage() {
   useEffect(() => {
     setFromDate(dateFrom);
     setToDate(dateTo);
+    setSelectionAnchor(null);
+    setSelectedRange(null);
     setEditingPeriodId(null);
     setPeriodError(null);
     setPeriodForm({ name: "", start_date: dateFrom, end_date: dateTo, price_per_night: 0, priority: 0, is_active: true, comparable_season_key: "", is_high_demand_event: false });
@@ -362,9 +364,14 @@ export function RateCalendarPage() {
     });
   };
 
+  // A selected grid cell/range is the operator's explicit scope. Keep it as
+  // the source of truth for range editing, and clear it when the dates are
+  // edited manually so the controls and preview cannot diverge.
+  const effectiveFromDate = bulkMode === "range" && selectedRange ? selectedRange.startDate : fromDate;
+  const effectiveToDate = bulkMode === "range" && selectedRange ? selectedRange.endDate : toDate;
   const rangeRows = useMemo(
-    () => (dailyRatesQuery.data ?? []).filter((row) => row.date >= fromDate && row.date <= toDate),
-    [dailyRatesQuery.data, fromDate, toDate]
+    () => (dailyRatesQuery.data ?? []).filter((row) => row.date >= effectiveFromDate && row.date <= effectiveToDate),
+    [dailyRatesQuery.data, effectiveFromDate, effectiveToDate]
   );
 
   const weekdaySet = useMemo(() => new Set(selectedWeekdays), [selectedWeekdays]);
@@ -419,7 +426,7 @@ export function RateCalendarPage() {
     event.preventDefault();
     if (editorDisabled) return;
     setSaveError(null);
-    if (toDate < fromDate) {
+    if (effectiveToDate < effectiveFromDate) {
       setSaveError("La fecha final debe ser mayor o igual a la inicial.");
       return;
     }
@@ -1022,11 +1029,11 @@ export function RateCalendarPage() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
                 <label className={labelClass}>
                   Desde
-                  <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                  <input type="date" value={fromDate} onChange={(e) => { setFromDate(e.target.value); setSelectionAnchor(null); setSelectedRange(null); }} className={`${inputClass} normal-case tracking-normal text-slate-900`} />
                 </label>
                 <label className={labelClass}>
                   Hasta
-                  <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className={`${inputClass} normal-case tracking-normal text-slate-900`} />
+                  <input type="date" value={toDate} onChange={(e) => { setToDate(e.target.value); setSelectionAnchor(null); setSelectedRange(null); }} className={`${inputClass} normal-case tracking-normal text-slate-900`} />
                 </label>
                 <label className={labelClass}>
                   Tipo de edición

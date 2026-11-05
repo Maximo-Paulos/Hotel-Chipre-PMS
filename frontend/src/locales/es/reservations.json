@@ -65,6 +65,7 @@
       "title": "Completar datos para el check-in",
       "loading": "Validando los datos requeridos para el check-in…",
       "loadFailed": "No se pudieron validar los datos del huésped. El check-in permanece bloqueado.",
+      "clockLoadFailed": "No se pudo verificar la fecha operativa del hotel. El check-in permanece bloqueado.",
       "retry": "Reintentar",
       "documentType": "Tipo de documento",
       "documentTypeUnspecified": "Sin especificar",
@@ -361,6 +362,8 @@
       "checkInFailed": "No se pudo hacer check-in.",
       "checkInPaymentRequired": "El check-in no pudo confirmarse según la política de pago del hotel. Saldo operativo pendiente: {{balance}}. Revisá el cobro antes de reintentar.",
       "checkInDepartureDatePassed": "La fecha de salida de la reserva ya pasó. Extendé la estadía antes de hacer el check-in.",
+      "checkInBeforeArrival": "El check-in solo se puede realizar desde la fecha de llegada de la reserva.",
+      "checkInBeforeArrivalOn": "El check-in solo se puede realizar desde la fecha de llegada de la reserva ({{date}}).",
       "voucherFinancialSummaryUnavailable": "No se pudo verificar el saldo operativo. Volvé a intentar antes de exportar el voucher."
     },
     "messages": {

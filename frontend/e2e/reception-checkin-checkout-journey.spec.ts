@@ -191,18 +191,14 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await expect(captureForm).toBeVisible();
   await expect(captureForm.getByLabel("Acepta términos y condiciones", { exact: true })).not.toBeChecked();
   await expect(captureForm).toContainText("Completá el lugar de nacimiento.");
-
-  // If the POST returns the legacy English missing-data detail, show a
-  // localized correction message instead of exposing backend text.
-  await drawer.getByRole("button", { name: "Confirmar check-in", exact: true }).click();
-  await expect(drawer).toContainText("Completá los datos faltantes para el check-in y volvé a intentar.");
-  await expect(drawer).not.toContainText("Check-in blocked");
+  await expect(drawer.getByRole("button", { name: "Confirmar check-in", exact: true })).toBeDisabled();
 
   await captureForm.getByLabel("Lugar de nacimiento").fill("Rosario");
   await captureForm.getByLabel("País de nacimiento").fill("Argentina");
   await captureForm.getByLabel("Estado civil").fill("Soltero/a");
   await captureForm.getByLabel("Profesión").fill("Recepcionista QA");
   await captureForm.getByLabel("Acepta términos y condiciones", { exact: true }).check();
+  await expect(drawer.getByRole("button", { name: "Confirmar check-in", exact: true })).toBeEnabled();
 
   await drawer.getByLabel("Nombre del acompañante").fill("Acompañante");
   await drawer.getByLabel("Apellido del acompañante").fill(guestLastName);
@@ -261,6 +257,8 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   const secondDrawer = page.getByRole("dialog", { name: secondReservation.confirmation_code });
   await expect(secondDrawer).toBeVisible();
   await expect(secondDrawer.getByText("Check-in registrado.", { exact: true })).toHaveCount(0);
+  await expect(secondDrawer.getByTestId("checkin-date-blocker")).toBeVisible();
+  await expect(secondDrawer.getByRole("button", { name: "Confirmar check-in", exact: true })).toBeDisabled();
   await secondDrawer.getByRole("button", { name: "Cancelar", exact: true }).click();
   await expect(secondDrawer.getByText("Reserva cancelada.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
