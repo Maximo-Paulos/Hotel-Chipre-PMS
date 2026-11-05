@@ -208,6 +208,7 @@ jobs:
             printf 'EXTERNAL_EFFECTS_ENABLED=false\n'
             printf 'CONNECTIONS_ENABLED=false\n'
             printf 'INBOUND_PROVIDER_EVENTS_ENABLED=false\n'
+            printf 'DOLARAPI_RATES_ENABLED=true\n'
           } >> "${GITHUB_ENV}"
 
       - name: Run E2E journeys
