@@ -1,6 +1,6 @@
 # Playwright E2E
 
-These specs use the real Vite frontend on `http://127.0.0.1:5173` and the real FastAPI backend on `http://127.0.0.1:8040`. Every database-backed E2E run requires a fresh, isolated PostgreSQL 16 database in Colima; SQLite is not supported.
+These specs use the real Vite frontend on `http://127.0.0.1:5173` and the real FastAPI backend on `http://127.0.0.1:8040`. Local database-backed runs use a fresh, isolated PostgreSQL 16 database in Colima; GitHub Actions provisions an isolated PostgreSQL 16 service for each job. SQLite is not supported for E2E.
 
 ## Managed run
 
