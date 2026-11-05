@@ -56,8 +56,26 @@ async def test_disabled_async_fx_uses_cache_without_constructing_client(monkeypa
 
     monkeypatch.setattr(fx_service.httpx, "AsyncClient", UnexpectedClient)
 
-    assert await fx_service.fetch_rate("oficial") == quote
-    assert await fx_service.fetch_all_rates() == {"oficial": quote}
+    fallback_rate = await fx_service.fetch_rate("oficial")
+    assert fallback_rate is not None
+    assert {
+        key: value
+        for key, value in fallback_rate.items()
+        if key not in {"_cache_fallback", "quote_status"}
+    } == quote
+    assert fallback_rate["_cache_fallback"] is True
+    assert fallback_rate["quote_status"] == "outage_fallback_24h"
+
+    fallback_rates = await fx_service.fetch_all_rates()
+    assert set(fallback_rates) == {"oficial"}
+    fallback_official = fallback_rates["oficial"]
+    assert {
+        key: value
+        for key, value in fallback_official.items()
+        if key not in {"_cache_fallback", "quote_status"}
+    } == quote
+    assert fallback_official["_cache_fallback"] is True
+    assert fallback_official["quote_status"] == "outage_fallback_24h"
 
 
 def test_disabled_sync_fx_uses_stale_cache_without_network(monkeypatch):

@@ -17,6 +17,7 @@ from app.services.fx_service import (
     quote_is_fresh,
 )
 
+FRESH_FX_CACHE_AGE = timedelta(hours=3)
 MAX_FX_CACHE_AGE = timedelta(hours=24)
 
 

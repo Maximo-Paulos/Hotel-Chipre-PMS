@@ -591,7 +591,9 @@ def test_usd_markets_are_directional_while_other_currencies_use_global_reference
     )
     assert policy_usd_to_ars_rate == pytest.approx(_FX_TEST_RATES["USD"]["venta"] * 1.05)
     assert policy_details["usd_market"] == "oficial"
-    assert seen_markets[:3] == ["oficial", "blue", "oficial"]
+    # The third conversion reuses the official PostgreSQL cache instead of
+    # querying DolarAPI again.
+    assert seen_markets == ["oficial", "blue"]
 
     _, cross_rate, cross_details = pricing_policy_service._convert_amount(
         db,
@@ -648,8 +650,9 @@ def test_missing_selected_blue_market_does_not_fall_back_to_official_snapshot(db
     )
     db.flush()
     monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", lambda *_: None)
+    monkeypatch.setattr(pricing_policy_service, "get_cached_supported_rates", lambda: {})
 
-    with pytest.raises(ValueError, match="blue.*USD.*no se usará otro mercado"):
+    with pytest.raises(ValueError, match=r"USD \(blue\).*No se usará una tasa sin verificar"):
         pricing_policy_service._convert_amount(
             db,
             hotel_id=51,
@@ -679,6 +682,7 @@ def test_blue_non_usd_conversion_uses_only_matching_derived_snapshot(db, monkeyp
     )
     db.flush()
     monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", lambda *_: None)
+    monkeypatch.setattr(pricing_policy_service, "get_cached_supported_rates", lambda: {})
 
     _, _, details = pricing_policy_service._convert_amount(
         db,
@@ -712,8 +716,9 @@ def test_blue_non_usd_conversion_does_not_use_official_currency_snapshot(db, mon
         )
     )
     monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", lambda *_: None)
+    monkeypatch.setattr(pricing_policy_service, "get_cached_supported_rates", lambda: {})
 
-    with pytest.raises(ValueError, match="eur_blue.*no se usará otro mercado"):
+    with pytest.raises(ValueError, match=r"EUR \(eur_blue\).*No se usará una tasa sin verificar"):
         pricing_policy_service._convert_amount(
             db,
             hotel_id=51,

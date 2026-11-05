@@ -4,14 +4,12 @@ from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 import app.api.fx_rates as fx_rates_module
 import app.database as db_module
 import app.main as main_module
-from app.database import Base, get_db
+from app.database import get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.models.hotel_config import HotelConfiguration
 from app.models.fx_rate_snapshot import FxRateSnapshot
@@ -19,18 +17,8 @@ from app.models.user import User
 
 
 @pytest.fixture
-def fx_client(monkeypatch: pytest.MonkeyPatch):
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-
-    @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_connection, connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+def fx_client(db_engine, monkeypatch: pytest.MonkeyPatch):
+    engine = db_engine
 
     def fake_get_engine(database_url: str | None = None):
         return engine
@@ -48,7 +36,6 @@ def fx_client(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(db_module, "get_engine", fake_get_engine)
     monkeypatch.setattr(fx_rates_module, "get_all_rates_snapshot", fake_snapshot)
-    db_module.init_db()
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     # FX snapshots are financial config -- manager's default matrix does not
@@ -89,8 +76,6 @@ def fx_client(monkeypatch: pytest.MonkeyPatch):
         yield client, SessionLocal, auth_state
 
     main_module.app.dependency_overrides.clear()
-    Base.metadata.drop_all(bind=engine)
-    engine.dispose()
 
 
 def test_create_fx_snapshot(fx_client):
@@ -178,7 +163,12 @@ def test_generic_fx_list_exposes_only_supported_conversion_quotes(fx_client, mon
     async def fake_rates():
         return {
             "oficial": {"moneda": "USD", "compra": 1000, "venta": 1010},
-            "blue": {"moneda": "USD", "compra": 1100, "venta": 1110},
+            "blue": {
+                "moneda": "USD",
+                "compra": 1100,
+                "venta": 1110,
+                "quote_status": "outage_fallback_24h",
+            },
             "eur": {"moneda": "EUR", "compra": 1200, "venta": 1210},
             "brl": {"moneda": "BRL", "compra": 200, "venta": 210},
             "clp": {"moneda": "CLP", "compra": 1, "venta": 1.1},
@@ -202,6 +192,9 @@ def test_generic_fx_list_exposes_only_supported_conversion_quotes(fx_client, mon
         "oficial", "blue", "eur", "brl", "clp", "uyu",
         "eur_blue", "brl_blue", "clp_blue", "uyu_blue",
     }
+    status_by_type = {item["type"]: item["quote_status"] for item in response.json()}
+    assert status_by_type["blue"] == "outage_fallback_24h"
+    assert status_by_type["oficial"] == "fresh"
 
 
 def test_single_fx_quote_endpoint_rejects_other_usd_markets(fx_client):
@@ -253,6 +246,9 @@ def test_current_conversion_quote_returns_configured_cross_currency_rate_without
         return 1.25, 1.25, {
             "provider": "dolarapi.com",
             "configured_usd_market": "blue",
+            "quote_status": "outage_fallback_24h",
+            "uses_outage_fallback": True,
+            "warning_code": "fx.lastSuccessFallback24h",
             "path": "via_ars",
             "source_quote": {"currency": "EUR", "is_derived_blue": True},
             "target_quote": {"currency": "UYU", "is_derived_blue": True},
@@ -269,6 +265,29 @@ def test_current_conversion_quote_returns_configured_cross_currency_rate_without
     assert payload["rate"] == 1.25
     assert payload["provider"] == "dolarapi.com"
     assert payload["configured_market"] == "blue"
+    assert payload["quote_status"] == "outage_fallback_24h"
+    assert payload["warning_code"] == "fx.lastSuccessFallback24h"
     assert payload["quote_details"]["source_quote"]["is_derived_blue"] is True
     with SessionLocal() as db:
         assert db.query(FxRateSnapshot).filter(FxRateSnapshot.hotel_id == 1).count() == 0
+
+
+def test_conversion_quote_same_currency_does_not_require_fx(fx_client, monkeypatch):
+    client, _, _ = fx_client
+
+    def quote(db, *, hotel_id, amount, from_currency, to_currency, fx_policy_id, provider_code, persist_snapshots):
+        assert from_currency == "ARS"
+        assert to_currency == "ARS"
+        return amount, 1.0, None
+
+    monkeypatch.setattr(fx_rates_module, "_convert_amount", quote)
+    response = client.post(
+        "/api/fx/conversion-quote",
+        json={"from_currency": "ARS", "to_currency": "ARS"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["rate"] == 1.0
+    assert payload["quote_status"] == "not_required"
+    assert payload["warning_code"] is None

@@ -18,6 +18,7 @@ export type FxRateItem = {
   compra?: number | null;
   venta?: number | null;
   fechaActualizacion?: string | null;
+  quote_status?: "fresh" | "outage_fallback_24h" | "stale";
 };
 
 export type FxCurrencyCode = "ARS" | "USD" | "EUR" | "BRL" | "CLP" | "UYU";
@@ -28,7 +29,12 @@ export type FxConversionQuote = {
   rate: number;
   provider: "dolarapi.com";
   configured_market: "oficial" | "blue";
+  quote_status: "fresh" | "outage_fallback_24h" | "not_required";
+  warning_code: "fx.lastSuccessFallback24h" | null;
   quote_details: {
+    uses_outage_fallback?: boolean;
+    quote_status?: "fresh" | "outage_fallback_24h";
+    warning_code?: "fx.lastSuccessFallback24h" | null;
     configured_usd_market?: "oficial" | "blue";
     configured_ars_to_usd_rate_side?: "compra" | "venta" | null;
     spread_pct?: number | null;

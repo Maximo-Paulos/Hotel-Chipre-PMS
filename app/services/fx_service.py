@@ -343,6 +343,35 @@ async def _cached_supported_rates() -> dict[str, dict]:
     for key in SUPPORTED_DISPLAY_RATE_TYPES:
         cached = _cached_rate(_cache_key_for_display_rate(key), allow_stale=True)
         if _cached_quote_matches(key, cached):
+            result[key] = _as_cached_fallback_quote(cached)
+    return result
+
+
+def _as_cached_fallback_quote(quote: dict) -> dict:
+    """Mark display data returned without a successful current provider fetch."""
+    result = dict(quote)
+    observed_at = parse_provider_updated_at(
+        result.get("_observed_at")
+        or result.get("fechaActualizacion")
+        or result.get("fecha")
+    )
+    age = datetime.now(timezone.utc) - observed_at if observed_at is not None else None
+    within_fallback_window = (
+        age is not None
+        and age >= -MAX_PROVIDER_FUTURE_SKEW
+        and age <= MAX_PROVIDER_QUOTE_AGE
+    )
+    result["_cache_fallback"] = True
+    result["quote_status"] = "outage_fallback_24h" if within_fallback_window else "stale"
+    return result
+
+
+def get_cached_supported_rates() -> dict[str, dict]:
+    """Return valid process-cached rates to persist with an on-demand refresh."""
+    result: dict[str, dict] = {}
+    for key in SUPPORTED_DISPLAY_RATE_TYPES:
+        cached = _cached_rate(_cache_key_for_display_rate(key), allow_stale=True)
+        if _cached_quote_matches(key, cached) and quote_is_fresh(cached):
             result[key] = cached
     return result
 
@@ -392,7 +421,11 @@ async def fetch_rate(rate_type: str) -> Optional[dict]:
             return cached
         if not dolarapi_rates_enabled():
             stale = _cached_rate(cache_key, allow_stale=True)
-            return stale if _cached_quote_matches(normalized, stale) else None
+            return (
+                _as_cached_fallback_quote(stale)
+                if _cached_quote_matches(normalized, stale)
+                else None
+            )
         return (await _refresh_supported_rates()).get(normalized)
     else:
         return None
@@ -402,7 +435,11 @@ async def fetch_rate(rate_type: str) -> Optional[dict]:
         return cached
     if not dolarapi_rates_enabled():
         stale = _cached_rate(cache_key, allow_stale=True)
-        return stale if _cached_quote_matches(normalized, stale) else None
+        return (
+            _as_cached_fallback_quote(stale)
+            if _cached_quote_matches(normalized, stale)
+            else None
+        )
     payload = await _get_async(url)
     if currency == "USD":
         quote = payload if _quote_matches_supported_market(payload, currency="USD", market=normalized) else None

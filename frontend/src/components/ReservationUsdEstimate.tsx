@@ -6,7 +6,7 @@ import { ApiError, hasValidSession } from "../api/client";
 import { getFxConversionQuote } from "../api/fxRates";
 import { useEffectivePermissions } from "../hooks/usePermissions";
 import { useSession } from "../state/session";
-import { formatMoney } from "../utils/currency";
+import { formatFxRate, formatMoney } from "../utils/currency";
 
 type Props = {
   amount: number;
@@ -45,10 +45,9 @@ export default function ReservationUsdEstimate({ amount }: Props) {
         ? "page.form.usdEstimateBlueMarket"
         : "page.form.usdEstimateOfficialMarket")
     : null;
-  const fxRateLabel = fxQuoteQuery.data?.rate.toLocaleString(
-    i18n.language === "en" ? "en-US" : "es-AR",
-    { maximumFractionDigits: 8 }
-  );
+  const fxRateLabel = fxQuoteQuery.data
+    ? formatFxRate("ARS", "USD", fxQuoteQuery.data.rate, i18n.language)
+    : null;
   const fxSpreadLabel = fxDetails?.spread_pct == null
     ? null
     : fxDetails.spread_pct.toLocaleString(

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-05T02:42:05.941Z",
+  "generatedAt": "2026-11-05T03:39:01.337Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -13448,6 +13448,7 @@
         "services_fx_service_get_usd_rate_for_type",
         "services_fx_service_fetch_rate",
         "services_fx_service_is_cache_fresh",
+        "services_fx_service_as_cached_fallback_quote",
         "services_fx_service_cache_key",
         "services_fx_service_cached_quote_matches",
         "services_fx_service_cached_rate",
@@ -13456,10 +13457,10 @@
         "services_fx_service_quote_matches_supported_market",
         "services_fx_service_refresh_supported_rates",
         "services_fx_service_store_rate",
+        "services_fx_service_parse_provider_updated_at",
         "services_fx_service_quote_matches_conversion_market",
         "services_fx_service_with_observed_at",
         "services_fx_service_derive_blue_equivalent",
-        "services_fx_service_parse_provider_updated_at",
         "services_fx_service_quote_is_fresh"
       ],
       "qualifiedPath": [
@@ -13467,6 +13468,7 @@
         "services_fx_service_get_usd_rate_for_type",
         "services_fx_service_fetch_rate",
         "services_fx_service_is_cache_fresh",
+        "services_fx_service_as_cached_fallback_quote",
         "services_fx_service_cache_key",
         "services_fx_service_cached_quote_matches",
         "services_fx_service_cached_rate",
@@ -13475,14 +13477,14 @@
         "services_fx_service_quote_matches_supported_market",
         "services_fx_service_refresh_supported_rates",
         "services_fx_service_store_rate",
+        "services_fx_service_parse_provider_updated_at",
         "services_fx_service_quote_matches_conversion_market",
         "services_fx_service_with_observed_at",
         "services_fx_service_derive_blue_equivalent",
-        "services_fx_service_parse_provider_updated_at",
         "services_fx_service_quote_is_fresh"
       ],
       "depth": 5,
-      "nodeCount": 17,
+      "nodeCount": 18,
       "fileCount": 1,
       "files": [
         "app/services/fx_service.py"
@@ -15035,6 +15037,7 @@
         "services_fx_service_cache_key",
         "services_fx_service_quote_matches_conversion_market",
         "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_as_cached_fallback_quote",
         "services_fx_service_with_observed_at",
         "services_fx_service_derive_blue_equivalent",
         "services_fx_service_extract_direct_quotes",
@@ -15054,6 +15057,7 @@
         "services_fx_service_cache_key",
         "services_fx_service_quote_matches_conversion_market",
         "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_as_cached_fallback_quote",
         "services_fx_service_with_observed_at",
         "services_fx_service_derive_blue_equivalent",
         "services_fx_service_extract_direct_quotes",
@@ -15062,7 +15066,7 @@
         "services_fx_service_quote_is_fresh"
       ],
       "depth": 4,
-      "nodeCount": 17,
+      "nodeCount": 18,
       "fileCount": 1,
       "files": [
         "app/services/fx_service.py"
@@ -27491,6 +27495,28 @@
       "warnings": []
     },
     {
+      "id": "flow:utils_currency_formatfxrate",
+      "name": "formatFxRate",
+      "entryPoint": "utils_currency_formatfxrate",
+      "entryPointId": "utils_currency_formatfxrate",
+      "path": [
+        "utils_currency_formatfxrate",
+        "utils_currency_normalizecurrencycode"
+      ],
+      "qualifiedPath": [
+        "utils_currency_formatfxrate",
+        "utils_currency_normalizecurrencycode"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/utils/currency.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:utils_localizeddateinput_formatnativedatetimevalue",
       "name": "formatNativeDateTimeValue",
       "entryPoint": "utils_localizeddateinput_formatnativedatetimevalue",
@@ -27681,14 +27707,16 @@
       "entryPointId": "api_fx_rates_get_all_rates",
       "path": [
         "api_fx_rates_get_all_rates",
+        "api_fx_rates_fx_display_quote_status",
         "api_fx_rates_fxrateitem"
       ],
       "qualifiedPath": [
         "api_fx_rates_get_all_rates",
+        "api_fx_rates_fx_display_quote_status",
         "api_fx_rates_fxrateitem"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/fx_rates.py"
@@ -28447,14 +28475,16 @@
       "entryPointId": "api_fx_rates_get_single_rate",
       "path": [
         "api_fx_rates_get_single_rate",
+        "api_fx_rates_fx_display_quote_status",
         "api_fx_rates_fxrateitem"
       ],
       "qualifiedPath": [
         "api_fx_rates_get_single_rate",
+        "api_fx_rates_fx_display_quote_status",
         "api_fx_rates_fxrateitem"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/fx_rates.py"

@@ -142,7 +142,7 @@ def test_scheduled_refresh_task_persists_daily_observation(pg_session, monkeypat
         verify_db.commit()
 
 
-def test_reservation_conversion_checks_provider_before_using_recent_global_cache(
+def test_reservation_conversion_reuses_recent_global_cache_without_provider_call(
     pg_session, monkeypatch
 ):
     observed_at = datetime.now(UTC) - timedelta(hours=2)
@@ -156,12 +156,45 @@ def test_reservation_conversion_checks_provider_before_using_recent_global_cache
         },
         cache_source="daily",
     )
-    live_observed_at = datetime.now(UTC)
-    live_quote = _quote(
-        observed_at=live_observed_at,
-        market_updated_at=observed_at - timedelta(days=2),
-        sell=1230.0,
+    provider_calls = []
+
+    def fake_provider(currency, market="oficial"):
+        provider_calls.append((currency, market))
+        return None
+
+    monkeypatch.setattr(pricing_policy_service, "get_conversion_quote_sync", fake_provider)
+
+    quote = pricing_policy_service._resolve_conversion_quote(
+        pg_session,
+        hotel_id=1,
+        currency="USD",
+        market="oficial",
     )
+
+    cached_row = (
+        pg_session.query(FxRateCache)
+        .filter_by(currency="USD", rate_type="oficial")
+        .one()
+    )
+    assert provider_calls == []
+    assert quote["_cache_fallback"] is False
+    assert quote["_quote_source"] == "daily_cache"
+    assert quote["_observed_at"] == observed_at.isoformat()
+    assert float(cached_row.sell) == 1200.0
+    assert cached_row.observed_at.replace(tzinfo=UTC) == observed_at
+
+
+def test_reservation_conversion_refreshes_cache_after_three_hours(
+    pg_session, monkeypatch
+):
+    observed_at = datetime.now(UTC) - timedelta(hours=4)
+    store_supported_fx_rates(
+        pg_session,
+        {"oficial": _quote(observed_at=observed_at)},
+        cache_source="daily",
+    )
+    live_observed_at = datetime.now(UTC)
+    live_quote = _quote(observed_at=live_observed_at, sell=1230.0)
     provider_calls = []
 
     def fake_provider(currency, market="oficial"):

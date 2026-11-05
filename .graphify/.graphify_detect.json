@@ -1189,6 +1189,7 @@
       "tests/test_fx_conversion_rate_sides_migration.py",
       "tests/test_fx_credit_refund_api.py",
       "tests/test_fx_direction_markets_migration.py",
+      "tests/test_fx_display_status.py",
       "tests/test_fx_external_effects.py",
       "tests/test_fx_rate_cache_postgres.py",
       "tests/test_fx_rounding_credit_ledger.py",
@@ -1798,10 +1799,10 @@
     ],
     "video": []
   },
-  "total_files": 1789,
-  "total_words": 2598314,
+  "total_files": 1790,
+  "total_words": 2598904,
   "needs_graph": true,
-  "warning": "Large corpus: 1789 files · ~2,598,314 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1790 files · ~2,598,904 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1822,7 +1823,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "654deaa43255512d27a0aec11fbd95a6a6ff623e",
+    "source_hash": "37011c3ebe11a7fabd0218a46dbcc2d3b45dedd4",
     "branches": [
       "codex/fix-pilot-reconciled",
       "codex/render-quota-closure-20261104",
@@ -1843,9 +1844,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "654deaa43255512d27a0aec11fbd95a6a6ff623e",
+    "head": "37011c3ebe11a7fabd0218a46dbcc2d3b45dedd4",
     "candidate_count": null,
-    "included_count": 1789,
+    "included_count": 1790,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 15,

@@ -26,6 +26,7 @@ from app.services.fx_service import (
     quote_is_fresh,
 )
 from app.services.fx_rate_cache_service import (
+    FRESH_FX_CACHE_AGE,
     MAX_FX_CACHE_AGE,
     get_fx_rate_cache_quote,
     store_supported_fx_rates,
@@ -531,40 +532,47 @@ def _resolve_conversion_quote(
 ) -> dict:
     selected_type = market if currency == "USD" else f"{currency.lower()}_{market}"
     expected_market = market if currency == "USD" or market == "oficial" else "blue_derivado"
-    # A conversion always checks DolarAPI. A recent stored observation may be
-    # reused only after a failed/invalid provider response, and then only for
-    # the explicit 24-hour outage window.
-    quote = None
-    provider_quote = get_conversion_quote_sync(currency, market)
-    if isinstance(provider_quote, dict):
-        candidate = dict(provider_quote)
-        observed_at = parse_provider_updated_at(candidate.get("_observed_at"))
-        if observed_at is None:
-            # The adapter stamps real responses; this also keeps alternate
-            # adapters and deterministic test doubles on the same contract.
-            observed_at = datetime.now(timezone.utc)
-            candidate["_observed_at"] = observed_at.isoformat()
-        if (
-            quote_is_fresh(candidate, now=observed_at)
-            and str(candidate.get("casa") or "").strip().lower() == expected_market
-        ):
-            quote = candidate
-            quote["_quote_source"] = "live_api"
-            quote["_cache_fallback"] = False
-            cache_rates = get_cached_supported_rates()
-            if currency == "USD":
-                rate_key = market
-            elif market == "oficial":
-                rate_key = currency.lower()
-            else:
-                rate_key = f"{currency.lower()}_blue"
-            cache_rates[rate_key] = quote
-            store_supported_fx_rates(
-                db,
-                cache_rates,
-                cache_source="on_demand",
-                observed_at=observed_at,
-            )
+    # Reuse the shared PostgreSQL quote while it is inside DolarAPI's
+    # recommended three-hour refresh interval. This keeps reservation
+    # estimates and payment previews fast across users and app workers.
+    quote = get_fx_rate_cache_quote(
+        db,
+        currency=currency,
+        market=market,
+        max_age=FRESH_FX_CACHE_AGE,
+        fallback_used=False,
+    )
+    if quote is None:
+        provider_quote = get_conversion_quote_sync(currency, market)
+        if isinstance(provider_quote, dict):
+            candidate = dict(provider_quote)
+            observed_at = parse_provider_updated_at(candidate.get("_observed_at"))
+            if observed_at is None:
+                # The adapter stamps real responses; this also keeps alternate
+                # adapters and deterministic test doubles on the same contract.
+                observed_at = datetime.now(timezone.utc)
+                candidate["_observed_at"] = observed_at.isoformat()
+            if (
+                quote_is_fresh(candidate, now=observed_at)
+                and str(candidate.get("casa") or "").strip().lower() == expected_market
+            ):
+                quote = candidate
+                quote["_quote_source"] = "live_api"
+                quote["_cache_fallback"] = False
+                cache_rates = get_cached_supported_rates()
+                if currency == "USD":
+                    rate_key = market
+                elif market == "oficial":
+                    rate_key = currency.lower()
+                else:
+                    rate_key = f"{currency.lower()}_blue"
+                cache_rates[rate_key] = quote
+                store_supported_fx_rates(
+                    db,
+                    cache_rates,
+                    cache_source="on_demand",
+                    observed_at=observed_at,
+                )
     if quote is None:
         quote = get_fx_rate_cache_quote(
             db,

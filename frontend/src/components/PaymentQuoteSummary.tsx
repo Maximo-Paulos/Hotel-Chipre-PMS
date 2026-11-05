@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 
 import type { PaymentSurchargeQuote } from "../api/paymentSurcharges";
-import { formatMoney } from "../utils/currency";
+import { formatFxRate, formatMoney } from "../utils/currency";
 
 type PaymentQuoteSummaryProps = {
   quote: PaymentSurchargeQuote;
@@ -17,28 +17,20 @@ const detailLabel = (details: Record<string, unknown> | null): string | null => 
   return null;
 };
 
-const formatRate = (rate: number) => rate.toLocaleString(undefined, {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: rate >= 1 ? 2 : 6
-});
-
-const usdAnchoredRate = (
-  fromCurrency: string,
-  toCurrency: string,
-  unitsPerFrom: number
-): { fromCurrency: string; toCurrency: string; rate: number } => {
-  if (fromCurrency === "USD") return { fromCurrency, toCurrency, rate: unitsPerFrom };
-  if (toCurrency === "USD") return { fromCurrency: toCurrency, toCurrency: fromCurrency, rate: 1 / unitsPerFrom };
-  return { fromCurrency, toCurrency, rate: unitsPerFrom };
-};
-
 export function PaymentQuoteSummary({ quote, showCashSuggestion = false }: PaymentQuoteSummaryProps) {
-  const { t } = useTranslation("reservations");
+  const { t, i18n } = useTranslation("reservations");
   const currency = quote.currency_code.toUpperCase();
   const reservationCurrency = quote.reservation_currency_code.toUpperCase();
   const fxRate = quote.fx_rate_snapshot == null ? null : Number(quote.fx_rate_snapshot);
   const cashChangeCurrency = quote.cash_change_currency_code?.toUpperCase() ?? reservationCurrency;
   const cashChangeFxRate = quote.cash_change_fx_rate == null ? null : Number(quote.cash_change_fx_rate);
+  const fxRateLabel = currency !== reservationCurrency && fxRate !== null
+    ? formatFxRate(reservationCurrency, currency, fxRate, i18n.language)
+    : null;
+  const cashChangeFxRateLabel = currency !== cashChangeCurrency &&
+    cashChangeFxRate !== null && cashChangeFxRate > 0
+    ? formatFxRate(currency, cashChangeCurrency, cashChangeFxRate, i18n.language)
+    : null;
   const suggestion = quote.cash_tender_suggestion === null ? null : Number(quote.cash_tender_suggestion);
   const hasCashSuggestion = showCashSuggestion && suggestion !== null &&
     Math.abs(suggestion - Number(quote.final_amount)) >= 0.005;
@@ -81,30 +73,18 @@ export function PaymentQuoteSummary({ quote, showCashSuggestion = false }: Payme
           <dd>{formatMoney(quote.remaining_balance, reservationCurrency)}</dd>
         </div>
       </dl>
-      {currency !== reservationCurrency && fxRate !== null && Number.isFinite(fxRate) ? (
+      {fxRateLabel ? (
         <p className="mt-1" data-testid="payment-quote-fx-rate">
-          {(() => {
-            const rate = usdAnchoredRate(reservationCurrency, currency, fxRate);
-            return t("page.form.paymentQuoteFxRate", {
-              fromCurrency: rate.fromCurrency,
-              rate: formatRate(rate.rate),
-              toCurrency: rate.toCurrency
-            });
-          })()}
+          {t("page.form.paymentQuoteFxRate", {
+            rate: fxRateLabel
+          })}
           {fxSource ? ` · ${fxSource}` : ""}
         </p>
       ) : null}
       {quote.payment_method === "cash" && currency !== cashChangeCurrency ? (
-        cashChangeFxRate !== null && Number.isFinite(cashChangeFxRate) && cashChangeFxRate > 0 ? (
+        cashChangeFxRateLabel ? (
           <p className="mt-1" data-testid="payment-quote-cash-change-rate">
-            {(() => {
-              const rate = usdAnchoredRate(currency, cashChangeCurrency, cashChangeFxRate);
-              return t("page.form.paymentQuoteCashChangeFxRate", {
-                fromCurrency: rate.fromCurrency,
-                rate: formatRate(rate.rate),
-                toCurrency: rate.toCurrency
-              });
-            })()}
+            {t("page.form.paymentQuoteCashChangeFxRate", { rate: cashChangeFxRateLabel })}
           </p>
         ) : (
           <p className="mt-1 text-amber-900" role="status" data-testid="payment-quote-cash-change-unavailable">
