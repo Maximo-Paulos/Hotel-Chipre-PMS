@@ -53,11 +53,13 @@ export type AuthResponsePayload = {
 export class ApiError extends Error {
   status: number;
   payload: unknown;
+  retryAfterMs: number | null;
 
-  constructor(status: number, message: string, payload?: unknown) {
+  constructor(status: number, message: string, payload?: unknown, retryAfterMs: number | null = null) {
     super(message);
     this.status = status;
     this.payload = payload;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
@@ -494,7 +496,16 @@ const makeApiError = (response: Response, payload: unknown) => {
       ? (payload as Record<string, unknown>).detail
       : undefined;
   const message = formatErrorDetail(detail) || requestFailureFallback();
-  return new ApiError(response.status, message, payload);
+  const retryAfter = response.headers.get("Retry-After")?.trim();
+  const retryAfterSeconds = retryAfter && /^\d+(?:\.\d+)?$/.test(retryAfter) ? Number(retryAfter) : null;
+  const retryAfterDateMs = retryAfterSeconds === null && retryAfter ? Date.parse(retryAfter) - Date.now() : null;
+  const requestedDelayMs = retryAfterSeconds !== null
+    ? retryAfterSeconds * 1000
+    : retryAfterDateMs;
+  const retryAfterMs = requestedDelayMs === null || !Number.isFinite(requestedDelayMs)
+    ? null
+    : Math.min(30_000, Math.max(0, Math.ceil(requestedDelayMs)));
+  return new ApiError(response.status, message, payload, retryAfterMs);
 };
 
 const requestFailureFallback = () => {

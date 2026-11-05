@@ -71,3 +71,29 @@ test("apiFetch forwards caller cancellation without converting it into a timeout
 
   await assert.rejects(request, (error) => error.name === "AbortError");
 });
+
+test("API errors preserve a bounded Retry-After delay for transient query retries", async () => {
+  const client = loadClient(async () => new Response(JSON.stringify({ detail: "Servidor ocupado" }), {
+    status: 503,
+    headers: { "Content-Type": "application/json", "Retry-After": "5" }
+  }));
+
+  await assert.rejects(
+    client.apiFetch("/api/reservations"),
+    (error) => error.status === 503 && error.retryAfterMs === 5_000
+  );
+});
+
+test("API errors cap long Retry-After values and parse standard HTTP dates", async () => {
+  const cappedClient = loadClient(async () => new Response("{}", {
+    status: 503,
+    headers: { "Retry-After": "3600" }
+  }));
+  await assert.rejects(cappedClient.apiFetch("/api/reservations"), (error) => error.retryAfterMs === 30_000);
+
+  const dateClient = loadClient(async () => new Response("{}", {
+    status: 503,
+    headers: { "Retry-After": new Date(Date.now() + 60_000).toUTCString() }
+  }));
+  await assert.rejects(dateClient.apiFetch("/api/reservations"), (error) => error.retryAfterMs === 30_000);
+});

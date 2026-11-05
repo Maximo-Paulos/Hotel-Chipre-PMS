@@ -93,7 +93,10 @@ export function useReservations(filters: ReservationFilters) {
     enabled: hasValidSession(session) && searchFilterReady,
     placeholderData: keepPreviousData,
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
-    retry: false
+    // A pool-exhaustion 503 is transient and safe to repeat for this read.
+    // Honor the server's Retry-After header, but retry at most once.
+    retry: (failureCount, error) => error instanceof ApiError && error.status === 503 && failureCount < 1,
+    retryDelay: (_failureCount, error) => error instanceof ApiError ? error.retryAfterMs ?? 1000 : 1000
   });
 }
 
