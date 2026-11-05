@@ -24,6 +24,10 @@ from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.allocation_policy_service import record_manual_override_feedback
 from app.services.allocation_runtime_service import run_persisted_allocation
+from app.services.distributed_lock import (
+    DistributedLockBusy,
+    DistributedLockUnavailable,
+)
 
 GEMMA_DEFER_REASON = "Gemma validation is deferred until the final IA configuration phase."
 
@@ -67,6 +71,57 @@ def _cleanup_client(db, engine):
     fastapi_app.dependency_overrides.clear()
     db.close()
     engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("lock_error", "expected_status", "expected_retry_after"),
+    [
+        (DistributedLockBusy("busy"), 409, None),
+        (DistributedLockUnavailable("offline"), 503, "5"),
+    ],
+)
+def test_manual_allocation_returns_retryable_lock_error_without_database(
+    monkeypatch, lock_error, expected_status, expected_retry_after
+):
+    class FakeSession:
+        def __init__(self):
+            self.rollback_count = 0
+
+        def rollback(self):
+            self.rollback_count += 1
+
+    db = FakeSession()
+
+    def override_db():
+        yield db
+
+    fastapi_app.dependency_overrides[get_db] = override_db
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+    monkeypatch.setattr(
+        "app.dependencies.auth.authorize_permission",
+        lambda request, db, context, permission: context,
+    )
+
+    def raise_lock_error(*args, **kwargs):
+        raise lock_error
+
+    monkeypatch.setattr(
+        "app.api.reservations.run_persisted_allocation",
+        raise_lock_error,
+    )
+
+    try:
+        response = TestClient(fastapi_app).post(
+            "/api/reservations/allocation/recalculate",
+            json={"apply": True},
+        )
+
+        assert response.status_code == expected_status, response.text
+        assert response.json()["detail"]
+        assert response.headers.get("retry-after") == expected_retry_after
+        assert db.rollback_count == 1
+    finally:
+        fastapi_app.dependency_overrides.clear()
 
 
 def test_allocation_policy_api_exposes_active_policy_and_versions():

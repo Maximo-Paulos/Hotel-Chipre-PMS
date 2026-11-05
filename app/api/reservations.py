@@ -128,6 +128,10 @@ from app.services.allocation_runtime_service import (
     reservation_overlaps_default_horizon,
     run_persisted_allocation,
 )
+from app.services.distributed_lock import (
+    DistributedLockBusy,
+    DistributedLockUnavailable,
+)
 from app.services.allocation_trigger_service import (
     trigger_reoptimization_bg as _coalesced_reoptimization_bg,
 )
@@ -2370,6 +2374,19 @@ def recalculate_allocation(
         raise HTTPException(
             status_code=409,
             detail="La reserva o la disponibilidad cambió durante el cálculo. Volvé a ejecutar la asignación.",
+        ) from exc
+    except DistributedLockBusy as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Ya hay un cálculo de asignación en curso. Esperá a que termine y volvé a intentar.",
+        ) from exc
+    except DistributedLockUnavailable as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudo confirmar que la asignación sea exclusiva. Reintentá en unos segundos.",
+            headers={"Retry-After": "5"},
         ) from exc
     db.commit()
     return AllocationRunResponse(
