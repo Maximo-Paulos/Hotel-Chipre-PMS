@@ -2768,28 +2768,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1793857460755.5808,
-    "hash": "c2562822bf608640bcc15488d7001730"
+    "mtime": 1793857628373.6992,
+    "hash": "ee9bc2f1e62f9d002e323036e3a124a0"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1793857459959.0947,
-    "hash": "7022921ddcb37455ae28fa6682ebb927"
+    "mtime": 1793857627595.9185,
+    "hash": "d1f58400796a78f675f5ebc7fd088397"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1793857460744.6702,
-    "hash": "0ce29e55f89dbcd1d97f3bf41e738771"
+    "mtime": 1793857628362.9465,
+    "hash": "f8d3142924d06be21edef5d456dc17f7"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1793857459970.9226,
-    "hash": "d98e0c9023b80bc92546319bc02b87e0"
+    "mtime": 1793857627608.1284,
+    "hash": "548440ce1f4db0812f436d2e17678c8f"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1793857460733.147,
-    "hash": "046ec0adb7d61113916bff6d65a9596a"
+    "mtime": 1793857628350.7146,
+    "hash": "387ee69c175f4a2283eddaaa229978b5"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1793857460146.0115,
-    "hash": "406d70403efc75200cf04ce5190fd795"
+    "mtime": 1793857627787.6301,
+    "hash": "1b2400738c4666ee7cf3a1a03675b0e2"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
