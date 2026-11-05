@@ -1,8 +1,18 @@
-# WhatsApp CRM W0/W1
+# Diseño futuro: WhatsApp CRM W0/W1
 
-La primera entrega de WhatsApp separa el CRM humano del bot público legado y de los dominios de pagos e IA.
+## Estado del piloto
 
-## Alcance entregado
+WhatsApp queda fuera del piloto y se presenta como **Próximamente**. Los routers del bot público,
+CRM y webhook de Meta no se montan en la aplicación; sus rutas no están registradas. Las solicitudes
+reciben 404 o 405 del manejador genérico según el método HTTP. La interfaz de conexiones y las rutas
+del CRM muestran solo este estado, sin pedir IDs ni registrar credenciales.
+La emisión de nuevas API keys `whatsapp_bot` también está bloqueada. El código de desarrollo y
+este diseño se conservan para una habilitación futura, pero no forman parte de las funciones del
+piloto actual.
+
+El código conservado para desarrollo separa el CRM humano del bot público legado y de los dominios de pagos e IA. Esta implementación no está disponible durante el piloto.
+
+## Diseño técnico conservado
 
 - `whatsapp_channels`, `whatsapp_contacts`, `whatsapp_conversations`, `whatsapp_messages`, notas y eventos son tenant-scoped; usan claves compuestas hotel+entidad y políticas RLS en PostgreSQL.
 - `whatsapp_provider_routes` contiene únicamente IDs de Meta para resolver el hotel antes de establecer `app.hotel_id`; no contiene PII y no se fuerza RLS en esa tabla de routing.

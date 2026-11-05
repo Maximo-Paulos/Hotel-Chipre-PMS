@@ -997,6 +997,7 @@
       "frontend/src/views/protected/StockPage.tsx",
       "frontend/src/views/protected/TaxPoliciesCard.tsx",
       "frontend/src/views/protected/WaitlistPage.tsx",
+      "frontend/src/views/protected/WhatsAppComingSoonPage.tsx",
       "frontend/src/views/protected/WhatsAppInboxPage.tsx",
       "frontend/src/views/protected/analytics/AnalyticsPages.tsx",
       "frontend/src/views/public/AcceptInvitationPage.tsx",
@@ -1463,7 +1464,8 @@
       "tests/test_whatsapp_booking_service.py",
       "tests/test_whatsapp_crm.py",
       "tests/test_whatsapp_hooks_api.py",
-      "tests/test_whatsapp_meta_webhook.py"
+      "tests/test_whatsapp_meta_webhook.py",
+      "tests/test_whatsapp_pilot_disabled.py"
     ],
     "document": [
       "AGENTS.md",
@@ -1799,10 +1801,10 @@
     ],
     "video": []
   },
-  "total_files": 1790,
-  "total_words": 2599477,
+  "total_files": 1792,
+  "total_words": 2598761,
   "needs_graph": true,
-  "warning": "Large corpus: 1790 files · ~2,599,477 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1792 files · ~2,598,761 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1823,12 +1825,13 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "60fea8cb82063e0ee3648aeb2309f9e2e5300999",
+    "source_hash": "edc799f24a774651f92d6f5dcdbf291f933c4b60",
     "branches": [
       "codex/fix-pilot-reconciled",
       "codex/render-quota-closure-20261104",
       "feature/revenue-allocation-engines",
       "feature/whatsapp-proximamente",
+      "fix/disable-whatsapp-pilot",
       "fix/occupancy-grid-client-version",
       "fix/pilot-readiness-fx-snapshot",
       "fix/qa-allocation-tariff-20261027",
@@ -1844,9 +1847,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "60fea8cb82063e0ee3648aeb2309f9e2e5300999",
+    "head": "edc799f24a774651f92d6f5dcdbf291f933c4b60",
     "candidate_count": null,
-    "included_count": 1790,
+    "included_count": 1792,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 15,

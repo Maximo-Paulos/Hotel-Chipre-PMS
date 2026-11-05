@@ -36,6 +36,8 @@ def issue_key(
     clean_name = (name or "").strip()
     if not clean_name:
         raise HotelAPIKeyError("El nombre de la clave es obligatorio")
+    if purpose == APIKeyPurposeEnum.WHATSAPP_BOT:
+        raise HotelAPIKeyError("La integración de WhatsApp está en desarrollo y todavía no admite claves API")
 
     secret = _generate_secret()
     key = HotelAPIKey(
