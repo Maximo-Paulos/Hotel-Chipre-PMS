@@ -1,12 +1,12 @@
 # Resumen Graphify
 
-Generado: 2026-11-05T08:20:32.056421+00:00
-Commit: `f18f6a9bafaa13e03209a3e7aab2b28ff0dd6bb1`
+Generado: 2026-11-05T10:04:46.630776+00:00
+Commit: `60fea8cb82063e0ee3648aeb2309f9e2e5300999`
 
 `graphify summary .graphify/graph.json`:
 ```text
 Graphify First-Hop Summary
-Graph: 18856 nodes, 78752 edges, 802 communities, density 0.0004, average degree 8.353, undirected
+Graph: 18860 nodes, 78776 edges, 787 communities, density 0.0004, average degree 8.3538, undirected
 
 Top hubs:
   1. Reservation (degree 1616, community 3 Community 3, app/models/reservation.py)
@@ -16,7 +16,7 @@ Top hubs:
   5. RoomCategory (degree 984, community 1 Community 1, app/models/room.py)
 
 Key communities:
-  1. Community 0 - Community 0: 653 nodes, 1068 internal edges, density 0.005; top nodes: d908400 Merge pull request #107 from Maximo-Paulos/fix/hotel-sim-day0-day1, database.py, bf4a21f Fix day 0 and day 1 hotel simulation findings
+  1. Community 0 - Community 0: 667 nodes, 1100 internal edges, density 0.005; top nodes: d908400 Merge pull request #107 from Maximo-Paulos/fix/hotel-sim-day0-day1, database.py, bf4a21f Fix day 0 and day 1 hotel simulation findings
   2. Community 1 - Community 1: 467 nodes, 3902 internal edges, density 0.0359; top nodes: HotelConfiguration, RoomCategory, Company
   3. Community 2 - Community 2: 450 nodes, 3455 internal edges, density 0.0342; top nodes: ReservationSourceEnum, TransactionTypeEnum, Transaction
   4. Community 3 - Community 3: 435 nodes, 2303 internal edges, density 0.0244; top nodes: Reservation, ReservationStatusEnum, Room

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Response } from "@playwright/test";
 
 import { completeStepUpPrompt, loginAsStepUpOwner } from "./support/step-up-owner";
 
@@ -48,37 +48,54 @@ async function login(page: Page) {
 }
 
 async function ensureCashSessionOpen(page: Page, currencyCode = "ARS") {
-  const sessionsResponsePromise = page.waitForResponse(
-    (response) => response.url().includes("/api/cash-register/sessions") && response.request().method() === "GET"
-  );
-  await page.goto("/caja");
-  const sessionsResponse = await sessionsResponsePromise;
-  const sessions = await sessionsResponse.json() as Array<{ status?: string; currency_code?: string }>;
-  const hasOpenDefaultCurrencySession = sessions.some(
-    (session) => session.status === "open" && session.currency_code?.toUpperCase() === currencyCode
-  );
-  const openingForm = page
-    .locator("form")
-    .filter({ hasText: localizedText("Saldo inicial", "Opening balance") })
-    .filter({ hasText: localizedText("Abrir caja", "Open cash register") });
-  await openingForm
-    .locator("label")
-    .filter({ hasText: localizedText("Moneda", "Currency") })
-    .locator("select")
-    .selectOption(currencyCode);
-  const openButton = openingForm.getByRole("button", { name: localizedName("Abrir caja", "Open cash register") });
-  if (hasOpenDefaultCurrencySession) {
-    // The response promise resolves before React commits the updated session
-    // state. Wait for the disabled label instead of clicking the optimistic
-    // "Abrir caja" button during that brief render window.
-    await expect(
-      openingForm.getByRole("button", { name: localizedName("Ya hay una caja abierta", "Cash register already open") })
-    ).toBeDisabled();
-  } else {
-    await expect(openButton).toBeEnabled();
-    await openingForm.getByText(localizedName("Saldo inicial", "Opening balance")).locator("..").locator("input").fill("0");
-    await openButton.click();
-    await expect(page.getByText(localizedName("Caja abierta.", "Cash register opened."))).toBeVisible();
+  const completedCashGetPaths = new Set<string>();
+  const recordCashGetResponse = (response: Response) => {
+    if (response.request().method() !== "GET") return;
+    const url = new URL(response.url());
+    if (url.pathname.startsWith("/api/cash-register/")) {
+      completedCashGetPaths.add(`${url.pathname}${url.search}`);
+    }
+  };
+  page.on("response", recordCashGetResponse);
+  try {
+    await page.goto("/caja");
+    await expect.poll(() => [...completedCashGetPaths].some((path) => {
+      const pathname = path.split("?", 1)[0];
+      return pathname === "/api/cash-register/sessions";
+    })).toBe(true);
+    await expect.poll(() => completedCashGetPaths.has("/api/cash-register/close-reports/pending")).toBe(true);
+
+    const openingForm = page
+      .locator("form")
+      .filter({ hasText: localizedText("Saldo inicial", "Opening balance") })
+      .filter({ hasText: localizedText("Abrir caja", "Open cash register") });
+    const currencySelect = openingForm
+      .locator("label")
+      .filter({ hasText: localizedText("Moneda", "Currency") })
+      .locator("select");
+    const latestReportPath = `/api/cash-register/close-reports/latest?currency=${encodeURIComponent(currencyCode)}`;
+    await currencySelect.selectOption(currencyCode);
+    await expect.poll(() => completedCashGetPaths.has(latestReportPath)).toBe(true);
+
+    const openButton = openingForm.getByRole("button", { name: localizedName("Abrir caja", "Open cash register") });
+    const alreadyOpenButton = openingForm.getByRole("button", {
+      name: localizedName("Ya hay una caja abierta", "Cash register already open")
+    });
+    await expect.poll(async () => {
+      if (await alreadyOpenButton.isVisible()) return "already-open";
+      if (await openButton.isEnabled()) return "openable";
+      return "loading";
+    }).not.toBe("loading");
+    if (await alreadyOpenButton.isVisible()) {
+      await expect(alreadyOpenButton).toBeDisabled();
+    } else {
+      await expect(openButton).toBeEnabled();
+      await openingForm.getByText(localizedName("Saldo inicial", "Opening balance")).locator("..").locator("input").fill("0");
+      await openButton.click();
+      await expect(page.getByText(localizedName("Caja abierta.", "Cash register opened."))).toBeVisible();
+    }
+  } finally {
+    page.off("response", recordCashGetResponse);
   }
 }
 

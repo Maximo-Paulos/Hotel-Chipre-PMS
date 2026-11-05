@@ -2204,8 +2204,8 @@
     "hash": "c5cf55fd0b730c5179d460b18d33654e"
   },
   ".github/workflows/pr-validation.yml": {
-    "mtime": 1793853200006.0242,
-    "hash": "5455d875dead82586b2fbeb697ab5761"
+    "mtime": 1793860409615.091,
+    "hash": "78c740d5c45369649528ed5c4f6824a4"
   },
   "AGENTS.md": {
     "mtime": 1793285707517.314,
@@ -2768,28 +2768,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1793865133153.9924,
-    "hash": "b84a88e68a90d8b9c0ad65b460b4e03e"
+    "mtime": 1793866832099.3564,
+    "hash": "5be5cb260cd021e50fc16757929b690f"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1793865132340.5837,
-    "hash": "593d68b245292c6e65d0a2371b3afbf6"
+    "mtime": 1793866831199.8235,
+    "hash": "da2a3576024a91f1a216af4df2c707e7"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1793865133142.8567,
-    "hash": "7fc39ca699fd612f2bd072c4b46230eb"
+    "mtime": 1793866832085.7336,
+    "hash": "d39a160fa23a0b29fdb47654ee348150"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1793865132352.5125,
-    "hash": "cfd9deab2985b5f0b8efa651bf3b2caf"
+    "mtime": 1793866831214.486,
+    "hash": "b0fc16d5950e4f3f4de7768d75476653"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1793865133130.8875,
-    "hash": "fcab1e804ca249ceace86ff824b5e9f1"
+    "mtime": 1793866832071.3674,
+    "hash": "42e4b134cd0074507e4595a9ce4f6c40"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1793865132534.043,
-    "hash": "7ca30900591e105cc61ce02e7eb49470"
+    "mtime": 1793866831419.7107,
+    "hash": "961c4a90c8b953dda752f0168b56ffef"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -3232,8 +3232,8 @@
     "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1793849919449.4824,
-    "hash": "e041360ed99c0decd146b1ed10cb3a81"
+    "mtime": 1793871167804.7065,
+    "hash": "0b98a39476fb1e2d1b720b1c3f00c929"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784517879747.6167,
@@ -3600,8 +3600,8 @@
     "hash": "e2d0560e6f954b5f3f2b69bb1edd7bf6"
   },
   "frontend/e2e/payment-journey-full-matrix.spec.ts": {
-    "mtime": 1793863941888.5935,
-    "hash": "067af17737d55708403fe5a44221f184"
+    "mtime": 1793872784899.8174,
+    "hash": "8071f9a9ed055f8f4c370cee7315e7b9"
   },
   "tests/test_mercadopago_webhook_endpoint.py": {
     "mtime": 1792817817273.407,
