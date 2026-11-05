@@ -13,6 +13,7 @@ from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import RoomCategory
 from app.models.transaction import PaymentMethodEnum, TransactionTypeEnum
+from app.models.cash_register import CashMovementTypeEnum, CashSession
 from app.schemas.transaction import PaymentGatewayResponse, PaymentRequest
 from app.services import payment_service as payment_service_module
 from app.services.cash_register_service import CashMovement, open_session
@@ -133,6 +134,7 @@ def test_postgres_exact_fx_cash_over_tender_records_change_or_tip_without_credit
         id=hotel_id,
         hotel_name=f"Synthetic exact cash FX {suffix}",
         subscription_active=True,
+        default_currency="ARS",
         fx_rounding_policy="exact",
     )
     category = RoomCategory(
@@ -170,6 +172,13 @@ def test_postgres_exact_fx_cash_over_tender_records_change_or_tip_without_credit
         opening_balance=Decimal("0.00"),
         currency_code="USD",
     )
+    open_session(
+        pg_session,
+        hotel_id=hotel_id,
+        opened_by_user_id=None,
+        opening_balance=Decimal("0.00"),
+        currency_code="ARS",
+    )
 
     def quote(_db, *, amount, **_kwargs):
         return amount * 1500.0, 1500.0, {
@@ -203,7 +212,11 @@ def test_postgres_exact_fx_cash_over_tender_records_change_or_tip_without_credit
         idempotency_key=idempotency_key,
         apply_surcharge=False,
     )
-    movement = pg_session.query(CashMovement).filter_by(transaction_id=transaction.id).one()
+    movements = pg_session.query(CashMovement).filter_by(transaction_id=transaction.id).all()
+    usd_session = pg_session.query(CashSession).filter_by(hotel_id=hotel_id, currency_code="USD").one()
+    ars_session = pg_session.query(CashSession).filter_by(hotel_id=hotel_id, currency_code="ARS").one()
+    usd_movement = next(movement for movement in movements if movement.session_id == usd_session.id)
+    ars_movements = [movement for movement in movements if movement.session_id == ars_session.id]
     summary = get_reservation_financial_summary(pg_session, hotel_id, reservation.id)
 
     assert transaction.tender_amount == Decimal("56.40")
@@ -211,9 +224,19 @@ def test_postgres_exact_fx_cash_over_tender_records_change_or_tip_without_credit
     assert transaction.gross_amount == Decimal("56.40")
     assert transaction.cash_received_amount == Decimal("57.00")
     assert transaction.cash_change_amount == Decimal(expected_change)
+    assert transaction.cash_change_settled_currency == "ARS"
+    assert transaction.cash_change_settled_amount == Decimal(expected_change) * Decimal("1500.00")
     assert transaction.cash_tip_amount == Decimal(tip_amount)
     assert transaction.rounding_credit_amount == Decimal("0.00")
-    assert movement.amount == Decimal("56.40") + Decimal(tip_amount)
+    assert usd_movement.movement_type == CashMovementTypeEnum.INCOME
+    assert usd_movement.amount == Decimal("57.00")
+    if transaction.cash_change_settled_amount > Decimal("0.00"):
+        assert len(ars_movements) == 1
+        assert ars_movements[0].movement_type == CashMovementTypeEnum.EXPENSE
+        assert ars_movements[0].amount == transaction.cash_change_settled_amount
+    else:
+        assert ars_movements == []
+    assert len(movements) == (2 if transaction.cash_change_settled_amount > Decimal("0.00") else 1)
     assert reservation.amount_paid == Decimal("84600.00")
     assert replay.id == transaction.id
     assert summary["operational_balance_due"] == Decimal("0.00")

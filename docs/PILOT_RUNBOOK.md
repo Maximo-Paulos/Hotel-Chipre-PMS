@@ -54,8 +54,8 @@ npm run build
 
 1. Crear un hotel vacío y completar onboarding con Owner, Recepción y Gerencia sintéticos.
 2. Configurar categorías, habitaciones, moneda, tarifas, política de seña e impuestos antes de cotizar.
-3. Crear reservas manuales; validar asignación, búsqueda, edición y conflictos.
-4. Recorrer llegada, check-in parcial y completo, cambios de habitación permitidos, checkout y cierre de caja.
+3. Crear reservas manuales; confirmar que la reserva nueva recibe una habitación compatible y validar búsqueda, edición y conflictos.
+4. Revisar sugerencias de asignación: aprobar o rechazar cambios antes de mover reservas existentes. Las reservas con check-in no deben moverse. Después recorrer llegada, check-in parcial y completo, cambios manuales permitidos, checkout y cierre de caja.
 5. Probar cobros en efectivo, pagos mixtos, saldo, recibo y devoluciones simuladas. Mercado Pago no forma parte de esta fase local.
 6. Probar permisos con cada rol: Recepción no fija una cotización FX manual; una persona autorizada sí; Recepción puede cobrar el monto previamente aprobado sin modificarlo.
 7. Probar la caída de DolarAPI con respuestas simuladas: cotización actual, respaldo menor de 24 horas, respaldo vencido, monto manual autorizado y rechazo de una conversión automática sin respaldo.

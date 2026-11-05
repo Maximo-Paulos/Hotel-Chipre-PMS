@@ -74,6 +74,19 @@ def test_permanently_unavailable_push_is_terminal_on_postgres(
 
     monkeypatch.setattr(pa, "require_external_connections", _gate_external_connections)
 
+    # Other PostgreSQL integration tests can commit their own synthetic outbox
+    # rows into the session-scoped test database. Keep this case scoped to the
+    # row it seeded so aggregate worker counters remain deterministic.
+    for other_row in (
+        pg_session.query(NotificationOutbox)
+        .filter(
+            NotificationOutbox.status == NotificationOutboxStatusEnum.PENDING,
+            NotificationOutbox.id != row.id,
+        )
+        .all()
+    ):
+        other_row.next_retry_at = now + timedelta(minutes=5)
+
     counts = svc.process_pending_outbox(pg_session, now=now)
     pg_session.flush()
 

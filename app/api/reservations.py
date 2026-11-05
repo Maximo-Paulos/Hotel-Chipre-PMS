@@ -125,7 +125,6 @@ from app.services.financial_ledger import (
 )
 from app.services.allocation_runtime_service import (
     AllocationRuntimeError,
-    auto_apply_safe_allocation_run,
     reservation_overlaps_default_horizon,
     run_persisted_allocation,
 )
@@ -2366,10 +2365,6 @@ def recalculate_allocation(
             horizon_start=payload.horizon_start,
             horizon_end=payload.horizon_end,
         )
-        if payload.apply and result.solver_result.success:
-            auto_apply_safe_allocation_run(
-                db, hotel_id=context.hotel_id, run_id=result.run.id
-            )
     except AllocationRuntimeError as exc:
         db.rollback()
         raise HTTPException(

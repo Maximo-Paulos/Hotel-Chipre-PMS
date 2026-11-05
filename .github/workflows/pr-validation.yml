@@ -214,7 +214,29 @@ jobs:
       - name: Run E2E journeys
         env:
           E2E_PYTHON: python
-        run: npx playwright test --project=chromium --project=public-site --project=mobile-chromium --project=preview-host-routing
+        run: |
+          set -eu
+          cd ..
+          export APP_ENV=test
+          export DATABASE_URL="${E2E_DATABASE_URL}"
+          export REDIS_URL="redis://127.0.0.1:1/0"
+          export CELERY_BROKER_URL="memory://"
+          export CELERY_RESULT_BACKEND="cache+memory://"
+          export EMAIL_PROVIDER=null
+          export PAYPAL_MODE=sandbox
+          export AI_ENABLED=false
+          export AI_PROVIDER=disabled
+          export GEMMA_ENABLED=false
+          export GEMMA_PROVIDER=disabled
+          export GOOGLE_LOGIN_ENABLED=false
+          export APPLE_LOGIN_ENABLED=false
+          export NOTIFICATION_EMAIL_ENABLED=false
+          export EXTERNAL_EFFECTS_ENABLED=false
+          export CONNECTIONS_ENABLED=false
+          export INBOUND_PROVIDER_EVENTS_ENABLED=false
+          export DOLARAPI_RATES_ENABLED=true
+          cd frontend
+          npx playwright test --project=chromium --project=public-site --project=mobile-chromium --project=preview-host-routing
 
       - name: Upload Playwright report
         if: ${{ failure() }}

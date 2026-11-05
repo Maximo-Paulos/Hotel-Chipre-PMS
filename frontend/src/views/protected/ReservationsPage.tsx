@@ -287,6 +287,7 @@ export function ReservationsPage() {
   const [guestForm, setGuestForm] = useState<QuickGuestFormValues>(emptyQuickGuestForm);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentAmountInput, setPaymentAmountInput] = useState("");
+  const [paymentAmountSuggestionPending, setPaymentAmountSuggestionPending] = useState(false);
   const [cashReceivedAmountInput, setCashReceivedAmountInput] = useState("");
   const [cashTipAmountInput, setCashTipAmountInput] = useState("");
   const [paymentTenderCurrencyInput, setPaymentTenderCurrencyInput] = useState("");
@@ -367,7 +368,6 @@ export function ReservationsPage() {
   const [noShowNotes, setNoShowNotes] = useState("");
   const [guestIdOpen, setGuestIdOpen] = useState<number | null>(null);
   const [allocationForm, setAllocationForm] = useState({
-    apply: true,
     horizon_start: businessDate,
     horizon_end: ""
   });
@@ -614,7 +614,28 @@ export function ReservationsPage() {
   const createManualFxPaymentQuoteMutation = useManualFxPaymentQuoteMutation().createMutation;
   useEffect(() => {
     setPaymentTenderCurrencyInput(paymentReservationCurrency);
+    setPaymentAmountSuggestionPending(false);
   }, [editing?.id, paymentReservationCurrency]);
+  useEffect(() => {
+    if (!paymentAmountSuggestionPending || !paymentQuoteEnabled || !fullPaymentQuote) return;
+    if (
+      fullPaymentQuote.currency_code.toUpperCase() !== paymentTenderCurrency ||
+      fullPaymentQuote.reservation_currency_code.toUpperCase() !== paymentReservationCurrency
+    ) {
+      return;
+    }
+    const suggestedAmount = Number(fullPaymentQuote.base_amount);
+    if (!Number.isFinite(suggestedAmount) || suggestedAmount <= 0) return;
+
+    setPaymentAmountInput(suggestedAmount.toFixed(2));
+    setPaymentAmountSuggestionPending(false);
+  }, [
+    fullPaymentQuote,
+    paymentAmountSuggestionPending,
+    paymentQuoteEnabled,
+    paymentReservationCurrency,
+    paymentTenderCurrency
+  ]);
   useEffect(() => {
     setManualFxReservationAmountInput("");
     setManualFxReasonInput("");
@@ -793,7 +814,7 @@ export function ReservationsPage() {
     mutationFn: (payload) =>
       triggerAllocationRecalculation(
         {
-          apply: payload.apply,
+          apply: false,
           horizon_start: payload.horizon_start || null,
           horizon_end: payload.horizon_end || null
         },
@@ -1694,7 +1715,7 @@ export function ReservationsPage() {
 
     try {
       const run = await allocationRunMutation.mutateAsync(allocationForm);
-      showToast("success", t("page.messages.allocationRecalculated", { created: run.assignments_created, moved: run.moved_count }));
+      showToast("success", t("page.messages.allocationRecalculated", { moved: run.moved_count }));
     } catch (err: unknown) {
       setAllocationError(err instanceof Error ? err.message : t("page.errors.allocationFailed"));
     }
@@ -3790,7 +3811,7 @@ export function ReservationsPage() {
           </div>
         </div>
 
-        <div className="mt-3 grid gap-3 md:grid-cols-5">
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
           <LocalizedDateField
             id="allocation-horizon-from"
             label={t("page.common.from")}
@@ -3815,16 +3836,7 @@ export function ReservationsPage() {
             chooseDateLabel={t("page.dateInput.chooseDate")}
             invalidMessage={t("page.dateInput.invalidDate")}
           />
-          <label className="flex items-center gap-2 self-end rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
-            <input
-              type="checkbox"
-              checked={allocationForm.apply}
-              onChange={(e) => setAllocationForm((prev) => ({ ...prev, apply: e.target.checked }))}
-              className="h-4 w-4 rounded border-slate-300 text-brand-600"
-            />
-            {t("page.allocation.applyChanges")}
-          </label>
-          <div className="flex items-end md:col-span-2">
+          <div className="flex items-end">
             <button
               type="button"
               onClick={handleAllocationRun}
@@ -3846,25 +3858,31 @@ export function ReservationsPage() {
         )}
 
         {allocationRunMutation.data ? (
-          <div className="mt-3 grid gap-2 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900 sm:grid-cols-4">
+          <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
+            <div className="grid gap-2 sm:grid-cols-4">
             <div>
-              <p className="text-xs text-emerald-700">{t("page.allocation.run_id")}</p>
+              <p className="text-xs text-sky-800">{t("page.allocation.run_id")}</p>
               <p className="font-semibold">#{allocationRunMutation.data.run_id}</p>
             </div>
             <div>
-              <p className="text-xs text-emerald-700">{t("page.allocation.status")}</p>
+              <p className="text-xs text-sky-800">{t("page.allocation.status")}</p>
               <p className="font-semibold">{allocationRunMutation.data.status}</p>
             </div>
             <div>
-              <p className="text-xs text-emerald-700">{t("page.allocation.assigned")}</p>
+              <p className="text-xs text-sky-800">{t("page.allocation.assigned")}</p>
               <p className="font-semibold">{allocationRunMutation.data.assignments_created}</p>
             </div>
             <div>
-              <p className="text-xs text-emerald-700">{t("page.allocation.movedUnassigned")}</p>
+              <p className="text-xs text-sky-800">{t("page.allocation.movedUnassigned")}</p>
               <p className="font-semibold">
                 {allocationRunMutation.data.moved_count} / {allocationRunMutation.data.unassigned_count}
               </p>
             </div>
+            </div>
+            <p className="mt-2">{t("page.messages.allocationRecalculated", { moved: allocationRunMutation.data.moved_count })}</p>
+            <Link to="/operacion/asignacion" className="mt-2 inline-flex font-semibold text-brand-800 underline underline-offset-2">
+              {t("page.allocation.reviewProposals")}
+            </Link>
           </div>
         ) : null}
 
@@ -5129,6 +5147,7 @@ export function ReservationsPage() {
                         onChange={(event) => {
                           setPaymentTenderCurrencyInput(event.target.value);
                           setPaymentAmountInput("");
+                          setPaymentAmountSuggestionPending(true);
                           setCashReceivedAmountInput("");
                           setCashTipAmountInput("");
                         }}
@@ -5172,7 +5191,10 @@ export function ReservationsPage() {
                           min="0.01"
                           step="0.01"
                           value={paymentAmountInput}
-                          onChange={(event) => setPaymentAmountInput(event.target.value)}
+                          onChange={(event) => {
+                            setPaymentAmountInput(event.target.value);
+                            setPaymentAmountSuggestionPending(false);
+                          }}
                           aria-describedby="payment-fx-conversion-help"
                           placeholder={paymentMethod === "cash" && canRefundPayment
                             ? t("page.form.cashMovementAmountPlaceholder")

@@ -413,8 +413,8 @@ test("cross-currency payment quotes received tender into the reservation currenc
   await expect(quotePanel).toContainText("Cotización confirmada por el servidor");
   await expect(quotePanel).toContainText(/Tipo fijado: 1 USD = [\d.,]+ ARS/);
   await expect(editForm.getByTestId("payment-currency-hint")).toContainText("cotización");
-  await expect(editForm.getByTestId("payment-fx-suggested-amount")).toContainText("Monto sugerido para saldar el saldo completo:");
-  await expect(amountInput).toHaveValue("");
+  await expect(amountInput).toBeEditable();
+  await expect(amountInput).toHaveValue(Number(balanceQuote.base_amount).toFixed(2));
   expect(balanceQuote).toMatchObject({ currency_code: "USD", reservation_currency_code: "ARS" });
   expect(Number(balanceQuote.base_amount)).toBeGreaterThan(0);
   expect(Number(balanceQuote.fx_rate_snapshot)).toBeGreaterThan(0);
@@ -802,7 +802,7 @@ test("owner rejects a transfer proof with a reason and the proof cannot be appro
   const { editModal, editForm } = await openPaymentsPanel(reservationRow, page);
 
   await editForm.locator("label").filter({ hasText: localizedText("Medio de pago", "Payment method") }).locator("select").selectOption("bank_transfer");
-  await editForm.getByLabel(localizedName("Monto a cobrar", "Amount to collect")).fill("60");
+  await editForm.getByLabel(/^(?:Monto a cobrar|Amount to collect) \([A-Z]{3}\)$/i).fill("60");
   await editForm.getByLabel(localizedName("Imagen del comprobante", "Proof image")).setInputFiles({
     name: "comprobante-reject.png",
     mimeType: "image/png",

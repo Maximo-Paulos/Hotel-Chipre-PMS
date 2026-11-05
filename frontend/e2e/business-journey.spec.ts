@@ -169,7 +169,9 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   const editModal = page.locator("div.fixed").filter({ hasText: "Pagos y balance" });
   const editForm = editModal.locator("form").filter({ hasText: "Pagos y balance" });
   await expect(editForm.getByText("Resumen financiero y acciones rápidas.", { exact: true })).toBeVisible();
-  const partialAmount = editForm.getByLabel(/^(Monto a cobrar|Monto del movimiento)$/);
+  const partialAmount = editForm.getByLabel(
+    /^(Monto a cobrar|Monto del movimiento)( \([A-Z]{3}\))?$/
+  );
   await expect(partialAmount).toBeVisible();
   await expect(editForm.getByTestId("payment-partial-hint")).toContainText(
     "Cualquier importe positivo cuyo equivalente sea menor que el saldo se acepta como cobro parcial"

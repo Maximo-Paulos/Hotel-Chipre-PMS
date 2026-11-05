@@ -78,14 +78,14 @@ export function AllocationProposalReview({
   const assignmentsToApplyCount = proposed.length - lockedMovePreservedCount;
   const reviewable = proposed.length > 0;
   const canAccept = run?.status.toLowerCase() === "succeeded";
-  const automaticRunComplete = Boolean(
+  const proposalRunReadyForReview = Boolean(
     run &&
     run.status.toLowerCase() === "succeeded" &&
     automaticAllocationTriggers.has(run.trigger_type)
   );
-  const automaticMoveCount = run?.explanations.filter(
-    (explanation) => explanation.explanation_type === "proposal_auto_applied"
-  ).length ?? 0;
+  const proposedMoveCount = proposed.filter(
+    (assignment) => assignment.source_room_id !== assignment.room_id
+  ).length;
 
   useEffect(() => {
     setSelectedLockedMoveApprovals(new Set());
@@ -144,8 +144,8 @@ export function AllocationProposalReview({
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">{t("proposal.run", { id: run.run_id })}</span>
             <span className={`rounded-full px-3 py-1 font-semibold ${run.status.toLowerCase() === "succeeded" ? "bg-emerald-100 text-emerald-800" : run.status.toLowerCase() === "failed" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-900"}`}>
-              {automaticRunComplete
-                ? t("proposal.status.automaticComplete")
+              {proposalRunReadyForReview
+                ? t("proposal.status.readyForReview")
                 : t(`proposal.status.${run.status.toLowerCase()}`, { defaultValue: run.status })}
             </span>
             <time className="text-slate-500" dateTime={run.created_at}>{new Intl.DateTimeFormat(i18n.language === "en" ? "en-US" : "es-AR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(run.created_at))}</time>
@@ -153,11 +153,11 @@ export function AllocationProposalReview({
 
           {run.error_message ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">{run.error_message}</p> : null}
 
-          {automaticRunComplete ? (
-            <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
-              {automaticMoveCount > 0
-                ? t("proposal.automaticApplied", { count: automaticMoveCount })
-                : t("proposal.automaticNoChanges")}
+          {proposalRunReadyForReview ? (
+            <p className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950" role="status">
+              {proposedMoveCount > 0
+                ? t("proposal.suggestionsPendingReview", { count: proposedMoveCount })
+                : t("proposal.noSuggestedMoves")}
             </p>
           ) : null}
 
@@ -260,7 +260,7 @@ export function AllocationProposalReview({
               )}
               {!canAccept ? <p className="mt-2 text-xs text-slate-600">{t("proposal.acceptRequiresSuccess")}</p> : null}
             </div>
-          ) : !automaticRunComplete && run.status.toLowerCase() === "succeeded" && run.assignments.length > 0 ? (
+          ) : !proposalRunReadyForReview && run.status.toLowerCase() === "succeeded" && run.assignments.length > 0 ? (
             run.assignments.some((assignment) => assignment.status.toLowerCase() === "manual_review") ? (
               <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t("proposal.lockedMovesRemain")}</p>
             ) : (

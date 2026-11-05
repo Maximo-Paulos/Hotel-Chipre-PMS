@@ -94,9 +94,9 @@ def request_reservation_created_allocation(
     """Queue one hotel-scoped automatic optimization run for a new reservation.
 
     The request is a pending AllocationRun row in the reservation's transaction.
-    A periodic worker reoptimizes after commit and automatically applies only a
-    complete, revalidated plan for reservations without an explicit lock or
-    check-in. The first-fit assignment remains in place if optimization fails.
+    The scheduled PostgreSQL processor creates a reviewable proposal after
+    commit. First-fit assigns the new reservation immediately; suggestions that
+    move existing bookings require an authenticated operator's approval.
     """
     hotel_id = reservation.hotel_id
     if (
@@ -141,9 +141,9 @@ def trigger_reoptimization_bg(
 ) -> None:
     """Persist a coalesced request, then best-effort wake the Celery worker.
 
-    Call this only after the business transaction commits. The periodic worker
-    is the recovery path if the broker is unavailable; this function never runs
-    the CP-SAT solver and never changes a reservation assignment.
+    Call this only after the business transaction commits. The scheduled
+    PostgreSQL processor is the recovery path if no broker is configured; this
+    function never runs the CP-SAT solver or changes a reservation assignment.
     """
     from app.database import get_session_factory
     from app.services.tenant_context import set_tenant_hotel_context
@@ -188,6 +188,20 @@ def trigger_reoptimization_bg(
     finally:
         if db is not None:
             db.close()
+
+    from app.config import get_settings
+
+    runtime_settings = get_settings()
+    configured_fields = getattr(runtime_settings, "model_fields_set", set())
+    if (
+        not isinstance(configured_fields, (set, frozenset))
+        or "CELERY_BROKER_URL" not in configured_fields
+    ):
+        logger.debug(
+            "allocation_trigger.dispatch_skipped hotel_id=%s reason=broker_not_configured",
+            hotel_id,
+        )
+        return
 
     try:
         process_recalculation_requests.apply_async(

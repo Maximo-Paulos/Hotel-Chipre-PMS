@@ -1,5 +1,5 @@
 from contextlib import nullcontext
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -355,7 +355,10 @@ def test_company_night_charge_payment_path_uses_reservation_lock_target(monkeypa
 
 
 def test_lock_query_executes_on_postgres_with_joined_eager_loads(pg_session):
-    reservations = lock_query(pg_session.query(Reservation), Reservation).limit(1).all()
+    reservations = lock_query(
+        pg_session.query(Reservation).filter(Reservation.id == -1),
+        Reservation,
+    ).limit(1).all()
 
     assert reservations == []
 
@@ -462,7 +465,12 @@ def test_room_move_handler_executes_on_postgres_with_joined_reservation_relation
 
 def test_reservation_and_task_mutation_routes_execute_on_postgres_with_joined_relations(pg_session, monkeypatch):
     hotel_id = 902
-    hotel = HotelConfiguration(id=hotel_id, hotel_name="Synthetic PostgreSQL Row Lock Flows")
+    hotel = HotelConfiguration(
+        id=hotel_id,
+        hotel_name="Synthetic PostgreSQL Row Lock Flows",
+        check_in_time="15:00",
+        hotel_timezone="America/Argentina/Buenos_Aires",
+    )
     category = RoomCategory(
         hotel_id=hotel_id,
         name="PG Operations",
@@ -503,8 +511,8 @@ def test_reservation_and_task_mutation_routes_execute_on_postgres_with_joined_re
         guest_id=guest.id,
         room_id=room.id,
         category_id=category.id,
-        check_in_date=date(2026, 10, 1),
-        check_out_date=date(2026, 10, 3),
+        check_in_date=date.today() + timedelta(days=30),
+        check_out_date=date.today() + timedelta(days=32),
         total_amount=200,
         subtotal_amount=200,
         net_amount=200,
@@ -513,6 +521,14 @@ def test_reservation_and_task_mutation_routes_execute_on_postgres_with_joined_re
         currency_code="ARS",
         status=ReservationStatusEnum.PENDING,
         source=ReservationSourceEnum.DIRECT,
+        cancellation_policy_snapshot={
+            "schema_version": 1,
+            "source": "rate_plan",
+            "is_refundable": True,
+            "free_cancellation_hours": 48,
+            "penalty_type": "percentage",
+            "penalty_value": "50",
+        },
         num_adults=1,
         num_children=0,
     )
@@ -607,6 +623,7 @@ def test_reservation_and_task_mutation_routes_execute_on_postgres_with_joined_re
 
     cancel = client.post(f"/api/reservations/{reservation.id}/cancel")
     assert cancel.status_code == 200, cancel.text
+    assert cancel.json()["cancellation_outcome"] == "cancelled"
     pg_session.refresh(reservation)
     assert reservation.status == ReservationStatusEnum.CANCELLED
 

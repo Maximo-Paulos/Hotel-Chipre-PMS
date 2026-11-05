@@ -1995,7 +1995,7 @@
           "Rooms"
         ],
         "summary": "Trigger Reallocation",
-        "description": "Recalculate and automatically apply a complete, revalidated safe plan.",
+        "description": "Prepare a room-move proposal for an authenticated operator to review.",
         "operationId": "trigger_reallocation_api_rooms_reallocate_post",
         "parameters": [
           {

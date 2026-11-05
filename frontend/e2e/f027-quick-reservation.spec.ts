@@ -260,7 +260,7 @@ test.describe("F-027 reservation creation in English with an English browser loc
 test.describe("F-027 with an English browser locale", () => {
   test.use({ locale: "en-US" });
 
-  test("Spanish interface applies eligible moves by default and keeps preview explicit", async ({ page }) => {
+  test("Spanish interface keeps recalculated room changes pending for review", async ({ page }) => {
     const allocationRequests: Array<{ apply: boolean }> = [];
     const unexpectedDialogs: string[] = [];
     const dismissUnexpectedDialog = async (dialog: { message(): string; dismiss(): Promise<void> }) => {
@@ -296,16 +296,14 @@ test.describe("F-027 with an English browser locale", () => {
 
     const main = page.locator("main");
     await expect(main.getByRole("heading", { name: "Reservas", exact: true })).toBeVisible();
-    const applyChanges = main.getByRole("checkbox", { name: "Aplicar automáticamente movimientos seguros" });
     const recalculate = main.getByRole("button", { name: "Recalcular asignación", exact: true });
-    await expect(applyChanges).toBeChecked();
+    await expect(main.getByRole("checkbox", { name: /movimientos seguros/i })).toHaveCount(0);
 
     await recalculate.click();
     await expect.poll(() => allocationRequests.length).toBe(1);
-    expect(allocationRequests[0]?.apply).toBe(true);
+    expect(allocationRequests[0]?.apply).toBe(false);
     expect(unexpectedDialogs).toEqual([]);
 
-    await applyChanges.uncheck();
     await recalculate.click();
     await expect.poll(() => allocationRequests.length).toBe(2);
     expect(allocationRequests[1]?.apply).toBe(false);

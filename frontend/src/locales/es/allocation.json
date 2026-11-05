@@ -2,8 +2,8 @@
   "page": {
     "eyebrow": "Operación hotelera",
     "title": "Asignación inteligente",
-    "description": "El motor asigna reservas y reorganiza automáticamente las futuras que todavía no tuvieron check-in para reducir huecos por habitación. Las restricciones y excepciones quedan protegidas para revisión.",
-    "reviewBeforeApply": "Movimientos elegibles automáticos · excepciones revisables",
+    "description": "Las reservas nuevas reciben una habitación compatible al crearse. El motor puede sugerir cambios para mejorar la ocupación, pero no mueve reservas existentes hasta que Recepción aprueba la propuesta.",
+    "reviewBeforeApply": "Asignación inicial automática · cambios futuros con aprobación",
     "actionFailed": "No se pudo completar la operación: {{message}}",
     "genericFailure": "No se pudo completar la operación.",
     "staleProposal": "Las reservas cambiaron después del cálculo. No se aplicó la propuesta. Rechazá esta propuesta y generá otra para revisar el estado actual."
@@ -25,10 +25,10 @@
   "proposal": {
     "eyebrow": "Revisión del motor",
     "title": "Última propuesta",
-    "description": "Recalcular aplica automáticamente los movimientos completos y seguros. Los check-ins y bloqueos explícitos se respetan; una excepción requiere aprobación puntual.",
-    "recalculate": "Recalcular y aplicar movimientos seguros",
+    "description": "Recalcular prepara sugerencias revisables. Ninguna reserva ya asignada cambia de habitación hasta que una persona autorizada acepta la propuesta.",
+    "recalculate": "Recalcular sugerencias",
     "recalculating": "Calculando…",
-    "recalculateHelp": "El motor aplica solo planes completos y revalidados. Los casos bloqueados permanecen para revisión.",
+    "recalculateHelp": "El motor propone cambios completos. Revisalos y aceptalos para mover reservas; las reservas con check-in permanecen fijas.",
     "resolveBeforeRecalculate": "Aceptá o rechazá la propuesta pendiente antes de generar otra.",
     "loading": "Cargando la propuesta más reciente…",
     "loadFailed": "No se pudo cargar la propuesta: {{message}}",
@@ -38,7 +38,7 @@
       "pending": "Pendiente",
       "running": "En cálculo",
       "succeeded": "Lista para revisar",
-      "automaticComplete": "Optimización automática completada",
+      "readyForReview": "Sugerencias listas para revisar",
       "failed": "Cálculo detenido",
       "partial": "Resultado parcial"
     },
@@ -80,13 +80,13 @@
     "confirmationLabel": "Confirmación de la propuesta",
     "keepReviewing": "Volver a revisar",
     "reviewed": "Esta propuesta ya no tiene movimientos pendientes.",
-    "automaticApplied": "El motor aplicó {{count}} movimientos seguros. Los movimientos con bloqueo esperan aprobación y las reservas con check-in no se mueven.",
-    "automaticNoChanges": "El motor terminó la revisión y no encontró movimientos seguros para aplicar."
+    "suggestionsPendingReview": "El motor encontró {{count}} cambio(s) sugerido(s). No se movió ninguna reserva; Recepción debe aprobarlos.",
+    "noSuggestedMoves": "No hay cambios sugeridos. Las habitaciones actuales se conservan."
   },
   "locks": {
     "eyebrow": "Control manual",
     "title": "Reservas protegidas",
-    "description": "Marcá una habitación cuando deba permanecer con esa reserva. El motor la excluirá de futuras reasignaciones automáticas.",
+    "description": "Protegé una habitación cuando deba permanecer con esa reserva. Si el motor propone un cambio, requiere aprobación puntual y el bloqueo se conserva.",
     "readPermissionRequired": "Tu rol no tiene permiso para consultar reservas. Podés revisar propuestas, pero no administrar reservas protegidas.",
     "loading": "Cargando reservas próximas…",
     "loadFailed": "No se pudieron cargar las reservas: {{message}}",
