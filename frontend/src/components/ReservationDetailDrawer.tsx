@@ -2375,7 +2375,9 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   <p className="text-xs uppercase tracking-wide text-slate-500">{t("drawer.payment.title")}</p>
                   <div className="mt-2 flex flex-wrap items-end gap-2">
                     <label className="flex-1 space-y-1 text-xs">
-                      <span className="text-slate-600">{t("drawer.payment.amountLabel")}</span>
+                      <span className="text-slate-600">
+                        {t("drawer.payment.amountLabel", { currency: paymentTenderCurrency })}
+                      </span>
                       <input
                         type="number"
                         min="0"
@@ -2398,7 +2400,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                         }
                         disabled={selectedCompanyChargeIds.length > 0}
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                        aria-label={t("drawer.payment.amountAria")}
+                        aria-label={t("drawer.payment.amountAria", { currency: paymentTenderCurrency })}
                       />
                     </label>
                     <label className="space-y-1 text-xs">
@@ -2421,6 +2423,9 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                           <option key={value} value={value}>{value}</option>
                         ))}
                       </select>
+                      <span className="block max-w-44 text-[11px] text-slate-500" data-testid="reservation-drawer-payment-currency-hint">
+                        {t("drawer.payment.currencyHint")}
+                      </span>
                     </label>
                     <label className="space-y-1 text-xs">
                       <span className="text-slate-600">{t("drawer.payment.methodLabel")}</span>

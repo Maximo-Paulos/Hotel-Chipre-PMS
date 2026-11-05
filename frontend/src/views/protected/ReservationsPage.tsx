@@ -5123,10 +5123,15 @@ export function ReservationsPage() {
                       </select>
                     </label>
                     <label className="text-xs font-semibold text-slate-600">
-                      Moneda recibida
+                      {t("page.form.paymentCurrencyLabel")}
                       <select
                         value={paymentTenderCurrency}
-                        onChange={(event) => setPaymentTenderCurrencyInput(event.target.value)}
+                        onChange={(event) => {
+                          setPaymentTenderCurrencyInput(event.target.value);
+                          setPaymentAmountInput("");
+                          setCashReceivedAmountInput("");
+                          setCashTipAmountInput("");
+                        }}
                         disabled={collectedBefore}
                         className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm disabled:bg-slate-100"
                         data-testid="payment-tender-currency"
@@ -5135,13 +5140,16 @@ export function ReservationsPage() {
                           <option key={currencyCode} value={currencyCode}>{currencyCode}</option>
                         ))}
                       </select>
+                      <span className="mt-1 block text-[11px] font-normal text-slate-500" data-testid="payment-currency-hint">
+                        {t("page.form.paymentCurrencyHint")}
+                      </span>
                     </label>
                     <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
                       {isCompanyNightRefund
                         ? t("page.form.companyNightRefundCashAmount", { currency: selectedRefundTarget?.currency ?? paymentTenderCurrency })
                         : paymentMethod === "cash" && canRefundPayment
                           ? t("page.form.cashMovementAmount")
-                          : t("page.form.amountToCharge")}
+                          : t("page.form.amountToChargeCurrency", { currency: paymentTenderCurrency })}
                       {isCompanyNightRefund ? (
                         <input
                           aria-label={t("page.form.companyNightRefundCashAmount", { currency: selectedRefundTarget?.currency ?? paymentTenderCurrency })}
@@ -5159,7 +5167,7 @@ export function ReservationsPage() {
                         <input
                           aria-label={paymentMethod === "cash" && canRefundPayment
                             ? t("page.form.cashMovementAmount")
-                            : t("page.form.amountToChargeAria")}
+                            : t("page.form.amountToChargeCurrencyAria", { currency: paymentTenderCurrency })}
                           type="number"
                           min="0.01"
                           step="0.01"
@@ -5172,6 +5180,22 @@ export function ReservationsPage() {
                           className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-800 shadow-sm"
                         />
                       )}
+                      {!isCompanyNightRefund &&
+                      refundTargetTransactionId === null &&
+                      !refundReasonInput.trim() &&
+                      !collectedBefore &&
+                      paymentTenderCurrency !== paymentReservationCurrency &&
+                      !paymentAmountInput.trim() &&
+                      (fullPaymentQuote ?? paymentEntryQuote) ? (
+                        <span className="mt-1 block text-[11px] font-normal text-sky-800" data-testid="payment-fx-suggested-amount">
+                          {t("page.form.paymentFxSuggestedFullBalance", {
+                            amount: formatMoney(
+                              Number((fullPaymentQuote ?? paymentEntryQuote)?.base_amount),
+                              paymentTenderCurrency
+                            )
+                          })}
+                        </span>
+                      ) : null}
                     </label>
                     {paymentMethod === "cash" &&
                     !isCompanyNightRefund &&

@@ -1440,8 +1440,8 @@
     "hash": "49dcd300521a083b25cab5685b6ffd18"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1793841683381.678,
-    "hash": "835cc7cc8398c8a32e88c375fcdc2a1a"
+    "mtime": 1793856637260.159,
+    "hash": "0a2f58ec4e43ce26e3869f1aa5afa40c"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1792965459461.1082,
@@ -2092,35 +2092,35 @@
     "hash": "13c075762304f5bf61c5183f56910cf4"
   },
   ".claude/agents/architecture-reviewer.md": {
-    "mtime": 1784817309002.621,
+    "mtime": 1793848387172.9023,
     "hash": "0e3741f5fd317621c4b4e6dadfdbdbc5"
   },
   ".claude/agents/backend-engineer.md": {
-    "mtime": 1784817309002.802,
+    "mtime": 1793848387173.0295,
     "hash": "d9ecf606f106908cfbe99848159b83fb"
   },
   ".claude/agents/database-migrations.md": {
-    "mtime": 1784817309003.167,
+    "mtime": 1793848387173.6543,
     "hash": "fb17089c4f89250c4e25a71bf1bfc07c"
   },
   ".claude/agents/docs-writer.md": {
-    "mtime": 1784817309003.4148,
+    "mtime": 1793848387173.7925,
     "hash": "9b948346884c2dfde996c7663a85d97b"
   },
   ".claude/agents/frontend-engineer.md": {
-    "mtime": 1784817309003.5347,
+    "mtime": 1793848387173.854,
     "hash": "54ea36eb497d6ad7ff54a0fbaa7f113e"
   },
   ".claude/agents/performance-analyst.md": {
-    "mtime": 1784817309004.1116,
+    "mtime": 1793848387174.2861,
     "hash": "d9fcdafa1e751ed6041b32c791ee8554"
   },
   ".claude/agents/qa-testing.md": {
-    "mtime": 1784817309004.3528,
+    "mtime": 1793848387174.4163,
     "hash": "503a0453b0d5ddd90183c7461218c732"
   },
   ".claude/agents/security-auditor.md": {
-    "mtime": 1784817309004.585,
+    "mtime": 1793848387174.5625,
     "hash": "46c9b4b5a2e5608a22877d1be8b991ef"
   },
   ".codex_prompts/d1.txt": {
@@ -2204,8 +2204,8 @@
     "hash": "c5cf55fd0b730c5179d460b18d33654e"
   },
   ".github/workflows/pr-validation.yml": {
-    "mtime": 1792781783289.0137,
-    "hash": "6ff97ee52dcc37bf03e9ed05b14ecdde"
+    "mtime": 1793853200006.0242,
+    "hash": "5455d875dead82586b2fbeb697ab5761"
   },
   "AGENTS.md": {
     "mtime": 1793285707517.314,
@@ -2536,8 +2536,8 @@
     "hash": "83dc87fe15f3432941dccc7e213fcc96"
   },
   "frontend/e2e/README.md": {
-    "mtime": 1793291422420.745,
-    "hash": "ac29fcafc7fe5307d79ad9f5542d8796"
+    "mtime": 1793851119930.6804,
+    "hash": "f1980793a9f5f720f38ea825acc6c6ba"
   },
   "frontend/index.html": {
     "mtime": 1790395445675.4468,
@@ -2768,28 +2768,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1793846546713.3237,
-    "hash": "0a3f6ec87a1054fb4b3a392491520c8a"
+    "mtime": 1793849946795.7444,
+    "hash": "77183787ce571efb2d7165fc84d8625c"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1793846545908.758,
-    "hash": "56c0ab4c81528df124947671d33dc799"
+    "mtime": 1793849945975.5842,
+    "hash": "6d0d8d297b6e4cce72f3048436e115ae"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1793846546701.637,
-    "hash": "5547001522b731898e294f3bd1256f86"
+    "mtime": 1793849946784.1538,
+    "hash": "ea9a7ba56fdd6fe9db190aee799ccdb7"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1793846545920.566,
-    "hash": "a3c5aaa59f9572d4b641acbcdc29e567"
+    "mtime": 1793849945988.7534,
+    "hash": "1c530e5fe85dcac3bae079fb35de1a53"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1793846546688.7017,
-    "hash": "6a057858627a9d525c71fbb04a478211"
+    "mtime": 1793849946771.7869,
+    "hash": "394981413a92120faf93b977c0c69486"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1793846546102.4448,
-    "hash": "5e19d625791ec5a15b99982cc44cf42a"
+    "mtime": 1793849946171.467,
+    "hash": "a59aaebbf4f316ae9b341b0b70c6e05a"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -3032,39 +3032,39 @@
     "hash": "5ea4d77ae49dcdc77cd205b532140886"
   },
   ".claude/agents/cloud-qa-user.md": {
-    "mtime": 1784817309002.928,
+    "mtime": 1793848387173.1077,
     "hash": "25376628e28d4a0f2729404eb80533f6"
   },
   ".claude/agents/data-visualization.md": {
-    "mtime": 1784817309003.0469,
+    "mtime": 1793848387173.4688,
     "hash": "dcb14acb57a63d784c3f63291c848515"
   },
   ".claude/agents/devops-containers.md": {
-    "mtime": 1784817309003.2935,
+    "mtime": 1793848387173.7263,
     "hash": "a23f66cd18a7a37479095ca336985940"
   },
   ".claude/agents/geo-local-seo.md": {
-    "mtime": 1784817309003.6985,
+    "mtime": 1793848387174.009,
     "hash": "4d2cebbe5f90d4bfb358d5139f7c2d0f"
   },
   ".claude/agents/geo-market-expansion.md": {
-    "mtime": 1784817309003.8582,
+    "mtime": 1793848387174.0771,
     "hash": "285b124eec2cc1e0dee0effdbb7c8488"
   },
   ".claude/agents/knowledge-graph-curator.md": {
-    "mtime": 1784817309003.9893,
+    "mtime": 1793848387174.2224,
     "hash": "b7e872144d1a41f44a20bd114ec4d3c4"
   },
   ".claude/agents/product-ceo.md": {
-    "mtime": 1784817309004.2317,
+    "mtime": 1793848387174.349,
     "hash": "76a9671b04bb6eb2cb8b06de2797e745"
   },
   ".claude/agents/release-governor.md": {
-    "mtime": 1784817309004.4695,
+    "mtime": 1793848387174.4817,
     "hash": "39aa2d54b0764935d1a3aebe7f76816b"
   },
   ".claude/agents/ux-ui-auditor.md": {
-    "mtime": 1784817309004.7227,
+    "mtime": 1793848387174.6409,
     "hash": "ef35735d034a51a2252fec9bb768a97b"
   },
   ".claude/skills/agent-setup-maintenance/SKILL.md": {
@@ -3076,7 +3076,7 @@
     "hash": "967cc804617e0c6daf9d6c7a10b429dd"
   },
   ".claude/skills/cloud-user-qa/SKILL.md": {
-    "mtime": 1791849255847.5513,
+    "mtime": 1791849255846.8452,
     "hash": "78e68f7386e3788b82ec93105c4d356a"
   },
   ".claude/skills/cloud-user-qa/agents/openai.yaml": {
@@ -3128,7 +3128,7 @@
     "hash": "6e92cc5d9e88e22c370a3a40e20c62e6"
   },
   ".claude/skills/graphify-read/SKILL.md": {
-    "mtime": 1791849255847.7397,
+    "mtime": 1791849255847.0925,
     "hash": "93eaff240ba760e7a58369ec602a21df"
   },
   ".claude/skills/graphify-read/agents/openai.yaml": {
@@ -3136,7 +3136,7 @@
     "hash": "eb155a1a8e1aa45a671a4507c736f6b7"
   },
   ".claude/skills/graphify-write/SKILL.md": {
-    "mtime": 1791849255847.8325,
+    "mtime": 1791849255847.3735,
     "hash": "720d5e5ead4eed1979606befbf315dc7"
   },
   ".claude/skills/graphify-write/agents/openai.yaml": {
@@ -3220,8 +3220,8 @@
     "hash": "f88f2e0fc4b94cb53ef8d5ac709de4d6"
   },
   ".claude/skills/validate-all/SKILL.md": {
-    "mtime": 1789674055082.7175,
-    "hash": "21357c99870c148f6950d0b3769e3369"
+    "mtime": 1793285707517.886,
+    "hash": "5ea4d77ae49dcdc77cd205b532140886"
   },
   ".github/workflows/preview-qa.yml": {
     "mtime": 1784816939139.239,
@@ -3232,8 +3232,8 @@
     "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1793839650801.4497,
-    "hash": "27d14ecbd7391b9b1ecc99cf8937d32b"
+    "mtime": 1793849919449.4824,
+    "hash": "e041360ed99c0decd146b1ed10cb3a81"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1784517879747.6167,
@@ -3372,7 +3372,7 @@
     "hash": "3f19a2e230b5e82f46a7c990a069dad2"
   },
   ".claude/agents/data-architecture-specialist.md": {
-    "mtime": 1787360058441.2659,
+    "mtime": 1793848387173.3872,
     "hash": "c7a5b78381b8855ce88b853b56376705"
   },
   ".claude/skills/scale-data-architecture/SKILL.md": {
@@ -3600,8 +3600,8 @@
     "hash": "e2d0560e6f954b5f3f2b69bb1edd7bf6"
   },
   "frontend/e2e/payment-journey-full-matrix.spec.ts": {
-    "mtime": 1793846158001.329,
-    "hash": "2ba078bd232766d19f0accd2466e2c1a"
+    "mtime": 1793856766500.0964,
+    "hash": "31fc701a2be9231e1dcdceb3288cf2c9"
   },
   "tests/test_mercadopago_webhook_endpoint.py": {
     "mtime": 1792817817273.407,
@@ -3644,8 +3644,8 @@
     "hash": "920483553da1be8a2c43b9e4e3ea6541"
   },
   "frontend/src/components/ReservationDetailDrawer.tsx": {
-    "mtime": 1793845906470.5842,
-    "hash": "3c79b858f9b44b36fea3694f952d629d"
+    "mtime": 1793856646070.9128,
+    "hash": "7ea58e80ff472173bb20b29b15bc07b1"
   },
   "frontend/src/components/ReservationGlobalSearch.tsx": {
     "mtime": 1792100439493.4734,

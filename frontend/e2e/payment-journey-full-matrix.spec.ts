@@ -385,6 +385,9 @@ test("cross-currency payment quotes received tender into the reservation currenc
   const { editForm } = await openPaymentsPanel(reservationRow, page);
   await editForm.locator("label").filter({ hasText: localizedText("Medio de pago", "Payment method") }).locator("select").selectOption("cash");
   const currencySelect = editForm.getByTestId("payment-tender-currency");
+  await expect(currencySelect.locator('option[value="USD"]')).toBeAttached();
+  const amountInput = editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i);
+  await amountInput.fill("1000");
   const balanceQuoteResponsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
     if (url.pathname !== "/api/payment-surcharges/quote" || response.request().method() !== "POST" || response.status() !== 200) {
@@ -409,13 +412,15 @@ test("cross-currency payment quotes received tender into the reservation currenc
   await expect(quotePanel).toBeVisible();
   await expect(quotePanel).toContainText("Cotización confirmada por el servidor");
   await expect(quotePanel).toContainText(/Tipo fijado: 1 USD = [\d.,]+ ARS/);
+  await expect(editForm.getByTestId("payment-currency-hint")).toContainText("cotización");
+  await expect(editForm.getByTestId("payment-fx-suggested-amount")).toContainText("Monto sugerido para saldar el saldo completo:");
+  await expect(amountInput).toHaveValue("");
   expect(balanceQuote).toMatchObject({ currency_code: "USD", reservation_currency_code: "ARS" });
   expect(Number(balanceQuote.base_amount)).toBeGreaterThan(0);
   expect(Number(balanceQuote.fx_rate_snapshot)).toBeGreaterThan(0);
   expect(balanceQuote.fx_quote_details?.provider).toBe("dolarapi.com");
   expect(balanceQuote.fx_quote_details?.fallback_used).toBe(false);
 
-  const amountInput = editForm.getByLabel(/Monto del movimiento|Monto a cobrar|Cash movement amount|Amount to collect/i);
   const partialTenderAmount = Math.max(
     0.01,
     Math.floor(Number(balanceQuote.base_amount) * 100 / 2) / 100
@@ -487,6 +492,7 @@ test("reservation detail drawer quotes and records an editable USD cash payment 
   const currencySelect = drawer.getByTestId("reservation-drawer-payment-currency");
   await expect(currencySelect).toBeVisible();
   await expect(currencySelect).toHaveValue("ARS");
+  await expect(currencySelect.locator('option[value="USD"]')).toBeAttached();
 
   const balanceQuoteResponsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -506,7 +512,9 @@ test("reservation detail drawer quotes and records an editable USD cash payment 
   expect(balanceQuote.cash_change_currency_code).toBe("ARS");
   expect(Number(balanceQuote.cash_change_fx_rate)).toBeGreaterThan(0);
   await expect(drawer.getByTestId("payment-quote-fx-rate")).toContainText(/1 USD = [\d.,]+ ARS/);
-  const amountInput = drawer.getByLabel("Importe a cobrar");
+  await expect(drawer.getByTestId("reservation-drawer-payment-currency-hint")).toContainText("cotización");
+  const amountInput = drawer.getByLabel(/Importe a cobrar \(USD\)|Amount to collect \(USD\)/);
+  await expect(amountInput).toBeEditable();
   await expect(amountInput).toHaveValue(Number(balanceQuote.base_amount).toFixed(2));
 
   const partialTenderAmount = Math.max(0.01, Math.floor(Number(balanceQuote.base_amount) * 100 / 2) / 100);

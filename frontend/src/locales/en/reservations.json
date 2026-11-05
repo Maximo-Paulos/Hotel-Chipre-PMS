@@ -188,8 +188,8 @@
     },
     "payment": {
       "title": "Collect payment",
-      "amountLabel": "Amount",
-      "amountAria": "Amount to collect",
+      "amountLabel": "Amount to collect ({{currency}})",
+      "amountAria": "Amount to collect ({{currency}})",
       "methodLabel": "Method",
       "methodAria": "Payment method",
       "methods": {
@@ -202,8 +202,9 @@
       },
       "submitting": "Collecting...",
       "submit": "Register payment",
-      "currencyLabel": "Received currency",
+      "currencyLabel": "Payment currency",
       "currencyAria": "Currency used for this payment",
+      "currencyHint": "Choose USD to see the exchange rate and an editable calculated amount.",
       "companyChargesCurrencyRequired": "Company charges must be collected in {{currency}} from this panel. Select that currency to continue."
     },
     "companyDocuments": {
@@ -1052,7 +1053,12 @@
       "cashMovementAmountPlaceholder": "Amount to collect or refund",
       "amountToCharge": "Amount to collect",
       "amountToChargeAria": "Amount to collect",
+      "amountToChargeCurrency": "Amount to collect ({{currency}})",
+      "amountToChargeCurrencyAria": "Amount to collect ({{currency}})",
       "amountToChargePlaceholder": "Partial amount",
+      "paymentCurrencyLabel": "Payment currency",
+      "paymentCurrencyHint": "Choose ARS, USD, or another currency. Review the exchange rate and calculated amount before recording the payment.",
+      "paymentFxSuggestedFullBalance": "Suggested amount for the full balance: {{amount}}. You can edit it to collect a different amount.",
       "cashReceived": "Cash received ({{currency}})",
       "cashReceivedHint": "Enter the total handed over by the guest. Leave blank if they pay the exact amount.",
       "cashChange": "Calculated change",

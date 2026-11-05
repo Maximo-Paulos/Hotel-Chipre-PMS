@@ -188,8 +188,8 @@
     },
     "payment": {
       "title": "Cobrar",
-      "amountLabel": "Importe",
-      "amountAria": "Importe a cobrar",
+      "amountLabel": "Importe a cobrar ({{currency}})",
+      "amountAria": "Importe a cobrar ({{currency}})",
       "methodLabel": "Método",
       "methodAria": "Método de pago",
       "methods": {
@@ -202,8 +202,9 @@
       },
       "submitting": "Cobrando...",
       "submit": "Registrar cobro",
-      "currencyLabel": "Moneda recibida",
+      "currencyLabel": "Moneda de cobro",
       "currencyAria": "Moneda en la que se cobra",
+      "currencyHint": "Al elegir USD, se muestra la cotización y el importe calculado queda editable.",
       "companyChargesCurrencyRequired": "Los cargos de empresa se cobran en {{currency}} desde este panel. Elegí esa moneda para continuar."
     },
     "companyDocuments": {
@@ -1052,7 +1053,12 @@
       "cashMovementAmountPlaceholder": "Importe a cobrar o devolver",
       "amountToCharge": "Monto a cobrar",
       "amountToChargeAria": "Monto a cobrar",
+      "amountToChargeCurrency": "Monto a cobrar ({{currency}})",
+      "amountToChargeCurrencyAria": "Monto a cobrar ({{currency}})",
       "amountToChargePlaceholder": "Importe parcial",
+      "paymentCurrencyLabel": "Moneda de cobro",
+      "paymentCurrencyHint": "Elegí ARS, USD u otra moneda. Verás la cotización y el monto calculado antes de registrar.",
+      "paymentFxSuggestedFullBalance": "Monto sugerido para saldar el saldo completo: {{amount}}. Podés editarlo para cobrar otro importe.",
       "cashReceived": "Efectivo recibido ({{currency}})",
       "cashReceivedHint": "Ingresá el total que entrega el huésped. Dejalo vacío si paga el importe exacto.",
       "cashChange": "Vuelto calculado",
