@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 
 from app.services.scheduled_hotel_jobs_service import run_scheduled_hotel_jobs
+from app.tasks.allocation_tasks import process_recalculation_requests
 from app.tasks.payment_link_revocation_tasks import run_payment_link_revocation_tasks
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,26 @@ def main() -> int:
         totals["failed_hotels"],
     )
 
+    # AllocationRun rows are committed with reservation changes. Render runs
+    # this PostgreSQL cron without a broker/worker, so drain the durable queue
+    # directly after the regular scheduler has released its database session.
+    try:
+        allocations = process_recalculation_requests()
+    except Exception as exc:  # noqa: BLE001 - cron boundary must report failures safely
+        logger.error(
+            "allocation_recalculation.cron_failed error_type=%s",
+            type(exc).__name__,
+        )
+        allocations = {"selected": 0, "succeeded": 0, "failed": 1, "deferred": 0}
+
+    logger.info(
+        "allocation_recalculation.completed selected=%s succeeded=%s failed=%s deferred=%s",
+        allocations["selected"],
+        allocations["succeeded"],
+        allocations["failed"],
+        allocations["deferred"],
+    )
+
     # Provider traffic runs in a distinct session and only after the regular
     # tenant-scoped SQL job pass has completed.
     try:
@@ -66,7 +87,11 @@ def main() -> int:
         revocations["failed_jobs"],
         revocations["failed_hotels"],
     )
-    return 1 if totals["failed_jobs"] or revocations["failed_jobs"] else 0
+    return 1 if (
+        totals["failed_jobs"]
+        or allocations["failed"]
+        or revocations["failed_jobs"]
+    ) else 0
 
 
 if __name__ == "__main__":

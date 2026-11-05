@@ -159,7 +159,8 @@ test("owner can revoke OTA recording for receptionist and the UI hides the entry
 });
 
 test("el selector OTA limita habitaciones por categoría y fechas, y limpia la asignación al cambiar el rango", async ({
-  page
+  page,
+  request
 }) => {
   const checkIn = localIsoDate(300);
   const checkOut = localIsoDate(302);
@@ -167,11 +168,24 @@ test("el selector OTA limita habitaciones por categoría y fechas, y limpia la a
 
   await login(page);
   await page.goto("/reservas");
-  const rooms = await page.evaluate(async () => {
-    const response = await fetch("/api/rooms/");
-    if (!response.ok) throw new Error(`No se pudieron consultar las habitaciones: ${response.status}`);
-    return response.json();
-  }) as Array<{
+  const sessionResponse = await request.post(`${backendURL}/api/auth/login`, { data: credentials });
+  expect(sessionResponse.ok(), await sessionResponse.text()).toBeTruthy();
+  const session = await sessionResponse.json() as {
+    hotel_id: number;
+    access_token: string;
+    csrf_token?: string;
+    user: { email: string };
+  };
+  const roomsResponse = await request.get(`${backendURL}/api/rooms/`, {
+    headers: {
+      "X-Hotel-Id": String(session.hotel_id),
+      "X-User-Id": session.user.email,
+      Authorization: `Bearer ${session.access_token}`,
+      "X-CSRF-Token": String(session.csrf_token || "")
+    }
+  });
+  expect(roomsResponse.ok(), await roomsResponse.text()).toBeTruthy();
+  const rooms = await roomsResponse.json() as Array<{
     id: number;
     category_id: number;
   }>;

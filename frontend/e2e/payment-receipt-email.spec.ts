@@ -112,6 +112,7 @@ async function installMocks(
     "/api/rooms/",
     "/api/rooms/categories",
     "/api/config/",
+    "/api/config/business-clock",
     "/api/config/interface-language",
     "/api/subscription/status",
     "/api/companies/options",
@@ -306,6 +307,13 @@ async function installMocks(
         };
       } else if (path === "/api/config/interface-language") {
         body = { interface_language: "es" };
+      } else if (path === "/api/config/business-clock") {
+        body = {
+          hotel_id: 1,
+          business_date: "2026-10-29",
+          hotel_timezone: "America/Argentina/Buenos_Aires",
+          simulation_enabled: false
+        };
       } else if (path === "/api/subscription/status") {
         body = {
           hotel_id: 1,

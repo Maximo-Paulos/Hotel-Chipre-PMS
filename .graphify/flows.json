@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-27T17:04:14.030Z",
+  "generatedAt": "2026-11-05T10:04:24.032Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -5207,6 +5207,30 @@
       "warnings": []
     },
     {
+      "id": "flow:services_integration_service_exchange_token",
+      "name": "exchange_token",
+      "entryPoint": "services_integration_service_exchange_token",
+      "entryPointId": "services_integration_service_exchange_token",
+      "path": [
+        "services_integration_service_exchange_token",
+        "services_integration_service_stamp_token_lifetime",
+        "valueerror"
+      ],
+      "qualifiedPath": [
+        "services_integration_service_exchange_token",
+        "services_integration_service_stamp_token_lifetime",
+        "valueerror"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "app/services/integration_service.py"
+      ],
+      "criticality": 0.3267,
+      "warnings": []
+    },
+    {
       "id": "flow:services_stock_service_get_stock_count_session",
       "name": "get_stock_count_session",
       "entryPoint": "services_stock_service_get_stock_count_session",
@@ -5361,6 +5385,52 @@
       "warnings": []
     },
     {
+      "id": "flow:services_integration_service_get_provider_connection_payload",
+      "name": "get_provider_connection_payload",
+      "entryPoint": "services_integration_service_get_provider_connection_payload",
+      "entryPointId": "services_integration_service_get_provider_connection_payload",
+      "path": [
+        "services_integration_service_get_provider_connection_payload",
+        "services_integration_service_decrypt_payload",
+        "services_integration_service_get_connection_payload",
+        "services_integration_service_seed_catalog",
+        "services_integration_service_fernet",
+        "valueerror",
+        "services_integration_service_connection_token_expires_soon",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_encrypt_payload",
+        "services_integration_service_refresh_mercadopago_access_token",
+        "services_integration_service_is_expired",
+        "services_integration_service_parse_datetime",
+        "services_integration_service_mercadopagoreauthorizationrequired",
+        "services_integration_service_stamp_token_lifetime"
+      ],
+      "qualifiedPath": [
+        "services_integration_service_get_provider_connection_payload",
+        "services_integration_service_decrypt_payload",
+        "services_integration_service_get_connection_payload",
+        "services_integration_service_seed_catalog",
+        "services_integration_service_fernet",
+        "valueerror",
+        "services_integration_service_connection_token_expires_soon",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_encrypt_payload",
+        "services_integration_service_refresh_mercadopago_access_token",
+        "services_integration_service_is_expired",
+        "services_integration_service_parse_datetime",
+        "services_integration_service_mercadopagoreauthorizationrequired",
+        "services_integration_service_stamp_token_lifetime"
+      ],
+      "depth": 3,
+      "nodeCount": 14,
+      "fileCount": 1,
+      "files": [
+        "app/services/integration_service.py"
+      ],
+      "criticality": 0.3229,
+      "warnings": []
+    },
+    {
       "id": "flow:services_external_effects_policy_require_apple_login",
       "name": "require_apple_login",
       "entryPoint": "services_external_effects_policy_require_apple_login",
@@ -5422,6 +5492,66 @@
         "app/services/external_effects_policy.py"
       ],
       "criticality": 0.3229,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_integration_service_verify_connection_health",
+      "name": "verify_connection_health",
+      "entryPoint": "services_integration_service_verify_connection_health",
+      "entryPointId": "services_integration_service_verify_connection_health",
+      "path": [
+        "services_integration_service_verify_connection_health",
+        "services_integration_service_account_label_from_payload",
+        "services_integration_service_decrypt_payload",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_encrypt_payload",
+        "services_integration_service_get_connection_payload",
+        "services_integration_service_redact_integration_error",
+        "services_integration_service_seed_catalog",
+        "services_integration_service_validate_gmail_credentials",
+        "services_integration_service_validate_mercadopago_credentials",
+        "valueerror",
+        "services_integration_service_fernet",
+        "services_integration_service_parse_datetime",
+        "services_integration_service_connection_token_expires_soon",
+        "services_integration_service_refresh_mercadopago_access_token",
+        "services_integration_service_google_userinfo",
+        "services_integration_service_is_expired",
+        "services_integration_service_refresh_gmail_access_token",
+        "services_integration_service_mercadopago_error_message",
+        "services_integration_service_mercadopagoreauthorizationrequired",
+        "services_integration_service_stamp_token_lifetime"
+      ],
+      "qualifiedPath": [
+        "services_integration_service_verify_connection_health",
+        "services_integration_service_account_label_from_payload",
+        "services_integration_service_decrypt_payload",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_encrypt_payload",
+        "services_integration_service_get_connection_payload",
+        "services_integration_service_redact_integration_error",
+        "services_integration_service_seed_catalog",
+        "services_integration_service_validate_gmail_credentials",
+        "services_integration_service_validate_mercadopago_credentials",
+        "valueerror",
+        "services_integration_service_fernet",
+        "services_integration_service_parse_datetime",
+        "services_integration_service_connection_token_expires_soon",
+        "services_integration_service_refresh_mercadopago_access_token",
+        "services_integration_service_google_userinfo",
+        "services_integration_service_is_expired",
+        "services_integration_service_refresh_gmail_access_token",
+        "services_integration_service_mercadopago_error_message",
+        "services_integration_service_mercadopagoreauthorizationrequired",
+        "services_integration_service_stamp_token_lifetime"
+      ],
+      "depth": 3,
+      "nodeCount": 21,
+      "fileCount": 1,
+      "files": [
+        "app/services/integration_service.py"
+      ],
+      "criticality": 0.311,
       "warnings": []
     },
     {
@@ -7315,50 +7445,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_integration_service_ensure_provider_payload",
-      "name": "ensure_provider_payload",
-      "entryPoint": "services_integration_service_ensure_provider_payload",
-      "entryPointId": "services_integration_service_ensure_provider_payload",
-      "path": [
-        "services_integration_service_ensure_provider_payload",
-        "services_integration_service_decrypt_payload",
-        "services_integration_service_derive_expires_at",
-        "services_integration_service_encrypt_payload",
-        "services_integration_service_get_connection_record",
-        "services_integration_service_validate_gmail_credentials",
-        "valueerror",
-        "services_integration_service_fernet",
-        "services_integration_service_seed_catalog",
-        "services_integration_service_google_userinfo",
-        "services_integration_service_is_expired",
-        "services_integration_service_refresh_gmail_access_token",
-        "services_integration_service_parse_datetime"
-      ],
-      "qualifiedPath": [
-        "services_integration_service_ensure_provider_payload",
-        "services_integration_service_decrypt_payload",
-        "services_integration_service_derive_expires_at",
-        "services_integration_service_encrypt_payload",
-        "services_integration_service_get_connection_record",
-        "services_integration_service_validate_gmail_credentials",
-        "valueerror",
-        "services_integration_service_fernet",
-        "services_integration_service_seed_catalog",
-        "services_integration_service_google_userinfo",
-        "services_integration_service_is_expired",
-        "services_integration_service_refresh_gmail_access_token",
-        "services_integration_service_parse_datetime"
-      ],
-      "depth": 3,
-      "nodeCount": 13,
-      "fileCount": 1,
-      "files": [
-        "app/services/integration_service.py"
-      ],
-      "criticality": 0.2762,
-      "warnings": []
-    },
-    {
       "id": "flow:services_mfa_service_consume_mfa_code",
       "name": "consume_mfa_code",
       "entryPoint": "services_mfa_service_consume_mfa_code",
@@ -7422,56 +7508,6 @@
       "fileCount": 1,
       "files": [
         "app/services/checkin_service.py"
-      ],
-      "criticality": 0.2738,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_integration_service_verify_connection_health",
-      "name": "verify_connection_health",
-      "entryPoint": "services_integration_service_verify_connection_health",
-      "entryPointId": "services_integration_service_verify_connection_health",
-      "path": [
-        "services_integration_service_verify_connection_health",
-        "services_integration_service_account_label_from_payload",
-        "services_integration_service_decrypt_payload",
-        "services_integration_service_derive_expires_at",
-        "services_integration_service_encrypt_payload",
-        "services_integration_service_redact_integration_error",
-        "services_integration_service_seed_catalog",
-        "services_integration_service_validate_gmail_credentials",
-        "services_integration_service_validate_mercadopago_credentials",
-        "valueerror",
-        "services_integration_service_fernet",
-        "services_integration_service_google_userinfo",
-        "services_integration_service_is_expired",
-        "services_integration_service_refresh_gmail_access_token",
-        "services_integration_service_mercadopago_error_message",
-        "services_integration_service_parse_datetime"
-      ],
-      "qualifiedPath": [
-        "services_integration_service_verify_connection_health",
-        "services_integration_service_account_label_from_payload",
-        "services_integration_service_decrypt_payload",
-        "services_integration_service_derive_expires_at",
-        "services_integration_service_encrypt_payload",
-        "services_integration_service_redact_integration_error",
-        "services_integration_service_seed_catalog",
-        "services_integration_service_validate_gmail_credentials",
-        "services_integration_service_validate_mercadopago_credentials",
-        "valueerror",
-        "services_integration_service_fernet",
-        "services_integration_service_google_userinfo",
-        "services_integration_service_is_expired",
-        "services_integration_service_refresh_gmail_access_token",
-        "services_integration_service_mercadopago_error_message",
-        "services_integration_service_parse_datetime"
-      ],
-      "depth": 3,
-      "nodeCount": 16,
-      "fileCount": 1,
-      "files": [
-        "app/services/integration_service.py"
       ],
       "criticality": 0.2738,
       "warnings": []
@@ -7636,62 +7672,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_integration_service_get_connection_payload",
-      "name": "get_connection_payload",
-      "entryPoint": "services_integration_service_get_connection_payload",
-      "entryPointId": "services_integration_service_get_connection_payload",
-      "path": [
-        "services_integration_service_get_connection_payload",
-        "services_integration_service_decrypt_payload",
-        "services_integration_service_seed_catalog",
-        "services_integration_service_fernet",
-        "valueerror"
-      ],
-      "qualifiedPath": [
-        "services_integration_service_get_connection_payload",
-        "services_integration_service_decrypt_payload",
-        "services_integration_service_seed_catalog",
-        "services_integration_service_fernet",
-        "valueerror"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/integration_service.py"
-      ],
-      "criticality": 0.27,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_integration_service_get_provider_connection_payload",
-      "name": "get_provider_connection_payload",
-      "entryPoint": "services_integration_service_get_provider_connection_payload",
-      "entryPointId": "services_integration_service_get_provider_connection_payload",
-      "path": [
-        "services_integration_service_get_provider_connection_payload",
-        "services_integration_service_decrypt_payload",
-        "services_integration_service_seed_catalog",
-        "services_integration_service_fernet",
-        "valueerror"
-      ],
-      "qualifiedPath": [
-        "services_integration_service_get_provider_connection_payload",
-        "services_integration_service_decrypt_payload",
-        "services_integration_service_seed_catalog",
-        "services_integration_service_fernet",
-        "valueerror"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/services/integration_service.py"
-      ],
-      "criticality": 0.27,
-      "warnings": []
-    },
-    {
       "id": "flow:versions_20260724_allocation_enum_values_upgrade",
       "name": "upgrade",
       "entryPoint": "versions_20260724_allocation_enum_values_upgrade",
@@ -7803,6 +7783,50 @@
         "scripts/agent_ops/provision_qa_bootstrap.py"
       ],
       "criticality": 0.2675,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_integration_service_ensure_provider_payload",
+      "name": "ensure_provider_payload",
+      "entryPoint": "services_integration_service_ensure_provider_payload",
+      "entryPointId": "services_integration_service_ensure_provider_payload",
+      "path": [
+        "services_integration_service_ensure_provider_payload",
+        "services_integration_service_decrypt_payload",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_encrypt_payload",
+        "services_integration_service_get_connection_record",
+        "services_integration_service_validate_gmail_credentials",
+        "valueerror",
+        "services_integration_service_fernet",
+        "services_integration_service_parse_datetime",
+        "services_integration_service_seed_catalog",
+        "services_integration_service_google_userinfo",
+        "services_integration_service_is_expired",
+        "services_integration_service_refresh_gmail_access_token"
+      ],
+      "qualifiedPath": [
+        "services_integration_service_ensure_provider_payload",
+        "services_integration_service_decrypt_payload",
+        "services_integration_service_derive_expires_at",
+        "services_integration_service_encrypt_payload",
+        "services_integration_service_get_connection_record",
+        "services_integration_service_validate_gmail_credentials",
+        "valueerror",
+        "services_integration_service_fernet",
+        "services_integration_service_parse_datetime",
+        "services_integration_service_seed_catalog",
+        "services_integration_service_google_userinfo",
+        "services_integration_service_is_expired",
+        "services_integration_service_refresh_gmail_access_token"
+      ],
+      "depth": 2,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/integration_service.py"
+      ],
+      "criticality": 0.2662,
       "warnings": []
     },
     {
@@ -10905,42 +10929,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_link_test_service_create_mercadopago_payment_link_test",
-      "name": "create_mercadopago_payment_link_test",
-      "entryPoint": "services_payment_link_test_service_create_mercadopago_payment_link_test",
-      "entryPointId": "services_payment_link_test_service_create_mercadopago_payment_link_test",
-      "path": [
-        "services_payment_link_test_service_create_mercadopago_payment_link_test",
-        "services_payment_link_test_service_friendly_mercadopago_error",
-        "services_payment_link_test_service_mercadopago_access_token",
-        "services_payment_link_test_service_notification_url_if_public",
-        "services_payment_link_test_service_paymentlinktesterror",
-        "services_payment_link_test_service_send_payment_link_email",
-        "services_payment_link_test_service_validate_email",
-        "services_payment_link_test_service_is_public_webhook_base",
-        "services_payment_link_test_service_notification_url"
-      ],
-      "qualifiedPath": [
-        "services_payment_link_test_service_create_mercadopago_payment_link_test",
-        "services_payment_link_test_service_friendly_mercadopago_error",
-        "services_payment_link_test_service_mercadopago_access_token",
-        "services_payment_link_test_service_notification_url_if_public",
-        "services_payment_link_test_service_paymentlinktesterror",
-        "services_payment_link_test_service_send_payment_link_email",
-        "services_payment_link_test_service_validate_email",
-        "services_payment_link_test_service_is_public_webhook_base",
-        "services_payment_link_test_service_notification_url"
-      ],
-      "depth": 2,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_link_test_service.py"
-      ],
-      "criticality": 0.2256,
-      "warnings": []
-    },
-    {
       "id": "flow:services_room_block_service_resolve_block",
       "name": "resolve_block",
       "entryPoint": "services_room_block_service_resolve_block",
@@ -11538,6 +11526,44 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
+      ],
+      "criticality": 0.22,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_link_test_service_create_mercadopago_payment_link_test",
+      "name": "create_mercadopago_payment_link_test",
+      "entryPoint": "services_payment_link_test_service_create_mercadopago_payment_link_test",
+      "entryPointId": "services_payment_link_test_service_create_mercadopago_payment_link_test",
+      "path": [
+        "services_payment_link_test_service_create_mercadopago_payment_link_test",
+        "services_payment_link_test_service_friendly_mercadopago_error",
+        "services_payment_link_test_service_mercadopago_access_token",
+        "services_payment_link_test_service_mercadopago_checkout_url",
+        "services_payment_link_test_service_notification_url_if_public",
+        "services_payment_link_test_service_paymentlinktesterror",
+        "services_payment_link_test_service_send_payment_link_email",
+        "services_payment_link_test_service_validate_email",
+        "services_payment_link_test_service_is_public_webhook_base",
+        "services_payment_link_test_service_notification_url"
+      ],
+      "qualifiedPath": [
+        "services_payment_link_test_service_create_mercadopago_payment_link_test",
+        "services_payment_link_test_service_friendly_mercadopago_error",
+        "services_payment_link_test_service_mercadopago_access_token",
+        "services_payment_link_test_service_mercadopago_checkout_url",
+        "services_payment_link_test_service_notification_url_if_public",
+        "services_payment_link_test_service_paymentlinktesterror",
+        "services_payment_link_test_service_send_payment_link_email",
+        "services_payment_link_test_service_validate_email",
+        "services_payment_link_test_service_is_public_webhook_base",
+        "services_payment_link_test_service_notification_url"
+      ],
+      "depth": 2,
+      "nodeCount": 10,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_link_test_service.py"
       ],
       "criticality": 0.22,
       "warnings": []
@@ -13422,6 +13448,7 @@
         "services_fx_service_get_usd_rate_for_type",
         "services_fx_service_fetch_rate",
         "services_fx_service_is_cache_fresh",
+        "services_fx_service_as_cached_fallback_quote",
         "services_fx_service_cache_key",
         "services_fx_service_cached_quote_matches",
         "services_fx_service_cached_rate",
@@ -13430,9 +13457,10 @@
         "services_fx_service_quote_matches_supported_market",
         "services_fx_service_refresh_supported_rates",
         "services_fx_service_store_rate",
-        "services_fx_service_quote_matches_conversion_market",
-        "services_fx_service_derive_blue_equivalent",
         "services_fx_service_parse_provider_updated_at",
+        "services_fx_service_quote_matches_conversion_market",
+        "services_fx_service_with_observed_at",
+        "services_fx_service_derive_blue_equivalent",
         "services_fx_service_quote_is_fresh"
       ],
       "qualifiedPath": [
@@ -13440,6 +13468,7 @@
         "services_fx_service_get_usd_rate_for_type",
         "services_fx_service_fetch_rate",
         "services_fx_service_is_cache_fresh",
+        "services_fx_service_as_cached_fallback_quote",
         "services_fx_service_cache_key",
         "services_fx_service_cached_quote_matches",
         "services_fx_service_cached_rate",
@@ -13448,13 +13477,14 @@
         "services_fx_service_quote_matches_supported_market",
         "services_fx_service_refresh_supported_rates",
         "services_fx_service_store_rate",
-        "services_fx_service_quote_matches_conversion_market",
-        "services_fx_service_derive_blue_equivalent",
         "services_fx_service_parse_provider_updated_at",
+        "services_fx_service_quote_matches_conversion_market",
+        "services_fx_service_with_observed_at",
+        "services_fx_service_derive_blue_equivalent",
         "services_fx_service_quote_is_fresh"
       ],
       "depth": 5,
-      "nodeCount": 16,
+      "nodeCount": 18,
       "fileCount": 1,
       "files": [
         "app/services/fx_service.py"
@@ -13771,60 +13801,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_payment_service_process_payment",
-      "name": "process_payment",
-      "entryPoint": "services_payment_service_process_payment",
-      "entryPointId": "services_payment_service_process_payment",
-      "path": [
-        "services_payment_service_process_payment",
-        "services_payment_service_calculate_payment_surcharge",
-        "services_payment_service_cash_tender_breakdown",
-        "services_payment_service_paymenterror",
-        "services_payment_service_paymentnotfounderror",
-        "services_payment_service_resolve_applied_payment_amount",
-        "services_payment_service_resolve_payment_currency",
-        "services_payment_service_resolve_reservation_hotel",
-        "services_payment_service_rounding_policy_for_hotel",
-        "services_payment_service_rounding_tender_amount",
-        "services_payment_service_same_idempotent_payment",
-        "services_payment_service_update_reservation_financials",
-        "services_payment_service_validate_payment_method_enabled",
-        "services_payment_service_verify_payment_quote_token",
-        "services_payment_service_payment_conversion_rate",
-        "services_payment_service_payment_method_value",
-        "services_payment_service_get_hotel_config",
-        "services_payment_service_sync_reservation_financial_status"
-      ],
-      "qualifiedPath": [
-        "services_payment_service_process_payment",
-        "services_payment_service_calculate_payment_surcharge",
-        "services_payment_service_cash_tender_breakdown",
-        "services_payment_service_paymenterror",
-        "services_payment_service_paymentnotfounderror",
-        "services_payment_service_resolve_applied_payment_amount",
-        "services_payment_service_resolve_payment_currency",
-        "services_payment_service_resolve_reservation_hotel",
-        "services_payment_service_rounding_policy_for_hotel",
-        "services_payment_service_rounding_tender_amount",
-        "services_payment_service_same_idempotent_payment",
-        "services_payment_service_update_reservation_financials",
-        "services_payment_service_validate_payment_method_enabled",
-        "services_payment_service_verify_payment_quote_token",
-        "services_payment_service_payment_conversion_rate",
-        "services_payment_service_payment_method_value",
-        "services_payment_service_get_hotel_config",
-        "services_payment_service_sync_reservation_financial_status"
-      ],
-      "depth": 2,
-      "nodeCount": 18,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_service.py"
-      ],
-      "criticality": 0.1978,
-      "warnings": []
-    },
-    {
       "id": "flow:services_room_block_service_propose_room_block_extension_reassignment",
       "name": "propose_room_block_extension_reassignment",
       "entryPoint": "services_room_block_service_propose_room_block_extension_reassignment",
@@ -13930,6 +13906,62 @@
         "app/services/temporary_action_grant_service.py"
       ],
       "criticality": 0.1978,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_payment_service_process_payment",
+      "name": "process_payment",
+      "entryPoint": "services_payment_service_process_payment",
+      "entryPointId": "services_payment_service_process_payment",
+      "path": [
+        "services_payment_service_process_payment",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_cash_tender_breakdown",
+        "services_payment_service_get_hotel_config",
+        "services_payment_service_manual_fx_quote_details",
+        "services_payment_service_payment_conversion_rate",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_resolve_applied_payment_amount",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_resolve_reservation_hotel",
+        "services_payment_service_rounding_policy_for_hotel",
+        "services_payment_service_rounding_tender_amount",
+        "services_payment_service_same_idempotent_payment",
+        "services_payment_service_update_reservation_financials",
+        "services_payment_service_validate_payment_method_enabled",
+        "services_payment_service_verify_payment_quote_token",
+        "services_payment_service_sync_reservation_financial_status"
+      ],
+      "qualifiedPath": [
+        "services_payment_service_process_payment",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_cash_tender_breakdown",
+        "services_payment_service_get_hotel_config",
+        "services_payment_service_manual_fx_quote_details",
+        "services_payment_service_payment_conversion_rate",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_resolve_applied_payment_amount",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_resolve_reservation_hotel",
+        "services_payment_service_rounding_policy_for_hotel",
+        "services_payment_service_rounding_tender_amount",
+        "services_payment_service_same_idempotent_payment",
+        "services_payment_service_update_reservation_financials",
+        "services_payment_service_validate_payment_method_enabled",
+        "services_payment_service_verify_payment_quote_token",
+        "services_payment_service_sync_reservation_financial_status"
+      ],
+      "depth": 2,
+      "nodeCount": 19,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_service.py"
+      ],
+      "criticality": 0.1963,
       "warnings": []
     },
     {
@@ -15005,6 +15037,8 @@
         "services_fx_service_cache_key",
         "services_fx_service_quote_matches_conversion_market",
         "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_as_cached_fallback_quote",
+        "services_fx_service_with_observed_at",
         "services_fx_service_derive_blue_equivalent",
         "services_fx_service_extract_direct_quotes",
         "services_fx_service_store_rate",
@@ -15023,6 +15057,8 @@
         "services_fx_service_cache_key",
         "services_fx_service_quote_matches_conversion_market",
         "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_as_cached_fallback_quote",
+        "services_fx_service_with_observed_at",
         "services_fx_service_derive_blue_equivalent",
         "services_fx_service_extract_direct_quotes",
         "services_fx_service_store_rate",
@@ -15030,7 +15066,7 @@
         "services_fx_service_quote_is_fresh"
       ],
       "depth": 4,
-      "nodeCount": 16,
+      "nodeCount": 18,
       "fileCount": 1,
       "files": [
         "app/services/fx_service.py"
@@ -18107,6 +18143,50 @@
       "warnings": []
     },
     {
+      "id": "flow:services_payment_service_create_manual_fx_payment_quote",
+      "name": "create_manual_fx_payment_quote",
+      "entryPoint": "services_payment_service_create_manual_fx_payment_quote",
+      "entryPointId": "services_payment_service_create_manual_fx_payment_quote",
+      "path": [
+        "services_payment_service_create_manual_fx_payment_quote",
+        "services_payment_service_manual_fx_quote_details",
+        "services_payment_service_payment_conversion_rate",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_quote_reservation_payment_surcharge",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_get_hotel_config",
+        "services_payment_service_resolve_applied_payment_amount",
+        "services_payment_service_rounding_policy_for_hotel",
+        "services_payment_service_rounding_tender_amount"
+      ],
+      "qualifiedPath": [
+        "services_payment_service_create_manual_fx_payment_quote",
+        "services_payment_service_manual_fx_quote_details",
+        "services_payment_service_payment_conversion_rate",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_quote_reservation_payment_surcharge",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_get_hotel_config",
+        "services_payment_service_resolve_applied_payment_amount",
+        "services_payment_service_rounding_policy_for_hotel",
+        "services_payment_service_rounding_tender_amount"
+      ],
+      "depth": 2,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_ota_manual_service_create_or_update_manual_ota_reservation",
       "name": "create_or_update_manual_ota_reservation",
       "entryPoint": "services_ota_manual_service_create_or_update_manual_ota_reservation",
@@ -18503,6 +18583,32 @@
       "warnings": []
     },
     {
+      "id": "flow:versions_20261029_rate_prices_numeric_downgrade",
+      "name": "downgrade",
+      "entryPoint": "versions_20261029_rate_prices_numeric_downgrade",
+      "entryPointId": "versions_20261029_rate_prices_numeric_downgrade",
+      "path": [
+        "versions_20261029_rate_prices_numeric_downgrade",
+        "versions_20261029_rate_prices_numeric_change_column_types",
+        "versions_20261029_rate_prices_numeric_assert_prices_fit_cents",
+        "versions_20261029_rate_prices_numeric_columns_to_change"
+      ],
+      "qualifiedPath": [
+        "versions_20261029_rate_prices_numeric_downgrade",
+        "versions_20261029_rate_prices_numeric_change_column_types",
+        "versions_20261029_rate_prices_numeric_assert_prices_fit_cents",
+        "versions_20261029_rate_prices_numeric_columns_to_change"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261029_rate_prices_numeric.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:services_company_reservation_terms_effective_company_terms",
       "name": "effective_company_terms",
       "entryPoint": "services_company_reservation_terms_effective_company_terms",
@@ -18775,6 +18881,50 @@
       "warnings": []
     },
     {
+      "id": "flow:services_payment_service_get_active_manual_fx_payment_quote",
+      "name": "get_active_manual_fx_payment_quote",
+      "entryPoint": "services_payment_service_get_active_manual_fx_payment_quote",
+      "entryPointId": "services_payment_service_get_active_manual_fx_payment_quote",
+      "path": [
+        "services_payment_service_get_active_manual_fx_payment_quote",
+        "services_payment_service_manual_fx_quote_details",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_quote_reservation_payment_surcharge",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_get_hotel_config",
+        "services_payment_service_payment_conversion_rate",
+        "services_payment_service_resolve_applied_payment_amount",
+        "services_payment_service_rounding_policy_for_hotel",
+        "services_payment_service_rounding_tender_amount"
+      ],
+      "qualifiedPath": [
+        "services_payment_service_get_active_manual_fx_payment_quote",
+        "services_payment_service_manual_fx_quote_details",
+        "services_payment_service_payment_method_value",
+        "services_payment_service_paymenterror",
+        "services_payment_service_paymentnotfounderror",
+        "services_payment_service_quote_reservation_payment_surcharge",
+        "services_payment_service_resolve_payment_currency",
+        "services_payment_service_calculate_payment_surcharge",
+        "services_payment_service_get_hotel_config",
+        "services_payment_service_payment_conversion_rate",
+        "services_payment_service_resolve_applied_payment_amount",
+        "services_payment_service_rounding_policy_for_hotel",
+        "services_payment_service_rounding_tender_amount"
+      ],
+      "depth": 2,
+      "nodeCount": 13,
+      "fileCount": 1,
+      "files": [
+        "app/services/payment_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:api_allocation_policy_get_active_policy",
       "name": "get_active_policy",
       "entryPoint": "api_allocation_policy_get_active_policy",
@@ -18891,6 +19041,42 @@
       "warnings": []
     },
     {
+      "id": "flow:services_fx_service_get_cached_supported_rates",
+      "name": "get_cached_supported_rates",
+      "entryPoint": "services_fx_service_get_cached_supported_rates",
+      "entryPointId": "services_fx_service_get_cached_supported_rates",
+      "path": [
+        "services_fx_service_get_cached_supported_rates",
+        "services_fx_service_cache_key_for_display_rate",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_quote_is_fresh",
+        "services_fx_service_cache_key",
+        "services_fx_service_quote_matches_conversion_market",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_parse_provider_updated_at"
+      ],
+      "qualifiedPath": [
+        "services_fx_service_get_cached_supported_rates",
+        "services_fx_service_cache_key_for_display_rate",
+        "services_fx_service_cached_quote_matches",
+        "services_fx_service_cached_rate",
+        "services_fx_service_quote_is_fresh",
+        "services_fx_service_cache_key",
+        "services_fx_service_quote_matches_conversion_market",
+        "services_fx_service_quote_matches_supported_market",
+        "services_fx_service_parse_provider_updated_at"
+      ],
+      "depth": 2,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/fx_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:api_gemma_chat_get_chat_insights",
       "name": "get_chat_insights",
       "entryPoint": "api_gemma_chat_get_chat_insights",
@@ -18988,6 +19174,7 @@
         "services_fx_service_quote_matches_conversion_market",
         "services_fx_service_quote_matches_supported_market",
         "services_fx_service_store_rate",
+        "services_fx_service_with_observed_at",
         "services_fx_service_parse_provider_updated_at"
       ],
       "qualifiedPath": [
@@ -19001,10 +19188,11 @@
         "services_fx_service_quote_matches_conversion_market",
         "services_fx_service_quote_matches_supported_market",
         "services_fx_service_store_rate",
+        "services_fx_service_with_observed_at",
         "services_fx_service_parse_provider_updated_at"
       ],
       "depth": 2,
-      "nodeCount": 11,
+      "nodeCount": 12,
       "fileCount": 1,
       "files": [
         "app/services/fx_service.py"
@@ -19286,6 +19474,7 @@
         "services_fx_service_is_cache_fresh",
         "services_fx_service_quote_matches_supported_market",
         "services_fx_service_store_rate",
+        "services_fx_service_with_observed_at",
         "services_fx_service_quote_matches_conversion_market"
       ],
       "qualifiedPath": [
@@ -19295,10 +19484,11 @@
         "services_fx_service_is_cache_fresh",
         "services_fx_service_quote_matches_supported_market",
         "services_fx_service_store_rate",
+        "services_fx_service_with_observed_at",
         "services_fx_service_quote_matches_conversion_market"
       ],
       "depth": 2,
-      "nodeCount": 7,
+      "nodeCount": 8,
       "fileCount": 1,
       "files": [
         "app/services/fx_service.py"
@@ -20084,46 +20274,6 @@
       "fileCount": 1,
       "files": [
         "app/api/allocation_policy.py"
-      ],
-      "criticality": 0.17,
-      "warnings": []
-    },
-    {
-      "id": "flow:services_payment_service_quote_reservation_payment_surcharge",
-      "name": "quote_reservation_payment_surcharge",
-      "entryPoint": "services_payment_service_quote_reservation_payment_surcharge",
-      "entryPointId": "services_payment_service_quote_reservation_payment_surcharge",
-      "path": [
-        "services_payment_service_quote_reservation_payment_surcharge",
-        "services_payment_service_calculate_payment_surcharge",
-        "services_payment_service_payment_conversion_rate",
-        "services_payment_service_payment_method_value",
-        "services_payment_service_paymenterror",
-        "services_payment_service_paymentnotfounderror",
-        "services_payment_service_resolve_applied_payment_amount",
-        "services_payment_service_resolve_payment_currency",
-        "services_payment_service_rounding_policy_for_hotel",
-        "services_payment_service_rounding_tender_amount",
-        "services_payment_service_get_hotel_config"
-      ],
-      "qualifiedPath": [
-        "services_payment_service_quote_reservation_payment_surcharge",
-        "services_payment_service_calculate_payment_surcharge",
-        "services_payment_service_payment_conversion_rate",
-        "services_payment_service_payment_method_value",
-        "services_payment_service_paymenterror",
-        "services_payment_service_paymentnotfounderror",
-        "services_payment_service_resolve_applied_payment_amount",
-        "services_payment_service_resolve_payment_currency",
-        "services_payment_service_rounding_policy_for_hotel",
-        "services_payment_service_rounding_tender_amount",
-        "services_payment_service_get_hotel_config"
-      ],
-      "depth": 2,
-      "nodeCount": 11,
-      "fileCount": 1,
-      "files": [
-        "app/services/payment_service.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -21447,6 +21597,34 @@
       "warnings": []
     },
     {
+      "id": "flow:services_fx_rate_cache_service_store_supported_fx_rates",
+      "name": "store_supported_fx_rates",
+      "entryPoint": "services_fx_rate_cache_service_store_supported_fx_rates",
+      "entryPointId": "services_fx_rate_cache_service_store_supported_fx_rates",
+      "path": [
+        "services_fx_rate_cache_service_store_supported_fx_rates",
+        "services_fx_rate_cache_service_as_utc",
+        "services_fx_rate_cache_service_cache_identity",
+        "services_fx_rate_cache_service_row_values",
+        "services_fx_rate_cache_service_expected_market"
+      ],
+      "qualifiedPath": [
+        "services_fx_rate_cache_service_store_supported_fx_rates",
+        "services_fx_rate_cache_service_as_utc",
+        "services_fx_rate_cache_service_cache_identity",
+        "services_fx_rate_cache_service_row_values",
+        "services_fx_rate_cache_service_expected_market"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/services/fx_rate_cache_service.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
       "id": "flow:api_subscription_subscription_status",
       "name": "subscription_status",
       "entryPoint": "api_subscription_subscription_status",
@@ -21838,6 +22016,32 @@
       "fileCount": 1,
       "files": [
         "alembic/versions/20261024_atomic_payment_corrections.py"
+      ],
+      "criticality": 0.17,
+      "warnings": []
+    },
+    {
+      "id": "flow:versions_20261029_rate_prices_numeric_upgrade",
+      "name": "upgrade",
+      "entryPoint": "versions_20261029_rate_prices_numeric_upgrade",
+      "entryPointId": "versions_20261029_rate_prices_numeric_upgrade",
+      "path": [
+        "versions_20261029_rate_prices_numeric_upgrade",
+        "versions_20261029_rate_prices_numeric_change_column_types",
+        "versions_20261029_rate_prices_numeric_assert_prices_fit_cents",
+        "versions_20261029_rate_prices_numeric_columns_to_change"
+      ],
+      "qualifiedPath": [
+        "versions_20261029_rate_prices_numeric_upgrade",
+        "versions_20261029_rate_prices_numeric_change_column_types",
+        "versions_20261029_rate_prices_numeric_assert_prices_fit_cents",
+        "versions_20261029_rate_prices_numeric_columns_to_change"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "alembic/versions/20261029_rate_prices_numeric.py"
       ],
       "criticality": 0.17,
       "warnings": []
@@ -23346,6 +23550,28 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/CashRegisterPage.tsx"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:components_cashtenderfield_cashtenderfield",
+      "name": "CashTenderField",
+      "entryPoint": "components_cashtenderfield_cashtenderfield",
+      "entryPointId": "components_cashtenderfield_cashtenderfield",
+      "path": [
+        "components_cashtenderfield_cashtenderfield",
+        "components_cashtenderfield_formatsettledchangeamount"
+      ],
+      "qualifiedPath": [
+        "components_cashtenderfield_cashtenderfield",
+        "components_cashtenderfield_formatsettledchangeamount"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/components/CashTenderField.tsx"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -27269,6 +27495,28 @@
       "warnings": []
     },
     {
+      "id": "flow:utils_currency_formatfxrate",
+      "name": "formatFxRate",
+      "entryPoint": "utils_currency_formatfxrate",
+      "entryPointId": "utils_currency_formatfxrate",
+      "path": [
+        "utils_currency_formatfxrate",
+        "utils_currency_normalizecurrencycode"
+      ],
+      "qualifiedPath": [
+        "utils_currency_formatfxrate",
+        "utils_currency_normalizecurrencycode"
+      ],
+      "depth": 1,
+      "nodeCount": 2,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/utils/currency.ts"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
       "id": "flow:utils_localizeddateinput_formatnativedatetimevalue",
       "name": "formatNativeDateTimeValue",
       "entryPoint": "utils_localizeddateinput_formatnativedatetimevalue",
@@ -27459,14 +27707,16 @@
       "entryPointId": "api_fx_rates_get_all_rates",
       "path": [
         "api_fx_rates_get_all_rates",
+        "api_fx_rates_fx_display_quote_status",
         "api_fx_rates_fxrateitem"
       ],
       "qualifiedPath": [
         "api_fx_rates_get_all_rates",
+        "api_fx_rates_fx_display_quote_status",
         "api_fx_rates_fxrateitem"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/fx_rates.py"
@@ -27822,6 +28072,32 @@
       "fileCount": 1,
       "files": [
         "app/services/analytics_exports.py"
+      ],
+      "criticality": 0.16,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_fx_rate_cache_service_get_fx_rate_cache_quote",
+      "name": "get_fx_rate_cache_quote",
+      "entryPoint": "services_fx_rate_cache_service_get_fx_rate_cache_quote",
+      "entryPointId": "services_fx_rate_cache_service_get_fx_rate_cache_quote",
+      "path": [
+        "services_fx_rate_cache_service_get_fx_rate_cache_quote",
+        "services_fx_rate_cache_service_as_utc",
+        "services_fx_rate_cache_service_expected_market",
+        "services_fx_rate_cache_service_quote_for_cache_row"
+      ],
+      "qualifiedPath": [
+        "services_fx_rate_cache_service_get_fx_rate_cache_quote",
+        "services_fx_rate_cache_service_as_utc",
+        "services_fx_rate_cache_service_expected_market",
+        "services_fx_rate_cache_service_quote_for_cache_row"
+      ],
+      "depth": 1,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "app/services/fx_rate_cache_service.py"
       ],
       "criticality": 0.16,
       "warnings": []
@@ -28199,14 +28475,16 @@
       "entryPointId": "api_fx_rates_get_single_rate",
       "path": [
         "api_fx_rates_get_single_rate",
+        "api_fx_rates_fx_display_quote_status",
         "api_fx_rates_fxrateitem"
       ],
       "qualifiedPath": [
         "api_fx_rates_get_single_rate",
+        "api_fx_rates_fx_display_quote_status",
         "api_fx_rates_fxrateitem"
       ],
       "depth": 1,
-      "nodeCount": 2,
+      "nodeCount": 3,
       "fileCount": 1,
       "files": [
         "app/api/fx_rates.py"

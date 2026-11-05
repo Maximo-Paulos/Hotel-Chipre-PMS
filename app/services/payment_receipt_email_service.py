@@ -132,8 +132,13 @@ def _receipt_email_content(receipt: dict) -> tuple[str, str]:
             lines.append(f"Efectivo entregado: {_format_money(receipt['cash_received_amount'], receipt['currency'])}")
             if Decimal(str(receipt.get("cash_tip_amount") or 0)) > Decimal("0.00"):
                 lines.append(f"Propina: {_format_money(receipt['cash_tip_amount'], receipt['currency'])}")
-            if receipt.get("cash_change_amount") is not None:
-                lines.append(f"Vuelto: {_format_money(receipt['cash_change_amount'], receipt['currency'])}")
+            settled_change = receipt.get("cash_change_settled_amount")
+            settled_change_currency = receipt.get("cash_change_settled_currency") or receipt["currency"]
+            if settled_change is None:
+                settled_change = receipt.get("cash_change_amount")
+                settled_change_currency = receipt["currency"]
+            if settled_change is not None:
+                lines.append(f"Vuelto: {_format_money(settled_change, settled_change_currency)}")
         fee = Decimal(str(receipt.get("fee_amount") or 0)).copy_abs().quantize(Decimal("0.01"))
         if fee > Decimal("0.00"):
             lines.append(f"Cargo del medio de pago: {_format_money(fee, receipt['currency'])}")

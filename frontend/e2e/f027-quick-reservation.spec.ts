@@ -260,7 +260,7 @@ test.describe("F-027 reservation creation in English with an English browser loc
 test.describe("F-027 with an English browser locale", () => {
   test.use({ locale: "en-US" });
 
-  test("Spanish interface applies eligible moves by default and keeps preview explicit", async ({ page }) => {
+  test("Spanish interface keeps recalculated room changes pending for review", async ({ page }) => {
     const allocationRequests: Array<{ apply: boolean }> = [];
     const unexpectedDialogs: string[] = [];
     const dismissUnexpectedDialog = async (dialog: { message(): string; dismiss(): Promise<void> }) => {
@@ -296,16 +296,14 @@ test.describe("F-027 with an English browser locale", () => {
 
     const main = page.locator("main");
     await expect(main.getByRole("heading", { name: "Reservas", exact: true })).toBeVisible();
-    const applyChanges = main.getByRole("checkbox", { name: "Aplicar automáticamente movimientos seguros" });
     const recalculate = main.getByRole("button", { name: "Recalcular asignación", exact: true });
-    await expect(applyChanges).toBeChecked();
+    await expect(main.getByRole("checkbox", { name: /movimientos seguros/i })).toHaveCount(0);
 
     await recalculate.click();
     await expect.poll(() => allocationRequests.length).toBe(1);
-    expect(allocationRequests[0]?.apply).toBe(true);
+    expect(allocationRequests[0]?.apply).toBe(false);
     expect(unexpectedDialogs).toEqual([]);
 
-    await applyChanges.uncheck();
     await recalculate.click();
     await expect.poll(() => allocationRequests.length).toBe(2);
     expect(allocationRequests[1]?.apply).toBe(false);
@@ -316,7 +314,7 @@ test.describe("F-027 with an English browser locale", () => {
 test.describe("F-027 task due date with an English browser locale", () => {
   test.use({ locale: "en-US", timezoneId: "America/Argentina/Buenos_Aires" });
 
-  test("shows day-first 24-hour input and sends the selected local time as UTC", async ({ page }) => {
+  test("shows day-first 24-hour input and sends the selected hotel-local wall time", async ({ page }) => {
     const housekeeping = {
       email: process.env.E2E_HOUSEKEEPING_EMAIL || "housekeeping@e2e.com",
       password: process.env.E2E_HOUSEKEEPING_PASSWORD || "E2eHousekeeping1234!"
@@ -351,7 +349,7 @@ test.describe("F-027 task due date with an English browser locale", () => {
     await page.waitForURL("**/habitaciones");
     await page.goto("/operacion/tareas");
 
-    const dueAt = page.getByLabel("Vencimiento (opcional)", { exact: true });
+    const dueAt = page.getByLabel("Vencimiento (hora del hotel, opcional)", { exact: true });
     await expect(dueAt).toHaveAttribute("placeholder", "DD/MM/AAAA HH:MM");
     await dueAt.fill("02/11/2026 16:25");
     await expect(dueAt).toHaveValue("02/11/2026 16:25");
@@ -359,7 +357,7 @@ test.describe("F-027 task due date with an English browser locale", () => {
     await page.getByRole("button", { name: "Agregar", exact: true }).click();
 
     await expect.poll(() => createdTask).not.toBeNull();
-    expect(createdTask?.due_at).toBe("2026-11-02T19:25:00.000Z");
+    expect(createdTask?.due_at).toBe("2026-11-02T16:25");
   });
 });
 

@@ -11,8 +11,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.config import get_settings
 from app.database import get_engine
 from app.models.allocation import (
-    AllocationAssignment,
-    AllocationAssignmentStatusEnum,
     AllocationRun,
     AllocationRunStatusEnum,
 )
@@ -91,7 +89,7 @@ def _process_hotel_request(
     allocation_runner: Callable | None = None,
     origin_key: str | None = None,
 ) -> dict[str, int]:
-    """Process one queued run and auto-apply only its safe, complete moves."""
+    """Process one queued run; existing room changes remain operator proposals."""
     now = now or datetime.now(timezone.utc)
     set_tenant_hotel_context(db, hotel_id)
     claimed = _claim_request(db, hotel_id=hotel_id, now=now)
@@ -116,30 +114,13 @@ def _process_hotel_request(
             db,
             hotel_id=hotel_id,
             trigger_type=trigger_type,
-            apply=True,
+            apply=trigger_type in {"reservation_created_auto_proposal", "new_reservation"},
             queued_run_id=request_id,
             origin_key=normalized_origin_key,
         )
-        if result.run.status == AllocationRunStatusEnum.SUCCEEDED:
-            pending_moves = (
-                db.query(AllocationAssignment.id)
-                .filter(
-                    AllocationAssignment.hotel_id == hotel_id,
-                    AllocationAssignment.allocation_run_id == request_id,
-                    AllocationAssignment.status == AllocationAssignmentStatusEnum.PROPOSED,
-                )
-                .count()
-            )
-            if pending_moves:
-                from app.services.allocation_runtime_service import accept_allocation_run
-
-                accept_allocation_run(
-                    db,
-                    hotel_id=hotel_id,
-                    run_id=request_id,
-                    user_id=None,
-                    automatic=True,
-                )
+        # Initial assignment for an unassigned new reservation happens during
+        # run_persisted_allocation. Any move of an existing room assignment
+        # stays PROPOSED until an authenticated operator accepts it.
         db.commit()
         succeeded = int(result.run.status == AllocationRunStatusEnum.SUCCEEDED)
         failed = int(not succeeded)
@@ -207,7 +188,11 @@ def process_recalculation_requests(
     hotel_id: int | None = None,
     origin_key: str | None = None,
 ) -> dict[str, int]:
-    """Process one pending optimizer run per active hotel, without providers."""
+    """Process one pending optimizer run per active hotel, without providers.
+
+    Render Cron calls this task synchronously against PostgreSQL. A configured
+    Celery worker may also call it as a best-effort fast path.
+    """
     totals = {"selected": 0, "succeeded": 0, "failed": 0, "deferred": 0}
     if hotel_id is not None and (type(hotel_id) is not int or hotel_id <= 0):
         logger.warning("allocation_tasks.invalid_hotel_id")

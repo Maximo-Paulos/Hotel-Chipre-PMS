@@ -196,21 +196,31 @@ test("Gemma runtime health probes run on demand instead of every 30 seconds", as
   assert.match(page, /aria-label="Verificar el estado del runtime"/);
 });
 
-test("payment FX quotes do not poll and refresh only when a payment action needs a rate", async () => {
+test("payment FX uses reservation-bound quotes without polling", async () => {
   const page = await source("./src/views/protected/ReservationsPage.tsx");
-  const quoteQuery = page.match(/const paymentFxQuoteQuery = useQuery\([\s\S]*?\n  \}\);/)?.[0];
-  const refreshHelper = page.match(/const refreshPaymentFxRateForAction = async \(\)[\s\S]*?\n  \};/)?.[0];
+  const quoteHook = await source("./src/hooks/usePaymentSurcharges.ts");
+  const entryQuoteQuery = page.match(/const paymentEntryQuoteQuery = usePaymentSurchargeQuote\([\s\S]*?\n  \);/)?.[0];
+  const fullQuoteQuery = page.match(/const fullPaymentQuoteQuery = usePaymentSurchargeQuote\([\s\S]*?\n  \);/)?.[0];
   const depositHandler = page.match(/const handlePayDeposit = async \(\) => \{[\s\S]*?\n  \};/)?.[0];
   const fullPaymentHandler = page.match(/const handlePayFull = async \(\) => \{[\s\S]*?\n  \};/)?.[0];
   const partialPaymentHandler = page.match(/const handlePayPartial = async \(\) => \{[\s\S]*?\n  \};/)?.[0];
 
-  assert.ok(quoteQuery, "payment FX quote query must remain defined");
-  assert.doesNotMatch(quoteQuery, /refetchInterval/);
-  assert.match(quoteQuery, /staleTime: 30_000/);
-  assert.match(refreshHelper ?? "", /paymentFxQuoteQuery\.refetch\(\)/);
-  assert.match(refreshHelper ?? "", /result\.error \|\| !Number\.isFinite\(rate\) \|\| rate <= 0/);
+  assert.ok(entryQuoteQuery, "partial payment quote must remain defined");
+  assert.ok(fullQuoteQuery, "full payment quote must remain defined");
+  assert.match(entryQuoteQuery, /currency_code: paymentTenderCurrency/);
+  assert.match(fullQuoteQuery, /currency_code: paymentTenderCurrency/);
+  assert.match(page, /const paymentQuoteEnabled = Boolean\([\s\S]*paymentFormOpen/);
+  assert.match(quoteHook, /staleTime: 15_000/);
+  assert.doesNotMatch(quoteHook, /refetchInterval/);
+  assert.doesNotMatch(entryQuoteQuery, /refetchInterval/);
+  assert.doesNotMatch(fullQuoteQuery, /refetchInterval/);
+  assert.match(depositHandler ?? "", /const quote = isPriorReceipt \? null : depositPaymentQuoteQuery\.data/);
+  assert.match(page, /const paymentEntryQuote = paymentEntryQuoteQuery\.data \?\? \(/);
+  assert.match(page, /const fullPaymentQuote = fullPaymentQuoteQuery\.data \?\? fullManualPaymentQuote/);
+  assert.match(fullPaymentHandler ?? "", /const quote = isPriorReceipt \? null : fullPaymentQuote/);
+  assert.match(partialPaymentHandler ?? "", /const quote = isPriorReceipt \? null : paymentEntryQuote/);
   for (const handler of [depositHandler, fullPaymentHandler, partialPaymentHandler]) {
-    assert.match(handler ?? "", /await refreshPaymentFxRateForAction\(\)/);
+    assert.match(handler ?? "", /if \(!isPriorReceipt && !quote\)/);
   }
 });
 
@@ -311,10 +321,14 @@ test("a transient refresh error only clears the session after an explicit 401", 
 
 test("WhatsApp writes refresh only the active hotel's conversations in the background", async () => {
   const crm = await source("./src/hooks/useWhatsappCRM.ts");
-  const invalidation = crm.match(/const invalidate = \(\) => invalidateQueriesInBackground\(queryClient, \{[\s\S]*?\}\);/)?.[0];
+  const listKey = crm.match(/const conversationListKey = \[[^\n]+\] as const;/)?.[0];
+  const invalidation = crm.match(/const invalidateConversations = \(\) => invalidateQueriesInBackground\(queryClient, \{[\s\S]*?\}\);/)?.[0];
 
+  assert.ok(listKey, "WhatsApp conversation cache key must be defined");
   assert.ok(invalidation, "WhatsApp mutations must use a non-blocking invalidation");
-  assert.match(invalidation, /queryKey: \["whatsapp", "conversations", session\.hotelId\]/);
+  assert.match(listKey, /\["whatsapp-conversations", session\.hotelId\]/);
+  assert.match(invalidation, /queryKey: conversationListKey/);
+  assert.match(invalidation, /exact: true/);
   assert.doesNotMatch(invalidation, /queryKey: \["whatsapp"\]/);
 });
 

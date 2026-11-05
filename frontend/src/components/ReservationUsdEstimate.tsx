@@ -54,6 +54,9 @@ export default function ReservationUsdEstimate({ amount }: Props) {
         i18n.language === "en" ? "en-US" : "es-AR",
         { maximumFractionDigits: 2 }
       );
+  const quoteObservedAt = fxDetails?.quote_observed_at
+    ? new Date(fxDetails.quote_observed_at).toLocaleString(i18n.language === "en" ? "en-US" : "es-AR")
+    : null;
   const statusMessage = !canViewEstimate
     ? t("page.form.usdEstimatePermissionDenied")
     : fxQuoteQuery.isError
@@ -83,6 +86,16 @@ export default function ReservationUsdEstimate({ amount }: Props) {
           {t("page.form.usdEstimateRate", { rate: fxRateLabel, market: fxMarketLabel })}
           {fxSideLabel ? t("page.form.usdEstimateSide", { side: fxSideLabel }) : ""}
           {fxSpreadLabel !== null ? t("page.form.usdEstimateSpread", { spread: fxSpreadLabel }) : ""}
+        </p>
+      ) : null}
+      {statusMessage === null && quoteObservedAt ? (
+        <p className="mt-1 text-xs text-sky-900">
+          {t("page.form.usdEstimateObservedAt", { date: quoteObservedAt })}
+        </p>
+      ) : null}
+      {statusMessage === null && fxDetails?.fallback_used ? (
+        <p className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs font-medium text-amber-950" role="alert" data-testid="reservation-usd-estimate-fallback">
+          {t("page.form.usdEstimateFallback", { date: quoteObservedAt ?? t("page.form.usdEstimateUnknownDate") })}
         </p>
       ) : null}
       <p className="mt-1 text-xs text-sky-900">{t("page.form.usdEstimateDisclaimer")}</p>

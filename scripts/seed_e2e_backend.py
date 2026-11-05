@@ -1,8 +1,8 @@
-"""Prepare the fixed local SQLite or explicitly isolated PostgreSQL E2E database.
+"""Prepare an explicitly isolated local PostgreSQL E2E database.
 
 The safety check intentionally runs before importing Alembic or any ``app``
-module.  An inherited PostgreSQL URL or any SQLite path other than the fixed
-repository ``_e2e.db`` target is refused.
+module. SQLite, inherited URLs, and any PostgreSQL target that is not explicitly
+isolated for this test run are refused.
 """
 from __future__ import annotations
 
@@ -18,8 +18,6 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-E2E_DATABASE_PATH = ROOT_DIR / "_e2e.db"
-E2E_DATABASE_URL = f"sqlite:///{E2E_DATABASE_PATH.as_posix()}"
 E2E_POSTGRES_DATABASE_URL_EXPLICIT = "E2E_POSTGRES_DATABASE_URL_EXPLICIT"
 E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT = "E2E_POSTGRES_SEED_DATABASE_URL_EXPLICIT"
 E2E_POSTGRES_ISOLATED = "E2E_POSTGRES_ISOLATED"
@@ -111,11 +109,6 @@ def _postgres_e2e_seed_connection(
     return seed_url, seed_parameters
 
 
-def _is_postgres_e2e_target(env: MutableMapping[str, str] | None = None) -> bool:
-    target = os.environ if env is None else env
-    return (target.get("DATABASE_URL") or "").startswith(("postgresql://", "postgresql+psycopg2://"))
-
-
 def _assert_postgres_e2e_database_empty() -> str:
     """Refuse migrations unless the dedicated database has no user objects."""
     target = os.environ
@@ -162,51 +155,16 @@ def prepare_e2e_environment(env: MutableMapping[str, str] | None = None) -> str:
         raise E2ESafetyError("local E2E requires APP_ENV=test")
 
     url = target.get("DATABASE_URL") or ""
-    if url.startswith(("postgresql://", "postgresql+psycopg2://")):
-        runtime_parameters = _postgres_e2e_connection(url, target)
-        if not str(runtime_parameters["user"]).endswith("_app_runner"):
-            raise E2ESafetyError("PostgreSQL E2E DATABASE_URL must use the regular app role")
-        _postgres_e2e_seed_connection(url, runtime_parameters, target)
-        target["APP_ENV"] = "test"
-        target.setdefault("JWT_SECRET", "e2e-local-jwt-secret-change-me-32chars")
-        return url
-    if not url.startswith("sqlite:///") or url.startswith("sqlite://///"):
-        raise E2ESafetyError("local E2E requires the fixed SQLite database or an explicitly isolated loopback PostgreSQL 16 database")
-    if "?" in url or "#" in url:
-        raise E2ESafetyError("local E2E SQLite URL cannot contain query or fragment")
-    raw_path = url.removeprefix("sqlite:///").replace("\\", "/")
-    if not raw_path or raw_path == ":memory:":
-        raise E2ESafetyError("local E2E requires a persistent SQLite file")
-    if len(raw_path) >= 3 and raw_path[0] == "/" and raw_path[2] == ":":
-        raw_path = raw_path[1:]
-    db_path = Path(raw_path)
-    if not db_path.is_absolute():
-        db_path = ROOT_DIR / db_path
-    if E2E_DATABASE_PATH.is_symlink():
-        raise E2ESafetyError("local E2E database path cannot be a symlink")
-    if db_path.resolve(strict=False) != E2E_DATABASE_PATH.resolve(strict=False):
-        raise E2ESafetyError("local E2E database path must be the repository _e2e.db")
+    if not url.startswith(("postgresql://", "postgresql+psycopg2://")):
+        raise E2ESafetyError("local E2E requires an explicitly isolated loopback PostgreSQL 16 database; SQLite is not supported")
+    runtime_parameters = _postgres_e2e_connection(url, target)
+    if not str(runtime_parameters["user"]).endswith("_app_runner"):
+        raise E2ESafetyError("PostgreSQL E2E DATABASE_URL must use the regular app role")
+    _postgres_e2e_seed_connection(url, runtime_parameters, target)
 
     target["APP_ENV"] = "test"
-    target["DATABASE_URL"] = E2E_DATABASE_URL
     target.setdefault("JWT_SECRET", "e2e-local-jwt-secret-change-me-32chars")
-    return E2E_DATABASE_URL
-
-
-def reset_e2e_database() -> None:
-    """Remove only the generated repository E2E database when explicitly requested."""
-
-    if _is_postgres_e2e_target():
-        prepare_e2e_environment()
-        return
-    if os.environ.get("E2E_RESET_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
-        return
-    if E2E_DATABASE_PATH.is_symlink():
-        raise E2ESafetyError("local E2E database path cannot be a symlink")
-    for suffix in ("", "-wal", "-shm"):
-        target = Path(f"{E2E_DATABASE_PATH}{suffix}")
-        if target.exists():
-            target.unlink()
+    return url
 
 
 def _credentials(env: MutableMapping[str, str] | None = None) -> tuple[str, str]:
@@ -246,10 +204,7 @@ def _step_up_test_projects() -> tuple[str, ...]:
 
 def run_migrations() -> None:
     database_url = prepare_e2e_environment()
-    if database_url.startswith(("postgresql://", "postgresql+psycopg2://")):
-        database_name = _assert_postgres_e2e_database_empty()
-    else:
-        database_name = ""
+    database_name = _assert_postgres_e2e_database_empty()
     print("Running local E2E database migrations", file=sys.stderr, flush=True)
     from alembic import command
     from alembic.config import Config
@@ -282,30 +237,24 @@ def run_migrations() -> None:
 def upsert_seed_data() -> None:
     database_url = prepare_e2e_environment()
     seed_engine = None
-    if database_url.startswith(("postgresql://", "postgresql+psycopg2://")):
-        runtime_parameters = _postgres_e2e_connection(database_url, os.environ)
-        _, seed_parameters = _postgres_e2e_seed_connection(database_url, runtime_parameters, os.environ)
-        database_name = str(runtime_parameters["dbname"])
-        if database_name not in _POSTGRES_E2E_MIGRATED_DATABASES:
-            raise E2ESafetyError("PostgreSQL E2E seed requires fresh migrations in this process")
-        from app.database import get_engine
-        from sqlalchemy import text
-        from sqlalchemy.orm import sessionmaker
+    runtime_parameters = _postgres_e2e_connection(database_url, os.environ)
+    _, seed_parameters = _postgres_e2e_seed_connection(database_url, runtime_parameters, os.environ)
+    database_name = str(runtime_parameters["dbname"])
+    if database_name not in _POSTGRES_E2E_MIGRATED_DATABASES:
+        raise E2ESafetyError("PostgreSQL E2E seed requires fresh migrations in this process")
+    from app.database import get_engine
+    from sqlalchemy import text
+    from sqlalchemy.orm import sessionmaker
 
-        seed_engine = get_engine(str(os.environ["E2E_POSTGRES_SEED_DATABASE_URL"]))
-        with seed_engine.connect() as connection:
-            bypasses_rls = connection.execute(
-                text("SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user")
-            ).scalar_one_or_none()
-        if bypasses_rls is not True:
-            seed_engine.dispose()
-            raise E2ESafetyError("PostgreSQL E2E seed role must be a dedicated local BYPASSRLS fixture role")
-        session_factory = sessionmaker(autocommit=False, autoflush=False, bind=seed_engine)
-    else:
-        from app.database import get_session_factory, init_db
-
-        init_db(database_url)
-        session_factory = get_session_factory()
+    seed_engine = get_engine(str(os.environ["E2E_POSTGRES_SEED_DATABASE_URL"]))
+    with seed_engine.connect() as connection:
+        bypasses_rls = connection.execute(
+            text("SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user")
+        ).scalar_one_or_none()
+    if bypasses_rls is not True:
+        seed_engine.dispose()
+        raise E2ESafetyError("PostgreSQL E2E seed role must be a dedicated local BYPASSRLS fixture role")
+    session_factory = sessionmaker(autocommit=False, autoflush=False, bind=seed_engine)
     owner_email, owner_password = _credentials()
     role_credentials = _role_credentials()
 
@@ -341,6 +290,11 @@ def upsert_seed_data() -> None:
         hotel.subscription_active = True
         hotel.default_currency = "ARS"
         hotel.hotel_timezone = "America/Argentina/Buenos_Aires"
+        # The synthetic hotel has completed its operational schedule setup so
+        # reservation cancellation/check-in journeys can exercise the policy
+        # instead of stopping at the onboarding configuration gate.
+        hotel.check_in_time = "15:00"
+        hotel.check_out_time = "10:00"
         hotel.enable_bank_transfer = True
         # The synthetic owner has explicitly completed deposit/cancellation
         # setup; production hotels stay blocked until an owner does this.
@@ -609,7 +563,6 @@ def upsert_seed_data() -> None:
 
 def main() -> None:
     prepare_e2e_environment()
-    reset_e2e_database()
     run_migrations()
     upsert_seed_data()
     print("Local E2E database ready; credentials loaded from E2E_* environment/local defaults")

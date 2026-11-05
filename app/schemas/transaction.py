@@ -88,6 +88,9 @@ class PaymentRequest(BaseModel):
     # Signed 15-minute quote from POST /api/payment-surcharges/quote. It binds
     # the amount, tender currency, payment method and FX/surcharge snapshots.
     payment_quote_token: Optional[str] = Field(default=None, max_length=24_000)
+    # Persisted, single-use authorization for a manually approved currency
+    # conversion. Cashier permissions cannot alter this reserved amount.
+    manual_fx_quote_id: Optional[int] = Field(default=None, gt=0)
     description: Optional[str] = None
     manual_reference: Optional[str] = Field(default=None, min_length=1, max_length=120)
     refund_of_transaction_id: Optional[int] = Field(default=None, gt=0)
@@ -128,6 +131,12 @@ class PaymentRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_prior_receipt_fields(self) -> "PaymentRequest":
+        if self.manual_fx_quote_id is not None and self.payment_quote_token is None:
+            raise ValueError("El importe manual requiere su cotización firmada por el servidor")
+        if self.manual_fx_quote_id is not None and (
+            self.transaction_type == TransactionTypeEnum.REFUND or self.collected_before
+        ):
+            raise ValueError("El importe manual no se admite en devoluciones ni cobros previos")
         if self.cash_received_amount is not None:
             if self.payment_method != PaymentMethodEnum.CASH:
                 raise ValueError("El efectivo entregado solo se admite en pagos en efectivo")
@@ -176,6 +185,9 @@ class TransactionRead(BaseModel):
     tender_currency: Optional[str] = None
     cash_received_amount: Optional[Decimal] = None
     cash_change_amount: Optional[Decimal] = None
+    cash_change_settled_amount: Optional[Decimal] = None
+    cash_change_settled_currency: Optional[str] = None
+    cash_change_fx_rate_snapshot: Optional[Decimal] = None
     cash_tip_amount: Decimal = Decimal("0.00")
     fx_rate_snapshot: Optional[float] = None
     transaction_type: TransactionTypeEnum
@@ -218,6 +230,9 @@ class PaymentReceiptRead(BaseModel):
     fee_amount: Decimal
     cash_received_amount: Optional[Decimal] = None
     cash_change_amount: Optional[Decimal] = None
+    cash_change_settled_amount: Optional[Decimal] = None
+    cash_change_settled_currency: Optional[str] = None
+    cash_change_fx_rate_snapshot: Optional[Decimal] = None
     cash_tip_amount: Decimal = Decimal("0.00")
     currency: str
     method: PaymentMethodEnum

@@ -71,7 +71,7 @@ test("owner sees clear not-connected status and a human error, not a raw technic
       contentType: "application/json",
       json: {
         detail:
-          "OAuth de Mercado Pago no esta configurado en este entorno. Usa access_token manual o configura la app del PMS."
+          "La conexión con Mercado Pago todavía no está habilitada. El equipo de Hotels-PMS debe completar la configuración de la plataforma."
       }
     })
   );
@@ -96,9 +96,11 @@ test("owner sees clear not-connected status and a human error, not a raw technic
   await expect(mercadopagoCard).toBeVisible();
   await expect(mercadopagoCard.getByText("No conectado", { exact: true })).toBeVisible();
 
-  await mercadopagoCard.getByRole("button", { name: "Abrir autorización", exact: true }).click();
+  await expect(mercadopagoCard.getByRole("button", { name: "Conectar Mercado Pago", exact: true })).toBeVisible();
+  await expect(mercadopagoCard.getByPlaceholder(/access_token|user_id|Código de autorización/i)).toHaveCount(0);
+  await mercadopagoCard.getByRole("button", { name: "Conectar Mercado Pago", exact: true }).click();
   const mercadopagoNotice = mercadopagoCard.locator("div.mt-3.rounded-lg.border").first();
-  await expect(mercadopagoNotice).toContainText("OAuth de Mercado Pago no esta configurado en este entorno");
+  await expect(mercadopagoNotice).toContainText("todavía está habilitando la conexión con Mercado Pago");
   const mercadopagoText = await mercadopagoNotice.innerText();
   expect(mercadopagoText).not.toContain("Traceback");
   expect(mercadopagoText).not.toContain("{");

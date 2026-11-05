@@ -32,7 +32,7 @@
 
 ## Current gaps visible in the repo
 - OTA lifecycle is not yet fully closed operationally.
-- Allocation applies complete, revalidated safe moves automatically. A better move for a reassignment-locked reservation remains pending for one-time approval; any partial/full check-in remains immovable. Channel/company room priorities are soft tie-breakers after the occupancy/continuity objective; floor preference requires an explicit no-elevator setting. PostgreSQL integration and cloud QA remain pending.
+- New reservations receive an immediate compatible first-fit room. Later optimizer runs only prepare suggestions; Reception must approve each proposal before an existing reservation moves. Check-ins remain immovable, and a reassignment lock needs explicit one-time approval. Channel/company room priorities are soft tie-breakers after the occupancy/continuity objective; floor preference requires an explicit no-elevator setting. PostgreSQL integration and cloud QA remain pending.
 - Experimental pricing advice now prepares editable, auditable drafts from demand signals and comparable published USD rates. The rate calendar remains authoritative and changes require human confirmation; backtest and cloud QA remain pending.
 - Guest and check-in UX is not yet a full first-class workflow.
 - Gemma is intentionally bounded and still needs a tighter feedback/runtime loop.

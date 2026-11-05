@@ -21,6 +21,8 @@ export type PaymentRequest = {
   refund_reason?: string;
   /** Signed backend FX/surcharge snapshot for this exact individual payment. */
   payment_quote_token?: string;
+  /** A persisted, single-use manual FX amount authorized for this reservation. */
+  manual_fx_quote_id?: number;
   company_night_charge_refund_allocations?: Array<{
     charge_id: number;
     amount: number;
@@ -82,6 +84,9 @@ export type PaymentSummary = {
     fee_amount?: number;
     cash_received_amount?: number | null;
     cash_change_amount?: number | null;
+    cash_change_settled_amount?: number | string | null;
+    cash_change_settled_currency?: string | null;
+    cash_change_fx_rate_snapshot?: number | string | null;
     cash_tip_amount?: number | null;
     currency: string;
     method: string;
@@ -143,6 +148,9 @@ export type PaymentReceiptData = {
   fee_amount: number | string;
   cash_received_amount?: number | string | null;
   cash_change_amount?: number | string | null;
+  cash_change_settled_amount?: number | string | null;
+  cash_change_settled_currency?: string | null;
+  cash_change_fx_rate_snapshot?: number | string | null;
   cash_tip_amount?: number | string | null;
   currency: string;
   method: string;

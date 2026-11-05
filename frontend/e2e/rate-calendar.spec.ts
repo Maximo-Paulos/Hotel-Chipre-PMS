@@ -716,7 +716,7 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   await expect.poll(() => openDraft?.status).toBe("confirmed");
 
   const pricePeriodsSection = page.getByTestId("price-periods-section");
-  await pricePeriodsSection.getByLabel("Nombre").fill("Temporada de verano");
+  await pricePeriodsSection.getByLabel("Nombre", { exact: true }).last().fill("Temporada de verano");
   await pricePeriodsSection.getByLabel("Desde").fill("2026-12-20");
   await pricePeriodsSection.getByLabel("Hasta").fill("2026-12-31");
   await pricePeriodsSection.getByLabel("Precio por noche").fill("68000");
@@ -733,6 +733,8 @@ test("rate calendar page renders annual editor and integrated channel view", asy
         end_date: "2026-12-31",
         price_per_night: 68000,
         priority: 0,
+        comparable_season_key: "",
+        is_high_demand_event: false,
         is_active: true
       }
     }

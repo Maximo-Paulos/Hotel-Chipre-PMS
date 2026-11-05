@@ -742,8 +742,12 @@ export function CashRegisterPage() {
                             {receipt.cash_received_amount !== null && receipt.cash_received_amount !== undefined ? (
                               <span className="mt-1 block whitespace-normal text-xs font-normal text-emerald-800">
                                 Entregado {cashMoney(receipt.cash_received_amount, receipt.currency_code)}
-                                {receipt.cash_change_amount !== null && receipt.cash_change_amount !== undefined
-                                  ? ` · Vuelto ${cashMoney(receipt.cash_change_amount, receipt.currency_code)}`
+                                {(receipt.cash_change_settled_amount ?? receipt.cash_change_amount) !== null &&
+                                (receipt.cash_change_settled_amount ?? receipt.cash_change_amount) !== undefined
+                                  ? ` · Vuelto ${cashMoney(
+                                      receipt.cash_change_settled_amount ?? receipt.cash_change_amount!,
+                                      receipt.cash_change_settled_currency ?? receipt.currency_code
+                                    )}`
                                   : ""}
                                 {Number(receipt.cash_tip_amount ?? 0) > 0
                                   ? ` · Propina ${cashMoney(Number(receipt.cash_tip_amount), receipt.currency_code)}`
@@ -807,8 +811,12 @@ export function CashRegisterPage() {
                         {entry.cash_received_amount !== null && entry.cash_received_amount !== undefined ? (
                           <span className="mt-1 block whitespace-nowrap text-xs font-normal text-emerald-800">
                             Entregado {cashMoney(entry.cash_received_amount, entry.currency_code)}
-                            {entry.cash_change_amount !== null && entry.cash_change_amount !== undefined
-                              ? ` · Vuelto ${cashMoney(entry.cash_change_amount, entry.currency_code)}`
+                            {(entry.cash_change_settled_amount ?? entry.cash_change_amount) !== null &&
+                            (entry.cash_change_settled_amount ?? entry.cash_change_amount) !== undefined
+                              ? ` · Vuelto ${cashMoney(
+                                  entry.cash_change_settled_amount ?? entry.cash_change_amount!,
+                                  entry.cash_change_settled_currency ?? entry.currency_code
+                                )}`
                               : ""}
                             {Number(entry.cash_tip_amount ?? 0) > 0
                               ? ` · Propina ${cashMoney(Number(entry.cash_tip_amount), entry.currency_code)}`
@@ -1303,8 +1311,12 @@ export function CashRegisterPage() {
                         {movement.cash_received_amount !== null && movement.cash_received_amount !== undefined ? (
                           <p className="mt-1 text-xs font-normal text-emerald-800">
                             {t("page.cashRegister.cashReceived")} {cashMoney(movement.cash_received_amount, currency)}
-                            {movement.cash_change_amount !== null && movement.cash_change_amount !== undefined
-                              ? ` · ${t("page.cashRegister.cashChange")} ${cashMoney(movement.cash_change_amount, currency)}`
+                            {(movement.cash_change_settled_amount ?? movement.cash_change_amount) !== null &&
+                            (movement.cash_change_settled_amount ?? movement.cash_change_amount) !== undefined
+                              ? ` · ${t("page.cashRegister.cashChange")} ${cashMoney(
+                                  movement.cash_change_settled_amount ?? movement.cash_change_amount!,
+                                  movement.cash_change_settled_currency ?? currency
+                                )}`
                               : ""}
                             {Number(movement.cash_tip_amount ?? 0) > 0
                               ? ` · ${t("page.cashRegister.cashTip")} ${cashMoney(Number(movement.cash_tip_amount), currency)}`

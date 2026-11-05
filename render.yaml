@@ -134,9 +134,10 @@ services:
     autoDeploy: true
 
   # One scheduler per five-minute interval. It runs bounded SQL work under
-  # each hotel's RLS context, then attempts at most two pending Mercado Pago
-  # checkout revocations only when both external-connection flags are enabled.
-  # No separate worker, Redis, or NoSQL service is required.
+  # each hotel's RLS context, drains durable room-allocation proposals, then
+  # attempts at most two pending Mercado Pago checkout revocations only when
+  # both external-connection flags are enabled. No separate worker, Redis, or
+  # NoSQL service is required.
   - type: cron
     name: hotel-chipre-pms-scheduled-hotel-jobs
     runtime: python

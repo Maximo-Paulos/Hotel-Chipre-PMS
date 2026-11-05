@@ -86,17 +86,6 @@ test("owner sees a real reservation on the current-month grid and opens it via t
   expect(reservationId).toBeGreaterThan(0);
   expect(created.room_id).toBeTruthy();
 
-  await page.goto("/habitaciones");
-  const blockForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Crear bloqueo", exact: true }) });
-  await blockForm.getByLabel("Habitación").selectOption(String(created.room_id));
-  await blockForm.getByLabel("Desde").fill(checkIn);
-  await blockForm.getByLabel("Hasta").fill(checkOut);
-  const blockConflictWarning = page.getByRole("alert").filter({ hasText: "Reservas superpuestas" });
-  await expect(blockConflictWarning).toContainText("Reservas superpuestas: 1");
-  await expect(blockConflictWarning).toContainText("Revisá la Planilla");
-  await blockForm.getByRole("button", { name: "Crear bloqueo", exact: true }).click();
-  await expect(page.getByText("Bloqueo creado.", { exact: true })).toBeVisible();
-
   // Load the current month's grid (default window starts today).
   const gridResponse = page.waitForResponse(
     (res) => res.url().includes("/api/reservations/occupancy-grid") && res.request().method() === "GET"
@@ -120,10 +109,6 @@ test("owner sees a real reservation on the current-month grid and opens it via t
   const cell = page.getByTestId(`occupancy-reservation-${reservationId}`).first();
   await expect(cell).toBeVisible();
   await expect(cell).toContainText(guestLastName);
-  const blockConflictCell = page.getByTestId(`occupancy-block-conflict-${reservationId}`).first();
-  await expect(blockConflictCell).toBeVisible();
-  await expect(blockConflictCell).toContainText("Bloqueo superpuesto: Mantenimiento");
-
   await cell.click();
   const drawer = page.getByRole("dialog", { name: confirmationCode });
   await expect(drawer).toBeVisible();

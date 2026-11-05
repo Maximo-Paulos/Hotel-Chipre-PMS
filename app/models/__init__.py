@@ -175,6 +175,7 @@ from app.models.payment import (
     PaymentWebhookEvent,
 )
 from app.models.payment_correction import PaymentCorrection
+from app.models.manual_fx_payment_quote import ManualFxPaymentQuote
 from app.models.payment_link_test import PaymentLinkTest
 from app.models.payment_proof import (
     PaymentProof,
@@ -356,6 +357,7 @@ __all__ = [
     "IntegrationConnection",
     "IntegrationEvent",
     "PaymentLinkTest",
+    "ManualFxPaymentQuote",
     "PaymentSurcharge",
     "PaymentSurchargeTypeEnum",
     "Payment",

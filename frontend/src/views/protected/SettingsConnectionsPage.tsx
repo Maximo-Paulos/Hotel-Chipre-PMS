@@ -23,6 +23,13 @@ const getErrorMessage = (error: unknown) => {
 
 const getProviderErrorMessage = (provider: string, error: unknown) => {
   const message = getErrorMessage(error);
+  if (
+    provider === "mercadopago" &&
+    (message.includes("La conexión con Mercado Pago todavía no está habilitada") ||
+      message.includes("OAuth de Mercado Pago no esta configurado"))
+  ) {
+    return "Hotels-PMS todavía está habilitando la conexión con Mercado Pago. No necesitás copiar tokens, IDs ni claves.";
+  }
   if (provider === "gmail" && message.includes("OAuth de Gmail no esta configurado")) {
     return "Todavía falta configurar la app de Google de Hotels-PMS en este entorno. Cuando esté lista, este botón va a abrir Google directamente para conectar el correo del hotel.";
   }
@@ -146,7 +153,9 @@ export function SettingsConnectionsPage() {
         setNoticeFor(
           id,
           "info",
-          "Autorización iniciada. Si el proveedor no vuelve solo al PMS, puedes usar el ingreso manual con código como respaldo.",
+          provider === "mercadopago"
+            ? "Iniciá sesión en Mercado Pago, autorizá Hotels-PMS y volverás a esta pantalla automáticamente."
+            : "Autorización iniciada. Si el proveedor no vuelve solo al PMS, puedes usar el ingreso manual con código como respaldo.",
         );
       } else {
         setNoticeFor(id, "success", "Conexión guardada de forma segura para este hotel.");
@@ -158,15 +167,6 @@ export function SettingsConnectionsPage() {
   };
 
   const handleStartAuthorization = async (id: number, provider: string) => {
-    const payload = form[id] || {};
-    if (payload.access_token?.trim()) {
-      setNoticeFor(
-        id,
-        "info",
-        "Ya cargaste credenciales manuales. En este caso no uses 'Abrir autorización': toca 'Guardar credenciales'.",
-      );
-      return;
-    }
     try {
       const res = await connect.mutateAsync({ id, payload: {} });
       if (res.redirect_url) {
@@ -174,7 +174,9 @@ export function SettingsConnectionsPage() {
         setNoticeFor(
           id,
           "info",
-          provider === "gmail"
+          provider === "mercadopago"
+            ? "Iniciá sesión en Mercado Pago, autorizá Hotels-PMS y volverás a esta pantalla automáticamente."
+            : provider === "gmail"
             ? "Autorización iniciada. Cuando termines en Google, la conexión debería completarse sola en esta pantalla. Si Google no redirige bien, usa el campo de código como respaldo."
             : "Autorización iniciada. Cuando el proveedor te entregue el código, pégalo en el campo 'Código de autorización' y luego toca 'Guardar código'.",
         );
@@ -282,11 +284,11 @@ export function SettingsConnectionsPage() {
           const status = conn?.status || "not_connected";
           const currentNotice = notice[cat.id];
           const hasCode = Boolean(form[cat.id]?.code?.trim());
-          const hasManualMercadoPagoToken = Boolean(form[cat.id]?.access_token?.trim());
           const isOauth = cat.auth_type === "oauth_code";
-          const canSaveOauth = hasCode || hasManualMercadoPagoToken;
+          const canSaveOauth = hasCode;
           const isConnected = status === "connected";
           const isGmail = cat.provider === "gmail";
+          const isMercadoPago = cat.provider === "mercadopago";
           const manualCodeVisible = Boolean(showManualCode[cat.id]);
 
           return (
@@ -378,6 +380,13 @@ export function SettingsConnectionsPage() {
                         i
                       </button>
                     </div>
+                  ) : isMercadoPago ? (
+                    <div className="rounded-lg border border-sky-200 bg-white px-3 py-2">
+                      <p className="text-xs font-semibold text-slate-900">Conexión con la cuenta del hotel</p>
+                      <p className="mt-1 text-[11px] text-slate-600">
+                        El Owner inicia sesión en Mercado Pago y autoriza Hotels-PMS. Recepción opera los cobros desde el PMS.
+                      </p>
+                    </div>
                   ) : (
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Conexión guiada</p>
@@ -387,7 +396,7 @@ export function SettingsConnectionsPage() {
                     </div>
                   )}
 
-                  {(!isGmail || manualCodeVisible) && (
+                  {!isMercadoPago && (!isGmail || manualCodeVisible) && (
                     <div className="space-y-1">
                       <label className="block text-xs font-semibold text-slate-700">Código de autorización</label>
                       <input
@@ -408,38 +417,6 @@ export function SettingsConnectionsPage() {
                     </div>
                   )}
 
-                  {cat.provider === "mercadopago" && (
-                    <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
-                      <p className="text-xs font-semibold text-slate-700">Opción alternativa: guardar credenciales manuales</p>
-                      <p className="text-[11px] text-slate-500">
-                        Si OAuth aún no está habilitado para este PMS, usa este camino. Guarda el access token del hotel sin tocar código.
-                      </p>
-                      <p className="text-xs text-slate-600">
-                        Si ya tenés credenciales de Mercado Pago, también podés guardarlas directo para este hotel.
-                      </p>
-                      <input
-                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                        placeholder="access_token de Mercado Pago"
-                        value={form[cat.id]?.access_token || ""}
-                        onChange={(e) => setField(cat.id, "access_token", e.target.value)}
-                      />
-                      <input
-                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                        placeholder="public_key (opcional)"
-                        value={form[cat.id]?.public_key || ""}
-                        onChange={(e) => setField(cat.id, "public_key", e.target.value)}
-                      />
-                      <input
-                        className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                        placeholder="user_id / collector_id (opcional)"
-                        value={form[cat.id]?.user_id || ""}
-                        onChange={(e) => setField(cat.id, "user_id", e.target.value)}
-                      />
-                      <p className="text-[11px] font-medium text-emerald-700">
-                        Después de completar estos campos, toca <strong>Guardar credenciales</strong>. No hace falta abrir autorización.
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -457,13 +434,6 @@ export function SettingsConnectionsPage() {
                 </div>
               )}
 
-              {!isConnected && cat.provider === "mercadopago" && !hasManualMercadoPagoToken && !hasCode && (
-                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Si al tocar <strong>Abrir autorización</strong> ves un error del proveedor, usa <strong>access_token</strong> en la opcion alternativa.
-                  Ese dato se guarda cifrado y queda asociado solo a este hotel.
-                </div>
-              )}
-
               {!isConnected && cat.provider === "gmail" && (
                 <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
                   Este Gmail se usara para enviar mensajes del hotel a sus huespedes. La conexion principal se hace desde la ventana de Google; el codigo manual queda solo como respaldo.
@@ -477,16 +447,14 @@ export function SettingsConnectionsPage() {
                   </Link>
                 ) : !isConnected && isOauth ? (
                   <>
-                    {!hasManualMercadoPagoToken && (
-                      <button
-                        className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                        onClick={() => handleStartAuthorization(cat.id, cat.provider)}
-                        disabled={connect.isPending}
-                        type="button"
-                      >
-                        {isGmail ? "Conectar Gmail" : "Abrir autorización"}
-                      </button>
-                    )}
+                    <button
+                      className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                      onClick={() => handleStartAuthorization(cat.id, cat.provider)}
+                      disabled={connect.isPending}
+                      type="button"
+                    >
+                      {isGmail ? "Conectar Gmail" : isMercadoPago ? "Conectar Mercado Pago" : "Abrir autorización"}
+                    </button>
                     {isGmail ? (
                       <>
                         <button
@@ -524,6 +492,14 @@ export function SettingsConnectionsPage() {
                           </>
                         )}
                       </>
+                    ) : isMercadoPago ? (
+                      <button
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-brand-400"
+                        onClick={() => setHelpProvider(cat.provider)}
+                        type="button"
+                      >
+                        Como conectar
+                      </button>
                     ) : (
                       <>
                         <button
@@ -539,7 +515,7 @@ export function SettingsConnectionsPage() {
                           disabled={connect.isPending || !canSaveOauth}
                           type="button"
                         >
-                          {hasManualMercadoPagoToken ? "Guardar credenciales" : "Guardar código"}
+                          "Guardar código"
                         </button>
                       </>
                     )}

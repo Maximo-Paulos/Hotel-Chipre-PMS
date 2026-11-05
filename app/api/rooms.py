@@ -34,7 +34,6 @@ from app.schemas.room import (
 )
 from app.services import audit_log_service
 from app.services.allocation_runtime_service import (
-    auto_apply_safe_allocation_run,
     run_persisted_allocation,
 )
 from app.services.analytics_service import record_hotel_audit_event
@@ -94,15 +93,15 @@ def _serialize_reallocation_result(result, *, include_message: bool = False) -> 
         "run_id": result.run.id,
         "status": result.run.status.value if hasattr(result.run.status, "value") else str(result.run.status),
         "assignments": len(result.solver_result.assignments),
-        "moved": len(result.solver_result.moved_reservations),
-        "moved_ids": result.solver_result.moved_reservations,
+        "proposed_moves": len(result.solver_result.moved_reservations),
+        "proposed_move_ids": result.solver_result.moved_reservations,
         "unassigned": len(result.solver_result.unassigned_reservations),
         "unassigned_ids": result.solver_result.unassigned_reservations,
         "objective_value": result.solver_result.objective_value,
         "error": result.solver_result.error,
     }
     if include_message:
-        payload["message"] = "Reallocation executed"
+        payload["message"] = "Reallocation proposal prepared; Reception must approve moves before they are applied."
     return payload
 
 
@@ -739,7 +738,7 @@ def trigger_reallocation(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
-    """Recalculate and automatically apply a complete, revalidated safe plan."""
+    """Prepare a room-move proposal for an authenticated operator to review."""
     
     _require_manager_room_lane(context)
     try:
@@ -747,18 +746,14 @@ def trigger_reallocation(
             db,
             hotel_id=context.hotel_id,
             trigger_type="rooms_manual_reallocate",
-            apply=True,
+            apply=False,
         )
-        if result.solver_result.success:
-            auto_apply_safe_allocation_run(
-                db, hotel_id=context.hotel_id, run_id=result.run.id
-            )
         db.commit()
         if not result.solver_result.assignments and not result.solver_result.unassigned_reservations:
             return {
                 "status": "ok",
                 "message": "No active reservations to reallocate",
-                "moved": 0,
+                "proposed_moves": 0,
                 "unassigned": [],
             }
         payload = _serialize_reallocation_result(result, include_message=True)

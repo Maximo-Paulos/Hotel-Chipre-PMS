@@ -24,10 +24,12 @@ from app.models.allocation import (
     AllocationRunStatusEnum,
 )
 from app.models.guest import Guest
+from app.models.hotel_membership import HotelMembership
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationStatusEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.schemas.reservation import ReservationCreate
+from app.models.user import User
 from app.services.allocation_runtime_service import (
     AllocationRuntimeError,
     accept_allocation_run,
@@ -89,8 +91,15 @@ def _seed_allocation_case(
             )
             for index in range(1, 4)
         ]
-        db.add_all([*rooms, *guests])
+        owner = User(
+            email=f"allocation-pg-owner-{suffix.lower()}@example.test",
+            password_hash="test-only-hash",
+            is_active=True,
+            is_verified=True,
+        )
+        db.add_all([*rooms, *guests, owner])
         db.flush()
+        db.add(HotelMembership(hotel_id=hotel_id, user_id=owner.id, role="owner", status="active"))
 
         reservation = Reservation(
             hotel_id=hotel_id,
@@ -115,6 +124,7 @@ def _seed_allocation_case(
             "category_id": category.id,
             "room_ids": [room.id for room in rooms],
             "guest_ids": [guest.id for guest in guests],
+            "user_id": owner.id,
             "reservation_id": reservation.id,
             "check_in": check_in,
             "check_out": check_out,
@@ -320,7 +330,7 @@ def test_postgres_acceptance_rejects_stale_policy_or_fx_configuration(pg_engine,
                 acceptance,
                 hotel_id=hotel_id,
                 run_id=result.run.id,
-                user_id=None,
+                user_id=int(case["user_id"]),
             )
         acceptance.rollback()
     finally:

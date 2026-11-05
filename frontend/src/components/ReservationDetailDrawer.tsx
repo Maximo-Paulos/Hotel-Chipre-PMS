@@ -41,7 +41,12 @@ import {
 } from "../hooks/useCompanies";
 import { useEffectivePermissions } from "../hooks/usePermissions";
 import { usePaymentMutation, usePaymentSummary } from "../hooks/usePayments";
-import { usePaymentSurchargeQuote, usePaymentSurcharges } from "../hooks/usePaymentSurcharges";
+import {
+  useManualFxPaymentQuote,
+  useManualFxPaymentQuoteMutation,
+  usePaymentSurchargeQuote,
+  usePaymentSurcharges
+} from "../hooks/usePaymentSurcharges";
 import { useRestrictionOverridePrompt } from "../hooks/useRestrictionOverridePrompt";
 import { useGuardedMutation } from "../hooks/useGuardedMutation";
 import { useSession } from "../state/session";
@@ -89,6 +94,7 @@ const emptyCaptureForm: CheckinCaptureForm = {
 };
 
 const MAX_COMPANY_VOUCHER_PDF_BYTES = 5 * 1024 * 1024;
+const PAYMENT_CURRENCIES = ["ARS", "USD", "EUR", "BRL", "CLP", "UYU"] as const;
 
 const checkinValidationErrorKeys: Record<string, string> = {
   "First name is required": "drawer.checkinCapture.requiredFields.firstName",
@@ -295,9 +301,13 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const { t } = useTranslation("reservations");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentAmountTouched, setPaymentAmountTouched] = useState(false);
+  const [paymentTenderCurrencyInput, setPaymentTenderCurrencyInput] = useState("");
   const [cashReceivedAmountInput, setCashReceivedAmountInput] = useState("");
   const [cashTipAmountInput, setCashTipAmountInput] = useState("");
   const [paymentReferenceInput, setPaymentReferenceInput] = useState("");
+  const [manualFxReservationAmountInput, setManualFxReservationAmountInput] = useState("");
+  const [manualFxReasonInput, setManualFxReasonInput] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [captureForm, setCaptureForm] = useState<CheckinCaptureForm>(emptyCaptureForm);
@@ -343,9 +353,13 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     setActionError(null);
     setActionMessage(null);
     setPaymentAmount("");
+    setPaymentAmountTouched(false);
+    setPaymentTenderCurrencyInput("");
     setCashReceivedAmountInput("");
     setCashTipAmountInput("");
     setCaptureForm(emptyCaptureForm);
+    setManualFxReservationAmountInput("");
+    setManualFxReasonInput("");
     setCompanyExtensionPreview(null);
     setCompanyExtensionConfirmOpen(false);
     setIndividualExtensionPreview(null);
@@ -363,6 +377,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const operationsQuery = useReservationOperationsSummary(reservationId ?? undefined);
   const summaryQuery = usePaymentSummary(reservationId ?? undefined);
   const paymentMutation = usePaymentMutation(reservationId ?? undefined);
+  const manualFxPaymentQuoteMutation = useManualFxPaymentQuoteMutation().createMutation;
   const individualExtensionMutation = useGuardedMutation({
     mutationFn: ({ id, payload }: { id: number; payload: ReservationExtensionPayload }) =>
       extendReservationStay(id, payload, session),
@@ -563,6 +578,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   // ignore consumption charges. Always prefer the operational figures for
   // anything the operator will actually collect.
   const currencyCode = normalizeCurrencyCode(summary?.currency_code ?? reservation?.currency_code);
+  const paymentTenderCurrency = normalizeCurrencyCode(paymentTenderCurrencyInput || currencyCode);
   const extensionPaymentSurcharge = (paymentSurchargesQuery.data ?? []).find(
     (surcharge) => surcharge.payment_method === individualExtensionPaymentMethod && surcharge.is_active
   ) ?? null;
@@ -584,31 +600,88 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const selectedCompanyChargeTotal = outstandingCompanyCharges
     .filter((charge) => selectedCompanyChargeIds.includes(charge.id) && !charge.review_only && !charge.payment_pending)
     .reduce((total, charge) => total + Number(charge.remaining_due), 0);
-  const paymentCashPreviewBase = Number(paymentAmount) > 0
-    ? Number(paymentAmount)
+  const enteredPaymentAmount = paymentAmount.trim() ? Number(paymentAmount) : null;
+  const hasValidEnteredPaymentAmount = enteredPaymentAmount !== null &&
+    Number.isFinite(enteredPaymentAmount) &&
+    enteredPaymentAmount > 0;
+  const selectedCompanyChargesRequireReservationCurrency =
+    (selectedCompanyChargeIds.length > 0 || outstandingCompanyCharges.length > 0) &&
+    paymentTenderCurrency !== currencyCode;
+  const paymentQuoteBaseAmount = hasValidEnteredPaymentAmount
+    ? enteredPaymentAmount
     : selectedCompanyChargeIds.length > 0
       ? selectedCompanyChargeTotal
-      : Number(operationalBalanceDue ?? 0);
+      : paymentTenderCurrency === currencyCode
+        ? Number(operationalBalanceDue ?? 0)
+        : undefined;
   const paymentQuoteQuery = usePaymentSurchargeQuote(
-    reservation && Number.isFinite(paymentCashPreviewBase) && paymentCashPreviewBase > 0
+    reservation && !selectedCompanyChargesRequireReservationCurrency &&
+    (paymentQuoteBaseAmount === undefined || (Number.isFinite(paymentQuoteBaseAmount) && paymentQuoteBaseAmount > 0))
       ? {
           reservation_id: reservation.id,
           payment_method: paymentMethod,
-          currency_code: currencyCode,
-          base_amount: paymentCashPreviewBase
+          currency_code: paymentTenderCurrency,
+          ...(paymentQuoteBaseAmount !== undefined ? { base_amount: paymentQuoteBaseAmount } : {})
         }
       : null,
     {
       enabled: Boolean(
         reservation &&
-        Number.isFinite(paymentCashPreviewBase) &&
-        paymentCashPreviewBase > 0 &&
+        !selectedCompanyChargesRequireReservationCurrency &&
+        (paymentQuoteBaseAmount === undefined || (Number.isFinite(paymentQuoteBaseAmount) && paymentQuoteBaseAmount > 0)) &&
         hasPermission("cash:operate")
       )
     }
   );
-  const paymentQuote = paymentQuoteQuery.data;
+  const manualFxPaymentQuoteQuery = useManualFxPaymentQuote(
+    reservation && paymentTenderCurrency !== currencyCode && !selectedCompanyChargesRequireReservationCurrency
+      ? {
+          reservation_id: reservation.id,
+          payment_method: paymentMethod,
+          currency_code: paymentTenderCurrency
+        }
+      : null,
+    { enabled: Boolean(reservation && hasPermission("cash:operate")) }
+  );
+  const manualFxPaymentQuote = manualFxPaymentQuoteQuery.data ?? null;
+  const manualFxPaymentQuoteMatchesEntry = Boolean(
+    manualFxPaymentQuote &&
+    (!paymentAmount.trim() || (hasValidEnteredPaymentAmount &&
+      Math.abs(Number(manualFxPaymentQuote.base_amount) - Number(enteredPaymentAmount)) < 0.005))
+  );
+  const paymentQuote = paymentQuoteQuery.data && !paymentQuoteQuery.isError
+    ? paymentQuoteQuery.data
+    : manualFxPaymentQuoteMatchesEntry
+      ? manualFxPaymentQuote ?? undefined
+      : undefined;
+  const canConfigureManualFxQuote = Boolean(
+    reservation &&
+    paymentTenderCurrency !== currencyCode &&
+    !selectedCompanyChargesRequireReservationCurrency &&
+    hasPermission("payment:fx_manual_set") &&
+    (!hasPermission("cash:operate") || paymentQuoteQuery.isError)
+  );
   const paymentCashPreviewTotal = paymentQuote ? Number(paymentQuote.final_amount) : 0;
+  const paymentCashChangeCurrency = paymentQuote?.cash_change_currency_code?.toUpperCase() ?? currencyCode;
+  const paymentCashChangeFxRate = paymentQuote?.cash_change_fx_rate != null
+    ? Number(paymentQuote.cash_change_fx_rate)
+    : paymentTenderCurrency === paymentCashChangeCurrency
+      ? 1
+      : null;
+
+  useEffect(() => {
+    if (
+      paymentTenderCurrency === currencyCode ||
+      paymentAmountTouched ||
+      !paymentQuote
+    ) {
+      return;
+    }
+    const quotedTenderAmount = Number(paymentQuote.base_amount);
+    if (!Number.isFinite(quotedTenderAmount) || quotedTenderAmount <= 0) return;
+    const formattedAmount = quotedTenderAmount.toFixed(2);
+    if (paymentAmount !== formattedAmount) setPaymentAmount(formattedAmount);
+  }, [currencyCode, paymentAmount, paymentAmountTouched, paymentQuote, paymentTenderCurrency]);
   const extensionCashPreviewBase = Number(individualExtensionPreview?.extension_amount ?? 0);
   const extensionCashPreviewTotal = grossWithSurcharge(extensionCashPreviewBase, extensionPaymentSurcharge);
   const hasUnpaidCompanyCharges = outstandingCompanyCharges.length > 0;
@@ -1194,10 +1267,49 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     }
   };
 
+  const handleCreateManualFxPaymentQuote = async () => {
+    if (!reservationId || !canConfigureManualFxQuote) return;
+    const tenderAmount = Number(paymentAmount);
+    const reservationAmount = Number(manualFxReservationAmountInput);
+    if (
+      !hasValidEnteredPaymentAmount ||
+      !Number.isFinite(reservationAmount) ||
+      reservationAmount <= 0
+    ) {
+      setActionError(t("page.form.manualFxAmountRequired"));
+      return;
+    }
+    if (!manualFxReasonInput.trim()) {
+      setActionError(t("page.form.manualFxReasonRequired"));
+      return;
+    }
+    try {
+      await manualFxPaymentQuoteMutation.mutateAsync({
+        reservation_id: reservationId,
+        payment_method: paymentMethod,
+        currency_code: paymentTenderCurrency,
+        reservation_amount: Number(reservationAmount.toFixed(2)),
+        tender_amount: Number(tenderAmount.toFixed(2)),
+        reason: manualFxReasonInput.trim()
+      });
+      setActionError(null);
+      setActionMessage(t("page.messages.manualFxQuoteSaved"));
+      setManualFxReasonInput("");
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : t("page.errors.paymentQuoteUnavailable"));
+    }
+  };
+
   const handlePay = async () => {
     if (!reservationId) return;
-    const amount = Number(paymentAmount);
+    const amount = selectedCompanyChargeIds.length > 0 && paymentQuote
+      ? Number(paymentQuote.base_amount)
+      : Number(paymentAmount);
     const manualReference = isManualPaymentMethod ? paymentReferenceInput.trim() : undefined;
+    if (selectedCompanyChargesRequireReservationCurrency) {
+      setActionError(t("drawer.payment.companyChargesCurrencyRequired", { currency: currencyCode }));
+      return;
+    }
     if (deferredCompanyBilling && selectedCompanyChargeIds.length === 0) {
       setActionError(t("drawer.companyCharges.selectBeforePayment"));
       return;
@@ -1219,7 +1331,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       setActionError(t("drawer.errors.invalidAmount"));
       return;
     }
-    const quote = paymentQuoteQuery.data;
+    const quote = paymentQuote;
     if (!quote || Math.abs(Number(quote.base_amount) - amount) >= 0.005) {
       setActionError(t("page.errors.paymentQuoteUnavailable"));
       return;
@@ -1231,7 +1343,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     if (cashTender && (!cashTender.valid || cashTender.receivedAmount === null)) {
       setActionError(
         cashTender.reason === "insufficient"
-          ? t("page.form.cashReceivedInsufficient", { amount: formatMoney(expectedCashAmount, currencyCode) })
+          ? t("page.form.cashReceivedInsufficient", { amount: formatMoney(expectedCashAmount, paymentTenderCurrency) })
           : t("page.form.cashReceivedInvalid")
       );
       return;
@@ -1255,8 +1367,9 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
         amount,
         payment_method: paymentMethod,
         transaction_type: reservation?.status === "pending" ? "deposit" : "balance_payment",
-        currency: currencyCode,
+        currency: paymentTenderCurrency,
         payment_quote_token: quote.payment_quote_token,
+        ...(quote.manual_fx_quote_id ? { manual_fx_quote_id: quote.manual_fx_quote_id } : {}),
         ...(cashTender?.receivedAmount !== null && cashTender?.receivedAmount !== undefined
           ? { cash_received_amount: cashTender.receivedAmount }
           : {}),
@@ -1268,6 +1381,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       });
       setSelectedCompanyChargeIds([]);
       setPaymentAmount("");
+      setPaymentAmountTouched(false);
       setCashReceivedAmountInput("");
       setCashTipAmountInput("");
       setPaymentReferenceInput("");
@@ -2261,26 +2375,57 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   <p className="text-xs uppercase tracking-wide text-slate-500">{t("drawer.payment.title")}</p>
                   <div className="mt-2 flex flex-wrap items-end gap-2">
                     <label className="flex-1 space-y-1 text-xs">
-                      <span className="text-slate-600">{t("drawer.payment.amountLabel")}</span>
+                      <span className="text-slate-600">
+                        {t("drawer.payment.amountLabel", { currency: paymentTenderCurrency })}
+                      </span>
                       <input
                         type="number"
                         min="0"
                         step="0.01"
                         value={paymentAmount}
-                        onChange={(event) => setPaymentAmount(event.target.value)}
+                        onChange={(event) => {
+                          setPaymentAmount(event.target.value);
+                          setPaymentAmountTouched(true);
+                        }}
                         placeholder={
-                          deferredCompanyBilling
-                            ? t("drawer.companyCharges.selectBeforePayment")
-                            : reservation.company_id && hasUnpaidCompanyCharges
-                            ? companyBaseBalanceDue.toFixed(2)
-                            : operationalBalanceDue
-                              ? String(operationalBalanceDue)
-                              : "0"
+                          paymentQuote
+                            ? Number(paymentQuote.base_amount).toFixed(2)
+                            : deferredCompanyBilling
+                              ? t("drawer.companyCharges.selectBeforePayment")
+                              : reservation.company_id && hasUnpaidCompanyCharges
+                                ? companyBaseBalanceDue.toFixed(2)
+                                : operationalBalanceDue
+                                  ? String(operationalBalanceDue)
+                                  : "0"
                         }
                         disabled={selectedCompanyChargeIds.length > 0}
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                        aria-label={t("drawer.payment.amountAria")}
+                        aria-label={t("drawer.payment.amountAria", { currency: paymentTenderCurrency })}
                       />
+                    </label>
+                    <label className="space-y-1 text-xs">
+                      <span className="text-slate-600">{t("drawer.payment.currencyLabel")}</span>
+                      <select
+                        value={paymentTenderCurrency}
+                        onChange={(event) => {
+                          setPaymentTenderCurrencyInput(event.target.value);
+                          setPaymentAmount("");
+                          setPaymentAmountTouched(false);
+                          setCashReceivedAmountInput("");
+                          setCashTipAmountInput("");
+                        }}
+                        disabled={paymentMutation.isPending}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        aria-label={t("drawer.payment.currencyAria")}
+                        data-testid="reservation-drawer-payment-currency"
+                      >
+                        {PAYMENT_CURRENCIES.map((value) => (
+                          <option key={value} value={value}>{value}</option>
+                        ))}
+                      </select>
+                      <span className="block max-w-44 text-[11px] text-slate-500" data-testid="reservation-drawer-payment-currency-hint">
+                        {t("drawer.payment.currencyHint")}
+                      </span>
                     </label>
                     <label className="space-y-1 text-xs">
                       <span className="text-slate-600">{t("drawer.payment.methodLabel")}</span>
@@ -2338,6 +2483,8 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       disabled={
                         paymentMutation.isPending ||
                         !paymentQuote ||
+                        selectedCompanyChargesRequireReservationCurrency ||
+                        (!hasValidEnteredPaymentAmount && selectedCompanyChargeIds.length === 0) ||
                         (Boolean(reservation.company_id) && (companyNightChargesQuery.isLoading || companyNightChargesQuery.isError)) ||
                         (deferredCompanyBilling
                           ? selectedCompanyChargeIds.length === 0 || selectedCompanyChargeTotal <= 0
@@ -2351,10 +2498,39 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       {paymentMutation.isPending ? t("drawer.payment.submitting") : t("drawer.payment.submit")}
                     </button>
                   </div>
-                  {paymentQuoteQuery.isError ? (
-                    <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert" data-testid="reservation-drawer-payment-quote-error">
-                      {t("page.errors.paymentQuoteUnavailable")}
+                  {selectedCompanyChargesRequireReservationCurrency ? (
+                    <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status" data-testid="reservation-drawer-company-charge-currency-hint">
+                      {t("drawer.payment.companyChargesCurrencyRequired", { currency: currencyCode })}
                     </p>
+                  ) : paymentQuoteQuery.isError && !paymentQuote ? (
+                    <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert" data-testid="reservation-drawer-payment-quote-error">
+                      <p>{t("page.errors.paymentQuoteUnavailable")}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void paymentQuoteQuery.refetch()}
+                          disabled={paymentQuoteQuery.isFetching}
+                          className="rounded border border-rose-300 bg-white px-2 py-1 font-semibold disabled:opacity-60"
+                          data-testid="reservation-drawer-payment-quote-retry"
+                        >
+                          {t("page.form.paymentQuoteRetry")}
+                        </button>
+                        {paymentTenderCurrency !== currencyCode ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPaymentTenderCurrencyInput(currencyCode);
+                              setPaymentAmount("");
+                              setPaymentAmountTouched(false);
+                            }}
+                            className="rounded border border-rose-300 bg-white px-2 py-1 font-semibold"
+                            data-testid="reservation-drawer-payment-fx-fallback"
+                          >
+                            {t("page.form.paymentFxFallbackAction", { currency: currencyCode })}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
                   ) : paymentQuoteQuery.isLoading || !paymentQuote ? (
                     <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" role="status">
                       {t("page.form.paymentQuoteLoading")}
@@ -2370,21 +2546,79 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                         amount={cashReceivedAmountInput}
                         tipAmount={cashTipAmountInput}
                         expectedAmount={paymentCashPreviewTotal}
-                        currency={currencyCode}
-                        label={t("page.form.cashReceived", { currency: currencyCode })}
+                        currency={paymentTenderCurrency}
+                        changeCurrency={paymentCashChangeCurrency}
+                        changeRate={paymentCashChangeFxRate}
+                        changeRateUnavailableMessage={t("page.form.cashChangeRateUnavailable", { currency: paymentCashChangeCurrency })}
+                        label={t("page.form.cashReceived", { currency: paymentTenderCurrency })}
                         hint={t("page.form.cashReceivedHint")}
                         changeLabel={t("page.form.cashChange")}
                         tipToggleLabel={t("page.form.cashTipToggle")}
                         tipAmountLabel={t("page.form.cashTipAmount")}
                         tipHint={t("page.form.cashTipHint")}
                         invalidAmountMessage={t("page.form.cashReceivedInvalid")}
-                        insufficientMessage={t("page.form.cashReceivedInsufficient", { amount: formatMoney(paymentCashPreviewTotal, currencyCode) })}
+                        insufficientMessage={t("page.form.cashReceivedInsufficient", { amount: formatMoney(paymentCashPreviewTotal, paymentTenderCurrency) })}
                         tipInvalidMessage={t("page.form.cashTipInvalid")}
                         onChange={setCashReceivedAmountInput}
                         onTipAmountChange={setCashTipAmountInput}
                         testId="reservation-drawer-cash-received"
                         disabled={paymentMutation.isPending}
                       />
+                    </div>
+                  ) : null}
+                  {canConfigureManualFxQuote ? (
+                    <div className="mt-3 grid gap-2 rounded border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 sm:grid-cols-2" data-testid="reservation-drawer-manual-fx-quote">
+                      <p className="font-semibold sm:col-span-2">{t("page.form.manualFxTitle")}</p>
+                      <p className="sm:col-span-2">{t("page.form.manualFxHelp", { reservationCurrency: currencyCode, tenderCurrency: paymentTenderCurrency })}</p>
+                      {manualFxPaymentQuoteQuery.isLoading ? (
+                        <p className="sm:col-span-2" role="status">{t("page.form.manualFxQuoteLoading")}</p>
+                      ) : (
+                        <>
+                          <label className="font-semibold">
+                            {t("page.form.manualFxReservationAmount", { currency: currencyCode })}
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              value={manualFxReservationAmountInput}
+                              onChange={(event) => setManualFxReservationAmountInput(event.target.value)}
+                              placeholder={Number(operationalBalanceDue ?? 0).toFixed(2)}
+                              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 font-normal text-slate-800"
+                              data-testid="reservation-drawer-manual-fx-reservation-amount"
+                            />
+                          </label>
+                          <label className="font-semibold">
+                            {t("page.form.manualFxTenderAmount", { currency: paymentTenderCurrency })}
+                            <input
+                              type="number"
+                              readOnly
+                              value={hasValidEnteredPaymentAmount ? enteredPaymentAmount ?? "" : ""}
+                              className="mt-1 w-full rounded border border-slate-200 bg-slate-100 px-3 py-2 font-normal text-slate-800"
+                              data-testid="reservation-drawer-manual-fx-tender-amount"
+                            />
+                          </label>
+                          <label className="font-semibold sm:col-span-2">
+                            {t("page.form.manualFxReason")}
+                            <input
+                              type="text"
+                              maxLength={240}
+                              value={manualFxReasonInput}
+                              onChange={(event) => setManualFxReasonInput(event.target.value)}
+                              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 font-normal text-slate-800"
+                              data-testid="reservation-drawer-manual-fx-reason"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => void handleCreateManualFxPaymentQuote()}
+                            disabled={manualFxPaymentQuoteMutation.isPending || !hasValidEnteredPaymentAmount || !manualFxReservationAmountInput.trim() || !manualFxReasonInput.trim()}
+                            className="w-fit rounded border border-amber-400 bg-white px-3 py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2"
+                            data-testid="reservation-drawer-manual-fx-save"
+                          >
+                            {manualFxPaymentQuoteMutation.isPending ? t("page.form.manualFxSaving") : t("page.form.manualFxSave")}
+                          </button>
+                        </>
+                      )}
                     </div>
                   ) : null}
                 </section>

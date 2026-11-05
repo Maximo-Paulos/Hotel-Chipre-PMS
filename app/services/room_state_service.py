@@ -14,10 +14,7 @@ from sqlalchemy.orm import Session
 from app.models.audit_log import AuditActionEnum
 from app.models.room import Room, RoomHousekeepingStatusEnum, RoomStatusEnum
 from app.services import audit_log_service
-from app.services.allocation_runtime_service import (
-    auto_apply_safe_allocation_run,
-    run_persisted_allocation,
-)
+from app.services.allocation_runtime_service import run_persisted_allocation
 from app.services.housekeeping_checklist_policy import (
     open_housekeeping_checklist_exists,
 )
@@ -183,24 +180,21 @@ def change_room_status(
             db,
             hotel_id=hotel_id,
             trigger_type=f"room_status_{status.value}",
-            apply=True,
+            apply=False,
         )
-        if result.solver_result.success:
-            auto_apply_safe_allocation_run(
-                db, hotel_id=hotel_id, run_id=result.run.id
-            )
         if result.solver_result.assignments or result.solver_result.unassigned_reservations:
             db.commit()
             return {
                 "run_id": result.run.id,
                 "status": result.run.status.value if hasattr(result.run.status, "value") else str(result.run.status),
                 "assignments": len(result.solver_result.assignments),
-                "moved": len(result.solver_result.moved_reservations),
-                "moved_ids": result.solver_result.moved_reservations,
+                "proposed_moves": len(result.solver_result.moved_reservations),
+                "proposed_move_ids": result.solver_result.moved_reservations,
                 "unassigned": len(result.solver_result.unassigned_reservations),
                 "unassigned_ids": result.solver_result.unassigned_reservations,
                 "objective_value": result.solver_result.objective_value,
                 "error": result.solver_result.error,
+                "message": "El motor preparó sugerencias; Recepción debe aprobarlas antes de mover reservas.",
             }
     except Exception as exc:  # allocation must not undo the persisted room state
         return {"error": str(exc)}

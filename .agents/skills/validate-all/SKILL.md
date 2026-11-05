@@ -1,6 +1,6 @@
 ---
 name: validate-all
-description: Run the full local validation gate for Hotel Chipre PMS before pushing or merging — backend tests, frontend lint, typecheck and build, plus a migration dry-run. Use before any push/merge to main, or when the user asks to "validar", "check everything", or "correr todo".
+description: Run the full local validation gate for Hotel Chipre PMS before pushing or merging — PostgreSQL-only backend tests and migration validation, frontend lint, typecheck, tests and build. Use before any push/merge to main, or when the user asks to "validar", "check everything", or "correr todo".
 ---
 
 # validate-all — puerta de validación pre-push
@@ -9,6 +9,12 @@ Corré esto **en este orden** y no declares "verde" sin ver el resultado de cada
 Este proyecto usa un entorno Python >=3.10 y Node 20 fuera del PATH por defecto.
 No confíes en el nombre del directorio: el `.venv` histórico puede contener
 Python 3.9 y debe rechazarse antes de importar la aplicación.
+
+Para cualquier validación con base, aplica también la skill global
+`colima-postgres-only`. Crea una base PostgreSQL 16 nueva en Colima, usa un DSN
+loopback explícito con la guarda de aislamiento de `tests/postgres_test_safety.py`
+y efectos externos apagados. No cargues el DSN desde `.env`, no permitas fallback
+a SQLite y no borres perfiles, volúmenes ni bases preexistentes.
 
 ## 1. Backend — tests
 ```sh
@@ -28,7 +34,11 @@ if [ -z "$PYTHON_BIN" ]; then
 fi
 "$PYTHON_BIN" -m pytest -q
 ```
-Esperado: 0 failed. Si algo falla, diagnosticá antes de seguir.
+Esperado: 0 failed. Antes de ejecutarlo, confirma que la selección completa no
+creará bases SQLite: el `db_engine` heredado de `tests/conftest.py` y algunos
+módulos antiguos todavía pueden abrir SQLite directamente. Si la suite no puede
+quedar completamente PostgreSQL, porta esos fixtures primero; no cuentes una
+selección parcial como suite completa ni informes “todo verde”.
 
 ## 2. Frontend — lint + typecheck + tests + build
 ```sh
@@ -43,7 +53,7 @@ Los cuatro deben pasar sin errores (el warning de chunk >500 kB es deuda conocid
 `npm test` estuvo fuera de esta puerta y de CI hasta 2026-09-17: el test del manifest PWA
 quedó desactualizado meses sin que nadie lo viera. No lo saques de la lista.
 
-## 3. Migraciones — dry-run sobre SQLite virgen (nunca la DB de dev)
+## 3. Migraciones — instalación limpia sobre una base PostgreSQL virgen de Colima
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 MIGRATION_PYTHON="${E2E_PYTHON:-${PYTHON_BIN:-}}"
@@ -59,9 +69,12 @@ if [ -z "$MIGRATION_PYTHON" ]; then
   echo "Python >=3.10 is required for migrations." >&2
   exit 1
 fi
-DATABASE_URL="sqlite:///$(mktemp -d)/mig.db" "$MIGRATION_PYTHON" -m alembic upgrade head
+APP_ENV=test DATABASE_URL="$POSTGRES_MIGRATION_TEST_URL" "$MIGRATION_PYTHON" -m alembic upgrade head
 ```
-Debe llegar a `head` sin error.
+`POSTGRES_MIGRATION_TEST_URL` debe apuntar a una base PostgreSQL loopback nueva y
+desechable, distinta de las bases persistentes. Valida antes el destino exacto;
+debe llegar a `head` sin error. No sustituyas PostgreSQL por SQLite si Colima no
+está disponible.
 
 ## Resultado
 Reportá una tabla con el resultado de cada paso. Solo está "todo verde" si los tres pasan.

@@ -36,7 +36,11 @@ def test_sandbox_has_no_scheduled_network_tasks():
     schedule = build_beat_schedule(
         Settings(EXTERNAL_EFFECTS_ENABLED=False, CONNECTIONS_ENABLED=False)
     )
-    assert set(schedule) == {"reservations-no-show-sweep"}
+    assert set(schedule) == {
+        "reservations-no-show-sweep",
+        "allocation-process-recalculation-requests",
+        "tariff-recommendations-daily-review",
+    }
     assert schedule["reservations-no-show-sweep"]["task"] == "reservations.sweep_no_shows"
     assert build_beat_schedule(
         Settings(EXTERNAL_EFFECTS_ENABLED=True, CONNECTIONS_ENABLED=False)
@@ -55,11 +59,33 @@ def test_closed_sandbox_with_internal_redis_schedules_only_domain_event_replay()
         )
     )
 
-    assert set(schedule) == {"domain-events-publish-outbox", "reservations-no-show-sweep"}
+    assert set(schedule) == {
+        "domain-events-publish-outbox",
+        "reservations-no-show-sweep",
+        "allocation-process-recalculation-requests",
+        "tariff-recommendations-daily-review",
+    }
     assert schedule["domain-events-publish-outbox"] == {
         "task": "domain_events.publish_outbox",
         "schedule": 30.0,
     }
+
+
+def test_dolarapi_daily_cache_is_scheduled_without_opening_other_integrations():
+    schedule = build_beat_schedule(
+        Settings(
+            EXTERNAL_EFFECTS_ENABLED=False,
+            CONNECTIONS_ENABLED=False,
+            DOLARAPI_RATES_ENABLED=True,
+        )
+    )
+
+    assert schedule["fx-daily-rate-cache"]["task"] == "fx.refresh_daily_rate_cache"
+    assert schedule["fx-daily-rate-cache"]["schedule"].hour == {8}
+    assert schedule["fx-daily-rate-cache"]["schedule"].minute == {0}
+    assert "notifications-process-outbox" not in schedule
+    assert "operational-morning-reports" not in schedule
+    assert "analytics-derived-facts-incremental" not in schedule
 
 
 def test_closed_sandbox_keeps_beat_empty_without_explicit_matching_redis():
@@ -89,7 +115,11 @@ def test_closed_sandbox_keeps_beat_empty_without_explicit_matching_redis():
 
     for settings in (settings_without_redis, settings_with_mismatched_redis, settings_with_realtime_disabled):
         schedule = build_beat_schedule(settings)
-        assert set(schedule) == {"reservations-no-show-sweep"}
+        assert set(schedule) == {
+            "reservations-no-show-sweep",
+            "allocation-process-recalculation-requests",
+            "tariff-recommendations-daily-review",
+        }
 
 
 def _safe_worker_env() -> dict[str, str]:
@@ -108,6 +138,7 @@ def _safe_worker_env() -> dict[str, str]:
         "GEMMA_ENABLED": "false",
         "GEMMA_PROVIDER": "disabled",
         "PAYPAL_MODE": "sandbox",
+        "DOLARAPI_RATES_ENABLED": "false",
         "JWT_SECRET": "worker-jwt-secret-that-is-at-least-32-bytes",
         "MANAGER_PIN": "830527",
         "INTEGRATIONS_ENCRYPTION_KEY": "cXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXE=",
@@ -128,7 +159,8 @@ def test_celery_process_accepts_explicit_closed_production_profile():
             "-c",
             f"{_ISOLATED_WORKER_IMPORT}; "
             "schedule=app.tasks.celery_app.celery_app.conf.beat_schedule; "
-            "assert set(schedule) == {'domain-events-publish-outbox', 'reservations-no-show-sweep'}; "
+                "assert set(schedule) == {'domain-events-publish-outbox', 'reservations-no-show-sweep', "
+                "'allocation-process-recalculation-requests', 'tariff-recommendations-daily-review'}; "
             "assert schedule['domain-events-publish-outbox']['task'] == 'domain_events.publish_outbox'; "
             "assert schedule['domain-events-publish-outbox']['schedule'] == 30.0",
         ],

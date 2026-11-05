@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from app.models.allocation import (
     AllocationAssignment,
     AllocationAssignmentStatusEnum,
+    AllocationExplanation,
     AllocationRun,
     AllocationRunStatusEnum,
     ReservationAllocationLock,
@@ -25,8 +26,9 @@ from app.models.user import User
 from app.schemas.reservation import ReservationCreate
 from app.services.allocation_runtime_service import (
     AllocationRuntimeError,
+    _load_json_dict,
+    _reservation_state_payload,
     accept_allocation_run,
-    auto_apply_safe_allocation_run,
     run_persisted_allocation,
     set_reservation_reassignment_lock,
 )
@@ -118,7 +120,7 @@ def test_waitlisted_or_out_of_horizon_reservation_does_not_request_current_run(
     assert _pending_requests(db) == []
 
 
-def test_background_worker_runs_auto_apply_for_eligible_room_moves(
+def test_background_worker_leaves_initial_assignment_unchanged(
     db, sample_guest, sample_rooms, sample_categories, hotel_config
 ):
     reservation = create_reservation(
@@ -149,7 +151,7 @@ def test_background_worker_runs_auto_apply_for_eligible_room_moves(
     assert db.query(AllocationRun).filter(AllocationRun.id == queued.id).one().status == AllocationRunStatusEnum.SUCCEEDED
 
 
-def test_real_background_solver_auto_applies_eligible_moves_and_keeps_locks(
+def test_real_background_solver_leaves_existing_moves_for_reception_review(
     db, sample_guest, sample_rooms, sample_categories, hotel_config
 ):
     today = hotel_today(db, 1)
@@ -208,18 +210,17 @@ def test_real_background_solver_auto_applies_eligible_moves_and_keeps_locks(
     )
 
     assert counts == {"selected": 1, "succeeded": 1, "failed": 0, "deferred": 0}
-    assert assignment.status == AllocationAssignmentStatusEnum.APPLIED
+    assert assignment.status == AllocationAssignmentStatusEnum.PROPOSED
     assert assignment.room_id == first_room.id
-    assert new_reservation.room_id == first_room.id
-    assert new_reservation.room_id != original_room_id
+    assert new_reservation.room_id == original_room_id
     assert db.query(RoomMoveEvent).filter(
         RoomMoveEvent.reservation_id == new_reservation.id,
         RoomMoveEvent.trigger_event == "allocation_auto_applied",
-    ).count() == 1
+    ).count() == 0
     assert db.query(SecurityAuditLog).filter(
         SecurityAuditLog.hotel_id == 1,
         SecurityAuditLog.action == "allocation.proposal.auto_applied",
-    ).count() == 1
+    ).count() == 0
     assert checked_in_reservation.room_id == first_room.id
     assert checked_in_reservation.actual_check_in is not None
     assert locked_reservation.room_id == first_room.id
@@ -277,17 +278,24 @@ def test_automatic_proposal_requests_remain_scoped_to_their_hotel(
     assert hotel_two.hotel_id == 2
 
 
-def test_postgres_worker_auto_applies_only_unchecked_in_unlocked_moves(pg_session):
-    """Exercise the real auto-apply path on the isolated PostgreSQL fixture."""
+def test_postgres_worker_requires_reception_approval_for_existing_moves(pg_session):
+    """Existing future assignments stay put until an authenticated operator accepts them."""
     db = pg_session
     hotel_id = 1
-    db.add(
-        HotelConfiguration(
-            id=hotel_id,
-            deposit_percentage=30,
-            deposit_policy_configured=True,
-            subscription_active=True,
-        )
+    db.add_all(
+        [
+            HotelConfiguration(
+                id=hotel_id,
+                deposit_percentage=30,
+                deposit_policy_configured=True,
+                subscription_active=True,
+            ),
+            User(
+                id=9900,
+                email="allocation-reviewer@example.test",
+                password_hash="synthetic-only",
+            ),
+        ]
     )
     db.flush()
     category = RoomCategory(
@@ -366,9 +374,9 @@ def test_postgres_worker_auto_applies_only_unchecked_in_unlocked_moves(pg_sessio
     )
 
     assert counts == {"selected": 1, "succeeded": 1, "failed": 0, "deferred": 0}
-    assert eligible.room_id == first_room.id
-    assert eligible.room_id != original_room_id
-    assert assignment.status == AllocationAssignmentStatusEnum.APPLIED
+    assert eligible.room_id == original_room_id
+    assert assignment.room_id == first_room.id
+    assert assignment.status == AllocationAssignmentStatusEnum.PROPOSED
     assert checked_in.room_id == first_room.id
     assert locked.room_id == first_room.id
     assert locked.allocation_locked is True
@@ -378,7 +386,21 @@ def test_postgres_worker_auto_applies_only_unchecked_in_unlocked_moves(pg_sessio
     assert db.query(SecurityAuditLog).filter(
         SecurityAuditLog.hotel_id == hotel_id,
         SecurityAuditLog.action == "allocation.proposal.auto_applied",
-    ).count() == 1
+    ).count() == 0
+
+    accepted = accept_allocation_run(
+        db,
+        hotel_id=hotel_id,
+        run_id=queued.id,
+        user_id=9900,
+    )
+    db.refresh(eligible)
+    assert eligible.room_id == first_room.id
+    assert any(
+        row.reservation_id == eligible.id
+        and row.status == AllocationAssignmentStatusEnum.APPLIED
+        for row in accepted.assignments
+    )
 
 
 def test_postgres_locked_move_requires_one_time_approval_and_keeps_pin(pg_session):
@@ -522,7 +544,7 @@ def test_postgres_locked_move_requires_one_time_approval_and_keeps_pin(pg_sessio
     assert future_run.solver_result.assignments[mover.id] == first_room.id
 
 
-def test_postgres_auto_apply_keeps_locked_move_pending_for_one_time_approval(pg_session):
+def test_postgres_worker_keeps_all_existing_moves_pending_until_approval(pg_session):
     db = pg_session
     hotel_id = 1
     approver_id = 9902
@@ -613,21 +635,26 @@ def test_postgres_auto_apply_keeps_locked_move_pending_for_one_time_approval(pg_
         horizon_start=today,
         horizon_end=today + timedelta(days=6),
     )
-    details = auto_apply_safe_allocation_run(
-        db, hotel_id=hotel_id, run_id=result.run.id
-    )
-    assert details is not None
     db.refresh(checked_in)
     db.refresh(locked)
     db.refresh(eligible)
-    assignments = {item.reservation_id: item for item in details.assignments}
+    assignments = {
+        item.reservation_id: item
+        for item in db.query(AllocationAssignment)
+        .filter(
+            AllocationAssignment.hotel_id == hotel_id,
+            AllocationAssignment.allocation_run_id == result.run.id,
+        )
+        .all()
+    }
     assert checked_in.room_id == first_room.id
     assert assignments[checked_in.id].status != AllocationAssignmentStatusEnum.PROPOSED
     assert locked.room_id == second_room.id
     assert assignments[locked.id].status == AllocationAssignmentStatusEnum.PROPOSED
     assert assignments[locked.id].room_id == first_room.id
-    assert eligible.room_id == first_room.id
-    assert assignments[eligible.id].status == AllocationAssignmentStatusEnum.APPLIED
+    assert eligible.room_id == second_room.id
+    assert assignments[eligible.id].room_id == first_room.id
+    assert assignments[eligible.id].status == AllocationAssignmentStatusEnum.PROPOSED
 
     approve_lock = (
         db.query(ReservationAllocationLock)
@@ -640,6 +667,23 @@ def test_postgres_auto_apply_keeps_locked_move_pending_for_one_time_approval(pg_
     )
     assert approve_lock.locked_room_id == second_room.id
 
+    for reservation in (checked_in, locked, eligible):
+        explanation = (
+            db.query(AllocationExplanation)
+            .filter(
+                AllocationExplanation.hotel_id == hotel_id,
+                AllocationExplanation.allocation_run_id == result.run.id,
+                AllocationExplanation.reservation_id == reservation.id,
+                AllocationExplanation.explanation_type == "assignment",
+            )
+            .one()
+        )
+        snapshot = _load_json_dict(explanation.details_json).get("source_state")
+        assert snapshot == _reservation_state_payload(reservation), (
+            f"Reservation {reservation.id} differs from its saved source snapshot: "
+            f"{snapshot!r} != {_reservation_state_payload(reservation)!r}"
+        )
+
     reviewed = accept_allocation_run(
         db,
         hotel_id=hotel_id,
@@ -648,8 +692,10 @@ def test_postgres_auto_apply_keeps_locked_move_pending_for_one_time_approval(pg_
         explicitly_approved_locked_reservation_ids={locked.id},
     )
     db.refresh(locked)
+    db.refresh(eligible)
     db.refresh(approve_lock)
     assert locked.room_id == first_room.id
+    assert eligible.room_id == first_room.id
     assert locked.allocation_locked is True
     assert approve_lock.locked_room_id == first_room.id
     assert any(
@@ -666,21 +712,37 @@ def test_postgres_auto_apply_keeps_locked_move_pending_for_one_time_approval(pg_
         horizon_start=today,
         horizon_end=today + timedelta(days=6),
     )
-    auto_apply_safe_allocation_run(
-        db, hotel_id=hotel_id, run_id=future_run.run.id
-    )
     db.refresh(locked)
     assert locked.room_id == first_room.id
     assert locked.allocation_locked is True
 
 
-def test_background_trigger_commits_before_best_effort_celery_dispatch(
-    db, hotel_config, monkeypatch
-):
-    factory = sessionmaker(
+def _pg_allocation_trigger_factory(db):
+    db.add(
+        HotelConfiguration(
+            id=1,
+            deposit_percentage=30,
+            deposit_policy_configured=True,
+            subscription_active=True,
+        )
+    )
+    db.flush()
+    return sessionmaker(
         bind=db.connection(),
         join_transaction_mode="create_savepoint",
     )
+
+
+def test_postgres_background_trigger_commits_before_best_effort_celery_dispatch(
+    pg_session, monkeypatch
+):
+    db = pg_session
+    settings = SimpleNamespace(
+        CELERY_BROKER_URL="memory://",
+        model_fields_set={"CELERY_BROKER_URL"},
+    )
+    monkeypatch.setattr("app.config.get_settings", lambda: settings)
+    factory = _pg_allocation_trigger_factory(db)
     monkeypatch.setattr("app.database.get_session_factory", lambda: factory)
     dispatches = []
 
@@ -715,6 +777,41 @@ def test_background_trigger_commits_before_best_effort_celery_dispatch(
             "retry": False,
         }
     ]
+
+
+def test_postgres_background_trigger_keeps_durable_request_without_configured_broker(
+    pg_session, monkeypatch
+):
+    db = pg_session
+    settings = SimpleNamespace(
+        CELERY_BROKER_URL="redis://localhost:6379/0",
+        model_fields_set=set(),
+    )
+    monkeypatch.setattr("app.config.get_settings", lambda: settings)
+    factory = _pg_allocation_trigger_factory(db)
+    monkeypatch.setattr("app.database.get_session_factory", lambda: factory)
+
+    def unexpected_dispatch(**_kwargs):
+        raise AssertionError("an unconfigured default broker must not be contacted")
+
+    monkeypatch.setattr(process_recalculation_requests, "apply_async", unexpected_dispatch)
+
+    trigger_reoptimization_bg(
+        hotel_id=1,
+        trigger_type="reservation_date_change",
+        origin_key="d50e100a-609a-43de-8f23-94e2720bd81c",
+    )
+
+    pending = (
+        db.query(AllocationRun)
+        .filter(
+            AllocationRun.hotel_id == 1,
+            AllocationRun.trigger_type == "reservation_date_change",
+            AllocationRun.status == AllocationRunStatusEnum.PENDING,
+        )
+        .one()
+    )
+    assert pending.id is not None
 
 
 def test_worker_defers_when_allocation_lock_is_busy_and_keeps_request_retryable(

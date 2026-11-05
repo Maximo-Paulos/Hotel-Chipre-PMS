@@ -59,6 +59,7 @@ export function usePaymentMutation(reservationId?: number) {
       // applies to a new collection.
       const requiresQuote = payload.transaction_type !== "refund" &&
         payload.collected_before !== true &&
+        !payload.manual_fx_quote_id &&
         !payload.payment_quote_token;
       let paymentPayload = payload;
       if (requiresQuote) {
@@ -80,9 +81,19 @@ export function usePaymentMutation(reservationId?: number) {
     // payment visible and reconcile affected views in the background.
     onSuccess: (_data, payload) => {
       void refreshPaymentState(queryClient, session.hotelId, reservationId).catch(() => undefined);
+      // Balance-based payment quotes are snapshots. Refresh them after every
+      // payment or refund so "Pago total" cannot reuse the previous balance.
+      invalidateQueriesInBackground(queryClient, {
+        queryKey: ["payment-surcharge-quote", session.hotelId, payload.reservation_id]
+      });
       if (reservationId) {
         invalidateQueriesInBackground(queryClient, {
           queryKey: ["company-night-charges", session.hotelId, reservationId]
+        });
+      }
+      if (payload.manual_fx_quote_id && reservationId) {
+        invalidateQueriesInBackground(queryClient, {
+          queryKey: ["manual-fx-payment-quote", session.hotelId, reservationId]
         });
       }
       intentKeysRef.current.delete(JSON.stringify(payload));

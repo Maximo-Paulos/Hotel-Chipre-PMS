@@ -1995,7 +1995,7 @@
           "Rooms"
         ],
         "summary": "Trigger Reallocation",
-        "description": "Recalculate and automatically apply a complete, revalidated safe plan.",
+        "description": "Prepare a room-move proposal for an authenticated operator to review.",
         "operationId": "trigger_reallocation_api_rooms_reallocate_post",
         "parameters": [
           {
@@ -16033,6 +16033,187 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PaymentSurchargeQuoteRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payment-surcharges/manual-fx-quote": {
+      "post": {
+        "tags": [
+          "Payment Surcharges"
+        ],
+        "summary": "Create Manual Fx Quote",
+        "description": "Set a fixed, audited amount for one reservation after automatic FX expires.",
+        "operationId": "create_manual_fx_quote_api_payment_surcharges_manual_fx_quote_post",
+        "parameters": [
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualFxPaymentQuoteCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentSurchargeQuoteRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payment-surcharges/manual-fx-quote/{reservation_id}": {
+      "get": {
+        "tags": [
+          "Payment Surcharges"
+        ],
+        "summary": "Get Manual Fx Quote",
+        "description": "Return the active manager-approved amount to an authorized collector.",
+        "operationId": "get_manual_fx_quote_api_payment_surcharges_manual_fx_quote__reservation_id__get",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "payment_method",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50,
+              "title": "Payment Method"
+            }
+          },
+          {
+            "name": "currency_code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3,
+              "title": "Currency Code"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PaymentSurchargeQuoteRead"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Manual Fx Quote Api Payment Surcharges Manual Fx Quote  Reservation Id  Get"
                 }
               }
             }
@@ -48671,6 +48852,39 @@
             ],
             "title": "Cash Change Amount"
           },
+          "cash_change_settled_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Settled Amount"
+          },
+          "cash_change_settled_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Settled Currency"
+          },
+          "cash_change_fx_rate_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Fx Rate Snapshot"
+          },
           "cash_tip_amount": {
             "type": "string",
             "title": "Cash Tip Amount",
@@ -48910,6 +49124,39 @@
               }
             ],
             "title": "Cash Change Amount"
+          },
+          "cash_change_settled_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Settled Amount"
+          },
+          "cash_change_settled_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Settled Currency"
+          },
+          "cash_change_fx_rate_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Fx Rate Snapshot"
           },
           "cash_tip_amount": {
             "type": "string",
@@ -49706,6 +49953,61 @@
               }
             ],
             "title": "Group Payment Reservation Count"
+          },
+          "cash_received_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Received Amount"
+          },
+          "cash_change_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Amount"
+          },
+          "cash_change_settled_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Settled Amount"
+          },
+          "cash_change_settled_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Settled Currency"
+          },
+          "cash_change_fx_rate_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Fx Rate Snapshot"
           },
           "cash_tip_amount": {
             "type": "string",
@@ -58844,6 +59146,65 @@
         ],
         "title": "LoginRequest"
       },
+      "ManualFxPaymentQuoteCreate": {
+        "properties": {
+          "reservation_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Reservation Id"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentMethodEnum"
+          },
+          "currency_code": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code"
+          },
+          "reservation_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Reservation Amount"
+          },
+          "tender_amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Tender Amount"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reservation_id",
+          "payment_method",
+          "currency_code",
+          "reservation_amount",
+          "tender_amount",
+          "reason"
+        ],
+        "title": "ManualFxPaymentQuoteCreate",
+        "description": "Authorized reservation-specific FX amount after automatic quotes expire."
+      },
       "ManualOTAReservationCreate": {
         "properties": {
           "guest_id": {
@@ -64111,6 +64472,39 @@
             ],
             "title": "Cash Change Amount"
           },
+          "cash_change_settled_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Settled Amount"
+          },
+          "cash_change_settled_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Settled Currency"
+          },
+          "cash_change_fx_rate_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Fx Rate Snapshot"
+          },
           "cash_tip_amount": {
             "type": "string",
             "title": "Cash Tip Amount",
@@ -64253,6 +64647,18 @@
               }
             ],
             "title": "Payment Quote Token"
+          },
+          "manual_fx_quote_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Fx Quote Id"
           },
           "description": {
             "anyOf": [
@@ -64518,6 +64924,21 @@
             ],
             "title": "Fx Quote Details"
           },
+          "cash_change_currency_code": {
+            "type": "string",
+            "title": "Cash Change Currency Code"
+          },
+          "cash_change_fx_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Fx Rate"
+          },
           "cash_tender_rounding_policy": {
             "anyOf": [
               {
@@ -64547,6 +64968,39 @@
           "payment_quote_token": {
             "type": "string",
             "title": "Payment Quote Token"
+          },
+          "manual_fx_quote_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Fx Quote Id"
+          },
+          "manual_fx_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Fx Reason"
+          },
+          "manual_fx_created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Fx Created At"
           }
         },
         "type": "object",
@@ -64568,6 +65022,8 @@
           "surcharge_fx_quote_details",
           "fx_rate_snapshot",
           "fx_quote_details",
+          "cash_change_currency_code",
+          "cash_change_fx_rate",
           "cash_tender_rounding_policy",
           "cash_tender_suggestion",
           "cash_tender_suggestion_difference",
@@ -72976,6 +73432,66 @@
             ],
             "title": "Fee Amount"
           },
+          "cash_received_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Received Amount"
+          },
+          "cash_change_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Amount"
+          },
+          "cash_change_settled_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Settled Amount"
+          },
+          "cash_change_settled_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Settled Currency"
+          },
+          "cash_change_fx_rate_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Fx Rate Snapshot"
+          },
+          "cash_tip_amount": {
+            "type": "string",
+            "title": "Cash Tip Amount",
+            "default": "0.00"
+          },
           "currency": {
             "type": "string",
             "title": "Currency"
@@ -78760,6 +79276,39 @@
               }
             ],
             "title": "Cash Change Amount"
+          },
+          "cash_change_settled_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Settled Amount"
+          },
+          "cash_change_settled_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Settled Currency"
+          },
+          "cash_change_fx_rate_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cash Change Fx Rate Snapshot"
           },
           "cash_tip_amount": {
             "type": "string",

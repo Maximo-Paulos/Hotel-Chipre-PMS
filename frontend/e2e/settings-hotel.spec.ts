@@ -128,7 +128,11 @@ test("owner can configure and persist the FX market and side for each conversion
 });
 
 test("owner can save and reload the foreign-payment conversion policy", async ({ page }, testInfo: TestInfo) => {
-  const ownerSession = await loginAsStepUpOwner(page, "fx-rounding-policy", testInfo.project.name);
+  // This journey performs two step-up protected changes (save and restore).
+  // Synthetic TOTP codes cannot be replayed, so either action may wait for the
+  // next 30-second code window.
+  testInfo.setTimeout(120_000);
+  const ownerSession = await loginAsStepUpOwner(page, "rate-policy", testInfo.project.name);
   let lastTotpStep = ownerSession.lastTotpStep;
   let policyMayNeedRestore = false;
 
@@ -153,12 +157,12 @@ test("owner can save and reload the foreign-payment conversion policy", async ({
     const policy = page.getByTestId("fx-rounding-policy");
     await expect(policy).toHaveValue("keep_remainder");
     await expect(policy.locator("option")).toHaveCount(5);
-    await expect(page.getByTestId("fx-rounding-setting")).toContainText("El estimador es orientativo");
+    await expect(page.getByTestId("fx-rounding-setting")).toContainText("no cambia el importe aplicado ni perdona el saldo");
     await expect(policy.locator('option[value="round_up"]')).toContainText("entero superior");
     await expect(policy.locator('option[value="round_down"]')).toContainText("entero inferior");
-    await expect(policy.locator('option[value="nearest_ten"]')).toContainText("múltiplo de 10 más cercano");
-    await expect(policy.locator('option[value="exact"]')).toContainText("importe convertido exacto, incluidos centavos");
-    await expect(policy.locator('option[value="keep_remainder"]')).toContainText("cobrarlo en otra moneda");
+    await expect(policy.locator('option[value="nearest_ten"]')).toContainText("decena más cercana");
+    await expect(policy.locator('option[value="exact"]')).toContainText("Pedir el importe exacto con centavos, sin sugerir redondeo");
+    await expect(policy.locator('option[value="keep_remainder"]')).toContainText("Mostrar cualquier saldo restante para cobrarlo aparte");
 
     policyMayNeedRestore = true;
     await savePolicy("exact");

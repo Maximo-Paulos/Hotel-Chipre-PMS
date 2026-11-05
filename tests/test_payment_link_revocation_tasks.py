@@ -186,6 +186,12 @@ def test_cron_runs_provider_phase_after_sql_hotel_jobs(monkeypatch):
     )
     monkeypatch.setattr(
         cron_entrypoint,
+        "process_recalculation_requests",
+        lambda: events.append("allocation")
+        or {"selected": 1, "succeeded": 1, "failed": 0, "deferred": 0},
+    )
+    monkeypatch.setattr(
+        cron_entrypoint,
         "run_payment_link_revocation_tasks",
         lambda: events.append("provider")
         or {
@@ -204,4 +210,51 @@ def test_cron_runs_provider_phase_after_sql_hotel_jobs(monkeypatch):
     )
 
     assert cron_entrypoint.main() == 0
-    assert events == ["sql", "provider"]
+    assert events == ["sql", "allocation", "provider"]
+
+
+def test_cron_reports_failed_allocation_processing(monkeypatch):
+    monkeypatch.setattr(
+        cron_entrypoint,
+        "run_scheduled_hotel_jobs",
+        lambda: {
+            "hotels_scanned": 0,
+            "active_hotels_scanned": 0,
+            "no_shows_scanned": 0,
+            "no_shows_marked": 0,
+            "reports_generated": 0,
+            "notifications_processed": 0,
+            "notifications_sent": 0,
+            "notifications_failed": 0,
+            "notifications_deferred": 0,
+            "notifications_retried": 0,
+            "analytics_facts_processed": 0,
+            "analytics_facts_deferred": 0,
+            "failed_jobs": 0,
+            "failed_hotels": 0,
+        },
+    )
+    monkeypatch.setattr(
+        cron_entrypoint,
+        "process_recalculation_requests",
+        lambda: {"selected": 1, "succeeded": 0, "failed": 1, "deferred": 0},
+    )
+    monkeypatch.setattr(
+        cron_entrypoint,
+        "run_payment_link_revocation_tasks",
+        lambda: {
+            "hotels_scanned": 0,
+            "hotels_visited": 0,
+            "processed": 0,
+            "succeeded": 0,
+            "failed": 0,
+            "skipped": 0,
+            "attempts_used": 0,
+            "attempt_limit": 2,
+            "external_connections_disabled": 0,
+            "failed_jobs": 0,
+            "failed_hotels": 0,
+        },
+    )
+
+    assert cron_entrypoint.main() == 1

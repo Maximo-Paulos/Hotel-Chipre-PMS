@@ -29,14 +29,11 @@ def _postgres_e2e_environment(url: str = LOCAL_POSTGRES_E2E_URL) -> dict[str, st
     }
 
 
-def test_seed_guard_accepts_only_explicit_test_and_repository_e2e_database():
-    env = {"APP_ENV": "test", "DATABASE_URL": seed_e2e_backend.E2E_DATABASE_URL}
+def test_seed_guard_rejects_sqlite_even_for_legacy_repository_e2e_path():
+    env = {"APP_ENV": "test", "DATABASE_URL": "sqlite:///./_e2e.db"}
 
-    normalized = seed_e2e_backend.prepare_e2e_environment(env)
-
-    assert env["APP_ENV"] == "test"
-    assert env["DATABASE_URL"] == seed_e2e_backend.E2E_DATABASE_URL
-    assert normalized == seed_e2e_backend.E2E_DATABASE_URL
+    with pytest.raises(seed_e2e_backend.E2ESafetyError, match="SQLite is not supported"):
+        seed_e2e_backend.prepare_e2e_environment(env)
 
 
 def test_seed_guard_accepts_only_explicit_loopback_postgres_e2e_database():
@@ -144,38 +141,12 @@ def test_seed_guard_rejects_postgres_without_the_dedicated_local_test_boundary(u
         seed_e2e_backend.prepare_e2e_environment(env)
 
 
-def test_reset_e2e_database_only_removes_the_explicit_generated_database(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    db_path = tmp_path / "_e2e.db"
-    db_path.write_bytes(b"isolated test data")
-    (tmp_path / "_e2e.db-wal").write_bytes(b"wal")
-    monkeypatch.setattr(seed_e2e_backend, "E2E_DATABASE_PATH", db_path)
-    monkeypatch.setenv("E2E_RESET_DATABASE", "true")
-
-    seed_e2e_backend.reset_e2e_database()
-
-    assert not db_path.exists()
-    assert not (tmp_path / "_e2e.db-wal").exists()
-
-
-def test_reset_e2e_database_never_deletes_postgres_target_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    db_path = tmp_path / "_e2e.db"
-    db_path.write_bytes(b"preserve while Postgres is selected")
-    monkeypatch.setattr(seed_e2e_backend, "E2E_DATABASE_PATH", db_path)
-    monkeypatch.setenv("E2E_RESET_DATABASE", "true")
-    for key, value in _postgres_e2e_environment().items():
-        monkeypatch.setenv(key, value)
-
-    seed_e2e_backend.reset_e2e_database()
-
-    assert db_path.read_bytes() == b"preserve while Postgres is selected"
-
-
 @pytest.mark.parametrize(
     "env",
     [
         {},
         {"APP_ENV": "test"},
-        {"DATABASE_URL": seed_e2e_backend.E2E_DATABASE_URL},
+        {"DATABASE_URL": "sqlite:///./_e2e.db"},
     ],
 )
 def test_seed_guard_rejects_missing_explicit_environment(env):
@@ -185,7 +156,7 @@ def test_seed_guard_rejects_missing_explicit_environment(env):
 
 @pytest.mark.parametrize("app_env", ["production", "prod", "preview", "development", "TEST"])
 def test_seed_guard_rejects_every_environment_except_exact_test(app_env):
-    env = {"APP_ENV": app_env, "DATABASE_URL": seed_e2e_backend.E2E_DATABASE_URL}
+    env = {"APP_ENV": app_env, "DATABASE_URL": "sqlite:///./_e2e.db"}
 
     with pytest.raises(seed_e2e_backend.E2ESafetyError, match="APP_ENV=test"):
         seed_e2e_backend.prepare_e2e_environment(env)

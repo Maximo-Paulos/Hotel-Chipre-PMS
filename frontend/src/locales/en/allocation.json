@@ -2,8 +2,8 @@
   "page": {
     "eyebrow": "Hotel operations",
     "title": "Smart allocation",
-    "description": "The engine assigns rooms and automatically reorganizes future reservations without check-in to reduce gaps by room. Constraints and exceptions remain protected for review.",
-    "reviewBeforeApply": "Eligible moves apply automatically · exceptions stay reviewable",
+    "description": "New reservations receive a compatible room when created. The engine can suggest changes to improve occupancy, but existing reservations stay in their rooms until Reception approves a proposal.",
+    "reviewBeforeApply": "Initial assignment is automatic · future changes need approval",
     "actionFailed": "The operation could not be completed: {{message}}",
     "genericFailure": "The operation could not be completed.",
     "staleProposal": "Reservations changed after this calculation. The proposal was not applied. Reject it and generate a new proposal to review the current state."
@@ -25,10 +25,10 @@
   "proposal": {
     "eyebrow": "Engine review",
     "title": "Latest proposal",
-    "description": "Recalculation automatically applies complete, safe moves. Check-ins and explicit locks stay protected; an exception requires one-time approval.",
-    "recalculate": "Recalculate and apply safe moves",
+    "description": "Recalculation prepares suggestions for review. No existing reservation changes rooms until an authorized person accepts the proposal.",
+    "recalculate": "Recalculate suggestions",
     "recalculating": "Calculating…",
-    "recalculateHelp": "The engine applies only complete, revalidated plans. Locked cases remain for review.",
+    "recalculateHelp": "The engine proposes complete changes. Review and accept them to move reservations; checked-in guests stay in place.",
     "resolveBeforeRecalculate": "Accept or reject the pending proposal before generating another.",
     "loading": "Loading the latest proposal…",
     "loadFailed": "Could not load the proposal: {{message}}",
@@ -38,7 +38,7 @@
       "pending": "Pending",
       "running": "Calculating",
       "succeeded": "Ready for review",
-      "automaticComplete": "Automatic optimization completed",
+      "readyForReview": "Suggestions ready for review",
       "failed": "Calculation stopped",
       "partial": "Partial result"
     },
@@ -80,13 +80,13 @@
     "confirmationLabel": "Proposal confirmation",
     "keepReviewing": "Keep reviewing",
     "reviewed": "There are no pending moves in this proposal.",
-    "automaticApplied": "The engine applied {{count}} safe moves. Moves on locked reservations need approval, and reservations with check-in do not move.",
-    "automaticNoChanges": "The engine completed its review and found no safe moves to apply."
+    "suggestionsPendingReview": "The engine found {{count}} suggested change(s). No reservations were moved; Reception must approve them.",
+    "noSuggestedMoves": "There are no suggested changes. Current rooms stay as assigned."
   },
   "locks": {
     "eyebrow": "Manual control",
     "title": "Protected reservations",
-    "description": "Pin a room when it must remain with a reservation. The engine will exclude it from future automatic reassignment.",
+    "description": "Protect a room when it must stay with a reservation. A proposed move requires one-time approval and keeps the lock active.",
     "readPermissionRequired": "Your role cannot view reservations. You can review proposals, but cannot manage protected reservations.",
     "loading": "Loading upcoming reservations…",
     "loadFailed": "Could not load reservations: {{message}}",

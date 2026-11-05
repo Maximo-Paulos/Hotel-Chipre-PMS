@@ -376,6 +376,16 @@ def get_cached_supported_rates() -> dict[str, dict]:
     return result
 
 
+def get_cached_supported_rates() -> dict[str, dict]:
+    """Return valid process-cached rates to persist with an on-demand refresh."""
+    result: dict[str, dict] = {}
+    for key in SUPPORTED_DISPLAY_RATE_TYPES:
+        cached = _cached_rate(_cache_key_for_display_rate(key), allow_stale=True)
+        if _cached_quote_matches(key, cached) and quote_is_fresh(cached):
+            result[key] = cached
+    return result
+
+
 def _cached_quote_matches(rate_type: str, quote: object) -> bool:
     if rate_type in USD_RATE_TYPES:
         return _quote_matches_supported_market(quote, currency="USD", market=rate_type)

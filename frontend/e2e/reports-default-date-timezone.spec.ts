@@ -19,6 +19,19 @@ const owner = {
 
 test.use({ timezoneId: "America/Argentina/Buenos_Aires" });
 
+async function useLateNightBusinessDate(page: Page) {
+  await page.route("**/api/config/business-clock", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      hotel_id: 1,
+      business_date: expectedHotelLocalDate,
+      hotel_timezone: "America/Argentina/Buenos_Aires",
+      simulation_enabled: false
+    })
+  }));
+}
+
 async function login(page: Page) {
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(owner.email);
@@ -28,6 +41,7 @@ async function login(page: Page) {
 }
 
 test("reports date defaults to the hotel's local today, not UTC's tomorrow, late at night", async ({ page }) => {
+  await useLateNightBusinessDate(page);
   await login(page);
   await page.clock.install({ time: new Date(lateNightArgentinaUtc) });
 
@@ -37,6 +51,7 @@ test("reports date defaults to the hotel's local today, not UTC's tomorrow, late
 });
 
 test("dashboard KPIs default to the hotel's local today, not UTC's tomorrow, late at night", async ({ page }) => {
+  await useLateNightBusinessDate(page);
   await login(page);
   await page.clock.install({ time: new Date(lateNightArgentinaUtc) });
 

@@ -21,15 +21,27 @@ export function PaymentQuoteSummary({ quote, showCashSuggestion = false }: Payme
   const { t, i18n } = useTranslation("reservations");
   const currency = quote.currency_code.toUpperCase();
   const reservationCurrency = quote.reservation_currency_code.toUpperCase();
-  const fxRate = quote.fx_rate_snapshot === null ? null : Number(quote.fx_rate_snapshot);
+  const fxRate = quote.fx_rate_snapshot == null ? null : Number(quote.fx_rate_snapshot);
+  const cashChangeCurrency = quote.cash_change_currency_code?.toUpperCase() ?? reservationCurrency;
+  const cashChangeFxRate = quote.cash_change_fx_rate == null ? null : Number(quote.cash_change_fx_rate);
   const fxRateLabel = currency !== reservationCurrency && fxRate !== null
     ? formatFxRate(reservationCurrency, currency, fxRate, i18n.language)
+    : null;
+  const cashChangeFxRateLabel = currency !== cashChangeCurrency &&
+    cashChangeFxRate !== null && cashChangeFxRate > 0
+    ? formatFxRate(currency, cashChangeCurrency, cashChangeFxRate, i18n.language)
     : null;
   const suggestion = quote.cash_tender_suggestion === null ? null : Number(quote.cash_tender_suggestion);
   const hasCashSuggestion = showCashSuggestion && suggestion !== null &&
     Math.abs(suggestion - Number(quote.final_amount)) >= 0.005;
   const fxSource = detailLabel(quote.fx_quote_details);
   const surchargeFxSource = detailLabel(quote.surcharge_fx_quote_details);
+  const fallbackDetails = [quote.fx_quote_details, quote.surcharge_fx_quote_details].find(
+    (details) => details?.fallback_used === true
+  );
+  const observedAt = typeof fallbackDetails?.quote_observed_at === "string"
+    ? new Date(fallbackDetails.quote_observed_at).toLocaleString()
+    : null;
 
   return (
     <section
@@ -62,15 +74,39 @@ export function PaymentQuoteSummary({ quote, showCashSuggestion = false }: Payme
         </div>
       </dl>
       {fxRateLabel ? (
-        <p className="mt-1">
+        <p className="mt-1" data-testid="payment-quote-fx-rate">
           {t("page.form.paymentQuoteFxRate", {
             rate: fxRateLabel
           })}
           {fxSource ? ` · ${fxSource}` : ""}
         </p>
       ) : null}
+      {quote.payment_method === "cash" && currency !== cashChangeCurrency ? (
+        cashChangeFxRateLabel ? (
+          <p className="mt-1" data-testid="payment-quote-cash-change-rate">
+            {t("page.form.paymentQuoteCashChangeFxRate", { rate: cashChangeFxRateLabel })}
+          </p>
+        ) : (
+          <p className="mt-1 text-amber-900" role="status" data-testid="payment-quote-cash-change-unavailable">
+            {t("page.form.cashChangeRateUnavailable", { currency: cashChangeCurrency })}
+          </p>
+        )
+      ) : null}
+      {quote.manual_fx_quote_id ? (
+        <p className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 font-medium text-amber-950" role="status" data-testid="payment-quote-manual-fx">
+          {t("page.form.manualFxApprovedNotice", {
+            reason: quote.manual_fx_reason ?? "",
+            date: quote.manual_fx_created_at ? new Date(quote.manual_fx_created_at).toLocaleString() : ""
+          })}
+        </p>
+      ) : null}
       {surchargeFxSource ? (
         <p className="mt-1">{t("page.form.paymentQuoteSurchargeFx", { source: surchargeFxSource })}</p>
+      ) : null}
+      {fallbackDetails ? (
+        <p className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 font-medium text-amber-950" role="alert" data-testid="payment-quote-fx-fallback">
+          {t("page.form.paymentQuoteFxFallback", { date: observedAt ?? t("page.form.usdEstimateUnknownDate") })}
+        </p>
       ) : null}
       {hasCashSuggestion ? (
         <p className="mt-1 rounded border border-violet-200 bg-violet-50 p-2 text-violet-950">

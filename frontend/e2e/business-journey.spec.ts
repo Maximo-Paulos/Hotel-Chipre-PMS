@@ -169,14 +169,15 @@ test("owner completes the core reservation journey through the UI", async ({ pag
   const editModal = page.locator("div.fixed").filter({ hasText: "Pagos y balance" });
   const editForm = editModal.locator("form").filter({ hasText: "Pagos y balance" });
   await expect(editForm.getByText("Resumen financiero y acciones rápidas.", { exact: true })).toBeVisible();
-  const partialAmount = editForm.getByLabel(/^(Monto a cobrar|Monto del movimiento)$/);
+  const partialAmount = editForm.getByLabel(
+    /^(Monto a cobrar|Monto del movimiento)( \([A-Z]{3}\))?$/
+  );
   await expect(partialAmount).toBeVisible();
   await expect(editForm.getByTestId("payment-partial-hint")).toContainText(
     "Cualquier importe positivo cuyo equivalente sea menor que el saldo se acepta como cobro parcial"
   );
   await partialAmount.fill("70000");
-  await editForm.getByRole("button", { name: "Cobro parcial", exact: true }).click();
-  await expect(page.getByText("Ingresá un importe positivo que no supere el saldo pendiente.", { exact: true })).toBeVisible();
+  await expect(editForm.getByRole("button", { name: "Cobro parcial", exact: true })).toBeDisabled();
   await partialAmount.fill("500");
   await editForm.getByRole("button", { name: "Cobro parcial", exact: true }).click();
   await expect(page.getByText("Cobro parcial registrado", { exact: true })).toBeVisible();
@@ -522,18 +523,17 @@ test("owner operates waitlist, housekeeping, laundry and daily reports", async (
     .filter({ hasText: "Huesped E2E" })
     .filter({ hasText: `Disponibilidad solicitada ${suffix}` });
   await expect(waitlistCard).toHaveCount(1);
-  await waitlistCard.getByRole("button", { name: "Promover", exact: true }).click();
+  await waitlistCard.getByRole("button", { name: "Revisar propuesta", exact: true }).click();
 
   const promotionForm = page.locator("form").filter({ hasText: "Promoción" });
-  await expect(promotionForm.getByRole("button", { name: "Promover a reserva", exact: true })).toBeEnabled();
-  const promoteRoom = promotionForm.getByLabel("Habitación");
-  const roomOption = promoteRoom.locator("option").filter({ hasText: "Hab. 101" });
-  await expect(roomOption).toHaveCount(1);
-  const roomValue = await roomOption.getAttribute("value");
-  expect(roomValue).toBeTruthy();
-  await promoteRoom.selectOption(roomValue!);
+  const confirmPromotion = promotionForm.getByRole("button", { name: /^Confirmar reserva en Hab\./ });
+  await expect(confirmPromotion).toBeEnabled();
+  // Keep the room chosen by the allocation proposal. Hardcoding a room here
+  // can override the engine's feasible recommendation and make the test data
+  // depend on unrelated reservations from parallel browser projects.
+  await expect(promotionForm).toContainText(/habitación \d+/i);
   await promotionForm.getByLabel("Notas de reserva").fill("Promoción operativa E2E");
-  await promotionForm.getByRole("button", { name: "Promover a reserva", exact: true }).click();
+  await confirmPromotion.click();
   await expect(page.getByText("Entrada promovida a reserva.", { exact: true })).toBeVisible();
   await expect(waitlistCard).toContainText("Promovida");
 

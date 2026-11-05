@@ -345,10 +345,16 @@ def get_daily_summary(
         group_batch_id = getattr(transaction, "group_payment_batch_id", None)
         cash_received_amount = getattr(transaction, "cash_received_amount", None)
         cash_change_amount = getattr(transaction, "cash_change_amount", None)
+        cash_change_settled_amount = getattr(transaction, "cash_change_settled_amount", None)
+        cash_change_settled_currency = getattr(transaction, "cash_change_settled_currency", None)
+        cash_change_fx_rate_snapshot = getattr(transaction, "cash_change_fx_rate_snapshot", None)
         cash_tip_amount = getattr(transaction, "cash_tip_amount", ZERO) or ZERO
         if group_batch_id is not None:
             cash_received_amount = None
             cash_change_amount = None
+            cash_change_settled_amount = None
+            cash_change_settled_currency = None
+            cash_change_fx_rate_snapshot = None
             cash_tip_amount = ZERO
             batch = group_batches.get(group_batch_id)
             if (
@@ -377,6 +383,17 @@ def get_daily_summary(
                 "signed_amount": signed_amount,
                 "cash_received_amount": _decimal(cash_received_amount) if cash_received_amount is not None else None,
                 "cash_change_amount": _decimal(cash_change_amount) if cash_change_amount is not None else None,
+                "cash_change_settled_amount": (
+                    _decimal(cash_change_settled_amount)
+                    if cash_change_settled_amount is not None
+                    else None
+                ),
+                "cash_change_settled_currency": cash_change_settled_currency,
+                "cash_change_fx_rate_snapshot": (
+                    _decimal(cash_change_fx_rate_snapshot)
+                    if cash_change_fx_rate_snapshot is not None
+                    else None
+                ),
                 "cash_tip_amount": _decimal(cash_tip_amount),
                 "currency_code": transaction_currency,
                 "payment_method": method,
@@ -456,10 +473,16 @@ def get_daily_summary(
         group_batch_id = getattr(transaction, "group_payment_batch_id", None)
         cash_received_amount = getattr(transaction, "cash_received_amount", None)
         cash_change_amount = getattr(transaction, "cash_change_amount", None)
+        cash_change_settled_amount = getattr(transaction, "cash_change_settled_amount", None)
+        cash_change_settled_currency = getattr(transaction, "cash_change_settled_currency", None)
+        cash_change_fx_rate_snapshot = getattr(transaction, "cash_change_fx_rate_snapshot", None)
         cash_tip_amount = getattr(transaction, "cash_tip_amount", ZERO) or ZERO
         if group_batch_id is not None:
             cash_received_amount = None
             cash_change_amount = None
+            cash_change_settled_amount = None
+            cash_change_settled_currency = None
+            cash_change_fx_rate_snapshot = None
             cash_tip_amount = ZERO
             batch = group_batches.get(group_batch_id)
             if (
@@ -480,6 +503,17 @@ def get_daily_summary(
                 "amount": _decimal(transaction.tender_amount if transaction.tender_amount is not None else transaction.amount),
                 "cash_received_amount": _decimal(cash_received_amount) if cash_received_amount is not None else None,
                 "cash_change_amount": _decimal(cash_change_amount) if cash_change_amount is not None else None,
+                "cash_change_settled_amount": (
+                    _decimal(cash_change_settled_amount)
+                    if cash_change_settled_amount is not None
+                    else None
+                ),
+                "cash_change_settled_currency": cash_change_settled_currency,
+                "cash_change_fx_rate_snapshot": (
+                    _decimal(cash_change_fx_rate_snapshot)
+                    if cash_change_fx_rate_snapshot is not None
+                    else None
+                ),
                 "cash_tip_amount": _decimal(cash_tip_amount),
                 "currency_code": str(transaction.tender_currency or transaction.currency or "ARS").upper(),
                 "collected_on": transaction.collected_on,

@@ -399,6 +399,13 @@ Use the most appropriate level:
 - If a test is outdated, explain why and replace it responsibly.
 - If coverage cannot be added, explain why.
 
+### 9.5 Local database validation
+
+- For every local database-backed test, migration, seed, or runtime check, use a fresh isolated PostgreSQL database hosted by Colima. Use `hcpms-codex-qa` / PostgreSQL 16 for the deployment-matching run; use `hotel-chipre-pms-audit-pg` / PostgreSQL 17 only when that version is the target of the check.
+- Start the selected Colima profile if it is stopped. Keep existing profiles, containers, volumes, and databases; never clean them up as part of test setup.
+- Do not use SQLite for local app tests, fixtures, seeds, migration checks, or E2E. If a test helper silently selects SQLite or cannot prove the local disposable PostgreSQL target, stop and report the coverage gap rather than counting that test as passed.
+- Never infer a test target from `.env` or print a database URL. Set the explicit loopback PostgreSQL test URL and required isolation evidence, and use synthetic data with external effects disabled. Only drop a database created by the current run after rechecking its exact disposable name.
+
 ---
 
 ## 10) Performance and reliability rules
