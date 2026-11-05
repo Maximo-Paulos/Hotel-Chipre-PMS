@@ -1,7 +1,7 @@
 # Alembic head
 
-Generado: 2026-11-05T03:39:06.158446+00:00
-Commit: `37011c3ebe11a7fabd0218a46dbcc2d3b45dedd4`
+Generado: 2026-11-05T05:47:07.774723+00:00
+Commit: `8cefbbdd5903b3d8933cf5ad572d97a10c2c0be4`
 
 ```text
 20261104_cash_change_settlement (head)
