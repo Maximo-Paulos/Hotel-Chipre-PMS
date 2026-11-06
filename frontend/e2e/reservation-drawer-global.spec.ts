@@ -101,7 +101,32 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   const confirmationCode: string = created.confirmation_code;
   expect(reservationId).toBeGreaterThan(0);
   let allowFinancialSummaryToRecover = false;
+  let holdFinancialSummaryRefresh = false;
+  let failPaymentQuoteResponses = 0;
+  let signalPaymentSummaryRefreshStarted: (() => void) | null = null;
+  let releasePaymentSummaryRefresh: (() => void) | null = null;
+  let paymentSummaryRefreshStarted: Promise<void> = Promise.resolve();
+  await page.route("**/api/payment-surcharges/quote", async (route) => {
+    if (failPaymentQuoteResponses <= 0) {
+      await route.continue();
+      return;
+    }
+    failPaymentQuoteResponses -= 1;
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "No balance remains for a new payment quote" })
+    });
+  });
   await page.route(`**/api/payments/summary/${reservationId}`, async (route) => {
+    if (holdFinancialSummaryRefresh) {
+      signalPaymentSummaryRefreshStarted?.();
+      await new Promise<void>((resolve) => {
+        releasePaymentSummaryRefresh = resolve;
+      });
+      await route.continue();
+      return;
+    }
     if (allowFinancialSummaryToRecover) {
       await route.continue();
       return;
@@ -165,14 +190,52 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   const paymentRequest = page.waitForRequest((request) =>
     new URL(request.url()).pathname === "/api/payments" && request.method() === "POST"
   );
+  const paymentResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/payments" && response.request().method() === "POST"
+  );
+  const postPaymentQuoteFailure = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/payment-surcharges/quote" &&
+    response.request().method() === "POST" && response.status() === 409
+  );
+  // Hold the balance refresh after the committed payment. The first quote
+  // failure belongs to the stale balance; a second failure after refresh
+  // must remain actionable.
+  paymentSummaryRefreshStarted = new Promise<void>((resolve) => {
+    signalPaymentSummaryRefreshStarted = resolve;
+  });
+  holdFinancialSummaryRefresh = true;
+  failPaymentQuoteResponses = 2;
   await drawer.getByRole("button", { name: "Registrar cobro", exact: true }).click();
-  expect((await paymentRequest).postDataJSON()).toMatchObject({
+  const [paymentRequestResult, paymentResponseResult, postPaymentQuoteFailureResult] = await Promise.all([
+    paymentRequest,
+    paymentResponse,
+    postPaymentQuoteFailure
+  ]);
+  expect(paymentResponseResult.status()).toBe(201);
+  expect(postPaymentQuoteFailureResult.status()).toBe(409);
+  expect(paymentRequestResult.postDataJSON()).toMatchObject({
     payment_method: "cash",
     amount: 100,
     cash_received_amount: 120
   });
   expect(cashPaymentRequestCount).toBe(1);
   await expect(drawer.getByText("Pago registrado.", { exact: true })).toBeVisible();
+  await paymentSummaryRefreshStarted;
+  await expect(drawer.getByTestId("reservation-drawer-payment-quote-error")).toHaveCount(0);
+  const refreshedPaymentQuoteFailure = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/payment-surcharges/quote" &&
+    response.request().method() === "POST" && response.status() === 409
+  );
+  const paymentSummaryRetry = page.waitForResponse(
+    (response) => response.url().includes(`/api/payments/summary/${reservationId}`) && response.status() === 200
+  );
+  holdFinancialSummaryRefresh = false;
+  releasePaymentSummaryRefresh?.();
+  await paymentSummaryRetry;
+  await refreshedPaymentQuoteFailure;
+  await expect(drawer.getByTestId("reservation-drawer-payment-quote-error")).toBeVisible();
+  await drawer.getByTestId("reservation-drawer-payment-quote-retry").click();
+  await expect(drawer.getByTestId("reservation-drawer-payment-quote-error")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
   await expect(drawer).not.toBeVisible();

@@ -317,6 +317,10 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const [manualFxReasonInput, setManualFxReasonInput] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const clearPaymentFeedback = () => {
+    setActionError(null);
+    setActionMessage((current) => current === t("drawer.messages.paymentRegistered") ? null : current);
+  };
   const [captureForm, setCaptureForm] = useState<CheckinCaptureForm>(emptyCaptureForm);
   const [companyExtensionNote, setCompanyExtensionNote] = useState("");
   const [companyExtensionCheckoutDate, setCompanyExtensionCheckoutDate] = useState("");
@@ -686,6 +690,12 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     : manualFxPaymentQuoteMatchesEntry
       ? manualFxPaymentQuote ?? undefined
       : undefined;
+  const shouldDisplayPaymentQuoteError = paymentQuoteQuery.isError && !paymentQuote &&
+    Number(operationalBalanceDue ?? 0) > 0.01 &&
+    !(paymentMutation.isPending || (
+      actionMessage === t("drawer.messages.paymentRegistered") &&
+      summaryQuery.isFetching
+    ));
   const canConfigureManualFxQuote = Boolean(
     reservation &&
     paymentTenderCurrency !== currencyCode &&
@@ -2416,6 +2426,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                         step="0.01"
                         value={paymentAmount}
                         onChange={(event) => {
+                          clearPaymentFeedback();
                           setPaymentAmount(event.target.value);
                           setPaymentAmountTouched(true);
                         }}
@@ -2440,6 +2451,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       <select
                         value={paymentTenderCurrency}
                         onChange={(event) => {
+                          clearPaymentFeedback();
                           setPaymentTenderCurrencyInput(event.target.value);
                           setPaymentAmount("");
                           setPaymentAmountTouched(false);
@@ -2464,6 +2476,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       <select
                         value={paymentMethod}
                         onChange={(event) => {
+                          clearPaymentFeedback();
                           const method = event.target.value as PaymentMethod;
                           setPaymentMethod(method);
                           if (method !== "cash") {
@@ -2534,7 +2547,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                     <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status" data-testid="reservation-drawer-company-charge-currency-hint">
                       {t("drawer.payment.companyChargesCurrencyRequired", { currency: currencyCode })}
                     </p>
-                  ) : paymentQuoteQuery.isError && !paymentQuote ? (
+                  ) : shouldDisplayPaymentQuoteError ? (
                     <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert" data-testid="reservation-drawer-payment-quote-error">
                       <p>{isPaymentQuoteOverBalanceError(
                         paymentQuoteQuery.error instanceof ApiError ? paymentQuoteQuery.error.status : undefined,
