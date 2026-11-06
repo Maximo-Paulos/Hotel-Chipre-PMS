@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import date
 import re
+from datetime import date
 
 from sqlalchemy import event
 
@@ -20,8 +20,21 @@ from app.models.reservation import (
     ReservationStatusEnum,
 )
 from app.models.room import Room, RoomCategory, RoomStatusEnum
-from app.services.analytics_service import build_home_payload, build_room_detail_payload
-from app.services.analytics_facts import refresh_fact_reservation_daily
+from app.services.analytics_facts import (
+    refresh_fact_reservation_daily,
+    refresh_fact_room_occupancy_daily,
+)
+from app.services.analytics_service import (
+    _comparison_with_metrics,
+    build_category_detail_payload,
+    build_channels_payload,
+    build_home_payload,
+    build_operations_payload,
+    build_room_detail_payload,
+    build_rooms_overview_payload,
+    build_segments_payload,
+    get_company_fact_detail,
+)
 
 
 def test_analytics_home_does_not_repair_missing_facts_during_postgres_read(
@@ -207,6 +220,140 @@ def test_analytics_home_returns_currency_specific_sql_metrics_from_facts(pg_sess
         assert row["revenue_gross_usd"] == "200.00"
         assert row["revenue_net_usd"] == "180.00"
         assert row["unavailable_currencies"] == []
+
+
+def test_analytics_home_comparisons_return_matching_period_kpis(pg_session):
+    db = pg_session
+    hotel = HotelConfiguration(id=981193, hotel_name="Synthetic Analytics Comparisons")
+    db.add(hotel)
+    db.flush()
+
+    category = RoomCategory(
+        hotel_id=hotel.id,
+        name="Comparison Synthetic",
+        code="COMP-SYN",
+        base_price_per_night=100,
+        max_occupancy=2,
+    )
+    guest = Guest(
+        hotel_id=hotel.id,
+        first_name="Synthetic",
+        last_name="Comparison Guest",
+        terms_accepted=True,
+    )
+    company = Company(hotel_id=hotel.id, legal_name="Comparison Company", display_name="Comparison Company")
+    db.add_all([category, guest, company])
+    db.flush()
+
+    room = Room(
+        hotel_id=hotel.id,
+        room_number="COMP-01",
+        floor=1,
+        category_id=category.id,
+        status=RoomStatusEnum.AVAILABLE,
+        is_active=True,
+    )
+    db.add(room)
+    db.flush()
+
+    reservations = [
+        ("ANALYTICS-COMP-CURRENT", date(2026, 4, 5), date(2026, 4, 7), 220, 200),
+        ("ANALYTICS-COMP-PREVIOUS", date(2026, 4, 3), date(2026, 4, 5), 120, 100),
+        ("ANALYTICS-COMP-YOY", date(2025, 4, 5), date(2025, 4, 7), 330, 300),
+    ]
+    for code, check_in, check_out, gross, net in reservations:
+        db.add(
+            Reservation(
+                hotel_id=hotel.id,
+                confirmation_code=code,
+                guest_id=guest.id,
+                company_id=company.id,
+                room_id=room.id,
+                category_id=category.id,
+                check_in_date=check_in,
+                check_out_date=check_out,
+                total_amount=gross,
+                subtotal_amount=gross,
+                net_amount=net,
+                amount_paid=0,
+                currency_code="ARS",
+                status=ReservationStatusEnum.PENDING,
+                outcome=ReservationOutcomeEnum.PENDING,
+                source=ReservationSourceEnum.DIRECT,
+                channel_code=ReservationChannelCodeEnum.OTHER_DIRECT,
+                guest_segment=ReservationGuestSegmentEnum.LEISURE,
+                guest_segment_source=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
+                no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
+                num_adults=1,
+                num_children=0,
+            )
+        )
+    db.flush()
+
+    for date_from, date_to in (
+        (date(2026, 4, 3), date(2026, 4, 4)),
+        (date(2026, 4, 5), date(2026, 4, 6)),
+        (date(2025, 4, 5), date(2025, 4, 6)),
+    ):
+        refresh_fact_reservation_daily(db, hotel_id=hotel.id, date_from=date_from, date_to=date_to)
+        refresh_fact_room_occupancy_daily(db, hotel_id=hotel.id, date_from=date_from, date_to=date_to)
+
+    payload = build_home_payload(
+        db,
+        hotel_id=hotel.id,
+        date_from=date(2026, 4, 5),
+        date_to=date(2026, 4, 6),
+        compare_previous=True,
+        compare_yoy=True,
+        currency_display="ARS",
+    )
+
+    def revenue_gross(period_name: str) -> str:
+        period = getattr(payload["comparison"], period_name)
+        assert period.requested is True
+        assert period.available is True
+        cards = {card.card_code: card for card in period.metrics}
+        return cards["home_revenue_gross"].value_ars
+
+    current_cards = {card["card_code"]: card for card in payload["data"]["cards"]}
+    assert current_cards["home_revenue_gross"]["value_ars"] == "220.00"
+    assert revenue_gross("previous") == "120.00"
+    assert revenue_gross("yoy") == "330.00"
+    assert payload["comparison"].previous.date_from == date(2026, 4, 3)
+    assert payload["comparison"].previous.date_to == date(2026, 4, 4)
+    assert payload["comparison"].yoy.date_from == date(2025, 4, 5)
+    assert payload["comparison"].yoy.date_to == date(2025, 4, 6)
+
+    common = {
+        "db": db,
+        "hotel_id": hotel.id,
+        "date_from": date(2026, 4, 5),
+        "date_to": date(2026, 4, 6),
+        "compare_previous": True,
+        "compare_yoy": True,
+        "currency_display": "ARS",
+    }
+    reports = [
+        build_rooms_overview_payload(**common),
+        build_room_detail_payload(**common, room_id=room.id),
+        build_category_detail_payload(**common, category_id=category.id),
+        build_segments_payload(**common),
+        build_channels_payload(**common),
+        build_operations_payload(**common),
+    ]
+    company_comparison = _comparison_with_metrics(
+        payload["comparison"],
+        lambda date_from, date_to: get_company_fact_detail(
+            db, hotel_id=hotel.id, company_id=company.id, date_from=date_from, date_to=date_to
+        )["cards"],
+    )
+    reports.append({"comparison": company_comparison})
+    for report in reports:
+        for name in ("previous", "yoy"):
+            period = getattr(report["comparison"], name)
+            assert period.metrics_available is True
+            assert period.metrics_unavailable_reason is None
+            assert period.metrics
 
 def test_company_reservation_fact_refresh_persists_company_channel_on_postgres(pg_session):
     db = pg_session

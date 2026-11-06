@@ -6,22 +6,6 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
-class AnalyticsComparisonWindowRead(BaseModel):
-    requested: bool
-    available: bool
-    date_from: date | None = None
-    date_to: date | None = None
-
-    model_config = {"from_attributes": True}
-
-
-class AnalyticsComparisonStateRead(BaseModel):
-    previous: AnalyticsComparisonWindowRead
-    yoy: AnalyticsComparisonWindowRead
-
-    model_config = {"from_attributes": True}
-
-
 class AnalyticsMetricCardRead(BaseModel):
     card_code: str
     label: str
@@ -31,6 +15,25 @@ class AnalyticsMetricCardRead(BaseModel):
     value_usd_available: bool | None = None
     value_pct: float | None = None
     value_count: int | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class AnalyticsComparisonWindowRead(BaseModel):
+    requested: bool
+    available: bool
+    date_from: date | None = None
+    date_to: date | None = None
+    metrics_available: bool | None = None
+    metrics_unavailable_reason: str | None = None
+    metrics: list[AnalyticsMetricCardRead] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class AnalyticsComparisonStateRead(BaseModel):
+    previous: AnalyticsComparisonWindowRead
+    yoy: AnalyticsComparisonWindowRead
 
     model_config = {"from_attributes": True}
 

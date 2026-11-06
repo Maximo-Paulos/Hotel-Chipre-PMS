@@ -43,6 +43,7 @@ from app.services.analytics_contracts import (
     resolve_guest_segment,
     split_amount_evenly,
 )
+from app.services.analytics_service import _comparison_with_metrics
 from app.services.analytics_facts import _currency_pair
 from app.services.analytics_service import _unavailable_currencies
 
@@ -435,3 +436,22 @@ def test_comparison_contracts_and_schemas():
     assert response.comparison.previous.available is True
     assert response.data_as_of == datetime(2026, 4, 24, 12, 0, tzinfo=timezone.utc)
     assert response.data_source == "postgresql"
+
+
+def test_comparison_contract_distinguishes_unavailable_metric_set():
+    state = AnalyticsComparisonStateRead(
+        previous=AnalyticsComparisonWindowRead(
+            requested=True,
+            available=True,
+            date_from=date(2026, 3, 1),
+            date_to=date(2026, 3, 31),
+        ),
+        yoy=AnalyticsComparisonWindowRead(requested=False, available=False),
+    )
+    resolved = _comparison_with_metrics(state, lambda _date_from, _date_to: [])
+    assert resolved.previous.available is True
+    assert resolved.previous.metrics_available is False
+    assert resolved.previous.metrics_unavailable_reason == "no_comparable_metrics"
+    assert resolved.previous.metrics == []
+    assert resolved.yoy.metrics_available is None
+    assert resolved.yoy.metrics_unavailable_reason is None

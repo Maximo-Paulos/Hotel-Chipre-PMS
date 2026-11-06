@@ -27,7 +27,11 @@ from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import Reservation, ReservationOutcomeEnum, ReservationStatusEnum
 from app.models.room import Room, RoomCategory
-from app.schemas.analytics import AnalyticsComparisonStateRead, AnalyticsComparisonWindowRead, AnalyticsMetricCardRead
+from app.schemas.analytics import (
+    AnalyticsComparisonStateRead,
+    AnalyticsComparisonWindowRead,
+    AnalyticsMetricCardRead,
+)
 from app.schemas.analytics_api import (
     AnalyticsAIConfigRead,
     AnalyticsAIConfigUpdate,
@@ -1386,6 +1390,27 @@ def build_starter_summary_payload(db: Session, *, hotel_id: int, date_from: date
     }
 
 
+def _comparison_with_metrics(
+    comparison_state: AnalyticsComparisonStateRead,
+    metric_loader: Callable[[date, date], list[dict[str, Any]]],
+) -> AnalyticsComparisonStateRead:
+    """Attach same-report KPI cards for each requested, valid comparison window."""
+    comparison = comparison_state.model_copy(deep=True)
+    for name in ("previous", "yoy"):
+        window = getattr(comparison, name)
+        if not window.requested:
+            continue
+        if not window.available or window.date_from is None or window.date_to is None:
+            window.metrics_available = False
+            window.metrics_unavailable_reason = "comparison_window_unavailable"
+            continue
+        cards = metric_loader(window.date_from, window.date_to)
+        window.metrics = [AnalyticsMetricCardRead.model_validate(card) for card in cards]
+        window.metrics_available = bool(window.metrics)
+        window.metrics_unavailable_reason = None if window.metrics else "no_comparable_metrics"
+    return comparison
+
+
 def build_home_payload(
     db: Session,
     *,
@@ -1535,12 +1560,24 @@ def build_home_payload(
         metric_card("home_pickup_30d", "Pickup 30 días", value_count=pickup_30d).model_dump(),
         metric_card("home_physical_room_nights", "Noches-habitación disponibles", value_count=physical_room_nights).model_dump(),
     ]
+    comparison = _comparison_with_metrics(
+        window.comparison,
+        lambda date_from, date_to: build_home_payload(
+            db,
+            hotel_id=hotel_id,
+            date_from=date_from,
+            date_to=date_to,
+            compare_previous=False,
+            compare_yoy=False,
+            currency_display=currency_display,
+        )["data"]["cards"],
+    )
     return {
         "hotel_id": hotel_id,
         "date_from": window.date_from,
         "date_to": window.date_to,
         "currency_display": currency_display,
-        "comparison": window.comparison,
+        "comparison": comparison,
         "data": {
             "cards": cards,
             "top_channels": build_channels_breakdown(
@@ -1646,12 +1683,19 @@ def build_rooms_overview_payload(
         metric_card("rooms_occupied", "Noches ocupadas", value_count=occupied_nights).model_dump(),
         metric_card("rooms_occupancy", "Ocupación promedio", value_pct=((occupied_nights / room_count) * 100.0) if room_count else 0.0).model_dump(),
     ]
+    comparison = _comparison_with_metrics(
+        window.comparison,
+        lambda date_from, date_to: build_rooms_overview_payload(
+            db, hotel_id=hotel_id, date_from=date_from, date_to=date_to,
+            compare_previous=False, compare_yoy=False, currency_display=currency_display,
+        )["data"]["cards"],
+    )
     return {
         "hotel_id": hotel_id,
         "date_from": window.date_from,
         "date_to": window.date_to,
         "currency_display": currency_display,
-        "comparison": window.comparison,
+        "comparison": comparison,
         "data": {
             "cards": cards,
             "rooms": payload_rooms,
@@ -1794,13 +1838,22 @@ def build_room_detail_payload(
         ]
         events = [_serialize_room_state_event(event) for event in events]
         data_as_of = _facts_data_as_of(facts_rows, currency_facts)
+    room_cards = _room_detail_metric_cards(facts)
+    comparison = _comparison_with_metrics(
+        window.comparison,
+        lambda date_from, date_to: build_room_detail_payload(
+            db, hotel_id=hotel_id, room_id=room_id, date_from=date_from, date_to=date_to,
+            compare_previous=False, compare_yoy=False, currency_display=currency_display,
+        )["data"]["cards"],
+    )
     return {
         "hotel_id": hotel_id,
         "date_from": window.date_from,
         "date_to": window.date_to,
         "currency_display": currency_display,
-        "comparison": window.comparison,
+        "comparison": comparison,
         "data": {
+            "cards": room_cards,
             "room": {
                 "room_id": room.id,
                 "room_number": room.room_number,
@@ -1833,6 +1886,33 @@ def _room_detail_fact_read(row: Any) -> dict[str, Any]:
         "margin_operating_usd": _money_str(fact.margin_operating_usd),
         **_unavailable_currency_metadata([currency_fact] if currency_fact is not None else []),
     }
+
+
+def _room_detail_metric_cards(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    occupied_nights = sum(1 for fact in facts if fact["is_occupied"])
+    sellable_nights = sum(1 for fact in facts if fact["is_sellable_night"])
+    unavailable = {code for fact in facts for code in fact.get("unavailable_currencies", [])}
+    return [
+        metric_card("room_detail_nights", "Noches del período", value_count=len(facts)).model_dump(),
+        metric_card("room_detail_occupied_nights", "Noches ocupadas", value_count=occupied_nights).model_dump(),
+        metric_card(
+            "room_detail_occupancy", "Ocupación", value_pct=(occupied_nights / sellable_nights * 100) if sellable_nights else 0.0
+        ).model_dump(),
+        metric_card(
+            "room_detail_revenue_net", "Revenue neto",
+            value_ars=sum((Decimal(fact["revenue_net_ars"]) for fact in facts), Decimal("0")),
+            value_ars_available="ARS" not in unavailable,
+            value_usd=sum((Decimal(fact["revenue_net_usd"]) for fact in facts), Decimal("0")),
+            value_usd_available="USD" not in unavailable,
+        ).model_dump(),
+        metric_card(
+            "room_detail_operating_margin", "Margen operativo",
+            value_ars=sum((Decimal(fact["margin_operating_ars"]) for fact in facts), Decimal("0")),
+            value_ars_available="ARS" not in unavailable,
+            value_usd=sum((Decimal(fact["margin_operating_usd"]) for fact in facts), Decimal("0")),
+            value_usd_available="USD" not in unavailable,
+        ).model_dump(),
+    ]
 
 
 def build_category_detail_payload(
@@ -1893,13 +1973,22 @@ def build_category_detail_payload(
         fact_rows = facts_query.all()
         facts = [_category_fact_read(fact) for fact in fact_rows]
         data_as_of = _facts_data_as_of(fact_rows)
+    category_cards = _category_detail_metric_cards(facts)
+    comparison = _comparison_with_metrics(
+        window.comparison,
+        lambda date_from, date_to: build_category_detail_payload(
+            db, hotel_id=hotel_id, category_id=category_id, date_from=date_from, date_to=date_to,
+            compare_previous=False, compare_yoy=False, currency_display=currency_display,
+        )["data"]["cards"],
+    )
     return {
         "hotel_id": hotel_id,
         "date_from": window.date_from,
         "date_to": window.date_to,
         "currency_display": currency_display,
-        "comparison": window.comparison,
+        "comparison": comparison,
         "data": {
+            "cards": category_cards,
             "category": {
                 "category_id": category.id,
                 "name": category.name,
@@ -1937,6 +2026,20 @@ def _category_fact_read(fact: FactReservationDaily) -> dict[str, Any]:
         "revenue_net_usd": _money_str(fact.revenue_net_usd),
         **_unavailable_currency_metadata([fact]),
     }
+
+
+def _category_detail_metric_cards(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    unavailable = {code for fact in facts for code in fact.get("unavailable_currencies", [])}
+    return [
+        metric_card("category_detail_nights", "Noches del período", value_count=len(facts)).model_dump(),
+        metric_card(
+            "category_detail_revenue_net", "Revenue neto",
+            value_ars=sum((Decimal(fact["revenue_net_ars"]) for fact in facts), Decimal("0")),
+            value_ars_available="ARS" not in unavailable,
+            value_usd=sum((Decimal(fact["revenue_net_usd"]) for fact in facts), Decimal("0")),
+            value_usd_available="USD" not in unavailable,
+        ).model_dump(),
+    ]
 
 
 def build_segments_breakdown(
@@ -2001,12 +2104,19 @@ def build_segments_payload(
         output_key="guest_segment",
         facts=reservation_facts,
     )
+    comparison = _comparison_with_metrics(
+        window.comparison,
+        lambda comparison_from, comparison_to: build_segments_payload(
+            db, hotel_id=hotel_id, date_from=comparison_from, date_to=comparison_to,
+            compare_previous=False, compare_yoy=False, currency_display=currency_display,
+        )["data"]["cards"],
+    )
     return {
         "hotel_id": hotel_id,
         "date_from": window.date_from,
         "date_to": window.date_to,
         "currency_display": currency_display,
-        "comparison": window.comparison,
+        "comparison": comparison,
         "data": {
             "cards": [
                 metric_card("segments_total", "Segmentos con actividad", value_count=len(segments)).model_dump(),
@@ -2040,12 +2150,19 @@ def build_channels_payload(
         output_key="channel_code",
         facts=reservation_facts,
     )
+    comparison = _comparison_with_metrics(
+        window.comparison,
+        lambda comparison_from, comparison_to: build_channels_payload(
+            db, hotel_id=hotel_id, date_from=comparison_from, date_to=comparison_to,
+            compare_previous=False, compare_yoy=False, currency_display=currency_display,
+        )["data"]["cards"],
+    )
     return {
         "hotel_id": hotel_id,
         "date_from": window.date_from,
         "date_to": window.date_to,
         "currency_display": currency_display,
-        "comparison": window.comparison,
+        "comparison": comparison,
         "data": {
             "cards": [
                 metric_card("channels_total", "Canales con actividad", value_count=len(channels)).model_dump(),
@@ -2160,12 +2277,19 @@ def build_operations_payload(
         open_events_count = len(open_event_rows)
         no_shows_count = len(no_show_rows)
         data_as_of = _facts_data_as_of(facts_rows)
+    comparison = _comparison_with_metrics(
+        window.comparison,
+        lambda comparison_from, comparison_to: build_operations_payload(
+            db, hotel_id=hotel_id, date_from=comparison_from, date_to=comparison_to,
+            compare_previous=False, compare_yoy=False, currency_display=currency_display,
+        )["data"]["cards"],
+    )
     return {
         "hotel_id": hotel_id,
         "date_from": window.date_from,
         "date_to": window.date_to,
         "currency_display": currency_display,
-        "comparison": window.comparison,
+        "comparison": comparison,
         "data": {
             "cards": [
                 metric_card("operations_open_room_events", "Eventos de habitación abiertos", value_count=open_events_count).model_dump(),

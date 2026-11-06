@@ -21,6 +21,7 @@ from app.schemas.analytics_api import (
 )
 from app.schemas.analytics_insights import AnalyticsAIChatRead, AnalyticsAIChatRequest, AnalyticsInsightRead, AnalyticsInsightRequest, AnalyticsInsightStatusRead
 from app.services.analytics_service import (
+    _comparison_with_metrics,
     build_category_detail_payload,
     build_channels_payload,
     build_home_payload,
@@ -301,13 +302,20 @@ def analytics_company_detail(
         date_to=window.date_to,
     )
     data_as_of = payload.pop("_data_as_of", None)
+    comparison = _comparison_with_metrics(
+        window.comparison,
+        lambda comparison_from, comparison_to: get_company_fact_detail(
+            db, hotel_id=context.hotel_id, company_id=company_id,
+            date_from=comparison_from, date_to=comparison_to,
+        )["cards"],
+    )
     return annotate_analytics_payload(
         {
             "hotel_id": context.hotel_id,
             "date_from": window.date_from,
             "date_to": window.date_to,
             "currency_display": currency_display,
-            "comparison": window.comparison,
+            "comparison": comparison,
             "data": payload,
             "generated_at": datetime.now(timezone.utc),
             "data_as_of": data_as_of,
