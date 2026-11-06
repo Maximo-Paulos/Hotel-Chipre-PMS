@@ -69,6 +69,10 @@ const pendingReservationActionsKey = (hotelId: number | null, limit: number) => 
   hotelId,
   limit
 ];
+const retryTransientServiceUnavailable = (failureCount: number, error: unknown) =>
+  error instanceof ApiError && error.status === 503 && failureCount < 1;
+const transientServiceUnavailableRetryDelay = (_failureCount: number, error: unknown) =>
+  error instanceof ApiError ? error.retryAfterMs ?? 1000 : 1000;
 const occupancyGridKey = (hotelId: number | null, dateFrom: string, dateTo: string) => [
   "occupancy-grid",
   hotelId,
@@ -95,8 +99,8 @@ export function useReservations(filters: ReservationFilters) {
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
     // A pool-exhaustion 503 is transient and safe to repeat for this read.
     // Honor the server's Retry-After header, but retry at most once.
-    retry: (failureCount, error) => error instanceof ApiError && error.status === 503 && failureCount < 1,
-    retryDelay: (_failureCount, error) => error instanceof ApiError ? error.retryAfterMs ?? 1000 : 1000
+    retry: retryTransientServiceUnavailable,
+    retryDelay: transientServiceUnavailableRetryDelay
   });
 }
 
@@ -189,7 +193,8 @@ export function usePendingReservationActions(limit = 100) {
     queryFn: ({ signal }) => listPendingReservationActions(limit, session, signal),
     enabled: hasValidSession(session),
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
-    retry: false
+    retry: retryTransientServiceUnavailable,
+    retryDelay: transientServiceUnavailableRetryDelay
   });
 }
 
@@ -201,7 +206,8 @@ export function usePendingCancellationReviews(enabled: boolean) {
     queryFn: ({ signal }) => listPendingCancellationReviews(session, signal),
     enabled: enabled && hasValidSession(session),
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS,
-    retry: false
+    retry: retryTransientServiceUnavailable,
+    retryDelay: transientServiceUnavailableRetryDelay
   });
 }
 
