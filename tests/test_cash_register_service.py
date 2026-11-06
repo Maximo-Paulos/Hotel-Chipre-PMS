@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.models.cash_register import CashCloseReport, CashMovementTypeEnum, CashSessionStatusEnum
+from app.models.cash_register import CashCloseReport, CashMovement, CashMovementTypeEnum, CashSessionStatusEnum
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
@@ -716,6 +716,131 @@ def test_session_summary_expected_balance_matches_arqueo(db):
     # Live summary must match the arqueo's computed expected balance exactly.
     assert summary["expected_balance"] == report.expected_balance
     assert report.difference == Decimal("0.00")
+
+
+def test_daily_summary_does_not_count_movements_before_session_open(pg_session, monkeypatch):
+    """A session's prior-day opening must only include movements in its lifetime."""
+    from app.services import cash_register_service
+    from app.services.cash_daily_summary_service import get_daily_summary
+    from app.services.cash_register_service import get_session_summary
+
+    hotel = _hotel(pg_session, 987654)
+    hotel.hotel_timezone = "UTC"
+    _user(pg_session, 987654)
+    business_now = {"value": datetime(2026, 11, 4, 10, tzinfo=timezone.utc)}
+    monkeypatch.setattr(
+        cash_register_service,
+        "hotel_business_now",
+        lambda *_args, **_kwargs: business_now["value"],
+    )
+    session = open_session(
+        pg_session,
+        hotel_id=hotel.id,
+        opened_by_user_id=987654,
+        opening_balance=Decimal("661400.00"),
+    )
+    session.opened_at = datetime(2026, 11, 4, 10)
+    session.business_opened_at = datetime(2026, 11, 4, 10)
+    pg_session.flush()
+
+    # Legacy/misassigned history must not be added to a cash session that did
+    # not yet exist at the time of the movement.
+    pg_session.add(
+        CashMovement(
+            hotel_id=hotel.id,
+            session_id=session.id,
+            recorded_by_user_id=987654,
+            movement_type=CashMovementTypeEnum.INCOME,
+            amount=Decimal("100.00"),
+            description="Synthetic movement before session opening",
+            recorded_at=datetime(2026, 11, 4, 9),
+            business_recorded_at=datetime(2026, 11, 4, 9),
+        )
+    )
+    pg_session.flush()
+
+    business_now["value"] = datetime(2026, 11, 5, 16, 30, tzinfo=timezone.utc)
+    add_movement(
+        pg_session,
+        hotel_id=hotel.id,
+        session_id=session.id,
+        recorded_by_user_id=987654,
+        movement_type=CashMovementTypeEnum.INCOME,
+        amount=Decimal("33004.00"),
+    )
+    add_movement(
+        pg_session,
+        hotel_id=hotel.id,
+        session_id=session.id,
+        recorded_by_user_id=987654,
+        movement_type=CashMovementTypeEnum.EXPENSE,
+        amount=Decimal("3454.00"),
+    )
+    pg_session.flush()
+
+    daily = get_daily_summary(
+        pg_session,
+        hotel_id=hotel.id,
+        report_date=date(2026, 11, 5),
+        currency_code="ARS",
+    )
+    session_summary = get_session_summary(pg_session, hotel_id=hotel.id, session_id=session.id)
+
+    assert daily["sessions"][0]["expected_balance"] == session_summary["expected_balance"]
+    assert daily["physical_cash"]["expected_balance"] == session_summary["expected_balance"]
+
+
+def test_daily_summary_preserves_same_day_cash_handoff_on_postgres(pg_session, monkeypatch):
+    from app.services import cash_register_service
+    from app.services.cash_daily_summary_service import get_daily_summary
+
+    hotel = _hotel(pg_session, 987655)
+    hotel.hotel_timezone = "UTC"
+    _user(pg_session, 987655)
+    monkeypatch.setattr(
+        cash_register_service,
+        "hotel_business_now",
+        lambda *_args, **_kwargs: datetime(2026, 11, 5, 10, tzinfo=timezone.utc),
+    )
+    session = open_session(
+        pg_session,
+        hotel_id=hotel.id,
+        opened_by_user_id=987655,
+        opening_balance=Decimal("0.00"),
+    )
+    add_movement(
+        pg_session,
+        hotel_id=hotel.id,
+        session_id=session.id,
+        recorded_by_user_id=987655,
+        movement_type=CashMovementTypeEnum.INCOME,
+        amount=Decimal("100000.00"),
+    )
+    report = close_session(
+        pg_session,
+        hotel_id=hotel.id,
+        session_id=session.id,
+        closed_by_user_id=987655,
+        counted_balance=Decimal("105000.00"),
+    )
+    confirm_cash_custody(
+        pg_session,
+        hotel_id=hotel.id,
+        report_id=report.id,
+        received_by_user_id=987655,
+        successor_float_amount=Decimal("10000.00"),
+    )
+
+    daily = get_daily_summary(
+        pg_session,
+        hotel_id=hotel.id,
+        report_date=date(2026, 11, 5),
+        currency_code="ARS",
+    )
+
+    assert daily["physical_cash"]["custody_delivered_total"] == Decimal("105000.00")
+    assert daily["physical_cash"]["custody_difference_total"] == Decimal("5000.00")
+    assert daily["physical_cash"]["expected_balance"] == Decimal("10000.00")
 
 
 def test_business_day_cash_uses_simulated_time_and_keeps_real_session_timestamps(db, monkeypatch):

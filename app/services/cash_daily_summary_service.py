@@ -11,7 +11,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.cash_register import (
@@ -97,6 +97,25 @@ def get_daily_summary(
     timezone_name = normalize_timezone((hotel.hotel_timezone if hotel else None) or "UTC")
     start, end = _utc_bounds(report_date, timezone_name)
     db_start, db_end = _db_utc_bounds(report_date, timezone_name)
+    movement_time = func.coalesce(CashMovement.business_recorded_at, CashMovement.recorded_at)
+    movement_session_start = case(
+        (
+            CashMovement.business_recorded_at.is_not(None),
+            func.coalesce(CashSession.business_opened_at, CashSession.opened_at),
+        ),
+        else_=CashSession.opened_at,
+    )
+    movement_session_end = case(
+        (
+            CashMovement.business_recorded_at.is_not(None),
+            func.coalesce(CashSession.business_closed_at, CashSession.closed_at),
+        ),
+        else_=CashSession.closed_at,
+    )
+    movement_within_session_lifetime = and_(
+        movement_time >= movement_session_start,
+        or_(movement_session_end.is_(None), movement_time <= movement_session_end),
+    )
     selected_currency = (currency_code or "").strip().upper() or None
     if selected_currency and len(selected_currency) != 3:
         raise ValueError("La moneda debe usar un código de tres letras")
@@ -171,9 +190,17 @@ def get_daily_summary(
     )
     movements = (
         db.query(CashMovement)
+        .join(
+            CashSession,
+            and_(
+                CashSession.id == CashMovement.session_id,
+                CashSession.hotel_id == CashMovement.hotel_id,
+            ),
+        )
         .filter(
             CashMovement.hotel_id == hotel_id,
             CashMovement.voided_at.is_(None),
+            movement_within_session_lifetime,
             or_(
                 and_(
                     CashMovement.business_recorded_at.is_not(None),
@@ -208,10 +235,18 @@ def get_daily_summary(
     session_ids = [session.id for session in sessions]
     prior_movements = (
         db.query(CashMovement)
+        .join(
+            CashSession,
+            and_(
+                CashSession.id == CashMovement.session_id,
+                CashSession.hotel_id == CashMovement.hotel_id,
+            ),
+        )
         .filter(
             CashMovement.hotel_id == hotel_id,
             CashMovement.session_id.in_(session_ids),
             CashMovement.voided_at.is_(None),
+            movement_within_session_lifetime,
             or_(
                 and_(
                     CashMovement.business_recorded_at.is_not(None),
