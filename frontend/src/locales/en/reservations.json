@@ -649,6 +649,7 @@
         "daily_rate": "Rate for this date",
         "price_period": "Seasonal rate",
         "category_base": "Category base rate",
+        "company_base_price": "Agreed company rate",
         "none": "No rate configured"
       },
       "allocationStatus": {

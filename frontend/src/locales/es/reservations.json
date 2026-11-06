@@ -649,6 +649,7 @@
         "daily_rate": "Tarifa del día",
         "price_period": "Tarifa por temporada",
         "category_base": "Tarifa base de la categoría",
+        "company_base_price": "Tarifa corporativa acordada",
         "none": "Sin tarifa configurada"
       },
       "allocationStatus": {

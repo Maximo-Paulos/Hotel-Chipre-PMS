@@ -91,6 +91,7 @@ test("owner creates a four-room company group and sees its total balance in the 
       legal_name: `${companyName} SRL`,
       display_name: companyName,
       country_code: "AR",
+      base_price: 12000,
       payment_deferred: false
     }
   });
@@ -141,6 +142,8 @@ test("owner creates a four-room company group and sees its total balance in the 
   await form.getByLabel("Check-in", { exact: true }).fill(checkIn);
   await form.getByLabel("Check-out", { exact: true }).fill(checkOut);
   await expect(form.getByTestId("reservation-group-auto-assignment")).toContainText("4 reservas");
+  await expect(form.getByText("Tarifa corporativa acordada", { exact: true })).toBeVisible();
+  await expect(form.getByText("Valor no reconocido", { exact: true })).toHaveCount(0);
   const groupCreateButton = form.getByRole("button", { name: "Crear grupo de 4 habitaciones", exact: true });
   await expect(groupCreateButton).toBeEnabled({ timeout: 20_000 });
 
@@ -165,15 +168,15 @@ test("owner creates a four-room company group and sees its total balance in the 
   expect(group.guest_id).not.toBe(existingGuest.id);
   expect(group.reservation_count).toBe(4);
   expect(group.room_count).toBe(4);
-  expect(Number(group.total_amount)).toBe(800);
+  expect(Number(group.total_amount)).toBe(12000 * 2 * 4);
   expect(Number(group.amount_paid)).toBe(0);
-  expect(Number(group.balance_due)).toBe(800);
+  expect(Number(group.balance_due)).toBe(12000 * 2 * 4);
   await expect(page.getByText("Grupo creado con 4 reservas independientes", { exact: true })).toBeVisible();
 
   const summary = page.getByTestId(`reservation-group-summary-${group.id}`);
   await expect(summary).toBeVisible();
   await expect(summary).toContainText(companyName);
-  await expect(summary).toContainText("800");
+  await expect(summary).toContainText("96.000");
   await page.getByTestId("reservation-company-filter").selectOption(String(company.id));
   const table = page.locator("table").filter({ hasText: "Código" });
   await expect(table.locator("tbody tr").filter({ hasText: guestLastName })).toHaveCount(4);
