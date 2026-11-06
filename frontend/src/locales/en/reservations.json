@@ -990,7 +990,7 @@
       "summaryBalance": "Balance",
       "paidTotalAdjustmentTitle": "Correct reservation total",
       "paidTotalAdjustmentHint": "The correction changes the balance and leaves recorded payments and refunds untouched. It does not create an automatic refund.",
-      "confirmedPriceReviewRequired": "This reservation has an assigned room and payment. The rate change is blocked; request a manual review. The total and recorded payments were not changed.",
+      "confirmedPriceReviewRequired": "Manual rate corrections are blocked because this reservation has an assigned room and recorded payments. Existing payments stay unchanged; date changes recalculate the stay total under the reservation's pricing policy.",
       "unpaidTotalAdjustmentHint": "The correction requires a reason and is recorded in the reservation audit trail.",
       "boundedUnpaidTotalAdjustmentHint": "The new total must stay within the manual-rate range configured by the owner. A reason is required and the correction is audited.",
       "paidTotalAdjustmentAmount": "New total",

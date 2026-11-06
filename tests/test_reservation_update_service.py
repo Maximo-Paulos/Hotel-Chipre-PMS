@@ -7,6 +7,7 @@ import pytest
 
 from app.schemas.reservation import ReservationUpdate
 from app.services import reservation_update_service
+from app.services.reservation_service import manual_override_total_for_nights
 
 
 class _RecordingSession:
@@ -92,6 +93,7 @@ def test_manual_total_update_mutation_and_audit_share_one_commit(monkeypatch):
         "room_move_notes": "Cambio manual desde API de reservas",
         "client_version": 3,
         "preserve_unclassified_price": True,
+        "recalculate_explicit_price": False,
         "total_adjustment_kind": "manual",
         "manual_rate_scope": "bounded",
         "confirmed_price_change_review_required": False,
@@ -118,6 +120,93 @@ def test_manual_total_update_mutation_and_audit_share_one_commit(monkeypatch):
     }
     assert "paid_total_adjustment" not in audit["payload_after"]
     assert events[-1] == ("refresh", reservation)
+
+
+def test_checkout_extension_recalculates_manual_nightly_price_without_touching_paid_ledger(monkeypatch):
+    events = []
+    db = _RecordingSession(events)
+    reservation = SimpleNamespace(
+        id=47,
+        check_in_date=date(2026, 11, 4),
+        check_out_date=date(2026, 11, 5),
+        total_amount=Decimal("60000.00"),
+        amount_paid=Decimal("3000.00"),
+        pricing_snapshot=json.dumps(
+            {"pricing_source": "manual_total_override", "nightly_rate": "60000.00"}
+        ),
+    )
+    data = ReservationUpdate(
+        check_out_date=date(2026, 11, 6),
+        client_version=4,
+    )
+    _install_recording_dependencies(monkeypatch, events)
+    captured = {}
+
+    def mutate(_db, reservation_arg, data_arg, _hotel_id, **kwargs):
+        captured.update(kwargs)
+        # The service passes the opt-in to the existing repricer. Simulate its
+        # expected two-night result while asserting the prior payment remains.
+        if kwargs["recalculate_explicit_price"]:
+            reservation_arg.total_amount = manual_override_total_for_nights(
+                reservation_arg,
+                nights=2,
+            )
+        reservation_arg.check_out_date = data_arg.check_out_date
+
+    monkeypatch.setattr(reservation_update_service, "update_reservation_fields", mutate)
+
+    reservation_update_service.apply_reservation_update(
+        db,
+        reservation,
+        data,
+        7,
+        actor_user_id=12,
+        actor_role="manager",
+        total_adjustment_kind=None,
+        manual_rate_scope=None,
+        confirmed_price_change_review_required=False,
+    )
+
+    assert captured["recalculate_explicit_price"] is True
+    assert captured["preserve_unclassified_price"] is True
+    assert reservation.total_amount == Decimal("120000.00")
+    assert reservation.amount_paid == Decimal("3000.00")
+    assert reservation.check_out_date == date(2026, 11, 6)
+
+
+def test_checkout_extension_does_not_reprice_non_manual_reservation(monkeypatch):
+    events = []
+    db = _RecordingSession(events)
+    reservation = SimpleNamespace(
+        id=48,
+        check_in_date=date(2026, 11, 4),
+        check_out_date=date(2026, 11, 5),
+        total_amount=Decimal("60000.00"),
+        amount_paid=Decimal("3000.00"),
+        pricing_snapshot=json.dumps({"pricing_source": "rate_plan_quote"}),
+    )
+    data = ReservationUpdate(check_out_date=date(2026, 11, 6), client_version=4)
+    _install_recording_dependencies(monkeypatch, events)
+    captured = {}
+
+    def mutate(_db, _reservation, _data, _hotel_id, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(reservation_update_service, "update_reservation_fields", mutate)
+
+    reservation_update_service.apply_reservation_update(
+        db,
+        reservation,
+        data,
+        7,
+        actor_user_id=12,
+        actor_role="manager",
+        total_adjustment_kind=None,
+        manual_rate_scope=None,
+        confirmed_price_change_review_required=False,
+    )
+
+    assert captured["recalculate_explicit_price"] is False
 
 
 def test_paid_total_adjustment_keeps_legacy_audit_key(monkeypatch):

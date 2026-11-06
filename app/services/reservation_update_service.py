@@ -234,6 +234,23 @@ def apply_reservation_update(
     session if the mutator or commit raises, as it does for the existing route.
     """
     before = audit_log_service.model_snapshot(reservation)
+    submitted_data = data.model_dump(exclude_unset=True)
+    new_check_out = submitted_data.get("check_out_date")
+    # The dedicated stay-extension flow already carries a negotiated nightly
+    # amount forward when no current rate can be quoted. Apply that same rule
+    # to the edit modal when it extends a reservation with an explicit manual
+    # total, without treating the resulting amount change as a manual total
+    # correction. Existing payments remain ledger entries and are not rewritten.
+    recalculate_manual_nightly_rate = False
+    if new_check_out is not None and new_check_out > reservation.check_out_date:
+        try:
+            pricing_snapshot = json.loads(reservation.pricing_snapshot or "{}")
+        except (TypeError, json.JSONDecodeError):
+            pricing_snapshot = {}
+        recalculate_manual_nightly_rate = (
+            isinstance(pricing_snapshot, dict)
+            and pricing_snapshot.get("pricing_source") == "manual_total_override"
+        )
     update_reservation_fields(
         db,
         reservation,
@@ -245,6 +262,7 @@ def apply_reservation_update(
         room_move_notes="Cambio manual desde API de reservas",
         client_version=data.client_version,
         preserve_unclassified_price=True,
+        recalculate_explicit_price=recalculate_manual_nightly_rate,
         total_adjustment_kind=total_adjustment_kind,
         manual_rate_scope=manual_rate_scope,
         confirmed_price_change_review_required=confirmed_price_change_review_required,
