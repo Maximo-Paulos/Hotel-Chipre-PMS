@@ -517,6 +517,31 @@ def _confirmed_cash_movements_total(db: Session, session: CashSession, business_
             ):
                 continue
         total += _movement_sign(movement.movement_type) * _money(movement.amount)
+
+    # Before successor-float declarations were stored explicitly, daily cash
+    # reports treated a confirmed legacy handoff as the successor's opening
+    # float. Keep session summaries and close reports on the same basis. Newer
+    # handoffs are already represented by CashSession.opening_balance.
+    legacy_handoff_report = (
+        db.query(CashCloseReport)
+        .options(joinedload(CashCloseReport.custody_handoff))
+        .filter(
+            CashCloseReport.hotel_id == session.hotel_id,
+            CashCloseReport.successor_session_id == session.id,
+            CashCloseReport.successor_float_declared_amount.is_(None),
+        )
+        .one_or_none()
+    )
+    legacy_handoff = legacy_handoff_report.custody_handoff if legacy_handoff_report is not None else None
+    if legacy_handoff is not None and legacy_handoff.status == CashCustodyStatusEnum.CONFIRMED:
+        acknowledged_at = (
+            legacy_handoff.business_received_at
+            or legacy_handoff.business_delivered_at
+            or legacy_handoff.received_at
+            or legacy_handoff.delivered_at
+        )
+        if acknowledged_at is not None and acknowledged_at <= business_as_of:
+            total += _money(legacy_handoff.delivered_amount)
     return _money(total)
 
 

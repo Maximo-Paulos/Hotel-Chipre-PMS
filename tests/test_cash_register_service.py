@@ -3,7 +3,13 @@ from decimal import Decimal
 
 import pytest
 
-from app.models.cash_register import CashCloseReport, CashMovement, CashMovementTypeEnum, CashSessionStatusEnum
+from app.models.cash_register import (
+    CashCloseReport,
+    CashCustodyStatusEnum,
+    CashMovement,
+    CashMovementTypeEnum,
+    CashSessionStatusEnum,
+)
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
 from app.models.hotel_membership import HotelMembership
@@ -793,6 +799,7 @@ def test_daily_summary_does_not_count_movements_before_session_open(pg_session, 
 def test_daily_summary_preserves_same_day_cash_handoff_on_postgres(pg_session, monkeypatch):
     from app.services import cash_register_service
     from app.services.cash_daily_summary_service import get_daily_summary
+    from app.services.cash_register_service import get_session_summary
 
     hotel = _hotel(pg_session, 987655)
     hotel.hotel_timezone = "UTC"
@@ -830,6 +837,11 @@ def test_daily_summary_preserves_same_day_cash_handoff_on_postgres(pg_session, m
         received_by_user_id=987655,
         successor_float_amount=Decimal("10000.00"),
     )
+    successor_summary = get_session_summary(
+        pg_session,
+        hotel_id=hotel.id,
+        session_id=report.successor_session_id,
+    )
 
     daily = get_daily_summary(
         pg_session,
@@ -841,6 +853,7 @@ def test_daily_summary_preserves_same_day_cash_handoff_on_postgres(pg_session, m
     assert daily["physical_cash"]["custody_delivered_total"] == Decimal("105000.00")
     assert daily["physical_cash"]["custody_difference_total"] == Decimal("5000.00")
     assert daily["physical_cash"]["expected_balance"] == Decimal("10000.00")
+    assert successor_summary["expected_balance"] == Decimal("10000.00")
 
 
 def test_business_day_cash_uses_simulated_time_and_keeps_real_session_timestamps(db, monkeypatch):
@@ -1233,3 +1246,102 @@ def test_daily_cash_summary_subtracts_same_day_handoff_and_reconciles_close_diff
     assert summary["physical_cash"]["custody_delivered_total"] == Decimal("105000.00")
     assert summary["physical_cash"]["custody_difference_total"] == Decimal("5000.00")
     assert summary["physical_cash"]["expected_balance"] == Decimal("10000.00")
+
+
+def test_daily_summary_matches_successor_session_with_legacy_handoff_history(pg_session, monkeypatch):
+    """Session and daily balances both include a confirmed legacy successor carry."""
+    from app.services import cash_register_service
+    from app.services.cash_daily_summary_service import get_daily_summary
+    from app.services.cash_register_service import get_session_summary
+
+    hotel = _hotel(pg_session, 987656)
+    hotel.hotel_timezone = "UTC"
+    _user(pg_session, 987656)
+    business_now = {"value": datetime(2026, 7, 25, 10, tzinfo=timezone.utc)}
+    monkeypatch.setattr(
+        cash_register_service,
+        "hotel_business_now",
+        lambda *_args, **_kwargs: business_now["value"],
+    )
+    predecessor = open_session(
+        pg_session,
+        hotel_id=hotel.id,
+        opened_by_user_id=987656,
+        opening_balance=Decimal("0.00"),
+    )
+    predecessor.opened_at = datetime(2026, 7, 24, 10)
+    predecessor.business_opened_at = datetime(2026, 7, 24, 10)
+    pg_session.flush()
+    report = close_session(
+        pg_session,
+        hotel_id=hotel.id,
+        session_id=predecessor.id,
+        closed_by_user_id=987656,
+        counted_balance=Decimal("100.00"),
+    )
+    successor = report.successor_session
+    report.successor_float_declared_amount = None
+    report.custody_handoff.delivered_amount = Decimal("100.00")
+    report.custody_handoff.status = CashCustodyStatusEnum.CONFIRMED
+    report.custody_handoff.received_by_user_id = 987656
+    report.custody_handoff.received_at = datetime(2026, 7, 25, 10)
+    report.custody_handoff.business_received_at = datetime(2026, 7, 25, 10)
+
+    historical_amounts = [Decimal("38905.88")] * 16 + [Decimal("38905.92")]
+    for index, amount in enumerate(historical_amounts):
+        occurred_at = datetime(2026, 7, 26, 12) + timedelta(days=index)
+        pg_session.add(
+            CashMovement(
+                hotel_id=hotel.id,
+                session_id=successor.id,
+                recorded_by_user_id=987656,
+                movement_type=CashMovementTypeEnum.INCOME,
+                amount=amount,
+                description=f"Synthetic historical receipt {index + 1}",
+                recorded_at=occurred_at,
+                business_recorded_at=occurred_at,
+            )
+        )
+
+    business_now["value"] = datetime(2026, 11, 5, 16, 30, tzinfo=timezone.utc)
+    add_movement(
+        pg_session,
+        hotel_id=hotel.id,
+        session_id=successor.id,
+        recorded_by_user_id=987656,
+        movement_type=CashMovementTypeEnum.INCOME,
+        amount=Decimal("33004.00"),
+    )
+    add_movement(
+        pg_session,
+        hotel_id=hotel.id,
+        session_id=successor.id,
+        recorded_by_user_id=987656,
+        movement_type=CashMovementTypeEnum.EXPENSE,
+        amount=Decimal("3454.00"),
+    )
+    pg_session.flush()
+
+    daily = get_daily_summary(
+        pg_session,
+        hotel_id=hotel.id,
+        report_date=date(2026, 11, 5),
+        currency_code="ARS",
+    )
+    session_summary = get_session_summary(pg_session, hotel_id=hotel.id, session_id=successor.id)
+
+    assert sum(historical_amounts) == Decimal("661400.00")
+    assert daily["physical_cash"]["opening_balance"] == Decimal("661500.00")
+    assert daily["physical_cash"]["expected_balance"] == session_summary["expected_balance"]
+    assert session_summary["expected_balance"] == Decimal("691050.00")
+
+    business_now["value"] = datetime(2026, 11, 6, 10, tzinfo=timezone.utc)
+    close_report = close_session(
+        pg_session,
+        hotel_id=hotel.id,
+        session_id=successor.id,
+        closed_by_user_id=987656,
+        counted_balance=Decimal("691050.00"),
+    )
+    assert close_report.expected_balance == Decimal("691050.00")
+    assert close_report.difference == Decimal("0.00")
