@@ -772,6 +772,15 @@
       "run": "Recalcular asignación",
       "run_id": "Corrida",
       "status": "Estado",
+      "statusValues": {
+        "pending": "Pendiente",
+        "running": "En cálculo",
+        "succeeded": "Completada",
+        "completed": "Completada",
+        "partial": "Resultado parcial",
+        "failed": "Fallida",
+        "unknown": "Estado no disponible"
+      },
       "assigned": "Asignaciones calculadas",
       "movedUnassigned": "Cambios sugeridos / sin asignar",
       "reviewProposals": "Revisar y aprobar sugerencias",

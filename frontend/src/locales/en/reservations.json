@@ -772,6 +772,15 @@
       "run": "Recalculate allocation",
       "run_id": "Run",
       "status": "Status",
+      "statusValues": {
+        "pending": "Pending",
+        "running": "Calculating",
+        "succeeded": "Completed",
+        "completed": "Completed",
+        "partial": "Partial result",
+        "failed": "Failed",
+        "unknown": "Status unavailable"
+      },
       "assigned": "Assignments calculated",
       "movedUnassigned": "Suggested changes / unassigned",
       "reviewProposals": "Review and approve suggestions",

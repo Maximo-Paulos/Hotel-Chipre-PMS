@@ -278,7 +278,7 @@ test.describe("F-027 with an English browser locale", () => {
         contentType: "application/json",
         body: JSON.stringify({
           run_id: 1,
-          status: "completed",
+          status: "succeeded",
           objective_score: 0,
           assignments_created: 0,
           unassigned_count: 0,
@@ -302,6 +302,8 @@ test.describe("F-027 with an English browser locale", () => {
     await recalculate.click();
     await expect.poll(() => allocationRequests.length).toBe(1);
     expect(allocationRequests[0]?.apply).toBe(false);
+    await expect(main.getByText("Completada", { exact: true })).toBeVisible();
+    await expect(main.getByText("succeeded", { exact: true })).toHaveCount(0);
     expect(unexpectedDialogs).toEqual([]);
 
     await recalculate.click();

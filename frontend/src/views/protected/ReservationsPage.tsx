@@ -822,6 +822,12 @@ export function ReservationsPage() {
       ),
     onSuccess: async () => invalidateAllocationState()
   });
+  const allocationRunStatusKey = allocationRunMutation.data?.status?.trim().toLowerCase();
+  const allocationRunStatusLabel = allocationRunStatusKey
+    ? t(`page.allocation.statusValues.${allocationRunStatusKey}`, {
+      defaultValue: t("page.allocation.statusValues.unknown")
+    })
+    : null;
 
   const revertMovementGroupMutation = useGuardedMutation<RoomMovementGroup, unknown, number>({
     mutationFn: (groupId) => revertRoomMovementGroup(groupId, session),
@@ -3866,7 +3872,7 @@ export function ReservationsPage() {
             </div>
             <div>
               <p className="text-xs text-sky-800">{t("page.allocation.status")}</p>
-              <p className="font-semibold">{allocationRunMutation.data.status}</p>
+              <p className="font-semibold">{allocationRunStatusLabel}</p>
             </div>
             <div>
               <p className="text-xs text-sky-800">{t("page.allocation.assigned")}</p>
