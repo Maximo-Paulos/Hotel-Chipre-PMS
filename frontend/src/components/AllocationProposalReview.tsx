@@ -170,6 +170,12 @@ export function AllocationProposalReview({
                 const reservation = reservationById.get(assignment.reservation_id);
                 const proposedRoom = assignment.room_id;
                 const currentRoom = assignment.source_room_id;
+                const assignmentStatus = assignment.status.toLowerCase();
+                const destinationLabel = assignmentStatus === "applied"
+                  ? t("proposal.assignedRoom")
+                  : assignmentStatus === "rejected"
+                    ? t("proposal.rejectedRoom")
+                    : t("proposal.proposedRoom");
                 return (
                   <article key={assignment.id} className="rounded-xl border border-slate-200 p-3 sm:p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -186,11 +192,11 @@ export function AllocationProposalReview({
                     </div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div className="rounded-lg bg-slate-50 p-3">
-                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("proposal.currentRoom")}</p>
+                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("proposal.roomBeforeProposal")}</p>
                         <p className="mt-1 text-sm font-semibold text-slate-900">{roomLabel(currentRoom)}</p>
                       </div>
                       <div className="rounded-lg bg-brand-50 p-3">
-                        <p className="text-xs font-medium uppercase tracking-wide text-brand-800">{t("proposal.proposedRoom")}</p>
+                        <p className="text-xs font-medium uppercase tracking-wide text-brand-800">{destinationLabel}</p>
                         <p className="mt-1 text-sm font-semibold text-brand-900">{roomLabel(proposedRoom)}</p>
                       </div>
                     </div>

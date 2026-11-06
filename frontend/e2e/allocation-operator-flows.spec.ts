@@ -161,6 +161,14 @@ test("an applied automatic allocation run is shown as reviewed, not as a pending
           status: "applied",
           explanation_summary: "Movimiento aprobado.",
           requires_explicit_approval: false
+        }, {
+          id: 2,
+          reservation_id: 881,
+          source_room_id: 42,
+          room_id: 43,
+          status: "rejected",
+          explanation_summary: "Destino rechazado durante la revisión.",
+          requires_explicit_approval: false
         }]
       })
     });
@@ -199,6 +207,9 @@ test("an applied automatic allocation run is shown as reviewed, not as a pending
   await page.goto("/operacion/asignacion");
   await expect(page.getByText("RES-QA-ALLOC-880")).toBeVisible();
   await expect(page.getByText("Aplicada", { exact: true })).toBeVisible();
+  await expect(page.getByText("Habitación antes de la propuesta", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("Habitación asignada", { exact: true })).toBeVisible();
+  await expect(page.getByText("Destino propuesto rechazado", { exact: true })).toBeVisible();
   await expect(page.getByText("Esta propuesta ya no tiene movimientos pendientes.")).toBeVisible();
   await expect(page.getByText("Sugerencias listas para revisar", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Aceptar propuesta" })).toHaveCount(0);
