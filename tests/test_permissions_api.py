@@ -1254,6 +1254,12 @@ def test_permission_override_restore_requires_action_bound_step_up(
         engine.dispose()
 
 
+@pytest.mark.skip(
+    reason=(
+        "El estado del canal no se publica durante el piloto; "
+        "las rutas WhatsApp inactivas se cubren en test_whatsapp_pilot_disabled.py."
+    )
+)
 def test_whatsapp_channel_status_requires_inbox_or_integration_view_permission(monkeypatch):
     client, db, engine = _client_with_db()
     _enable_whatsapp_plan_for_api_test(monkeypatch)
@@ -1306,6 +1312,12 @@ def test_whatsapp_channel_status_requires_inbox_or_integration_view_permission(m
         engine.dispose()
 
 
+@pytest.mark.skip(
+    reason=(
+        "La configuración CRM de WhatsApp no se publica durante el piloto; "
+        "las rutas WhatsApp inactivas se cubren en test_whatsapp_pilot_disabled.py."
+    )
+)
 def test_whatsapp_channel_status_serializes_only_the_ui_summary(monkeypatch):
     client, db, engine = _client_with_db()
     _enable_whatsapp_plan_for_api_test(monkeypatch)

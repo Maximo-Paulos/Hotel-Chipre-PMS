@@ -424,8 +424,8 @@
     "hash": "bcf554e111ec89c47d83670bfda6a2fa"
   },
   "app/main.py": {
-    "mtime": 1793120751382.5269,
-    "hash": "b40942a7b45c6255bd047a290fe8d309"
+    "mtime": 1793880031582.0457,
+    "hash": "67f125620a9582685dd37feb34f30ca1"
   },
   "app/master_admin/__init__.py": {
     "mtime": 1783103274878.9458,
@@ -900,8 +900,8 @@
     "hash": "88ed308ca9682a9665e2fe99442395c2"
   },
   "app/services/hotel_api_key_service.py": {
-    "mtime": 1787360058500.898,
-    "hash": "dbfafe2daba35a0fac58e6ba8ae82366"
+    "mtime": 1793880031582.6104,
+    "hash": "430e534a499e5ba8d330dfd92b3cefb4"
   },
   "app/services/hotel_outbound_email_service.py": {
     "mtime": 1792240082197.844,
@@ -1384,8 +1384,8 @@
     "hash": "5850ae0d93dcaa99a607e48fd8274b74"
   },
   "frontend/src/router.tsx": {
-    "mtime": 1792947813066.9294,
-    "hash": "f372a160b83088cc8be72c4cd7dc5758"
+    "mtime": 1793880031584.2664,
+    "hash": "339ce1f5a684a2a9f47846054d59c357"
   },
   "frontend/src/state/session.tsx": {
     "mtime": 1791849255917.6216,
@@ -1448,16 +1448,16 @@
     "hash": "e81b1cd547c246d206557336b4ba6f3a"
   },
   "frontend/src/views/protected/SettingsApiKeysPage.tsx": {
-    "mtime": 1790261007494.3623,
-    "hash": "55e20253ef3b7cf5b5033305152a46f9"
+    "mtime": 1793880031583.3958,
+    "hash": "da1a12bfa1ac6f9c3d5151103740c4cf"
   },
   "frontend/src/views/protected/SettingsAssistantPage.tsx": {
     "mtime": 1791849255922.5962,
     "hash": "0eaa02c36b97e1d5387c9fdf8083c63d"
   },
   "frontend/src/views/protected/SettingsConnectionsPage.tsx": {
-    "mtime": 1793315356540.3452,
-    "hash": "9049be477d762da56d932c863178e346"
+    "mtime": 1793880031585.2312,
+    "hash": "0c3590295227e2493ac90ba168228c45"
   },
   "frontend/src/views/protected/SettingsHotelPage.tsx": {
     "mtime": 1793120751392.139,
@@ -1484,8 +1484,8 @@
     "hash": "6c491d392c512eab8d63302d4c77c5dd"
   },
   "frontend/src/views/protected/SettingsWhatsAppPage.tsx": {
-    "mtime": 1790471836833.2546,
-    "hash": "17aae97f3543168f0083da6975b95360"
+    "mtime": 1793880233456.9927,
+    "hash": "b14460d6378745cfb98af096d4c377b1"
   },
   "frontend/src/views/protected/StockPage.tsx": {
     "mtime": 1792803812978.9868,
@@ -1912,8 +1912,8 @@
     "hash": "91934880adf849722cffcf7abad2c41b"
   },
   "tests/test_permissions_api.py": {
-    "mtime": 1792947123465.7578,
-    "hash": "b3e1160c7a41edf885febcda61dda7e9"
+    "mtime": 1793880244316.269,
+    "hash": "bb6e7d8d485fea054c6d9d13c77b8d5c"
   },
   "tests/test_postgres_validation.py": {
     "mtime": 1791849255949.979,
@@ -2088,8 +2088,8 @@
     "hash": "2e11e9b5ec19b6ec14cc8e21d3f11a90"
   },
   "tests/test_whatsapp_hooks_api.py": {
-    "mtime": 1787360058542.321,
-    "hash": "13c075762304f5bf61c5183f56910cf4"
+    "mtime": 1793881313636.8323,
+    "hash": "0e54c4e7f9d9ea4a36c9ece7140ba1b9"
   },
   ".claude/agents/architecture-reviewer.md": {
     "mtime": 1793848387172.9023,
@@ -2768,28 +2768,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1793866832099.3564,
-    "hash": "5be5cb260cd021e50fc16757929b690f"
+    "mtime": 1793873086668.746,
+    "hash": "b0cbe5030eb31615e334b44ab08196a7"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1793866831199.8235,
-    "hash": "da2a3576024a91f1a216af4df2c707e7"
+    "mtime": 1793873085863.7769,
+    "hash": "8b11ac1eee8d81b1f21b2bb6392aaab3"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1793866832085.7336,
-    "hash": "d39a160fa23a0b29fdb47654ee348150"
+    "mtime": 1793873086657.5933,
+    "hash": "4b0a525ba1328670bb807a5ed616c3e3"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1793866831214.486,
-    "hash": "b0fc16d5950e4f3f4de7768d75476653"
+    "mtime": 1793873085875.335,
+    "hash": "bd9ce8848e31f2ad4eaa3fa1cbf6378a"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1793866832071.3674,
-    "hash": "42e4b134cd0074507e4595a9ce4f6c40"
+    "mtime": 1793873086644.5208,
+    "hash": "fbdb44cd05c72bbef958b7daeccbf199"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1793866831419.7107,
-    "hash": "961c4a90c8b953dda752f0168b56ffef"
+    "mtime": 1793873086058.122,
+    "hash": "f9663f7a25dff92fc6cf65fce88e2e2d"
   },
   "qa/evidence/README.md": {
     "mtime": 1787360058523.809,
@@ -5572,20 +5572,20 @@
     "hash": "e618fa63de830148de865c4e317d40fc"
   },
   "frontend/src/views/protected/WhatsAppInboxPage.tsx": {
-    "mtime": 1792971125684.013,
-    "hash": "78eb9ad120ffaa051c6566edf1f17544"
+    "mtime": 1793880233456.994,
+    "hash": "55cc734cfade4be19fa79aa62fffb1aa"
   },
   "tests/test_whatsapp_crm.py": {
-    "mtime": 1789162422016.2798,
-    "hash": "3e41352c03de94e19a53e874d3194464"
+    "mtime": 1793880078982.8682,
+    "hash": "39b550660867decd2e88e0f70ad93e31"
   },
   "docs/whatsapp-crm-implementation.md": {
-    "mtime": 1792971738806.9832,
-    "hash": "f98445563205be572b75d224e9b9d48d"
+    "mtime": 1793880809353.1636,
+    "hash": "dd47f1fbb7ba7385c9650db0fb003e74"
   },
   "tests/test_whatsapp_meta_webhook.py": {
-    "mtime": 1789673495707.7156,
-    "hash": "bbb74167146ee5068f630778c1e3d174"
+    "mtime": 1793880078982.31,
+    "hash": "6b9099a1d94201a4ab43b451e62663b1"
   },
   "alembic/versions/20260917_sqlite_cash_close_parent_key_sqlite_unique_parent_key_for_shift_.py": {
     "mtime": 1789696051177.6506,
@@ -5836,8 +5836,8 @@
     "hash": "2712f5a860c807a2f73b0c879255f742"
   },
   "frontend/e2e/whatsapp-settings-permission-separation.spec.ts": {
-    "mtime": 1790475924460.8306,
-    "hash": "fa1d68b713b6b2068dd21a95d1493f56"
+    "mtime": 1793880233456.9924,
+    "hash": "76ca0d09463dd6490fe40f6bf9c0c87b"
   },
   "alembic/versions/20260927_manual_payments_checkin_policy.py": {
     "mtime": 1790552127342.2512,
@@ -7734,5 +7734,13 @@
   "tests/test_fx_display_status.py": {
     "mtime": 1793848417729.8467,
     "hash": "7e31d456bc245b167782641a67bd9dcb"
+  },
+  "frontend/src/views/protected/WhatsAppComingSoonPage.tsx": {
+    "mtime": 1793880031583.765,
+    "hash": "d37fa4ac13bf62effc4c84d6fcff859b"
+  },
+  "tests/test_whatsapp_pilot_disabled.py": {
+    "mtime": 1793880872631.9363,
+    "hash": "61652a877b93da41513aef93b8bdf11c"
   }
 }

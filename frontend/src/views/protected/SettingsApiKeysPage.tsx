@@ -16,18 +16,18 @@ import { refreshSettingsState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 const purposeLabels: Record<ApiKeyPurpose, string> = {
-  whatsapp_bot: "WhatsApp bot",
+  whatsapp_bot: "WhatsApp bot (en desarrollo)",
   web_engine: "Motor web",
   channel_manager: "Channel manager",
   reporting: "Reporting",
   other: "Otro"
 };
 
-const purposeOptions: ApiKeyPurpose[] = ["whatsapp_bot", "web_engine", "channel_manager", "reporting", "other"];
+const purposeOptions: ApiKeyPurpose[] = ["web_engine", "channel_manager", "reporting", "other"];
 
 const emptyForm: IssueHotelApiKeyPayload = {
   name: "",
-  purpose: "whatsapp_bot",
+  purpose: "other",
   expires_at: null
 };
 

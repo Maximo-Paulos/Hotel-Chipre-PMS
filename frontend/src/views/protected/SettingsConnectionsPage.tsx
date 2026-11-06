@@ -42,7 +42,6 @@ const connectedSummary: Record<string, string> = {
   gmail: "Gmail ya esta conectado a este hotel. Este email será el remitente del hotel para links de pago, recibos y mensajes a huéspedes.",
   booking: "Booking.com ya esta conectado a este hotel.",
   expedia: "Expedia ya esta conectada a este hotel.",
-  whatsapp: "WhatsApp Business ya esta conectado a este hotel.",
 };
 
 const providerPriority: Record<string, number> = {
@@ -51,7 +50,6 @@ const providerPriority: Record<string, number> = {
   paypal: 2,
   booking: 3,
   expedia: 4,
-  whatsapp: 5,
 };
 
 const connectionDescription: Record<string, string> = {
@@ -60,7 +58,6 @@ const connectionDescription: Record<string, string> = {
   mercadopago: "Cuenta de cobros del hotel",
   paypal: "Cuenta de cobros del hotel",
   gmail: "Correo operativo del hotel",
-  whatsapp: "Cuenta de mensajería del hotel",
 };
 
 export function SettingsConnectionsPage() {
@@ -280,6 +277,34 @@ export function SettingsConnectionsPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {orderedCatalog.map((cat) => {
+          if (cat.provider === "whatsapp") {
+            return (
+              <div
+                key={cat.id}
+                data-testid="integration-card-whatsapp"
+                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">WhatsApp Business</h2>
+                    <p className="text-xs text-slate-500">Integración de mensajería</p>
+                  </div>
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
+                    Próximamente
+                  </span>
+                </div>
+                <p className="mt-3 text-sm text-slate-600">
+                  La conexión y la bandeja siguen en desarrollo.
+                </p>
+                <Link
+                  className="mt-4 inline-flex rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-brand-300"
+                  to="/settings/whatsapp"
+                >
+                  Ver información
+                </Link>
+              </div>
+            );
+          }
           const conn = data.connections.find((item) => item.integration.id === cat.id);
           const status = conn?.status || "not_connected";
           const currentNotice = notice[cat.id];
@@ -330,13 +355,6 @@ export function SettingsConnectionsPage() {
                   {conn?.account_label && (
                     <p className="mt-2 text-xs font-medium text-emerald-800">Cuenta validada: {conn.account_label}</p>
                   )}
-                </div>
-              )}
-
-              {cat.provider === "whatsapp" && (
-                <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-900">
-                  <p className="font-semibold">Administración específica de WhatsApp</p>
-                  <p className="mt-1 text-xs">No uses los controles genéricos de integraciones para conectar, refrescar o revocar este canal.</p>
                 </div>
               )}
 
@@ -441,11 +459,7 @@ export function SettingsConnectionsPage() {
               )}
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {cat.provider === "whatsapp" ? (
-                  <Link className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white" to="/settings/whatsapp">
-                    Abrir configuración de WhatsApp
-                  </Link>
-                ) : !isConnected && isOauth ? (
+                {!isConnected && isOauth ? (
                   <>
                     <button
                       className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"

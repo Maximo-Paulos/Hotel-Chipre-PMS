@@ -24,6 +24,14 @@ from app.services.whatsapp_crm_service import (
 from app.services.subscription_entitlements import plan_has_feature
 
 
+pytestmark = pytest.mark.skip(
+    reason=(
+        "El CRM de WhatsApp sigue en desarrollo y no se publica en el piloto. "
+        "La prueba activa verifica que sus rutas no estén expuestas."
+    )
+)
+
+
 def _hotel_and_user(db, hotel_id=1, role="manager"):
     hotel = HotelConfiguration(id=hotel_id, subscription_active=True)
     user = User(email=f"wa-{hotel_id}@example.test", password_hash="test", is_verified=True, is_active=True)

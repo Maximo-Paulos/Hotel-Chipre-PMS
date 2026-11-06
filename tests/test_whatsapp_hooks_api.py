@@ -19,6 +19,13 @@ from app.models.reservation import Reservation, ReservationChannelCodeEnum
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.services.hotel_api_key_service import issue_key
 
+pytestmark = pytest.mark.skip(
+    reason=(
+        "Los hooks públicos de WhatsApp están fuera del piloto. "
+        "La ausencia de sus rutas se verifica en test_whatsapp_pilot_disabled.py."
+    )
+)
+
 
 @pytest.fixture
 def whatsapp_client_with_db():

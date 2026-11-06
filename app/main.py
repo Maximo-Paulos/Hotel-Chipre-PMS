@@ -115,9 +115,6 @@ from app.api import (
     public_booking,
     public_marketing,
     public_inquiries,
-    whatsapp_hooks,
-    whatsapp_crm,
-    whatsapp_meta_webhook,
     permissions,
     laundry,
     laundry_vendor,
@@ -562,9 +559,6 @@ app.include_router(hotel_api_keys.router)
 app.include_router(public_booking.router)
 app.include_router(public_marketing.router)
 app.include_router(public_inquiries.router)
-app.include_router(whatsapp_hooks.router)
-app.include_router(whatsapp_crm.router)
-app.include_router(whatsapp_meta_webhook.router)
 app.include_router(permissions.router)
 app.include_router(laundry.router)
 app.include_router(laundry_vendor.router)
