@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from typing import Optional
 
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, lazyload
 
 from app.models.allocation import (
     AllocationAssignment,
@@ -716,7 +716,7 @@ def _active_policy_version_id_for_acceptance(db: Session, hotel_id: int) -> int:
 def get_allocation_run_details(db: Session, *, hotel_id: int, run_id: int) -> AllocationRunDetails | None:
     run = (
         db.query(AllocationRun)
-        .options(selectinload(AllocationRun.assignments))
+        .options(lazyload("*"))
         .filter(
             AllocationRun.id == run_id,
             AllocationRun.hotel_id == hotel_id,
@@ -725,8 +725,19 @@ def get_allocation_run_details(db: Session, *, hotel_id: int, run_id: int) -> Al
     )
     if run is None:
         return None
+    return _load_allocation_run_details(db, run=run, hotel_id=hotel_id)
+
+
+def _load_allocation_run_details(
+    db: Session,
+    *,
+    run: AllocationRun,
+    hotel_id: int,
+) -> AllocationRunDetails:
+    run_id = run.id
     explanations = (
         db.query(AllocationExplanation)
+        .options(lazyload("*"))
         .filter(
             AllocationExplanation.allocation_run_id == run_id,
             AllocationExplanation.hotel_id == hotel_id,
@@ -736,6 +747,7 @@ def get_allocation_run_details(db: Session, *, hotel_id: int, run_id: int) -> Al
     )
     metrics = (
         db.query(SolverMetric)
+        .options(lazyload("*"))
         .filter(
             SolverMetric.allocation_run_id == run_id,
             SolverMetric.hotel_id == hotel_id,
@@ -743,19 +755,30 @@ def get_allocation_run_details(db: Session, *, hotel_id: int, run_id: int) -> Al
         .order_by(SolverMetric.id.asc())
         .all()
     )
-    return AllocationRunDetails(run=run, explanations=explanations, metrics=metrics, assignments=list(run.assignments))
+    assignments = (
+        db.query(AllocationAssignment)
+        .options(lazyload("*"))
+        .filter(
+            AllocationAssignment.allocation_run_id == run_id,
+            AllocationAssignment.hotel_id == hotel_id,
+        )
+        .order_by(AllocationAssignment.id.asc())
+        .all()
+    )
+    return AllocationRunDetails(run=run, explanations=explanations, metrics=metrics, assignments=assignments)
 
 
 def get_latest_allocation_run_details(db: Session, *, hotel_id: int) -> AllocationRunDetails | None:
     run = (
         db.query(AllocationRun)
+        .options(lazyload("*"))
         .filter(AllocationRun.hotel_id == hotel_id)
         .order_by(AllocationRun.id.desc())
         .first()
     )
     if run is None:
         return None
-    return get_allocation_run_details(db, hotel_id=hotel_id, run_id=run.id)
+    return _load_allocation_run_details(db, run=run, hotel_id=hotel_id)
 
 
 def accept_allocation_run(
