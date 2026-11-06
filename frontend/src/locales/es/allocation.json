@@ -37,7 +37,7 @@
     "status": {
       "pending": "Pendiente",
       "running": "En cálculo",
-      "succeeded": "Lista para revisar",
+      "succeeded": "Completada",
       "readyForReview": "Sugerencias listas para revisar",
       "failed": "Cálculo detenido",
       "partial": "Resultado parcial"

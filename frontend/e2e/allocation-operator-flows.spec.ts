@@ -211,6 +211,7 @@ test("an applied automatic allocation run is shown as reviewed, not as a pending
   await expect(page.getByText("Habitación asignada", { exact: true })).toBeVisible();
   await expect(page.getByText("Destino propuesto rechazado", { exact: true })).toBeVisible();
   await expect(page.getByText("Esta propuesta ya no tiene movimientos pendientes.")).toBeVisible();
+  await expect(page.getByText("Completada", { exact: true })).toBeVisible();
   await expect(page.getByText("Sugerencias listas para revisar", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Aceptar propuesta" })).toHaveCount(0);
 });
