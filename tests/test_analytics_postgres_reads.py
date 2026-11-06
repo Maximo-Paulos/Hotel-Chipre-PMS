@@ -116,6 +116,90 @@ def test_analytics_home_does_not_repair_missing_facts_during_postgres_read(
     assert db.query(FactRoomOccupancyDaily).filter_by(hotel_id=hotel.id).count() == 0
 
 
+def test_analytics_home_returns_currency_specific_sql_metrics_from_facts(pg_session):
+    db = pg_session
+    hotel = HotelConfiguration(id=981191, hotel_name="Synthetic Analytics Currency")
+    db.add(hotel)
+    db.flush()
+
+    category = RoomCategory(
+        hotel_id=hotel.id,
+        name="Currency Synthetic",
+        code="CURR-SYN",
+        base_price_per_night=100,
+        max_occupancy=2,
+    )
+    guest = Guest(
+        hotel_id=hotel.id,
+        first_name="Synthetic",
+        last_name="Currency Guest",
+        terms_accepted=True,
+    )
+    db.add_all([category, guest])
+    db.flush()
+
+    room = Room(
+        hotel_id=hotel.id,
+        room_number="CURR-01",
+        floor=1,
+        category_id=category.id,
+        status=RoomStatusEnum.AVAILABLE,
+        is_active=True,
+    )
+    db.add(room)
+    db.flush()
+
+    reservation = Reservation(
+        hotel_id=hotel.id,
+        confirmation_code="SYNTHETIC-ANALYTICS-CURRENCY",
+        guest_id=guest.id,
+        room_id=room.id,
+        category_id=category.id,
+        check_in_date=date(2026, 4, 1),
+        check_out_date=date(2026, 4, 3),
+        total_amount=200,
+        subtotal_amount=180,
+        net_amount=180,
+        amount_paid=0,
+        currency_code="USD",
+        fx_rate_snapshot=1000,
+        status=ReservationStatusEnum.PENDING,
+        outcome=ReservationOutcomeEnum.PENDING,
+        source=ReservationSourceEnum.DIRECT,
+        channel_code=ReservationChannelCodeEnum.OTHER_DIRECT,
+        guest_segment=ReservationGuestSegmentEnum.LEISURE,
+        guest_segment_source=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
+        no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
+        num_adults=1,
+        num_children=0,
+    )
+    db.add(reservation)
+    db.flush()
+
+    from app.services.analytics_facts import refresh_fact_room_occupancy_daily
+
+    refresh_fact_reservation_daily(db, hotel_id=hotel.id, date_from=date(2026, 4, 1), date_to=date(2026, 4, 3))
+    refresh_fact_room_occupancy_daily(db, hotel_id=hotel.id, date_from=date(2026, 4, 1), date_to=date(2026, 4, 3))
+
+    payload = build_home_payload(
+        db,
+        hotel_id=hotel.id,
+        date_from=date(2026, 4, 1),
+        date_to=date(2026, 4, 3),
+        compare_previous=False,
+        compare_yoy=False,
+        currency_display="USD",
+    )
+    cards = {card["card_code"]: card for card in payload["data"]["cards"]}
+
+    assert payload["currency_display"] == "USD"
+    assert cards["home_revenue_gross"]["value_ars"] == "200000.00"
+    assert cards["home_revenue_gross"]["value_usd"] == "200.00"
+    assert cards["home_revenue_gross"]["value_usd_available"] is True
+    assert cards["home_revenue_net"]["value_usd"] == "180.00"
+    assert cards["home_adr"]["value_usd"] == "90.00"
+    assert cards["home_revpar"]["value_usd"] == "60.00"
+
 def test_company_reservation_fact_refresh_persists_company_channel_on_postgres(pg_session):
     db = pg_session
     hotel = HotelConfiguration(id=981102, hotel_name="Synthetic Company Analytics")

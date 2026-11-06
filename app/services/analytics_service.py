@@ -224,6 +224,8 @@ def metric_card(
     *,
     value_ars: Decimal | float | int | str | None = None,
     value_ars_available: bool | None = None,
+    value_usd: Decimal | float | int | str | None = None,
+    value_usd_available: bool | None = None,
     value_pct: float | None = None,
     value_count: int | None = None,
 ) -> AnalyticsMetricCardRead:
@@ -232,6 +234,10 @@ def metric_card(
         payload["value_ars"] = _money_str(value_ars)
         if value_ars_available is not None:
             payload["value_ars_available"] = value_ars_available
+    if value_usd is not None:
+        payload["value_usd"] = _money_str(value_usd)
+        if value_usd_available is not None:
+            payload["value_usd_available"] = value_usd_available
     if value_pct is not None:
         payload["value_pct"] = round(float(value_pct), 2)
     if value_count is not None:
@@ -1244,17 +1250,26 @@ def _reservation_fact_summary(
     row = (
         db.query(
             func.coalesce(func.sum(FactReservationDaily.revenue_gross_ars), 0).label("revenue_gross_ars"),
+            func.coalesce(func.sum(FactReservationDaily.revenue_gross_usd), 0).label("revenue_gross_usd"),
             func.coalesce(func.sum(FactReservationDaily.revenue_net_ars), 0).label("revenue_net_ars"),
+            func.coalesce(func.sum(FactReservationDaily.revenue_net_usd), 0).label("revenue_net_usd"),
             func.coalesce(
                 func.sum(case((room_revenue, FactReservationDaily.revenue_net_ars), else_=0)), 0
             ).label("room_revenue_net_ars"),
+            func.coalesce(
+                func.sum(case((room_revenue, FactReservationDaily.revenue_net_usd), else_=0)), 0
+            ).label("room_revenue_net_usd"),
             func.coalesce(func.sum(case((room_revenue, 1), else_=0)), 0).label("occupied_chargeable_nights"),
             func.coalesce(
                 func.sum(case((FactReservationDaily.outcome == ReservationOutcomeEnum.NO_SHOW, 1), else_=0)), 0
             ).label("no_show_count"),
             func.coalesce(_currency_unavailable_aggregate("ARS"), 0).label("ars_unavailable"),
+            func.coalesce(_currency_unavailable_aggregate("USD"), 0).label("usd_unavailable"),
             func.coalesce(_currency_unavailable_aggregate("ARS", condition=room_revenue), 0).label(
                 "room_ars_unavailable"
+            ),
+            func.coalesce(_currency_unavailable_aggregate("USD", condition=room_revenue), 0).label(
+                "room_usd_unavailable"
             ),
             func.min(FactReservationDaily.updated_at).label("oldest_updated_at"),
         )
@@ -1266,12 +1281,17 @@ def _reservation_fact_summary(
     )
     return {
         "revenue_gross_ars": _money(row.revenue_gross_ars),
+        "revenue_gross_usd": _money(row.revenue_gross_usd),
         "revenue_net_ars": _money(row.revenue_net_ars),
+        "revenue_net_usd": _money(row.revenue_net_usd),
         "room_revenue_net_ars": _money(row.room_revenue_net_ars),
+        "room_revenue_net_usd": _money(row.room_revenue_net_usd),
         "occupied_chargeable_nights": int(row.occupied_chargeable_nights or 0),
         "no_show_count": int(row.no_show_count or 0),
         "ars_available": not bool(row.ars_unavailable),
+        "usd_available": not bool(row.usd_unavailable),
         "room_ars_available": not bool(row.room_ars_unavailable),
+        "room_usd_available": not bool(row.room_usd_unavailable),
         "data_as_of": row.oldest_updated_at,
     }
 
@@ -1404,22 +1424,32 @@ def build_home_payload(
     room_revenue_facts = [fact for fact in facts if fact.occupied_night and fact.chargeable_night] if facts is not None else []
     if facts is not None:
         revenue_gross_ars = _sum_money(facts, "revenue_gross_ars")
+        revenue_gross_usd = _sum_money(facts, "revenue_gross_usd")
         revenue_net_ars = _sum_money(facts, "revenue_net_ars")
+        revenue_net_usd = _sum_money(facts, "revenue_net_usd")
         revenue_ars_available = not _currency_unavailable_for(facts, "ARS")
+        revenue_usd_available = not _currency_unavailable_for(facts, "USD")
         room_revenue_net_ars = _sum_money(room_revenue_facts, "revenue_net_ars")
+        room_revenue_net_usd = _sum_money(room_revenue_facts, "revenue_net_usd")
         occupied_chargeable_nights = len(room_revenue_facts)
         room_revenue_ars_available = not _currency_unavailable_for(room_revenue_facts, "ARS")
+        room_revenue_usd_available = not _currency_unavailable_for(room_revenue_facts, "USD")
         no_show_count = len(
             [fact for fact in facts if getattr(fact.outcome, "value", fact.outcome) == ReservationOutcomeEnum.NO_SHOW.value]
         )
         reservation_data_as_of = _facts_data_as_of(facts)
     else:
         revenue_gross_ars = reservation_summary["revenue_gross_ars"]
+        revenue_gross_usd = reservation_summary["revenue_gross_usd"]
         revenue_net_ars = reservation_summary["revenue_net_ars"]
+        revenue_net_usd = reservation_summary["revenue_net_usd"]
         revenue_ars_available = reservation_summary["ars_available"]
+        revenue_usd_available = reservation_summary["usd_available"]
         room_revenue_net_ars = reservation_summary["room_revenue_net_ars"]
+        room_revenue_net_usd = reservation_summary["room_revenue_net_usd"]
         occupied_chargeable_nights = reservation_summary["occupied_chargeable_nights"]
         room_revenue_ars_available = reservation_summary["room_ars_available"]
+        room_revenue_usd_available = reservation_summary["room_usd_available"]
         no_show_count = reservation_summary["no_show_count"]
         reservation_data_as_of = reservation_summary["data_as_of"]
 
@@ -1438,8 +1468,18 @@ def build_home_payload(
         if occupied_chargeable_nights
         else None
     )
+    adr_usd = (
+        _money(room_revenue_net_usd / Decimal(occupied_chargeable_nights))
+        if occupied_chargeable_nights
+        else None
+    )
     revpar_ars = (
         _money(room_revenue_net_ars / Decimal(sellable_room_nights))
+        if sellable_room_nights
+        else None
+    )
+    revpar_usd = (
+        _money(room_revenue_net_usd / Decimal(sellable_room_nights))
         if sellable_room_nights
         else None
     )
@@ -1449,24 +1489,32 @@ def build_home_payload(
             "Revenue bruto",
             value_ars=revenue_gross_ars,
             value_ars_available=revenue_ars_available,
+            value_usd=revenue_gross_usd,
+            value_usd_available=revenue_usd_available,
         ).model_dump(),
         metric_card(
             "home_revenue_net",
             "Revenue neto",
             value_ars=revenue_net_ars,
             value_ars_available=revenue_ars_available,
+            value_usd=revenue_net_usd,
+            value_usd_available=revenue_usd_available,
         ).model_dump(),
         metric_card(
             "home_adr",
             "ADR",
             value_ars=adr_ars,
             value_ars_available=room_revenue_ars_available,
+            value_usd=adr_usd,
+            value_usd_available=room_revenue_usd_available,
         ).model_dump(),
         metric_card(
             "home_revpar",
             "RevPAR",
             value_ars=revpar_ars,
             value_ars_available=room_revenue_ars_available,
+            value_usd=revpar_usd,
+            value_usd_available=room_revenue_usd_available,
         ).model_dump(),
         metric_card(
             "home_occupancy",

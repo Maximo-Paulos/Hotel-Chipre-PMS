@@ -415,24 +415,36 @@ function PageShell({
   );
 }
 
-function MetricGrid({ cards }: { cards: Array<Record<string, unknown>> }) {
+function MetricGrid({
+  cards,
+  currencyDisplay = "ARS"
+}: {
+  cards: Array<Record<string, unknown>>;
+  currencyDisplay?: AnalyticsFilterState["currency_display"];
+}) {
   const { t } = useTranslation("appshell");
   const unavailableCurrencyLabel = t("currency.historicalRateUnavailable");
+  const currencyValue = (card: Record<string, unknown>, currency: "ARS" | "USD") => {
+    const key = currency === "ARS" ? "value_ars" : "value_usd";
+    const raw = card[key];
+    if (raw == null || card[`${key}_available`] === false) return unavailableCurrencyLabel;
+    return formatMoney(Number(raw), currency);
+  };
   const mapped = cards.map((card) => ({
     key: String(card.card_code || card.label || "metric"),
     label: String(card.label || card.card_code || "Métrica"),
     value:
-      card.value_ars != null
-        ? card.value_ars_available === false
-          ? unavailableCurrencyLabel
-          : formatMoney(Number(card.value_ars), "ARS")
-        : card.value_usd != null
-          ? formatMoney(Number(card.value_usd), "USD")
-          : card.value_pct != null
-            ? `${Number(card.value_pct).toLocaleString("es-AR", { maximumFractionDigits: 2 })}%`
-            : card.value_count != null
-              ? String(card.value_count)
-              : tableValue(card.value ?? card.summary ?? "—"),
+      card.value_ars != null || card.value_usd != null
+        ? currencyDisplay === "ARS"
+          ? currencyValue(card, "ARS")
+          : currencyDisplay === "USD"
+            ? currencyValue(card, "USD")
+            : `ARS ${currencyValue(card, "ARS")} · USD ${currencyValue(card, "USD")}`
+        : card.value_pct != null
+          ? `${Number(card.value_pct).toLocaleString("es-AR", { maximumFractionDigits: 2 })}%`
+          : card.value_count != null
+            ? String(card.value_count)
+            : tableValue(card.value ?? card.summary ?? "—"),
     tone: typeof card.value_pct === "number" && card.value_pct < 50 ? ("danger" as const) : ("default" as const)
   }));
   return (
@@ -640,7 +652,10 @@ function ReportScreen({
             dataSource={report.data_source}
           />
           {"data" in report && Array.isArray((report.data as Record<string, unknown>).cards) && (
-            <MetricGrid cards={(report.data as Record<string, unknown>).cards as Array<Record<string, unknown>>} />
+            <MetricGrid
+              cards={(report.data as Record<string, unknown>).cards as Array<Record<string, unknown>>}
+              currencyDisplay={filters.currency_display}
+            />
           )}
           <SectionTables data={report.data} />
         </div>
