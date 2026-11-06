@@ -133,6 +133,77 @@ test("reception reviews the engine's waitlist suggestion before creating a reser
   });
 });
 
+test("an applied automatic allocation run is shown as reviewed, not as a pending proposal", async ({ page }) => {
+  await login(page);
+
+  await page.route("**/api/allocation/policy/runs/latest", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        run_id: 48,
+        status: "succeeded",
+        trigger_type: "manual_api_recalculate",
+        objective_score: 1,
+        solver_summary: "Asignación aplicada.",
+        error_message: null,
+        policy_version_id: 3,
+        horizon_start: "2026-11-10",
+        horizon_end: "2026-11-12",
+        created_at: "2026-11-05T12:00:00Z",
+        explanations: [],
+        metrics: [],
+        assignments: [{
+          id: 1,
+          reservation_id: 880,
+          source_room_id: 41,
+          room_id: 42,
+          status: "applied",
+          explanation_summary: "Movimiento aprobado.",
+          requires_explicit_approval: false
+        }]
+      })
+    });
+  });
+  await page.route("**/api/allocation/policy", async (route) => {
+    await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ detail: "Sin política activa" }) });
+  });
+  await page.route("**/api/reservations/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([{
+        id: 880,
+        confirmation_code: "RES-QA-ALLOC-880",
+        check_in_date: "2026-11-10",
+        check_out_date: "2026-11-12",
+        status: "pending",
+        guest_name: "Huésped QA",
+        room_id: 42,
+        num_adults: 1,
+        num_children: 0
+      }])
+    });
+  });
+  await page.route("**/api/rooms/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        { id: 41, room_number: "101", floor: 1, category_id: 1, status: "available", is_active: true },
+        { id: 42, room_number: "102", floor: 1, category_id: 1, status: "available", is_active: true }
+      ])
+    });
+  });
+
+  await page.goto("/operacion/asignacion");
+  await expect(page.getByText("RES-QA-ALLOC-880")).toBeVisible();
+  await expect(page.getByText("Aplicada", { exact: true })).toBeVisible();
+  await expect(page.getByText("Esta propuesta ya no tiene movimientos pendientes.")).toBeVisible();
+  await expect(page.getByText("Sugerencias listas para revisar", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Aceptar propuesta" })).toHaveCount(0);
+});
+
 test("a future room block applies a valid allocation plan only after explicit confirmation", async ({ page }) => {
   await login(page);
 

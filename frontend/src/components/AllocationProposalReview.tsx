@@ -81,7 +81,8 @@ export function AllocationProposalReview({
   const proposalRunReadyForReview = Boolean(
     run &&
     run.status.toLowerCase() === "succeeded" &&
-    automaticAllocationTriggers.has(run.trigger_type)
+    automaticAllocationTriggers.has(run.trigger_type) &&
+    proposed.length > 0
   );
   const proposedMoveCount = proposed.filter(
     (assignment) => assignment.source_room_id !== assignment.room_id
