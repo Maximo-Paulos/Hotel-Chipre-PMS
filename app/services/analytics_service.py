@@ -1178,6 +1178,8 @@ def _reservation_fact_breakdown(
                         "nights_count": len(rows),
                         "revenue_gross_ars": _money_str(_sum_money(rows, "revenue_gross_ars")),
                         "revenue_net_ars": _money_str(_sum_money(rows, "revenue_net_ars")),
+                        "revenue_gross_usd": _money_str(_sum_money(rows, "revenue_gross_usd")),
+                        "revenue_net_usd": _money_str(_sum_money(rows, "revenue_net_usd")),
                     }
                 )
             result.append(item)
@@ -1194,6 +1196,8 @@ def _reservation_fact_breakdown(
                 func.count(FactReservationDaily.id).label("nights_count"),
                 func.coalesce(func.sum(FactReservationDaily.revenue_gross_ars), 0).label("revenue_gross_ars"),
                 func.coalesce(func.sum(FactReservationDaily.revenue_net_ars), 0).label("revenue_net_ars"),
+                func.coalesce(func.sum(FactReservationDaily.revenue_gross_usd), 0).label("revenue_gross_usd"),
+                func.coalesce(func.sum(FactReservationDaily.revenue_net_usd), 0).label("revenue_net_usd"),
             ]
         )
     query_columns.append(func.min(FactReservationDaily.updated_at).label("oldest_updated_at"))
@@ -1230,6 +1234,8 @@ def _reservation_fact_breakdown(
                     "nights_count": int(row.nights_count or 0),
                     "revenue_gross_ars": _money_str(row.revenue_gross_ars),
                     "revenue_net_ars": _money_str(row.revenue_net_ars),
+                    "revenue_gross_usd": _money_str(row.revenue_gross_usd),
+                    "revenue_net_usd": _money_str(row.revenue_net_usd),
                 }
             )
         result.append(item)

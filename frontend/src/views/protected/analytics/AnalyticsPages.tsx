@@ -7,7 +7,7 @@ import { ApiError, apiFetch } from "../../../api/client";
 import { useSubscriptionStatus } from "../../../hooks/useSubscription";
 import { useRooms } from "../../../hooks/useRooms";
 import { formatMoney } from "../../../utils/currency";
-import { formatAnalyticsTableValue } from "../../../utils/analyticsValue";
+import { formatAnalyticsTableValue, visibleAnalyticsCurrencyFields } from "../../../utils/analyticsValue";
 import { StatCard } from "../../../components/StatCard";
 import { useSession } from "../../../state/session";
 import { refreshAfterMutation, refreshRoomState } from "../../../api/queryInvalidation";
@@ -280,11 +280,12 @@ const FIELD_LABELS: Record<string, string> = {
   channel_code: "Canal",
   guest_segment: "Segmento",
   reservations_count: "Reservas",
+  revenue_gross_ars: "Revenue bruto (ARS)",
+  revenue_net_ars: "Revenue neto (ARS)",
+  revenue_gross_usd: "Revenue bruto (USD)",
+  revenue_net_usd: "Revenue neto (USD)",
   nights_count: "Noches",
   occupied_nights: "Noches ocupadas",
-  revenue_gross_ars: "Revenue bruto",
-  revenue_net_ars: "Revenue neto",
-  revenue_net_usd: "Revenue neto (USD)",
   margin_operating_ars: "Margen operativo",
   margin_operating_usd: "Margen operativo (USD)",
   room_number: "Habitación",
@@ -501,7 +502,13 @@ function AnalyticsFreshness({
   );
 }
 
-function SectionTables({ data }: { data: Record<string, unknown> }) {
+function SectionTables({
+  data,
+  currencyDisplay
+}: {
+  data: Record<string, unknown>;
+  currencyDisplay: AnalyticsFilterState["currency_display"];
+}) {
   const { t } = useTranslation("appshell");
   const unavailableCurrencyLabel = t("currency.historicalRateUnavailable");
   const entries = Object.entries(data).filter(([key]) => key !== "cards");
@@ -513,12 +520,12 @@ function SectionTables({ data }: { data: Record<string, unknown> }) {
       {entries.map(([key, value]) => {
         if (Array.isArray(value)) {
           const rows = value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"));
-          const headers = rows.reduce<string[]>((acc, row) => {
+          const headers = visibleAnalyticsCurrencyFields(rows.reduce<string[]>((acc, row) => {
               Object.keys(row).filter((field) => field !== "unavailable_currencies").forEach((field) => {
               if (!acc.includes(field)) acc.push(field);
             });
             return acc;
-          }, []);
+          }, []), currencyDisplay);
           return (
             <div key={key} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between">
@@ -657,7 +664,7 @@ function ReportScreen({
               currencyDisplay={filters.currency_display}
             />
           )}
-          <SectionTables data={report.data} />
+          <SectionTables data={report.data} currencyDisplay={filters.currency_display} />
         </div>
       )}
     </PageShell>

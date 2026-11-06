@@ -15,7 +15,7 @@ vm.runInNewContext(compiled, {
   require: () => ({ formatMoney: (amount, currency) => `${currency}:${amount}` })
 });
 
-const { formatAnalyticsTableValue } = module.exports;
+const { formatAnalyticsTableValue, visibleAnalyticsCurrencyFields } = module.exports;
 
 test("analytics detail trusts explicit availability metadata for aggregated values", () => {
   assert.equal(
@@ -43,4 +43,20 @@ test("analytics detail trusts explicit availability metadata for aggregated valu
 test("legacy analytics payloads keep the source-currency safety fallback", () => {
   assert.equal(formatAnalyticsTableValue("120", "revenue_net_ars", { source_currency: "ARS" }), "ARS:120");
   assert.equal(formatAnalyticsTableValue("120", "revenue_net_ars", {}), "No disponible");
+});
+
+test("analytics table monetary columns follow the selected currency", () => {
+  const fields = ["channel_code", "reservations_count", "revenue_gross_ars", "revenue_gross_usd"];
+
+  assert.deepEqual(visibleAnalyticsCurrencyFields(fields, "ARS"), [
+    "channel_code",
+    "reservations_count",
+    "revenue_gross_ars"
+  ]);
+  assert.deepEqual(visibleAnalyticsCurrencyFields(fields, "USD"), [
+    "channel_code",
+    "reservations_count",
+    "revenue_gross_usd"
+  ]);
+  assert.deepEqual(visibleAnalyticsCurrencyFields(fields, "BOTH"), fields);
 });

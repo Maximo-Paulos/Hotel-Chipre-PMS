@@ -199,6 +199,14 @@ def test_analytics_home_returns_currency_specific_sql_metrics_from_facts(pg_sess
     assert cards["home_revenue_net"]["value_usd"] == "180.00"
     assert cards["home_adr"]["value_usd"] == "90.00"
     assert cards["home_revpar"]["value_usd"] == "60.00"
+    channel = payload["data"]["top_channels"][0]
+    segment = payload["data"]["segments"][0]
+    for row in (channel, segment):
+        assert row["revenue_gross_ars"] == "200000.00"
+        assert row["revenue_net_ars"] == "180000.00"
+        assert row["revenue_gross_usd"] == "200.00"
+        assert row["revenue_net_usd"] == "180.00"
+        assert row["unavailable_currencies"] == []
 
 def test_company_reservation_fact_refresh_persists_company_channel_on_postgres(pg_session):
     db = pg_session

@@ -1,6 +1,14 @@
 import { formatMoney } from "./currency";
 
 type AnalyticsValueLabels = Record<string, Record<string, string> | undefined>;
+export type AnalyticsCurrencyDisplay = "ARS" | "USD" | "BOTH";
+
+export function visibleAnalyticsCurrencyFields(fields: string[], currencyDisplay: AnalyticsCurrencyDisplay): string[] {
+  return fields.filter((field) => {
+    const currency = /_(ars|usd)$/.exec(field)?.[1]?.toUpperCase();
+    return !currency || currencyDisplay === "BOTH" || currency === currencyDisplay;
+  });
+}
 
 export function formatAnalyticsTableValue(
   value: unknown,
