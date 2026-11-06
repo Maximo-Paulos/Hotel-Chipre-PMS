@@ -690,8 +690,10 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     : manualFxPaymentQuoteMatchesEntry
       ? manualFxPaymentQuote ?? undefined
       : undefined;
+  const paymentQuoteHasZeroBaseAmount = paymentQuoteBaseAmount !== undefined &&
+    Number.isFinite(paymentQuoteBaseAmount) && paymentQuoteBaseAmount <= 0;
   const shouldDisplayPaymentQuoteError = paymentQuoteQuery.isError && !paymentQuote &&
-    Number(operationalBalanceDue ?? 0) > 0.01 &&
+    (Number(operationalBalanceDue ?? 0) > 0.01 || hasValidEnteredPaymentAmount || selectedCompanyChargeIds.length > 0) &&
     !(paymentMutation.isPending || (
       actionMessage === t("drawer.messages.paymentRegistered") &&
       summaryQuery.isFetching
@@ -2546,6 +2548,12 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   {selectedCompanyChargesRequireReservationCurrency ? (
                     <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status" data-testid="reservation-drawer-company-charge-currency-hint">
                       {t("drawer.payment.companyChargesCurrencyRequired", { currency: currencyCode })}
+                    </p>
+                  ) : paymentQuoteHasZeroBaseAmount && !paymentQuote ? (
+                    <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" role="status" data-testid="reservation-drawer-payment-quote-no-balance">
+                      {summary
+                        ? t("page.form.paymentQuoteNoBalance")
+                        : t("page.form.paymentQuoteBalanceUnavailable")}
                     </p>
                   ) : shouldDisplayPaymentQuoteError ? (
                     <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" role="alert" data-testid="reservation-drawer-payment-quote-error">

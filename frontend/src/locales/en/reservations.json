@@ -1087,6 +1087,8 @@
       "fxEstimateNotice": "The server-confirmed quote is reused when this individual payment is recorded.",
       "paymentQuoteTitle": "Server-confirmed payment quote",
       "paymentQuoteLoading": "Checking the payment quote…",
+      "paymentQuoteNoBalance": "There is no outstanding balance to quote. Enter an amount or select pending charges.",
+      "paymentQuoteBalanceUnavailable": "A quote cannot be calculated until the reservation balance is available.",
       "paymentQuoteRetry": "Check again",
       "paymentQuoteBase": "Base amount",
       "paymentQuoteSurcharge": "Surcharge",

@@ -1087,6 +1087,8 @@
       "fxEstimateNotice": "La cotización confirmada por el servidor se reutiliza al registrar este cobro individual.",
       "paymentQuoteTitle": "Cotización confirmada por el servidor",
       "paymentQuoteLoading": "Consultando la cotización del cobro…",
+      "paymentQuoteNoBalance": "No hay saldo pendiente para cotizar. Ingresá un importe o seleccioná cargos pendientes.",
+      "paymentQuoteBalanceUnavailable": "No se puede cotizar hasta conocer el saldo de la reserva.",
       "paymentQuoteRetry": "Volver a consultar",
       "paymentQuoteBase": "Importe base",
       "paymentQuoteSurcharge": "Recargo",

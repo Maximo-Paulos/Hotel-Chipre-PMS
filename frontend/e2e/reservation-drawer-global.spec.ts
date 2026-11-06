@@ -29,7 +29,7 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   const suffix = Date.now().toString();
   const guestLastName = `DrawerQA-${suffix}`;
   const ownerSession = await loginAsStepUpOwner(page, "cash-business", testInfo.project.name);
-  let lastTotpStep = ownerSession.lastTotpStep;
+  const lastTotpStep = ownerSession.lastTotpStep;
   // The dashboard lists real upcoming arrivals: check-in from today on, not
   // yet checked in, soonest first, five at most (upcomingOnly on
   // GET /api/reservations). So this reservation has to be a near arrival.
@@ -268,9 +268,55 @@ test("owner opens the reservation drawer from the dashboard, global search, and 
   await expect(drawer).toContainText(confirmationCode);
   await expect(drawer.getByText("Seña", { exact: true })).toBeVisible();
 
+  // Settle the remaining synthetic balance and verify the zero-balance quote
+  // state does not stay in the disabled query's loading placeholder.
+  const parseSpanishAmount = (value: string) => Number(
+    value.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".")
+  );
+  const balanceText = await drawer.getByTestId("drawer-balance-due").innerText();
+  const remainingBalance = parseSpanishAmount(balanceText);
+  expect(remainingBalance).toBeGreaterThan(0);
+  await drawer.getByLabel("Método de pago").selectOption("bank_transfer");
+  await drawer.getByLabel(/Referencia de transferencia/i).fill(`QA-FULL-${suffix}`);
+  const fullBalanceQuoteResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/payment-surcharges/quote" &&
+    response.request().method() === "POST" && response.status() === 200
+  );
+  await drawer.getByLabel("Importe a cobrar").fill(remainingBalance.toFixed(2));
+  await fullBalanceQuoteResponse;
+  await expect(drawer.getByTestId("payment-backend-quote")).toBeVisible();
+  const finalPaymentResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/payments" && response.request().method() === "POST"
+  );
+  const zeroBalanceSummaryResponse = page.waitForResponse((response) =>
+    response.url().includes(`/api/payments/summary/${reservationId}`) &&
+    response.request().method() === "GET" && response.status() === 200
+  );
+  await drawer.getByRole("button", { name: "Registrar cobro", exact: true }).click();
+  const finalPaymentResult = await finalPaymentResponse;
+  expect(finalPaymentResult.status()).toBe(201);
+  expect(finalPaymentResult.request().postDataJSON()).toMatchObject({
+    payment_method: "bank_transfer",
+    amount: remainingBalance
+  });
+  await zeroBalanceSummaryResponse;
+  await expect.poll(async () => parseSpanishAmount(await drawer.getByTestId("drawer-balance-due").innerText())).toBe(0);
+  await expect(drawer.getByTestId("reservation-drawer-payment-quote-no-balance")).toContainText("No hay saldo pendiente para cotizar.");
+  await expect(drawer.getByText("Consultando la cotización del cobro…", { exact: true })).toHaveCount(0);
+
+  const nonzeroQuoteResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/payment-surcharges/quote" &&
+    response.request().method() === "POST" && response.status() === 409
+  );
+  await drawer.getByLabel("Importe a cobrar").fill("1");
+  await nonzeroQuoteResponse;
+  await expect(drawer.getByTestId("reservation-drawer-payment-quote-no-balance")).toHaveCount(0);
+  await expect(drawer.getByTestId("reservation-drawer-payment-quote-error")).toBeVisible();
+  await expect(drawer.getByText("Consultando la cotización del cobro…", { exact: true })).toHaveCount(0);
+
   // Cleanup: free tomorrow's room and dashboard slot for the next run.
   await drawer.getByRole("button", { name: "Cancelar", exact: true }).click();
-  lastTotpStep = await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
+  await completeStepUpPrompt(page, lastTotpStep, ownerSession.auth.user.email);
   await expect(drawer.getByText("Reserva cancelada.", { exact: true })).toBeVisible();
 });
 
