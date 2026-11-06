@@ -181,7 +181,7 @@ function GuestArrivalRow({
           <div className="flex justify-end">
             <button
               type="button"
-              disabled={isPending || !validation?.valid}
+              disabled={isPending || guestQuery.isLoading || validationQuery.isLoading}
               onClick={() => void submit()}
               className="min-h-9 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-900 disabled:cursor-not-allowed disabled:opacity-50"
             >

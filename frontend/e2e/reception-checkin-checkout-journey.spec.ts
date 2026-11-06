@@ -223,6 +223,45 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await expect(drawer.getByText("Check-in registrado.", { exact: true })).toBeVisible();
   await expect(drawer.getByText("Check-in", { exact: true }).first()).toBeVisible();
 
+  // A companion who still has an invalid profile must be able to submit the
+  // profile form itself. The previous validation result stays invalid until
+  // this save succeeds, so it must not gate the form's submit button.
+  const arrivedGuestPanel = drawer.getByTestId("reservation-guest-arrivals");
+  const companionArrivalRow = arrivedGuestPanel.locator("li").filter({ hasText: `Acompañante ${guestLastName}` });
+  await expect(companionArrivalRow.getByText("Faltan datos requeridos para registrar la llegada.", { exact: true })).toBeVisible();
+  await companionArrivalRow.getByRole("button", { name: "Completar perfil", exact: true }).click();
+  const companionProfile = companionArrivalRow.locator('[data-testid^="guest-arrival-profile-"]');
+  await companionProfile.getByLabel("Tipo de documento", { exact: true }).selectOption("DNI");
+  await companionProfile.getByLabel("Número de documento", { exact: true }).fill(`QA-COMP-${suffix}`);
+  await companionProfile.getByLabel("Nacionalidad", { exact: true }).fill("Argentina");
+  await companionProfile.getByLabel("País", { exact: true }).fill("Argentina");
+  await companionProfile.getByLabel("Lugar de nacimiento", { exact: true }).fill("Rosario");
+  await companionProfile.getByLabel("País de nacimiento", { exact: true }).fill("Argentina");
+  await companionProfile.getByLabel("Estado civil", { exact: true }).fill("Soltero/a");
+  await companionProfile.getByLabel("Profesión", { exact: true }).fill("Acompañante QA");
+  await companionProfile.getByLabel("Acepta términos y condiciones", { exact: true }).check();
+  const registerCompanionArrival = companionArrivalRow.getByRole("button", {
+    name: "Guardar perfil y registrar llegada",
+    exact: true
+  });
+  await expect(registerCompanionArrival).toBeEnabled();
+  let companionArrivalPayload: Record<string, unknown> | null = null;
+  const companionGuestId = Number((await companionArrivalRow.getAttribute("data-testid"))?.replace("guest-arrival-row-", ""));
+  expect(companionGuestId).toBeGreaterThan(0);
+  const companionArrivalPath = `/api/checkin/${reservationId}/guests/${companionGuestId}`;
+  await page.route(`**${companionArrivalPath}`, async (route) => {
+    if (route.request().method() === "POST") {
+      companionArrivalPayload = route.request().postDataJSON() as Record<string, unknown>;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    await route.continue();
+  });
+  await registerCompanionArrival.click();
+  await expect(registerCompanionArrival).toBeDisabled();
+  await expect.poll(() => companionArrivalPayload).not.toBeNull();
+  expect(companionArrivalPayload).toMatchObject({ guest: { terms_accepted: true } });
+  await expect(companionArrivalRow.getByRole("status")).toContainText("Llegó");
+
   await page.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
   await expect(drawer).not.toBeVisible();
 
