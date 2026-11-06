@@ -45784,6 +45784,35 @@
               }
             ],
             "title": "Date To"
+          },
+          "metrics_available": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics Available"
+          },
+          "metrics_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrics Unavailable Reason"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsMetricCardRead"
+            },
+            "type": "array",
+            "title": "Metrics"
           }
         },
         "type": "object",
@@ -46377,6 +46406,28 @@
               }
             ],
             "title": "Value Ars Available"
+          },
+          "value_usd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Usd"
+          },
+          "value_usd_available": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Usd Available"
           },
           "value_pct": {
             "anyOf": [
@@ -53621,12 +53672,27 @@
           "message": {
             "type": "string",
             "title": "Message"
+          },
+          "selected_market": {
+            "type": "string",
+            "title": "Selected Market"
+          },
+          "selected_side": {
+            "type": "string",
+            "title": "Selected Side"
+          },
+          "applied_rate": {
+            "type": "number",
+            "title": "Applied Rate"
           }
         },
         "type": "object",
         "required": [
           "stored",
-          "message"
+          "message",
+          "selected_market",
+          "selected_side",
+          "applied_rate"
         ],
         "title": "FxSnapshotCreateResponse"
       },
