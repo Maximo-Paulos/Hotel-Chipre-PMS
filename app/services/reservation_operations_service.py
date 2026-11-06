@@ -1262,20 +1262,34 @@ def _extension_amount(
         current_nights = max((reservation.check_out_date - reservation.check_in_date).days, 1)
         average = Decimal(str(reservation.total_amount or 0)) / Decimal(current_nights)
         return (average * Decimal(extra_nights)).quantize(Decimal("0.01"))
-    pricing = calculate_reservation_pricing(
-        db,
-        category_id=reservation.category_id,
-        check_in=reservation.check_out_date,
-        check_out=new_checkout_date,
-        hotel_id=hotel_id,
-        sellable_product_id=reservation.sellable_product_id,
-        rate_plan_id=reservation.rate_plan_id,
-        tax_policy_id=reservation.tax_policy_id,
-        pricing_channel_code=reservation.source_provider_code or reservation.source.value,
-        target_currency=reservation.currency_code,
-        occupancy=reservation.num_adults + reservation.num_children,
-        company_id=company.id if company is not None else None,
-    )
+    try:
+        pricing = calculate_reservation_pricing(
+            db,
+            category_id=reservation.category_id,
+            check_in=reservation.check_out_date,
+            check_out=new_checkout_date,
+            hotel_id=hotel_id,
+            sellable_product_id=reservation.sellable_product_id,
+            rate_plan_id=reservation.rate_plan_id,
+            tax_policy_id=reservation.tax_policy_id,
+            pricing_channel_code=reservation.source_provider_code or reservation.source.value,
+            target_currency=reservation.currency_code,
+            occupancy=reservation.num_adults + reservation.num_children,
+            company_id=company.id if company is not None else None,
+        )
+    except ReservationError as exc:
+        if (
+            pricing_mode != "current_rate"
+            or company is not None
+            or str(exc) != "No active prices found for rate plan"
+        ):
+            raise
+        # When no tariff covers the added dates, preserve the amount per night
+        # already agreed for this stay. This also handles explicit negotiated
+        # totals without a nightly breakdown using an even allocation.
+        current_nights = max((reservation.check_out_date - reservation.check_in_date).days, 1)
+        average = Decimal(str(reservation.total_amount or 0)) / Decimal(current_nights)
+        return (average * Decimal(extra_nights)).quantize(Decimal("0.01"))
     if company is not None:
         pricing = _apply_corporate_pricing(
             db,
