@@ -39,6 +39,12 @@
     "metricsUnavailable": "This report does not provide compatible metrics for comparison.",
     "change": "Change:"
   },
+  "analyticsFreshness": {
+    "source": "Source",
+    "oldestIncludedDataUpdatedAt": "Oldest included data was updated {{date}}",
+    "oldestIncludedDataUnavailable": "Date of oldest included data unavailable",
+    "status": "Source {{source}}. {{timestamp}}"
+  },
   "realtime": {
     "connected": "Connected: real-time changes active.",
     "connecting": "Connecting real-time sync…",

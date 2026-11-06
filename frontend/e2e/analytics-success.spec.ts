@@ -16,9 +16,49 @@ test("owner opens the analytics summary with reconciled freshness metadata", asy
   await page.goto("/analytics");
 
   await expect(page.getByRole("heading", { name: "Analítica", exact: true })).toBeVisible();
-  await expect(page.getByRole("status", { name: /Datos (PostgreSQL|ClickHouse)/ })).toBeVisible();
+  await expect(page.getByRole("status", { name: /Fuente (PostgreSQL|ClickHouse)\. Dato incluido más antiguo actualizado el/ })).toBeVisible();
   await expect(page.getByText("Cargando analytics...", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("analytics freshness label explains the oldest included data timestamp in English", async ({ page }) => {
+  await page.route("**/api/config/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/interface-language")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ interface_language: "en" })
+      });
+      return;
+    }
+    const response = await route.fetch();
+    const config = await response.json();
+    await route.fulfill({ response, body: JSON.stringify({ ...config, interface_language: "en" }) });
+  });
+  await page.route("**/api/analytics/home**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        hotel_id: 1,
+        date_from: "2026-07-01",
+        date_to: "2026-07-31",
+        generated_at: "2026-07-31T12:00:00Z",
+        data_as_of: "2026-07-24T10:00:00Z",
+        source_lag_seconds: 604800,
+        data_source: "postgresql",
+        data: { cards: [] }
+      })
+    });
+  });
+
+  await login(page);
+  await page.goto("/analytics");
+
+  const freshness = page.getByRole("status", { name: /Source PostgreSQL/ });
+  await expect(freshness).toContainText("Oldest included data was updated");
+  await expect(freshness).not.toContainText(/lag|behind|delayed|out of date/i);
 });
 
 test("operations keeps rendering when a legacy analytics response omits data_source", async ({ page }) => {
@@ -42,7 +82,7 @@ test("operations keeps rendering when a legacy analytics response omits data_sou
   await page.goto("/analytics/operations");
 
   await expect(page.getByRole("heading", { name: "Operaciones", exact: true })).toBeVisible();
-  await expect(page.getByRole("status", { name: /Datos PostgreSQL/ })).toBeVisible();
+  await expect(page.getByRole("status", { name: /Fuente PostgreSQL\. Dato incluido más antiguo actualizado el/ })).toBeVisible();
   await expect(page.getByText("Unexpected Application Error!", { exact: true })).toHaveCount(0);
 });
 

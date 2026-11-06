@@ -14,6 +14,7 @@ import { refreshAfterMutation, refreshRoomState } from "../../../api/queryInvali
 import { useGuardedMutation } from "../../../hooks/useGuardedMutation";
 import { useBusinessClock } from "../../../hooks/useBusinessClock";
 import { startOfCurrentMonthIso } from "../../../utils/date";
+import { interfaceLanguageToLocale } from "../../../i18n";
 
 type AnalyticsEnvelope = {
   hotel_id: number;
@@ -692,47 +693,35 @@ function AnalyticsComparisonPanel({
   );
 }
 
-function formatFreshnessLag(seconds: number | null) {
-  if (seconds === null || !Number.isFinite(seconds)) return "antigüedad desconocida";
-  if (!Number.isFinite(seconds) || seconds <= 0) return "al día";
-  if (seconds < 60) return `${Math.round(seconds)} s de atraso`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)} min de atraso`;
-  return `${(seconds / 3600).toFixed(1)} h de atraso`;
-}
-
 function AnalyticsFreshness({
   dataAsOf,
-  sourceLagSeconds,
   dataSource
 }: {
   dataAsOf: string | null;
-  sourceLagSeconds: number | null;
   dataSource?: string | null;
 }) {
+  const { t, i18n } = useTranslation("appshell");
   const asOf = dataAsOf ? new Date(dataAsOf) : null;
   const asOfLabel = !asOf || Number.isNaN(asOf.getTime())
-    ? "fecha no disponible"
-    : new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" }).format(asOf);
+    ? null
+    : new Intl.DateTimeFormat(interfaceLanguageToLocale(i18n.resolvedLanguage ?? i18n.language), {
+        dateStyle: "short",
+        timeStyle: "short"
+      }).format(asOf);
   const normalizedSource = typeof dataSource === "string" ? dataSource.trim().toLowerCase() : "";
   const sourceLabel = normalizedSource === "clickhouse" ? "ClickHouse" : normalizedSource === "postgresql" ? "PostgreSQL" : normalizedSource || "PostgreSQL";
-  const freshnessLabel =
-    dataAsOf === null || sourceLagSeconds === null
-      ? "frescura no verificada"
-      : formatFreshnessLag(sourceLagSeconds);
-  const isDelayed = freshnessLabel !== "al día";
+  const dataTimestampLabel = asOfLabel
+    ? t("analyticsFreshness.oldestIncludedDataUpdatedAt", { date: asOfLabel })
+    : t("analyticsFreshness.oldestIncludedDataUnavailable");
   return (
     <div
-      className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border px-3 py-2 text-xs ${
-        isDelayed ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"
-      }`}
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700"
       role="status"
-      aria-label={`Datos ${sourceLabel}, ${freshnessLabel}`}
+      aria-label={t("analyticsFreshness.status", { source: sourceLabel, timestamp: dataTimestampLabel })}
     >
-      <span className="font-semibold">Fuente: {sourceLabel}</span>
+      <span className="font-semibold">{t("analyticsFreshness.source")}: {sourceLabel}</span>
       <span aria-hidden="true">•</span>
-      <span>Datos al {asOfLabel}</span>
-      <span aria-hidden="true">•</span>
-      <span>{formatFreshnessLag(sourceLagSeconds)}</span>
+      <span>{dataTimestampLabel}</span>
     </div>
   );
 }
@@ -890,7 +879,6 @@ function ReportScreen({
         <div className="space-y-4">
           <AnalyticsFreshness
             dataAsOf={report.data_as_of}
-            sourceLagSeconds={report.source_lag_seconds}
             dataSource={report.data_source}
           />
           {"data" in report && Array.isArray((report.data as Record<string, unknown>).cards) && (
@@ -950,7 +938,6 @@ function StarterLandingScreen() {
       {query.data && (
         <AnalyticsFreshness
           dataAsOf={query.data.data_as_of}
-          sourceLagSeconds={query.data.source_lag_seconds}
           dataSource={query.data.data_source}
         />
       )}

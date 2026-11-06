@@ -39,6 +39,12 @@
     "metricsUnavailable": "Este informe no ofrece métricas compatibles para comparar.",
     "change": "Cambio:"
   },
+  "analyticsFreshness": {
+    "source": "Fuente",
+    "oldestIncludedDataUpdatedAt": "Dato incluido más antiguo actualizado el {{date}}",
+    "oldestIncludedDataUnavailable": "Fecha del dato incluido más antiguo no disponible",
+    "status": "Fuente {{source}}. {{timestamp}}"
+  },
   "realtime": {
     "connected": "Conectado: cambios en tiempo real activos.",
     "connecting": "Conectando sincronización en tiempo real…",
