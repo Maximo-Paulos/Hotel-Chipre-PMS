@@ -1,12 +1,16 @@
 import json
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
 
 from app.schemas.reservation import ReservationUpdate
-from app.services import reservation_update_service
+from app.services import (
+    reservation_operations_service,
+    reservation_service,
+    reservation_update_service,
+)
 from app.services.reservation_service import manual_override_total_for_nights
 
 
@@ -207,6 +211,193 @@ def test_checkout_extension_does_not_reprice_non_manual_reservation(monkeypatch)
     )
 
     assert captured["recalculate_explicit_price"] is False
+
+
+@pytest.mark.parametrize(
+    ("pricing_source", "recalculate_explicit_price"),
+    [
+        ("rate_plan_quote", False),
+        ("manual_total_override", True),
+    ],
+)
+@pytest.mark.parametrize(
+    ("nightly_rate", "current_total", "current_nights", "expected_total"),
+    [
+        ("60000.00", Decimal("60000.00"), 1, Decimal("120000.00")),
+        (None, Decimal("120000.00"), 2, Decimal("180000.00")),
+    ],
+)
+def test_date_reprice_without_active_rate_carries_historical_nightly_amount(
+    monkeypatch,
+    pricing_source,
+    recalculate_explicit_price,
+    nightly_rate,
+    current_total,
+    current_nights,
+    expected_total,
+):
+    class _CategoryQuery:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def enable_eagerloads(self, _enabled):
+            return self
+
+        def first(self):
+            return SimpleNamespace(id=9, hotel_id=7)
+
+    class _Session:
+        def query(self, *_args, **_kwargs):
+            return _CategoryQuery()
+
+    db = _Session()
+    old_checkout = date(2026, 11, 4) + timedelta(days=current_nights)
+    new_checkout = old_checkout + timedelta(days=1)
+    snapshot = {"pricing_source": pricing_source}
+    if nightly_rate is not None:
+        snapshot["nightly_rate"] = nightly_rate
+    reservation = SimpleNamespace(
+        id=49,
+        hotel_id=7,
+        guest_id=11,
+        category_id=9,
+        room_id=1,
+        company_id=None,
+        check_in_date=date(2026, 11, 4),
+        check_out_date=old_checkout,
+        total_amount=current_total,
+        amount_paid=Decimal("3000.00"),
+        subtotal_amount=current_total,
+        tax_amount=Decimal("0.00"),
+        fee_amount=Decimal("0.00"),
+        commission_amount=Decimal("0.00"),
+        net_amount=current_total,
+        deposit_amount=Decimal("3000.00"),
+        currency_code="ARS",
+        fx_rate_snapshot=None,
+        sellable_product_id=None,
+        rate_plan_id=12,
+        tax_policy_id=None,
+        source_provider_code=None,
+        source=SimpleNamespace(value="direct"),
+        num_adults=1,
+        num_children=0,
+        pricing_snapshot=json.dumps(snapshot),
+    )
+    monkeypatch.setattr(
+        reservation_service,
+        "calculate_reservation_pricing",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            reservation_service.ReservationError("No active prices found for rate plan")
+        ),
+    )
+    monkeypatch.setattr(reservation_service, "_require_deposit_policy_configured", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        reservation_service,
+        "_resolve_reservation_commercial_context",
+        lambda *_args, **_kwargs: (None, SimpleNamespace(id=12), None),
+    )
+    monkeypatch.setattr(reservation_service, "_get_hotel_default_currency", lambda *_args, **_kwargs: "ARS")
+    monkeypatch.setattr(reservation_service, "_compute_deposit_amount", lambda *_args, **_kwargs: 0.0)
+
+    reservation_service._apply_date_change_pricing(
+        db,
+        reservation,
+        hotel_id=7,
+        check_in_date=reservation.check_in_date,
+        check_out_date=new_checkout,
+        occupancy=1,
+        recalculate_pricing=True,
+        recalculate_explicit_price=recalculate_explicit_price,
+        preserve_unclassified_price=True,
+    )
+
+    assert reservation.total_amount == float(expected_total)
+    assert reservation.amount_paid == Decimal("3000.00")
+    assert reservation.total_amount - float(reservation.amount_paid) == float(expected_total - Decimal("3000.00"))
+    assert reservation.check_out_date == old_checkout
+    assert reservation.rate_plan_id == 12
+    assert json.loads(reservation.pricing_snapshot)["nightly_rate"] == 60000.0
+
+
+def test_date_change_does_not_use_historical_rate_for_other_pricing_errors(monkeypatch):
+    reservation = SimpleNamespace(
+        check_in_date=date(2026, 11, 4),
+        check_out_date=date(2026, 11, 5),
+        company_id=None,
+        pricing_snapshot=json.dumps(
+            {"pricing_source": "rate_plan_quote", "nightly_rate": "60000.00"}
+        ),
+        source_provider_code=None,
+        source=SimpleNamespace(value="direct"),
+        category_id=9,
+        sellable_product_id=None,
+        rate_plan_id=12,
+        tax_policy_id=None,
+        currency_code="ARS",
+        num_adults=1,
+        num_children=0,
+        guest_id=11,
+    )
+    monkeypatch.setattr(
+        reservation_service,
+        "calculate_reservation_pricing",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            reservation_service.ReservationError("Rate plan is inactive")
+        ),
+    )
+
+    with pytest.raises(reservation_service.ReservationError, match="Rate plan is inactive"):
+        reservation_service._apply_date_change_pricing(
+            object(),
+            reservation,
+            hotel_id=7,
+            check_in_date=reservation.check_in_date,
+            check_out_date=date(2026, 11, 6),
+            occupancy=1,
+            recalculate_pricing=True,
+            recalculate_explicit_price=False,
+            preserve_unclassified_price=True,
+        )
+
+
+def test_dedicated_extension_uses_saved_nightly_rate_when_added_dates_have_no_active_rate(monkeypatch):
+    reservation = SimpleNamespace(
+        id=50,
+        category_id=9,
+        check_in_date=date(2026, 11, 4),
+        check_out_date=date(2026, 11, 5),
+        total_amount=Decimal("60000.00"),
+        currency_code="ARS",
+        sellable_product_id=None,
+        rate_plan_id=12,
+        tax_policy_id=None,
+        source_provider_code=None,
+        source=SimpleNamespace(value="direct"),
+        num_adults=1,
+        num_children=0,
+        company_id=None,
+        pricing_snapshot=json.dumps(
+            {"pricing_source": "rate_plan_quote", "nightly_rate": "60000.00"}
+        ),
+    )
+    monkeypatch.setattr(
+        reservation_operations_service,
+        "calculate_reservation_pricing",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            reservation_service.ReservationError("No active prices found for rate plan")
+        ),
+    )
+
+    amount = reservation_operations_service._extension_amount(
+        object(),
+        reservation=reservation,
+        hotel_id=7,
+        new_checkout_date=date(2026, 11, 6),
+        pricing_mode="current_rate",
+    )
+
+    assert amount == Decimal("60000.00")
 
 
 def test_paid_total_adjustment_keeps_legacy_audit_key(monkeypatch):

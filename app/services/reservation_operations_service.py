@@ -86,6 +86,7 @@ from app.services.reservation_service import (
     create_reservation,
     lock_reservation_version,
     manual_override_total_for_nights,
+    preserved_nightly_total_for_nights,
     transition_reservation_status,
     update_reservation_fields,
 )
@@ -1285,11 +1286,9 @@ def _extension_amount(
         ):
             raise
         # When no tariff covers the added dates, preserve the amount per night
-        # already agreed for this stay. This also handles explicit negotiated
-        # totals without a nightly breakdown using an even allocation.
-        current_nights = max((reservation.check_out_date - reservation.check_in_date).days, 1)
-        average = Decimal(str(reservation.total_amount or 0)) / Decimal(current_nights)
-        return (average * Decimal(extra_nights)).quantize(Decimal("0.01"))
+        # already agreed for this stay. Older snapshots without a nightly
+        # breakdown fall back to their current total divided by stay length.
+        return preserved_nightly_total_for_nights(reservation, nights=extra_nights)
     if company is not None:
         pricing = _apply_corporate_pricing(
             db,

@@ -35,12 +35,12 @@ from app.models.reservation import (
 )
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
+from app.services.company_reservation_terms import build_company_terms_snapshot
 from app.services.financial_ledger import (
     billing_adjustment_totals_by_reservation,
     paid_amounts_by_reservation,
     reservation_has_payment_or_deposit,
 )
-from app.services.company_reservation_terms import build_company_terms_snapshot
 from app.services.pricing_policy_service import (
     PricingPolicyError,
     StayPricingQuote,
@@ -2589,30 +2589,101 @@ def _apply_date_change_pricing(
             )
         _apply_pricing_result_to_reservation(reservation, pricing)
     elif should_recalculate:
-        pricing = calculate_reservation_pricing(
-            db,
-            category_id=reservation.category_id,
-            check_in=check_in_date,
-            check_out=check_out_date,
-            hotel_id=hotel_id,
-            sellable_product_id=reservation.sellable_product_id,
-            rate_plan_id=reservation.rate_plan_id,
-            tax_policy_id=reservation.tax_policy_id,
-            pricing_channel_code=(
-                pricing_snapshot.get("pricing_channel_code")
-                or reservation.source_provider_code
-                or reservation.source.value
-            ),
-            pricing_payment_method=(
-                pricing_snapshot.get("pricing_payment_method")
-                or pricing_snapshot.get("payment_method")
-            ),
-            guest_scope=pricing_snapshot.get("guest_scope") or "all",
-            target_currency=reservation.currency_code,
-            occupancy=occupancy,
-            guest_id=reservation.guest_id,
-            company_id=reservation.company_id,
-        )
+        try:
+            pricing = calculate_reservation_pricing(
+                db,
+                category_id=reservation.category_id,
+                check_in=check_in_date,
+                check_out=check_out_date,
+                hotel_id=hotel_id,
+                sellable_product_id=reservation.sellable_product_id,
+                rate_plan_id=reservation.rate_plan_id,
+                tax_policy_id=reservation.tax_policy_id,
+                pricing_channel_code=(
+                    pricing_snapshot.get("pricing_channel_code")
+                    or reservation.source_provider_code
+                    or reservation.source.value
+                ),
+                pricing_payment_method=(
+                    pricing_snapshot.get("pricing_payment_method")
+                    or pricing_snapshot.get("payment_method")
+                ),
+                guest_scope=pricing_snapshot.get("guest_scope") or "all",
+                target_currency=reservation.currency_code,
+                occupancy=occupancy,
+                guest_id=reservation.guest_id,
+                company_id=reservation.company_id,
+            )
+        except ReservationError as exc:
+            # If the added checkout night has no active tariff, carry forward
+            # the historical nightly price. This is intentionally narrower
+            # than general repricing: other pricing failures, date edits, and
+            # company billing still require their normal operator workflow.
+            if (
+                str(exc) != "No active prices found for rate plan"
+                or check_in_date != reservation.check_in_date
+                or check_out_date <= reservation.check_out_date
+                or reservation.company_id is not None
+            ):
+                raise
+            nights = (check_out_date - check_in_date).days
+            preserved_total = preserved_nightly_total_for_nights(reservation, nights=nights)
+            category = (
+                db.query(RoomCategory)
+                .filter(RoomCategory.id == reservation.category_id, RoomCategory.hotel_id == hotel_id)
+                .enable_eagerloads(False)
+                .first()
+            )
+            if category is None:
+                raise ReservationError("No se encontró la categoría de habitación") from exc
+            pricing = _pricing_result_for_explicit_total(
+                db,
+                hotel_id=hotel_id,
+                category=category,
+                check_in=check_in_date,
+                check_out=check_out_date,
+                sellable_product_id=reservation.sellable_product_id,
+                rate_plan_id=reservation.rate_plan_id,
+                tax_policy_id=reservation.tax_policy_id,
+            )
+            historical_source = pricing_snapshot.get("pricing_source") or "manual_total_override"
+            pricing = _pricing_with_total(
+                db,
+                hotel_id=hotel_id,
+                pricing=pricing,
+                total_amount=preserved_total,
+                nightly_rate=preserved_total / Decimal(nights),
+                pricing_source=historical_source,
+                currency_code=reservation.currency_code,
+            )
+            original_total = Decimal(str(reservation.total_amount or 0))
+            if original_total > 0:
+                ratio = Decimal(str(preserved_total)) / original_total
+            else:
+                original_nights = max((reservation.check_out_date - reservation.check_in_date).days, 1)
+                ratio = Decimal(nights) / Decimal(original_nights)
+
+            def scale_existing_amount(value, fallback):
+                amount = Decimal(str(fallback if value is None else value)) * ratio
+                return float(amount.quantize(Decimal("0.01")))
+
+            merged_snapshot = {**pricing_snapshot}
+            try:
+                updated_snapshot = json.loads(pricing.pricing_snapshot or "{}")
+            except (TypeError, json.JSONDecodeError):
+                updated_snapshot = {}
+            if isinstance(updated_snapshot, dict):
+                merged_snapshot.update(updated_snapshot)
+            pricing = replace(
+                pricing,
+                subtotal_amount=scale_existing_amount(reservation.subtotal_amount, original_total),
+                tax_amount=scale_existing_amount(reservation.tax_amount, 0),
+                fee_amount=scale_existing_amount(reservation.fee_amount, 0),
+                commission_amount=scale_existing_amount(reservation.commission_amount, 0),
+                net_amount=scale_existing_amount(reservation.net_amount, original_total),
+                fx_rate_snapshot=reservation.fx_rate_snapshot,
+                pricing_snapshot=json.dumps(merged_snapshot, ensure_ascii=True, sort_keys=True),
+            )
         if reservation.company_id is not None:
             company = _resolve_reservation_company(
                 db, hotel_id=hotel_id, company_id=reservation.company_id
@@ -3204,6 +3275,40 @@ def _pricing_snapshot_values(reservation: Reservation) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def preserved_nightly_total_for_nights(
+    reservation: Reservation,
+    *,
+    nights: int,
+) -> Decimal:
+    """Carry a stored nightly amount across dates when no current rate exists.
+
+    Older snapshots may not include a nightly breakdown. In that case, derive
+    the historical average from the already-booked total and stay length, the
+    same conservative fallback used by the dedicated extension workflow.
+    """
+    snapshot = _pricing_snapshot_values(reservation)
+    if nights <= 0:
+        raise ReservationError("La fecha de salida debe ser posterior a la fecha de entrada")
+
+    nightly_rate = snapshot.get("nightly_rate")
+    try:
+        nightly = Decimal(str(nightly_rate)) if nightly_rate is not None else None
+    except (InvalidOperation, ValueError, TypeError):
+        nightly = None
+    if nightly is None or not nightly.is_finite() or nightly < 0:
+        original_nights = (reservation.check_out_date - reservation.check_in_date).days
+        if original_nights <= 0:
+            raise ReservationError("No se puede recalcular de forma segura el precio nocturno de la reserva")
+        try:
+            current_total = Decimal(str(reservation.total_amount or 0))
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            raise ReservationError("No se puede recalcular de forma segura el precio nocturno de la reserva") from exc
+        if not current_total.is_finite() or current_total < 0:
+            raise ReservationError("No se puede recalcular de forma segura el precio nocturno de la reserva")
+        nightly = current_total / Decimal(original_nights)
+    return (nightly * Decimal(nights)).quantize(Decimal("0.01"))
+
+
 def manual_override_total_for_nights(
     reservation: Reservation,
     *,
@@ -3213,20 +3318,7 @@ def manual_override_total_for_nights(
     snapshot = _pricing_snapshot_values(reservation)
     if snapshot.get("pricing_source") != "manual_total_override":
         return None
-    if nights <= 0:
-        raise ReservationError("La fecha de salida debe ser posterior a la fecha de entrada")
-
-    nightly_rate = snapshot.get("nightly_rate")
-    try:
-        nightly = Decimal(str(nightly_rate)) if nightly_rate is not None else None
-    except (InvalidOperation, ValueError, TypeError):
-        nightly = None
-    if nightly is None or nightly < 0:
-        original_nights = (reservation.check_out_date - reservation.check_in_date).days
-        if original_nights <= 0:
-            raise ReservationError("No se puede recalcular de forma segura el precio negociado de la reserva")
-        nightly = Decimal(str(reservation.total_amount or 0)) / Decimal(original_nights)
-    return (nightly * Decimal(nights)).quantize(Decimal("0.01"))
+    return preserved_nightly_total_for_nights(reservation, nights=nights)
 
 
 def _pricing_result_from_quote(
