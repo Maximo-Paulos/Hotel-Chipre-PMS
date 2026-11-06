@@ -139,3 +139,147 @@ test("analytics home switches monetary cards between stored ARS and USD values",
   await expect(grossCard).toContainText("US$");
   await expect(page.getByText("No-shows").locator("..")).toContainText("2");
 });
+
+test("analytics renders requested period comparisons and explicit unavailable states", async ({ page }) => {
+  await page.route("**/api/analytics/home**", async (route) => {
+    const url = new URL(route.request().url());
+    const compareYoy = url.searchParams.get("compare_yoy") === "true";
+    const unavailableYoy = compareYoy;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        hotel_id: 1,
+        date_from: "2026-11-01",
+        date_to: "2026-11-05",
+        generated_at: "2026-11-05T12:00:00Z",
+        data_as_of: "2026-11-05T12:00:00Z",
+        source_lag_seconds: 0,
+        data_source: "postgresql",
+        comparison: {
+          previous: {
+            requested: true,
+            available: true,
+            metrics_available: true,
+            date_from: "2026-10-27",
+            date_to: "2026-10-31",
+            metrics: [
+              {
+                card_code: "home_revenue_gross",
+                label: "Revenue bruto",
+                value_ars: "100000.00",
+                value_ars_available: true,
+                value_usd: "1000.00",
+                value_usd_available: true
+              },
+              { card_code: "home_occupancy", label: "Ocupación promedio", value_pct: 40 },
+              { card_code: "home_no_shows", label: "No-shows", value_count: 1 }
+            ]
+          },
+          yoy: {
+            requested: compareYoy,
+            available: !unavailableYoy,
+            metrics_available: !unavailableYoy,
+            date_from: compareYoy ? "2025-11-01" : null,
+            date_to: compareYoy ? "2025-11-05" : null,
+            metrics: []
+          }
+        },
+        data: {
+          cards: [
+            {
+              card_code: "home_revenue_gross",
+              label: "Revenue bruto",
+              value_ars: "200000.00",
+              value_ars_available: true,
+              value_usd: "2000.00",
+              value_usd_available: true
+            },
+            { card_code: "home_occupancy", label: "Ocupación promedio", value_pct: 50 },
+            { card_code: "home_no_shows", label: "No-shows", value_count: 2 }
+          ],
+          top_channels: [],
+          segments: []
+        }
+      })
+    });
+  });
+
+  await page.route("**/api/analytics/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/home")) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        hotel_id: 1,
+        date_from: "2026-11-01",
+        date_to: "2026-11-05",
+        generated_at: "2026-11-05T12:00:00Z",
+        data_as_of: "2026-11-05T12:00:00Z",
+        source_lag_seconds: 0,
+        data_source: "postgresql",
+        comparison: {
+          previous: {
+            requested: true,
+            available: true,
+            metrics_available: true,
+            date_from: "2026-10-27",
+            date_to: "2026-10-31",
+            metrics: [{ card_code: "report_occupancy", label: "Ocupación", value_pct: 39 }]
+          },
+          yoy: { requested: false, available: false, metrics: [] }
+        },
+        data: { cards: [{ card_code: "report_occupancy", label: "Ocupación", value_pct: 42 }] }
+      })
+    });
+  });
+
+  await login(page);
+  await page.goto("/analytics");
+
+  const previousComparison = page.getByTestId("analytics-comparison-previous");
+  await expect(previousComparison).toContainText("Comparación con el período anterior");
+  await expect(previousComparison).toContainText("Período de referencia:");
+  await expect(previousComparison).toContainText("100.000");
+  await expect(previousComparison).toContainText("Cambio:");
+  await expect(previousComparison).toContainText("100%");
+  await expect(previousComparison).toContainText("+10 pp");
+  await expect(previousComparison).toContainText("+1");
+
+  await page.getByLabel("Moneda").selectOption("USD");
+  await expect(previousComparison).toContainText("USD:");
+  await expect(previousComparison).toContainText("1.000");
+  await page.getByLabel("Moneda").selectOption("BOTH");
+  await expect(previousComparison).toContainText("ARS:");
+  await expect(previousComparison).toContainText("USD:");
+
+  await page.getByLabel("Comparar interanual").check();
+  const yoyComparison = page.getByTestId("analytics-comparison-yoy");
+  await expect(yoyComparison).toContainText("Comparación interanual");
+  await expect(yoyComparison).toContainText("No hay datos disponibles para comparar este período.");
+
+  await page.getByLabel("Comparar con el período anterior").uncheck();
+  await page.getByLabel("Comparar interanual").uncheck();
+  await expect(page.getByText("No solicitada. Activá esta comparación arriba para cargar valores de referencia.")).toHaveCount(2);
+
+  for (const path of [
+    "/analytics/rooms",
+    "/analytics/rooms/1",
+    "/analytics/categories/1",
+    "/analytics/segments",
+    "/analytics/companies/1",
+    "/analytics/channels",
+    "/analytics/operations"
+  ]) {
+    await page.goto(path);
+    const routeComparison = page.getByTestId("analytics-comparison-previous");
+    await expect(routeComparison).toContainText("Comparación con el período anterior");
+    await expect(routeComparison).toContainText("Ocupación");
+    await expect(routeComparison).toContainText("39%");
+    await expect(routeComparison).toContainText("+3 pp");
+  }
+});

@@ -24,8 +24,34 @@ type AnalyticsEnvelope = {
   data_as_of: string | null;
   source_lag_seconds: number | null;
   data_source?: string | null;
-  comparison?: Record<string, unknown>;
+  comparison?: AnalyticsComparisonState | null;
   data: Record<string, unknown>;
+};
+
+type AnalyticsMetric = Record<string, unknown> & {
+  card_code?: string;
+  label?: string;
+  value_ars?: string | number | null;
+  value_ars_available?: boolean | null;
+  value_usd?: string | number | null;
+  value_usd_available?: boolean | null;
+  value_pct?: number | null;
+  value_count?: number | null;
+};
+
+type AnalyticsComparisonWindow = {
+  requested: boolean;
+  available: boolean;
+  metrics_available?: boolean;
+  metrics_unavailable_reason?: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
+  metrics?: AnalyticsMetric[];
+};
+
+type AnalyticsComparisonState = {
+  previous?: AnalyticsComparisonWindow | null;
+  yoy?: AnalyticsComparisonWindow | null;
 };
 
 type AnalyticsStarterSummary = {
@@ -457,6 +483,215 @@ function MetricGrid({
   );
 }
 
+function formatComparisonDate(value: string | null | undefined, locale: string) {
+  if (!value) return null;
+  const parsed = new Date(value + "T00:00:00");
+  return Number.isNaN(parsed.getTime())
+    ? null
+    : new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(parsed);
+}
+
+function comparisonPeriodLabel(window: AnalyticsComparisonWindow, locale: string) {
+  const from = formatComparisonDate(window.date_from, locale);
+  const to = formatComparisonDate(window.date_to, locale);
+  if (from && to) return from === to ? from : from + " – " + to;
+  return null;
+}
+
+function metricAmount(metric: AnalyticsMetric, currency: "ARS" | "USD", unavailableLabel: string) {
+  const field = currency === "ARS" ? "value_ars" : "value_usd";
+  const availableField = field + "_available";
+  const raw = metric[field];
+  if (raw === null || raw === undefined || metric[availableField] === false) return null;
+  const amount = Number(raw);
+  return Number.isFinite(amount) ? formatMoney(amount, currency) : unavailableLabel;
+}
+
+function metricValue(
+  metric: AnalyticsMetric,
+  currencyDisplay: AnalyticsFilterState["currency_display"],
+  unavailableLabel: string,
+  locale: string
+) {
+  const isMoney =
+    metric.value_ars !== null && metric.value_ars !== undefined ||
+    metric.value_usd !== null && metric.value_usd !== undefined ||
+    metric.value_ars_available === false ||
+    metric.value_usd_available === false;
+  if (isMoney) {
+    if (currencyDisplay === "ARS") return metricAmount(metric, "ARS", unavailableLabel) ?? unavailableLabel;
+    if (currencyDisplay === "USD") return metricAmount(metric, "USD", unavailableLabel) ?? unavailableLabel;
+    return "ARS " + (metricAmount(metric, "ARS", unavailableLabel) ?? unavailableLabel)
+      + " · USD " + (metricAmount(metric, "USD", unavailableLabel) ?? unavailableLabel);
+  }
+  if (metric.value_pct !== null && metric.value_pct !== undefined) {
+    return Number(metric.value_pct).toLocaleString(locale, { maximumFractionDigits: 2 }) + "%";
+  }
+  if (metric.value_count !== null && metric.value_count !== undefined) {
+    return Number(metric.value_count).toLocaleString(locale, { maximumFractionDigits: 0 });
+  }
+  return unavailableLabel;
+}
+
+function signedDelta(value: number, locale: string, fractionDigits = 2) {
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  return sign + Math.abs(value).toLocaleString(locale, { maximumFractionDigits: fractionDigits });
+}
+
+function metricDelta(
+  current: AnalyticsMetric,
+  reference: AnalyticsMetric,
+  currencyDisplay: AnalyticsFilterState["currency_display"],
+  unavailableLabel: string,
+  locale: string
+) {
+  const isMoney =
+    current.value_ars !== null && current.value_ars !== undefined ||
+    current.value_usd !== null && current.value_usd !== undefined ||
+    reference.value_ars !== null && reference.value_ars !== undefined ||
+    reference.value_usd !== null && reference.value_usd !== undefined ||
+    current.value_ars_available === false ||
+    current.value_usd_available === false ||
+    reference.value_ars_available === false ||
+    reference.value_usd_available === false;
+  if (isMoney) {
+    const currencies: Array<"ARS" | "USD"> = currencyDisplay === "BOTH"
+      ? ["ARS", "USD"]
+      : [currencyDisplay];
+    return currencies.map((currency) => {
+      const field = currency === "ARS" ? "value_ars" : "value_usd";
+      const availableField = field + "_available";
+      const currentValue = Number(current[field]);
+      const referenceValue = Number(reference[field]);
+      if (
+        current[field] == null ||
+        reference[field] == null ||
+        current[availableField] === false ||
+        reference[availableField] === false ||
+        !Number.isFinite(currentValue) ||
+        !Number.isFinite(referenceValue)
+      ) {
+        return currency + ": " + unavailableLabel;
+      }
+      const delta = currentValue - referenceValue;
+      const percent = referenceValue === 0 ? null : (delta / Math.abs(referenceValue)) * 100;
+      const percentLabel = percent === null ? "" : " (" + signedDelta(percent, locale, 1) + "%)";
+      return currency + ": " + signedDelta(delta, locale) + percentLabel;
+    }).join(" · ");
+  }
+
+  if (
+    current.value_pct !== null && current.value_pct !== undefined &&
+    reference.value_pct !== null && reference.value_pct !== undefined
+  ) {
+    return signedDelta(current.value_pct - reference.value_pct, locale) + " pp";
+  }
+  if (
+    current.value_count !== null && current.value_count !== undefined &&
+    reference.value_count !== null && reference.value_count !== undefined
+  ) {
+    return signedDelta(current.value_count, locale, 0);
+  }
+  return unavailableLabel;
+}
+
+function AnalyticsComparisonPanel({
+  comparison,
+  currentMetrics,
+  currencyDisplay
+}: {
+  comparison: AnalyticsComparisonState;
+  currentMetrics: AnalyticsMetric[];
+  currencyDisplay: AnalyticsFilterState["currency_display"];
+}) {
+  const { t, i18n } = useTranslation("appshell");
+  const locale = i18n.resolvedLanguage === "en" ? "en-US" : "es-AR";
+  const unavailableLabel = t("currency.historicalRateUnavailable");
+  const windows = [
+    { key: "previous", title: t("analyticsComparison.previous"), value: comparison.previous },
+    { key: "yoy", title: t("analyticsComparison.yoy"), value: comparison.yoy }
+  ];
+
+  return (
+    <section
+      aria-label={t("analyticsComparison.region")}
+      data-testid="analytics-comparisons"
+      className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+    >
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">{t("analyticsComparison.title")}</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          {t("analyticsComparison.description")}
+        </p>
+      </div>
+      <div className="grid gap-3 xl:grid-cols-2">
+        {windows.map(({ key, title, value: window }) => {
+          const period = window ? comparisonPeriodLabel(window, locale) : null;
+          const metricsByCode = new Map(
+            (window?.metrics ?? [])
+              .filter((metric) => typeof metric.card_code === "string")
+              .map((metric) => [metric.card_code as string, metric])
+          );
+          const comparableCards = currentMetrics.filter((metric) => Boolean(metric.card_code));
+          return (
+            <div
+              key={key}
+              data-testid={"analytics-comparison-" + key}
+              className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+            >
+              <h3 className="font-semibold text-slate-900">{title}</h3>
+              {period && <p className="mt-1 text-xs text-slate-600">{t("analyticsComparison.referencePeriod", { period })}</p>}
+              {!window?.requested ? (
+                <p className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600" role="status">
+                  {t("analyticsComparison.notRequested")}
+                </p>
+              ) : !window.available ? (
+                <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+                  {t("analyticsComparison.unavailable")}
+                </p>
+              ) : window.metrics_available === false ? (
+                <p className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600" role="status">
+                  {t("analyticsComparison.metricsUnavailable")}
+                </p>
+              ) : comparableCards.length === 0 ? (
+                <p className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600" role="status">
+                  {t("analyticsComparison.metricsUnavailable")}
+                </p>
+              ) : (
+                <ul className="mt-3 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+                  {comparableCards.map((currentMetric) => {
+                    const code = currentMetric.card_code as string;
+                    const metric = metricsByCode.get(code);
+                    const label = String(currentMetric.label || code);
+                    return (
+                      <li
+                        key={code}
+                        className="grid gap-1 px-3 py-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                      >
+                        <span className="font-medium text-slate-700">{label}</span>
+                        <span className="text-slate-600">
+                          {metric
+                            ? metricValue(metric, currencyDisplay, unavailableLabel, locale)
+                            : unavailableLabel}
+                          <span className="ml-2 font-semibold text-slate-900">
+                            {t("analyticsComparison.change")} {metric
+                              ? metricDelta(currentMetric, metric, currencyDisplay, unavailableLabel, locale)
+                              : unavailableLabel}
+                          </span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function formatFreshnessLag(seconds: number | null) {
   if (seconds === null || !Number.isFinite(seconds)) return "antigüedad desconocida";
   if (!Number.isFinite(seconds) || seconds <= 0) return "al día";
@@ -661,6 +896,17 @@ function ReportScreen({
           {"data" in report && Array.isArray((report.data as Record<string, unknown>).cards) && (
             <MetricGrid
               cards={(report.data as Record<string, unknown>).cards as Array<Record<string, unknown>>}
+              currencyDisplay={filters.currency_display}
+            />
+          )}
+          {report.comparison && (
+            <AnalyticsComparisonPanel
+              comparison={report.comparison}
+              currentMetrics={
+                Array.isArray((report.data as Record<string, unknown>).cards)
+                  ? (report.data as Record<string, unknown>).cards as AnalyticsMetric[]
+                  : []
+              }
               currencyDisplay={filters.currency_display}
             />
           )}

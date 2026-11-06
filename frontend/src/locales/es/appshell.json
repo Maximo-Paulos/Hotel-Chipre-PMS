@@ -27,6 +27,18 @@
   "currency": {
     "historicalRateUnavailable": "No disponible"
   },
+  "analyticsComparison": {
+    "region": "Comparaciones del período",
+    "title": "Comparación de períodos",
+    "description": "Valores de referencia y cambios frente al rango seleccionado, según la moneda elegida.",
+    "previous": "Comparación con el período anterior",
+    "yoy": "Comparación interanual",
+    "referencePeriod": "Período de referencia: {{period}}",
+    "notRequested": "No solicitada. Activá esta comparación arriba para cargar valores de referencia.",
+    "unavailable": "No hay datos disponibles para comparar este período.",
+    "metricsUnavailable": "Este informe no ofrece métricas compatibles para comparar.",
+    "change": "Cambio:"
+  },
   "realtime": {
     "connected": "Conectado: cambios en tiempo real activos.",
     "connecting": "Conectando sincronización en tiempo real…",
