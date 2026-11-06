@@ -15,6 +15,16 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
 }
 
+test("owner can identify the base price and occupancy fields while editing a room category", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/hotel");
+
+  await page.getByRole("button", { name: "Editar", exact: true }).first().click();
+
+  await expect(page.getByLabel(/^Precio base por noche de /)).toBeVisible();
+  await expect(page.getByLabel(/^Ocupación máxima de /)).toBeVisible();
+});
+
 test("owner can save an enabled transfer method without completing the category draft", async ({ page }) => {
   await login(page);
   await page.goto("/settings/hotel");

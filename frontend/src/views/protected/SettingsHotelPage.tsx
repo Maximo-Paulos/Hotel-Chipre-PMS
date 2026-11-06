@@ -1086,8 +1086,14 @@ export function SettingsHotelPage() {
                       <input className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" value={categoryEdit.name ?? c.name} onChange={(e) => setCategoryEdit((p) => ({ ...p, name: e.target.value }))} />
                       <input className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" value={categoryEdit.code ?? c.code} onChange={(e) => setCategoryEdit((p) => ({ ...p, code: e.target.value }))} />
                       <div className="grid grid-cols-2 gap-2">
-                        <input type="number" className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" value={categoryEdit.base_price_per_night ?? c.base_price_per_night} onChange={(e) => setCategoryEdit((p) => ({ ...p, base_price_per_night: parseFloat(e.target.value || "0") }))} />
-                        <input type="number" className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" value={categoryEdit.max_occupancy ?? c.max_occupancy} onChange={(e) => setCategoryEdit((p) => ({ ...p, max_occupancy: parseInt(e.target.value || "1", 10) }))} />
+                        <label className="text-xs text-slate-600">
+                          Precio base por noche
+                          <input aria-label={`Precio base por noche de ${c.name}`} type="number" className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900" value={categoryEdit.base_price_per_night ?? c.base_price_per_night} onChange={(e) => setCategoryEdit((p) => ({ ...p, base_price_per_night: parseFloat(e.target.value || "0") }))} />
+                        </label>
+                        <label className="text-xs text-slate-600">
+                          Ocupación máxima
+                          <input aria-label={`Ocupación máxima de ${c.name}`} type="number" className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900" value={categoryEdit.max_occupancy ?? c.max_occupancy} onChange={(e) => setCategoryEdit((p) => ({ ...p, max_occupancy: parseInt(e.target.value || "1", 10) }))} />
+                        </label>
                       </div>
                       <input className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" placeholder="Amenidades" value={categoryEdit.amenities ?? c.amenities ?? ""} onChange={(e) => setCategoryEdit((p) => ({ ...p, amenities: e.target.value }))} />
                       <input className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" placeholder="Descripción" value={categoryEdit.description ?? c.description ?? ""} onChange={(e) => setCategoryEdit((p) => ({ ...p, description: e.target.value }))} />

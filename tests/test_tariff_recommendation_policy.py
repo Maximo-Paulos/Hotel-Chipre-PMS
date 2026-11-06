@@ -1,7 +1,10 @@
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
+from app.services.published_rate_history_service import get_fresh_ars_per_usd_snapshot
 from app.services.tariff_recommendation_service import (
     _effective_rate_adjustment_pct,
     _recommend_rate_direction,
@@ -89,3 +92,42 @@ def test_suggested_amount_rejects_invalid_direction():
             max_step_pct=Decimal(5),
             direction=0,
         )
+
+
+def test_tariff_fx_freshness_uses_pms_receipt_time_not_market_timestamp():
+    now = datetime(2026, 11, 6, 18, tzinfo=UTC)
+    snapshot = SimpleNamespace(
+        hotel_id=4,
+        rate_type="oficial",
+        moneda="USD",
+        selected_side="venta",
+        venta=1570,
+        applied_rate=Decimal(1570),
+        fetched_at=now - timedelta(hours=1),
+        provider_updated_at=now - timedelta(hours=27),
+    )
+
+    class SnapshotQuery:
+        def filter(self, *_conditions):
+            return self
+
+        def order_by(self, *_columns):
+            return self
+
+        def all(self):
+            return [snapshot]
+
+    class SnapshotSession:
+        def query(self, _model):
+            return SnapshotQuery()
+
+    config = SimpleNamespace(
+        fx_ars_to_usd_rate_type="oficial",
+        fx_ars_to_usd_rate_side="venta",
+    )
+
+    actual = get_fresh_ars_per_usd_snapshot(
+        SnapshotSession(), hotel_id=4, config=config, now=now
+    )
+
+    assert actual is snapshot

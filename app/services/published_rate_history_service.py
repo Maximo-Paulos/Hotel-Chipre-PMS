@@ -106,11 +106,14 @@ def get_fresh_ars_per_usd_snapshot(
             FxRateSnapshot.applied_rate.is_not(None),
             FxRateSnapshot.applied_rate > 0,
         )
-        .order_by(FxRateSnapshot.provider_updated_at.desc(), FxRateSnapshot.fetched_at.desc())
+        .order_by(FxRateSnapshot.fetched_at.desc())
         .all()
     )
     for snapshot in snapshots:
-        quote_time = _utc(snapshot.provider_updated_at) or _utc(snapshot.fetched_at)
+        # DolarAPI can repeat a previous market timestamp while returning a
+        # valid response now. Freshness follows the time this PMS received it;
+        # keep provider_updated_at only as provenance for the source quote.
+        quote_time = _utc(snapshot.fetched_at)
         selected_rate = _decimal(getattr(snapshot, side, None))
         applied_rate = _decimal(snapshot.applied_rate)
         if selected_rate is None or applied_rate != selected_rate:
