@@ -63,6 +63,14 @@ export type FxConversionQuote = {
   } | null;
 };
 
+export type FxSnapshotResult = {
+  stored: number;
+  message: string;
+  selected_market: "oficial" | "blue";
+  selected_side: "compra" | "venta";
+  applied_rate: number;
+};
+
 export const getFxRates = (session?: SessionLike) =>
   apiFetch<FxRateItem[]>("/fx/rates", { session, method: "GET" });
 
@@ -75,3 +83,6 @@ export const getFxConversionQuote = (
   data: { from_currency, to_currency },
   session
 });
+
+export const createFxSnapshot = (session?: SessionLike) =>
+  apiFetch<FxSnapshotResult>("/fx/snapshot", { method: "POST", session });

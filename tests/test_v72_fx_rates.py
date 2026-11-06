@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
 import app.api.fx_rates as fx_rates_module
+import app.services.fx_snapshot_service as fx_snapshot_service_module
 import app.database as db_module
 import app.main as main_module
 from app.database import get_db
@@ -17,8 +18,8 @@ from app.models.user import User
 
 
 @pytest.fixture
-def fx_client(db_engine, monkeypatch: pytest.MonkeyPatch):
-    engine = db_engine
+def fx_client(pg_engine, monkeypatch: pytest.MonkeyPatch):
+    engine = pg_engine
 
     def fake_get_engine(database_url: str | None = None):
         return engine
@@ -26,7 +27,7 @@ def fx_client(db_engine, monkeypatch: pytest.MonkeyPatch):
     async def fake_snapshot():
         return {
             "oficial": {"moneda": "USD", "compra": 900.0, "venta": 920.0},
-            "blue": {"moneda": "USD", "compra": 1000.0, "venta": 1020.0},
+            "blue": {"moneda": "USD", "compra": 1000.25, "venta": 1020.75},
             "eur": {"moneda": "EUR", "casa": "oficial", "compra": 1000.0, "venta": 1010.0},
             "eur_blue": {"moneda": "EUR", "casa": "blue_derivado", "compra": 1100.0, "venta": 1120.0},
             "brl": {"moneda": "BRL", "casa": "oficial", "compra": 200.0, "venta": 210.0},
@@ -35,11 +36,10 @@ def fx_client(db_engine, monkeypatch: pytest.MonkeyPatch):
         }
 
     monkeypatch.setattr(db_module, "get_engine", fake_get_engine)
-    monkeypatch.setattr(fx_rates_module, "get_all_rates_snapshot", fake_snapshot)
+    monkeypatch.setattr(fx_snapshot_service_module, "get_all_rates_snapshot", fake_snapshot)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    # FX snapshots are financial config -- manager's default matrix does not
-    # grant reports:financial:view, so the fixture uses owner here.
+    # FX snapshots are owner-managed currency settings.
     auth_state = {"hotel_id": 1, "user_id": 21, "role": "owner"}
 
     def override_get_db():
@@ -63,6 +63,10 @@ def fx_client(db_engine, monkeypatch: pytest.MonkeyPatch):
     main_module.app.dependency_overrides[get_auth_context] = override_auth_context
 
     with SessionLocal() as db:
+        db.query(FxRateSnapshot).delete()
+        db.query(HotelConfiguration).delete()
+        db.query(User).delete()
+        db.commit()
         db.add_all(
             [
                 HotelConfiguration(id=1, owner_email="owner1@example.com", subscription_active=True),
@@ -90,6 +94,63 @@ def test_create_fx_snapshot(fx_client):
         assert {row.rate_type for row in rows} == {
             "oficial", "blue", "eur_oficial", "eur_blue", "brl_oficial", "clp_oficial", "uyu_oficial"
         }
+
+
+def test_create_fx_snapshot_persists_configured_market_and_exact_side_rate(fx_client):
+    client, SessionLocal, _ = fx_client
+    with SessionLocal() as db:
+        config = db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).one()
+        config.fx_ars_to_usd_rate_type = "blue"
+        config.fx_ars_to_usd_rate_side = "compra"
+        db.commit()
+
+    response = client.post("/api/fx/snapshot")
+
+    assert response.status_code == 201, response.text
+    assert response.json()["selected_market"] == "blue"
+    assert response.json()["selected_side"] == "compra"
+    assert response.json()["applied_rate"] == 1000.25
+    with SessionLocal() as db:
+        selected = (
+            db.query(FxRateSnapshot)
+            .filter(FxRateSnapshot.hotel_id == 1, FxRateSnapshot.rate_type == "blue")
+            .one()
+        )
+        assert selected.selected_side == "compra"
+        assert selected.applied_rate == 1000.25
+        assert selected.compra == 1000.25
+        assert selected.venta == 1020.75
+        assert selected.base_currency == "USD"
+        assert selected.quote_currency == "ARS"
+
+
+def test_create_fx_snapshot_requires_fx_settings_permission(fx_client):
+    client, _, auth_state = fx_client
+    auth_state["role"] = "manager"
+
+    response = client.post("/api/fx/snapshot")
+
+    assert response.status_code == 403
+
+
+def test_create_fx_snapshot_returns_clear_error_when_selected_side_is_missing(fx_client, monkeypatch):
+    client, SessionLocal, _ = fx_client
+    with SessionLocal() as db:
+        config = db.query(HotelConfiguration).filter(HotelConfiguration.id == 1).one()
+        config.fx_ars_to_usd_rate_type = "blue"
+        config.fx_ars_to_usd_rate_side = "compra"
+        db.commit()
+
+    async def missing_selected_side():
+        return {"blue": {"moneda": "USD", "venta": 1020.0}}
+
+    monkeypatch.setattr(fx_snapshot_service_module, "get_all_rates_snapshot", missing_selected_side)
+    response = client.post("/api/fx/snapshot")
+
+    assert response.status_code == 502
+    assert "compra" in response.json()["detail"]
+    with SessionLocal() as db:
+        assert db.query(FxRateSnapshot).filter(FxRateSnapshot.hotel_id == 1).count() == 0
 
 
 def test_get_rate_snapshot_by_date(fx_client):

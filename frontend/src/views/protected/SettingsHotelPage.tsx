@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getHotelConfig, updateHotelConfig, type FxRoundingPolicy, type HotelConfig } from "../../api/config";
-import { getFxRates } from "../../api/fxRates";
+import { createFxSnapshot, getFxRates, type FxSnapshotResult } from "../../api/fxRates";
 import {
   createRoomCategory,
   updateRoomCategory,
@@ -116,6 +116,7 @@ export function SettingsHotelPage() {
   });
   const [form, setForm] = useState<Partial<HotelConfig>>({});
   const [error, setError] = useState<string | null>(null);
+  const [fxSnapshotMessage, setFxSnapshotMessage] = useState<string | null>(null);
   const [fiscalPreviewOpen, setFiscalPreviewOpen] = useState(false);
 
   const [categoryForm, setCategoryForm] = useState<Omit<RoomCategory, "id">>({
@@ -198,6 +199,21 @@ export function SettingsHotelPage() {
       await refreshAfterMutation(qc, session.hotelId, ["settings", "reservations", "rooms", "analytics"]);
     },
     onError: (err: unknown) => setError(err instanceof Error ? err.message : "No se pudo guardar la configuración")
+  });
+
+  const createFxSnapshotMutation = useGuardedMutation<FxSnapshotResult>({
+    mutationFn: () => createFxSnapshot(session),
+    onSuccess: async (result) => {
+      setError(null);
+      setFxSnapshotMessage(
+        `Cotización guardada: ${result.selected_side} ${result.selected_market} a ${result.applied_rate} ARS por USD.`
+      );
+      await qc.invalidateQueries({ queryKey: ["tariff-recommendation-settings", session.hotelId ?? null] });
+    },
+    onError: (cause: unknown) => {
+      setFxSnapshotMessage(null);
+      setError(cause instanceof Error ? cause.message : "No se pudo guardar la cotización de DolarAPI.");
+    }
   });
 
   const createCategoryMutation = useGuardedMutation({
@@ -471,6 +487,9 @@ export function SettingsHotelPage() {
 
   const ownerOnly = session.baseRole === "owner";
   const canManageFxSettings = permissionsKnown && hasPermission("settings:fx:manage");
+  const fxRecommendationConfigSaved =
+    form.fx_ars_to_usd_rate_type === configQuery.data?.fx_ars_to_usd_rate_type &&
+    form.fx_ars_to_usd_rate_side === configQuery.data?.fx_ars_to_usd_rate_side;
   const canDeleteRooms = permissionsKnown && hasPermission("hotel_settings:update");
   const canManageManualRatePolicy = permissionsKnown && hasPermission("reservation:manual_rate_policy_manage");
   const canManageFiscalProfile = permissionsKnown && hasPermission("config:manage");
@@ -846,6 +865,29 @@ export function SettingsHotelPage() {
                     </div>
                   </div>
                 </fieldset>
+                <div className="lg:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-sm font-semibold text-slate-800">Cotización para sugerencias de tarifas</p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Al solicitarla, se consulta una cotización en vivo de DolarAPI y se guarda el valor Compra/Venta del mercado configurado para convertir ARS a USD. La acción es manual y no se ejecuta automáticamente.
+                  </p>
+                  {!fxRecommendationConfigSaved && (
+                    <p className="mt-2 text-xs text-amber-700">Guardá primero la configuración del mercado y del lado para usar esos valores.</p>
+                  )}
+                  <button
+                    type="button"
+                    className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!fxRecommendationConfigSaved || createFxSnapshotMutation.isPending}
+                    onClick={() => {
+                      setError(null);
+                      setFxSnapshotMessage(null);
+                      createFxSnapshotMutation.mutate();
+                    }}
+                    data-testid="create-fx-snapshot"
+                  >
+                    {createFxSnapshotMutation.isPending ? "Consultando DolarAPI…" : "Guardar cotización seleccionada"}
+                  </button>
+                  {fxSnapshotMessage && <p className="mt-2 text-xs text-emerald-700" role="status">{fxSnapshotMessage}</p>}
+                </div>
                 <label className="text-sm font-semibold text-slate-700" data-testid="fx-rounding-setting">
                   Política de conversión de pagos
                   <select

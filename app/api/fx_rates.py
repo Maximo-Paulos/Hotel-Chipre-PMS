@@ -18,12 +18,12 @@ from app.services.fx_service import (
     USD_RATE_TYPES,
     fetch_all_rates,
     fetch_rate,
-    get_all_rates_snapshot,
-    parse_provider_updated_at,
 )
 from app.services.permission_service import PERMISSION_REPORTS_FINANCIAL_VIEW
 from app.services.permission_service import PERMISSION_CASH_OPERATE
+from app.services.permission_service import PERMISSION_SETTINGS_FX_MANAGE
 from app.services.pricing_policy_service import PricingPolicyError, _convert_amount
+from app.services.fx_snapshot_service import FxSnapshotError, create_hotel_fx_snapshot
 
 
 router = APIRouter(prefix="/fx", tags=["FX Rates"])
@@ -83,6 +83,9 @@ class FxSnapshotRead(BaseModel):
 class FxSnapshotCreateResponse(BaseModel):
     stored: int
     message: str
+    selected_market: str
+    selected_side: str
+    applied_rate: float
 
 
 class FxConversionQuoteRequest(BaseModel):
@@ -264,56 +267,13 @@ async def get_single_rate(
 )
 async def create_fx_snapshot(
     db: Session = Depends(get_db),
-    context: AuthContext = Depends(require_permission(PERMISSION_REPORTS_FINANCIAL_VIEW)),
+    context: AuthContext = Depends(require_permission(PERMISSION_SETTINGS_FX_MANAGE)),
 ):
     try:
-        snapshot_data = await get_all_rates_snapshot()
-    except Exception as exc:
-        logger.error("Error fetching snapshot for persistence error_type=%s", type(exc).__name__)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="No se pudieron obtener los tipos de cambio para persistir.",
-        ) from exc
-
-    if not snapshot_data:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="DolarAPI no devolvio datos. Intente nuevamente.",
-        )
-
-    fetched_at = datetime.now(timezone.utc)
-    rows: list[FxRateSnapshot] = []
-    for rate_type, rate_data in snapshot_data.items():
-        if not isinstance(rate_data, dict):
-            continue
-        rows.append(
-            FxRateSnapshot(
-                hotel_id=context.hotel_id,
-                rate_type=(
-                    rate_type
-                    if rate_type in USD_RATE_TYPES or rate_type in DIRECT_CURRENCY_BLUE_RATE_TYPES
-                    else f"{str(rate_data.get('moneda') or rate_type).strip().lower()}_oficial"
-                ),
-                provider_market=(
-                    str(rate_data.get("casa") or rate_type).strip().lower()
-                ),
-                moneda=(rate_data.get("moneda") or "USD").upper(),
-                compra=rate_data.get("compra"),
-                venta=rate_data.get("venta"),
-                fetched_at=fetched_at,
-                provider_updated_at=parse_provider_updated_at(
-                    rate_data.get("fechaActualizacion") or rate_data.get("fecha")
-                ),
-                source="dolarapi.com",
-            )
-        )
-
-    db.add_all(rows)
-    db.commit()
-    return FxSnapshotCreateResponse(
-        stored=len(rows),
-        message=f"Se persistieron {len(rows)} tipos de cambio correctamente.",
-    )
+        result = await create_hotel_fx_snapshot(db, hotel_id=context.hotel_id)
+    except FxSnapshotError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    return FxSnapshotCreateResponse(**result)
 
 
 @router.get("/snapshots", response_model=list[FxSnapshotRead], summary="Historical FX snapshots")
