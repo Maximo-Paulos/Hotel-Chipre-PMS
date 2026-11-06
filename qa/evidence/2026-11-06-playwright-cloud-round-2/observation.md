@@ -48,3 +48,11 @@
 - Cloud UI evidence is from the owner profile at `https://app.hotels-pms.com` after the fixes were observed; separate manager and receptionist profile checks listed above remain from this run.
 - `origin/main` points to `b76d07101ca3447ab558bb7b4d1044c8a2f22b62`.
 - Full multi-persona regression is still incomplete: cleaner write permissions, positive recommendation generation/publication workflow, and several other operational modules/actions have not been covered in this pass. No third-party payment, message, OTA, or provider write was performed.
+
+## Additional booking and cash checks (same deployed code)
+
+- Reception created synthetic guest `QA Codex Round3 20261106 #42` and reservation `RES-QK6GHRH1` for Doble Baño Compartido, 2026-11-20 to 2026-11-22. The UI calculated ARS 120,000 from two nightly tariffs of ARS 60,000. The reception profile explicitly said it could not query USD conversion; it allowed saving in ARS. The reservation saved after a long wait. **Confirmed** in the visible UI.
+- Reservation finance showed total ARS 120,000, received ARS 0, deposit ARS 60,000, and balance ARS 120,000. No payment transaction was recorded. **Confirmed**; the deposit amount appears to be the requested deposit, not collected cash.
+- The USD cash view separated currencies and showed USD 0.00 confirmed for the selected business day, with an open USD cash session and USD 95.00 opening/expected balance. No cash movement was written. **Confirmed**.
+- **Reliability finding:** the receptionist reservations page showed timeout errors for the operational action tray, movement groups, and recent-reservations panel while the table still showed records. The new reservation save also stayed in `Guardando la reserva…` for roughly 15 seconds before completing. A manager planilla showed a timeout notice while the occupancy grid remained visible. These were transient in this pass; retry/reload and backend timing correlation are needed before attributing a cause. **Confirmed UI symptoms; cause needs-verification.**
+- Suggestion: add bounded request loading/error states that cannot remain stuck after the API eventually succeeds, and instrument the affected requests with request IDs and duration buckets. Retest under normal and slow-network conditions.
