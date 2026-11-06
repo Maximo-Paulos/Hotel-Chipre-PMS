@@ -70,7 +70,7 @@ const pendingReservationActionsKey = (hotelId: number | null, limit: number) => 
   limit
 ];
 const retryTransientServiceUnavailable = (failureCount: number, error: unknown) =>
-  error instanceof ApiError && error.status === 503 && failureCount < 1;
+  error instanceof ApiError && (error.status === 408 || error.status === 503) && failureCount < 1;
 const transientServiceUnavailableRetryDelay = (_failureCount: number, error: unknown) =>
   error instanceof ApiError ? error.retryAfterMs ?? 1000 : 1000;
 const occupancyGridKey = (hotelId: number | null, dateFrom: string, dateTo: string) => [

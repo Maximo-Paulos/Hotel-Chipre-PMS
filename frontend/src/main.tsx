@@ -24,6 +24,10 @@ const queryClient = new QueryClient({
       // Keep a single retry for transient network and server failures so a
       // degraded API does not multiply every active read several times.
       retry: (failureCount, error) => {
+        // apiFetch maps its bounded GET deadline to 408. Treat that local
+        // timeout as transient once, while keeping business/auth 4xx outcomes
+        // and mutations out of the retry path.
+        if (error instanceof ApiError && error.status === 408) return failureCount < 1;
         if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
         return failureCount < 1;
       }
