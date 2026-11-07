@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-07T11:19:49.117Z",
+  "generatedAt": "2026-11-07T12:02:39.304Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -13791,42 +13791,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_rate_change_draft_service_create_rate_change_draft",
-      "name": "create_rate_change_draft",
-      "entryPoint": "services_rate_change_draft_service_create_rate_change_draft",
-      "entryPointId": "services_rate_change_draft_service_create_rate_change_draft",
-      "path": [
-        "services_rate_change_draft_service_create_rate_change_draft",
-        "services_rate_change_draft_service_audit_payload",
-        "services_rate_change_draft_service_category_or_error",
-        "services_rate_change_draft_service_effective_value",
-        "services_rate_change_draft_service_impact_for_dates",
-        "services_rate_change_draft_service_load_rate_state",
-        "services_rate_change_draft_service_ratedrafterror",
-        "services_rate_change_draft_service_validate_changes",
-        "services_rate_change_draft_service_money"
-      ],
-      "qualifiedPath": [
-        "services_rate_change_draft_service_create_rate_change_draft",
-        "services_rate_change_draft_service_audit_payload",
-        "services_rate_change_draft_service_category_or_error",
-        "services_rate_change_draft_service_effective_value",
-        "services_rate_change_draft_service_impact_for_dates",
-        "services_rate_change_draft_service_load_rate_state",
-        "services_rate_change_draft_service_ratedrafterror",
-        "services_rate_change_draft_service_validate_changes",
-        "services_rate_change_draft_service_money"
-      ],
-      "depth": 2,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/rate_change_draft_service.py"
-      ],
-      "criticality": 0.1978,
-      "warnings": []
-    },
-    {
       "id": "flow:services_temporary_action_grant_service_deny_grant",
       "name": "deny_grant",
       "entryPoint": "services_temporary_action_grant_service_deny_grant",
@@ -15298,6 +15262,42 @@
         "scripts/agent_ops/qa_evidence_attestation.py"
       ],
       "criticality": 0.1879,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_rate_change_draft_service_create_rate_change_draft",
+      "name": "create_rate_change_draft",
+      "entryPoint": "services_rate_change_draft_service_create_rate_change_draft",
+      "entryPointId": "services_rate_change_draft_service_create_rate_change_draft",
+      "path": [
+        "services_rate_change_draft_service_create_rate_change_draft",
+        "services_rate_change_draft_service_audit_payload",
+        "services_rate_change_draft_service_category_or_error",
+        "services_rate_change_draft_service_effective_value",
+        "services_rate_change_draft_service_impact_for_dates",
+        "services_rate_change_draft_service_load_rate_state",
+        "services_rate_change_draft_service_money",
+        "services_rate_change_draft_service_ratedrafterror",
+        "services_rate_change_draft_service_validate_changes"
+      ],
+      "qualifiedPath": [
+        "services_rate_change_draft_service_create_rate_change_draft",
+        "services_rate_change_draft_service_audit_payload",
+        "services_rate_change_draft_service_category_or_error",
+        "services_rate_change_draft_service_effective_value",
+        "services_rate_change_draft_service_impact_for_dates",
+        "services_rate_change_draft_service_load_rate_state",
+        "services_rate_change_draft_service_money",
+        "services_rate_change_draft_service_ratedrafterror",
+        "services_rate_change_draft_service_validate_changes"
+      ],
+      "depth": 1,
+      "nodeCount": 9,
+      "fileCount": 1,
+      "files": [
+        "app/services/rate_change_draft_service.py"
+      ],
+      "criticality": 0.1878,
       "warnings": []
     },
     {

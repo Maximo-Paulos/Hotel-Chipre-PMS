@@ -467,7 +467,14 @@ def create_rate_change_draft(
         current = rows.get(target_date)
         baseline = resolved[target_date]
         values = item["values"]
-        raw_before = {field: getattr(current, field, None) if current is not None else None for field in values}
+        # DailyRate monetary columns are NUMERIC on PostgreSQL and load as
+        # Decimal. Draft snapshots are stored in a JSON column, whose encoder
+        # cannot serialize Decimal values. Keep this JSON-safe and aligned with
+        # the public money precision used by the rest of the draft payload.
+        raw_before = {
+            field: _money(getattr(current, field, None)) if current is not None else None
+            for field in values
+        }
         effective_before = {field: _effective_value(field, current, baseline) for field in values}
         effective_after: dict[str, float | None] = {}
         resulting_base = values.get("price", effective_before.get("price", _effective_value("price", current, baseline)))
