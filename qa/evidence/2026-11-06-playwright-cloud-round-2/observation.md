@@ -88,3 +88,11 @@
 - The source-preservation fix and a pure unit regression test were pushed to `main`. The focused test passed (1/1); Ruff on touched files (ignoring two pre-existing `UP017` findings in the service) and `git diff --check` passed.
 - After waiting, reloading the owner app, and preparing the same one-night company quote, the cloud still showed ARS 50,000, ARS 15,000 deposit, ARS 35,000 balance, and `Valor no reconocido`. I closed the unsaved form. **The app has not reflected the backend fix yet or its served backend source remains unverified.**
 - Suggestion: use the normal release process to confirm the backend deployed SHA is `5ecd256e` (or a descendant), then repeat this quote. I did not open or change Render, Vercel, or Supabase.
+
+## Assignment and room-block checks
+
+- Auto-assignment: recalculated proposal `#54`. Five future synthetic reservations remained in room 3; the run finished with no movements pending. **Proposal path loaded and completed; no room moved.**
+- Reservation protection: toggled `RES-BVA0Y9U8` to “No permitir reasignar” and back to “Se puede reasignar”; both states were visible. **Reversible protection confirmed.**
+- Manual assignment: moved `RES-BVA0Y9U8` from room 3 to compatible room 4, then restored it to room 3. The final fresh reservation list showed room 3. No payment was recorded.
+- Date-based room block: prepared a one-night block for room 4 on 2026-12-06, previewed it (zero reservations to move), confirmed it, and resolved it. Active count changed 0 → 1 → 0; the UI stated the end date is exclusive and the room is free from 2026-12-07. **Block and resolution flows confirmed.**
+- The room inventory separately showed room 2 with operational state `Bloqueada` while date-based active blocks were 0. This appears to be a distinct status from scheduled blocks. Suggestion: label both concepts clearly in the UI so operators can tell a current room status from a dated out-of-sale block.
