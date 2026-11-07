@@ -89,6 +89,10 @@
 - After waiting, reloading the owner app, and preparing the same one-night company quote, the cloud still showed ARS 50,000, ARS 15,000 deposit, ARS 35,000 balance, and `Valor no reconocido`. I closed the unsaved form. **The app has not reflected the backend fix yet or its served backend source remains unverified.**
 - Suggestion: use the normal release process to confirm the backend deployed SHA is `5ecd256e` (or a descendant), then repeat this quote. I did not open or change Render, Vercel, or Supabase.
 
+## Final company quote cloud retest
+
+- After the backend change propagated, the same unsaved one-night synthetic company quote displayed `Tarifa corporativa acordada` instead of `Valor no reconocido`, with ARS 50,000 total, ARS 15,000 deposit, and ARS 35,000 balance. **Cloud behavior now matches the code fix.** The page does not expose its deployed SHA. I closed the form without saving a reservation.
+
 ## Assignment and room-block checks
 
 - Auto-assignment: recalculated proposal `#54`. Five future synthetic reservations remained in room 3; the run finished with no movements pending. **Proposal path loaded and completed; no room moved.**
