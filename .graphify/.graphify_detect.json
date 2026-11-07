@@ -1408,6 +1408,7 @@
       "tests/test_room_move_permission_tiers.py",
       "tests/test_room_movement_groups_api.py",
       "tests/test_room_soft_delete_counts.py",
+      "tests/test_room_state_events_postgres.py",
       "tests/test_rooms_api_roles.py",
       "tests/test_rooms_schema.py",
       "tests/test_route_security_guardrail.py",
@@ -1800,10 +1801,10 @@
     ],
     "video": []
   },
-  "total_files": 1791,
-  "total_words": 2596920,
+  "total_files": 1792,
+  "total_words": 2597107,
   "needs_graph": true,
-  "warning": "Large corpus: 1791 files · ~2,596,920 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
+  "warning": "Large corpus: 1792 files · ~2,597,107 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.",
   "skipped_sensitive": [
     "alembic/versions/20260408_security_tokens.py",
     "alembic/versions/20260725_user_token_version.py",
@@ -1824,7 +1825,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "73062b53ef37d5a30a2f3231330cea139d78beec",
+    "source_hash": "fb8be2bdef976b5d1d3fbaee6d8231ccb5d2668b",
     "branches": [
       "codex/allocation-latest-query",
       "codex/allocation-lock-errors",
@@ -1868,6 +1869,7 @@
       "fix/pilot-readiness-fx-snapshot",
       "fix/qa-allocation-tariff-20261027",
       "fix/qa-timeout-handling",
+      "fix/room-state-event-500-20261106",
       "fix/tariff-fx-snapshot",
       "main",
       "test/occupancy-room-move-playwright"
@@ -1881,9 +1883,9 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "73062b53ef37d5a30a2f3231330cea139d78beec",
+    "head": "fb8be2bdef976b5d1d3fbaee6d8231ccb5d2668b",
     "candidate_count": null,
-    "included_count": 1791,
+    "included_count": 1792,
     "excluded_untracked_count": 0,
     "excluded_ignored_count": 0,
     "excluded_sensitive_count": 15,

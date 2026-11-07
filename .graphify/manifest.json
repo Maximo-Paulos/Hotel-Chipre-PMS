@@ -808,8 +808,8 @@
     "hash": "6c4184a0d5c62ba446abc1e183c3f6b5"
   },
   "app/services/analytics_facts.py": {
-    "mtime": 1794011727090.8652,
-    "hash": "4676cf8cf92d003dacc4d325d0f43380"
+    "mtime": 1794013661663.0776,
+    "hash": "72c49f3b9b0ff9e258ba63372a4e2d20"
   },
   "app/services/analytics_insights.py": {
     "mtime": 1794011727090.9956,
@@ -7738,5 +7738,9 @@
   "tests/test_analytics_outcome_projection_unit.py": {
     "mtime": 1794012251924.7156,
     "hash": "9ef4c527419da93c67bcc84b3bf9a55f"
+  },
+  "tests/test_room_state_events_postgres.py": {
+    "mtime": 1794013661663.214,
+    "hash": "2a29f1a7be625b8ee7c64f2664d07cb4"
   }
 }
