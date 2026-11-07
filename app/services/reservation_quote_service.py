@@ -105,6 +105,7 @@ def build_reservation_quote(
             {
                 "date": (check_in_date + timedelta(days=offset)).isoformat(),
                 "price": pricing.nightly_rate,
+                "source": pricing.pricing_source,
             }
             for offset in range(pricing.nights)
         ]
