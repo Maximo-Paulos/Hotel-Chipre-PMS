@@ -6,7 +6,7 @@ import { isAppHostname, resolveAppLocation, resolveSiteLocation } from "./config
 import { useOnboardingStatus } from "./hooks/useOnboardingStatus";
 import { useSession } from "./state/session";
 import { PermissionGate } from "./components/PermissionGate";
-import { isStaleBundleLoadError } from "./utils/routeLoadError.mjs";
+import { createCacheBustedReloadUrl, isStaleBundleLoadError } from "./utils/routeLoadError.mjs";
 
 function RouteLoadError() {
   const error = useRouteError();
@@ -25,7 +25,7 @@ function RouteLoadError() {
       </div>
       <button
         type="button"
-        onClick={() => window.location.reload()}
+        onClick={() => window.location.replace(createCacheBustedReloadUrl(window.location.href))}
         className="min-h-11 w-fit rounded-lg bg-brand-700 px-4 py-2 font-semibold text-white hover:bg-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
       >
         {t("routeLoadError.reload")}

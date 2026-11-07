@@ -1,23 +1,24 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
-import { resolveCodeSha } from "./build-meta.mjs";
+import { buildMetaPlugin } from "./build-meta.mjs";
 
-const sha = "0123456789abcdef0123456789abcdef01234567";
+const sha = "a94c1209a8aeb2aee80b348799acef54aef34e14";
 
-test("uses and normalizes Vercel's immutable commit SHA", () => {
-  assert.equal(resolveCodeSha({ VERCEL: "1", VERCEL_GIT_COMMIT_SHA: sha.toUpperCase() }), sha);
-});
+test("build SHA is embedded in the frontend runtime and service worker cache key", () => {
+  const plugin = buildMetaPlugin({ VERCEL_GIT_COMMIT_SHA: sha });
+  assert.equal(plugin.config().define.__APP_BUILD_SHA__, JSON.stringify(sha));
 
-test("refuses an untraceable Vercel artifact", () => {
-  assert.throws(() => resolveCodeSha({ VERCEL: "1" }), /VERCEL_GIT_COMMIT_SHA is required/);
-  assert.throws(
-    () => resolveCodeSha({ VERCEL: "1", VERCEL_GIT_COMMIT_SHA: "not-a-sha" }),
-    /full 40-character hexadecimal Git SHA/
-  );
-});
-
-test("allows a validated local fallback or an explicit unknown marker", () => {
-  assert.equal(resolveCodeSha({ GIT_COMMIT_SHA: sha }), sha);
-  assert.equal(resolveCodeSha({}), "unknown");
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "hcpms-build-meta-"));
+  try {
+    fs.writeFileSync(path.join(outDir, "sw.js"), 'const BUILD_SHA = "__APP_BUILD_SHA__";');
+    plugin.configResolved({ build: { outDir } });
+    plugin.closeBundle();
+    assert.equal(fs.readFileSync(path.join(outDir, "sw.js"), "utf8"), `const BUILD_SHA = "${sha}";`);
+  } finally {
+    fs.rmSync(outDir, { recursive: true, force: true });
+  }
 });

@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 const FULL_GIT_SHA = /^[0-9a-f]{40}$/i;
 
 const validatedSha = (value, variableName) => {
@@ -25,14 +28,30 @@ export function resolveCodeSha(env = process.env) {
 
 export function buildMetaPlugin(env = process.env) {
   const codeSha = resolveCodeSha(env);
+  let outDir = "dist";
   return {
     name: "hotel-chipre-build-meta",
+    configResolved(config) {
+      outDir = config.build.outDir;
+    },
+    config() {
+      return { define: { __APP_BUILD_SHA__: JSON.stringify(codeSha) } };
+    },
     generateBundle() {
       this.emitFile({
         type: "asset",
         fileName: "build-meta.json",
         source: `${JSON.stringify({ code_sha: codeSha })}\n`
       });
+    },
+    closeBundle() {
+      const workerPath = path.resolve(outDir, "sw.js");
+      if (!fs.existsSync(workerPath)) return;
+      const source = fs.readFileSync(workerPath, "utf8");
+      if (!source.includes("__APP_BUILD_SHA__")) {
+        throw new Error("Service worker is missing its build SHA placeholder.");
+      }
+      fs.writeFileSync(workerPath, source.replaceAll("__APP_BUILD_SHA__", codeSha));
     }
   };
 }

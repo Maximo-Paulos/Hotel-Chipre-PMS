@@ -205,6 +205,10 @@
       "description": "Recargá la página e intentá de nuevo. Si el problema continúa, avisale a una persona administradora."
     }
   },
+  "appUpdate": {
+    "description": "Hay una versión nueva. Al recargar se pueden perder los cambios sin guardar.",
+    "reload": "Recargar para actualizar"
+  },
   "tariffRecommendations": {
     "skippedCount_one": "{{count}} fecha sin sugerencia.",
     "skippedCount_other": "{{count}} fechas sin sugerencia.",

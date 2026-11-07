@@ -1344,8 +1344,8 @@
     "hash": "9ea5cdf2e4745f37a9b9eb3ac3332182"
   },
   "frontend/src/main.tsx": {
-    "mtime": 1794011727266.1943,
-    "hash": "861d081e22827e00bd57a89db8322fd1"
+    "mtime": 1794050292000.899,
+    "hash": "dc9b97955663a9a442393eaa79d25c92"
   },
   "frontend/src/master_admin/api.ts": {
     "mtime": 1794011727266.2737,
@@ -1384,8 +1384,8 @@
     "hash": "5850ae0d93dcaa99a607e48fd8274b74"
   },
   "frontend/src/router.tsx": {
-    "mtime": 1794048537673.9417,
-    "hash": "024409b69579d4a044eb7841697eb141"
+    "mtime": 1794050292001.0327,
+    "hash": "1d71eb37a4f1f78bbc5399130c4fb989"
   },
   "frontend/src/state/session.tsx": {
     "mtime": 1794011727267.2253,
@@ -3888,12 +3888,12 @@
     "hash": "1c594a40395cb3afcb509c09d07dabf9"
   },
   "frontend/build-meta.mjs": {
-    "mtime": 1794011727183.1304,
-    "hash": "9ccf07310048a7d96a04b51716ea9bd0"
+    "mtime": 1794050291999.0842,
+    "hash": "c762f55b92d24ce955742c5fcbf49691"
   },
   "frontend/build-meta.test.mjs": {
-    "mtime": 1794011727183.1792,
-    "hash": "b46d475a6a22bb852ded22e401fcef1f"
+    "mtime": 1794050291999.186,
+    "hash": "e5d939295461e2ed4bd5987dc1ebb0f0"
   },
   "frontend/e2e/hotel-selector-roundtrip.spec.ts": {
     "mtime": 1794011727186.5093,
@@ -4148,8 +4148,8 @@
     "hash": "0d92cb44a62bc3f2d73464a2e4f9a890"
   },
   "frontend/public/sw.js": {
-    "mtime": 1794011727238.6045,
-    "hash": "ff1f53812942e8a659fa2c02b6280b7d"
+    "mtime": 1794050291999.6167,
+    "hash": "d53d48eb4cb7afdaee69bd35eed1a7bc"
   },
   "frontend/src/api/guestRestrictions.ts": {
     "mtime": 1794011727240.4434,
@@ -4716,8 +4716,8 @@
     "hash": "cec8c4393bacc2a0962a23e1bf1bef5f"
   },
   "frontend/pwa-manifest.test.mjs": {
-    "mtime": 1794011727238.6565,
-    "hash": "87e1ef8a6ed0ea696eebd3e1b0efc114"
+    "mtime": 1794050291999.805,
+    "hash": "55505add7e6cf11390c681229952dfd8"
   },
   "frontend/src/components/AppleSignInButton.tsx": {
     "mtime": 1794011727254.113,
@@ -7720,8 +7720,8 @@
     "hash": "9352d3a2d3a5ba762351977e99ca260c"
   },
   "qa/evidence/2026-11-06-playwright-cloud-round-2/observation.md": {
-    "mtime": 1794049232467.4783,
-    "hash": "72365a73ba5de28e099a407405562f4a"
+    "mtime": 1794049703368.7827,
+    "hash": "1bb6c3349d43936ae8f9cad003f501e5"
   },
   "tests/test_reservation_quote_fallback_unit.py": {
     "mtime": 1794011727315.1802,
@@ -7756,8 +7756,8 @@
     "hash": "623c104b2c83720cf9987e75b68d70d2"
   },
   "frontend/route-load-error.test.mjs": {
-    "mtime": 1794048537673.2207,
-    "hash": "4110749323bef636bf8ae1c3b154c1a9"
+    "mtime": 1794050291999.9966,
+    "hash": "286ab03e8329447d000cb81998f79365"
   },
   "frontend/src/utils/allocationHistoryLabels.ts": {
     "mtime": 1794048501557.167,
@@ -7768,7 +7768,11 @@
     "hash": "c4a35b34f1a6eb7ed22a43539c8ecad5"
   },
   "frontend/src/utils/routeLoadError.mjs": {
-    "mtime": 1794048537674.0886,
-    "hash": "60119eb35d95ca75dec49a2c9a97dc5d"
+    "mtime": 1794050292001.347,
+    "hash": "2f04e8d7ceddd70b2882b72ba84722f8"
+  },
+  "frontend/service-worker.test.mjs": {
+    "mtime": 1794050292000.0837,
+    "hash": "f5a10a71cfea4706d64657a3754efae1"
   }
 }

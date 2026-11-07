@@ -140,3 +140,13 @@
 - Replaced generic missing-value labels in room-event history with contextual room/note explanations. Cloud behavior still needs retest after release.
 - Grouped the suggested-rate evaluator's missing-season blocker, added a link to season configuration, and kept rate calculation and saved prices unchanged. Cloud behavior still needs retest after release.
 - Combined frontend validation: 168/168 unit tests, 5/5 i18n checks, lint, TypeScript, production build, and diff check passed. The build retains the existing large-chunk warning.
+
+
+## Retest of `a94c1209` after cloud deployment
+
+- `/build-meta.json` eventually reported frontend `code_sha=a94c1209a8aeb2aee80b348799acef54aef34e14`; no provider dashboard was opened.
+- Suggested-rate evaluation in the owner profile completed. It showed `54 fechas omitidas: no hay temporadas activas que las cubran`, with a single guidance paragraph and the `Ir a temporadas` anchor link. The screen continued to show `Sin cambios pendientes`; no price or season was saved. One of the 55 dates had a different skip reason and was not part of the missing-season group.
+- Room-event history in the owner profile now showed the historical missing room as `Habitación no disponible` and blank note as `Sin nota registrada`; the event with a room remained `Habitación: 10`.
+- The reservation page showed `Salidas previstas: 1` for 2026-11-07. Recent allocation history rendered `Nueva reserva` and `Recalculo manual de asignaciones`, with the generated move note localized.
+- Owner and a newly opened reception tab both showed stay statuses in Spanish (`Pendiente`, `Check-out`, `Cancelada`) and the neutral selected placeholder `Seleccioná una etiqueta` while the guest has no tags.
+- **Stale tab remains reproducible:** the already-open receptionist tab still showed `Pending`, `Checked Out`, `Cancelled` and preselected `Prohibido alojar` even after invoking reload, while a new tab in that same signed-in profile rendered the corrected labels. This is being investigated; the cloud recovery fix is not yet verified for an already-open stale tab.

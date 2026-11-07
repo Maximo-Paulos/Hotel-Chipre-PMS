@@ -205,6 +205,10 @@
       "description": "Reload the page and try again. If the problem continues, contact a hotel administrator."
     }
   },
+  "appUpdate": {
+    "description": "A newer version is ready. Reloading may discard unsaved changes.",
+    "reload": "Reload to update"
+  },
   "tariffRecommendations": {
     "skippedCount_one": "{{count}} date skipped without a suggestion.",
     "skippedCount_other": "{{count}} dates skipped without a suggestion.",

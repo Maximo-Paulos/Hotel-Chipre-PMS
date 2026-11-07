@@ -45,8 +45,13 @@ test("PWA manifest declares installable metadata and real icon files", () => {
 
 test("service worker keeps operational API responses out of the shell cache", () => {
   const serviceWorker = fs.readFileSync(path.join(publicRoot, "sw.js"), "utf8");
-  assert.match(serviceWorker, /const NEVER_CACHE_PREFIXES = \["\/api", "\/health"\]/);
+  assert.match(serviceWorker, /const NEVER_CACHE_PREFIXES = \["\/api", "\/health", "\/build-meta\.json"\]/);
   assert.match(serviceWorker, /NEVER_CACHE_PREFIXES\.some\(\(prefix\) => url\.pathname\.startsWith\(prefix\)\)/);
+  assert.match(serviceWorker, /const CACHE_NAME = `\$\{CACHE_PREFIX\}\$\{BUILD_SHA\}`/);
+  assert.match(serviceWorker, /keys\.filter\(\(key\) => key\.startsWith\(CACHE_PREFIX\) && key !== CACHE_NAME\)/);
+  assert.match(serviceWorker, /fetch\(request, \{ cache: "no-store" \}\)[\s\S]*caches\.match\(request\)/);
+  assert.match(serviceWorker, /HOTEL_CHIPRE_APP_UPDATE/);
+  assert.match(serviceWorker, /staleChunkRecoveryResponse/);
 });
 
 test("application shell exposes explicit offline and stale-data messaging", () => {
