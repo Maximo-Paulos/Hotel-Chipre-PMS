@@ -3232,8 +3232,8 @@
     "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1794009942264.873,
-    "hash": "91858906ccf336ff92632ad1f6484420"
+    "mtime": 1794010442628.3374,
+    "hash": "9750d2277254accbd060bedabf1e8afc"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1793986827854.051,
@@ -7720,7 +7720,11 @@
     "hash": "9352d3a2d3a5ba762351977e99ca260c"
   },
   "qa/evidence/2026-11-06-playwright-cloud-round-2/observation.md": {
-    "mtime": 1794010162849.822,
-    "hash": "06e3adb2a88868b5bd65367d3303cd06"
+    "mtime": 1794010571493.4402,
+    "hash": "96019cd75f5fc5ec3209dd97d7bc496e"
+  },
+  "tests/test_reservation_quote_fallback_unit.py": {
+    "mtime": 1794010372617.278,
+    "hash": "d3c9a0ecf887a838631336cae06bc3e8"
   }
 }

@@ -82,3 +82,9 @@
 - Reopened the company quote after a full page reload. Prices and balances still calculated correctly, but the source remained `Valor no reconocido`.
 - **Confirmed cause in code:** company-base pricing replaces the pricing snapshot without nightly breakdown rows; `build_reservation_quote()` then creates fallback rows containing only date and price. The frontend substitutes the untranslated fallback `backend_quote`. Existing `company_base_price` translations do not fix this response. A backend correction and regression test are now in progress.
 - The cloud page did not expose its deployed SHA. This smoke pass confirms the visible reservation/task data load, but not which post-push frontend build served the company quote.
+
+## Company quote retest after backend source fix (`main` `5ecd256e`)
+
+- The source-preservation fix and a pure unit regression test were pushed to `main`. The focused test passed (1/1); Ruff on touched files (ignoring two pre-existing `UP017` findings in the service) and `git diff --check` passed.
+- After waiting, reloading the owner app, and preparing the same one-night company quote, the cloud still showed ARS 50,000, ARS 15,000 deposit, ARS 35,000 balance, and `Valor no reconocido`. I closed the unsaved form. **The app has not reflected the backend fix yet or its served backend source remains unverified.**
+- Suggestion: use the normal release process to confirm the backend deployed SHA is `5ecd256e` (or a descendant), then repeat this quote. I did not open or change Render, Vercel, or Supabase.
