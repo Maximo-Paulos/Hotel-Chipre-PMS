@@ -1460,8 +1460,8 @@
     "hash": "9049be477d762da56d932c863178e346"
   },
   "frontend/src/views/protected/SettingsHotelPage.tsx": {
-    "mtime": 1794068625843.6077,
-    "hash": "9807ae097eda0e98b4b963858a1599e2"
+    "mtime": 1794069049197.8958,
+    "hash": "0325aa5b3b72ed3b549e1db2e7034c12"
   },
   "frontend/src/views/protected/SettingsPermissionsPage.tsx": {
     "mtime": 1794068658428.2913,
@@ -3228,8 +3228,8 @@
     "hash": "5570c9911cdba25846edeca22fa5e743"
   },
   ".graphify/GRAPH_REPORT.md": {
-    "mtime": 1794068721890.157,
-    "hash": "c4d4bb5a7c8ce5092417d0baf414b750"
+    "mtime": 1794068920787.604,
+    "hash": "cb92190fd8dc28f893fac5e246508e2f"
   },
   "scripts/agent_ops/manage_qa_baseline_lease.py": {
     "mtime": 1794068625856.791,
@@ -6116,8 +6116,8 @@
     "hash": "31a7c08af94f5bf6586795b2b4c9d02a"
   },
   "frontend/e2e/f015-manual-rate-policy.spec.ts": {
-    "mtime": 1794068625765.8792,
-    "hash": "f5d3e97f838bc0dfdd9b9aadc9a76038"
+    "mtime": 1794069015206.2244,
+    "hash": "f1815bfb05e20df0d877c7a5920ddcd3"
   },
   "tests/test_manual_rate_policy_migration.py": {
     "mtime": 1794068625871.687,
