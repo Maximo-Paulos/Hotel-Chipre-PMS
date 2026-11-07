@@ -14,7 +14,10 @@ test("API 4xx query failures do not trigger repeated SQL requests", async () => 
   const integrations = await source("./src/hooks/useIntegrations.ts");
   assert.match(integrations, /failureCount < 1/);
   const permissionPage = await source("./src/views/protected/SettingsPermissionsPage.tsx");
-  assert.match(permissionPage, /error\.status >= 400 && error\.status < 500\) && failureCount < 1/);
+  assert.match(permissionPage, /failureCount >= 1\) return false/);
+  assert.match(permissionPage, /error\.status >= 400 && error\.status < 500\) return error\.status === 408/);
+  assert.match(permissionPage, /query\.isError\)[\s\S]*?query\.refetch\(\)/);
+  assert.match(permissionPage, /hotelRoles\.retryLoad/);
 });
 
 test("room category consumers share one hotel-scoped query key", async () => {

@@ -55,8 +55,11 @@ const builtinRoleLabels: Record<BuiltinPermissionRole, string> = {
   housekeeping: "Housekeeping"
 };
 
-const retryPermissionAdminQuery = (failureCount: number, error: unknown) =>
-  !(error instanceof ApiError && error.status >= 400 && error.status < 500) && failureCount < 1;
+const retryPermissionAdminQuery = (failureCount: number, error: unknown) => {
+  if (failureCount >= 1) return false;
+  if (error instanceof ApiError && error.status >= 400 && error.status < 500) return error.status === 408;
+  return true;
+};
 
 const visibilityOptions = [
   { value: "12", label: "12 h" },
@@ -827,6 +830,11 @@ export function SettingsPermissionsPage() {
   const loading = rolesQuery.isLoading || catalogQuery.isLoading || matrixQuery.isLoading || roleProfilesQuery.isLoading || visibilityQuery.isLoading;
   const queryError = rolesQuery.error || catalogQuery.error || matrixQuery.error || roleProfilesQuery.error || visibilityQuery.error;
   const matrixIsFetching = rolesQuery.isFetching || catalogQuery.isFetching || matrixQuery.isFetching || roleProfilesQuery.isFetching || visibilityQuery.isFetching;
+  const retryFailedPermissionQueries = () => {
+    [rolesQuery, catalogQuery, matrixQuery, roleProfilesQuery, visibilityQuery]
+      .filter((query) => query.isError)
+      .forEach((query) => void query.refetch());
+  };
 
   return (
     <div className="space-y-6">
@@ -905,7 +913,19 @@ export function SettingsPermissionsPage() {
         </section>
       ) : null}
       {loading ? <p className="text-sm text-slate-600" role="status">Cargando permisos...</p> : null}
-      {queryError ? <p className="text-sm text-rose-600">No se pudo cargar la configuración de permisos. {(queryError as Error).message}</p> : null}
+      {queryError ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 sm:flex-row sm:items-center sm:justify-between" role="alert">
+          <p>No se pudo cargar la configuración de permisos. {(queryError as Error).message}</p>
+          <button
+            type="button"
+            onClick={retryFailedPermissionQueries}
+            disabled={matrixIsFetching}
+            className="shrink-0 rounded-lg border border-rose-300 bg-white px-3 py-2 font-semibold text-rose-800 disabled:opacity-50"
+          >
+            {t("hotelRoles.retryLoad")}
+          </button>
+        </div>
+      ) : null}
       {customRoleContractMismatch && !queryError ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="status">
           {t("hotelRoles.matrixContractMismatch")}

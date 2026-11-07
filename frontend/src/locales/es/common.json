@@ -159,6 +159,7 @@
     "archiveConflict": "No se pudo archivar: el servidor detectó usuarios activos o invitaciones pendientes para este rol. Revisá el listado actualizado y gestioná las asignaciones o invitaciones por sus flujos correspondientes.",
     "loading": "Cargando roles...",
     "loadError": "No se pudo cargar la lista de roles.",
+    "retryLoad": "Reintentar carga",
     "empty": "Todavía no hay roles para este hotel.",
     "stale": "El rol cambió desde que se cargó. Actualicé la lista; revisá antes de volver a intentarlo.",
     "createError": "No se pudo crear el rol.",

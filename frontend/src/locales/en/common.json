@@ -159,6 +159,7 @@
     "archiveConflict": "Could not archive: the server found active users or pending invitations for this role. Review the refreshed list and manage assignments or invitations through their respective flows.",
     "loading": "Loading roles...",
     "loadError": "Could not load the role list.",
+    "retryLoad": "Retry loading",
     "empty": "There are no roles for this hotel yet.",
     "stale": "This role changed after it was loaded. The list was refreshed; review it before trying again.",
     "createError": "Could not create the role.",
