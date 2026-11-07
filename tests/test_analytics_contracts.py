@@ -101,6 +101,50 @@ def test_status_to_outcome(status, expected):
     assert reservation_status_to_outcome(status) == expected
 
 
+def test_nightly_fact_uses_checked_out_status_when_stored_outcome_is_stale():
+    reservation = SimpleNamespace(
+        id=43,
+        hotel_id=4,
+        room_id=1,
+        category_id=5,
+        company_id=None,
+        status=ReservationStatusEnum.CHECKED_OUT,
+        outcome=ReservationOutcomeEnum.PENDING,
+        no_show_policy_applied=ReservationNoShowPolicyAppliedEnum.NONE,
+        source="direct",
+        source_provider_code=None,
+        guest_segment=ReservationGuestSegmentEnum.LEISURE,
+        guest_segment_source=ReservationGuestSegmentSourceEnum.SYSTEM_DEFAULT,
+    )
+
+    facts = build_reservation_nightly_facts(
+        reservation=reservation,
+        stay_dates=[date(2026, 11, 4)],
+        totals=MonetaryTotals(),
+    )
+
+    assert facts[0].status == ReservationStatusEnum.CHECKED_OUT
+    assert facts[0].outcome == ReservationOutcomeEnum.COMPLETED
+
+
+def test_pickup_excludes_cancelled_status_when_stored_outcome_is_stale():
+    rows = [
+        SimpleNamespace(
+            created_at=datetime(2026, 4, 2, 12, tzinfo=timezone.utc),
+            check_in_date=date(2026, 4, 10),
+            status=ReservationStatusEnum.CANCELLED,
+            outcome=ReservationOutcomeEnum.PENDING,
+        )
+    ]
+
+    assert calculate_pickup_30d_count_from_rows(
+        rows,
+        date_from=date(2026, 4, 1),
+        date_to=date(2026, 4, 5),
+        hotel_timezone="UTC",
+    ) == 0
+
+
 def test_guest_segment_inference(db, hotel_config):
     company = Company(
         hotel_id=hotel_config.id,

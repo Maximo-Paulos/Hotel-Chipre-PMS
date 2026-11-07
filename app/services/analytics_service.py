@@ -4,7 +4,7 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models.analytics import (
+    AnalyticsAIUsageMonthly,
     AnalyticsAlertSetting,
     AnalyticsAlertSnooze,
-    AnalyticsAIUsageMonthly,
     FactReservationDaily,
     FactRoomOccupancyDaily,
     HotelAuditEvent,
@@ -25,7 +25,11 @@ from app.models.analytics import (
 )
 from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
-from app.models.reservation import Reservation, ReservationOutcomeEnum, ReservationStatusEnum
+from app.models.reservation import (
+    Reservation,
+    ReservationStatusEnum,
+    reservation_status_to_outcome,
+)
 from app.models.room import Room, RoomCategory
 from app.schemas.analytics import (
     AnalyticsComparisonStateRead,
@@ -43,8 +47,15 @@ from app.schemas.analytics_api import (
     CompanyUpdate,
     RoomStateEventCreate,
 )
-from app.services.analytics_ai_providers import build_analytics_ai_config, get_analytics_ai_provider
-from app.services.analytics_contracts import build_analytics_window, calculate_physical_room_nights_for_hotel, calculate_pickup_30d_count
+from app.services.analytics_ai_providers import (
+    build_analytics_ai_config,
+    get_analytics_ai_provider,
+)
+from app.services.analytics_contracts import (
+    build_analytics_window,
+    calculate_physical_room_nights_for_hotel,
+    calculate_pickup_30d_count,
+)
 from app.services.analytics_facts import (
     touch_room_state_event_fact_window,
 )
@@ -613,7 +624,7 @@ def _company_fact_read(fact: FactReservationDaily) -> dict[str, Any]:
         "category_id": fact.category_id,
         "channel_code": fact.channel_code.value if hasattr(fact.channel_code, "value") else str(fact.channel_code),
         "guest_segment": fact.guest_segment.value if hasattr(fact.guest_segment, "value") else str(fact.guest_segment),
-        "outcome": fact.outcome.value if hasattr(fact.outcome, "value") else str(fact.outcome),
+        "outcome": reservation_status_to_outcome(fact.status).value,
         "row_kind": fact.row_kind.value if hasattr(fact.row_kind, "value") else str(fact.row_kind),
         "revenue_net_ars": _money_str(fact.revenue_net_ars),
         "revenue_net_usd": _money_str(fact.revenue_net_usd),
@@ -628,7 +639,7 @@ def _company_reservation_read(reservation: Any) -> dict[str, Any]:
         "id": reservation.id,
         "confirmation_code": reservation.confirmation_code,
         "status": reservation.status.value if hasattr(reservation.status, "value") else str(reservation.status),
-        "outcome": reservation.outcome.value if hasattr(reservation.outcome, "value") else str(reservation.outcome),
+        "outcome": reservation_status_to_outcome(reservation.status).value,
         "check_in_date": reservation.check_in_date,
         "check_out_date": reservation.check_out_date,
         "room_id": reservation.room_id,
@@ -1271,7 +1282,7 @@ def _reservation_fact_summary(
             ).label("room_revenue_net_usd"),
             func.coalesce(func.sum(case((room_revenue, 1), else_=0)), 0).label("occupied_chargeable_nights"),
             func.coalesce(
-                func.sum(case((FactReservationDaily.outcome == ReservationOutcomeEnum.NO_SHOW, 1), else_=0)), 0
+                func.sum(case((FactReservationDaily.status == ReservationStatusEnum.NO_SHOW, 1), else_=0)), 0
             ).label("no_show_count"),
             func.coalesce(_currency_unavailable_aggregate("ARS"), 0).label("ars_unavailable"),
             func.coalesce(_currency_unavailable_aggregate("USD"), 0).label("usd_unavailable"),
@@ -1466,7 +1477,7 @@ def build_home_payload(
         room_revenue_ars_available = not _currency_unavailable_for(room_revenue_facts, "ARS")
         room_revenue_usd_available = not _currency_unavailable_for(room_revenue_facts, "USD")
         no_show_count = len(
-            [fact for fact in facts if getattr(fact.outcome, "value", fact.outcome) == ReservationOutcomeEnum.NO_SHOW.value]
+            [fact for fact in facts if fact.status == ReservationStatusEnum.NO_SHOW]
         )
         reservation_data_as_of = _facts_data_as_of(facts)
     else:
@@ -2021,7 +2032,7 @@ def _category_fact_read(fact: FactReservationDaily) -> dict[str, Any]:
         "stay_date": fact.stay_date,
         "reservation_id": fact.reservation_id,
         "room_id": fact.room_id,
-        "outcome": fact.outcome.value if hasattr(fact.outcome, "value") else str(fact.outcome),
+        "outcome": reservation_status_to_outcome(fact.status).value,
         "revenue_net_ars": _money_str(fact.revenue_net_ars),
         "revenue_net_usd": _money_str(fact.revenue_net_usd),
         **_unavailable_currency_metadata([fact]),
@@ -2312,7 +2323,7 @@ def _operations_reservation_read(reservation: Any) -> dict[str, Any]:
         "id": reservation.id,
         "confirmation_code": reservation.confirmation_code,
         "status": reservation.status.value if hasattr(reservation.status, "value") else str(reservation.status),
-        "outcome": reservation.outcome.value if hasattr(reservation.outcome, "value") else str(reservation.outcome),
+        "outcome": reservation_status_to_outcome(reservation.status).value,
         "check_in_date": reservation.check_in_date,
         "room_id": reservation.room_id,
         "category_id": reservation.category_id,

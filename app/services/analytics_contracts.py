@@ -269,7 +269,9 @@ def build_reservation_nightly_facts(
     room_id = getattr(reservation, "room_id", None)
     category_id = int(getattr(reservation, "category_id"))
     company_id = getattr(reservation, "company_id", None)
-    outcome = _maybe_enum(getattr(reservation, "outcome", None), ReservationOutcomeEnum) or reservation_status_to_outcome(status)
+    # Status is the source of truth for lifecycle outcomes. Older reservations
+    # can retain a stale `outcome` value after a terminal status transition.
+    outcome = reservation_status_to_outcome(status)
     resolved_channel = normalize_channel_code(
         channel_code,
         source=getattr(reservation, "source", None),
@@ -376,7 +378,13 @@ def calculate_pickup_30d_count_from_rows(
             continue
         if not (anchor_date <= check_in_date <= pickup_window_end):
             continue
-        if _enum_value(getattr(reservation, "outcome", None)) == ReservationOutcomeEnum.CANCELLED.value:
+        status = getattr(reservation, "status", None)
+        outcome = (
+            reservation_status_to_outcome(status).value
+            if status is not None
+            else _enum_value(getattr(reservation, "outcome", None))
+        )
+        if outcome == ReservationOutcomeEnum.CANCELLED.value:
             continue
         count += 1
     return count
@@ -397,11 +405,11 @@ def calculate_pickup_30d_count(
         SimpleNamespace(
             created_at=created_at,
             check_in_date=check_in_date,
-            outcome=outcome,
+            status=status,
         )
-        for created_at, check_in_date, outcome in (
+        for created_at, check_in_date, status in (
             active_reservations(db, hotel_id)
-            .with_entities(Reservation.created_at, Reservation.check_in_date, Reservation.outcome)
+            .with_entities(Reservation.created_at, Reservation.check_in_date, Reservation.status)
             .filter(
                 Reservation.check_in_date >= anchor_date,
                 Reservation.check_in_date <= pickup_window_end,
