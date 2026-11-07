@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useOperationalAudit } from "../../hooks/useOperationalAudit";
 import { useHotelConfig } from "../../hooks/useHotelConfig";
@@ -30,6 +31,7 @@ function permissionChangeLines(details: Record<string, unknown>): string[] {
 }
 
 export function OperationalAuditPage() {
+  const { t } = useTranslation("common");
   const { session } = useSession();
   const hotelConfigQuery = useHotelConfig();
   const businessDate = useBusinessDate();
@@ -88,11 +90,18 @@ export function OperationalAuditPage() {
         <div className="border-b border-slate-200 px-4 py-3"><h2 className="font-semibold text-slate-900">Actividad</h2><p className="text-xs text-slate-500">{auditQuery.data?.total ?? 0} registros encontrados</p></div>
         {auditQuery.isLoading ? <p className="p-5 text-sm text-slate-500">Cargando actividad...</p> : items.length === 0 ? <p className="p-5 text-sm text-slate-500">No hay actividad para estos filtros.</p> : (
           <div className="divide-y divide-slate-100">
-            {items.map((item) => <article key={`${item.source}-${item.source_id}`} className="grid gap-2 px-4 py-4 md:grid-cols-[150px_1fr_auto]">
-              <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.area}</p><p className="text-xs text-slate-500">{formatHotelDateTime(item.occurred_at, hotelConfigQuery.data?.hotel_timezone)}</p></div>
-              <div><p className="font-semibold text-slate-900">{item.summary}</p><p className="text-sm text-slate-600">{item.action} · {item.actor_name}</p>{item.area === "permissions" ? permissionChangeLines(item.details).map((line) => <p key={line} className="text-xs text-slate-600">{line}</p>) : null}{item.reason_code ? <p className="text-xs text-slate-500">Motivo: {item.reason_code}{item.reason_note ? ` · ${item.reason_note}` : ""}</p> : null}{item.origin_room_disposition ? <p className="text-xs text-brand-700">Habitación origen: {item.origin_room_disposition} ({item.origin_room_status_before ?? "?"} → {item.origin_room_status_after ?? "?"})</p> : null}</div>
+            {items.map((item) => {
+              const areaLabel = t(`operationalAudit.areas.${item.area}`, { defaultValue: t("operationalAudit.otherArea") });
+              const actionLabel = t(`operationalAudit.actions.${item.action}`, { defaultValue: t("operationalAudit.genericAction") });
+              const summaryUsesTechnicalCode = Boolean(item.action) && item.summary.toLowerCase().includes(item.action.toLowerCase());
+              const summaryLabel = summaryUsesTechnicalCode ? actionLabel : item.summary;
+              const actionContext = summaryUsesTechnicalCode ? item.actor_name : `${actionLabel} · ${item.actor_name}`;
+              return <article key={`${item.source}-${item.source_id}`} className="grid gap-2 px-4 py-4 md:grid-cols-[150px_1fr_auto]">
+              <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{areaLabel}</p><p className="text-xs text-slate-500">{formatHotelDateTime(item.occurred_at, hotelConfigQuery.data?.hotel_timezone)}</p></div>
+              <div><p className="font-semibold text-slate-900">{summaryLabel}</p><p className="text-sm text-slate-600">{actionContext}</p>{item.area === "permissions" ? permissionChangeLines(item.details).map((line) => <p key={line} className="text-xs text-slate-600">{line}</p>) : null}{item.reason_code ? <p className="text-xs text-slate-500">Motivo: {item.reason_code}{item.reason_note ? ` · ${item.reason_note}` : ""}</p> : null}{item.origin_room_disposition ? <p className="text-xs text-brand-700">Habitación origen: {item.origin_room_disposition} ({item.origin_room_status_before ?? "?"} → {item.origin_room_status_after ?? "?"})</p> : null}<details className="mt-1 text-xs text-slate-500" data-testid={`audit-technical-details-${item.source_id}`}><summary className="cursor-pointer">{t("operationalAudit.technicalDetails")}</summary><div className="mt-1 space-y-1"><p>{t("operationalAudit.areaCode", { value: item.area })}</p><p>{t("operationalAudit.actionCode", { value: item.action })}</p><p>{t("operationalAudit.sourceCode", { value: `${item.source} #${item.source_id}` })}</p><p>{t("operationalAudit.summaryCode", { value: item.summary })}</p></div></details></div>
               <div className="text-right">{item.amount !== null && item.amount !== undefined ? <p className="font-semibold text-slate-900">{Number(item.amount).toLocaleString("es-AR", { style: "currency", currency: item.currency_code ?? "ARS" })}</p> : null}<p className="text-xs text-slate-500">#{item.source_id}</p></div>
-            </article>)}
+            </article>;
+            })}
           </div>
         )}
         <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3"><button type="button" disabled={offset === 0 || auditQuery.isFetching} onClick={() => setOffset((value) => Math.max(0, value - PAGE_SIZE))} className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40">Anterior</button><span className="text-xs text-slate-500">Página {Math.floor(offset / PAGE_SIZE) + 1}</span><button type="button" disabled={!auditQuery.data?.has_more || auditQuery.isFetching} onClick={() => setOffset((value) => value + PAGE_SIZE)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40">Siguiente</button></div>

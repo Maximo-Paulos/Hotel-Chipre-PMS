@@ -1,6 +1,46 @@
 {
   "loading": "Loading...",
   "saving": "Saving...",
+  "notificationTitle": {
+    "reservationCreated": "New reservation {{reference}}",
+    "reservationCancelled": "Reservation {{reference}} cancelled",
+    "reservationUpdated": "Reservation {{reference}} updated",
+    "reservationNoShow": "Reservation {{reference}} marked no-show",
+    "guestArrival": "Guest arrival registered for reservation {{reference}}",
+    "reservationCheckedOut": "Check-out completed for reservation {{reference}}",
+    "dailyReport": "Daily operational report {{reference}}"
+  },
+  "operationalAudit": {
+    "areas": {
+      "reservations": "Reservations",
+      "rooms": "Rooms",
+      "housekeeping_checklists": "Housekeeping",
+      "payments": "Payments",
+      "cash": "Cash",
+      "guests": "Guests",
+      "inventory": "Inventory",
+      "laundry": "Laundry",
+      "commercial": "Rates and promotions",
+      "users": "Users",
+      "permissions": "Permissions",
+      "configuration": "Configuration",
+      "security": "Security"
+    },
+    "actions": {
+      "status_change": "Status changed",
+      "reservation": { "status": { "checked_in": "Check-in registered", "checked_out": "Check-out completed", "cancelled": "Reservation cancelled", "no_show": "No-show recorded" } },
+      "cash": { "income": "Cash income", "expense": "Cash expense", "voided": "Cash movement voided" },
+      "room": { "move": "Room changed" },
+      "payment": { "payment": "Payment recorded", "refund": "Refund recorded" }
+    },
+    "genericAction": "Operational action",
+    "otherArea": "Other operations",
+    "technicalDetails": "View technical details",
+    "areaCode": "Area code: {{value}}",
+    "actionCode": "Action code: {{value}}",
+    "sourceCode": "Source: {{value}}",
+    "summaryCode": "Original summary: {{value}}"
+  },
   "rateCalendar": {
     "restrictions": {
       "arrival": {

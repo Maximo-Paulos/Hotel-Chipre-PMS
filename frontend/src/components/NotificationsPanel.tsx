@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { type NotificationItem, type NotificationSeverity } from "../api/notifications";
@@ -46,6 +47,7 @@ const formatRelativeTime = (iso: string): string => {
 };
 
 export function NotificationsPanel({ open, onClose }: Props) {
+  const { t } = useTranslation("common");
   const containerRef = useDialogA11y(open, onClose);
   const isOnline = useOnlineStatus();
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
@@ -61,6 +63,21 @@ export function NotificationsPanel({ open, onClose }: Props) {
 
   const items = inboxQuery.data?.items ?? [];
   const unreadCount = inboxQuery.data?.unread_count ?? 0;
+
+  const notificationTitle = (item: NotificationItem) => {
+    const patterns: Record<string, { key: string; pattern: RegExp }> = {
+      "reservation.created": { key: "notificationTitle.reservationCreated", pattern: /^New reservation\s+(.+)$/i },
+      "reservation.cancelled": { key: "notificationTitle.reservationCancelled", pattern: /^Reservation\s+(.+?)\s+cancelled$/i },
+      "reservation.updated": { key: "notificationTitle.reservationUpdated", pattern: /^Reservation\s+(.+?)\s+updated$/i },
+      "reservation.no_show": { key: "notificationTitle.reservationNoShow", pattern: /^Reservation\s+(.+?)\s+marked no-show$/i },
+      "reservation.checked_in": { key: "notificationTitle.guestArrival", pattern: /^Reservation\s+(.+?)\s+guest arrival registered$/i },
+      "reservation.checked_out": { key: "notificationTitle.reservationCheckedOut", pattern: /^Reservation\s+(.+?)\s+checked out$/i },
+      "report.daily": { key: "notificationTitle.dailyReport", pattern: /^Daily operational report(?:\s*[-–]\s*|\s+)?(.*)$/i }
+    };
+    const localized = patterns[item.event_type];
+    const match = localized?.pattern.exec(item.title);
+    return localized && match ? t(localized.key, { reference: match[1] ?? "" }).trim() : item.title;
+  };
 
   // Only entities this frontend actually has a page/drawer for become
   // clickable. entity_type/entity_id are all NotificationRead exposes (see
@@ -201,7 +218,7 @@ export function NotificationsPanel({ open, onClose }: Props) {
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center justify-between gap-2">
                           <span className={`truncate font-semibold ${item.is_read ? "text-slate-700" : "text-slate-900"}`}>
-                            {item.title}
+                            {notificationTitle(item)}
                           </span>
                           {!item.is_read && (
                             <span className="h-2 w-2 shrink-0 rounded-full bg-brand-600" aria-label="No leída" />

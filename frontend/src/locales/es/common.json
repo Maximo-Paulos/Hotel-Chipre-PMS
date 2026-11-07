@@ -1,6 +1,46 @@
 {
   "loading": "Cargando...",
   "saving": "Guardando...",
+  "notificationTitle": {
+    "reservationCreated": "Nueva reserva {{reference}}",
+    "reservationCancelled": "Reserva {{reference}} cancelada",
+    "reservationUpdated": "Reserva {{reference}} modificada",
+    "reservationNoShow": "Reserva {{reference}} marcada como ausente",
+    "guestArrival": "Llegada del huésped registrada para reserva {{reference}}",
+    "reservationCheckedOut": "Check-out registrado para reserva {{reference}}",
+    "dailyReport": "Reporte operativo diario {{reference}}"
+  },
+  "operationalAudit": {
+    "areas": {
+      "reservations": "Reservas",
+      "rooms": "Habitaciones",
+      "housekeeping_checklists": "Limpieza",
+      "payments": "Pagos",
+      "cash": "Caja",
+      "guests": "Huéspedes",
+      "inventory": "Inventario",
+      "laundry": "Lavandería",
+      "commercial": "Tarifas y promociones",
+      "users": "Usuarios",
+      "permissions": "Permisos",
+      "configuration": "Configuración",
+      "security": "Seguridad"
+    },
+    "actions": {
+      "status_change": "Cambio de estado",
+      "reservation": { "status": { "checked_in": "Check-in registrado", "checked_out": "Check-out registrado", "cancelled": "Reserva cancelada", "no_show": "Ausencia registrada" } },
+      "cash": { "income": "Ingreso de caja", "expense": "Egreso de caja", "voided": "Movimiento de caja anulado" },
+      "room": { "move": "Cambio de habitación" },
+      "payment": { "payment": "Cobro registrado", "refund": "Devolución registrada" }
+    },
+    "genericAction": "Acción operativa",
+    "otherArea": "Otras operaciones",
+    "technicalDetails": "Ver datos técnicos",
+    "areaCode": "Código de área: {{value}}",
+    "actionCode": "Código de acción: {{value}}",
+    "sourceCode": "Origen: {{value}}",
+    "summaryCode": "Resumen original: {{value}}"
+  },
   "rateCalendar": {
     "restrictions": {
       "arrival": {
