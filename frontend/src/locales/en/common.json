@@ -1,6 +1,22 @@
 {
   "loading": "Loading...",
   "saving": "Saving...",
+  "rateCalendar": {
+    "restrictions": {
+      "arrival": {
+        "booking": "No arrivals",
+        "expedia": "Closed to arrival",
+        "direct": "No check-in",
+        "default": "Closed to arrival"
+      },
+      "departure": {
+        "booking": "No departures",
+        "expedia": "Closed to departure",
+        "direct": "No check-out",
+        "default": "Closed to departure"
+      }
+    }
+  },
   "laundryCost": {
     "knownTotal": "Costs with configured prices",
     "unpricedWarning": "No price is set for {{quantity}} units; subtotals include only quantities with a price.",

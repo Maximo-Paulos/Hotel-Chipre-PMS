@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import cx from "clsx";
+import { useTranslation } from "react-i18next";
 
 import type {
   RateCalendarChannelDay,
@@ -37,16 +38,16 @@ const DATE_LABEL = new Intl.DateTimeFormat("es-AR", {
 
 const INTEGER_LABEL = new Intl.NumberFormat("es-AR");
 
-const ARRIVAL_LABELS: Record<string, string> = {
-  booking: "No arrivals",
-  expedia: "Cerrado llegada",
-  direct: "No check-in"
+const ARRIVAL_LABEL_KEYS: Record<string, string> = {
+  booking: "rateCalendar.restrictions.arrival.booking",
+  expedia: "rateCalendar.restrictions.arrival.expedia",
+  direct: "rateCalendar.restrictions.arrival.direct"
 };
 
-const DEPARTURE_LABELS: Record<string, string> = {
-  booking: "No departures",
-  expedia: "Cerrado salida",
-  direct: "No check-out"
+const DEPARTURE_LABEL_KEYS: Record<string, string> = {
+  booking: "rateCalendar.restrictions.departure.booking",
+  expedia: "rateCalendar.restrictions.departure.expedia",
+  direct: "rateCalendar.restrictions.departure.direct"
 };
 
 function formatCurrency(amount: number, currencyCode: string) {
@@ -250,6 +251,7 @@ export function RateCalendarGrid({
   showSummaryRows = true,
   excludeProviderCodes = []
 }: RateCalendarGridProps) {
+  const { t } = useTranslation("common");
   const channelSummaries = buildChannelSummaries(calendar.days, excludeProviderCodes);
 
   return (
@@ -365,7 +367,7 @@ export function RateCalendarGrid({
               <tr key={`${summary.providerCode}-arrival`}>
                 <StickyLabelCell>
                   <span className="text-sm font-medium text-slate-900">
-                    {ARRIVAL_LABELS[summary.providerCode] || "Cerrado llegada"}
+                    {t(ARRIVAL_LABEL_KEYS[summary.providerCode] || "rateCalendar.restrictions.arrival.default")}
                   </span>
                 </StickyLabelCell>
                 {calendar.days.map((day) => {
@@ -380,7 +382,7 @@ export function RateCalendarGrid({
               <tr key={`${summary.providerCode}-departure`}>
                 <StickyLabelCell>
                   <span className="text-sm font-medium text-slate-900">
-                    {DEPARTURE_LABELS[summary.providerCode] || "Cerrado salida"}
+                    {t(DEPARTURE_LABEL_KEYS[summary.providerCode] || "rateCalendar.restrictions.departure.default")}
                   </span>
                 </StickyLabelCell>
                 {calendar.days.map((day) => {

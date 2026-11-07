@@ -710,6 +710,11 @@ test("rate calendar page renders annual editor and integrated channel view", asy
   await expect(page.getByText("Booking.com")).toBeVisible();
   await expect(page.getByText("Falta mapeo").first()).toBeVisible();
   await expect(page.getByText("US$ 42")).toBeVisible();
+  const rateCalendarGrid = page.getByTestId("rate-calendar-grid");
+  await expect(rateCalendarGrid).toContainText("Sin llegadas");
+  await expect(rateCalendarGrid).toContainText("Sin salidas");
+  await expect(rateCalendarGrid).not.toContainText("No arrivals");
+  await expect(rateCalendarGrid).not.toContainText("No departures");
 
   const rateEditor = page.getByTestId("rate-editor");
   // Selecting one grid cell must constrain the bulk editor to that exact

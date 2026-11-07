@@ -1,6 +1,22 @@
 {
   "loading": "Cargando...",
   "saving": "Guardando...",
+  "rateCalendar": {
+    "restrictions": {
+      "arrival": {
+        "booking": "Sin llegadas",
+        "expedia": "Cerrado para llegadas",
+        "direct": "No permite check-in",
+        "default": "Cerrado para llegadas"
+      },
+      "departure": {
+        "booking": "Sin salidas",
+        "expedia": "Cerrado para salidas",
+        "direct": "No permite check-out",
+        "default": "Cerrado para salidas"
+      }
+    }
+  },
   "laundryCost": {
     "knownTotal": "Costos con tarifa configurada",
     "unpricedWarning": "Falta precio para {{quantity}} unidades; los subtotales solo incluyen cantidades con tarifa.",
