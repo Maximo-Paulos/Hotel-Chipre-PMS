@@ -15,7 +15,35 @@ vm.runInNewContext(compiled, {
   require: () => ({ formatMoney: (amount, currency) => `${currency}:${amount}` })
 });
 
-const { formatAnalyticsTableValue, visibleAnalyticsCurrencyFields } = module.exports;
+const {
+  ANALYTICS_ROOM_FIELD_LABELS,
+  ANALYTICS_ROOM_VALUE_LABELS,
+  formatAnalyticsTableValue,
+  visibleAnalyticsCurrencyFields
+} = module.exports;
+
+test("room analytics labels distinguish identifiers from display names", () => {
+  assert.equal(JSON.stringify(ANALYTICS_ROOM_FIELD_LABELS), JSON.stringify({
+    room_id: "ID habitación",
+    room_number: "Habitación",
+    category_id: "ID categoría",
+    category_name: "Categoría"
+  }));
+});
+
+test("room analytics statuses are presented in Spanish", () => {
+  for (const key of ["status", "status_at_night"]) {
+    for (const [value, label] of Object.entries({
+      available: "Libre",
+      occupied: "Ocupada",
+      cleaning: "En limpieza",
+      maintenance: "Mantenimiento",
+      blocked: "Bloqueada"
+    })) {
+      assert.equal(formatAnalyticsTableValue(value, key, undefined, "No disponible", ANALYTICS_ROOM_VALUE_LABELS), label);
+    }
+  }
+});
 
 test("analytics detail trusts explicit availability metadata for aggregated values", () => {
   assert.equal(

@@ -3,6 +3,30 @@ import { formatMoney } from "./currency";
 type AnalyticsValueLabels = Record<string, Record<string, string> | undefined>;
 export type AnalyticsCurrencyDisplay = "ARS" | "USD" | "BOTH";
 
+export const ANALYTICS_ROOM_FIELD_LABELS: Record<string, string> = {
+  room_id: "ID habitación",
+  room_number: "Habitación",
+  category_id: "ID categoría",
+  category_name: "Categoría"
+};
+
+export const ANALYTICS_ROOM_VALUE_LABELS: Record<string, Record<string, string>> = {
+  status: {
+    available: "Libre",
+    occupied: "Ocupada",
+    cleaning: "En limpieza",
+    maintenance: "Mantenimiento",
+    blocked: "Bloqueada"
+  },
+  status_at_night: {
+    available: "Libre",
+    occupied: "Ocupada",
+    cleaning: "En limpieza",
+    maintenance: "Mantenimiento",
+    blocked: "Bloqueada"
+  }
+};
+
 export function visibleAnalyticsCurrencyFields(fields: string[], currencyDisplay: AnalyticsCurrencyDisplay): string[] {
   return fields.filter((field) => {
     const currency = /_(ars|usd)$/.exec(field)?.[1]?.toUpperCase();

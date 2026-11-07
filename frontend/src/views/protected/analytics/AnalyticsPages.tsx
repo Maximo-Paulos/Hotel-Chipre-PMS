@@ -7,7 +7,12 @@ import { ApiError, apiFetch } from "../../../api/client";
 import { useSubscriptionStatus } from "../../../hooks/useSubscription";
 import { useRooms } from "../../../hooks/useRooms";
 import { formatMoney } from "../../../utils/currency";
-import { formatAnalyticsTableValue, visibleAnalyticsCurrencyFields } from "../../../utils/analyticsValue";
+import {
+  ANALYTICS_ROOM_FIELD_LABELS,
+  ANALYTICS_ROOM_VALUE_LABELS,
+  formatAnalyticsTableValue,
+  visibleAnalyticsCurrencyFields
+} from "../../../utils/analyticsValue";
 import { StatCard } from "../../../components/StatCard";
 import { useSession } from "../../../state/session";
 import { refreshAfterMutation, refreshRoomState } from "../../../api/queryInvalidation";
@@ -301,8 +306,8 @@ const FIELD_LABELS: Record<string, string> = {
   id: "ID",
   hotel_id: "Hotel",
   reservation_id: "Reserva",
-  room_id: "Habitación",
-  category_id: "Categoría",
+  room_id: ANALYTICS_ROOM_FIELD_LABELS.room_id,
+  category_id: ANALYTICS_ROOM_FIELD_LABELS.category_id,
   company_id: "Empresa",
   channel_code: "Canal",
   guest_segment: "Segmento",
@@ -315,8 +320,8 @@ const FIELD_LABELS: Record<string, string> = {
   occupied_nights: "Noches ocupadas",
   margin_operating_ars: "Margen operativo",
   margin_operating_usd: "Margen operativo (USD)",
-  room_number: "Habitación",
-  category_name: "Categoría",
+  room_number: ANALYTICS_ROOM_FIELD_LABELS.room_number,
+  category_name: ANALYTICS_ROOM_FIELD_LABELS.category_name,
   floor: "Piso",
   stay_date: "Noche",
   status_at_night: "Estado",
@@ -354,6 +359,7 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const VALUE_LABELS: Record<string, Record<string, string>> = {
+  ...ANALYTICS_ROOM_VALUE_LABELS,
   channel_code: {
     website_direct: "Web directa",
     whatsapp: "WhatsApp",
