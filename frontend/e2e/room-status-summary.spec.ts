@@ -29,6 +29,10 @@ test("room inventory summary includes every operational room status", async ({ p
   }));
 
   await page.goto("/habitaciones");
+  await expect(page.getByText(
+    "Inventario en vivo con estados operativos: libre, ocupada, en limpieza, en mantenimiento y bloqueada.",
+    { exact: true }
+  )).toBeVisible();
   const summary = page.getByTestId("room-status-summary");
   await expect(summary.getByText("Libres", { exact: true }).locator("..")).toContainText("1");
   await expect(summary.getByText("Ocupadas", { exact: true }).locator("..")).toContainText("1");

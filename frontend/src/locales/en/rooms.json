@@ -7,7 +7,7 @@
   "header": {
     "eyebrow": "Operations",
     "title": "Rooms",
-    "description": "Live inventory with status updates (available, occupied, cleaning).",
+    "description": "Live inventory with operational statuses: available, occupied, cleaning, maintenance, and blocked.",
     "updating": "Updating status..."
   },
   "stats": {

@@ -7,7 +7,7 @@
   "header": {
     "eyebrow": "Operación",
     "title": "Habitaciones",
-    "description": "Inventario en vivo con actualización de estado (libre, ocupada, limpieza).",
+    "description": "Inventario en vivo con estados operativos: libre, ocupada, en limpieza, en mantenimiento y bloqueada.",
     "updating": "Actualizando estado..."
   },
   "stats": {
