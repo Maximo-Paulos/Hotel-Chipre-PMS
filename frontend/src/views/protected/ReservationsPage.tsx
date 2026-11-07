@@ -46,6 +46,7 @@ import {
 import { ApiError, hasValidSession } from "../../api/client";
 import type { FxCurrencyCode } from "../../api/fxRates";
 import { getGuestProhibitedDetail } from "../../api/guestRestrictions";
+import { allocationHistoryNoteTranslation, allocationHistoryTriggerTranslation } from "../../utils/allocationHistoryLabels";
 import GuestQuickCreatePanel, {
   emptyQuickGuestForm,
   hasQuickGuestFormData,
@@ -104,6 +105,7 @@ import { useRooms } from "../../hooks/useRooms";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { useSession } from "../../state/session";
 import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
+import { countScheduledDepartures } from "../../utils/reservationStats";
 import { escapeHtml, resolveVoucherOperationalBalance } from "../../utils/escapeHtml";
 import { isLargeTotalAdjustment } from "../../utils/largeTotalAdjustment.mjs";
 import { resolveFxRoundingPolicy, roundFxAmount, suggestFxTenderSettlement } from "../../utils/fxRounding.mjs";
@@ -1103,16 +1105,20 @@ export function ReservationsPage() {
   }, [calendarRange, reservations, totalRooms]);
 
   const totals = useMemo(() => {
-    return reservations.reduce(
+    const reservationTotals = reservations.reduce(
       (acc, item) => {
         if (item.status !== "cancelled" && item.status !== "checked_out") acc.active += 1;
         if (item.check_in_date === today) acc.checkInsToday += 1;
-        if (item.check_out_date === today || item.status === "checked_out") acc.checkOutsToday += 1;
         if (item.status === "cancelled") acc.cancelled += 1;
         return acc;
       },
-      { active: 0, checkInsToday: 0, checkOutsToday: 0, cancelled: 0 }
+      { active: 0, checkInsToday: 0, cancelled: 0 }
     );
+
+    return {
+      ...reservationTotals,
+      checkOutsToday: countScheduledDepartures(reservations, today)
+    };
   }, [reservations, today]);
   const pendingActions = pendingActionsQuery.data ?? [];
   const cancellationReviews = cancellationReviewsQuery.data ?? [];
@@ -3916,6 +3922,8 @@ export function ReservationsPage() {
             <div className="divide-y divide-slate-200">
               {recentMovementGroups.map((group) => {
                 const moveCount = group.move_events.length;
+                const reasonTranslation = allocationHistoryTriggerTranslation(group.trigger_reason);
+                const noteTranslation = group.notes ? allocationHistoryNoteTranslation(group.notes) : null;
                 return (
                   <div key={group.id} className="flex flex-col gap-3 px-3 py-3 md:flex-row md:items-center md:justify-between">
                     <div>
@@ -3932,12 +3940,16 @@ export function ReservationsPage() {
                       </div>
                       <p className="mt-1 text-xs text-slate-600">
                         {t("page.allocation.groupTrigger", {
-                          reason: group.trigger_reason,
+                          reason: t(reasonTranslation.key, reasonTranslation.values),
                           count: moveCount,
                           moveWord: moveCount === 1 ? t("page.allocation.moveSingular") : t("page.allocation.movePlural")
                         })}
                       </p>
-                      {group.notes ? <p className="mt-1 text-xs text-slate-500">{group.notes}</p> : null}
+                      {group.notes ? (
+                        <p className="mt-1 text-xs text-slate-500">
+                          {noteTranslation ? t(noteTranslation.key, noteTranslation.values) : group.notes}
+                        </p>
+                      ) : null}
                     </div>
                     {hasPermission("reservation:movement_group_revert") ? (
                       <button

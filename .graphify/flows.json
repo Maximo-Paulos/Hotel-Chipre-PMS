@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-06T18:05:15.446Z",
+  "generatedAt": "2026-11-07T11:01:43.537Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -15517,7 +15517,6 @@
         "services_analytics_contracts_maybe_enum",
         "services_analytics_contracts_monetarytotals",
         "services_analytics_contracts_normalize_channel_code",
-        "services_analytics_contracts_reservation_status_to_outcome",
         "services_analytics_contracts_reservationnightfactdraft",
         "services_analytics_contracts_resolve_guest_segment",
         "services_analytics_contracts_resolve_row_kind",
@@ -15533,7 +15532,6 @@
         "services_analytics_contracts_maybe_enum",
         "services_analytics_contracts_monetarytotals",
         "services_analytics_contracts_normalize_channel_code",
-        "services_analytics_contracts_reservation_status_to_outcome",
         "services_analytics_contracts_reservationnightfactdraft",
         "services_analytics_contracts_resolve_guest_segment",
         "services_analytics_contracts_resolve_row_kind",
@@ -15544,7 +15542,7 @@
         "services_analytics_contracts_money"
       ],
       "depth": 3,
-      "nodeCount": 14,
+      "nodeCount": 13,
       "fileCount": 1,
       "files": [
         "app/services/analytics_contracts.py"
@@ -23450,28 +23448,6 @@
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/AllocationPage.tsx"
-      ],
-      "criticality": 0.16,
-      "warnings": []
-    },
-    {
-      "id": "flow:analytics_analyticspages_analyticsfreshness",
-      "name": "AnalyticsFreshness",
-      "entryPoint": "analytics_analyticspages_analyticsfreshness",
-      "entryPointId": "analytics_analyticspages_analyticsfreshness",
-      "path": [
-        "analytics_analyticspages_analyticsfreshness",
-        "analytics_analyticspages_formatfreshnesslag"
-      ],
-      "qualifiedPath": [
-        "analytics_analyticspages_analyticsfreshness",
-        "analytics_analyticspages_formatfreshnesslag"
-      ],
-      "depth": 1,
-      "nodeCount": 2,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/views/protected/analytics/AnalyticsPages.tsx"
       ],
       "criticality": 0.16,
       "warnings": []

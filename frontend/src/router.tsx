@@ -1,10 +1,38 @@
 import { lazy, useEffect, type ReactNode } from "react";
-import { createBrowserRouter, Navigate, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { createBrowserRouter, Navigate, useLocation, useRouteError } from "react-router-dom";
 
 import { isAppHostname, resolveAppLocation, resolveSiteLocation } from "./config/publicUrls";
 import { useOnboardingStatus } from "./hooks/useOnboardingStatus";
 import { useSession } from "./state/session";
 import { PermissionGate } from "./components/PermissionGate";
+import { isStaleBundleLoadError } from "./utils/routeLoadError.mjs";
+
+function RouteLoadError() {
+  const error = useRouteError();
+  const { t } = useTranslation("common");
+  const staleBundle = isStaleBundleLoadError(error);
+
+  return (
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-4 px-6 py-12 text-slate-900">
+      <div role="alert" aria-live="assertive">
+        <h1 className="text-2xl font-semibold">
+          {t(staleBundle ? "routeLoadError.staleBundle.title" : "routeLoadError.generic.title")}
+        </h1>
+        <p className="mt-2 text-sm text-slate-700">
+          {t(staleBundle ? "routeLoadError.staleBundle.description" : "routeLoadError.generic.description")}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="min-h-11 w-fit rounded-lg bg-brand-700 px-4 py-2 font-semibold text-white hover:bg-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+      >
+        {t("routeLoadError.reload")}
+      </button>
+    </main>
+  );
+}
 
 const AppShell = lazy(() =>
   import("./ui/AppShell").then((module) => ({ default: module.AppShell }))
@@ -259,6 +287,7 @@ const appRoutes = APP_HOST
       {
         path: "/",
         element: <AppShell />,
+        errorElement: <RouteLoadError />,
         children: [
           { index: true, element: <Navigate to="/dashboard" replace /> },
           { path: "analytics", element: <PermissionGate anyPermission={["analytics:view"]}><AnalyticsHomePage /></PermissionGate> },

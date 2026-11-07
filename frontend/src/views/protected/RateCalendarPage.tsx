@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import { RateCalendarGrid } from "../../components/RateCalendarGrid";
 import { RateEditorGrid, type PriceField } from "../../components/RateEditorGrid";
@@ -40,16 +41,16 @@ const PRICE_FIELD_LABEL: Record<PriceField, string> = {
   price_credit_card: "Tarjeta de crédito"
 };
 
-const TARIFF_SKIP_REASON_LABEL: Record<string, string> = {
-  no_active_price_period: "no hay una temporada activa para esa fecha",
-  season_not_marked_comparable: "la temporada no tiene grupo comparable",
-  insufficient_published_history: "faltan tres fechas históricas publicadas comparables",
-  current_rate_unavailable: "no se pudo obtener una tarifa vigente en USD",
-  comparable_usd_average_unavailable: "no hay promedio comparable en USD verificable",
-  pickup_history_unavailable: "falta historial comparable de pickup",
-  no_remaining_inventory: "no quedan habitaciones vendibles",
-  signals_do_not_agree: "la ocupación y el pickup no confirman la misma tendencia",
-  rounds_to_current_rate: "el ajuste se redondea a la tarifa actual"
+const TARIFF_SKIP_REASON_KEY: Record<string, string> = {
+  no_active_price_period: "tariffRecommendations.skipReasons.noActivePricePeriod",
+  season_not_marked_comparable: "tariffRecommendations.skipReasons.seasonNotComparable",
+  insufficient_published_history: "tariffRecommendations.skipReasons.insufficientHistory",
+  current_rate_unavailable: "tariffRecommendations.skipReasons.currentRateUnavailable",
+  comparable_usd_average_unavailable: "tariffRecommendations.skipReasons.comparableAverageUnavailable",
+  pickup_history_unavailable: "tariffRecommendations.skipReasons.pickupUnavailable",
+  no_remaining_inventory: "tariffRecommendations.skipReasons.noInventory",
+  signals_do_not_agree: "tariffRecommendations.skipReasons.signalsDisagree",
+  rounds_to_current_rate: "tariffRecommendations.skipReasons.roundsToCurrentRate"
 };
 
 const TARIFF_SIGNAL_LABEL: Record<string, string> = {
@@ -120,6 +121,7 @@ function Pill({ children, tone = "default" }: { children: React.ReactNode; tone?
 }
 
 export function RateCalendarPage() {
+  const { t } = useTranslation("common");
   const businessDate = useBusinessDate();
   const { hasPermission } = useEffectivePermissions();
   const canEditRates = hasPermission("rates:update");
@@ -591,6 +593,9 @@ export function RateCalendarPage() {
   const openPeriodOperation = openDraft?.period_operation ?? null;
   const periodDraftAfter = openPeriodOperation?.after as Record<string, unknown> | null | undefined;
   const periodDraftBefore = openPeriodOperation?.before as Record<string, unknown> | null | undefined;
+  const skippedWithoutActiveSeason = Object.fromEntries(
+    Object.entries(tariffRunResult?.skipped ?? {}).filter(([reason]) => reason !== "no_active_price_period")
+  );
 
   return (
     <div className="space-y-4" data-testid="rate-calendar-page">
@@ -711,13 +716,22 @@ export function RateCalendarPage() {
               <button type="button" onClick={() => void handleRunTariffRecommendations()} disabled={!canEditRates || !tariffSettingsForm.enabled || Boolean(openDraft) || tariffEngine.generate.isPending || !categoryId} className="rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{tariffEngine.generate.isPending ? "Evaluando fechas..." : "Evaluar fechas y preparar borrador"}</button>
               {tariffRunMessage ? <p role="status" className="text-sm text-slate-700">{tariffRunMessage}</p> : null}
               {tariffRunResult && Object.keys(tariffRunResult.skipped).length > 0 ? (
-                <div className="w-full text-xs text-slate-500">
-                  <p>Fechas sin sugerencia: {Object.values(tariffRunResult.skipped).reduce((sum, value) => sum + value, 0)}.</p>
-                  <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                    {Object.entries(tariffRunResult.skipped).map(([reason, count]) => (
-                      <li key={reason}>{count} {TARIFF_SKIP_REASON_LABEL[reason] ?? reason}</li>
-                    ))}
-                  </ul>
+                <div className="w-full space-y-2 text-sm text-slate-700" aria-live="polite">
+                  <p className="text-xs text-slate-500">{t("tariffRecommendations.skippedCount", { count: Object.values(tariffRunResult.skipped).reduce((sum, value) => sum + value, 0) })}</p>
+                  {tariffRunResult.skipped.no_active_price_period ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3" data-testid="tariff-missing-season-notice">
+                      <p className="font-semibold">{t("tariffRecommendations.missingSeasonTitle", { count: tariffRunResult.skipped.no_active_price_period })}</p>
+                      <p className="mt-1">{t("tariffRecommendations.missingSeasonDescription")}</p>
+                      <a className="mt-2 inline-flex font-semibold text-brand-700 underline underline-offset-2" href="#price-periods-section">{t("tariffRecommendations.configureSeasonLink")}</a>
+                    </div>
+                  ) : null}
+                  {Object.keys(skippedWithoutActiveSeason).length > 0 ? (
+                    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                      {Object.entries(skippedWithoutActiveSeason).map(([reason, count]) => (
+                        <li key={reason}>{count} {t(TARIFF_SKIP_REASON_KEY[reason] ?? reason, { defaultValue: reason })}</li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -1174,7 +1188,7 @@ export function RateCalendarPage() {
             </form>
           </section>
 
-          <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200" data-testid="price-periods-section">
+          <section id="price-periods-section" className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200" data-testid="price-periods-section">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Precio por temporada</h2>

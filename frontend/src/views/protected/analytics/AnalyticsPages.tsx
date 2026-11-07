@@ -1599,7 +1599,9 @@ export function RoomStateEventsPage() {
                     {t(`analyticsRoomEvents.types.${event.event_type}`, { defaultValue: t("analyticsRoomEvents.unknown") })}
                   </h3>
                   <p className="text-sm text-slate-600">
-                    {t("analyticsRoomEvents.room")}: {roomLabels.get(event.room_id) ?? t("analyticsRoomEvents.unavailable")} · {t(`analyticsRoomEvents.reasons.${event.reason_code}`, { defaultValue: t("analyticsRoomEvents.unknown") })}
+                    {roomLabels.has(event.room_id)
+                      ? `${t("analyticsRoomEvents.room")}: ${roomLabels.get(event.room_id)}`
+                      : t("analyticsRoomEvents.roomUnavailable")} · {t(`analyticsRoomEvents.reasons.${event.reason_code}`, { defaultValue: t("analyticsRoomEvents.unknown") })}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -1622,7 +1624,7 @@ export function RoomStateEventsPage() {
                 <div>{t("analyticsRoomEvents.endedAt")}: {event.ended_at ? formatEventDate(event.ended_at) : t("analyticsRoomEvents.open")}</div>
                 <div>{t("analyticsRoomEvents.createdBy")}: {event.created_by_user_id ? t("analyticsRoomEvents.recordedUser") : t("analyticsRoomEvents.unavailable")}</div>
                 <div>{t("analyticsRoomEvents.closedBy")}: {event.closed_by_user_id ? t("analyticsRoomEvents.recordedUser") : t("analyticsRoomEvents.unavailable")}</div>
-                <div className="sm:col-span-2">{t("analyticsRoomEvents.note")}: {event.reason_note || t("analyticsRoomEvents.unavailable")}</div>
+                <div className="sm:col-span-2">{t("analyticsRoomEvents.note")}: {event.reason_note?.trim() || t("analyticsRoomEvents.noteMissing")}</div>
               </div>
             </div>
           ))}

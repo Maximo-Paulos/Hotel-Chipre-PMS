@@ -193,5 +193,35 @@
     "permissionConflict": "This permission changed while you were editing. Data was refreshed; review it before trying again.",
     "permissionDenied": "The server denied this change. No permission was applied.",
     "permissionSaveError": "The change could not be saved."
+  },
+  "routeLoadError": {
+    "reload": "Reload page",
+    "staleBundle": {
+      "title": "The app has been updated",
+      "description": "This tab is using an older version. Reload the page to open it again. Unsaved changes will not be kept."
+    },
+    "generic": {
+      "title": "This screen could not be opened",
+      "description": "Reload the page and try again. If the problem continues, contact a hotel administrator."
+    }
+  },
+  "tariffRecommendations": {
+    "skippedCount_one": "{{count}} date skipped without a suggestion.",
+    "skippedCount_other": "{{count}} dates skipped without a suggestion.",
+    "missingSeasonTitle_one": "{{count}} date skipped: no active season covers it.",
+    "missingSeasonTitle_other": "{{count}} dates skipped: no active seasons cover them.",
+    "missingSeasonDescription": "Configure a season for those dates in the calendar, then evaluate again. No rate was created or changed.",
+    "configureSeasonLink": "Go to seasons",
+    "skipReasons": {
+      "noActivePricePeriod": "no active season for that date",
+      "seasonNotComparable": "the season has no comparable group",
+      "insufficientHistory": "three comparable published historical dates are missing",
+      "currentRateUnavailable": "a current rate in USD could not be obtained",
+      "comparableAverageUnavailable": "no verifiable comparable USD average is available",
+      "pickupUnavailable": "comparable pickup history is missing",
+      "noInventory": "no rooms remain for sale",
+      "signalsDisagree": "occupancy and pickup do not confirm the same trend",
+      "roundsToCurrentRate": "the adjustment rounds to the current rate"
+    }
   }
 }

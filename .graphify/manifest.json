@@ -1084,8 +1084,8 @@
     "hash": "29167c199015ae25886347313bfae12c"
   },
   "frontend/e2e/rate-calendar.spec.ts": {
-    "mtime": 1794011727188.528,
-    "hash": "74fe4cd45c7500fbca123726e6ceb7ed"
+    "mtime": 1794049160881.65,
+    "hash": "052a7cb379410c7a209d23bb42e4f552"
   },
   "frontend/e2e/smoke.spec.ts": {
     "mtime": 1794011727190.8596,
@@ -1384,8 +1384,8 @@
     "hash": "5850ae0d93dcaa99a607e48fd8274b74"
   },
   "frontend/src/router.tsx": {
-    "mtime": 1794011727266.9968,
-    "hash": "f372a160b83088cc8be72c4cd7dc5758"
+    "mtime": 1794048537673.9417,
+    "hash": "024409b69579d4a044eb7841697eb141"
   },
   "frontend/src/state/session.tsx": {
     "mtime": 1794011727267.2253,
@@ -1424,24 +1424,24 @@
     "hash": "06989ada2055bb2d4a0221b21b76c008"
   },
   "frontend/src/views/protected/GuestsPage.tsx": {
-    "mtime": 1794011727269.8564,
-    "hash": "9304da1e282b025a6b02170d1d65caf0"
+    "mtime": 1794048501597.589,
+    "hash": "f33c7fbaaca0f8a4cb245052906a709e"
   },
   "frontend/src/views/protected/LaundryPage.tsx": {
     "mtime": 1794011727270.1438,
     "hash": "ddec47daa6d88844afb4f4d429aa157a"
   },
   "frontend/src/views/protected/RateCalendarPage.tsx": {
-    "mtime": 1794011727270.8938,
-    "hash": "7bc4456aa1f2ad180ebdb31f768f1b5e"
+    "mtime": 1794049160882.2292,
+    "hash": "be2ebff0b73e10aace4a19984f5209f3"
   },
   "frontend/src/views/protected/ReportsPage.tsx": {
     "mtime": 1794011727271.0295,
     "hash": "49dcd300521a083b25cab5685b6ffd18"
   },
   "frontend/src/views/protected/ReservationsPage.tsx": {
-    "mtime": 1794011727272.0205,
-    "hash": "0207159ac621989a5354b14e247bc918"
+    "mtime": 1794048801156.2275,
+    "hash": "1ef9c54255756e1ea837b2ace7df8c09"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
     "mtime": 1794011727272.1748,
@@ -1496,8 +1496,8 @@
     "hash": "57fe8c7c47690d91313074ef79e0e8da"
   },
   "frontend/src/views/protected/analytics/AnalyticsPages.tsx": {
-    "mtime": 1794012716800.7844,
-    "hash": "dfab69f8507a8ea65a895643720ad041"
+    "mtime": 1794049160714.1863,
+    "hash": "3bb464d6c2e5d36a0c8802ec2c7b61f7"
   },
   "frontend/src/views/public/AcceptInvitationPage.tsx": {
     "mtime": 1794011727274.6172,
@@ -2768,27 +2768,27 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1794011727279.3406,
+    "mtime": 1794049147212.68,
     "hash": "b288f643f633873471b48d581fe58bb0"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1794011727279.4749,
+    "mtime": 1794049147214.367,
     "hash": "c148c7c3b7942301b5976cb1dc29c5f7"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1794011727279.7507,
+    "mtime": 1794049147214.5872,
     "hash": "3a190d57946f1ebfe0d6235c95747358"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1794011727279.8657,
+    "mtime": 1794049147214.6667,
     "hash": "e6bff001915a5b0be0e94f02db9bacd7"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1794011727279.978,
+    "mtime": 1794049147214.7473,
     "hash": "ce111d351cfc6a949708dcc948a5e615"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1794011727280.1301,
+    "mtime": 1794049147214.826,
     "hash": "3447cb474f64bf2eed5be6d9e204a736"
   },
   "qa/evidence/README.md": {
@@ -3476,8 +3476,8 @@
     "hash": "e2923f69379bb30241bc73ace05e9402"
   },
   "frontend/e2e/role-journey.spec.ts": {
-    "mtime": 1794011727190.2007,
-    "hash": "e5e4bd4657de4179e71c088bcfcb554c"
+    "mtime": 1794048501596.8872,
+    "hash": "c229b24fd944a8044f4e64dd95a36514"
   },
   "frontend/e2e/auth-onboarding-journey.spec.ts": {
     "mtime": 1794011727184.4724,
@@ -7720,8 +7720,8 @@
     "hash": "9352d3a2d3a5ba762351977e99ca260c"
   },
   "qa/evidence/2026-11-06-playwright-cloud-round-2/observation.md": {
-    "mtime": 1794011727282.1873,
-    "hash": "e607a5c30a49bb0e1b4131303176becc"
+    "mtime": 1794049232467.4783,
+    "hash": "72365a73ba5de28e099a407405562f4a"
   },
   "tests/test_reservation_quote_fallback_unit.py": {
     "mtime": 1794011727315.1802,
@@ -7742,5 +7742,33 @@
   "tests/test_room_state_events_postgres.py": {
     "mtime": 1794013661663.214,
     "hash": "2a29f1a7be625b8ee7c64f2664d07cb4"
+  },
+  "frontend/allocation-history-labels.test.mjs": {
+    "mtime": 1794048501556.2334,
+    "hash": "570adbc7c476ef78e6c767ded2fab18d"
+  },
+  "frontend/reservation-stats.test.mjs": {
+    "mtime": 1794048818501.4858,
+    "hash": "1303a5917e4e8f4ff3232578601b44c6"
+  },
+  "frontend/room-state-event-fallbacks.test.mjs": {
+    "mtime": 1794049160713.5034,
+    "hash": "623c104b2c83720cf9987e75b68d70d2"
+  },
+  "frontend/route-load-error.test.mjs": {
+    "mtime": 1794048537673.2207,
+    "hash": "4110749323bef636bf8ae1c3b154c1a9"
+  },
+  "frontend/src/utils/allocationHistoryLabels.ts": {
+    "mtime": 1794048501557.167,
+    "hash": "a20d6487aeb8891f8fffc9ee122b9113"
+  },
+  "frontend/src/utils/reservationStats.ts": {
+    "mtime": 1794048818501.222,
+    "hash": "c4a35b34f1a6eb7ed22a43539c8ecad5"
+  },
+  "frontend/src/utils/routeLoadError.mjs": {
+    "mtime": 1794048537674.0886,
+    "hash": "60119eb35d95ca75dec49a2c9a97dc5d"
   }
 }

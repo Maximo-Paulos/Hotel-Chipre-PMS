@@ -416,6 +416,24 @@ test("rate calendar page renders annual editor and integrated channel view", asy
       return;
     }
 
+    if (url.pathname.endsWith("/api/tariff-recommendations/settings") && request.method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ hotel_id: 1, enabled: true, high_occupancy_pct: 80, low_occupancy_pct: 40, pickup_change_pct: 20, max_step_pct: 5 })
+      });
+      return;
+    }
+
+    if (url.pathname.endsWith("/api/tariff-recommendations/generate") && request.method() === "POST") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ created: false, reason: null, draft_id: null, suggestions: [], skipped: { no_active_price_period: 55 }, draft: null })
+      });
+      return;
+    }
+
     if (url.pathname.endsWith("/api/rate-change-drafts") && request.method() === "GET") {
       const drafts: unknown[] = [];
       if (openDraft?.status === "draft") drafts.push(openDraft);
@@ -645,6 +663,13 @@ test("rate calendar page renders annual editor and integrated channel view", asy
 
   await expect(page.getByTestId("rate-calendar-page")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Calendario de tarifas y disponibilidad" })).toBeVisible();
+  await page.getByRole("button", { name: "Evaluar fechas y preparar borrador" }).click();
+  const missingSeasonNotice = page.getByTestId("tariff-missing-season-notice");
+  await expect(missingSeasonNotice).toContainText("55 fechas omitidas");
+  await expect(missingSeasonNotice).toContainText("Configurá una temporada para esas fechas");
+  await expect(missingSeasonNotice.getByRole("link", { name: "Ir a temporadas" })).toHaveAttribute("href", "#price-periods-section");
+  await expect(missingSeasonNotice).toHaveCount(1);
+  await expect(page.getByTestId("tariff-recommendation-engine")).toContainText("55 fechas sin sugerencia.");
   const rateEditorGrid = page.getByTestId("rate-editor-grid");
   await expect(rateEditorGrid).toBeVisible();
   // Task 4 added RateEditorMobileCards, a `md:hidden` sibling tree that

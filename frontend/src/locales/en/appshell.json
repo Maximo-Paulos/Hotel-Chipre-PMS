@@ -57,6 +57,8 @@
     "open": "Open",
     "recordedUser": "Recorded user",
     "unavailable": "Unavailable",
+    "roomUnavailable": "Room unavailable",
+    "noteMissing": "No note recorded",
     "unknown": "Other",
     "types": {
       "out_of_service": "Out of service",

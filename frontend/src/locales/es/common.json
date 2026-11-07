@@ -193,5 +193,35 @@
     "permissionConflict": "El permiso cambió mientras editabas. Se actualizaron los datos; revisalos antes de volver a intentar.",
     "permissionDenied": "El servidor rechazó el cambio por falta de autorización. No se aplicó ningún permiso.",
     "permissionSaveError": "No se pudo guardar el cambio."
+  },
+  "routeLoadError": {
+    "reload": "Recargar página",
+    "staleBundle": {
+      "title": "La aplicación se actualizó",
+      "description": "Esta pestaña tiene una versión anterior. Recargá la página para abrirla de nuevo. Los cambios que no hayas guardado no se conservarán."
+    },
+    "generic": {
+      "title": "No se pudo abrir esta pantalla",
+      "description": "Recargá la página e intentá de nuevo. Si el problema continúa, avisale a una persona administradora."
+    }
+  },
+  "tariffRecommendations": {
+    "skippedCount_one": "{{count}} fecha sin sugerencia.",
+    "skippedCount_other": "{{count}} fechas sin sugerencia.",
+    "missingSeasonTitle_one": "{{count}} fecha omitida: no hay una temporada activa que la cubra.",
+    "missingSeasonTitle_other": "{{count}} fechas omitidas: no hay temporadas activas que las cubran.",
+    "missingSeasonDescription": "Configurá una temporada para esas fechas en el calendario y volvé a evaluar. No se generó ni modificó ninguna tarifa.",
+    "configureSeasonLink": "Ir a temporadas",
+    "skipReasons": {
+      "noActivePricePeriod": "no hay una temporada activa para esa fecha",
+      "seasonNotComparable": "la temporada no tiene grupo comparable",
+      "insufficientHistory": "faltan tres fechas históricas publicadas comparables",
+      "currentRateUnavailable": "no se pudo obtener una tarifa vigente en USD",
+      "comparableAverageUnavailable": "no hay promedio comparable en USD verificable",
+      "pickupUnavailable": "falta historial comparable de pickup",
+      "noInventory": "no quedan habitaciones vendibles",
+      "signalsDisagree": "la ocupación y el pickup no confirman la misma tendencia",
+      "roundsToCurrentRate": "el ajuste se redondea a la tarifa actual"
+    }
   }
 }

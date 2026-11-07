@@ -217,16 +217,34 @@ for (const persona of personas) {
 test("receptionist can edit guest data and manage tags", async ({ page }) => {
   const receptionist = personas.find((persona) => persona.label === "receptionist")!;
   await login(page, receptionist);
+  await page.route("**/api/guests/*/quick-profile", async (route) => {
+    const response = await route.fetch();
+    const profile = await response.json();
+    profile.last_stays = [
+      { reservation_id: 98001, confirmation_code: "QA-PENDING", status: "pending", check_in_date: "2026-10-01", check_out_date: "2026-10-02" },
+      { reservation_id: 98002, confirmation_code: "QA-CHECKED-OUT", status: "checked_out", check_in_date: "2026-10-03", check_out_date: "2026-10-04" },
+      { reservation_id: 98003, confirmation_code: "QA-CANCELLED", status: "cancelled", check_in_date: "2026-10-05", check_out_date: "2026-10-06" }
+    ];
+    await route.fulfill({ response, json: profile });
+  });
   await page.goto("/huespedes");
 
   await expect(page.getByRole("heading", { name: "Ficha de huéspedes", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Huesped E2E", exact: true })).toBeVisible();
+  const staysSection = page.getByRole("heading", { name: "Últimas estadías", exact: true }).locator("xpath=ancestor::section[1]");
+  await expect(staysSection).toContainText("QA-PENDING · Pendiente");
+  await expect(staysSection).toContainText("QA-CHECKED-OUT · Check-out");
+  await expect(staysSection).toContainText("QA-CANCELLED · Cancelada");
+  await expect(staysSection).not.toContainText("Checked Out");
+
   await page.getByRole("button", { name: "Guardar huésped", exact: true }).click();
   await expect(page.getByText("Huésped guardado.", { exact: true })).toBeVisible();
 
   const tagSection = page
     .getByRole("heading", { name: "Alertas y segmentación", exact: true })
     .locator("xpath=ancestor::section[1]");
+  await expect(tagSection.getByLabel("Etiqueta")).toHaveValue("");
+  await expect(tagSection.getByLabel("Etiqueta")).toHaveAttribute("required", "");
   const tagNote = `QA recepción ${Date.now()}`;
   await tagSection.getByLabel("Etiqueta").selectOption("otro");
   await tagSection.getByLabel("Nota").fill(tagNote);

@@ -77,18 +77,33 @@ const emptyCompanion: GuestCompanionPayload = {
   relationship_to_guest: ""
 };
 
-const emptyTagForm: GuestTagPayload = {
-  tag_type: "prohibido_alojar",
+type GuestTagFormState = Omit<GuestTagPayload, "tag_type"> & { tag_type: GuestTagType | "" };
+
+const emptyTagForm: GuestTagFormState = {
+  tag_type: "",
   note: "",
   expires_at: ""
 };
 
 const canCheckInStatus = (status: string) => ["fully_paid", "pre_check_in"].includes(status);
 
-const formatStatus = (status: string) =>
-  status
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+const STAY_STATUSES = [
+  "pending",
+  "deposit_paid",
+  "fully_paid",
+  "pre_check_in",
+  "partial_checkin",
+  "checked_in",
+  "checked_out",
+  "cancelled",
+  "no_show"
+] as const;
+
+const formatStatus = (status: string, t: TFunction) => {
+  const normalized = status.trim().toLowerCase();
+  const statusKey = STAY_STATUSES.find((knownStatus) => knownStatus === normalized);
+  return statusKey ? t(`checkIn.statuses.${statusKey}`) : t("checkIn.statuses.unknown");
+};
 
 const formatDate = (value: string | null | undefined, t: TFunction) => {
   if (!value) return t("checkIn.noDate");
@@ -117,7 +132,7 @@ export function GuestsPage() {
   const [selectedGuestId, setSelectedGuestId] = useState<number | null>(null);
   const [formValues, setFormValues] = useState<GuestUpdatePayload>(emptyForm);
   const [companionValues, setCompanionValues] = useState<GuestCompanionPayload>(emptyCompanion);
-  const [tagValues, setTagValues] = useState<GuestTagPayload>(emptyTagForm);
+  const [tagValues, setTagValues] = useState<GuestTagFormState>(emptyTagForm);
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [companionMessage, setCompanionMessage] = useState<string | null>(null);
   const [tagMessage, setTagMessage] = useState<string | null>(null);
@@ -337,7 +352,7 @@ export function GuestsPage() {
 
   const handleTagSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedGuestId || !canManageTags) return;
+    if (!selectedGuestId || !canManageTags || !tagValues.tag_type) return;
     setTagMessage(null);
     try {
       await addTagMutation.mutateAsync({
@@ -851,9 +866,13 @@ export function GuestsPage() {
                     <span className="text-slate-600">{t("tags.typeLabel")}</span>
                     <select
                       value={tagValues.tag_type}
-                      onChange={(e) => setTagValues((current) => ({ ...current, tag_type: e.target.value as GuestTagType }))}
+                      onChange={(e) => setTagValues((current) => ({ ...current, tag_type: e.target.value as GuestTagType | "" }))}
+                      required
                       className="w-full rounded-lg border border-slate-300 px-3 py-2"
                     >
+                      <option value="" disabled>
+                        {t("tags.selectType")}
+                      </option>
                       {TAG_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
                           {t(`tags.types.${option.value}`)}
@@ -924,7 +943,7 @@ export function GuestsPage() {
                                   >
                                     {stay.confirmation_code}
                                   </button>{" "}
-                                  · {formatStatus(String(stay.status))}
+                                  · {formatStatus(String(stay.status), t)}
                                 </p>
                                 <p className="text-xs text-slate-500">
                                   {t("checkIn.dateRange", { start: formatDate(stay.check_in_date, t), end: formatDate(stay.check_out_date, t) })}

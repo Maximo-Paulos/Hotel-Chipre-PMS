@@ -57,6 +57,8 @@
     "open": "Abierto",
     "recordedUser": "Usuario registrado",
     "unavailable": "No disponible",
+    "roomUnavailable": "Habitación no disponible",
+    "noteMissing": "Sin nota registrada",
     "unknown": "Otro",
     "types": {
       "out_of_service": "Fuera de servicio",
