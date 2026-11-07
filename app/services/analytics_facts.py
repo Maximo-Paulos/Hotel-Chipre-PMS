@@ -608,7 +608,7 @@ def touch_room_state_event_fact_window(
             db.query(
                 func.min(FactRoomOccupancyDaily.stay_date),
                 func.max(FactRoomOccupancyDaily.stay_date),
-                HotelConfiguration.hotel_timezone,
+                func.min(HotelConfiguration.hotel_timezone),
             )
             .select_from(FactRoomOccupancyDaily)
             .outerjoin(HotelConfiguration, HotelConfiguration.id == FactRoomOccupancyDaily.hotel_id)
