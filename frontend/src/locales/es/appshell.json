@@ -43,7 +43,35 @@
     "source": "Fuente",
     "oldestIncludedDataUpdatedAt": "Dato incluido más antiguo actualizado el {{date}}",
     "oldestIncludedDataUnavailable": "Fecha del dato incluido más antiguo no disponible",
+    "showingLastLoadedReport": "Mostrando el último informe cargado el {{date}}. Puede no incluir cambios recientes.",
+    "showingLastLoadedReportDateUnavailable": "Mostrando el último informe cargado; no se pudo determinar cuándo se cargó.",
     "status": "Fuente {{source}}. {{timestamp}}"
+  },
+  "analyticsRoomEvents": {
+    "room": "Habitación",
+    "startedAt": "Inicio",
+    "endedAt": "Fin",
+    "createdBy": "Creado por",
+    "closedBy": "Cerrado por",
+    "note": "Nota",
+    "open": "Abierto",
+    "recordedUser": "Usuario registrado",
+    "unavailable": "No disponible",
+    "unknown": "Otro",
+    "types": {
+      "out_of_service": "Fuera de servicio",
+      "maintenance": "Mantenimiento",
+      "housekeeping_block": "Bloqueo de limpieza",
+      "renovation": "Reforma"
+    },
+    "reasons": {
+      "plumbing": "Plomería",
+      "electrical": "Electricidad",
+      "furniture": "Mobiliario",
+      "deep_clean": "Limpieza profunda",
+      "inspection": "Inspección",
+      "other": "Otro"
+    }
   },
   "realtime": {
     "connected": "Conectado: cambios en tiempo real activos.",

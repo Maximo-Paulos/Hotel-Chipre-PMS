@@ -43,7 +43,35 @@
     "source": "Source",
     "oldestIncludedDataUpdatedAt": "Oldest included data was updated {{date}}",
     "oldestIncludedDataUnavailable": "Date of oldest included data unavailable",
+    "showingLastLoadedReport": "Showing the last report loaded {{date}}. It may not include recent changes.",
+    "showingLastLoadedReportDateUnavailable": "Showing the last loaded report; its load time could not be determined.",
     "status": "Source {{source}}. {{timestamp}}"
+  },
+  "analyticsRoomEvents": {
+    "room": "Room",
+    "startedAt": "Starts",
+    "endedAt": "Ends",
+    "createdBy": "Created by",
+    "closedBy": "Closed by",
+    "note": "Note",
+    "open": "Open",
+    "recordedUser": "Recorded user",
+    "unavailable": "Unavailable",
+    "unknown": "Other",
+    "types": {
+      "out_of_service": "Out of service",
+      "maintenance": "Maintenance",
+      "housekeeping_block": "Housekeeping block",
+      "renovation": "Renovation"
+    },
+    "reasons": {
+      "plumbing": "Plumbing",
+      "electrical": "Electrical",
+      "furniture": "Furniture",
+      "deep_clean": "Deep clean",
+      "inspection": "Inspection",
+      "other": "Other"
+    }
   },
   "realtime": {
     "connected": "Connected: real-time changes active.",

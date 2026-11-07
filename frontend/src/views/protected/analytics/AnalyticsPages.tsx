@@ -838,6 +838,13 @@ function ReportScreen({
   const query = useAnalyticsQuery<AnalyticsEnvelope>(path, queryParams, filtersReady);
   const report = query.data;
   const errorMessage = analyticsErrorMessage(query.error);
+  const { t, i18n } = useTranslation("appshell");
+  const lastLoadedAt = query.dataUpdatedAt > 0
+    ? new Intl.DateTimeFormat(interfaceLanguageToLocale(i18n.resolvedLanguage ?? i18n.language), {
+        dateStyle: "short",
+        timeStyle: "short"
+      }).format(new Date(query.dataUpdatedAt))
+    : null;
   return (
     <PageShell
       eyebrow="Analítica"
@@ -874,6 +881,13 @@ function ReportScreen({
             ) : null}
           </div>
         </div>
+      )}
+      {query.isError && report && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="status" aria-live="polite">
+          {lastLoadedAt
+            ? t("analyticsFreshness.showingLastLoadedReport", { date: lastLoadedAt })
+            : t("analyticsFreshness.showingLastLoadedReportDateUnavailable")}
+        </p>
       )}
       {report && (
         <div className="space-y-4">
@@ -1421,6 +1435,7 @@ export function CompaniesSettingsPage() {
 
 export function RoomStateEventsPage() {
   const plan = usePlan();
+  const { t, i18n } = useTranslation("appshell");
   const { session } = useSession();
   const { roomsQuery } = useRooms({ includeCategories: false });
   const queryClient = useQueryClient();
@@ -1428,8 +1443,7 @@ export function RoomStateEventsPage() {
     room_id: 0,
     event_type: "maintenance",
     reason_code: "inspection",
-    reason_note: "",
-    started_at: new Date().toISOString()
+    reason_note: ""
   });
 
   const eventsQuery = useQuery({
@@ -1458,6 +1472,13 @@ export function RoomStateEventsPage() {
   });
 
   const events = eventsQuery.data || [];
+  const eventLocale = interfaceLanguageToLocale(i18n.resolvedLanguage ?? i18n.language);
+  const formatEventDate = (value: string | null | undefined) => {
+    if (!value) return t("analyticsRoomEvents.unavailable");
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return t("analyticsRoomEvents.unavailable");
+    return new Intl.DateTimeFormat(eventLocale, { dateStyle: "medium", timeStyle: "short" }).format(date);
+  };
   const roomLabels = useMemo(
     () => new Map((roomsQuery.data ?? []).map((room) => [room.id, room.room_number])),
     [roomsQuery.data]
@@ -1492,7 +1513,7 @@ export function RoomStateEventsPage() {
           <h2 className="text-lg font-semibold text-slate-900">Nuevo evento</h2>
           <div className="mt-4 grid gap-3">
             <label className="grid gap-1 text-sm">
-              <span className="text-slate-600">Habitación</span>
+              <span className="text-slate-600">{t("analyticsRoomEvents.room")}</span>
               <select
                 value={form.room_id || ""}
                 onChange={(event) => setForm((current) => ({ ...current, room_id: Number(event.target.value) }))}
@@ -1556,7 +1577,13 @@ export function RoomStateEventsPage() {
           >
             {createMutation.isPending ? "Guardando…" : "Crear evento"}
           </button>
-            {createMutation.isError && <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">No se pudo crear el evento. Revisá los datos e intentá nuevamente.</p>}
+            {createMutation.isError && (
+              <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
+                {createMutation.error instanceof ApiError && createMutation.error.status === 400 && createMutation.error.message
+                  ? createMutation.error.message
+                  : "No se pudo crear el evento. Revisá los datos e intentá nuevamente."}
+              </p>
+            )}
         </div>
 
         <div className="space-y-3">
@@ -1568,8 +1595,12 @@ export function RoomStateEventsPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500">Evento #{event.id}</p>
-                  <h3 className="text-lg font-semibold text-slate-900">{event.event_type}</h3>
-                  <p className="text-sm text-slate-600">Habitación {roomLabels.get(event.room_id) ?? "Información no disponible"} · {event.reason_code}</p>
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    {t(`analyticsRoomEvents.types.${event.event_type}`, { defaultValue: t("analyticsRoomEvents.unknown") })}
+                  </h3>
+                  <p className="text-sm text-slate-600">
+                    {t("analyticsRoomEvents.room")}: {roomLabels.get(event.room_id) ?? t("analyticsRoomEvents.unavailable")} · {t(`analyticsRoomEvents.reasons.${event.reason_code}`, { defaultValue: t("analyticsRoomEvents.unknown") })}
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   {event.ended_at ? (
@@ -1587,11 +1618,11 @@ export function RoomStateEventsPage() {
                 </div>
               </div>
               <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
-                <div>Inicio: {event.started_at}</div>
-                <div>Fin: {event.ended_at || "Abierto"}</div>
-                <div>Creado por: {event.created_by_user_id}</div>
-                <div>Cerrado por: {event.closed_by_user_id || "—"}</div>
-                <div className="sm:col-span-2">Nota: {event.reason_note || "—"}</div>
+                <div>{t("analyticsRoomEvents.startedAt")}: {formatEventDate(event.started_at)}</div>
+                <div>{t("analyticsRoomEvents.endedAt")}: {event.ended_at ? formatEventDate(event.ended_at) : t("analyticsRoomEvents.open")}</div>
+                <div>{t("analyticsRoomEvents.createdBy")}: {event.created_by_user_id ? t("analyticsRoomEvents.recordedUser") : t("analyticsRoomEvents.unavailable")}</div>
+                <div>{t("analyticsRoomEvents.closedBy")}: {event.closed_by_user_id ? t("analyticsRoomEvents.recordedUser") : t("analyticsRoomEvents.unavailable")}</div>
+                <div className="sm:col-span-2">{t("analyticsRoomEvents.note")}: {event.reason_note || t("analyticsRoomEvents.unavailable")}</div>
               </div>
             </div>
           ))}
