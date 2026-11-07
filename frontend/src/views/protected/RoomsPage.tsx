@@ -464,10 +464,15 @@ export function RoomsPage() {
           </div>
         ) : null
       ) : roomsQuery.isSuccess ? (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <StatusBadge label={t("stats.available")} value={stats.available ?? 0} className={statusColors.available} />
-          <StatusBadge label={t("stats.occupied")} value={stats.occupied ?? 0} className={statusColors.occupied} />
-          <StatusBadge label={t("stats.cleaning")} value={stats.cleaning ?? 0} className={statusColors.cleaning} />
+        <div data-testid="room-status-summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {statusOptions.map((status) => (
+            <StatusBadge
+              key={status}
+              label={t(`stats.${status}`)}
+              value={stats[status] ?? 0}
+              className={statusColors[status]}
+            />
+          ))}
         </div>
       ) : null}
 

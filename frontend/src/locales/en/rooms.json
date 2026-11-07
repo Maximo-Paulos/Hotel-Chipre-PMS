@@ -13,7 +13,9 @@
   "stats": {
     "available": "Available",
     "occupied": "Occupied",
-    "cleaning": "Cleaning"
+    "cleaning": "Cleaning",
+    "maintenance": "Maintenance",
+    "blocked": "Blocked"
   },
   "housekeepingStatus": {
     "label": "Cleaning status",
