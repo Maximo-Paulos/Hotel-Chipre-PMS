@@ -36,10 +36,10 @@ a usuarios reales ni operar secretos de proveedor.
 - `.github/workflows/release-gate.yml` y
   `.github/workflows/trusted-release-gate.yml` mantienen la evidencia ligada al
   PR head/base y al workflow trusted de la rama default.
-- `.github/workflows/build-and-push.yml` sólo ejecuta desde la rama default,
-  publica imágenes con tag completo `GITHUB_SHA`, verifica el label
-  `org.opencontainers.image.revision` y no publica `latest`. Produce un
-  `release-manifest.json` versionado como artifact de CI.
+- El workflow `.github/workflows/build-and-push.yml` fue retirado: Render
+  despliega el backend desde el runtime nativo y Vercel construye el frontend
+  desde el repositorio; no se encontró un consumidor de las imágenes GHCR.
+  Los pushes a `main` ya no compilan ni publican esas imágenes con GitHub Actions.
 - `scripts/agent_ops/verify_release_sha.py` rechaza un manifest cuyo commit,
   ambiente, repositorio o referencias de artifacts no coincidan, y rechaza
   tags mutables (`latest`, `main`). Es una verificación local; no despliega.
@@ -58,7 +58,7 @@ a usuarios reales ni operar secretos de proveedor.
 | Secrets separados | Parcialmente cerrado | Los nombres/configuración son versionables y los valores quedan fuera de Git; falta configurar y auditar scopes por environment. |
 | Migraciones controladas | Cerrado en código, operación pendiente | PR usa DB descartable y Render declara pre-deploy Alembic; falta ejecutar y registrar un drill real por ambiente. |
 | Rollback | Documentado, no automatizado | Ver procedimiento debajo; no hay proveedor/servicio autorizado para implementar un rollback automático. |
-| Release atada a SHA | Cerrado para artifacts CI; pendiente de runtime cloud | Imágenes y manifest son SHA-only; staging/producción deben demostrar que el runtime desplegado es ese SHA. |
+| Release atada a SHA | Parcialmente cerrado | El workflow de imágenes GHCR fue retirado; staging/producción deben demostrar que el runtime desplegado corresponde al SHA previsto. |
 | No experimentos directos a usuarios reales | Bloqueado por configuración externa | `render.yaml` aún declara `autoDeploy: true`; una persona debe imponer aprobación/entorno protegido en el proveedor antes de certificar este punto. |
 
 ## Procedimiento de rollback / forward-fix
