@@ -172,11 +172,38 @@ test("reception can operate company check-in and collect existing extras but can
     await drawer.getByLabel(`Seleccionar adicional de la noche ${checkIn} para cobrar`).check();
     await expect(drawer.getByLabel("Importe a cobrar")).toHaveValue("30.00");
     await expect(drawer.getByRole("button", { name: "Registrar cobro", exact: true })).toBeVisible();
+    await expect(drawer.getByTestId("payment-backend-quote")).toBeVisible();
 
     await drawer.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
     await receptionistRow.getByRole("button", { name: "Ficha", exact: true }).click();
     await expect(receptionistPage.getByRole("button", { name: "Mover habitación", exact: true })).toHaveCount(0);
   } finally {
     await receptionistPage.close();
+  }
+
+  const restrictedReceptionistPage = await browser.newPage();
+  try {
+    await restrictedReceptionistPage.route("**/api/permissions/effective", async (route) => {
+      const response = await route.fetch();
+      const permissions = await response.json() as { permissions: string[] };
+      await route.fulfill({
+        response,
+        json: { ...permissions, permissions: permissions.permissions.filter((permission) => permission !== "cash:operate") }
+      });
+    });
+    await login(restrictedReceptionistPage, receptionistCredentials);
+    await restrictedReceptionistPage.goto("/reservas");
+    const restrictedRow = restrictedReceptionistPage.locator("table tbody tr").filter({ hasText: reservation.confirmation_code });
+    await expect(restrictedRow).toBeVisible();
+    await restrictedRow.getByRole("button", { name: "Check-in", exact: true }).click();
+    const restrictedDrawer = restrictedReceptionistPage.getByRole("dialog", { name: reservation.confirmation_code });
+    await expect(restrictedDrawer.getByTestId("reservation-drawer-payment-permission-required")).toContainText(
+      "Pedile a un usuario autorizado que registre el pago"
+    );
+    await expect(restrictedDrawer.getByRole("button", { name: "Registrar cobro", exact: true })).toHaveCount(0);
+    await expect(restrictedDrawer.getByLabel("Importe a cobrar")).toHaveCount(0);
+    await expect(restrictedDrawer.getByText("Consultando la cotización del cobro…")).toHaveCount(0);
+  } finally {
+    await restrictedReceptionistPage.close();
   }
 });

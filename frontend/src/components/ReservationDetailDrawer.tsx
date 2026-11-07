@@ -419,7 +419,13 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
     },
     onSuccess: refreshCompanyNightCharges
   });
-  const { hasPermission, permissionsKnown } = useEffectivePermissions();
+  const {
+    hasPermission,
+    permissionsKnown,
+    isError: effectivePermissionsError,
+    isFetching: effectivePermissionsFetching,
+    refetch: refetchEffectivePermissions
+  } = useEffectivePermissions();
   const canReadCompanyDocuments = permissionsKnown && hasPermission("company:documents:read");
   const companyDocumentsQuery = useReservationCompanyDocuments(
     reservationQuery.data?.company_id && canReadCompanyDocuments ? reservationId ?? undefined : undefined
@@ -2417,6 +2423,28 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                 (!deferredCompanyBilling || selectedCompanyChargeIds.length > 0) && (
                 <section className="rounded-lg border border-slate-200 bg-white p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-500">{t("drawer.payment.title")}</p>
+                  {permissionsKnown && !hasPermission("cash:operate") ? (
+                    <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status" data-testid="reservation-drawer-payment-permission-required">
+                      {t("page.form.paymentAuthorizedUserRequired")}
+                    </p>
+                  ) : !permissionsKnown ? (
+                    <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700" role={effectivePermissionsError ? "alert" : "status"} data-testid="reservation-drawer-payment-permissions-loading">
+                      <p>{effectivePermissionsError
+                        ? t("page.form.paymentPermissionCheckFailed")
+                        : t("page.form.paymentPermissionChecking")}</p>
+                      {effectivePermissionsError ? (
+                        <button
+                          type="button"
+                          onClick={() => void refetchEffectivePermissions()}
+                          disabled={effectivePermissionsFetching}
+                          className="mt-2 rounded border border-slate-300 bg-white px-2 py-1 font-semibold disabled:opacity-60"
+                        >
+                          {t("page.form.paymentQuoteRetry")}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <>
                   <div className="mt-2 flex flex-wrap items-end gap-2">
                     <label className="flex-1 space-y-1 text-xs">
                       <span className="text-slate-600">
@@ -2679,6 +2707,8 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                       )}
                     </div>
                   ) : null}
+                    </>
+                  )}
                 </section>
               )}
 
