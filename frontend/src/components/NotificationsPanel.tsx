@@ -79,6 +79,39 @@ export function NotificationsPanel({ open, onClose }: Props) {
     return localized && match ? t(localized.key, { reference: match[1] ?? "" }).trim() : item.title;
   };
 
+  const notificationBody = (item: NotificationItem) => {
+    if (!item.body || item.event_type !== "report.daily") return item.body;
+
+    const patterns: Array<{ pattern: RegExp; key: string; fields: string[] }> = [
+      { pattern: /^Daily operational report - (.+)$/i, key: "notificationBody.dailyReport", fields: ["date"] },
+      { pattern: /^Occupancy: (\d+)\/(\d+) rooms \(([\d.,]+)%\)$/i, key: "notificationBody.occupancy", fields: ["occupied", "total", "percentage"] },
+      { pattern: /^Arrivals: (.+)$/i, key: "notificationBody.arrivals", fields: ["count"] },
+      { pattern: /^Departures: (.+)$/i, key: "notificationBody.departures", fields: ["count"] },
+      { pattern: /^Pending payments: (.+)$/i, key: "notificationBody.pendingPayments", fields: ["count"] },
+      { pattern: /^Pending balance total: (.+)$/i, key: "notificationBody.pendingBalanceTotal", fields: ["balances"] },
+      { pattern: /^Late arrivals: (.+)$/i, key: "notificationBody.lateArrivals", fields: ["count"] },
+      { pattern: /^Active room blocks: (.+)$/i, key: "notificationBody.roomBlocks", fields: ["count"] },
+      { pattern: /^Cash session: (.+)$/i, key: "notificationBody.cashSession", fields: ["status"] },
+      { pattern: /^Low stock items: (.+)$/i, key: "notificationBody.lowStock", fields: ["count"] },
+      { pattern: /^Laundry outbound remitos \(last 14 days\): (.+)$/i, key: "notificationBody.laundryOutbound", fields: ["count"] },
+      { pattern: /^Alerts: (.+)$/i, key: "notificationBody.alerts", fields: ["count"] }
+    ];
+
+    return item.body.split(/\r?\n/).map((line) => {
+      for (const { pattern, key, fields } of patterns) {
+        const match = line.match(pattern);
+        if (!match) continue;
+        const values: Record<string, string> = {};
+        fields.forEach((field, index) => { values[field] = match[index + 1] ?? ""; });
+        if (key === "notificationBody.cashSession") {
+          values.status = t(`notificationBody.cashSessionStatuses.${values.status}`, { defaultValue: values.status });
+        }
+        return t(key, values);
+      }
+      return line;
+    }).join("\n");
+  };
+
   // Only entities this frontend actually has a page/drawer for become
   // clickable. entity_type/entity_id are all NotificationRead exposes (see
   // api/notifications.ts) -- there is no guest_id on a guest_restriction
@@ -224,7 +257,7 @@ export function NotificationsPanel({ open, onClose }: Props) {
                             <span className="h-2 w-2 shrink-0 rounded-full bg-brand-600" aria-label="No leída" />
                           )}
                         </span>
-                        {item.body && <span className="mt-0.5 block break-words text-xs text-slate-600">{item.body}</span>}
+                        {item.body && <span className="mt-0.5 block whitespace-pre-line break-words text-xs text-slate-600">{notificationBody(item)}</span>}
                         <span className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
                           <span>{notificationEventLabel(item.event_type)}</span>
                           <span>·</span>

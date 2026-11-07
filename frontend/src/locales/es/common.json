@@ -10,11 +10,31 @@
     "reservationCheckedOut": "Check-out registrado para reserva {{reference}}",
     "dailyReport": "Reporte operativo diario {{reference}}"
   },
+  "notificationBody": {
+    "dailyReport": "Reporte operativo diario - {{date}}",
+    "occupancy": "Ocupación: {{occupied}}/{{total}} habitaciones ({{percentage}}%)",
+    "arrivals": "Llegadas: {{count}}",
+    "departures": "Salidas: {{count}}",
+    "pendingPayments": "Pagos pendientes: {{count}}",
+    "pendingBalanceTotal": "Saldo pendiente total: {{balances}}",
+    "lateArrivals": "Llegadas tardías: {{count}}",
+    "roomBlocks": "Bloqueos activos de habitaciones: {{count}}",
+    "cashSession": "Estado de caja: {{status}}",
+    "cashSessionStatuses": {
+      "open": "abierta",
+      "closed": "cerrada",
+      "pending_approval": "pendiente de aprobación"
+    },
+    "lowStock": "Artículos con stock bajo: {{count}}",
+    "laundryOutbound": "Remitos salientes de lavandería (últimos 14 días): {{count}}",
+    "alerts": "Alertas: {{count}}"
+  },
   "operationalAudit": {
     "areas": {
       "reservations": "Reservas",
       "rooms": "Habitaciones",
       "housekeeping_checklists": "Limpieza",
+      "housekeeping_checklist_items": "Limpieza",
       "payments": "Pagos",
       "cash": "Caja",
       "guests": "Huéspedes",

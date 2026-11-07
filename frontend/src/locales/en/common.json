@@ -10,11 +10,31 @@
     "reservationCheckedOut": "Check-out completed for reservation {{reference}}",
     "dailyReport": "Daily operational report {{reference}}"
   },
+  "notificationBody": {
+    "dailyReport": "Daily operational report - {{date}}",
+    "occupancy": "Occupancy: {{occupied}}/{{total}} rooms ({{percentage}}%)",
+    "arrivals": "Arrivals: {{count}}",
+    "departures": "Departures: {{count}}",
+    "pendingPayments": "Pending payments: {{count}}",
+    "pendingBalanceTotal": "Pending balance total: {{balances}}",
+    "lateArrivals": "Late arrivals: {{count}}",
+    "roomBlocks": "Active room blocks: {{count}}",
+    "cashSession": "Cash session: {{status}}",
+    "cashSessionStatuses": {
+      "open": "open",
+      "closed": "closed",
+      "pending_approval": "pending approval"
+    },
+    "lowStock": "Low stock items: {{count}}",
+    "laundryOutbound": "Laundry outbound remitos (last 14 days): {{count}}",
+    "alerts": "Alerts: {{count}}"
+  },
   "operationalAudit": {
     "areas": {
       "reservations": "Reservations",
       "rooms": "Rooms",
       "housekeeping_checklists": "Housekeeping",
+      "housekeeping_checklist_items": "Housekeeping",
       "payments": "Payments",
       "cash": "Cash",
       "guests": "Guests",
