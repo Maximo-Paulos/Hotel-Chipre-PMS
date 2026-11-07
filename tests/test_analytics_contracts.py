@@ -7,7 +7,10 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import event
 
-from app.models.analytics import FactReservationRowKindEnum, FactRoomOccupancyStatusAtNightEnum
+from app.models.analytics import (
+    FactReservationRowKindEnum,
+    FactRoomOccupancyStatusAtNightEnum,
+)
 from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import (
@@ -43,9 +46,11 @@ from app.services.analytics_contracts import (
     resolve_guest_segment,
     split_amount_evenly,
 )
-from app.services.analytics_service import _comparison_with_metrics
 from app.services.analytics_facts import _currency_pair
-from app.services.analytics_service import _unavailable_currencies
+from app.services.analytics_service import (
+    _comparison_with_metrics,
+    _unavailable_currencies,
+)
 
 
 @pytest.mark.parametrize(
@@ -84,6 +89,8 @@ def test_analytics_marks_only_the_missing_converted_currency_as_unavailable():
         (ReservationStatusEnum.PENDING, ReservationOutcomeEnum.PENDING),
         (ReservationStatusEnum.DEPOSIT_PAID, ReservationOutcomeEnum.PENDING),
         (ReservationStatusEnum.FULLY_PAID, ReservationOutcomeEnum.PENDING),
+        (ReservationStatusEnum.PRE_CHECK_IN, ReservationOutcomeEnum.PENDING),
+        (ReservationStatusEnum.PARTIAL_CHECK_IN, ReservationOutcomeEnum.CHECKED_IN),
         (ReservationStatusEnum.CHECKED_IN, ReservationOutcomeEnum.CHECKED_IN),
         (ReservationStatusEnum.CHECKED_OUT, ReservationOutcomeEnum.COMPLETED),
         (ReservationStatusEnum.CANCELLED, ReservationOutcomeEnum.CANCELLED),

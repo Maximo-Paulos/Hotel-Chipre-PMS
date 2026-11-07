@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from types import SimpleNamespace
 from typing import Any, Iterable, Sequence
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
-from app.models.analytics import FactReservationRowKindEnum, FactRoomOccupancyStatusAtNightEnum
+from app.models.analytics import (
+    FactReservationRowKindEnum,
+    FactRoomOccupancyStatusAtNightEnum,
+)
 from app.models.company import Company
 from app.models.hotel_config import HotelConfiguration
 from app.models.reservation import (
@@ -20,6 +23,7 @@ from app.models.reservation import (
     ReservationNoShowPolicyAppliedEnum,
     ReservationOutcomeEnum,
     ReservationStatusEnum,
+    reservation_status_to_outcome,
 )
 from app.models.room import Room
 from app.services.reservation_service import active_reservations
@@ -137,23 +141,6 @@ class RoomOccupancyNightFactDraft:
     revenue_net_usd: Decimal
     margin_operating_ars: Decimal
     margin_operating_usd: Decimal
-
-
-def reservation_status_to_outcome(status: ReservationStatusEnum | str) -> ReservationOutcomeEnum:
-    value = _enum_value(status)
-    mapping = {
-        ReservationStatusEnum.PENDING.value: ReservationOutcomeEnum.PENDING,
-        ReservationStatusEnum.DEPOSIT_PAID.value: ReservationOutcomeEnum.PENDING,
-        ReservationStatusEnum.FULLY_PAID.value: ReservationOutcomeEnum.PENDING,
-        ReservationStatusEnum.CHECKED_IN.value: ReservationOutcomeEnum.CHECKED_IN,
-        ReservationStatusEnum.CHECKED_OUT.value: ReservationOutcomeEnum.COMPLETED,
-        ReservationStatusEnum.CANCELLED.value: ReservationOutcomeEnum.CANCELLED,
-        ReservationStatusEnum.NO_SHOW.value: ReservationOutcomeEnum.NO_SHOW,
-    }
-    try:
-        return mapping[value]
-    except KeyError as exc:
-        raise ValueError(f"Unknown reservation status: {status}") from exc
 
 
 def infer_guest_segment_from_company(company: Company | None) -> ReservationGuestSegmentEnum:

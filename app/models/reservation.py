@@ -58,6 +58,26 @@ class ReservationOutcomeEnum(str, enum.Enum):
     NO_SHOW = "no_show"
 
 
+def reservation_status_to_outcome(status: ReservationStatusEnum | str) -> ReservationOutcomeEnum:
+    """Return the reportable outcome that corresponds to a lifecycle status."""
+    value = getattr(status, "value", status)
+    mapping = {
+        ReservationStatusEnum.PENDING.value: ReservationOutcomeEnum.PENDING,
+        ReservationStatusEnum.DEPOSIT_PAID.value: ReservationOutcomeEnum.PENDING,
+        ReservationStatusEnum.FULLY_PAID.value: ReservationOutcomeEnum.PENDING,
+        ReservationStatusEnum.PRE_CHECK_IN.value: ReservationOutcomeEnum.PENDING,
+        ReservationStatusEnum.PARTIAL_CHECK_IN.value: ReservationOutcomeEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_IN.value: ReservationOutcomeEnum.CHECKED_IN,
+        ReservationStatusEnum.CHECKED_OUT.value: ReservationOutcomeEnum.COMPLETED,
+        ReservationStatusEnum.CANCELLED.value: ReservationOutcomeEnum.CANCELLED,
+        ReservationStatusEnum.NO_SHOW.value: ReservationOutcomeEnum.NO_SHOW,
+    }
+    try:
+        return mapping[value]
+    except KeyError as exc:
+        raise ValueError(f"Unknown reservation status: {status}") from exc
+
+
 class ReservationGuestSegmentEnum(str, enum.Enum):
     LEISURE = "leisure"
     BUSINESS = "business"

@@ -32,6 +32,7 @@ from app.models.reservation import (
     ReservationSourceEnum,
     ReservationStatusEnum,
     reservation_additional_guests,
+    reservation_status_to_outcome,
 )
 from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.schemas.reservation import ReservationCreate, ReservationUpdate
@@ -2060,6 +2061,7 @@ def transition_reservation_status(
         )
     previous_status = reservation.status
     reservation.status = new_status
+    reservation.outcome = reservation_status_to_outcome(new_status)
     db.add(
         ReservationStatusHistory(
             hotel_id=reservation.hotel_id,
