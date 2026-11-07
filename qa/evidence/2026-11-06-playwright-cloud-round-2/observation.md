@@ -150,3 +150,9 @@
 - The reservation page showed `Salidas previstas: 1` for 2026-11-07. Recent allocation history rendered `Nueva reserva` and `Recalculo manual de asignaciones`, with the generated move note localized.
 - Owner and a newly opened reception tab both showed stay statuses in Spanish (`Pendiente`, `Check-out`, `Cancelada`) and the neutral selected placeholder `Seleccioná una etiqueta` while the guest has no tags.
 - **Stale tab remains reproducible:** the already-open receptionist tab still showed `Pending`, `Checked Out`, `Cancelled` and preselected `Prohibido alojar` even after invoking reload, while a new tab in that same signed-in profile rendered the corrected labels. This is being investigated; the cloud recovery fix is not yet verified for an already-open stale tab.
+
+## Stale-tab recovery retest after `afc8b423`
+
+- Public `/build-meta.json` reported `afc8b423c257b2916c4017bfda2e2e2d949f6395`; public `/sw.js` contained the same SHA, a build-specific cache, and network-first asset handling, with no unresolved build placeholder.
+- Reloaded the previously stale receptionist tab after confirming it had no unsaved form changes. The same tab then showed guest stays as `Pendiente`, `Check-out`, and `Cancelada`, with `Seleccioná una etiqueta` selected while no tags were active. A fresh tab had shown the same corrected UI before this reload.
+- **Stale tab recovered after the user-confirmed reload path.** No guest record, tag, tariff, or reservation was changed. The error/confirm screen for an old missing chunk was not forced in the cloud; its 404/HTML behavior is covered by the new frontend service-worker tests.
