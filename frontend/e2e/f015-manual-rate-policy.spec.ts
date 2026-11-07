@@ -47,6 +47,16 @@ test("F-015 owner configures a bounded rate, manager records it with reason, rec
     lastTotpStep = ownerSession.lastTotpStep;
     await page.goto("/settings/hotel");
 
+    const categoriesSection = page
+      .getByRole("heading", { name: "Categorías de habitación", exact: true })
+      .locator("xpath=../../..");
+    await expect(categoriesSection.getByLabel("Precio base por noche", { exact: true })).toHaveCount(1);
+    await expect(categoriesSection.getByLabel("Ocupación máxima", { exact: true })).toHaveCount(1);
+    await categoriesSection.getByRole("button", { name: "Editar", exact: true }).first().click();
+    await expect(categoriesSection.getByLabel("Precio base por noche", { exact: true })).toHaveCount(2);
+    await expect(categoriesSection.getByLabel("Ocupación máxima", { exact: true })).toHaveCount(2);
+    await categoriesSection.getByRole("button", { name: "Cancelar", exact: true }).click();
+
     const minimumLimit = page.getByLabel("Ajuste mínimo (%)", { exact: true });
     const maximumLimit = page.getByLabel("Ajuste máximo (%)", { exact: true });
     await expect(minimumLimit).toBeVisible();

@@ -1070,8 +1070,14 @@ export function SettingsHotelPage() {
             <div className="mt-3 grid gap-3 md:grid-cols-3">
               <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Nombre" value={categoryForm.name} onChange={(e) => setCategoryForm((p) => ({ ...p, name: e.target.value }))} />
               <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Código" value={categoryForm.code} onChange={(e) => setCategoryForm((p) => ({ ...p, code: e.target.value }))} />
-              <input type="number" min={1} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Precio base" value={categoryForm.base_price_per_night} onChange={(e) => setCategoryForm((p) => ({ ...p, base_price_per_night: parseFloat(e.target.value || "0") }))} />
-              <input type="number" min={1} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Ocupación máx" value={categoryForm.max_occupancy} onChange={(e) => setCategoryForm((p) => ({ ...p, max_occupancy: parseInt(e.target.value || "1", 10) }))} />
+              <label className="block space-y-1 text-xs font-medium text-slate-600">
+                Precio base por noche
+                <input type="number" min={1} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900" value={categoryForm.base_price_per_night} onChange={(e) => setCategoryForm((p) => ({ ...p, base_price_per_night: parseFloat(e.target.value || "0") }))} />
+              </label>
+              <label className="block space-y-1 text-xs font-medium text-slate-600">
+                Ocupación máxima
+                <input type="number" min={1} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900" value={categoryForm.max_occupancy} onChange={(e) => setCategoryForm((p) => ({ ...p, max_occupancy: parseInt(e.target.value || "1", 10) }))} />
+              </label>
               <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2" placeholder="Amenidades" value={categoryForm.amenities ?? ""} onChange={(e) => setCategoryForm((p) => ({ ...p, amenities: e.target.value }))} />
               <input className="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-3" placeholder="Descripción" value={categoryForm.description ?? ""} onChange={(e) => setCategoryForm((p) => ({ ...p, description: e.target.value }))} />
               <button type="button" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60" disabled={createCategoryMutation.isPending || !categoryForm.name || !categoryForm.code || categoryForm.base_price_per_night <= 0 || categoryForm.max_occupancy <= 0} onClick={() => void createCategoryMutation.mutateAsync(categoryForm).catch(() => undefined)}>
