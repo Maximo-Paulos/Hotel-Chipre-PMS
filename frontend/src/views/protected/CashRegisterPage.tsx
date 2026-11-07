@@ -1089,12 +1089,19 @@ export function CashRegisterPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">Movimientos</p>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  {selectedSession ? `Caja #${selectedSession.id}` : "Sin caja seleccionada"}
+                <h2 className="text-lg font-semibold text-slate-900" data-testid="cash-selected-session">
+                  {selectedSession ? `Caja #${selectedSession.id} · ${selectedSession.currency_code.toUpperCase()}` : "Sin caja seleccionada"}
                 </h2>
                 <p className="text-xs text-slate-500">
-                  {selectedSession ? cashSessionStatusLabel[selectedSession.status] || selectedSession.status : "Selecciona una sesión"}
+                  {selectedSession
+                    ? "Sesión seleccionada. Este detalle es independiente del filtro diario de moneda."
+                    : "Selecciona una sesión"}
                 </p>
+                {selectedSession ? (
+                  <p className="text-xs text-slate-500">
+                    {cashSessionStatusLabel[selectedSession.status] || selectedSession.status}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {canSubmitCashExpense ? (
