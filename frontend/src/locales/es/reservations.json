@@ -447,6 +447,8 @@
     "nextWindow": "14 días →",
     "loading": "Cargando planilla...",
     "loadError": "No se pudo cargar la planilla: {{message}}",
+    "retry": "Reintentar",
+    "retrying": "Reintentando...",
     "noRooms": "No hay habitaciones cargadas para mostrar la planilla.",
     "room": "Habitación",
     "sortBy": "Ordenar habitaciones",

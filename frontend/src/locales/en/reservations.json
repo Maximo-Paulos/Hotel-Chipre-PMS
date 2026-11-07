@@ -447,6 +447,8 @@
     "nextWindow": "14 days →",
     "loading": "Loading planning grid...",
     "loadError": "Could not load the planning grid: {{message}}",
+    "retry": "Retry",
+    "retrying": "Retrying...",
     "noRooms": "No rooms available to show the planning grid.",
     "room": "Room",
     "sortBy": "Sort rooms",

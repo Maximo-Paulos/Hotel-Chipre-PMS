@@ -189,8 +189,17 @@ export function OccupancyPlanningPage() {
       ) : null}
 
       {gridQuery.isError ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-          {t("occupancy.loadError", { message: (gridQuery.error as Error).message })}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700" role="alert">
+          <p>{t("occupancy.loadError", { message: (gridQuery.error as Error).message })}</p>
+          <button
+            type="button"
+            onClick={() => void gridQuery.refetch()}
+            disabled={gridQuery.isFetching}
+            className="min-h-10 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100 disabled:cursor-wait disabled:opacity-60"
+            data-testid="occupancy-grid-retry"
+          >
+            {gridQuery.isFetching ? t("occupancy.retrying") : t("occupancy.retry")}
+          </button>
         </div>
       ) : null}
 
