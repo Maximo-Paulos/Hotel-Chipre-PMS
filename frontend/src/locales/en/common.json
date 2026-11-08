@@ -35,6 +35,9 @@
       "rooms": "Rooms",
       "housekeeping_checklists": "Housekeeping",
       "housekeeping_checklist_items": "Housekeeping",
+      "rate_change_drafts": "Rates and promotions",
+      "room_state_event": "Room events",
+      "company": "Companies",
       "payments": "Payments",
       "cash": "Cash",
       "guests": "Guests",
@@ -48,6 +51,16 @@
     },
     "actions": {
       "status_change": "Status changed",
+      "create": "Record created",
+      "analytics": {
+        "room_state_event": {
+          "created": "Room event recorded",
+          "closed": "Room event closed"
+        },
+        "company": {
+          "created": "Company created"
+        }
+      },
       "reservation": { "status": { "checked_in": "Check-in registered", "checked_out": "Check-out completed", "cancelled": "Reservation cancelled", "no_show": "No-show recorded" } },
       "cash": { "income": "Cash income", "expense": "Cash expense", "voided": "Cash movement voided" },
       "room": { "move": "Room changed" },

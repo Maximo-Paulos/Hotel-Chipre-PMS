@@ -78,8 +78,25 @@ test("operational audit localizes areas and action codes while retaining technic
         actor_name: "QA Housekeeping",
         occurred_at: "2026-11-07T12:01:00Z",
         details: {}
-      }],
-      total: 2,
+      }, ...[
+        { source_id: 45, area: "rate_change_drafts", action: "create", actor_name: "QA Rate Create" },
+        { source_id: 46, area: "rate_change_drafts", action: "status_change", actor_name: "QA Rate Status" },
+        { source_id: 47, area: "room_state_event", action: "analytics.room_state_event.created", actor_name: "QA Room Event Created" },
+        { source_id: 48, area: "room_state_event", action: "analytics.room_state_event.closed", actor_name: "QA Room Event Closed" },
+        { source_id: 49, area: "company", action: "analytics.company.created", actor_name: "QA Company Created" },
+        { source_id: 50, area: "unmapped_area_xyz", action: "unknown.action.xyz", actor_name: "QA Unknown Codes" }
+      ].map(({ source_id, area, action, actor_name }) => ({
+        source: "business_event",
+        source_id,
+        area,
+        action,
+        summary: `${area}: ${action}`,
+        actor_user_id: 3,
+        actor_name,
+        occurred_at: "2026-11-07T12:02:00Z",
+        details: {}
+      }))],
+      total: 8,
       limit: 50,
       offset: 0,
       has_more: false
@@ -101,4 +118,18 @@ test("operational audit localizes areas and action codes while retaining technic
   await expect(technicalDetails.getByText("Resumen original: status_change (rooms #2)", { exact: true })).toBeVisible();
   const housekeepingRow = auditPage.locator("article").filter({ hasText: "QA Housekeeping" });
   await expect(housekeepingRow.getByText("Limpieza", { exact: true })).toBeVisible();
+
+  const expectedAuditLabels = [
+    ["QA Rate Create", "Tarifas y promociones", "Registro creado"],
+    ["QA Rate Status", "Tarifas y promociones", "Cambio de estado"],
+    ["QA Room Event Created", "Eventos de habitación", "Evento de habitación registrado"],
+    ["QA Room Event Closed", "Eventos de habitación", "Evento de habitación cerrado"],
+    ["QA Company Created", "Empresas", "Empresa creada"],
+    ["QA Unknown Codes", "Otras operaciones", "Acción operativa"]
+  ] as const;
+  for (const [actor, area, action] of expectedAuditLabels) {
+    const localizedRow = auditPage.locator("article").filter({ hasText: actor });
+    await expect(localizedRow.getByText(area, { exact: true })).toBeVisible();
+    await expect(localizedRow.getByText(action, { exact: true })).toBeVisible();
+  }
 });

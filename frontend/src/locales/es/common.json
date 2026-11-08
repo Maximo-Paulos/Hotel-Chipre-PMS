@@ -35,6 +35,9 @@
       "rooms": "Habitaciones",
       "housekeeping_checklists": "Limpieza",
       "housekeeping_checklist_items": "Limpieza",
+      "rate_change_drafts": "Tarifas y promociones",
+      "room_state_event": "Eventos de habitación",
+      "company": "Empresas",
       "payments": "Pagos",
       "cash": "Caja",
       "guests": "Huéspedes",
@@ -48,6 +51,16 @@
     },
     "actions": {
       "status_change": "Cambio de estado",
+      "create": "Registro creado",
+      "analytics": {
+        "room_state_event": {
+          "created": "Evento de habitación registrado",
+          "closed": "Evento de habitación cerrado"
+        },
+        "company": {
+          "created": "Empresa creada"
+        }
+      },
       "reservation": { "status": { "checked_in": "Check-in registrado", "checked_out": "Check-out registrado", "cancelled": "Reserva cancelada", "no_show": "Ausencia registrada" } },
       "cash": { "income": "Ingreso de caja", "expense": "Egreso de caja", "voided": "Movimiento de caja anulado" },
       "room": { "move": "Cambio de habitación" },
