@@ -86,6 +86,57 @@ test("operations keeps rendering when a legacy analytics response omits data_sou
   await expect(page.getByText("Unexpected Application Error!", { exact: true })).toHaveCount(0);
 });
 
+test("operations renders room event labels in Spanish", async ({ page }) => {
+  await page.route("**/api/config/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/interface-language")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ interface_language: "es" })
+      });
+      return;
+    }
+    const response = await route.fetch();
+    const config = await response.json();
+    await route.fulfill({ response, body: JSON.stringify({ ...config, interface_language: "es" }) });
+  });
+  await page.route("**/api/analytics/operations**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        hotel_id: 1,
+        date_from: "2026-11-01",
+        date_to: "2026-11-08",
+        generated_at: "2026-11-08T12:00:00Z",
+        data_as_of: "2026-11-08T12:00:00Z",
+        source_lag_seconds: 0,
+        data_source: "postgresql",
+        data: {
+          cards: [],
+          room_events_open: [{
+            room_id: 42,
+            created_by_user_id: 7,
+            closed_by_user_id: 8,
+            row_kind: "room_state_event"
+          }]
+        }
+      })
+    });
+  });
+
+  await login(page);
+  await page.goto("/analytics/operations");
+
+  await expect(page.getByRole("heading", { name: "Eventos de habitación abiertos", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "ID habitación", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "ID de usuario creador", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "ID de usuario que cerró", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Tipo de registro", exact: true })).toBeVisible();
+  await expect(page.getByText(/Room Events Open|Created By User Id|Closed By User Id|Row Kind/)).toHaveCount(0);
+});
+
 test("analytics marks a missing historical currency quote as unavailable without changing other metrics", async ({ page }) => {
   await page.route("**/api/analytics/home**", async (route) => {
     await route.fulfill({
