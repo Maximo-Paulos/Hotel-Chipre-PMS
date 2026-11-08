@@ -5280,7 +5280,11 @@ export function ReservationsPage() {
                             <p className="mt-1 text-rose-800" role="alert">{companyNightRefundValidationMessage}</p>
                           ) : null}
                         </div>
-                      ) : !paymentQuoteEnabled || refundTargetTransactionId !== null || refundReasonInput.trim() || collectedBefore ? null : enteredPaymentExceedsSameCurrencyBalance ? (
+                      ) : !paymentQuoteEnabled || refundTargetTransactionId !== null || refundReasonInput.trim() || collectedBefore ? null : paymentSummaryQuery.data && currentReservationBalance <= 0 ? (
+                        <p className="rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600" role="status" data-testid="payment-no-balance-to-quote">
+                          {t("page.messages.noBalanceDue")}
+                        </p>
+                      ) : enteredPaymentExceedsSameCurrencyBalance ? (
                         <p className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800" data-testid="payment-amount-balance-error" role="alert">
                           {t("page.errors.invalidPartialAmount")}
                         </p>

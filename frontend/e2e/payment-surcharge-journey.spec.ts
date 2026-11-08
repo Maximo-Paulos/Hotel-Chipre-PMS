@@ -62,9 +62,24 @@ async function readStat(form: ReturnType<Page["locator"]>, label: string) {
 
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
-test("owner records a 3% credit-card surcharge separately from a 100000 ARS reservation", async ({ page }) => {
+test("owner records a 3% credit-card surcharge and stops requesting quotes at zero balance", async ({ page }) => {
   const suffix = `${Date.now()}`;
   const guestLastName = `QA Recargo ${suffix}`;
+  let surchargeQuoteRequestCount = 0;
+  const surchargeQuoteResponseStatuses: number[] = [];
+
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/payment-surcharges/quote" && request.method() === "POST") {
+      surchargeQuoteRequestCount += 1;
+    }
+  });
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (url.pathname === "/api/payment-surcharges/quote" && response.request().method() === "POST") {
+      surchargeQuoteResponseStatuses.push(response.status());
+    }
+  });
 
   await login(page);
 
@@ -199,6 +214,7 @@ test("owner records a 3% credit-card surcharge separately from a 100000 ARS rese
   await expect(quoteSummary).toContainText("3.000");
   await expect(quoteSummary).toContainText("103.000");
 
+  const quoteRequestsBeforeSettlingBalance = surchargeQuoteRequestCount;
   const paymentRequestPromise = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === "/api/payments" && request.method() === "POST";
@@ -247,4 +263,9 @@ test("owner records a 3% credit-card surcharge separately from a 100000 ARS rese
   await expect(transactionRow).toContainText("recargo");
   await expect(transactionRow).toContainText("3.000");
   await expect(transactionRow).toContainText("103.000");
+  await expect(page.getByTestId("payment-no-balance-to-quote")).toBeVisible();
+  await expect(editForm.getByRole("button", { name: "Pago total", exact: true })).toBeDisabled();
+  await page.waitForTimeout(250);
+  expect(surchargeQuoteRequestCount).toBe(quoteRequestsBeforeSettlingBalance);
+  expect(surchargeQuoteResponseStatuses).not.toContain(422);
 });

@@ -15,11 +15,19 @@ import {
 } from "../api/paymentSurcharges";
 import { hasValidSession } from "../api/client";
 import { refreshAfterMutation } from "../api/queryInvalidation";
+import { type PaymentSummary } from "../api/payments";
+import { queryKeys } from "../api/queryKeys";
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
+import { usePaymentSummary } from "./usePayments";
 
 const surchargesKey = (hotelId: number | null) => ["payment-surcharges", hotelId];
+const paymentBalanceForQuote = (summary: PaymentSummary | undefined): number | null => {
+  if (!summary) return null;
+  const balance = Number(summary.operational_balance_due ?? summary.balance_due ?? 0);
+  return Number.isFinite(balance) ? Number(balance.toFixed(2)) : null;
+};
 
 export function usePaymentSurcharges(options?: { enabled?: boolean }) {
   const { session } = useSession();
@@ -36,24 +44,54 @@ export function usePaymentSurchargeQuote(
   options?: { enabled?: boolean }
 ) {
   const { session } = useSession();
+  const queryClient = useQueryClient();
   const normalizedInput = input
     ? { ...input, currency_code: input.currency_code.trim().toUpperCase() }
     : null;
+  const paymentSummaryQuery = usePaymentSummary(normalizedInput?.reservation_id);
+  const reservationBalance = paymentBalanceForQuote(paymentSummaryQuery.data);
+  const hasBalanceToQuote = reservationBalance !== null && reservationBalance > 0;
   const baseAmountKey = normalizedInput?.base_amount ?? "balance";
-  return useQuery<PaymentSurchargeQuote>({
+  const balanceKey = hasBalanceToQuote ? reservationBalance : null;
+  return useQuery<PaymentSurchargeQuote | null>({
     queryKey: [
       "payment-surcharge-quote",
       session.hotelId,
       normalizedInput?.reservation_id ?? null,
       normalizedInput?.payment_method ?? null,
       normalizedInput?.currency_code ?? null,
-      baseAmountKey
+      baseAmountKey,
+      balanceKey
     ],
-    queryFn: () => {
+    queryFn: async () => {
       if (!normalizedInput) throw new Error("Falta la reserva para cotizar el cobro.");
+
+      // A payment invalidates both summary and quote caches. The quote query
+      // can be scheduled before React receives the refreshed summary, so
+      // re-check the cache state here and skip stale-balance quotes. The
+      // balance in the key makes a partial payment naturally request a fresh
+      // quote once its updated summary arrives.
+      const summaryKey = queryKeys.paymentSummary(session.hotelId, normalizedInput.reservation_id);
+      const summaryState = queryClient.getQueryState(summaryKey);
+      const latestSummary = queryClient.getQueryData<PaymentSummary>(summaryKey);
+      const latestBalance = paymentBalanceForQuote(latestSummary);
+      if (
+        !summaryState ||
+        summaryState.fetchStatus !== "idle" ||
+        summaryState.isInvalidated ||
+        latestBalance === null ||
+        latestBalance <= 0
+      ) {
+        return null;
+      }
+
       return quotePaymentSurcharge(normalizedInput, session);
     },
-    enabled: hasValidSession(session) && Boolean(normalizedInput) && (options?.enabled ?? true),
+    enabled: hasValidSession(session) &&
+      Boolean(normalizedInput) &&
+      hasBalanceToQuote &&
+      !paymentSummaryQuery.isFetching &&
+      (options?.enabled ?? true),
     staleTime: 15_000,
     retry: false
   });
