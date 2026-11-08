@@ -1,33 +1,31 @@
 # Resumen Graphify
 
-Generado: 2026-11-08T07:01:32.166685+00:00
-Commit: `adf62c3fbe084b8544981ebab01f682bae3d5db0`
+Generado: 2026-11-08T20:36:22.635620+00:00
+Commit: `8eb40c2c65521e2b9db4f85b2ad557b5b58f9ab8`
 
 `graphify summary .graphify/graph.json`:
 ```text
 Graphify First-Hop Summary
-Graph: 15917 nodes, 63516 edges, 822 communities, density 0.0005, average degree 7.9809, undirected
+Graph: 15963 nodes, 67376 edges, 806 communities, density 0.0005, average degree 8.4415, undirected
 
 Top hubs:
-  1. Reservation (degree 528, community 7 Community 7, app/models/reservation.py)
-  2. HotelConfiguration (degree 512, community 9 Community 9, app/models/hotel_config.py)
-  3. ReservationStatusEnum (degree 463, community 6 Community 6, app/models/reservation.py)
-  4. Base (degree 452, community 10 Community 10, app/database.py)
-  5. Room (degree 355, community 6 Community 6, app/models/room.py)
+  1. Reservation (degree 528, community 4 Community 4, app/models/reservation.py)
+  2. HotelConfiguration (degree 512, community 10 Community 10, app/models/hotel_config.py)
+  3. ReservationStatusEnum (degree 463, community 8 Community 8, app/models/reservation.py)
+  4. Base (degree 452, community 7 Community 7, app/database.py)
+  5. Room (degree 355, community 8 Community 8, app/models/room.py)
 
 Key communities:
-  1. Community 0 - Community 0: 693 nodes, 1070 internal edges, density 0.0045; top nodes: af78e58 Consolidate PMS scenario and quality work, d908400 Merge pull request #107 from Maximo-Paulos/fix/hotel-sim-day0-day1, bf4a21f Fix day 0 and day 1 hotel simulation findings
-  2. Community 1 - Community 1: 448 nodes, 857 internal edges, density 0.0086; top nodes: ReservationsPage.tsx, reservations.ts, ReservationDetailDrawer.tsx
-  3. Community 2 - Community 2: 427 nodes, 19666 internal edges, density 0.2162; top nodes: codex/qa-issue-fixes, codex/allocation-history-localization-20261107, codex/allocation-latest-query
-  4. Community 3 - Community 3: 330 nodes, 448 internal edges, density 0.0083; top nodes: ef0aa41 Merge PR #125: week-two remediation [skip render], 9e4b357 Reduce PMS request load and complete simulation remediation, crossTabSync.ts
-  5. Community 4 - Community 4: 296 nodes, 595 internal edges, density 0.0136; top nodes: client.ts, session.tsx, useSession()
+  1. Community 0 - Community 0: 696 nodes, 1077 internal edges, density 0.0045; top nodes: af78e58 Consolidate PMS scenario and quality work, d908400 Merge pull request #107 from Maximo-Paulos/fix/hotel-sim-day0-day1, bf4a21f Fix day 0 and day 1 hotel simulation findings
+  2. Community 1 - Community 1: 453 nodes, 862 internal edges, density 0.0084; top nodes: ReservationsPage.tsx, reservations.ts, ReservationDetailDrawer.tsx
+  3. Community 2 - Community 2: 428 nodes, 23328 internal edges, density 0.2553; top nodes: 150ca64 Reduce PMS request load and keep analytics facts fresh, codex/allocation-history-localization-20261107, codex/allocation-latest-query
+  4. Community 3 - Community 3: 378 nodes, 777 internal edges, density 0.0109; top nodes: client.ts, session.tsx, SettingsHotelPage.tsx
+  5. Community 4 - Community 4: 359 nodes, 1829 internal edges, density 0.0285; top nodes: Reservation, ReservationError, ReservationSourceEnum
 
 Next best action: Start with get_neighbors on "Reservation", then use query_graph for the user's specific question.
 ```
 `graphify check-update .`:
 ```text
-[graphify check-update] Pending semantic updates in /private/tmp/hcpms-qa-issue-integration.
-[graphify check-update] graph was rebuilt by the fast git hook without descriptions/labels (.graphify_describe_pending)
-[graphify check-update] Fill the batch-*.json / communities.json files and re-run `graphify update` to ingest.
+[graphify check-update] Graph state looks current for /private/tmp/hcpms-qa-fixes-round-20261108.
 ```
 Fuente técnica: `.graphify/`. Este artefacto no reemplaza `GRAPH_REPORT.md`.

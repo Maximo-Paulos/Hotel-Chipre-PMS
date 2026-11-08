@@ -22444,6 +22444,92 @@
       }
     },
     "/api/laundry/transfers": {
+      "get": {
+        "tags": [
+          "Laundry Vendors"
+        ],
+        "summary": "Get Laundry Linen Transfer History",
+        "operationId": "get_laundry_linen_transfer_history_api_laundry_transfers_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "x-hotel-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Hotel-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinenTransferHistoryPageRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "Laundry Vendors"
@@ -59172,6 +59258,128 @@
           "reason"
         ],
         "title": "LinenTransferCreate"
+      },
+      "LinenTransferHistoryEntryRead": {
+        "properties": {
+          "transfer_reference": {
+            "type": "string",
+            "title": "Transfer Reference"
+          },
+          "linen_item_id": {
+            "type": "integer",
+            "title": "Linen Item Id"
+          },
+          "item_name": {
+            "type": "string",
+            "title": "Item Name"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "source_location_id": {
+            "type": "integer",
+            "title": "Source Location Id"
+          },
+          "source_location_name": {
+            "type": "string",
+            "title": "Source Location Name"
+          },
+          "destination_location_id": {
+            "type": "integer",
+            "title": "Destination Location Id"
+          },
+          "destination_location_name": {
+            "type": "string",
+            "title": "Destination Location Name"
+          },
+          "quantity": {
+            "type": "string",
+            "title": "Quantity"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "actor_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Display Name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "transfer_reference",
+          "linen_item_id",
+          "item_name",
+          "unit",
+          "source_location_id",
+          "source_location_name",
+          "destination_location_id",
+          "destination_location_name",
+          "quantity",
+          "reason",
+          "created_at"
+        ],
+        "title": "LinenTransferHistoryEntryRead"
+      },
+      "LinenTransferHistoryPageRead": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LinenTransferHistoryEntryRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset",
+          "has_more"
+        ],
+        "title": "LinenTransferHistoryPageRead"
       },
       "LinenTransferRead": {
         "properties": {
