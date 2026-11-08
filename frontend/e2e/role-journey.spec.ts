@@ -115,6 +115,15 @@ for (const persona of personas) {
   });
 }
 
+test("manager can read the rate calendar", async ({ page }) => {
+  const manager = personas.find((persona) => persona.label === "manager")!;
+  await login(page, manager);
+  await page.goto("/operacion/tarifas");
+
+  await expect(page.getByTestId("rate-calendar-page")).toBeVisible();
+  await expect(page.getByTestId("rate-calendar-grid")).toBeVisible();
+});
+
 test("manager can open and manage personal MFA settings", async ({ page }) => {
   const manager = personas.find((persona) => persona.label === "manager")!;
   await login(page, manager);

@@ -79,6 +79,25 @@ def test_migrated_route_keeps_legacy_role_contract(path, function, source_permis
     assert catalog_roles == legacy_roles
 
 
+def test_rate_calendar_read_contract_allows_only_owner_co_owner_and_manager():
+    node = _function("app/api/rate_calendar.py", "get_daily_rate_calendar")
+    permission_calls = [
+        child
+        for child in ast.walk(node)
+        if isinstance(child, ast.Call)
+        and isinstance(child.func, ast.Name)
+        and child.func.id == "require_permission"
+    ]
+
+    assert len(permission_calls) == 1
+    assert ast.unparse(permission_calls[0].args[0]) == "PERMISSION_RATES_READ"
+    roles_with_read = {
+        role for role in ROLE_CODES
+        if DEFAULT_MATRIX[role].get(canonical_permission_code("rates:read"), False)
+    }
+    assert roles_with_read == {"owner", "co_owner", "manager"}
+
+
 def test_api_routes_use_capability_dependencies_instead_of_legacy_role_guards():
     legacy_calls = []
     for path in Path("app/api").rglob("*.py"):
