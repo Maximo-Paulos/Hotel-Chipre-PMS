@@ -30,12 +30,28 @@ test.describe("Notification center", () => {
 
     // Preferences: default row plus at least one known event type.
     await expect(page.getByText("Predeterminado (todas las alertas)", { exact: true })).toBeVisible();
-    const reservationRow = page.locator("div").filter({ hasText: "Reserva creada" }).last();
+    const reservationRow = page.locator("div.rounded-lg", { hasText: "Reserva creada" }).first();
     await expect(reservationRow.getByRole("checkbox").first()).toBeVisible();
 
     // Owner/co-owner-only section is visible for the owner.
     await expect(page.getByRole("heading", { name: "Reporte diario (solo dueño/co-dueño)", exact: true })).toBeVisible();
     await expect(page.getByText("Enviar reporte diario", { exact: true })).toBeVisible();
+  });
+
+  test("receptionist sees when Push preferences cannot deliver yet", async ({ page }) => {
+    await login(page, receptionistCredentials);
+    await page.goto("/settings/notifications");
+
+    await expect(page.getByRole("heading", { name: "Notificaciones", exact: true })).toBeVisible();
+    await expect(page.getByRole("status", { name: "Estado de entrega Push" })).toHaveText(
+      "Las opciones de Push conservan tus preferencias, pero no se entregarán alertas hasta que el canal esté configurado para este hotel."
+    );
+
+    const pushToggles = page.getByRole("checkbox", { name: "Push", exact: true });
+    await expect(pushToggles).not.toHaveCount(0);
+    for (const pushToggle of await pushToggles.all()) {
+      await expect(pushToggle).toBeChecked();
+    }
   });
 
   test("toggling a preference persists after reload", async ({ page }) => {

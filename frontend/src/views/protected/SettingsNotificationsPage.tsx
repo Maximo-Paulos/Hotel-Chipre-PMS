@@ -27,8 +27,9 @@ const CHANNEL_OPTIONS: { value: "in_app" | "push" | "email"; label: string }[] =
   { value: "email", label: "Email" }
 ];
 
-function PushSubscriptionCard() {
-  const push = usePushSubscription();
+type PushSubscriptionController = ReturnType<typeof usePushSubscription>;
+
+function PushSubscriptionCard({ push }: { push: PushSubscriptionController }) {
 
   if (!push.isOnline) {
     return (
@@ -121,7 +122,7 @@ function PushSubscriptionCard() {
   );
 }
 
-function PreferencesCard() {
+function PreferencesCard({ pushConfigured }: { pushConfigured: boolean }) {
   const isOnline = useOnlineStatus();
   const preferencesQuery = useNotificationPreferences();
   const mutation = useNotificationPreferenceMutation();
@@ -163,6 +164,16 @@ function PreferencesCard() {
         "Predeterminado" aplica a toda alerta sin una preferencia propia debajo. Un tipo específico siempre gana sobre
         el predeterminado.
       </p>
+      {!pushConfigured && (
+        <p
+          className="mb-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900"
+          role="status"
+          aria-label="Estado de entrega Push"
+        >
+          Las opciones de Push conservan tus preferencias, pero no se entregarán alertas hasta que el canal esté
+          configurado para este hotel.
+        </p>
+      )}
       {preferencesQuery.isLoading ? (
         <p className="text-sm text-slate-600">Cargando preferencias...</p>
       ) : (
@@ -416,6 +427,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 export function SettingsNotificationsPage() {
   const { session } = useSession();
+  const push = usePushSubscription();
   const isOnline = useOnlineStatus();
   const realRole = session.baseRole ?? session.role;
   const canManageDailyReport = realRole === "owner" || realRole === "co_owner";
@@ -437,8 +449,8 @@ export function SettingsNotificationsPage() {
         )}
       </header>
 
-      <PushSubscriptionCard />
-      <PreferencesCard />
+      <PushSubscriptionCard push={push} />
+      <PreferencesCard pushConfigured={push.vapidConfigured} />
       {canManageDailyReport && <DailyReportScheduleCard />}
     </div>
   );
