@@ -51,6 +51,39 @@ test("notification titles localize English backend templates and keep reservatio
   await expect(page.getByRole("dialog")).not.toContainText(/New reservation|Reservation .* cancelled|Daily operational report/);
 });
 
+test("notification panel localizes company extension request event labels", async ({ page }) => {
+  await page.route("**/api/notifications?*", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      unread_count: 1,
+      items: [{
+        id: 4,
+        hotel_id: 1,
+        recipient_user_id: 1,
+        event_type: "reservation.company_extension_request_updated",
+        severity: "info",
+        title: "Extensión de empresa pendiente",
+        body: null,
+        entity_type: "reservation",
+        entity_id: 4,
+        is_read: false,
+        read_at: null,
+        created_at: "2026-11-07T12:00:00Z",
+        expires_at: null
+      }]
+    })
+  }));
+
+  await login(page);
+  await page.getByRole("button", { name: /Ver alertas/ }).click();
+
+  const notification = page.getByTestId("notification-item-4");
+  await expect(notification).toContainText("Extensión de empresa pendiente");
+  await expect(notification).toContainText("Solicitud de extensión de empresa actualizada");
+  await expect(notification).not.toContainText("reservation.company_extension_request_updated");
+});
+
 test("operational audit localizes areas and action codes while retaining technical detail", async ({ page }) => {
   await page.route("**/api/operations/audit?*", (route) => route.fulfill({
     status: 200,
