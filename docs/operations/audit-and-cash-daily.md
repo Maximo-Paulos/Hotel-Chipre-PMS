@@ -25,6 +25,7 @@ co-owner. La proyección combina los ledgers append-only existentes:
 - eventos de negocio y seguridad;
 - movimientos de habitación y cambios de estado de reservas;
 - transacciones de pago, ajustes de facturación y movimientos de caja;
+- ingresos, egresos, ajustes y transferencias del ledger de inventario (`stock_movements`);
 - apertura, arqueo, diferencias y custodia de caja.
 
 No se crea un segundo ledger financiero. La consulta está aislada por hotel,

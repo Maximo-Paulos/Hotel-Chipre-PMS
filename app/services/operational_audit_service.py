@@ -21,6 +21,7 @@ from app.models.cash_register import CashCloseReport, CashCustodyHandoff, CashMo
 from app.models.hotel_config import HotelConfiguration
 from app.models.operations import BillingAdjustment, ReservationAdjustment, ReservationStatusHistory, RoomMoveEvent
 from app.models.security_audit_log import SecurityAuditLog
+from app.models.stock import StockMovement
 from app.models.transaction import Transaction, TransactionTypeEnum
 from app.models.user import User
 from app.services.audit_timeline_service import _parse_redacted_json, _redact_text, _safe_resource_id
@@ -34,8 +35,15 @@ _SPECIALIZED_TABLES = {
     "cash_movements",
     "cash_close_reports",
     "cash_custody_handoffs",
+    "stock_movements",
 }
 _MAX_CANDIDATES = 20_000
+_STOCK_MOVEMENT_LABELS = {
+    "in": ("Ingreso", "ingreso"),
+    "out": ("Egreso", "egreso"),
+    "adjustment": ("Ajuste positivo", "ajuste positivo"),
+    "adjustment_out": ("Ajuste negativo", "ajuste negativo"),
+}
 
 # Operational audit is visible in the hotel UI. Expose only fields with a
 # stable operational meaning; arbitrary payload keys and free-form text stay
@@ -56,6 +64,7 @@ _SAFE_DETAIL_FIELDS = frozenset(
         "price_paypal", "price_credit_card", "price_debit_card", "price_booking",
         "price_expedia", "surcharge_type", "updated_at", "created_at",
         "voided_at", "payment_correction_id",
+        "item_id", "location_id", "item_name", "location_name", "quantity", "unit",
     }
 )
 
@@ -460,6 +469,66 @@ def list_operational_audit(
                     "description": _redact_text(movement.description or ""),
                     "voided_at": movement.voided_at,
                     "payment_correction_id": movement.voided_by_payment_correction_id,
+                },
+            )
+        )
+
+    stock_movement_query = db.query(StockMovement).filter(
+        StockMovement.hotel_id == hotel_id,
+        *_date_filter(StockMovement, start, end, "created_at"),
+    )
+    stock_movement_candidates = stock_movement_query.order_by(
+        StockMovement.created_at.desc(), StockMovement.id.desc()
+    ).limit(_MAX_CANDIDATES).all()
+    for movement in stock_movement_candidates:
+        movement_type = _value(movement.movement_type)
+        label, summary_label = _STOCK_MOVEMENT_LABELS.get(
+            movement_type, ("Movimiento", "movimiento")
+        )
+        item_name = _redact_text(movement.item.name if movement.item else "Artículo")
+        unit = _redact_text(movement.item.unit if movement.item else "unidades")
+        location_name = _redact_text(
+            movement.location.name if movement.location else "General del hotel"
+        )
+        quantity = Decimal(str(movement.quantity))
+        is_transfer = movement.transfer_reference is not None
+        if is_transfer:
+            summary = (
+                f"Traslado de inventario: {summary_label} de {quantity:f} "
+                f"{unit} de "
+                f"{item_name} en {location_name}"
+            )
+            movement_action = f"stock.transfer.{movement_type}"
+            reason_code = "Traslado interno"
+        else:
+            summary = (
+                f"{label} de inventario: {quantity:f} "
+                f"{unit} de "
+                f"{item_name} en {location_name}"
+            )
+            movement_action = f"stock.movement.{movement_type}"
+            reason_code = label
+        rows.append(
+            _row(
+                source="stock_movement",
+                source_id=movement.id,
+                area="inventory",
+                action=movement_action,
+                summary=_redact_text(summary),
+                actor_user_id=movement.created_by_user_id,
+                actor_name=_actor_name(_user(movement.created_by_user_id)),
+                occurred_at=movement.created_at,
+                reservation_id=movement.reservation_id,
+                reason_code=reason_code,
+                reason_note=_redact_text(movement.reason or "") or None,
+                movement_type=movement_type,
+                details={
+                    "item_id": movement.item_id,
+                    "item_name": item_name,
+                    "location_id": movement.location_id,
+                    "location_name": location_name,
+                    "quantity": quantity,
+                    "unit": unit,
                 },
             )
         )
