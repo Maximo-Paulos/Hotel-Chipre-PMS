@@ -1,6 +1,9 @@
 {
   "loading": "Cargando...",
   "saving": "Guardando...",
+  "formValidation": {
+    "required": "Completá este campo."
+  },
   "notificationTitle": {
     "reservationCreated": "Nueva reserva {{reference}}",
     "reservationCancelled": "Reserva {{reference}} cancelada",

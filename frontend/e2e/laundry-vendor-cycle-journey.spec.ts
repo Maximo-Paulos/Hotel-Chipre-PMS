@@ -75,6 +75,8 @@ test("owner runs the vendor/remito cycle and records neutral follow-up for a mis
   await expect(page.getByText(`Lavadero "${vendorName}" creado.`, { exact: true })).toBeVisible();
 
   const priceForm = page.locator("form").filter({ hasText: "Guardar precio" });
+  await priceForm.getByRole("button", { name: "Guardar precio", exact: true }).click();
+  await expect(priceForm.getByLabel("Ítem")).toHaveJSProperty("validationMessage", "Completá este campo.");
   for (const [itemName, price] of [
     [sheetsName, "150"],
     [towelsName, "250"]

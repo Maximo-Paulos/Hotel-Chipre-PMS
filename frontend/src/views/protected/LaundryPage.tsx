@@ -75,6 +75,19 @@ type LaundryDiscrepancyCommand =
 
 type LaundryDiscrepancyCommandWithKey = LaundryDiscrepancyCommand & { idempotencyKey: string };
 
+type NativeValidationField = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+
+function nativeValidationField(target: EventTarget): NativeValidationField | undefined {
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLTextAreaElement
+  ) {
+    return target;
+  }
+  return undefined;
+}
+
 type LaundryDiscrepancyCardProps = {
   discrepancy: LaundryDiscrepancy;
   itemName?: string;
@@ -1246,7 +1259,15 @@ export function LaundryPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div
+      className="space-y-6"
+      onInvalidCapture={(event) => {
+        const field = nativeValidationField(event.target);
+        if (field?.validity.valueMissing) field.setCustomValidity(t("formValidation.required"));
+      }}
+      onInputCapture={(event) => nativeValidationField(event.target)?.setCustomValidity("")}
+      onChangeCapture={(event) => nativeValidationField(event.target)?.setCustomValidity("")}
+    >
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Operación</p>

@@ -1,6 +1,9 @@
 {
   "loading": "Loading...",
   "saving": "Saving...",
+  "formValidation": {
+    "required": "This field is required."
+  },
   "notificationTitle": {
     "reservationCreated": "New reservation {{reference}}",
     "reservationCancelled": "Reservation {{reference}} cancelled",
