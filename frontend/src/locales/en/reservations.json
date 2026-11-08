@@ -763,7 +763,8 @@
       "checkOut": "Check-out for availability",
       "submit": "Check",
       "available": "Available: {{count}}",
-      "ids": "IDs: {{ids}}",
+      "roomNumbers": "Available rooms: {{rooms}}",
+      "roomNumbersUnavailable": "Room numbers could not be loaded.",
       "noMatches": "no matches"
     },
     "allocation": {

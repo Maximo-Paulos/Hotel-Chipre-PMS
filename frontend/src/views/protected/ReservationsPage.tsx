@@ -670,6 +670,21 @@ export function ReservationsPage() {
   const availabilityMutation = useGuardedMutation<RoomAvailabilityResponse, unknown, { category_id: number; check_in_date: string; check_out_date: string }>({
     mutationFn: (payload) => checkRoomAvailability(payload, session)
   });
+  const availabilityRoomNumbers = useMemo(() => {
+    const availableRoomIds = availabilityMutation.data?.status === "ok"
+      ? availabilityMutation.data.available_rooms
+      : [];
+    if (availableRoomIds.length === 0) return [] as string[] | null;
+
+    const roomNumbersById = new Map((roomsQuery.data ?? []).map((room) => [room.id, room.room_number.trim()]));
+    const roomNumbers: string[] = [];
+    for (const roomId of availableRoomIds) {
+      const roomNumber = roomNumbersById.get(roomId);
+      if (!roomNumber) return null;
+      roomNumbers.push(roomNumber);
+    }
+    return roomNumbers;
+  }, [availabilityMutation.data, roomsQuery.data]);
   const { createMutation, updateMutation, cancelMutation, checkInMutation, checkOutMutation } = useReservationMutations(filters);
   const cancellationReviewMutation = useCancellationReviewMutation();
   const createGroupMutation = useGuardedMutation<ReservationGroupSummary, unknown, ReservationPayload[]>({
@@ -3788,9 +3803,11 @@ export function ReservationsPage() {
                   {t("page.availability.available", { count: availabilityMutation.data.count })}
                 </p>
                 <p className="text-xs text-slate-600">
-                  {t("page.availability.ids", {
-                    ids: availabilityMutation.data.available_rooms.join(", ") || t("page.availability.noMatches")
-                  })}
+                  {availabilityMutation.data.available_rooms.length === 0
+                    ? t("page.availability.noMatches")
+                    : availabilityRoomNumbers
+                      ? t("page.availability.roomNumbers", { rooms: availabilityRoomNumbers.join(", ") })
+                      : t("page.availability.roomNumbersUnavailable")}
                 </p>
               </div>
             ) : (
