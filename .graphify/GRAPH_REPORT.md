@@ -1,13 +1,13 @@
 # Graph Report - .  (2026-11-08)
 
 ## Corpus Check
-- Large corpus: 1808 files · ~2,607,023 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
+- Large corpus: 1808 files · ~2,607,305 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder, or use --no-semantic to run AST-only.
 
 ## Summary
-- 15917 nodes · 63516 edges · 766 communities detected
+- 15919 nodes · 63525 edges · 766 communities detected
 - Extraction: 81% EXTRACTED · 19% INFERRED · 0% AMBIGUOUS · INFERRED: 12264 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
-- Edge kinds: ON_BRANCH: 20207 · uses: 12264 · contains: 10850 · calls: 8258 · MODIFIES: 3950 · rationale_for: 2162 · imports: 1884 · imports_from: 1541 · inherits: 1052 · method: 965 · PARENT_OF: 375 · re_exports: 4 · reads_from: 4
+- Edge kinds: ON_BRANCH: 20209 · uses: 12264 · contains: 10850 · calls: 8258 · MODIFIES: 3955 · rationale_for: 2162 · imports: 1884 · imports_from: 1541 · inherits: 1052 · method: 965 · PARENT_OF: 377 · re_exports: 4 · reads_from: 4
 
 
 ## Input Scope
@@ -17,7 +17,7 @@
 - Excluded: 0 untracked · 0 ignored · 15 sensitive · 0 missing committed
 
 ## Graph Freshness
-- Built from Git commit: `adf62c3`
+- Built from Git commit: `087b751`
 - Compare this hash to `git rev-parse HEAD` before trusting freshness-sensitive graph output.
 ## God Nodes (most connected - your core abstractions)
 1. `Reservation` - 528 edges
@@ -606,44 +606,44 @@ Cohesion: 0.29
 Nodes (25): _build_client(), _cleanup_client(), _manual_ota_payload(), _override_auth(), _payload(), No regression: the gate only fires when total_amount is actually sent., _seed_bookable_state(), test_bounded_manual_rate_rejects_ota_and_company_reservations() (+17 more)
 
 ### Community 140 - "Community 140"
+Cohesion: 0.10
+Nodes (14): 087b751 Validate laundry remitos and permission load errors, 4022df1 Disable companion arrival submit while saving, 4353794 Hide arrival policy after guest party completes, 47dbd28 Use accessible selector for arrival profile test, 4d55e2a Clarify automatic room assignment in reservation form, 7836233 Refresh Graphify and generated knowledge indexes, 787793b Hide arrival policy after guest party completes, 99e39e8 Clarify reservation form guidance for create and edit (+6 more)
+
+### Community 141 - "Community 141"
 Cohesion: 0.23
 Nodes (18): GemmaOrchestrator, _build_client(), _cleanup_client(), _override_auth(), _StubGemmaOrchestrator, test_gemma_chat_can_archive_session_and_hide_it_from_history(), test_gemma_chat_can_confirm_preview_into_policy_suggestion_draft(), test_gemma_chat_can_reject_pending_action() (+10 more)
 
-### Community 141 - "Community 141"
+### Community 142 - "Community 142"
 Cohesion: 0.17
 Nodes (22): TOTP MFA secrets and one-time recovery codes for normal user accounts., UserMfaRecoveryCode, UserMfaSecret, add_recovery_codes(), confirm_enrollment(), consume_mfa_code(), _consume_recovery_code(), _consume_totp_code() (+14 more)
 
-### Community 142 - "Community 142"
+### Community 143 - "Community 143"
 Cohesion: 0.21
 Nodes (22): example_manifest(), Regression tests for the isolated preview evidence contract., test_api_base_may_equal_origin_without_breaking_health_url(), test_api_base_rejects_arbitrary_path_and_health_under_api(), test_backend_sha_and_preview_service_must_be_distinct(), test_database_branch_and_connection_must_differ_from_production(), test_dedicated_baseline_rejects_missing_lease_field(), test_dedicated_baseline_rejects_weak_lease_id() (+14 more)
 
-### Community 143 - "Community 143"
+### Community 144 - "Community 144"
 Cohesion: 0.26
 Nodes (20): _canonical_hostname(), _canonical_json(), _connection_fingerprint(), _database_identity(), _decode_token_payload(), _deployment_became_live(), _github_repository(), _https_origin() (+12 more)
 
-### Community 144 - "Community 144"
+### Community 145 - "Community 145"
 Cohesion: 0.13
 Nodes (16): createPromotion(), deactivatePromotion(), FxQuoteDetails, listPromotions(), Promotion, PromotionAppliedEntry, PromotionCreatePayload, PromotionSimulateNight (+8 more)
 
-### Community 145 - "Community 145"
+### Community 146 - "Community 146"
 Cohesion: 0.17
 Nodes (21): _build_pending_actions(), _candidate_reservation_ids(), clear_reservation_manual_review(), _decorate_action(), _dedupe_candidates(), _fmt_date(), _get_latest_ota_link(), _get_operations_related_data() (+13 more)
 
-### Community 146 - "Community 146"
+### Community 147 - "Community 147"
 Cohesion: 0.11
 Nodes (23): _event_engine(), A minimal SQLite engine with just the tables the after_commit hook writes to., _successful_publisher(), test_bulk_allocation_model_changes_coalesce_to_one_invalidation_per_domain(), test_derived_analytics_changes_are_coalesced_by_family(), test_domain_event_recovery_uses_two_bounded_roundtrips(), test_failed_durable_publish_leaves_later_durable_rows_pending_but_attempts_ephemeral_events(), test_model_change_collector_fans_out_payment_dependencies_without_sensitive_fields() (+15 more)
 
-### Community 147 - "Community 147"
+### Community 148 - "Community 148"
 Cohesion: 0.11
 Nodes (7): Share the in-memory SQLite connection with async iterator worker threads., test_async_postgres_fallback_idle_wait_keeps_loop_responsive_and_cancels(), test_async_postgres_fallback_preserves_cursor_payload_and_tenant_isolation(), test_async_postgres_fallback_revalidates_membership_and_emits_control(), test_async_postgres_fallback_shares_poll_queries_across_streams(), test_async_postgres_listener_fans_out_without_idle_outbox_polls(), _thread_safe_event_engine()
 
-### Community 148 - "Community 148"
+### Community 149 - "Community 149"
 Cohesion: 0.09
 Nodes (9): Tests for reservation creation logic., Create a standard reservation and verify computed fields., B4: manual tarifa on a direct reservation with no company_id -- the         auto, Reserve a specific room., Should fail for non-existent guest., Should fail when check-out is before check-in., Should fail when room doesn't match the requested category., Cannot book the same room for overlapping dates. (+1 more)
-
-### Community 149 - "Community 149"
-Cohesion: 0.11
-Nodes (12): 4022df1 Disable companion arrival submit while saving, 4353794 Hide arrival policy after guest party completes, 47dbd28 Use accessible selector for arrival profile test, 4d55e2a Clarify automatic room assignment in reservation form, 787793b Hide arrival policy after guest party completes, 99e39e8 Clarify reservation form guidance for create and edit, adf62c3 Disable companion arrival submit while saving, b1598e0 Clarify automatic room assignment in reservation form (+4 more)
 
 ### Community 150 - "Community 150"
 Cohesion: 0.18
@@ -3424,7 +3424,7 @@ Nodes (1): DailyRate explicit row takes priority over an active PricePeriod.
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Base` connect `Community 10` to `Community 510`, `Community 215`, `Community 0`, `Community 62`, `Community 47`, `Community 51`, `Community 5`, `Community 11`, `Community 217`, `Community 6`, `Community 16`, `Community 57`, `Community 14`, `Community 7`, `Community 9`, `Community 17`, `Community 253`, `Community 61`, `Community 765`, `Community 1`, `Community 350`, `Community 83`, `Community 33`, `Community 112`, `Community 56`, `Community 30`, `Community 192`, `Community 39`, `Community 12`, `Community 91`, `Community 55`, `Community 90`, `Community 177`, `Community 203`, `Community 26`, `Community 318`, `Community 29`, `Community 141`, `Community 389`?**
+- **Why does `Base` connect `Community 10` to `Community 510`, `Community 215`, `Community 0`, `Community 62`, `Community 47`, `Community 51`, `Community 5`, `Community 11`, `Community 217`, `Community 6`, `Community 16`, `Community 57`, `Community 14`, `Community 7`, `Community 9`, `Community 17`, `Community 253`, `Community 61`, `Community 765`, `Community 1`, `Community 350`, `Community 83`, `Community 33`, `Community 112`, `Community 56`, `Community 30`, `Community 192`, `Community 39`, `Community 12`, `Community 91`, `Community 55`, `Community 90`, `Community 177`, `Community 203`, `Community 26`, `Community 318`, `Community 29`, `Community 142`, `Community 389`?**
   _High betweenness centrality (0.086) - this node is a cross-community bridge._
 - **Why does `HotelConfiguration` connect `Community 9` to `Community 14`, `Community 7`, `Community 16`, `Community 57`, `Community 5`, `Community 24`, `Community 6`, `Community 73`, `Community 4`, `Community 12`, `Community 112`, `Community 8`, `Community 0`, `Community 10`, `Community 47`, `Community 17`, `Community 157`, `Community 3`, `Community 55`, `Community 21`, `Community 30`, `Community 129`, `Community 91`, `Community 85`, `Community 29`, `Community 354`, `Community 421`?**
   _High betweenness centrality (0.027) - this node is a cross-community bridge._
