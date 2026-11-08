@@ -151,6 +151,7 @@ async function installMocks(page: Page, options: {
   overrideStatus?: number;
   legacyUserDeny?: boolean;
   permissionReadsRequireStepUp?: boolean;
+  permissionCatalogFailure?: number;
 } = {}) {
   let loggedIn = false;
   const writes: Array<{ path: string; method: string; payload: unknown }> = [];
@@ -210,6 +211,10 @@ async function installMocks(page: Page, options: {
           path: pathname
         }
       }, 428);
+      return;
+    }
+    if (method === "GET" && pathname === "/api/permissions/catalog" && options.permissionCatalogFailure) {
+      await json({ detail: "INTERNAL_PERMISSION_FAILURE_DETAIL" }, options.permissionCatalogFailure);
       return;
     }
     if (pathname.endsWith("/api/notifications")) {
@@ -565,6 +570,10 @@ test("canceling the permission catalog step-up does not start or retry protected
   await expect.poll(() => permissionReadAttempts.length).toBe(1);
   await dialog.getByRole("button", { name: "Cancelar" }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText(
+    "La verificación de identidad no se completó, así que no se cargaron los permisos."
+  );
+  await expect(page.getByTestId("permissions-matrix")).toHaveCount(0);
 
   // This spans the default React Query retry delay that previously reopened
   // the challenge after the operator had explicitly canceled it.
@@ -572,4 +581,19 @@ test("canceling the permission catalog step-up does not start or retry protected
   await expect(dialog).toHaveCount(0);
   expect(permissionReadAttempts).toHaveLength(1);
   expect(new Set(permissionReadAttempts).size).toBe(permissionReadAttempts.length);
+});
+
+test("does not expose unexpected permission API details in the load error", async ({ page }) => {
+  await installMocks(page, { permissionCatalogFailure: 500 });
+  await page.goto("/login", { waitUntil: "domcontentloaded" });
+  await page.locator('input[type="email"]').fill("owner@example.com");
+  await page.locator('input[type="password"]').fill("test-password");
+  await page.getByTestId("login-submit").click();
+  await page.waitForURL("**/dashboard");
+  await page.goto("/settings/permissions");
+
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("No se pudo cargar la configuración de permisos. Reintentá la carga.");
+  await expect(alert).not.toContainText("INTERNAL_PERMISSION_FAILURE_DETAIL");
+  await expect(page.getByTestId("permissions-matrix")).toHaveCount(0);
 });

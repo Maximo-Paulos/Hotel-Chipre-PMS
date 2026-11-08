@@ -298,6 +298,10 @@
     "roleUnavailable": "The role could not be confirmed as active. No changes were applied.",
     "permissionConflict": "This permission changed while you were editing. Data was refreshed; review it before trying again.",
     "permissionDenied": "The server denied this change. No permission was applied.",
+    "permissionLoadStepUpRequired": "Identity verification was not completed, so permissions were not loaded. Retry and complete the verification to continue.",
+    "permissionLoadTimeout": "Loading permissions took too long. No settings were changed; you can retry.",
+    "permissionLoadDenied": "You are not authorized to view this configuration. No permissions were changed.",
+    "permissionLoadError": "Permission settings could not be loaded. Retry loading the page.",
     "permissionSaveError": "The change could not be saved."
   },
   "routeLoadError": {

@@ -571,6 +571,14 @@ export function SettingsPermissionsPage() {
         : error instanceof Error
           ? error.message
           : t("hotelRoles.permissionSaveError");
+  const permissionLoadErrorMessage = (error: unknown) => {
+    if (error instanceof ApiError) {
+      if (error.status === 428) return t("hotelRoles.permissionLoadStepUpRequired");
+      if (error.status === 408) return t("hotelRoles.permissionLoadTimeout");
+      if (error.status === 403) return t("hotelRoles.permissionLoadDenied");
+    }
+    return t("hotelRoles.permissionLoadError");
+  };
 
   const rolesQuery = useQuery<HotelRolesResponse>({
     queryKey: hotelRolesQueryKey(session.hotelId),
@@ -915,7 +923,7 @@ export function SettingsPermissionsPage() {
       {loading ? <p className="text-sm text-slate-600" role="status">Cargando permisos...</p> : null}
       {queryError ? (
         <div className="flex flex-col gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 sm:flex-row sm:items-center sm:justify-between" role="alert">
-          <p>No se pudo cargar la configuración de permisos. {(queryError as Error).message}</p>
+          <p>{permissionLoadErrorMessage(queryError)}</p>
           <button
             type="button"
             onClick={retryFailedPermissionQueries}

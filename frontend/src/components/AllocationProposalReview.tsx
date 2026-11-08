@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { AllocationAssignment, AllocationRunDetail } from "../api/allocation";
 import type { Reservation } from "../api/reservations";
 import type { Room } from "../api/rooms";
+
 import { allocationAssignmentStatusKey } from "./allocationAssignmentStatus.mjs";
 
 type AllocationProposalReviewProps = {

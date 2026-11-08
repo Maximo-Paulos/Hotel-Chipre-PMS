@@ -298,6 +298,10 @@
     "roleUnavailable": "No se pudo confirmar que el rol siga activo. No se aplicaron cambios.",
     "permissionConflict": "El permiso cambió mientras editabas. Se actualizaron los datos; revisalos antes de volver a intentar.",
     "permissionDenied": "El servidor rechazó el cambio por falta de autorización. No se aplicó ningún permiso.",
+    "permissionLoadStepUpRequired": "La verificación de identidad no se completó, así que no se cargaron los permisos. Reintentá y completá el desafío para continuar.",
+    "permissionLoadTimeout": "La carga de permisos tardó demasiado. No se cambió ninguna configuración; podés reintentar.",
+    "permissionLoadDenied": "No tenés autorización para consultar esta configuración. No se cambió ningún permiso.",
+    "permissionLoadError": "No se pudo cargar la configuración de permisos. Reintentá la carga.",
     "permissionSaveError": "No se pudo guardar el cambio."
   },
   "routeLoadError": {

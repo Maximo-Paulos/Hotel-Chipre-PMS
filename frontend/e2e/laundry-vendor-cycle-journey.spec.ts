@@ -91,6 +91,16 @@ test("owner runs the vendor/remito cycle and records neutral follow-up for a mis
   // paper remito -- see LaundryPage.tsx's "Nuevo remito" form.
   const remitoForm = page.locator("form").filter({ hasText: "Nuevo remito" });
 
+  // Empty and incomplete submissions use localized in-app feedback instead
+  // of the browser's locale-dependent native constraint message.
+  await remitoForm.getByRole("button", { name: "Guardar remito", exact: true }).click();
+  await expect(remitoForm.getByRole("alert")).toContainText("Seleccioná un lavadero.");
+  await remitoForm.getByLabel("Lavadero").selectOption({ label: vendorName });
+  await remitoForm.getByLabel("Ubicación casa (origen/destino en el hotel)").selectOption({ label: locationName });
+  await remitoForm.getByLabel("N° de remito (papel)").fill(`R-EMPTY-${suffix}`);
+  await remitoForm.getByRole("button", { name: "Guardar remito", exact: true }).click();
+  await expect(remitoForm.getByRole("alert")).toContainText("Cargá al menos una cantidad de retiro o entrega.");
+
   // --- Remito de salida: 6 sabanas + 4 toallas, total estimado 6*150 + 4*250 = 1900 ---
   await remitoForm.getByLabel("Lavadero").selectOption({ label: vendorName });
   await remitoForm.getByLabel("Ubicación casa (origen/destino en el hotel)").selectOption({ label: locationName });

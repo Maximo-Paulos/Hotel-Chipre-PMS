@@ -1181,7 +1181,8 @@ export function LaundryPage() {
   }, [outboundLines, remitoVendorPriceByItem]);
   const remitoCurrency = remitoVendorPricesQuery.data?.[0]?.currency_code;
 
-  const setRemitoQuantity = (itemId: number, direction: "retiro" | "entrego" | "faltante", value: string) =>
+  const setRemitoQuantity = (itemId: number, direction: "retiro" | "entrego" | "faltante", value: string) => {
+    setRemitoError(null);
     setRemitoQuantities((current) => ({
       ...current,
       [itemId]: {
@@ -1191,12 +1192,43 @@ export function LaundryPage() {
         [direction]: value
       }
     }));
+  };
 
   const handleCreateRemito = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setRemitoError(null);
     if (!isOnline) {
       setRemitoError("Sin conexión. Conectate para guardar el remito.");
+      return;
+    }
+    if (!remitoForm.vendor_id) {
+      setRemitoError("Seleccioná un lavadero.");
+      return;
+    }
+    if (!remitoForm.house_location_id) {
+      setRemitoError("Seleccioná una ubicación del hotel.");
+      return;
+    }
+    if (!remitoForm.remito_number.trim()) {
+      setRemitoError("Ingresá el número del remito.");
+      return;
+    }
+    if (!remitoForm.remito_date) {
+      setRemitoError("Ingresá la fecha del remito.");
+      return;
+    }
+    const quantityValues = Object.values(remitoQuantities).flatMap((quantities) => [
+      quantities.retiro,
+      quantities.entrego,
+      quantities.faltante
+    ]);
+    const hasInvalidQuantity = quantityValues.some((value) => {
+      if (!value.trim()) return false;
+      const quantity = Number(value);
+      return !Number.isFinite(quantity) || quantity < 0 || !Number.isInteger(quantity);
+    });
+    if (hasInvalidQuantity) {
+      setRemitoError("Las cantidades deben ser números enteros iguales o mayores que cero.");
       return;
     }
     if (outboundLines.length === 0 && inboundLines.length === 0) {
@@ -2132,6 +2164,7 @@ export function LaundryPage() {
             <form
               className={remitoFormVisible ? "space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" : "hidden"}
               onSubmit={handleCreateRemito}
+              noValidate
             >
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">Remito</p>
@@ -2146,7 +2179,10 @@ export function LaundryPage() {
                 <span className="text-slate-600">Lavadero</span>
                 <select
                   value={remitoForm.vendor_id}
-                  onChange={(event) => setRemitoForm((current) => ({ ...current, vendor_id: event.target.value }))}
+                  onChange={(event) => {
+                    setRemitoError(null);
+                    setRemitoForm((current) => ({ ...current, vendor_id: event.target.value }));
+                  }}
                   required
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 >
@@ -2163,7 +2199,10 @@ export function LaundryPage() {
                 <span className="text-slate-600">Ubicación casa (origen/destino en el hotel)</span>
                 <select
                   value={remitoForm.house_location_id}
-                  onChange={(event) => setRemitoForm((current) => ({ ...current, house_location_id: event.target.value }))}
+                  onChange={(event) => {
+                    setRemitoError(null);
+                    setRemitoForm((current) => ({ ...current, house_location_id: event.target.value }));
+                  }}
                   required
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 >
@@ -2181,7 +2220,10 @@ export function LaundryPage() {
                   <span className="text-slate-600">N° de remito (papel)</span>
                   <input
                     value={remitoForm.remito_number}
-                    onChange={(event) => setRemitoForm((current) => ({ ...current, remito_number: event.target.value }))}
+                    onChange={(event) => {
+                      setRemitoError(null);
+                      setRemitoForm((current) => ({ ...current, remito_number: event.target.value }));
+                    }}
                     required
                     className="w-full rounded-lg border border-slate-300 px-3 py-2"
                   />
@@ -2191,7 +2233,10 @@ export function LaundryPage() {
                   <input
                     type="date"
                     value={remitoForm.remito_date}
-                    onChange={(event) => setRemitoForm((current) => ({ ...current, remito_date: event.target.value }))}
+                    onChange={(event) => {
+                      setRemitoError(null);
+                      setRemitoForm((current) => ({ ...current, remito_date: event.target.value }));
+                    }}
                     required
                     className="w-full rounded-lg border border-slate-300 px-3 py-2"
                   />
