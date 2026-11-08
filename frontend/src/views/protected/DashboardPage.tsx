@@ -55,7 +55,12 @@ export function DashboardPage() {
   const { fromDate: monthFrom, toDate: monthTo } = useMemo(() => monthRangeIso(new Date(`${today}T00:00:00`)), [today]);
   const reservationsQuery = useReservations({ fromDate: monthFrom, toDate: monthTo, order: "check_in", limit: 200 });
   const reservations = useMemo(() => reservationsQuery.data ?? [], [reservationsQuery.data]);
-  const { hasPermission } = useEffectivePermissions();
+  const { hasPermission, hasAnyPermission, permissionsKnown } = useEffectivePermissions();
+  const canAssignRooms = permissionsKnown
+    && hasPermission("occupancy:view")
+    && hasPermission("room:read")
+    && hasAnyPermission(["reservation:move", "reservation:move_category", "reservation:move_capacity"]);
+  const canViewRooms = permissionsKnown && hasPermission("room:read");
   const canViewFinancial = hasPermission("reports:financial:view");
   const canViewOperationalReports = hasPermission("reports:operational:view");
   const occupancyQuery = useOccupancyReport(today, today, canViewOperationalReports);
@@ -225,12 +230,14 @@ export function DashboardPage() {
           >
             {t("actions.newReservation")}
           </Link>
-          <Link
-            to="/habitaciones"
-            className="rounded-control bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50 active:scale-[0.98]"
-          >
-            {t("actions.assignRoom")}
-          </Link>
+          {canAssignRooms || canViewRooms ? (
+            <Link
+              to={canAssignRooms ? "/operacion/planilla" : "/habitaciones"}
+              className="rounded-control bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-900/10 hover:bg-slate-50 active:scale-[0.98]"
+            >
+              {t(canAssignRooms ? "actions.assignRoom" : "actions.viewRooms")}
+            </Link>
+          ) : null}
         </div>
       </header>
 

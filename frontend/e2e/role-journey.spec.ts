@@ -115,6 +115,37 @@ for (const persona of personas) {
   });
 }
 
+test("receptionist dashboard room action opens manual room assignment", async ({ page }) => {
+  const receptionist = personas.find((persona) => persona.label === "receptionist")!;
+  await login(page, receptionist);
+
+  const assignRoomLink = page.getByRole("link", { name: "Asignar habitación", exact: true });
+  await expect(assignRoomLink).toHaveAttribute("href", "/operacion/planilla");
+  await assignRoomLink.click();
+  await expect(page).toHaveURL(/\/operacion\/planilla$/);
+  await expect(page.getByRole("heading", { name: "Planilla de ocupación" })).toBeVisible();
+});
+
+test("dashboard offers room inventory when the role can read rooms but cannot move reservations", async ({ page }) => {
+  const receptionist = personas.find((persona) => persona.label === "receptionist")!;
+  await login(page, receptionist);
+
+  await page.route("**/api/permissions/effective", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json() as { permissions?: string[] };
+    const movePermissions = new Set(["reservation:move", "reservation:move_category", "reservation:move_capacity"]);
+    await route.fulfill({
+      response,
+      json: { ...body, permissions: (body.permissions ?? []).filter((permission) => !movePermissions.has(permission)) }
+    });
+  });
+  await page.reload();
+
+  const viewRoomsLink = page.getByRole("link", { name: "Ver habitaciones", exact: true });
+  await expect(viewRoomsLink).toHaveAttribute("href", "/habitaciones");
+  await expect(page.getByRole("link", { name: "Asignar habitación", exact: true })).toHaveCount(0);
+});
+
 test("manager can read the rate calendar", async ({ page }) => {
   const manager = personas.find((persona) => persona.label === "manager")!;
   await login(page, manager);

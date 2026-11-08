@@ -4,7 +4,8 @@
   "subtitle": "Live KPIs, arrivals/departures, and operational actions for the active hotel.",
   "actions": {
     "newReservation": "New reservation",
-    "assignRoom": "Assign room"
+    "assignRoom": "Assign room",
+    "viewRooms": "View rooms"
   },
   "cards": {
     "occupancyToday": {

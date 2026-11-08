@@ -4,7 +4,8 @@
   "subtitle": "KPIs en vivo, llegadas/salidas y acciones operativas del hotel activo.",
   "actions": {
     "newReservation": "Nueva reserva",
-    "assignRoom": "Asignar habitación"
+    "assignRoom": "Asignar habitación",
+    "viewRooms": "Ver habitaciones"
   },
   "cards": {
     "occupancyToday": {
