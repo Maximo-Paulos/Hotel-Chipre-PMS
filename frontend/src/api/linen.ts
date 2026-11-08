@@ -99,6 +99,30 @@ export type LinenTransferResult = {
   inbound: LinenMovement;
 };
 
+export type LinenTransferHistoryEntry = {
+  transfer_reference: string;
+  linen_item_id: number;
+  item_name: string;
+  unit: string;
+  source_location_id: number;
+  source_location_name: string;
+  destination_location_id: number;
+  destination_location_name: string;
+  quantity: DecimalValue;
+  reason: string;
+  created_by_user_id?: number | null;
+  actor_display_name?: string | null;
+  created_at: string;
+};
+
+export type LinenTransferHistoryPage = {
+  items: LinenTransferHistoryEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
 export type LinenParLevel = {
   id: number;
   hotel_id: number;
@@ -139,6 +163,14 @@ export const createLinenTransfer = (
     headers: { "Idempotency-Key": idempotencyKey },
     session
   });
+
+export const listLinenTransferHistory = (
+  { limit = 30, offset = 0 }: { limit?: number; offset?: number } = {},
+  session?: SessionLike
+) => apiFetch<LinenTransferHistoryPage>(
+  `/api/laundry/transfers?${new URLSearchParams({ limit: String(limit), offset: String(offset) })}`,
+  { session }
+);
 
 export const getCurrentLinenStock = (
   itemId: number,

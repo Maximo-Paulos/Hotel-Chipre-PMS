@@ -97,6 +97,22 @@
     "subtotalWithPrice": "Con tarifa: {{amount}}",
     "settlementBlockedByUnpriced": "Revisá manualmente los remitos sin tarifa antes de marcar esta liquidación como pagada."
   },
+  "linenTransferHistory": {
+    "title": "Historial de traspasos internos",
+    "description": "Movimientos entre ubicaciones del hotel, con responsable y motivo registrado.",
+    "total_one": "{{count}} traspaso",
+    "total_other": "{{count}} traspasos",
+    "loading": "Cargando historial...",
+    "loadFailed": "No se pudo cargar el historial.",
+    "retry": "Reintentar",
+    "empty": "Todavía no hay traspasos internos registrados.",
+    "reason": "Motivo",
+    "actor": "Responsable: {{actor}}",
+    "actorUser": "Usuario #{{userId}}",
+    "unknownActor": "Sin responsable identificado",
+    "loadMore": "Cargar más traspasos",
+    "loadingMore": "Cargando más..."
+  },
   "laundryDiscrepancies": {
     "tab": "Revisiones",
     "eyebrow": "Control de ropa blanca",

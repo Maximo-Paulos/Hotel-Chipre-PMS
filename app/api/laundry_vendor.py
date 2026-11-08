@@ -13,7 +13,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -62,6 +62,7 @@ from app.services.linen_service import (
     list_linen_items,
     list_locations as list_linen_locations,
     LinenIdempotencyConflict,
+    list_linen_transfer_history,
     register_movement as register_linen_movement,
     retire_linen,
     register_opening_counts,
@@ -408,6 +409,30 @@ class LinenTransferRead(BaseModel):
     inbound: LinenMovementRead
 
 
+class LinenTransferHistoryEntryRead(BaseModel):
+    transfer_reference: str
+    linen_item_id: int
+    item_name: str
+    unit: str
+    source_location_id: int
+    source_location_name: str
+    destination_location_id: int
+    destination_location_name: str
+    quantity: Decimal
+    reason: str
+    created_by_user_id: Optional[int] = None
+    actor_display_name: Optional[str] = None
+    created_at: datetime
+
+
+class LinenTransferHistoryPageRead(BaseModel):
+    items: list[LinenTransferHistoryEntryRead]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
 class LinenOpeningCountLineIn(BaseModel):
     linen_item_id: int = Field(gt=0)
     location_id: int = Field(gt=0)
@@ -662,6 +687,28 @@ def create_laundry_linen_opening_counts(
     for movement in movements:
         db.refresh(movement)
     return movements
+
+
+@router.get("/transfers", response_model=LinenTransferHistoryPageRead)
+def get_laundry_linen_transfer_history(
+    limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_permission(PERMISSION_LAUNDRY_MANAGE_VENDORS)),
+):
+    entries, total = list_linen_transfer_history(
+        db,
+        hotel_id=context.hotel_id,
+        limit=limit,
+        offset=offset,
+    )
+    return {
+        "items": entries,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(entries) < total,
+    }
 
 
 @router.post("/transfers", response_model=LinenTransferRead, status_code=status.HTTP_201_CREATED)

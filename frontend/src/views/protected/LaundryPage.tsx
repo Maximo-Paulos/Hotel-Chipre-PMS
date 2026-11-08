@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -39,6 +39,7 @@ import {
   createLinenOpeningCounts,
   createLinenTransfer,
   getLinenSummary,
+  listLinenTransferHistory,
   listLinenItems,
   listLinenLocations,
   setLinenLocationMinimum,
@@ -472,6 +473,14 @@ export function LaundryPage() {
     enabled: enabled && manageVendors && vendorSectionVisible,
     staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
   });
+  const linenTransferHistoryQuery = useInfiniteQuery({
+    queryKey: ["linen-transfer-history", session.hotelId],
+    queryFn: ({ pageParam }) => listLinenTransferHistory({ offset: pageParam }, session),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.has_more ? lastPage.offset + lastPage.limit : undefined,
+    enabled: enabled && manageVendors && vendorSectionVisible,
+    staleTime: EVENT_REFRESHED_QUERY_STALE_TIME_MS
+  });
   const remitosQuery = useQuery({
     queryKey: ["laundry-remitos", session.hotelId],
     queryFn: () => listLaundryRemitos({}, session),
@@ -496,6 +505,12 @@ export function LaundryPage() {
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
   const locations = useMemo(() => locationsQuery.data ?? [], [locationsQuery.data]);
   const remitos = useMemo(() => remitosQuery.data ?? [], [remitosQuery.data]);
+  const linenTransferHistory = useMemo(
+    () => linenTransferHistoryQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [linenTransferHistoryQuery.data]
+  );
+  const linenTransferHistoryTotal = linenTransferHistoryQuery.data?.pages[0]?.total ?? 0;
+  const transferHistoryLocale = i18n.language === "en" ? "en-US" : "es-AR";
   const discrepancies = useMemo(() => discrepanciesQuery.data ?? [], [discrepanciesQuery.data]);
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const vendorById = useMemo(() => new Map(vendors.map((vendor) => [vendor.id, vendor])), [vendors]);
@@ -803,6 +818,7 @@ export function LaundryPage() {
     onSuccess: async () => {
       linenTransferAttemptRef.current = null;
       await refreshStockState(queryClient, session.hotelId);
+      await queryClient.invalidateQueries({ queryKey: ["linen-transfer-history", session.hotelId] });
       setLinenTransferForm(emptyLinenTransferForm);
       setMessage("Traspaso de ropa blanca registrado.");
     }
@@ -1207,7 +1223,7 @@ export function LaundryPage() {
             Ropa blanca con lavadero externo: lavaderos, remitos de salida/entrada y balance de qué hay dónde.
           </p>
         </div>
-        {(vendorsQuery.isFetching || remitosQuery.isFetching) && <p className="text-xs text-slate-500">Actualizando...</p>}
+        {(vendorsQuery.isFetching || remitosQuery.isFetching || linenTransferHistoryQuery.isFetching) && <p className="text-xs text-slate-500">Actualizando...</p>}
       </header>
 
       {message ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
@@ -1699,6 +1715,86 @@ export function LaundryPage() {
               {createLinenTransferMutation.isPending ? "Guardando traspaso..." : "Guardar traspaso"}
             </button>
           </form>
+          <section
+            className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
+            aria-labelledby="linen-transfer-history-title"
+            aria-busy={linenTransferHistoryQuery.isFetching}
+            data-testid="linen-transfer-history"
+          >
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 id="linen-transfer-history-title" className="text-sm font-semibold text-slate-800">
+                  {t("linenTransferHistory.title")}
+                </h3>
+                <p className="text-xs text-slate-600">{t("linenTransferHistory.description")}</p>
+              </div>
+              <p className="text-xs text-slate-500">
+                {t("linenTransferHistory.total", { count: linenTransferHistoryTotal })}
+              </p>
+            </div>
+            {linenTransferHistoryQuery.isPending && (
+              <p role="status" className="text-sm text-slate-600">{t("linenTransferHistory.loading")}</p>
+            )}
+            {linenTransferHistoryQuery.isError && (
+              <p role="alert" className="text-sm text-rose-700">
+                {t("linenTransferHistory.loadFailed")} {" "}
+                <button
+                  type="button"
+                  onClick={() => void linenTransferHistoryQuery.refetch()}
+                  className="font-semibold underline"
+                >
+                  {t("linenTransferHistory.retry")}
+                </button>
+              </p>
+            )}
+            {!linenTransferHistoryQuery.isPending && !linenTransferHistoryQuery.isError && linenTransferHistory.length === 0 && (
+              <p className="text-sm text-slate-600">{t("linenTransferHistory.empty")}</p>
+            )}
+            {linenTransferHistory.length > 0 && (
+              <ol className="divide-y divide-slate-100 rounded-lg border border-slate-100" aria-label={t("linenTransferHistory.title")}>
+                {linenTransferHistory.map((transfer) => {
+                  const createdAt = new Date(transfer.created_at);
+                  const actorLabel = transfer.actor_display_name?.trim()
+                    || (transfer.created_by_user_id
+                      ? t("linenTransferHistory.actorUser", { userId: transfer.created_by_user_id })
+                      : t("linenTransferHistory.unknownActor"));
+                  return (
+                    <li key={transfer.transfer_reference} data-testid="linen-transfer-history-row" className="grid gap-2 px-3 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-800">
+                          {transfer.item_name} · {new Intl.NumberFormat(transferHistoryLocale, { maximumFractionDigits: 2 }).format(Number(transfer.quantity))} {transfer.unit}
+                        </p>
+                        <p className="mt-1 break-words text-slate-700">
+                          {transfer.source_location_name} <span aria-hidden="true">→</span> {transfer.destination_location_name}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-600">
+                          <span className="font-medium">{t("linenTransferHistory.reason")}:</span> {transfer.reason}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-1 text-xs text-slate-600 sm:items-end">
+                        <time dateTime={transfer.created_at}>
+                          {new Intl.DateTimeFormat(transferHistoryLocale, { dateStyle: "medium", timeStyle: "short" }).format(createdAt)}
+                        </time>
+                        <span>{t("linenTransferHistory.actor", { actor: actorLabel })}</span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+            {linenTransferHistoryQuery.hasNextPage && (
+              <button
+                type="button"
+                onClick={() => void linenTransferHistoryQuery.fetchNextPage()}
+                disabled={linenTransferHistoryQuery.isFetchingNextPage}
+                className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {linenTransferHistoryQuery.isFetchingNextPage
+                  ? t("linenTransferHistory.loadingMore")
+                  : t("linenTransferHistory.loadMore")}
+              </button>
+            )}
+          </section>
         </section>
       )}
 

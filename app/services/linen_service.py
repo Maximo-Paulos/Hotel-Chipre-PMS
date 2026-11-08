@@ -12,19 +12,22 @@ different abstraction over one shared table.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import NAMESPACE_URL, uuid5
 
-from sqlalchemy import case, func
+from sqlalchemy import and_, case, func
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.models.audit_log import AuditActionEnum
+from app.models.hotel_membership import HotelMembership
 from app.models.laundry_discrepancy import LaundryRemitoDiscrepancy
 from app.models.linen import LinenItem, LinenLocation, LinenMovement, LinenParLevel
 from app.models.laundry_vendor import LaundryVendor
 from app.models.security_audit_log import SecurityAuditLog
+from app.models.user import User
 from app.services import audit_log_service
 from app.services.timezones import hotel_business_now, utc_naive
 
@@ -43,6 +46,23 @@ class LinenOpeningCountConflict(LinenError):
 
 class LinenIdempotencyConflict(LinenError):
     """Raised when a transfer retry key is reused for another payload."""
+
+
+@dataclass(frozen=True)
+class LinenTransferHistoryEntry:
+    transfer_reference: str
+    linen_item_id: int
+    item_name: str
+    unit: str
+    source_location_id: int
+    source_location_name: str
+    destination_location_id: int
+    destination_location_name: str
+    quantity: Decimal
+    reason: str
+    created_by_user_id: int | None
+    actor_display_name: str | None
+    created_at: datetime
 
 
 # Same movement vocabulary as stock_service.py: "adjustment" raises the
@@ -496,6 +516,98 @@ def transfer_linen_stock(
             raise LinenIdempotencyConflict("Idempotency key was already used for a different linen transfer")
         raise
     return transfer_reference, outbound, inbound
+
+
+def list_linen_transfer_history(
+    db: Session,
+    *,
+    hotel_id: int,
+    limit: int = 30,
+    offset: int = 0,
+) -> tuple[list[LinenTransferHistoryEntry], int]:
+    """Return complete, hotel-scoped internal transfers newest first."""
+    outbound = aliased(LinenMovement)
+    inbound = aliased(LinenMovement)
+    item = aliased(LinenItem)
+    source = aliased(LinenLocation)
+    destination = aliased(LinenLocation)
+    membership = aliased(HotelMembership)
+    actor = aliased(User)
+
+    actor_label = func.coalesce(
+        func.nullif(func.trim(membership.alias), ""),
+        func.nullif(func.trim(actor.display_name), ""),
+    )
+    base_query = (
+        db.query(outbound, item, source, destination, actor_label)
+        .join(
+            inbound,
+            and_(
+                inbound.hotel_id == outbound.hotel_id,
+                inbound.transfer_reference == outbound.transfer_reference,
+                inbound.movement_type == "in",
+            ),
+        )
+        .join(item, and_(item.hotel_id == hotel_id, item.id == outbound.item_id))
+        .join(source, and_(source.hotel_id == hotel_id, source.id == outbound.location_id))
+        .join(destination, and_(destination.hotel_id == hotel_id, destination.id == inbound.location_id))
+        .outerjoin(
+            membership,
+            and_(membership.hotel_id == hotel_id, membership.user_id == outbound.created_by_user_id),
+        )
+        .outerjoin(actor, actor.id == outbound.created_by_user_id)
+        .filter(
+            outbound.hotel_id == hotel_id,
+            inbound.hotel_id == hotel_id,
+            outbound.movement_type == "out",
+            outbound.transfer_reference.isnot(None),
+        )
+    )
+    total = (
+        db.query(func.count(func.distinct(outbound.transfer_reference)))
+        .select_from(outbound)
+        .join(
+            inbound,
+            and_(
+                inbound.hotel_id == outbound.hotel_id,
+                inbound.transfer_reference == outbound.transfer_reference,
+                inbound.movement_type == "in",
+            ),
+        )
+        .filter(
+            outbound.hotel_id == hotel_id,
+            inbound.hotel_id == hotel_id,
+            outbound.movement_type == "out",
+            outbound.transfer_reference.isnot(None),
+        )
+        .scalar()
+        or 0
+    )
+    rows = (
+        base_query.order_by(outbound.created_at.desc(), outbound.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    entries = [
+        LinenTransferHistoryEntry(
+            transfer_reference=out_row.transfer_reference,
+            linen_item_id=item_row.id,
+            item_name=item_row.name,
+            unit=item_row.unit,
+            source_location_id=source_row.id,
+            source_location_name=source_row.name,
+            destination_location_id=destination_row.id,
+            destination_location_name=destination_row.name,
+            quantity=out_row.quantity,
+            reason=out_row.reason or "",
+            created_by_user_id=out_row.created_by_user_id,
+            actor_display_name=label,
+            created_at=out_row.created_at,
+        )
+        for out_row, item_row, source_row, destination_row, label in rows
+    ]
+    return entries, int(total)
 
 
 def register_opening_counts(

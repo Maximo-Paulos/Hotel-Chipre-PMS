@@ -276,6 +276,121 @@ def test_owner_can_register_a_linen_movement_and_load_an_opening_balance():
         _teardown(db, engine)
 
 
+def test_linen_transfer_history_is_hotel_scoped_paginated_and_serialized(pg_engine):
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=pg_engine)
+    db = TestingSessionLocal()
+
+    def override_get_db():
+        yield db
+
+    fastapi_app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(fastapi_app)
+    try:
+        db.add_all(
+            [
+                HotelConfiguration(id=1, subscription_active=True),
+                HotelConfiguration(id=2, subscription_active=True),
+            ]
+        )
+        db.add_all(
+            [
+                User(id=10, email="owner-one@example.test", password_hash="test", display_name="Owner One"),
+                User(id=20, email="owner-two@example.test", password_hash="test", display_name="Owner Two"),
+                User(id=30, email="housekeeping@example.test", password_hash="test", display_name="Housekeeping"),
+                HotelMembership(hotel_id=1, user_id=10, role="owner", status="active", alias="Turno Uno"),
+                HotelMembership(hotel_id=2, user_id=20, role="owner", status="active", alias="Turno Dos"),
+                HotelMembership(hotel_id=1, user_id=30, role="housekeeping", status="active", alias="Limpieza"),
+            ]
+        )
+        db.commit()
+
+        def create_transfer_fixture(hotel_id: int, user_id: int, item_name: str):
+            fastapi_app.dependency_overrides[get_auth_context] = _override_auth(hotel_id, "owner", user_id=user_id)
+            item = client.post("/api/laundry/items", json={"name": item_name, "unit": "unidad"})
+            assert item.status_code == 201, item.text
+            source = client.post("/api/laundry/locations", json={"name": f"Depósito {hotel_id}"})
+            destination = client.post("/api/laundry/locations", json={"name": f"Office {hotel_id}"})
+            assert source.status_code == destination.status_code == 201
+            opening = client.post(
+                "/api/laundry/opening-counts",
+                json={
+                    "reason": "Conteo inicial",
+                    "counts": [{
+                        "linen_item_id": item.json()["id"],
+                        "location_id": source.json()["id"],
+                        "quantity": "10",
+                    }],
+                },
+            )
+            assert opening.status_code == 201, opening.text
+            return {
+                "linen_item_id": item.json()["id"],
+                "source_location_id": source.json()["id"],
+                "destination_location_id": destination.json()["id"],
+            }
+
+        def post_transfer(fixture: dict[str, int], reason: str, key: str):
+            transfer = client.post(
+                "/api/laundry/transfers",
+                json={
+                    **fixture,
+                    "quantity": "2.50",
+                    "reason": reason,
+                },
+                headers={"Idempotency-Key": key},
+            )
+            assert transfer.status_code == 201, transfer.text
+
+        hotel_one_fixture = create_transfer_fixture(1, 10, "Sábanas del hotel uno")
+        post_transfer(hotel_one_fixture, "Reposición de office", "history-one-a")
+        post_transfer(hotel_one_fixture, "Reposición del turno noche", "history-one-b")
+        hotel_two_fixture = create_transfer_fixture(2, 20, "Toallas del hotel dos")
+        post_transfer(hotel_two_fixture, "Traslado privado", "history-two-a")
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner", user_id=10)
+        first_page = client.get("/api/laundry/transfers", params={"limit": 1, "offset": 0})
+        assert first_page.status_code == 200, first_page.text
+        first_body = first_page.json()
+        assert first_body["total"] == 2
+        assert first_body["limit"] == 1
+        assert first_body["offset"] == 0
+        assert first_body["has_more"] is True
+        assert len(first_body["items"]) == 1
+        first = first_body["items"][0]
+        assert first["item_name"] == "Sábanas del hotel uno"
+        assert first["source_location_name"] == "Depósito 1"
+        assert first["destination_location_name"] == "Office 1"
+        assert Decimal(str(first["quantity"])) == Decimal("2.50")
+        assert first["reason"] in {"Reposición de office", "Reposición del turno noche"}
+        assert first["created_by_user_id"] == 10
+        assert first["actor_display_name"] == "Turno Uno"
+        assert first["created_at"]
+        assert "email" not in first
+        assert "owner-one@example.test" not in first_page.text
+
+        second_page = client.get("/api/laundry/transfers", params={"limit": 1, "offset": 1})
+        assert second_page.status_code == 200, second_page.text
+        second_body = second_page.json()
+        assert second_body["total"] == 2
+        assert second_body["has_more"] is False
+        assert len(second_body["items"]) == 1
+        assert second_body["items"][0]["transfer_reference"] != first["transfer_reference"]
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(2, "owner", user_id=20)
+        hotel_two = client.get("/api/laundry/transfers")
+        assert hotel_two.status_code == 200, hotel_two.text
+        assert hotel_two.json()["total"] == 1
+        assert [row["item_name"] for row in hotel_two.json()["items"]] == ["Toallas del hotel dos"]
+        assert hotel_two.json()["items"][0]["actor_display_name"] == "Turno Dos"
+
+        fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "housekeeping", user_id=30)
+        denied = client.get("/api/laundry/transfers")
+        assert denied.status_code == 403
+    finally:
+        fastapi_app.dependency_overrides.clear()
+        db.close()
+
+
 def test_owner_can_save_atomic_linen_opening_count_grid_and_housekeeping_cannot():
     client, db, engine = _client_with_db()
     try:

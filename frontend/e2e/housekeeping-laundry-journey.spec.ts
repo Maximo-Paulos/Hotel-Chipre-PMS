@@ -134,6 +134,14 @@ test("housekeeping sends a laundry remito on a vendor set up by the owner", asyn
   await transferForm.getByLabel("Motivo").fill("Reposición de office QA");
   await transferForm.getByRole("button", { name: "Guardar traspaso", exact: true }).click();
   await expect(page.getByText("Traspaso de ropa blanca registrado.", { exact: true })).toBeVisible();
+  const transferHistory = page.getByTestId("linen-transfer-history");
+  const savedTransfer = transferHistory.getByTestId("linen-transfer-history-row").filter({ hasText: "Reposición de office QA" });
+  await expect(savedTransfer).toBeVisible();
+  await expect(savedTransfer).toContainText(itemName);
+  await expect(savedTransfer).toContainText("3 unidad");
+  await expect(savedTransfer).toContainText(locationName);
+  await expect(savedTransfer).toContainText(destinationLocationName);
+  await expect(savedTransfer).toContainText("Responsable:");
 
   await expect(hotelLinenStock.getByRole("alert")).toContainText(`${itemName}: 5 disponibles; mínimo 10.`);
   await hotelLinenStock.locator("select").selectOption({ label: destinationLocationName });

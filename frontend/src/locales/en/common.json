@@ -97,6 +97,22 @@
     "subtotalWithPrice": "Priced subtotal: {{amount}}",
     "settlementBlockedByUnpriced": "Review unpriced delivery notes manually before marking this settlement as paid."
   },
+  "linenTransferHistory": {
+    "title": "Internal transfer history",
+    "description": "Movements between hotel locations, with the responsible user and recorded reason.",
+    "total_one": "{{count}} transfer",
+    "total_other": "{{count}} transfers",
+    "loading": "Loading history...",
+    "loadFailed": "Could not load the history.",
+    "retry": "Retry",
+    "empty": "No internal transfers have been recorded yet.",
+    "reason": "Reason",
+    "actor": "Responsible: {{actor}}",
+    "actorUser": "User #{{userId}}",
+    "unknownActor": "Responsible user not identified",
+    "loadMore": "Load more transfers",
+    "loadingMore": "Loading more..."
+  },
   "laundryDiscrepancies": {
     "tab": "Reviews",
     "eyebrow": "Linen control",
