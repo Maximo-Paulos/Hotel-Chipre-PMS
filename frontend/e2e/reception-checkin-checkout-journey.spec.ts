@@ -231,7 +231,7 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await expect(companionArrivalRow.getByText("Faltan datos requeridos para registrar la llegada.", { exact: true })).toBeVisible();
   await companionArrivalRow.getByRole("button", { name: "Completar perfil", exact: true }).click();
   const companionProfile = companionArrivalRow.locator('[data-testid^="guest-arrival-profile-"]');
-  await companionProfile.getByLabel("Tipo de documento", { exact: true }).selectOption("DNI");
+  await companionProfile.getByRole("combobox", { name: "Tipo de documento", exact: true }).selectOption("DNI");
   await companionProfile.getByLabel("Número de documento", { exact: true }).fill(`QA-COMP-${suffix}`);
   await companionProfile.getByLabel("Nacionalidad", { exact: true }).fill("Argentina");
   await companionProfile.getByLabel("País", { exact: true }).fill("Argentina");
