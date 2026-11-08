@@ -323,3 +323,70 @@ test("analytics renders requested period comparisons and explicit unavailable st
     await expect(routeComparison).toContainText("+3 pp");
   }
 });
+
+test("analytics count comparisons subtract the reference period", async ({ page }) => {
+  await page.route("**/api/analytics/rooms**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        hotel_id: 1,
+        date_from: "2026-11-08",
+        date_to: "2026-11-08",
+        generated_at: "2026-11-08T12:00:00Z",
+        data_as_of: "2026-11-08T12:00:00Z",
+        data_source: "postgresql",
+        comparison: {
+          previous: {
+            requested: true,
+            available: true,
+            metrics_available: true,
+            date_from: "2026-11-07",
+            date_to: "2026-11-07",
+            metrics: [
+              { card_code: "rooms_total", label: "Habitaciones activas", value_count: 39 },
+              { card_code: "rooms_occupied", label: "Noches ocupadas", value_count: 1 },
+              { card_code: "rooms_maintenance", label: "Habitaciones en mantenimiento", value_count: 5 },
+              { card_code: "rooms_zero", label: "Conteo cero", value_count: 0 },
+              { card_code: "rooms_missing", label: "Sin referencia", value_count: null }
+            ]
+          },
+          yoy: { requested: false, available: false, metrics: [] }
+        },
+        data: {
+          cards: [
+            { card_code: "rooms_total", label: "Habitaciones activas", value_count: 39 },
+            { card_code: "rooms_occupied", label: "Noches ocupadas", value_count: 7 },
+            { card_code: "rooms_maintenance", label: "Habitaciones en mantenimiento", value_count: 2 },
+            { card_code: "rooms_zero", label: "Conteo cero", value_count: 0 },
+            { card_code: "rooms_missing", label: "Sin referencia", value_count: 5 }
+          ],
+          rooms: []
+        }
+      })
+    });
+  });
+
+  await login(page);
+  await page.goto("/analytics/rooms");
+
+  const previousComparison = page.getByTestId("analytics-comparison-previous");
+  const rows = previousComparison.getByRole("listitem");
+  const activeRooms = rows.filter({ hasText: "Habitaciones activas" });
+  const occupiedNights = rows.filter({ hasText: "Noches ocupadas" });
+  const maintenanceRooms = rows.filter({ hasText: "Habitaciones en mantenimiento" });
+  const zeroCount = rows.filter({ hasText: "Conteo cero" });
+  const missingReference = rows.filter({ hasText: "Sin referencia" });
+
+  await expect(activeRooms).toContainText("39");
+  await expect(activeRooms).toContainText("Cambio: 0");
+  await expect(activeRooms).not.toContainText("+39");
+  await expect(occupiedNights).toContainText("1");
+  await expect(occupiedNights).toContainText("+6");
+  await expect(occupiedNights).not.toContainText("+7");
+  await expect(maintenanceRooms).toContainText("−3");
+  await expect(zeroCount).toContainText("0");
+  await expect(zeroCount).toContainText("Cambio: 0");
+  await expect(zeroCount).not.toContainText("+0");
+  await expect(missingReference).toContainText("No disponible");
+});

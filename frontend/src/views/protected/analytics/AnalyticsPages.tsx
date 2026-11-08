@@ -597,7 +597,7 @@ function metricDelta(
     current.value_count !== null && current.value_count !== undefined &&
     reference.value_count !== null && reference.value_count !== undefined
   ) {
-    return signedDelta(current.value_count, locale, 0);
+    return signedDelta(current.value_count - reference.value_count, locale, 0);
   }
   return unavailableLabel;
 }
