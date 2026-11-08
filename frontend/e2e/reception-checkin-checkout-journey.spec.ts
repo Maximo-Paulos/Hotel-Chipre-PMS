@@ -261,6 +261,9 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await expect.poll(() => companionArrivalPayload).not.toBeNull();
   expect(companionArrivalPayload).toMatchObject({ guest: { terms_accepted: true } });
   await expect(companionArrivalRow.getByRole("status")).toContainText("Llegó");
+  await expect(
+    guestArrivalPanel.getByText("La reserva queda con llegadas parciales hasta que llegue todo el grupo.", { exact: true })
+  ).toHaveCount(0);
 
   await page.getByRole("button", { name: "Cerrar detalle de reserva" }).click();
   await expect(drawer).not.toBeVisible();

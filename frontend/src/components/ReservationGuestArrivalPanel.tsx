@@ -223,6 +223,11 @@ export function ReservationGuestArrivalPanel({ reservation, canCheckIn }: { rese
     }))
   ];
   const arrivals = summaryQuery.data?.arrivals ?? [];
+  const partyComplete = Boolean(
+    summaryQuery.data &&
+    summaryQuery.data.arrived_guest_count >= summaryQuery.data.expected_guest_count &&
+    summaryQuery.data.registered_guest_count >= summaryQuery.data.expected_guest_count
+  );
   const terminal = reservation.status === "cancelled" || reservation.status === "no_show" || reservation.status === "checked_out";
 
   return (
@@ -244,10 +249,14 @@ export function ReservationGuestArrivalPanel({ reservation, canCheckIn }: { rese
               arrived: summaryQuery.data.arrived_guest_count,
               expected: summaryQuery.data.expected_guest_count
             })}
-            {" · "}
-            {summaryQuery.data.status_policy === "partial_checkin"
-              ? t("drawer.guestArrivals.partialPolicy")
-              : t("drawer.guestArrivals.firstGuestPolicy")}
+            {!partyComplete ? (
+              <>
+                {" · "}
+                {summaryQuery.data.status_policy === "partial_checkin"
+                  ? t("drawer.guestArrivals.partialPolicy")
+                  : t("drawer.guestArrivals.firstGuestPolicy")}
+              </>
+            ) : null}
           </p>
           {summaryQuery.data.missing_profile_count > 0 ? (
             <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900" role="status">
