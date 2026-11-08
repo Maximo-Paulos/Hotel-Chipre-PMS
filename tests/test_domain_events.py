@@ -347,6 +347,24 @@ def test_assistant_records_use_a_separate_refresh_domain():
         assert domain_events.MODEL_DOMAIN_DEPENDENCIES[table_name] == ("assistant",)
 
 
+def test_operational_task_records_use_a_hotel_scoped_refresh_domain():
+    assert "tasks" in domain_events.SUPPORTED_DOMAINS
+    assert domain_events.validate_event_input(
+        hotel_id=42,
+        domain="tasks",
+        event_type="operational_task.changed",
+        payload={"task_id": 91},
+    ) == {"task_id": 91}
+    for table_name in (
+        "operational_tasks",
+        "operational_task_events",
+        "operational_task_attachments",
+        "shift_handoffs",
+        "shift_handoff_tasks",
+    ):
+        assert domain_events.MODEL_DOMAIN_DEPENDENCIES[table_name] == ("tasks",)
+
+
 def test_permission_invalidation_publishes_without_error_logging(monkeypatch, caplog):
     from app.services import permission_service
 

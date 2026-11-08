@@ -69,6 +69,33 @@ test("housekeeping checklists are hotel-scoped and refresh with room state", asy
   client.clear();
 });
 
+test("task events refresh task, history, attachment, and handoff queries for one hotel", async (context) => {
+  const { invalidation } = await loadQueryModules(context);
+  const hotelId = 41;
+  const client = new QueryClient();
+  const entries = [
+    [["operational-tasks", hotelId], true],
+    [["operational-task-history", hotelId, 3], true],
+    [["operational-task-attachments", hotelId, 3], true],
+    [["operational-task-attachment-content", hotelId, 3, 8], true],
+    [["operational-handoffs", hotelId], true],
+    [["operational-tasks", hotelId + 1], false],
+    [["rooms", hotelId], false]
+  ];
+  entries.forEach(([key]) => client.setQueryData(key, { key }));
+
+  await invalidation.refreshDomains(client, hotelId, ["tasks"]);
+
+  for (const [key, shouldInvalidate] of entries) {
+    assert.equal(
+      client.getQueryState(key)?.isInvalidated ?? false,
+      shouldInvalidate,
+      `unexpected task invalidation for ${JSON.stringify(key)}`
+    );
+  }
+  client.clear();
+});
+
 test("reservation refresh invalidates only related data and the selected entity", async (context) => {
   const { invalidation } = await loadQueryModules(context);
   const hotelId = 41;

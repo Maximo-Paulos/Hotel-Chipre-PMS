@@ -71,6 +71,7 @@ SUPPORTED_DOMAINS = frozenset(
         "security",
         "settings",
         "stock",
+        "tasks",
         "users",
         "whatsapp",
     }
@@ -117,6 +118,9 @@ SAFE_PAYLOAD_KEYS = frozenset(
         "source",
         "status",
         "status_history_id",
+        "task_event_id",
+        "task_id",
+        "attachment_id",
         "transaction_id",
         "user_id",
         "vendor_id",
@@ -327,6 +331,11 @@ MODEL_DOMAIN_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "laundry_remitos": ("stock", "analytics"),
     "laundry_remito_lines": ("stock", "analytics"),
     "laundry_vendor_settlements": ("stock", "cash", "analytics"),
+    "operational_tasks": ("tasks",),
+    "operational_task_events": ("tasks",),
+    "operational_task_attachments": ("tasks",),
+    "shift_handoffs": ("tasks",),
+    "shift_handoff_tasks": ("tasks",),
     "hotel_configuration": ("settings", "analytics"),
     "companies": ("settings", "analytics"),
     "company_documents": ("settings", "analytics"),
@@ -463,6 +472,10 @@ _MODEL_ID_PAYLOAD_KEYS: dict[str, str] = {
     "cash_movements": "movement_id",
     "cash_close_reports": "close_report_id",
     "cash_custody_handoffs": "handoff_id",
+    "operational_tasks": "task_id",
+    "operational_task_events": "task_event_id",
+    "operational_task_attachments": "attachment_id",
+    "shift_handoffs": "handoff_id",
     "rooms": "room_id",
     "room_categories": "category_id",
     "room_blocks": "block_id",
@@ -583,6 +596,7 @@ def _model_event_payload(model: Any, table_name: str) -> dict[str, Any]:
         ("linen_item_id", "linen_item_id"),
         ("company_id", "company_id"),
         ("movement_group_id", "group_id"),
+        ("task_id", "task_id"),
     ):
         value = _scalar_event_value(getattr(model, attribute, None))
         if isinstance(value, int) and value > 0:

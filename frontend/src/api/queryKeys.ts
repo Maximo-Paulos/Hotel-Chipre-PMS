@@ -71,6 +71,7 @@ export type QueryDomain =
   | "security"
   | "settings"
   | "stock"
+  | "tasks"
   | "whatsapp"
   | "users";
 
@@ -153,6 +154,11 @@ export const HOTEL_ID_INDEX_BY_QUERY_PREFIX: Readonly<Record<string, number>> = 
   "room-movement-groups": 1,
   "room-state-events": 1,
   rooms: 1,
+  "operational-tasks": 1,
+  "operational-task-history": 1,
+  "operational-task-attachments": 1,
+  "operational-task-attachment-content": 1,
+  "operational-handoffs": 1,
   "rate-calendar": 1,
   "settings-security": 2,
   "settings-sessions": 1,
@@ -272,6 +278,13 @@ export const QUERY_PREFIXES_BY_DOMAIN: Readonly<Record<QueryDomain, readonly str
     "linen-locations",
     "linen-summary",
     "laundry-remitos"
+  ],
+  tasks: [
+    "operational-tasks",
+    "operational-task-history",
+    "operational-task-attachments",
+    "operational-task-attachment-content",
+    "operational-handoffs"
   ],
   users: ["users"],
   whatsapp: ["whatsapp-conversations"]

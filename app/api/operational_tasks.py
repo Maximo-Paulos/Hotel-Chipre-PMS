@@ -474,9 +474,15 @@ def get_operational_task_history(
                 detail="Tarea no encontrada o no disponible",
             ) from exc
     try:
+        events = task_history(db, hotel_id=context.hotel_id, task_id=task_id)
+        actor_names = task_author_labels(
+            db,
+            hotel_id=context.hotel_id,
+            user_ids={event.actor_user_id for event in events},
+        )
         return [
-            serialize_task_event(event)
-            for event in task_history(db, hotel_id=context.hotel_id, task_id=task_id)
+            serialize_task_event(event, actor_name=actor_names.get(event.actor_user_id))
+            for event in events
         ]
     except OperationalTaskError as exc:
         raise HTTPException(

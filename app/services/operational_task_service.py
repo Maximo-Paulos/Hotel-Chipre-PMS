@@ -712,13 +712,13 @@ def serialize_handoff(handoff: ShiftHandoff) -> dict:
     }
 
 
-def serialize_task_event(event: OperationalTaskEvent) -> dict:
+def serialize_task_event(event: OperationalTaskEvent, *, actor_name: str | None = None) -> dict:
     return {
         "id": event.id,
         "from_status": event.from_status,
         "to_status": event.to_status,
         "actor_user_id": event.actor_user_id,
-        "actor_name": getattr(getattr(event, "actor", None), "display_name", None),
+        "actor_name": actor_name,
         "comment": event.comment,
         "created_at": event.created_at,
     }

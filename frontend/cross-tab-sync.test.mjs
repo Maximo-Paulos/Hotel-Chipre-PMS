@@ -32,7 +32,7 @@ const loadCrossTabSync = async (context) => {
     ['import { nextRealtimeRetryPlan } from "./retryPolicy";', "const nextRealtimeRetryPlan = () => ({ failureCount: 1, delayMs: 1_000 });"],
     [
       'import { QUERY_PREFIXES_BY_DOMAIN } from "../api/queryKeys";',
-      'const QUERY_PREFIXES_BY_DOMAIN = { analytics: [], assistant: [], cash: [], guests: [], onboarding: [], payments: [], reservations: [], rooms: [], security: [], settings: [], stock: [], users: [] };'
+      'const QUERY_PREFIXES_BY_DOMAIN = { analytics: [], assistant: [], cash: [], guests: [], onboarding: [], payments: [], reservations: [], rooms: [], security: [], settings: [], stock: [], tasks: [], users: [] };'
     ],
     ['import { useSession } from "../state/session";', "const useSession = () => ({ session: {} });"]
   ];
