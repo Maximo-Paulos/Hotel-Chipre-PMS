@@ -240,24 +240,40 @@ test("receptionist runs the full check-in / checkout journey with a pending-bala
   await companionProfile.getByLabel("Estado civil", { exact: true }).fill("Soltero/a");
   await companionProfile.getByLabel("Profesión", { exact: true }).fill("Acompañante QA");
   await companionProfile.getByLabel("Acepta términos y condiciones", { exact: true }).check();
-  const registerCompanionArrival = companionArrivalRow.getByRole("button", {
-    name: "Guardar perfil y registrar llegada",
-    exact: true
-  });
-  await expect(registerCompanionArrival).toBeEnabled();
-  let companionArrivalPayload: Record<string, unknown> | null = null;
   const companionGuestId = Number((await companionArrivalRow.getAttribute("data-testid"))?.replace("guest-arrival-row-", ""));
   expect(companionGuestId).toBeGreaterThan(0);
+  const registerCompanionArrival = companionArrivalRow.getByTestId(`guest-arrival-profile-submit-${companionGuestId}`);
+  await expect(registerCompanionArrival).toBeEnabled();
+  let companionArrivalPayload: Record<string, unknown> | null = null;
+  let releaseCompanionArrivalRequest!: () => void;
+  let signalCompanionArrivalRequestStarted!: () => void;
+  const companionArrivalRequestGate = new Promise<void>((resolve) => {
+    releaseCompanionArrivalRequest = resolve;
+  });
+  const companionArrivalRequestStarted = new Promise<void>((resolve) => {
+    signalCompanionArrivalRequestStarted = resolve;
+  });
   const companionArrivalPath = `/api/checkin/${reservationId}/guests/${companionGuestId}`;
   await page.route(`**${companionArrivalPath}`, async (route) => {
     if (route.request().method() === "POST") {
       companionArrivalPayload = route.request().postDataJSON() as Record<string, unknown>;
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      signalCompanionArrivalRequestStarted();
+      await companionArrivalRequestGate;
     }
     await route.continue();
   });
+  const companionArrivalResponsePromise = page.waitForResponse(
+    (response) => response.url().includes(companionArrivalPath) && response.request().method() === "POST"
+  );
   await registerCompanionArrival.click();
-  await expect(registerCompanionArrival).toBeDisabled();
+  await companionArrivalRequestStarted;
+  try {
+    await expect(registerCompanionArrival).toBeDisabled();
+  } finally {
+    releaseCompanionArrivalRequest();
+  }
+  const companionArrivalResponse = await companionArrivalResponsePromise;
+  expect(companionArrivalResponse.status()).toBe(200);
   await expect.poll(() => companionArrivalPayload).not.toBeNull();
   expect(companionArrivalPayload).toMatchObject({ guest: { terms_accepted: true } });
   await expect(companionArrivalRow.getByRole("status")).toContainText("Llegó");

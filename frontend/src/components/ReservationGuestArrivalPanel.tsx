@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { GuestUpdatePayload } from "../api/guests";
@@ -41,6 +41,8 @@ function GuestArrivalRow({
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<GuestUpdatePayload>({ terms_accepted: false });
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (!guestQuery.data) return;
@@ -64,6 +66,9 @@ function GuestArrivalRow({
     : null;
 
   const submit = async (restrictionOverride?: { restriction_id: number; reason: string }) => {
+    if (submittingRef.current || isPending) return;
+    submittingRef.current = true;
+    setIsSubmitting(true);
     setError(null);
     try {
       const payload = profileNeedsWork
@@ -84,6 +89,9 @@ function GuestArrivalRow({
     } catch (cause) {
       if (restrictionPrompt.handleError(cause, (override) => void submit(override))) return;
       setError(cause instanceof ApiError ? cause.message : t("drawer.guestArrivals.checkInFailed"));
+    } finally {
+      submittingRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
@@ -122,12 +130,12 @@ function GuestArrivalRow({
             ) : null}
             <button
               type="button"
-              disabled={isPending || !validation?.valid || guestQuery.isLoading || validationQuery.isLoading}
+              disabled={isPending || isSubmitting || !validation?.valid || guestQuery.isLoading || validationQuery.isLoading}
               onClick={() => void submit()}
               className="min-h-9 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-900 disabled:cursor-not-allowed disabled:opacity-50"
               data-testid={"guest-arrival-submit-" + guest.id}
             >
-              {isPending ? t("drawer.guestArrivals.submitting") : t("drawer.guestArrivals.register")}
+              {isPending || isSubmitting ? t("drawer.guestArrivals.submitting") : t("drawer.guestArrivals.register")}
             </button>
           </div>
         ) : null}
@@ -181,11 +189,12 @@ function GuestArrivalRow({
           <div className="flex justify-end">
             <button
               type="button"
-              disabled={isPending || guestQuery.isLoading || validationQuery.isLoading}
+              disabled={isPending || isSubmitting || guestQuery.isLoading || validationQuery.isLoading}
               onClick={() => void submit()}
               className="min-h-9 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-900 disabled:cursor-not-allowed disabled:opacity-50"
+              data-testid={"guest-arrival-profile-submit-" + guest.id}
             >
-              {isPending ? t("drawer.guestArrivals.submitting") : t("drawer.guestArrivals.completeAndRegister")}
+              {isPending || isSubmitting ? t("drawer.guestArrivals.submitting") : t("drawer.guestArrivals.completeAndRegister")}
             </button>
           </div>
         </div>
@@ -196,7 +205,7 @@ function GuestArrivalRow({
           phase={restrictionPrompt.phase}
           onSubmit={restrictionPrompt.submit}
           onCancel={restrictionPrompt.dismiss}
-          isPending={isPending}
+          isPending={isPending || isSubmitting}
         />
       ) : null}
     </li>
