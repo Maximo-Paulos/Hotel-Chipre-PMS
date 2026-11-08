@@ -614,7 +614,19 @@ export function RoomsPage() {
 
         {canCreateBlocks && (
         <>
-        <form className="mt-4 grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:grid-cols-6" onSubmit={handlePreviewBlock}>
+        <form
+          className="mt-4 grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:grid-cols-6"
+          onSubmit={handlePreviewBlock}
+          onInvalidCapture={(event) => {
+            const field = event.target;
+            if (field instanceof HTMLSelectElement && field.validity.valueMissing) {
+              field.setCustomValidity(t("blocks.selectRoomError"));
+            }
+          }}
+          onChangeCapture={(event) => {
+            if (event.target instanceof HTMLSelectElement) event.target.setCustomValidity("");
+          }}
+        >
           <label className="space-y-1 text-sm lg:col-span-1">
             <span className="text-slate-600">{t("blocks.roomFieldLabel")}</span>
             <select

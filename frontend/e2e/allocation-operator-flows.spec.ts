@@ -410,7 +410,13 @@ test("a future room block applies a valid allocation plan only after explicit co
 
   await page.goto("/habitaciones");
   const blockForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Calcular propuesta" }) });
-  await blockForm.getByLabel("Habitación").selectOption("41");
+  const roomSelector = blockForm.getByLabel("Habitación");
+  await blockForm.getByRole("button", { name: "Calcular propuesta" }).click();
+  await expect(roomSelector).toHaveJSProperty("validationMessage", "Seleccioná una habitación para bloquear.");
+  expect(previewPayload).toBeNull();
+
+  await roomSelector.selectOption("41");
+  await expect(roomSelector).toHaveJSProperty("validationMessage", "");
   await blockForm.getByLabel("Desde").fill("2026-11-10");
   await blockForm.getByLabel("Hasta").fill("2026-11-12");
   await blockForm.getByLabel("Detalle").fill("Prueba de propuesta");
