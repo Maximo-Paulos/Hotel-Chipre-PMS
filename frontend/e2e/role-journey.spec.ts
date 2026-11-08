@@ -181,6 +181,10 @@ for (const persona of personas) {
       await expect(roomStatusSelects).toHaveCount(0);
       await expect(housekeepingStatusSelects).toHaveCount(0);
       await expect(main.getByRole("button", { name: "Calcular propuesta", exact: true })).toBeVisible();
+      const confirmBlockButton = main.getByRole("button", { name: "Confirmar bloqueo y reasignaciones", exact: true });
+      await expect(confirmBlockButton).toBeDisabled();
+      await expect(confirmBlockButton).toHaveCSS("background-color", "rgb(203, 213, 225)");
+      await expect(confirmBlockButton).toHaveCSS("color", "rgb(71, 85, 105)");
     } else {
       const roomListResponse = page.waitForResponse((response) =>
         response.request().method() === "GET" && new URL(response.url()).pathname === "/api/rooms/"

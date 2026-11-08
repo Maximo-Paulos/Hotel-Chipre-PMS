@@ -780,7 +780,7 @@ export function RoomsPage() {
                 type="button"
                 onClick={() => void handleConfirmBlock()}
                 disabled={!blockPreviewCanBeConfirmed || actionsBlocked || createBlockMutation.isPending}
-                className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:text-slate-600"
               >
                 {createBlockMutation.isPending
                   ? t("blocks.applyingAllocation")
