@@ -4234,7 +4234,9 @@ export function ReservationsPage() {
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">{editing ? t("page.form.editEyebrow") : t("page.form.createEyebrow")}</p>
                 <h3 className="text-lg font-semibold text-slate-900">{t("page.form.title")}</h3>
-                <p className="text-xs text-slate-500">{t("page.form.subtitle")}</p>
+                <p className="text-xs text-slate-500">
+                  {editing ? t("page.form.editSubtitle") : t("page.form.subtitle")}
+                </p>
               </div>
               <button
                 onClick={closeForm}

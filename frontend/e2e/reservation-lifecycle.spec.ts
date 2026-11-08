@@ -126,6 +126,43 @@ test("owner preserves availability dates after querying a category", async ({ pa
   await expect(checkOutField).toHaveValue(displayDate(checkOut));
 });
 
+test("reservation create and edit forms avoid saying required fields are missing when complete", async ({ page }, testInfo) => {
+  const suffix = `${Date.now()}-${projectDateSalt(testInfo)}`;
+  const guestLastName = `Edit guidance ${suffix}`;
+  const checkIn = localIsoDate(75 + projectDateSalt(testInfo));
+  const checkOut = localIsoDate(77 + projectDateSalt(testInfo));
+
+  await login(page);
+  const { form: createForm } = await openReservationForm(page, guestLastName, checkIn, checkOut, {
+    assignRoom: false,
+    submit: false
+  });
+  await expect(page.getByText("La tarifa y la disponibilidad dependen de la categoría y las fechas seleccionadas.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Completá los campos mínimos: Huésped, Categoría y fechas.", { exact: true })).toHaveCount(0);
+  await expect(createForm.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
+  await createForm.getByRole("button", { name: "Crear", exact: true }).click();
+  await expect(page.getByText("Reserva creada", { exact: true })).toBeVisible();
+
+  const reservationTable = page.locator("table").filter({ hasText: "Código" });
+  const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
+  await expect(reservationRow).toHaveCount(1);
+  await reservationRow.getByRole("button", { name: "Editar", exact: true }).click();
+
+  const editForm = page.locator("form").filter({ hasText: "Pagos y balance" });
+  await expect(editForm).toBeVisible();
+  await expect(editForm.getByTestId("guest-confirm-card")).toContainText(guestLastName);
+  await expect(page.getByText("Revisá o actualizá los datos de la reserva antes de guardar.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Completá los campos mínimos: Huésped, Categoría y fechas.", { exact: true })).toHaveCount(0);
+
+  const categorySelect = editForm.locator("label").filter({ hasText: "Categoría" }).locator("select");
+  await expect(categorySelect).toHaveValue(/\d+/);
+  await expect(editForm.getByLabel("Check-in", { exact: true })).toHaveValue(displayDate(checkIn));
+  await expect(editForm.getByLabel("Check-out", { exact: true })).toHaveValue(displayDate(checkOut));
+  await expect(editForm.getByRole("button", { name: "Guardar cambios", exact: true })).toBeEnabled();
+
+  await editForm.getByRole("button", { name: "Cancelar", exact: true }).click();
+});
+
 test("owner is told when the browser blocks the reservation voucher window", async ({ page }) => {
   const suffix = `${Date.now()}`;
   const guestLastName = `Voucher Popup ${suffix}`;
