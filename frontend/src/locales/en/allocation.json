@@ -63,6 +63,8 @@
     "assignmentStatus": {
       "proposed": "Proposal pending",
       "applied": "Applied",
+      "retained": "Retained",
+      "retainedReason": "The current room is retained; no move was made.",
       "locked": "Protected by hotel",
       "rejected": "Rejected",
       "manual_review": "Manual review"

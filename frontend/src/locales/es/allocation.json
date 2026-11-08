@@ -63,6 +63,8 @@
     "assignmentStatus": {
       "proposed": "Propuesta pendiente",
       "applied": "Aplicada",
+      "retained": "Conservada",
+      "retainedReason": "La habitación actual se conserva; no se realizó ningún movimiento.",
       "locked": "Protegida por el hotel",
       "rejected": "Rechazada",
       "manual_review": "Revisión manual"

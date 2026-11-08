@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { AllocationAssignment, AllocationRunDetail } from "../api/allocation";
 import type { Reservation } from "../api/reservations";
 import type { Room } from "../api/rooms";
+import { allocationAssignmentStatusKey } from "./allocationAssignmentStatus.mjs";
 
 type AllocationProposalReviewProps = {
   run: AllocationRunDetail | undefined;
@@ -170,9 +171,15 @@ export function AllocationProposalReview({
                 const reservation = reservationById.get(assignment.reservation_id);
                 const proposedRoom = assignment.room_id;
                 const currentRoom = assignment.source_room_id;
-                const assignmentStatus = assignment.status.toLowerCase();
+                const assignmentStatus = allocationAssignmentStatusKey(
+                  assignment.status,
+                  currentRoom,
+                  proposedRoom
+                );
                 const destinationLabel = assignmentStatus === "applied"
                   ? t("proposal.assignedRoom")
+                  : assignmentStatus === "retained"
+                    ? t("proposal.assignedRoom")
                   : assignmentStatus === "rejected"
                     ? t("proposal.rejectedRoom")
                     : t("proposal.proposedRoom");
@@ -186,8 +193,8 @@ export function AllocationProposalReview({
                         {reservation ? <p className="mt-1 text-xs text-slate-500">{reservation.check_in_date} — {reservation.check_out_date}</p> : null}
                         {!reservation && canReadReservations ? <p className="mt-1 text-xs text-slate-500">{t("proposal.reservationId", { id: assignment.reservation_id })}</p> : null}
                       </div>
-                      <span className={`self-start rounded-full px-2.5 py-1 text-xs font-medium ${assignment.status.toLowerCase() === "proposed" ? "bg-amber-100 text-amber-900" : assignment.status.toLowerCase() === "applied" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>
-                        {t(`proposal.assignmentStatus.${assignment.status.toLowerCase()}`, { defaultValue: assignment.status })}
+                      <span className={`self-start rounded-full px-2.5 py-1 text-xs font-medium ${assignmentStatus === "proposed" ? "bg-amber-100 text-amber-900" : assignmentStatus === "applied" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>
+                        {t(`proposal.assignmentStatus.${assignmentStatus}`, { defaultValue: assignment.status })}
                       </span>
                     </div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -195,12 +202,12 @@ export function AllocationProposalReview({
                         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("proposal.roomBeforeProposal")}</p>
                         <p className="mt-1 text-sm font-semibold text-slate-900">{roomLabel(currentRoom)}</p>
                       </div>
-                      <div className="rounded-lg bg-brand-50 p-3">
-                        <p className="text-xs font-medium uppercase tracking-wide text-brand-800">{destinationLabel}</p>
-                        <p className="mt-1 text-sm font-semibold text-brand-900">{roomLabel(proposedRoom)}</p>
+                      <div className={`rounded-lg p-3 ${assignmentStatus === "retained" ? "bg-slate-50" : "bg-brand-50"}`}>
+                        <p className={`text-xs font-medium uppercase tracking-wide ${assignmentStatus === "retained" ? "text-slate-500" : "text-brand-800"}`}>{destinationLabel}</p>
+                        <p className={`mt-1 text-sm font-semibold ${assignmentStatus === "retained" ? "text-slate-900" : "text-brand-900"}`}>{roomLabel(proposedRoom)}</p>
                       </div>
                     </div>
-                    <p className="mt-3 text-sm text-slate-600"><span className="font-medium text-slate-700">{t("proposal.reason")}: </span>{assignmentReason(assignment, run, (key) => t(key))}</p>
+                    <p className="mt-3 text-sm text-slate-600"><span className="font-medium text-slate-700">{t("proposal.reason")}: </span>{assignmentStatus === "retained" ? t("proposal.assignmentStatus.retainedReason") : assignmentReason(assignment, run, (key) => t(key))}</p>
                     {assignment.status.toLowerCase() === "proposed" && assignment.requires_explicit_approval ? (
                       <label className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
                         <input
