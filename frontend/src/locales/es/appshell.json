@@ -20,6 +20,20 @@
     "description": "Si necesitás acceder, pedile al dueño del hotel que revise tus permisos.",
     "home": "Volver a mi inicio"
   },
+  "assistantAccess": {
+    "section": "Asistente de operaciones",
+    "heading": "Asistente Gemma",
+    "checking": "Comprobando los permisos necesarios…",
+    "title": "No tenés permiso para usar el asistente.",
+    "permissionMissing": "Tu rol necesita ambos permisos para usar el asistente. No se cargaron consultas ni acciones de Gemma.",
+    "serverDenied": "El servidor rechazó el acceso; las funciones de Gemma quedaron desactivadas para esta sesión.",
+    "financialPermission": "Ver informes financieros (reports:financial:view)",
+    "assistantPermission": "Usar el asistente (settings:assistant:view)",
+    "askOwner": "Pedile al dueño o co-dueño del hotel que revise estos permisos.",
+    "unavailableTitle": "No se pudieron comprobar tus permisos.",
+    "unavailableDescription": "Por seguridad, las funciones del asistente quedan desactivadas hasta verificar el acceso.",
+    "retry": "Reintentar comprobación"
+  },
   "mySecurityPage": {
     "title": "Mi seguridad",
     "description": "Administrá la verificación en dos pasos de tu cuenta."

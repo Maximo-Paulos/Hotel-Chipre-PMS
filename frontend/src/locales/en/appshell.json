@@ -20,6 +20,20 @@
     "description": "Ask the hotel owner to review your permissions if you need access.",
     "home": "Return to my home page"
   },
+  "assistantAccess": {
+    "section": "Operations assistant",
+    "heading": "Gemma assistant",
+    "checking": "Checking the required permissions…",
+    "title": "You don't have permission to use the assistant.",
+    "permissionMissing": "Your role needs both permissions to use the assistant. Gemma queries and actions were not loaded.",
+    "serverDenied": "The server denied access; Gemma features are disabled for this session.",
+    "financialPermission": "View financial reports (reports:financial:view)",
+    "assistantPermission": "Use the assistant (settings:assistant:view)",
+    "askOwner": "Ask the hotel owner or co-owner to review these permissions.",
+    "unavailableTitle": "Your permissions could not be checked.",
+    "unavailableDescription": "For safety, assistant features are disabled until access can be verified.",
+    "retry": "Check again"
+  },
   "mySecurityPage": {
     "title": "My security",
     "description": "Manage two-step verification for your account."

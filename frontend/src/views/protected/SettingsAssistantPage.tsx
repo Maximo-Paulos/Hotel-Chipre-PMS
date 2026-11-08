@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 
 import { ApiError } from "../../api/client";
 import { useGemmaChat } from "../../hooks/useGemmaChat";
@@ -54,6 +55,7 @@ const formatTimestamp = (value?: string | null) => {
 };
 
 export function SettingsAssistantPage() {
+  const { t } = useTranslation("appshell");
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const {
@@ -73,6 +75,9 @@ export function SettingsAssistantPage() {
     applyDraftMutation,
     archiveSessionMutation,
     isReady,
+    permissionAccessReason,
+    permissionAccessState,
+    retryPermissionCheck,
   } = useGemmaChat();
 
   const chatEnvelope = activeEnvelope;
@@ -100,6 +105,47 @@ export function SettingsAssistantPage() {
     if (chatEnvelope) return "border-emerald-200 bg-emerald-50 text-emerald-800";
     return "border-slate-200 bg-slate-50 text-slate-700";
   }, [chatEnvelope, sendMessageMutation.isError, sessionQuery.isError]);
+
+  if (permissionAccessState !== "allowed") {
+    const accessMessage = permissionAccessReason === "server"
+      ? t("assistantAccess.serverDenied")
+      : permissionAccessReason === "missing"
+        ? t("assistantAccess.permissionMissing")
+        : permissionAccessReason === "unavailable"
+          ? t("assistantAccess.unavailableDescription")
+          : null;
+
+    return (
+      <section className="mx-auto max-w-3xl space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 sm:p-6" data-testid="assistant-permission-guard">
+        <header>
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">{t("assistantAccess.section")}</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("assistantAccess.heading")}</h1>
+        </header>
+        {permissionAccessState === "checking" ? (
+          <p role="status" aria-live="polite">{t("assistantAccess.checking")}</p>
+        ) : (
+          <div role="alert" className="space-y-3 text-sm leading-6">
+            <p className="font-semibold">{t(permissionAccessReason === "unavailable" ? "assistantAccess.unavailableTitle" : "assistantAccess.title")}</p>
+            {accessMessage && <p>{accessMessage}</p>}
+            <ul className="list-disc space-y-1 pl-5">
+              <li>{t("assistantAccess.financialPermission")}</li>
+              <li>{t("assistantAccess.assistantPermission")}</li>
+            </ul>
+            <p>{t("assistantAccess.askOwner")}</p>
+            {permissionAccessReason === "unavailable" && (
+              <button
+                type="button"
+                onClick={() => void retryPermissionCheck()}
+                className="rounded-lg border border-amber-300 bg-white px-3 py-2 font-semibold hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
+              >
+                {t("assistantAccess.retry")}
+              </button>
+            )}
+          </div>
+        )}
+      </section>
+    );
+  }
 
   const error =
     sessionQuery.error ||

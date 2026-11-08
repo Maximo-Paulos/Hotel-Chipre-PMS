@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { hasValidSession } from "../api/client";
+import { ApiError, hasValidSession } from "../api/client";
 import { invalidateQueriesInBackground, refreshAfterMutation } from "../api/queryInvalidation";
 import {
   archiveGemmaChatSession,
@@ -31,6 +31,11 @@ import {
 import { useSession } from "../state/session";
 
 import { useGuardedMutation } from "./useGuardedMutation";
+import { useEffectivePermissions } from "./usePermissions";
+
+const REQUIRED_GEMMA_PERMISSIONS = ["reports:financial:view", "settings:assistant:view"] as const;
+
+const isForbiddenResponse = (error: unknown) => error instanceof ApiError && error.status === 403;
 
 const storageKey = (hotelId: number | null, userId: string | null) =>
   hotelId && userId ? `hotel-pms-gemma-session-${hotelId}-${userId}` : null;
@@ -60,8 +65,20 @@ const writeStoredSessionId = (key: string | null, value: number | null) => {
 export function useGemmaChat() {
   const { session } = useSession();
   const queryClient = useQueryClient();
+  const permissionQuery = useEffectivePermissions();
   const [sessionId, setSessionId] = useState<number | null>(null);
+  const [serverPermissionDenied, setServerPermissionDenied] = useState(false);
   const storage = useMemo(() => storageKey(session.hotelId, session.userId), [session.hotelId, session.userId]);
+  const hasRequiredPermissions = permissionQuery.hasAllPermissions([...REQUIRED_GEMMA_PERMISSIONS]);
+  const canQueryGemma =
+    hasValidSession(session) &&
+    permissionQuery.permissionsKnown &&
+    hasRequiredPermissions &&
+    !serverPermissionDenied;
+
+  useEffect(() => {
+    setServerPermissionDenied(false);
+  }, [session.hotelId, session.userId]);
 
   useEffect(() => {
     setSessionId(readStoredSessionId(storage));
@@ -74,28 +91,28 @@ export function useGemmaChat() {
   const sessionQuery = useQuery<GemmaChatEnvelope>({
     queryKey: gemmaChatKey(session.hotelId, sessionId),
     queryFn: () => fetchGemmaChatSession(sessionId!, session),
-    enabled: hasValidSession(session) && Boolean(sessionId),
+    enabled: canQueryGemma && Boolean(sessionId),
     staleTime: 1000 * 10,
   });
 
   const historyQuery = useQuery<GemmaChatSession[]>({
     queryKey: gemmaHistoryKey(session.hotelId),
     queryFn: () => fetchGemmaChatHistory(session),
-    enabled: hasValidSession(session),
+    enabled: canQueryGemma,
     staleTime: 1000 * 10,
   });
 
   const runtimeStatusQuery = useQuery<GemmaRuntimeStatus>({
     queryKey: gemmaRuntimeKey(session.hotelId),
     queryFn: () => fetchGemmaRuntimeStatus(session),
-    enabled: hasValidSession(session),
+    enabled: canQueryGemma,
     staleTime: 1000 * 15,
   });
 
   const insightsQuery = useQuery<GemmaInsight[]>({
     queryKey: gemmaInsightsKey(session.hotelId),
     queryFn: () => fetchGemmaInsights(session),
-    enabled: hasValidSession(session),
+    enabled: canQueryGemma,
     staleTime: 1000 * 15,
   });
 
@@ -174,6 +191,40 @@ export function useGemmaChat() {
     },
   });
 
+  const forbiddenResponseReceived = [
+    historyQuery.error,
+    insightsQuery.error,
+    runtimeStatusQuery.error,
+    sessionQuery.error,
+    sendMessageMutation.error,
+    approveActionMutation.error,
+    rejectActionMutation.error,
+    reviewDraftMutation.error,
+    applyDraftMutation.error,
+    archiveSessionMutation.error,
+  ].some(isForbiddenResponse);
+
+  useEffect(() => {
+    if (forbiddenResponseReceived) {
+      setServerPermissionDenied(true);
+    }
+  }, [forbiddenResponseReceived]);
+
+  const permissionAccessReason = serverPermissionDenied || forbiddenResponseReceived
+    ? "server"
+    : permissionQuery.permissionsKnown && !hasRequiredPermissions
+      ? "missing"
+      : !permissionQuery.permissionsKnown && permissionQuery.isError
+        ? "unavailable"
+        : null;
+  const permissionAccessState = permissionAccessReason === "server" || permissionAccessReason === "missing"
+    ? "denied"
+    : permissionAccessReason === "unavailable"
+      ? "unavailable"
+      : permissionQuery.permissionsKnown
+        ? "allowed"
+        : "checking";
+
   const resetTransientState = useCallback(() => {
     sendMessageMutation.reset();
     approveActionMutation.reset();
@@ -246,5 +297,8 @@ export function useGemmaChat() {
     applyDraftMutation,
     archiveSessionMutation,
     isReady: hasValidSession(session),
+    permissionAccessReason,
+    permissionAccessState,
+    retryPermissionCheck: permissionQuery.refetch,
   };
 }
