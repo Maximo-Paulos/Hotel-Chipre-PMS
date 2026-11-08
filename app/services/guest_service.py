@@ -157,6 +157,7 @@ def find_or_create_guest(db: Session, payload: GuestCreatePayload) -> tuple[Gues
 
 
 _GUEST_SEARCH_FIELDS = (
+    Guest.first_name.concat(" ").concat(Guest.last_name),
     Guest.first_name,
     Guest.last_name,
     Guest.email,
