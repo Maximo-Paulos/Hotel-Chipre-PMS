@@ -4433,7 +4433,9 @@ export function ReservationsPage() {
                         {!editing && formValues.category_id && quoteNights > 0 && formAvailabilityQuery.isFetching
                           ? t("page.form.roomAvailability.loading")
                           : availableRooms.length > 0 || editing
-                            ? t("page.common.unassigned")
+                            ? editing
+                              ? t("page.common.unassigned")
+                              : t("page.form.roomAutoAssign")
                             : t("page.form.roomAvailability.noRooms")}
                       </option>
                       {availableRooms.map((room) => (

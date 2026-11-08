@@ -935,6 +935,7 @@
       "categoryDisabledTitle": "The category of an existing reservation cannot be changed from here.",
       "categoryPlaceholder": "Choose a category",
       "room": "Room (optional)",
+      "roomAutoAssign": "Automatic assignment",
       "roomOption": "Room {{number}} · Cat {{category}}",
       "source": "Source",
       "sourceOptions": {

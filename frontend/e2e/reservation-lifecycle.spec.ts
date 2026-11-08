@@ -137,6 +137,8 @@ test("reservation create and edit forms avoid saying required fields are missing
     assignRoom: false,
     submit: false
   });
+  const roomSelect = createForm.locator("label").filter({ hasText: "Habitación (opcional)" }).locator("select");
+  await expect(roomSelect.locator('option[value=""]')).toHaveText("Asignación automática");
   await expect(page.getByText("La tarifa y la disponibilidad dependen de la categoría y las fechas seleccionadas.", { exact: true })).toBeVisible();
   await expect(page.getByText("Completá los campos mínimos: Huésped, Categoría y fechas.", { exact: true })).toHaveCount(0);
   await expect(createForm.getByRole("button", { name: "Crear", exact: true })).toBeEnabled();
@@ -146,6 +148,7 @@ test("reservation create and edit forms avoid saying required fields are missing
   const reservationTable = page.locator("table").filter({ hasText: "Código" });
   const reservationRow = reservationTable.locator("tbody tr").filter({ hasText: guestLastName });
   await expect(reservationRow).toHaveCount(1);
+  await expect(reservationRow).toContainText("Hab");
   await reservationRow.getByRole("button", { name: "Editar", exact: true }).click();
 
   const editForm = page.locator("form").filter({ hasText: "Pagos y balance" });
