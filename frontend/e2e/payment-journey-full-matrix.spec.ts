@@ -420,6 +420,7 @@ test("cross-currency payment quotes received tender into the reservation currenc
     applied_amount: number | string;
     base_amount: number | string;
     currency_code: string;
+    final_amount: number | string;
     fx_quote_details: { fallback_used?: boolean; provider?: string } | null;
     fx_rate_snapshot: number | string | null;
     remaining_balance: number | string;
@@ -429,6 +430,26 @@ test("cross-currency payment quotes received tender into the reservation currenc
   await expect(quotePanel).toBeVisible();
   await expect(quotePanel).toContainText("Cotización confirmada por el servidor");
   await expect(quotePanel).toContainText(/Tipo fijado: 1 USD = [\d.,]+ ARS/);
+  const expectedCurrencyAmount = (amount: number | string, currencyCode: string) =>
+    new Intl.NumberFormat("es-AR", { style: "currency", currency: currencyCode }).format(Number(amount));
+  const quoteRows = quotePanel.locator("dl");
+  await expect(quoteRows.locator("dt").filter({ hasText: localizedName("Total a recibir en USD", "Total to receive in USD") }).locator("xpath=following-sibling::dd[1]")).toHaveText(
+    expectedCurrencyAmount(balanceQuote.final_amount, "USD")
+  );
+  await expect(quoteRows.locator("dt").filter({ hasText: localizedName("Aplicado a la reserva", "Applied to reservation") }).locator("xpath=following-sibling::dd[1]")).toHaveText(
+    expectedCurrencyAmount(balanceQuote.applied_amount, "ARS")
+  );
+  await expect(quoteRows.locator("dt").filter({ hasText: localizedName("Saldo restante", "Remaining balance") }).locator("xpath=following-sibling::dd[1]")).toHaveText(
+    expectedCurrencyAmount(balanceQuote.remaining_balance, "ARS")
+  );
+  if (Number(balanceQuote.remaining_balance) > 0) {
+    await expect(quotePanel.getByTestId("payment-quote-minor-unit-remainder")).toContainText(
+      localizedText(
+        "La conversión respeta los centavos de la moneda de cobro",
+        "The conversion respects the tender currency's minor units"
+      )
+    );
+  }
   await expect(editForm.getByTestId("payment-currency-hint")).toContainText("cotización");
   await expect(amountInput).toBeEditable();
   await expect(amountInput).toHaveValue(Number(balanceQuote.base_amount).toFixed(2));
@@ -456,11 +477,25 @@ test("cross-currency payment quotes received tender into the reservation currenc
     applied_amount: number | string;
     base_amount: number | string;
     fx_rate_snapshot: number | string;
+    remaining_balance: number | string;
   };
   expect(Number(partialQuote.base_amount)).toBe(partialTenderAmount);
   expect(Number(partialQuote.applied_amount)).toBeCloseTo(
     partialTenderAmount / Number(partialQuote.fx_rate_snapshot),
     2
+  );
+  await expect(quoteRows.locator("dt").filter({ hasText: localizedName("Aplicado a la reserva", "Applied to reservation") }).locator("xpath=following-sibling::dd[1]")).toHaveText(
+    expectedCurrencyAmount(partialQuote.applied_amount, "ARS")
+  );
+  await expect(quoteRows.locator("dt").filter({ hasText: localizedName("Saldo restante", "Remaining balance") }).locator("xpath=following-sibling::dd[1]")).toHaveText(
+    expectedCurrencyAmount(partialQuote.remaining_balance, "ARS")
+  );
+  expect(Number(partialQuote.remaining_balance)).toBeGreaterThan(0);
+  await expect(quotePanel.getByTestId("payment-quote-minor-unit-remainder")).toContainText(
+    localizedText(
+      "La conversión se limita a los centavos disponibles en la moneda de cobro",
+      "The conversion is limited to the tender currency's minor units"
+    )
   );
 
   const paymentResponsePromise = page.waitForResponse((response) => {

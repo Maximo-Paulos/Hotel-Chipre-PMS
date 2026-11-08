@@ -1123,6 +1123,7 @@
       "paymentQuoteTotal": "Total a recibir en {{currency}}",
       "paymentQuoteApplied": "Aplicado a la reserva",
       "paymentQuoteRemaining": "Saldo restante",
+      "paymentQuoteMinorUnitRemainder": "La conversión se limita a los centavos disponibles en la moneda de cobro; cualquier diferencia, incluso de pocos centavos, queda pendiente en la moneda de la reserva.",
       "paymentQuoteFxRate": "Tipo fijado: {{rate}}",
       "paymentQuoteSurchargeFx": "Conversión del recargo: {{source}}",
       "paymentQuoteCashSuggestion": "Sugerencia de efectivo: {{amount}}; el total exacto de esta cotización es {{exact}}. Si se entrega menos, debe quedar saldo pendiente.",

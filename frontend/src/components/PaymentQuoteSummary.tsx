@@ -1,7 +1,8 @@
 import { useTranslation } from "react-i18next";
 
 import type { PaymentSurchargeQuote } from "../api/paymentSurcharges";
-import { formatFxRate, formatMoney } from "../utils/currency";
+import { interfaceLanguageToLocale } from "../i18n";
+import { formatFxRate, formatMoneyExact } from "../utils/currency";
 
 type PaymentQuoteSummaryProps = {
   quote: PaymentSurchargeQuote;
@@ -19,6 +20,7 @@ const detailLabel = (details: Record<string, unknown> | null): string | null => 
 
 export function PaymentQuoteSummary({ quote, showCashSuggestion = false }: PaymentQuoteSummaryProps) {
   const { t, i18n } = useTranslation("reservations");
+  const locale = interfaceLanguageToLocale(i18n.resolvedLanguage ?? i18n.language);
   const currency = quote.currency_code.toUpperCase();
   const reservationCurrency = quote.reservation_currency_code.toUpperCase();
   const fxRate = quote.fx_rate_snapshot == null ? null : Number(quote.fx_rate_snapshot);
@@ -54,25 +56,30 @@ export function PaymentQuoteSummary({ quote, showCashSuggestion = false }: Payme
       <dl className="mt-1 grid gap-x-3 gap-y-1 sm:grid-cols-2">
         <div className="flex justify-between gap-2">
           <dt>{t("page.form.paymentQuoteBase")}</dt>
-          <dd className="font-medium">{formatMoney(quote.base_amount, currency)}</dd>
+          <dd className="font-medium">{formatMoneyExact(quote.base_amount, currency, locale)}</dd>
         </div>
         <div className="flex justify-between gap-2">
           <dt>{t("page.form.paymentQuoteSurcharge")}</dt>
-          <dd className="font-medium">{formatMoney(quote.surcharge_amount, currency)}</dd>
+          <dd className="font-medium">{formatMoneyExact(quote.surcharge_amount, currency, locale)}</dd>
         </div>
         <div className="flex justify-between gap-2 sm:col-span-2">
           <dt className="font-semibold">{t("page.form.paymentQuoteTotal", { currency })}</dt>
-          <dd className="font-semibold">{formatMoney(quote.final_amount, currency)}</dd>
+          <dd className="font-semibold">{formatMoneyExact(quote.final_amount, currency, locale)}</dd>
         </div>
         <div className="flex justify-between gap-2">
           <dt>{t("page.form.paymentQuoteApplied")}</dt>
-          <dd>{formatMoney(quote.applied_amount, reservationCurrency)}</dd>
+          <dd>{formatMoneyExact(quote.applied_amount, reservationCurrency, locale)}</dd>
         </div>
         <div className="flex justify-between gap-2">
           <dt>{t("page.form.paymentQuoteRemaining")}</dt>
-          <dd>{formatMoney(quote.remaining_balance, reservationCurrency)}</dd>
+          <dd>{formatMoneyExact(quote.remaining_balance, reservationCurrency, locale)}</dd>
         </div>
       </dl>
+      {fxRateLabel && Number(quote.remaining_balance) > 0 ? (
+        <p className="mt-1" data-testid="payment-quote-minor-unit-remainder">
+          {t("page.form.paymentQuoteMinorUnitRemainder")}
+        </p>
+      ) : null}
       {fxRateLabel ? (
         <p className="mt-1" data-testid="payment-quote-fx-rate">
           {t("page.form.paymentQuoteFxRate", {
@@ -111,8 +118,8 @@ export function PaymentQuoteSummary({ quote, showCashSuggestion = false }: Payme
       {hasCashSuggestion ? (
         <p className="mt-1 rounded border border-violet-200 bg-violet-50 p-2 text-violet-950">
           {t("page.form.paymentQuoteCashSuggestion", {
-            amount: formatMoney(suggestion, currency),
-            exact: formatMoney(quote.final_amount, currency)
+            amount: formatMoneyExact(suggestion, currency, locale),
+            exact: formatMoneyExact(quote.final_amount, currency, locale)
           })}
         </p>
       ) : null}

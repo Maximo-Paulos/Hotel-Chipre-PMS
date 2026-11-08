@@ -1,4 +1,5 @@
 const formatterCache = new Map<string, Intl.NumberFormat>();
+const exactFormatterCache = new Map<string, Intl.NumberFormat>();
 
 export function normalizeCurrencyCode(currencyCode?: string | null): string {
   const candidate = (currencyCode || "ARS").trim().toUpperCase();
@@ -31,10 +32,44 @@ function getFormatter(locale: string, currencyCode?: string | null): Intl.Number
   return formatter;
 }
 
+function getExactFormatter(locale: string, currencyCode?: string | null): Intl.NumberFormat {
+  const normalized = normalizeCurrencyCode(currencyCode);
+  const cacheKey = `${locale}:${normalized}`;
+  const cached = exactFormatterCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  let formatter: Intl.NumberFormat;
+  try {
+    formatter = new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: normalized,
+    });
+  } catch {
+    formatter = new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: "ARS",
+    });
+  }
+  exactFormatterCache.set(cacheKey, formatter);
+  return formatter;
+}
+
 export function formatMoney(amount: number | string | null | undefined, currencyCode?: string | null, locale = "es-AR"): string {
   const numericAmount = Number(amount);
   const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
   return getFormatter(locale, currencyCode).format(safeAmount);
+}
+
+export function formatMoneyExact(
+  amount: number | string | null | undefined,
+  currencyCode?: string | null,
+  locale = "es-AR",
+): string {
+  const numericAmount = Number(amount);
+  const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0;
+  return getExactFormatter(locale, currencyCode).format(safeAmount);
 }
 
 export function formatFxRate(

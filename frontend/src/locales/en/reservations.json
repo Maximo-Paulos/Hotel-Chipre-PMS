@@ -1123,6 +1123,7 @@
       "paymentQuoteTotal": "Total to receive in {{currency}}",
       "paymentQuoteApplied": "Applied to reservation",
       "paymentQuoteRemaining": "Remaining balance",
+      "paymentQuoteMinorUnitRemainder": "The conversion is limited to the tender currency's minor units; any difference, even a few cents, remains due in the reservation currency.",
       "paymentQuoteFxRate": "Rate fixed: {{rate}}",
       "paymentQuoteSurchargeFx": "Surcharge conversion: {{source}}",
       "paymentQuoteCashSuggestion": "Cash suggestion: {{amount}}; the exact total in this quote is {{exact}}. If less is received, a balance must remain due.",
