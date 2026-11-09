@@ -1990,7 +1990,13 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   <h4 className="text-sm font-semibold leading-5 text-amber-950">{t("drawer.checkinCapture.title")}</h4>
                   <p className="mt-1 max-w-prose text-xs leading-5 text-amber-900">{t("drawer.checkinCapture.hint")}</p>
                   {checkinValidation.data && checkinValidation.data.errors.length > 0 && (
-                    <p className="mt-2 rounded-md border border-amber-200 bg-white/70 px-3 py-2 text-xs leading-5 text-amber-900">{localizedCheckinErrors.join("; ")}</p>
+                    <div className="mt-2 rounded-md border border-amber-200 bg-white/70 px-3 py-2 text-xs leading-5 text-amber-900">
+                      <ul className="list-disc space-y-1 pl-5">
+                        {localizedCheckinErrors.map((error, index) => (
+                          <li key={`${error}-${index}`}>{error}</li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <label className="min-w-0 space-y-1 text-xs">
