@@ -27,6 +27,13 @@ PENDING_ALLOCATION_STALE_REASON = (
 ALLOCATION_PROCESSING_INTERVAL = timedelta(minutes=5)
 MAX_HOTELS_PER_PROCESSING_CYCLE = 3
 RESERVATION_CREATED_ALLOCATION_TRIGGER = "reservation_created_auto_proposal"
+ALLOCATION_APPLY_TRIGGER_TYPES = frozenset(
+    {
+        RESERVATION_CREATED_ALLOCATION_TRIGGER,
+        "new_reservation",
+        "manual_api_recalculate",
+    }
+)
 ALLOCATION_PROPOSAL_TRIGGER_TYPES = frozenset(
     {
         RESERVATION_CREATED_ALLOCATION_TRIGGER,
@@ -39,6 +46,11 @@ ALLOCATION_PROPOSAL_TRIGGER_TYPES = frozenset(
         "manual_api_preview",
     }
 )
+
+
+def allocation_trigger_applies(trigger_type: str) -> bool:
+    """Return whether this persisted trigger creates an applied proposal run."""
+    return trigger_type in ALLOCATION_APPLY_TRIGGER_TYPES
 
 
 class AllocationRequestInProgress(RuntimeError):
@@ -72,6 +84,22 @@ def _pending_proposal_query(db: Session, hotel_id: int):
         AllocationRun.hotel_id == hotel_id,
         AllocationRun.trigger_type.in_(ALLOCATION_PROPOSAL_TRIGGER_TYPES),
         AllocationRun.status == AllocationRunStatusEnum.PENDING,
+    )
+
+
+def _manual_request_matches_pending(
+    request: AllocationRun,
+    *,
+    hotel_id: int,
+    apply: bool,
+    horizon_start: datetime | None,
+    horizon_end: datetime | None,
+) -> bool:
+    return (
+        request.hotel_id == hotel_id
+        and allocation_trigger_applies(request.trigger_type) is apply
+        and request.horizon_start == horizon_start
+        and request.horizon_end == horizon_end
     )
 
 
@@ -162,18 +190,43 @@ def request_manual_allocation(
     horizon_end: date | None,
     now: datetime | None = None,
 ) -> AllocationRun:
-    """Persist a manual run request so the HTTP request never runs the solver."""
+    """Persist a manual request, or wake a compatible pending hotel request.
+
+    Reusing a pending row is safe only when its hotel, apply behavior, and
+    requested horizon match. In that case the caller can dispatch the existing
+    durable request without creating a duplicate or inspecting other hotels.
+    """
     trigger_type = "manual_api_recalculate" if apply else "manual_api_preview"
     fail_stale_pending_allocation_requests(db, hotel_id=hotel_id, now=now)
     pending_query = _pending_proposal_query(db, hotel_id)
-    if pending_query.first() is not None:
-        raise AllocationRequestInProgress("An allocation request is already queued for this hotel")
+    existing = pending_query.order_by(
+        AllocationRun.created_at.asc(), AllocationRun.id.asc()
+    ).first()
+
+    requested_horizon_start = (
+        datetime.combine(horizon_start, time.min) if horizon_start else None
+    )
+    requested_horizon_end = (
+        datetime.combine(horizon_end, time.min) if horizon_end else None
+    )
+    if existing is not None:
+        if _manual_request_matches_pending(
+            existing,
+            hotel_id=hotel_id,
+            apply=apply,
+            horizon_start=requested_horizon_start,
+            horizon_end=requested_horizon_end,
+        ):
+            return existing
+        raise AllocationRequestInProgress(
+            "An allocation request is already queued for this hotel"
+        )
 
     request = AllocationRun(
         hotel_id=hotel_id,
         trigger_type=trigger_type,
-        horizon_start=datetime.combine(horizon_start, time.min) if horizon_start else None,
-        horizon_end=datetime.combine(horizon_end, time.min) if horizon_end else None,
+        horizon_start=requested_horizon_start,
+        horizon_end=requested_horizon_end,
         status=AllocationRunStatusEnum.PENDING,
     )
     try:
@@ -183,6 +236,17 @@ def request_manual_allocation(
             db.add(request)
             db.flush()
     except IntegrityError as exc:
+        existing = pending_query.order_by(
+            AllocationRun.created_at.asc(), AllocationRun.id.asc()
+        ).first()
+        if existing is not None and _manual_request_matches_pending(
+            existing,
+            hotel_id=hotel_id,
+            apply=apply,
+            horizon_start=requested_horizon_start,
+            horizon_end=requested_horizon_end,
+        ):
+            return existing
         raise AllocationRequestInProgress(
             "An allocation request is already queued for this hotel"
         ) from exc
