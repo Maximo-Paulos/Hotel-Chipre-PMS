@@ -139,6 +139,49 @@ const refreshHotelQueries = async (
 const validHotelId = (hotelId: number | null | undefined): hotelId is number =>
   Boolean(hotelId && Number.isInteger(hotelId) && hotelId > 0);
 
+/**
+ * Apply the authoritative reservation fields returned by a committed write
+ * before reservation list/detail reads reconcile. Cancelling in-flight reads
+ * prevents a response started before the write from overwriting the committed
+ * value; active views then refetch from the server in the background.
+ */
+export const updateReservationCacheFromCommittedPatch = async <T extends { id: number }>(
+  queryClient: QueryClient,
+  hotelId: number | null | undefined,
+  reservationId: number | null | undefined,
+  patch: Partial<T>
+): Promise<void> => {
+  if (
+    !validHotelId(hotelId) ||
+    !reservationId ||
+    !Number.isInteger(reservationId) ||
+    reservationId <= 0
+  ) return;
+
+  const matchesReservationPresentation = (queryKey: readonly unknown[]) => {
+    if (queryKey[1] !== hotelId) return false;
+    return queryKey[0] === "reservations" ||
+      (queryKey[0] === "reservation" && queryKey[2] === reservationId);
+  };
+  const filters = { predicate: (query: { queryKey: readonly unknown[] }) => matchesReservationPresentation(query.queryKey) };
+  const listFilters = {
+    predicate: (query: { queryKey: readonly unknown[] }) =>
+      query.queryKey[0] === "reservations" && query.queryKey[1] === hotelId
+  };
+
+  await queryClient.cancelQueries(filters);
+  queryClient.setQueryData<T>(["reservation", hotelId, reservationId], (current) =>
+    current ? { ...current, ...patch, id: reservationId } : current
+  );
+  queryClient.setQueriesData<T[]>(listFilters, (current) =>
+    current?.map((reservation) =>
+      reservation.id === reservationId ? { ...reservation, ...patch, id: reservationId } : reservation
+    )
+  );
+
+  invalidateQueriesInBackground(queryClient, filters);
+};
+
 const refreshReservationQueries = (
   queryClient: QueryClient,
   hotelId: number | null | undefined,
