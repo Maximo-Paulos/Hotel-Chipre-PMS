@@ -133,6 +133,93 @@ test("reception reviews the engine's waitlist suggestion before creating a reser
   });
 });
 
+test("waitlist promotion confirms from the committed response while list reconciliation is slow", async ({ page }) => {
+  await login(page);
+
+  let promotedEntry = { ...waitlistEntry, promoted_reservation_id: 880, status: "promoted" as const };
+  let promotionCommitted = false;
+  let waitlistRefreshStarted = false;
+  let releaseWaitlistRefresh: (() => void) | null = null;
+  const heldWaitlistRefresh = new Promise<void>((resolve) => { releaseWaitlistRefresh = resolve; });
+
+  await page.route("**/api/waitlist**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/waitlist/suggestions") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([{
+          entry_id: waitlistEntry.id,
+          guest_id: waitlistEntry.guest_id,
+          guest_name: "Ada Prueba",
+          category_id: waitlistEntry.category_id,
+          check_in_date: waitlistEntry.check_in_date,
+          check_out_date: waitlistEntry.check_out_date,
+          priority: waitlistEntry.priority,
+          suggested_room_id: 208,
+          suggested_room_number: "208",
+          expected_entry_fingerprint: "a".repeat(64),
+          reason: "Habitación compatible disponible para todo el período.",
+          allocation_basis: "feasibility_only_no_price_snapshot"
+        }])
+      });
+      return;
+    }
+    if (url.pathname === "/api/waitlist/" && request.method() === "GET") {
+      const statusFilter = url.searchParams.get("status_filter");
+      if (promotionCommitted && statusFilter !== "waiting") {
+        waitlistRefreshStarted = true;
+        await heldWaitlistRefresh;
+      }
+      const entries = statusFilter === "waiting"
+        ? promotionCommitted ? [] : [waitlistEntry]
+        : [promotionCommitted ? promotedEntry : waitlistEntry];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(entries) });
+      return;
+    }
+    if (url.pathname === `/api/waitlist/${waitlistEntry.id}/promote` && request.method() === "POST") {
+      promotionCommitted = true;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ waitlist_entry: promotedEntry, reservation: { id: 880 } })
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.route("**/api/guests/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([{ id: waitlistEntry.guest_id, first_name: "Ada", last_name: "Prueba" }])
+    });
+  });
+  await page.route("**/api/rooms/categories", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([{ id: waitlistEntry.category_id, name: "Doble estándar", code: "DBL", max_occupancy: 2, base_price_per_night: 50000 }])
+    });
+  });
+
+  try {
+    await page.goto("/operacion/lista-espera");
+    await expect(page.getByText("Propuesta del motor: habitación 208")).toBeVisible();
+    await page.getByRole("button", { name: "Revisar propuesta" }).click();
+    const confirmButton = page.getByRole("button", { name: "Confirmar reserva en Hab. 208" });
+    await expect(confirmButton).toBeEnabled();
+    await confirmButton.click();
+
+    await expect.poll(() => waitlistRefreshStarted).toBe(true);
+    await expect(page.getByText("Entrada promovida a reserva.", { exact: true })).toBeVisible({ timeout: 1500 });
+    await expect(page.getByText("Promovida", { exact: true })).toBeVisible({ timeout: 1500 });
+  } finally {
+    releaseWaitlistRefresh?.();
+  }
+});
+
 test("an applied automatic allocation run is shown as reviewed, not as a pending proposal", async ({ page }) => {
   await login(page);
 
