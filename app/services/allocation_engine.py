@@ -1173,7 +1173,7 @@ def build_slots_from_db(
     completed_stays_by_guest: dict[int, list[tuple[date, int, int, int]]] = {}
     completed_stay_keys_by_guest: dict[int, list[tuple[date, int]]] = {}
     if guest_ids:
-        from sqlalchemy import Date, Integer, and_, literal
+        from sqlalchemy import Date, Integer, and_, func, literal
 
         avoidance_signal_query = db.query(
             GuestRoomAvoidance.guest_id,
@@ -1189,27 +1189,84 @@ def build_slots_from_db(
         if has_hotel_context:
             avoidance_signal_query = avoidance_signal_query.filter(GuestRoomAvoidance.hotel_id == hotel_id)
 
-        historical_stay_signal_query = db.query(
+        # For each guest, only the latest completed stay before their first
+        # eligible check-in can influence any candidate reservation. Retain
+        # every stay from that check-in onward because later candidates in the
+        # same allocation horizon may have different prior stays.
+        guest_history_cutoffs = (
+            reservations_query.with_entities(
+                Reservation.guest_id.label("guest_id"),
+                func.min(Reservation.check_in_date).label("first_check_in"),
+            )
+            .filter(Reservation.guest_id.isnot(None))
+            .group_by(Reservation.guest_id)
+            .subquery()
+        )
+        historical_stay_columns = (
             Reservation.guest_id,
             Reservation.room_id,
             Reservation.check_out_date,
             Reservation.id.label("completed_reservation_id"),
             Room.category_id.label("room_category_id"),
-            literal("historical_stay").label("source"),
+        )
+        historical_stays_before_cutoff = db.query(
+            *historical_stay_columns,
+            func.row_number()
+            .over(
+                partition_by=Reservation.guest_id,
+                order_by=(Reservation.check_out_date.desc(), Reservation.id.desc()),
+            )
+            .label("history_rank"),
+        ).join(
+            guest_history_cutoffs,
+            guest_history_cutoffs.c.guest_id == Reservation.guest_id,
         ).join(
             Room,
             and_(Room.id == Reservation.room_id, Room.hotel_id == Reservation.hotel_id),
         ).filter(
-            Reservation.guest_id.in_(guest_ids),
             Reservation.room_id.isnot(None),
             Reservation.status == ReservationStatusEnum.CHECKED_OUT,
+            Reservation.check_out_date < guest_history_cutoffs.c.first_check_in,
+        )
+        if has_hotel_context:
+            historical_stays_before_cutoff = historical_stays_before_cutoff.filter(
+                Reservation.hotel_id == hotel_id
+            )
+        historical_stays_before_cutoff = historical_stays_before_cutoff.subquery()
+        latest_stay_before_cutoff_query = db.query(
+            historical_stays_before_cutoff.c.guest_id,
+            historical_stays_before_cutoff.c.room_id,
+            historical_stays_before_cutoff.c.check_out_date,
+            historical_stays_before_cutoff.c.completed_reservation_id,
+            historical_stays_before_cutoff.c.room_category_id,
+            literal("historical_stay").label("source"),
+        ).filter(historical_stays_before_cutoff.c.history_rank == 1)
+
+        historical_stays_after_cutoff = db.query(
+            *historical_stay_columns,
+            literal("historical_stay").label("source"),
+        ).join(
+            guest_history_cutoffs,
+            guest_history_cutoffs.c.guest_id == Reservation.guest_id,
+        ).join(
+            Room,
+            and_(Room.id == Reservation.room_id, Room.hotel_id == Reservation.hotel_id),
+        ).filter(
+            Reservation.room_id.isnot(None),
+            Reservation.status == ReservationStatusEnum.CHECKED_OUT,
+            Reservation.check_out_date >= guest_history_cutoffs.c.first_check_in,
             Reservation.check_out_date < end_date,
         )
         if has_hotel_context:
-            historical_stay_signal_query = historical_stay_signal_query.filter(Reservation.hotel_id == hotel_id)
+            historical_stays_after_cutoff = historical_stays_after_cutoff.filter(
+                Reservation.hotel_id == hotel_id
+            )
 
         for guest_id, room_id, check_out_date, completed_reservation_id, room_category_id, source in (
-            avoidance_signal_query.union_all(historical_stay_signal_query).all()
+            avoidance_signal_query.union_all(
+                latest_stay_before_cutoff_query,
+                historical_stays_after_cutoff,
+            ).all()
         ):
             if source == "avoidance":
                 avoided_room_ids_by_guest.setdefault(guest_id, set()).add(room_id)

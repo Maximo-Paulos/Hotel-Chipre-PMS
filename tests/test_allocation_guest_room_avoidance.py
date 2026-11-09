@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import event
 
@@ -261,6 +261,113 @@ def test_last_completed_room_signal_is_applied_by_cp_sat_and_greedy(db):
     assert next(slot for slot in slots if slot.reservation_id == upcoming.id).prior_stay_room_id == rooms[0].id
     assert cp_sat.assignments[upcoming.id] == rooms[0].id
     assert greedy.assignments[upcoming.id] == rooms[0].id
+
+
+def test_history_loading_keeps_only_latest_pre_horizon_stay_and_all_later_stays(db):
+    hotel, standard, rooms = _seed_hotel(db)
+    superior = RoomCategory(
+        hotel_id=hotel.id,
+        name="Superior",
+        code="AVOID-SUP",
+        base_price_per_night=150,
+        max_occupancy=2,
+    )
+    db.add(superior)
+    db.flush()
+    superior_room = Room(
+        hotel_id=hotel.id,
+        category_id=superior.id,
+        room_number="S-1",
+        status=RoomStatusEnum.AVAILABLE,
+        is_active=True,
+    )
+    db.add(superior_room)
+    db.flush()
+
+    guest = _guest(db, hotel.id, "history-window")
+    for index in range(20):
+        check_in = date(2026, 1, 1) + timedelta(days=index * 5)
+        _reservation(
+            db,
+            hotel_id=hotel.id,
+            guest_id=guest.id,
+            category_id=standard.id,
+            room_id=rooms[0].id,
+            check_in=check_in,
+            check_out=check_in + timedelta(days=1),
+            status=ReservationStatusEnum.CHECKED_OUT,
+            confirmation_code=f"AVOID-OLD-{index}",
+        )
+    _reservation(
+        db,
+        hotel_id=hotel.id,
+        guest_id=guest.id,
+        category_id=superior.id,
+        room_id=superior_room.id,
+        check_in=date(2027, 5, 5),
+        check_out=date(2027, 5, 7),
+        status=ReservationStatusEnum.CHECKED_OUT,
+        confirmation_code="AVOID-LATEST-BEFORE-HORIZON",
+    )
+    _reservation(
+        db,
+        hotel_id=hotel.id,
+        guest_id=guest.id,
+        category_id=standard.id,
+        room_id=rooms[1].id,
+        check_in=HORIZON_START,
+        check_out=date(2027, 5, 12),
+        status=ReservationStatusEnum.CHECKED_OUT,
+        confirmation_code="AVOID-WITHIN-HORIZON",
+    )
+    first_candidate = _reservation(
+        db,
+        hotel_id=hotel.id,
+        guest_id=guest.id,
+        category_id=standard.id,
+        room_id=None,
+        check_in=HORIZON_START,
+        check_out=date(2027, 5, 11),
+        status=ReservationStatusEnum.PENDING,
+        confirmation_code="AVOID-FIRST-CANDIDATE",
+    )
+    later_candidate = _reservation(
+        db,
+        hotel_id=hotel.id,
+        guest_id=guest.id,
+        category_id=standard.id,
+        room_id=None,
+        check_in=date(2027, 5, 13),
+        check_out=date(2027, 5, 14),
+        status=ReservationStatusEnum.PENDING,
+        confirmation_code="AVOID-LATER-CANDIDATE",
+    )
+
+    statements: list[str] = []
+
+    def capture_sql(_connection, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(" ".join(statement.lower().split()))
+
+    event.listen(db.bind, "before_cursor_execute", capture_sql)
+    try:
+        slots, _ = _slots(db, hotel.id)
+    finally:
+        event.remove(db.bind, "before_cursor_execute", capture_sql)
+
+    slot_by_id = {slot.reservation_id: slot for slot in slots}
+    assert slot_by_id[first_candidate.id].prior_stay_room_id is None
+    assert slot_by_id[later_candidate.id].prior_stay_room_id == rooms[1].id
+    signal_queries = [
+        statement
+        for statement in statements
+        if "from guest_room_avoidance" in statement
+        and "from reservations" in statement
+        and "row_number() over" in statement
+    ]
+    assert len(signal_queries) == 1
+    assert "partition by reservations.guest_id" in signal_queries[0]
+    assert "check_out_date >= " in signal_queries[0]
+    assert "first_check_in" in signal_queries[0]
 
 
 def test_soft_signals_do_not_move_an_already_compatible_assignment():
