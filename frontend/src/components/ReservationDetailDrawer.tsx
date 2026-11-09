@@ -2899,10 +2899,14 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
       />
       <ConfirmDialog
         open={individualExtensionConfirmOpen && individualExtensionPreview !== null}
-        title={t("drawer.individualExtension.confirmTitle")}
+        title={t(individualExtensionPaymentAction === "pending_balance"
+          ? "drawer.individualExtension.pendingBalanceConfirmTitle"
+          : "drawer.individualExtension.confirmTitle")}
         message={extensionImpactMessage(
           t,
-          t("drawer.individualExtension.confirmMessage", {
+          t(individualExtensionPaymentAction === "pending_balance"
+            ? "drawer.individualExtension.pendingBalanceConfirmMessage"
+            : "drawer.individualExtension.confirmMessage", {
             date: individualExtensionPreview?.new_checkout_date ?? individualExtensionCheckoutDate,
             amount: individualExtensionPreview
               ? formatMoney(Number(individualExtensionPreview.extension_amount), individualExtensionPreview.currency_code)

@@ -161,6 +161,8 @@
       "manualReferenceRequired": "Enter the receipt or transaction number for the payment received.",
       "confirmTitle": "Confirm extension and collection",
       "confirmMessage": "The stay will be extended through {{date}}, adding {{amount}} to the total. Confirm that the date and collection action are correct.",
+      "pendingBalanceConfirmTitle": "Confirm extension with balance outstanding",
+      "pendingBalanceConfirmMessage": "The stay will be extended through {{date}}, adding {{amount}} to the total. No payment will be recorded or requested; the balance will remain outstanding.",
       "confirmApply": "Confirm extension",
       "cancel": "Go back",
       "applying": "Applying extension…",

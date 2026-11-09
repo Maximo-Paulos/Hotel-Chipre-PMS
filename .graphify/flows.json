@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T08:19:57.240Z",
+  "generatedAt": "2026-11-09T16:48:58.160Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -4209,6 +4209,30 @@
       "warnings": []
     },
     {
+      "id": "flow:api_queryinvalidation_updatereservationcachefromcommittedpatch",
+      "name": "updateReservationCacheFromCommittedPatch",
+      "entryPoint": "api_queryinvalidation_updatereservationcachefromcommittedpatch",
+      "entryPointId": "api_queryinvalidation_updatereservationcachefromcommittedpatch",
+      "path": [
+        "api_queryinvalidation_updatereservationcachefromcommittedpatch",
+        "api_queryinvalidation_invalidatequeriesinbackground",
+        "api_queryinvalidation_validhotelid"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_updatereservationcachefromcommittedpatch",
+        "api_queryinvalidation_invalidatequeriesinbackground",
+        "api_queryinvalidation_validhotelid"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
       "id": "flow:api_permissions_update_permission_overrides_batch",
       "name": "update_permission_overrides_batch",
       "entryPoint": "api_permissions_update_permission_overrides_batch",
@@ -4907,6 +4931,34 @@
       "warnings": []
     },
     {
+      "id": "flow:tasks_allocation_tasks_process_recalculation_requests",
+      "name": "process_recalculation_requests",
+      "entryPoint": "tasks_allocation_tasks_process_recalculation_requests",
+      "entryPointId": "tasks_allocation_tasks_process_recalculation_requests",
+      "path": [
+        "tasks_allocation_tasks_process_recalculation_requests",
+        "tasks_allocation_tasks_process_hotel_request",
+        "tasks_allocation_tasks_rotate_active_hotel_ids",
+        "tasks_allocation_tasks_session",
+        "tasks_allocation_tasks_claim_request"
+      ],
+      "qualifiedPath": [
+        "tasks_allocation_tasks_process_recalculation_requests",
+        "tasks_allocation_tasks_process_hotel_request",
+        "tasks_allocation_tasks_rotate_active_hotel_ids",
+        "tasks_allocation_tasks_session",
+        "tasks_allocation_tasks_claim_request"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/tasks/allocation_tasks.py"
+      ],
+      "criticality": 0.37,
+      "warnings": []
+    },
+    {
       "id": "flow:services_allocation_trigger_service_request_reservation_created_allocation",
       "name": "request_reservation_created_allocation",
       "entryPoint": "services_allocation_trigger_service_request_reservation_created_allocation",
@@ -5116,36 +5168,6 @@
       "fileCount": 1,
       "files": [
         "app/services/gemma_orchestrator.py"
-      ],
-      "criticality": 0.3367,
-      "warnings": []
-    },
-    {
-      "id": "flow:tasks_allocation_tasks_process_recalculation_requests",
-      "name": "process_recalculation_requests",
-      "entryPoint": "tasks_allocation_tasks_process_recalculation_requests",
-      "entryPointId": "tasks_allocation_tasks_process_recalculation_requests",
-      "path": [
-        "tasks_allocation_tasks_process_recalculation_requests",
-        "tasks_allocation_tasks_active_hotel_count",
-        "tasks_allocation_tasks_process_hotel_request",
-        "tasks_allocation_tasks_rotate_active_hotel_ids",
-        "tasks_allocation_tasks_session",
-        "tasks_allocation_tasks_claim_request"
-      ],
-      "qualifiedPath": [
-        "tasks_allocation_tasks_process_recalculation_requests",
-        "tasks_allocation_tasks_active_hotel_count",
-        "tasks_allocation_tasks_process_hotel_request",
-        "tasks_allocation_tasks_rotate_active_hotel_ids",
-        "tasks_allocation_tasks_session",
-        "tasks_allocation_tasks_claim_request"
-      ],
-      "depth": 2,
-      "nodeCount": 6,
-      "fileCount": 1,
-      "files": [
-        "app/tasks/allocation_tasks.py"
       ],
       "criticality": 0.3367,
       "warnings": []
