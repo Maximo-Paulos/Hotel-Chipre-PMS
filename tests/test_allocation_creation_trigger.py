@@ -33,7 +33,11 @@ from app.services.allocation_runtime_service import (
     set_reservation_reassignment_lock,
 )
 from app.services.allocation_trigger_service import (
+    AllocationRequestInProgress,
+    PENDING_ALLOCATION_STALE_REASON,
     _request_allocation_proposal,
+    fail_stale_pending_allocation_requests,
+    request_manual_allocation,
     trigger_reoptimization_bg,
 )
 from app.services.distributed_lock import DistributedLockBusy
@@ -41,6 +45,7 @@ from app.services.reservation_service import create_reservation
 from app.services.tenant_context import set_tenant_hotel_context
 from app.services.timezones import hotel_today
 from app.tasks.allocation_tasks import (
+    _claim_request,
     _process_hotel_request,
     process_recalculation_requests,
 )
@@ -731,6 +736,176 @@ def _pg_allocation_trigger_factory(db):
         bind=db.connection(),
         join_transaction_mode="create_savepoint",
     )
+
+
+def test_stale_manual_pending_run_is_failed_before_new_manual_request(pg_session):
+    db = pg_session
+    _pg_allocation_trigger_factory(db)
+    set_tenant_hotel_context(db, 1)
+    now = datetime.now(timezone.utc)
+    stale = AllocationRun(
+        hotel_id=1,
+        trigger_type="manual_api_preview",
+        status=AllocationRunStatusEnum.PENDING,
+        created_at=now - timedelta(minutes=16),
+    )
+    db.add(stale)
+    db.flush()
+
+    replacement = request_manual_allocation(
+        db,
+        hotel_id=1,
+        apply=True,
+        horizon_start=None,
+        horizon_end=None,
+        now=now,
+    )
+    db.flush()
+    db.refresh(stale)
+
+    assert stale.status == AllocationRunStatusEnum.FAILED
+    assert stale.finished_at is not None
+    assert stale.error_message == PENDING_ALLOCATION_STALE_REASON
+    assert replacement.status == AllocationRunStatusEnum.PENDING
+    assert replacement.id != stale.id
+
+
+def test_recent_pending_run_still_blocks_manual_request(pg_session):
+    db = pg_session
+    _pg_allocation_trigger_factory(db)
+    set_tenant_hotel_context(db, 1)
+    now = datetime.now(timezone.utc)
+    recent = AllocationRun(
+        hotel_id=1,
+        trigger_type="manual_api_recalculate",
+        status=AllocationRunStatusEnum.PENDING,
+        created_at=now - timedelta(minutes=14),
+    )
+    db.add(recent)
+    db.flush()
+
+    with pytest.raises(AllocationRequestInProgress):
+        request_manual_allocation(
+            db,
+            hotel_id=1,
+            apply=True,
+            horizon_start=None,
+            horizon_end=None,
+            now=now,
+        )
+
+    db.refresh(recent)
+    assert recent.status == AllocationRunStatusEnum.PENDING
+    assert recent.finished_at is None
+
+
+def test_stale_automatic_pending_run_is_failed_before_coalescing(pg_session):
+    db = pg_session
+    _pg_allocation_trigger_factory(db)
+    set_tenant_hotel_context(db, 1)
+    now = datetime.now(timezone.utc)
+    stale = AllocationRun(
+        hotel_id=1,
+        trigger_type="reservation_date_change",
+        status=AllocationRunStatusEnum.PENDING,
+        created_at=now - timedelta(minutes=16),
+    )
+    db.add(stale)
+    db.flush()
+
+    replacement = _request_allocation_proposal(
+        db,
+        hotel_id=1,
+        trigger_type="reservation_update",
+        now=now,
+    )
+    db.flush()
+    db.refresh(stale)
+
+    assert stale.status == AllocationRunStatusEnum.FAILED
+    assert stale.finished_at is not None
+    assert stale.error_message == PENDING_ALLOCATION_STALE_REASON
+    assert replacement.status == AllocationRunStatusEnum.PENDING
+    assert replacement.id != stale.id
+
+
+def test_worker_fails_stale_pending_run_without_claiming_it(pg_session):
+    db = pg_session
+    _pg_allocation_trigger_factory(db)
+    set_tenant_hotel_context(db, 1)
+    now = datetime.now(timezone.utc)
+    stale = AllocationRun(
+        hotel_id=1,
+        trigger_type="manual_api_recalculate",
+        status=AllocationRunStatusEnum.PENDING,
+        created_at=now - timedelta(minutes=16),
+    )
+    db.add(stale)
+    db.flush()
+
+    claimed = _claim_request(db, hotel_id=1, now=now)
+    db.refresh(stale)
+
+    assert claimed is None
+    assert stale.status == AllocationRunStatusEnum.FAILED
+    assert stale.finished_at is not None
+    assert stale.error_message == PENDING_ALLOCATION_STALE_REASON
+
+
+def test_postgres_stale_pending_cleanup_skips_worker_locked_run(pg_engine):
+    Session = sessionmaker(bind=pg_engine, expire_on_commit=False)
+    setup = Session()
+    setup.add(
+        HotelConfiguration(
+            id=9904,
+            deposit_percentage=30,
+            deposit_policy_configured=True,
+            subscription_active=True,
+        )
+    )
+    setup.flush()
+    set_tenant_hotel_context(setup, 9904)
+    stale = AllocationRun(
+        hotel_id=9904,
+        trigger_type="manual_api_preview",
+        status=AllocationRunStatusEnum.PENDING,
+        created_at=datetime.now(timezone.utc) - timedelta(minutes=16),
+    )
+    setup.add(stale)
+    setup.commit()
+
+    worker = Session()
+    reaper = Session()
+    try:
+        set_tenant_hotel_context(worker, 9904)
+        set_tenant_hotel_context(reaper, 9904)
+        worker_request = (
+            worker.query(AllocationRun)
+            .filter(AllocationRun.id == stale.id, AllocationRun.hotel_id == 9904)
+            .enable_eagerloads(False)
+            .with_for_update(of=AllocationRun)
+            .one()
+        )
+        worker_request.status = AllocationRunStatusEnum.RUNNING
+        worker_request.started_at = datetime.now(timezone.utc)
+        worker.flush()
+
+        failed_count = fail_stale_pending_allocation_requests(
+            reaper,
+            hotel_id=9904,
+            now=datetime.now(timezone.utc),
+        )
+        reaper.commit()
+        worker.commit()
+
+        assert failed_count == 0
+        assert worker_request.status == AllocationRunStatusEnum.RUNNING
+    finally:
+        worker.rollback()
+        reaper.rollback()
+        worker.close()
+        reaper.close()
+        setup.close()
 
 
 def test_postgres_background_trigger_commits_before_best_effort_celery_dispatch(

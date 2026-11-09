@@ -16,6 +16,7 @@ from app.models.allocation import (
 )
 from app.services.allocation_trigger_service import (
     ALLOCATION_PROPOSAL_TRIGGER_TYPES,
+    fail_stale_pending_allocation_requests,
 )
 from app.services.distributed_lock import (
     DistributedLockBusy,
@@ -56,6 +57,16 @@ def _claim_request(
         row.started_at = None
         row.error_message = None
     if stale_running:
+        db.commit()
+
+    failed_stale_pending = fail_stale_pending_allocation_requests(
+        db,
+        hotel_id=hotel_id,
+        now=now,
+    )
+    if failed_stale_pending:
+        # Persist terminal failures even when this hotel has no newer request
+        # to claim during this scheduled pass.
         db.commit()
 
     request = (

@@ -19,6 +19,11 @@ from app.services.timezones import hotel_today
 logger = logging.getLogger(__name__)
 
 DEFAULT_ALLOCATION_HORIZON_DAYS = 90
+PENDING_ALLOCATION_STALE_AFTER = timedelta(minutes=15)
+PENDING_ALLOCATION_STALE_REASON = (
+    "La solicitud no fue tomada por el procesador dentro de 15 minutos. "
+    "Volvé a ejecutar la asignación."
+)
 RESERVATION_CREATED_ALLOCATION_TRIGGER = "reservation_created_auto_proposal"
 ALLOCATION_PROPOSAL_TRIGGER_TYPES = frozenset(
     {
@@ -46,16 +51,53 @@ def _pending_proposal_query(db: Session, hotel_id: int):
     )
 
 
+def fail_stale_pending_allocation_requests(
+    db: Session,
+    *,
+    hotel_id: int,
+    now: datetime | None = None,
+) -> int:
+    """Fail unclaimed requests after three five-minute processing cycles.
+
+    ``SKIP LOCKED`` leaves a request alone while a worker is claiming it. The
+    caller owns the transaction so reservation-triggered requests stay atomic
+    with their business write.
+    """
+    now_utc = now or datetime.now(timezone.utc)
+    if now_utc.tzinfo is None:
+        now_utc = now_utc.replace(tzinfo=timezone.utc)
+    now_utc = now_utc.astimezone(timezone.utc)
+    database_now = now_utc.replace(tzinfo=None)
+    stale_before = (now_utc - PENDING_ALLOCATION_STALE_AFTER).replace(tzinfo=None)
+    stale_requests = (
+        _pending_proposal_query(db, hotel_id)
+        .filter(AllocationRun.created_at <= stale_before)
+        .order_by(AllocationRun.created_at.asc(), AllocationRun.id.asc())
+        .enable_eagerloads(False)
+        .with_for_update(skip_locked=True, of=AllocationRun)
+        .all()
+    )
+    for request in stale_requests:
+        request.status = AllocationRunStatusEnum.FAILED
+        request.finished_at = database_now
+        request.error_message = PENDING_ALLOCATION_STALE_REASON
+    if stale_requests:
+        db.flush()
+    return len(stale_requests)
+
+
 def _request_allocation_proposal(
     db: Session,
     *,
     hotel_id: int,
     trigger_type: str,
+    now: datetime | None = None,
 ) -> AllocationRun:
     """Coalesce automatic invalidations into one pending hotel proposal."""
     if trigger_type not in ALLOCATION_PROPOSAL_TRIGGER_TYPES:
         raise ValueError("Unsupported automatic allocation trigger")
 
+    fail_stale_pending_allocation_requests(db, hotel_id=hotel_id, now=now)
     pending_query = _pending_proposal_query(db, hotel_id)
     existing = pending_query.order_by(AllocationRun.id.asc()).first()
     if existing is not None:
@@ -87,9 +129,11 @@ def request_manual_allocation(
     apply: bool,
     horizon_start: date | None,
     horizon_end: date | None,
+    now: datetime | None = None,
 ) -> AllocationRun:
     """Persist a manual run request so the HTTP request never runs the solver."""
     trigger_type = "manual_api_recalculate" if apply else "manual_api_preview"
+    fail_stale_pending_allocation_requests(db, hotel_id=hotel_id, now=now)
     pending_query = _pending_proposal_query(db, hotel_id)
     if pending_query.first() is not None:
         raise AllocationRequestInProgress("An allocation request is already queued for this hotel")
