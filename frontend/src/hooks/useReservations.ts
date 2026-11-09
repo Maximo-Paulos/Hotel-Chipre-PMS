@@ -113,7 +113,8 @@ export function useReservation(reservationId?: number) {
     queryFn: ({ signal }) => getReservation(reservationId!, session, signal),
     enabled: Boolean(reservationId) && hasValidSession(session),
     staleTime: 1000 * 15,
-    retry: false
+    retry: retryTransientServiceUnavailable,
+    retryDelay: transientServiceUnavailableRetryDelay
   });
 }
 
@@ -181,7 +182,8 @@ export function useReservationOperationsSummary(reservationId?: number) {
     queryFn: ({ signal }) => getReservationOperationsSummary(reservationId!, session, signal),
     enabled: Boolean(reservationId) && hasValidSession(session),
     staleTime: 1000 * 15,
-    retry: false
+    retry: retryTransientServiceUnavailable,
+    retryDelay: transientServiceUnavailableRetryDelay
   });
 }
 

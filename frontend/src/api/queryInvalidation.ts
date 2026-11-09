@@ -55,6 +55,7 @@ const ROOM_QUERY_PREFIXES = new Set([
 type ReservationRecordRefreshOptions = {
   includePaymentSummary?: boolean;
   includePaymentLinks?: boolean;
+  includeCash?: boolean;
 };
 
 /**
@@ -149,7 +150,8 @@ export const updateReservationCacheFromCommittedPatch = async <T extends { id: n
   queryClient: QueryClient,
   hotelId: number | null | undefined,
   reservationId: number | null | undefined,
-  patch: Partial<T>
+  patch: Partial<T>,
+  options: { invalidate?: boolean } = {}
 ): Promise<void> => {
   if (
     !validHotelId(hotelId) ||
@@ -179,7 +181,7 @@ export const updateReservationCacheFromCommittedPatch = async <T extends { id: n
     )
   );
 
-  invalidateQueriesInBackground(queryClient, filters);
+  if (options.invalidate !== false) invalidateQueriesInBackground(queryClient, filters);
 };
 
 const refreshReservationQueries = (
@@ -225,6 +227,24 @@ export const refreshReservationRecordState = (
   reservationId?: number,
   options: ReservationRecordRefreshOptions = {}
 ) => refreshReservationQueries(queryClient, hotelId, { reservationId, ...options });
+
+/** Apply the committed reservation response before one scoped background refresh. */
+export const reconcileCommittedReservationRecord = async <T extends { id: number }>(
+  queryClient: QueryClient,
+  hotelId: number | null | undefined,
+  reservationId: number,
+  committedReservation: Partial<T>,
+  options: ReservationRecordRefreshOptions = {}
+): Promise<void> => {
+  await updateReservationCacheFromCommittedPatch(
+    queryClient,
+    hotelId,
+    reservationId,
+    committedReservation,
+    { invalidate: false }
+  );
+  await refreshReservationRecordState(queryClient, hotelId, reservationId, options);
+};
 
 /** A new booking changes reservation lists, pending actions, and occupancy.
  * It does not create a room-movement group, payment, or cash movement. */

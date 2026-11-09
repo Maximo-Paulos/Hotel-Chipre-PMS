@@ -635,3 +635,59 @@ test("a known cursor reset refetches every active hotel domain and no other tena
   unsubscribe.forEach((stop) => stop());
   client.clear();
 });
+
+test("a committed pending-balance extension patches reservation projections and skips payment-link and cash refreshes", async (context) => {
+  const { invalidation } = await loadQueryModules(context);
+  const hotelId = 41;
+  const reservationId = 703;
+  const previous = {
+    id: reservationId,
+    total_amount: 120000,
+    amount_paid: 120000,
+    check_out_date: "2026-11-12",
+    status: "fully_paid",
+    version: 4
+  };
+  const committed = {
+    ...previous,
+    total_amount: 180000,
+    check_out_date: "2026-11-13",
+    status: "pending",
+    version: 5
+  };
+  const client = new QueryClient();
+  const detailKey = ["reservation", hotelId, reservationId];
+  const listKey = ["reservations", hotelId, { status: "fully_paid" }];
+  const operationsKey = ["reservation-operations", hotelId, reservationId];
+  const summaryKey = ["payment-summary", hotelId, reservationId];
+  const paymentLinksKey = ["payment-links", hotelId, reservationId];
+  const cashKey = ["cash-latest-close-report", hotelId, "pending"];
+  const otherHotelListKey = ["reservations", hotelId + 1, {}];
+  client.setQueryData(detailKey, previous);
+  client.setQueryData(listKey, [previous]);
+  client.setQueryData(operationsKey, { reservation_id: reservationId });
+  client.setQueryData(summaryKey, { reservation_id: reservationId });
+  client.setQueryData(paymentLinksKey, []);
+  client.setQueryData(cashKey, []);
+  client.setQueryData(otherHotelListKey, [previous]);
+
+  await invalidation.reconcileCommittedReservationRecord(
+    client,
+    hotelId,
+    reservationId,
+    committed,
+    { includePaymentSummary: true }
+  );
+
+  assert.deepEqual(client.getQueryData(detailKey), committed);
+  assert.deepEqual(client.getQueryData(listKey), [committed]);
+  assert.equal(client.getQueryState(detailKey)?.isInvalidated, true);
+  assert.equal(client.getQueryState(listKey)?.isInvalidated, true);
+  assert.equal(client.getQueryState(operationsKey)?.isInvalidated, true);
+  assert.equal(client.getQueryState(summaryKey)?.isInvalidated, true);
+  assert.equal(client.getQueryState(paymentLinksKey)?.isInvalidated ?? false, false);
+  assert.equal(client.getQueryState(cashKey)?.isInvalidated ?? false, false);
+  assert.equal(client.getQueryState(otherHotelListKey)?.isInvalidated ?? false, false);
+  assert.deepEqual(client.getQueryData(otherHotelListKey), [previous]);
+  client.clear();
+});
