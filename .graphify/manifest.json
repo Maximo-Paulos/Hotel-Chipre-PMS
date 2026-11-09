@@ -1284,8 +1284,8 @@
     "hash": "4f9ecfa3cb709066edc3c9fcadf89424"
   },
   "frontend/src/hooks/useGemmaChat.ts": {
-    "mtime": 1794169911478.7092,
-    "hash": "8bbdbd9edf85bd5fcc8025eddf063548"
+    "mtime": 1794171588025.186,
+    "hash": "43642eec072732c511cc6d0c8761eff0"
   },
   "frontend/src/hooks/useGuests.ts": {
     "mtime": 1794169911478.8782,
@@ -1428,8 +1428,8 @@
     "hash": "f33c7fbaaca0f8a4cb245052906a709e"
   },
   "frontend/src/views/protected/LaundryPage.tsx": {
-    "mtime": 1794169911490.011,
-    "hash": "7f1db3b0673ac63846b8ea2468248c8e"
+    "mtime": 1794171602502.5254,
+    "hash": "ff0839fbe9035d812a51a5def2c554bf"
   },
   "frontend/src/views/protected/RateCalendarPage.tsx": {
     "mtime": 1794169911490.7998,
@@ -1444,16 +1444,16 @@
     "hash": "ecb14e147d457bf4e30fad1a4e9e0c55"
   },
   "frontend/src/views/protected/RoomsPage.tsx": {
-    "mtime": 1794169911491.5212,
-    "hash": "ad4b6f210eaf2b0d6aea6f83391db93d"
+    "mtime": 1794181304440.8015,
+    "hash": "ca85e4c32987bfab3ac708c66a7094d9"
   },
   "frontend/src/views/protected/SettingsApiKeysPage.tsx": {
     "mtime": 1794169911491.598,
     "hash": "55e20253ef3b7cf5b5033305152a46f9"
   },
   "frontend/src/views/protected/SettingsAssistantPage.tsx": {
-    "mtime": 1794169911491.69,
-    "hash": "0eaa02c36b97e1d5387c9fdf8083c63d"
+    "mtime": 1794171588026.877,
+    "hash": "a6088e98ff6c81470147e200d26cf3fb"
   },
   "frontend/src/views/protected/SettingsConnectionsPage.tsx": {
     "mtime": 1794169911491.785,
@@ -1496,8 +1496,8 @@
     "hash": "57fe8c7c47690d91313074ef79e0e8da"
   },
   "frontend/src/views/protected/analytics/AnalyticsPages.tsx": {
-    "mtime": 1794169956140.2253,
-    "hash": "229367350611513be96a3a2228afd946"
+    "mtime": 1794182039022.1414,
+    "hash": "eb5a7689c8058d593d762e69a80c4958"
   },
   "frontend/src/views/public/AcceptInvitationPage.tsx": {
     "mtime": 1794169911493.37,
@@ -2764,28 +2764,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1794169961358.4023,
-    "hash": "bbb78654e3aac6db5e3eb0ad4076993f"
+    "mtime": 1794182174317.9087,
+    "hash": "bd1e4855a1f2ea25bccd99040a39d841"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1794169961358.4875,
-    "hash": "67374d41bbd9a315925273f40ce918a6"
+    "mtime": 1794182173600.313,
+    "hash": "93f92caeeeb780baa941e6e348dc4356"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1794169961358.6633,
-    "hash": "bd4d63f285a1e31f0437319a67ce2081"
+    "mtime": 1794182174306.2095,
+    "hash": "11fe1d3f92665f7fc221e38ab4ae2774"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1794169961358.749,
-    "hash": "227034fe05a1026e3ab4c7cbabce1789"
+    "mtime": 1794182173612.7246,
+    "hash": "f4929da0c7f0dbc8c79e08eab5982b3e"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1794169961358.8362,
-    "hash": "18202784551d738bd43c5bca65af4274"
+    "mtime": 1794182174293.5115,
+    "hash": "bb4b33189750235b6eb58aad651a12bd"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1794169961358.9255,
-    "hash": "6ed5ce7f023376a76b512faad75d3aba"
+    "mtime": 1794182173799.9866,
+    "hash": "c7cb2f081715a1a539f5d67cbcae3974"
   },
   "qa/evidence/README.md": {
     "mtime": 1794169911499.7566,
@@ -3500,8 +3500,8 @@
     "hash": "316e05345a06b6b13524694a374513ba"
   },
   "frontend/e2e/analytics-success.spec.ts": {
-    "mtime": 1794169956140.0298,
-    "hash": "5ed668c560ae7017f13cbd1a5ced6b7f"
+    "mtime": 1794184316216.014,
+    "hash": "b8a68e7db79f560bcabd78afa5d9b98d"
   },
   "frontend/e2e/guest-companion-journey.spec.ts": {
     "mtime": 1794169911417.6113,
@@ -3760,8 +3760,8 @@
     "hash": "e5170358b3b8914d25107ac62d246e8d"
   },
   "frontend/e2e/laundry-vendor-cycle-journey.spec.ts": {
-    "mtime": 1794169911418.97,
-    "hash": "5e771d683771fc1abc4bdfcf25d5b97f"
+    "mtime": 1794171602501.7852,
+    "hash": "127deea0ce530ce5a654ec71fe5824ae"
   },
   "frontend/src/api/laundryVendor.ts": {
     "mtime": 1794169911470.9949,
@@ -7480,8 +7480,8 @@
     "hash": "36d5b5214ce83552291c03c251d6f820"
   },
   "frontend/e2e/allocation-operator-flows.spec.ts": {
-    "mtime": 1794169911414.2324,
-    "hash": "b50a781b4f230b79e8e99c5df724985b"
+    "mtime": 1794181304440.412,
+    "hash": "f741d735c7f0f14362d82defe40604af"
   },
   "frontend/laundry-discrepancy-ui.test.mjs": {
     "mtime": 1794169911462.7046,
@@ -7810,5 +7810,9 @@
   "tests/test_operational_tasks_postgres.py": {
     "mtime": 1794169921973.0989,
     "hash": "8525dc65173268fe819e0545dbe54ee3"
+  },
+  "frontend/e2e/assistant-permission-guard.spec.ts": {
+    "mtime": 1794171588025.0334,
+    "hash": "a3cae98431a6a991d484068be6a05f7d"
   }
 }
