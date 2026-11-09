@@ -46,7 +46,6 @@ from app.services.analytics_contracts import (
     resolve_guest_segment,
     split_amount_evenly,
 )
-from app.services.analytics_service import _comparison_with_metrics
 from app.services.analytics_facts import _currency_pair
 from app.services.analytics_service import (
     _comparison_with_metrics,
