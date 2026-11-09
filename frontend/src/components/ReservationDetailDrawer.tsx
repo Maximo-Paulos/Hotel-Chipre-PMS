@@ -51,7 +51,7 @@ import { useRestrictionOverridePrompt } from "../hooks/useRestrictionOverridePro
 import { useGuardedMutation } from "../hooks/useGuardedMutation";
 import { useBusinessClock } from "../hooks/useBusinessClock";
 import { useSession } from "../state/session";
-import { formatMoney, normalizeCurrencyCode } from "../utils/currency";
+import { formatMoney, formatMoneyExact, normalizeCurrencyCode } from "../utils/currency";
 import { calculateCashTender, calculateCashTip } from "../utils/cashTender.mjs";
 import { isPaymentQuoteOverBalanceError } from "../utils/paymentQuoteError.mjs";
 import {
@@ -2120,22 +2120,22 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                     <div>
                       <p className="text-xs text-slate-500">{t("drawer.billing.operationalTotal")}</p>
                       <p className="font-semibold">
-                        {formatMoney(operations?.financial_summary?.operational_total_amount ?? summary.total_amount, currencyCode)}
+                        {formatMoneyExact(operations?.financial_summary?.operational_total_amount ?? summary.total_amount, currencyCode)}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">{t("drawer.billing.paid")}</p>
-                      <p className="font-semibold">{formatMoney(summary.amount_paid, currencyCode)}</p>
+                      <p className="font-semibold">{formatMoneyExact(summary.amount_paid, currencyCode)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">{t("drawer.billing.operationalBalance")}</p>
                       <p className="font-semibold text-slate-900" data-testid="drawer-balance-due">
-                        {formatMoney(operationalBalanceDue ?? 0, currencyCode)}
+                        {formatMoneyExact(operationalBalanceDue ?? 0, currencyCode)}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">{t("drawer.billing.depositRequired")}</p>
-                      <p className="font-semibold">{formatMoney(summary.deposit_required, currencyCode)}</p>
+                      <p className="font-semibold">{formatMoneyExact(summary.deposit_required, currencyCode)}</p>
                     </div>
                   </div>
                 ) : (
