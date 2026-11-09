@@ -131,6 +131,112 @@ test("reservation refresh invalidates only related data and the selected entity"
   client.clear();
 });
 
+test("a committed collaborative room change updates only that hotel's reservation list and detail caches", async (context) => {
+  const { invalidation } = await loadQueryModules(context);
+  const hotelId = 41;
+  const reservationId = 703;
+  const detailKey = ["reservation", hotelId, reservationId];
+  const confirmedListKey = ["reservations", hotelId, { status: "confirmed" }];
+  const allReservationsListKey = ["reservations", hotelId, { limit: 200 }];
+  const otherReservationKey = ["reservation", hotelId, reservationId + 1];
+  const otherHotelListKey = ["reservations", hotelId + 1, { status: "confirmed" }];
+  const client = new QueryClient();
+  const reservation = { id: reservationId, room_id: 3, room_number: "3", status: "confirmed" };
+  client.setQueryData(detailKey, reservation);
+  client.setQueryData(confirmedListKey, [reservation, { id: reservationId + 1, room_id: 5, room_number: "5" }]);
+  client.setQueryData(allReservationsListKey, [reservation]);
+  client.setQueryData(otherReservationKey, { id: reservationId + 1, room_id: 5, room_number: "5" });
+  client.setQueryData(otherHotelListKey, [reservation]);
+
+  await invalidation.updateReservationCacheFromCommittedPatch(client, hotelId, reservationId, {
+    room_id: 4,
+    room_number: "4",
+    version: 12
+  });
+
+  assert.deepEqual(client.getQueryData(detailKey), {
+    ...reservation,
+    room_id: 4,
+    room_number: "4",
+    version: 12
+  });
+  assert.deepEqual(client.getQueryData(confirmedListKey), [
+    { ...reservation, room_id: 4, room_number: "4", version: 12 },
+    { id: reservationId + 1, room_id: 5, room_number: "5" }
+  ]);
+  assert.deepEqual(client.getQueryData(allReservationsListKey), [
+    { ...reservation, room_id: 4, room_number: "4", version: 12 }
+  ]);
+  assert.deepEqual(client.getQueryData(otherReservationKey), {
+    id: reservationId + 1,
+    room_id: 5,
+    room_number: "5"
+  });
+  assert.deepEqual(client.getQueryData(otherHotelListKey), [reservation]);
+  assert.equal(client.getQueryState(detailKey)?.isInvalidated, true);
+  assert.equal(client.getQueryState(confirmedListKey)?.isInvalidated, true);
+  assert.equal(client.getQueryState(allReservationsListKey)?.isInvalidated, true);
+  assert.equal(client.getQueryState(otherReservationKey)?.isInvalidated ?? false, false);
+  assert.equal(client.getQueryState(otherHotelListKey)?.isInvalidated ?? false, false);
+  client.clear();
+});
+
+test("a pre-commit reservation read cannot overwrite the committed cache patch", async (context) => {
+  const { invalidation } = await loadQueryModules(context);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryKey = ["reservation", 41, 703];
+  const previousReservation = { id: 703, room_id: 3, room_number: "3" };
+  client.setQueryData(queryKey, previousReservation);
+
+  const pendingReads = [];
+  let readCount = 0;
+  const observer = new QueryObserver(client, {
+    queryKey,
+    queryFn: () => new Promise((resolve) => {
+      readCount += 1;
+      pendingReads.push(resolve);
+    }),
+    staleTime: Infinity,
+    retry: false
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+  void client.invalidateQueries({ queryKey, refetchType: "active" }).catch(() => undefined);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(readCount, 1, "a stale pre-commit read should be in flight");
+
+  await invalidation.updateReservationCacheFromCommittedPatch(client, 41, 703, {
+    room_id: 4,
+    room_number: "4"
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(readCount, 2, "the active detail view should start a fresh reconciliation read");
+  assert.equal(client.getQueryData(queryKey)?.room_id, 4);
+
+  pendingReads[0]({ ...previousReservation, room_id: 3, room_number: "3" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(client.getQueryData(queryKey)?.room_id, 4, "the old read must not replace the committed room");
+
+  pendingReads[1]({ id: 703, room_id: 4, room_number: "4" });
+  await client.getQueryCache().find({ queryKey })?.promise;
+  assert.deepEqual(client.getQueryData(queryKey), { id: 703, room_id: 4, room_number: "4" });
+  unsubscribe();
+  client.clear();
+});
+
+test("the collaborative reservation edit applies the committed patch to its cached room presentation", async () => {
+  const source = await readFile(new URL("./src/views/protected/ReservationsPage.tsx", import.meta.url), "utf8");
+  const saveBranch = source.match(/if \(collaborativeReservation\.isDirty\) \{[\s\S]*?updateReservationCacheFromCommittedPatch\([\s\S]*?\n\s{14}\}/)?.[0];
+  const regularSaveBranch = source.match(/const updatedReservation = await updateMutation\.mutateAsync\([\s\S]*?await updateReservationCacheFromCommittedPatch\([\s\S]*?\n\s{12}\);/)?.[0];
+
+  assert.ok(saveBranch, "a committed collaborative reservation save must update the reservation cache");
+  assert.match(saveBranch, /await collaborativeReservation\.save\(\)/);
+  assert.match(saveBranch, /result\.resource_id === editing\.id/);
+  assert.match(saveBranch, /reservationPatch\.room_number/);
+  assert.match(saveBranch, /updateReservationCacheFromCommittedPatch/);
+  assert.ok(regularSaveBranch, "a committed regular reservation save must update the reservation cache");
+  assert.match(regularSaveBranch, /updatedReservation/);
+});
+
 test("committed reservation mutations do not wait for active query refetches", async (context) => {
   const { invalidation } = await loadQueryModules(context);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
