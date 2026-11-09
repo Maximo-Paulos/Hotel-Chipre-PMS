@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T21:14:16.914Z",
+  "generatedAt": "2026-11-09T19:36:29.233Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -931,38 +931,6 @@
       "warnings": []
     },
     {
-      "id": "flow:api_queryinvalidation_reconcilecommittedreservationrecord",
-      "name": "reconcileCommittedReservationRecord",
-      "entryPoint": "api_queryinvalidation_reconcilecommittedreservationrecord",
-      "entryPointId": "api_queryinvalidation_reconcilecommittedreservationrecord",
-      "path": [
-        "api_queryinvalidation_reconcilecommittedreservationrecord",
-        "api_queryinvalidation_refreshreservationrecordstate",
-        "api_queryinvalidation_updatereservationcachefromcommittedpatch",
-        "api_queryinvalidation_refreshreservationqueries",
-        "api_queryinvalidation_invalidatequeriesinbackground",
-        "api_queryinvalidation_validhotelid",
-        "api_queryinvalidation_refreshhotelqueries"
-      ],
-      "qualifiedPath": [
-        "api_queryinvalidation_reconcilecommittedreservationrecord",
-        "api_queryinvalidation_refreshreservationrecordstate",
-        "api_queryinvalidation_updatereservationcachefromcommittedpatch",
-        "api_queryinvalidation_refreshreservationqueries",
-        "api_queryinvalidation_invalidatequeriesinbackground",
-        "api_queryinvalidation_validhotelid",
-        "api_queryinvalidation_refreshhotelqueries"
-      ],
-      "depth": 3,
-      "nodeCount": 7,
-      "fileCount": 1,
-      "files": [
-        "frontend/src/api/queryInvalidation.ts"
-      ],
-      "criticality": 0.43,
-      "warnings": []
-    },
-    {
       "id": "flow:api_queryinvalidation_refreshcashstate",
       "name": "refreshCashState",
       "entryPoint": "api_queryinvalidation_refreshcashstate",
@@ -1783,6 +1751,32 @@
       ],
       "qualifiedPath": [
         "api_queryinvalidation_refreshreservationgueststate",
+        "api_queryinvalidation_refreshreservationqueries",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid"
+      ],
+      "depth": 2,
+      "nodeCount": 4,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
+      ],
+      "criticality": 0.42,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_refreshreservationrecordstate",
+      "name": "refreshReservationRecordState",
+      "entryPoint": "api_queryinvalidation_refreshreservationrecordstate",
+      "entryPointId": "api_queryinvalidation_refreshreservationrecordstate",
+      "path": [
+        "api_queryinvalidation_refreshreservationrecordstate",
+        "api_queryinvalidation_refreshreservationqueries",
+        "api_queryinvalidation_refreshhotelqueries",
+        "api_queryinvalidation_validhotelid"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_refreshreservationrecordstate",
         "api_queryinvalidation_refreshreservationqueries",
         "api_queryinvalidation_refreshhotelqueries",
         "api_queryinvalidation_validhotelid"
@@ -3191,16 +3185,14 @@
       "entryPointId": "protected_settingsconnectionspage_getprovidererrormessage",
       "path": [
         "protected_settingsconnectionspage_getprovidererrormessage",
-        "protected_settingsconnectionspage_geterrormessage",
-        "protected_settingsconnectionspage_getprovidermessage"
+        "protected_settingsconnectionspage_geterrormessage"
       ],
       "qualifiedPath": [
         "protected_settingsconnectionspage_getprovidererrormessage",
-        "protected_settingsconnectionspage_geterrormessage",
-        "protected_settingsconnectionspage_getprovidermessage"
+        "protected_settingsconnectionspage_geterrormessage"
       ],
       "depth": 1,
-      "nodeCount": 3,
+      "nodeCount": 2,
       "fileCount": 1,
       "files": [
         "frontend/src/views/protected/SettingsConnectionsPage.tsx"
@@ -4212,6 +4204,30 @@
       "fileCount": 1,
       "files": [
         "app/api/auth.py"
+      ],
+      "criticality": 0.41,
+      "warnings": []
+    },
+    {
+      "id": "flow:api_queryinvalidation_updatereservationcachefromcommittedpatch",
+      "name": "updateReservationCacheFromCommittedPatch",
+      "entryPoint": "api_queryinvalidation_updatereservationcachefromcommittedpatch",
+      "entryPointId": "api_queryinvalidation_updatereservationcachefromcommittedpatch",
+      "path": [
+        "api_queryinvalidation_updatereservationcachefromcommittedpatch",
+        "api_queryinvalidation_invalidatequeriesinbackground",
+        "api_queryinvalidation_validhotelid"
+      ],
+      "qualifiedPath": [
+        "api_queryinvalidation_updatereservationcachefromcommittedpatch",
+        "api_queryinvalidation_invalidatequeriesinbackground",
+        "api_queryinvalidation_validhotelid"
+      ],
+      "depth": 1,
+      "nodeCount": 3,
+      "fileCount": 1,
+      "files": [
+        "frontend/src/api/queryInvalidation.ts"
       ],
       "criticality": 0.41,
       "warnings": []
