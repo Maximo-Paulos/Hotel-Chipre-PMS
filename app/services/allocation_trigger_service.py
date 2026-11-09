@@ -21,9 +21,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_ALLOCATION_HORIZON_DAYS = 90
 PENDING_ALLOCATION_STALE_AFTER = timedelta(minutes=15)
 PENDING_ALLOCATION_STALE_REASON = (
-    "La solicitud no fue tomada por el procesador dentro de 15 minutos. "
+    "La solicitud superó el tiempo máximo de espera en cola. "
     "Volvé a ejecutar la asignación."
 )
+ALLOCATION_PROCESSING_INTERVAL = timedelta(minutes=5)
+MAX_HOTELS_PER_PROCESSING_CYCLE = 3
 RESERVATION_CREATED_ALLOCATION_TRIGGER = "reservation_created_auto_proposal"
 ALLOCATION_PROPOSAL_TRIGGER_TYPES = frozenset(
     {
@@ -43,6 +45,28 @@ class AllocationRequestInProgress(RuntimeError):
     """A hotel already has a pending allocation request."""
 
 
+def pending_allocation_stale_after(
+    *,
+    active_hotel_count: int,
+) -> timedelta:
+    """Allow one bounded queue scan plus a grace cycle before failing PENDING.
+
+    The caller must be a global worker and derive this count from its active
+    hotel batch. Tenant-scoped API requests must not inspect other hotels to
+    decide whether to expire their own pending row.
+    """
+    if type(active_hotel_count) is not int or active_hotel_count < 0:
+        raise ValueError("active_hotel_count must be a non-negative integer")
+
+    page_count = max(
+        1,
+        (active_hotel_count + MAX_HOTELS_PER_PROCESSING_CYCLE - 1)
+        // MAX_HOTELS_PER_PROCESSING_CYCLE,
+    )
+    queue_scan_window = ALLOCATION_PROCESSING_INTERVAL * (page_count + 1)
+    return max(PENDING_ALLOCATION_STALE_AFTER, queue_scan_window)
+
+
 def _pending_proposal_query(db: Session, hotel_id: int):
     return db.query(AllocationRun).filter(
         AllocationRun.hotel_id == hotel_id,
@@ -56,19 +80,26 @@ def fail_stale_pending_allocation_requests(
     *,
     hotel_id: int,
     now: datetime | None = None,
+    stale_after: timedelta | None = None,
 ) -> int:
-    """Fail unclaimed requests after three five-minute processing cycles.
+    """Fail unclaimed requests only with the global worker's computed TTL.
 
     ``SKIP LOCKED`` leaves a request alone while a worker is claiming it. The
     caller owns the transaction so reservation-triggered requests stay atomic
-    with their business write.
+    with their business write. A missing TTL is a deliberate no-op: tenant API
+    callers cannot derive a safe cross-hotel queue SLA.
     """
+    if stale_after is None:
+        return 0
+    if not isinstance(stale_after, timedelta) or stale_after <= timedelta(0):
+        raise ValueError("stale_after must be a positive timedelta")
+
     now_utc = now or datetime.now(timezone.utc)
     if now_utc.tzinfo is None:
         now_utc = now_utc.replace(tzinfo=timezone.utc)
     now_utc = now_utc.astimezone(timezone.utc)
     database_now = now_utc.replace(tzinfo=None)
-    stale_before = (now_utc - PENDING_ALLOCATION_STALE_AFTER).replace(tzinfo=None)
+    stale_before = (now_utc - stale_after).replace(tzinfo=None)
     stale_requests = (
         _pending_proposal_query(db, hotel_id)
         .filter(AllocationRun.created_at <= stale_before)

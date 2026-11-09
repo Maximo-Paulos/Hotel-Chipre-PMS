@@ -15,8 +15,11 @@ from app.models.allocation import (
     AllocationRunStatusEnum,
 )
 from app.services.allocation_trigger_service import (
+    ALLOCATION_PROCESSING_INTERVAL,
     ALLOCATION_PROPOSAL_TRIGGER_TYPES,
+    MAX_HOTELS_PER_PROCESSING_CYCLE,
     fail_stale_pending_allocation_requests,
+    pending_allocation_stale_after,
 )
 from app.services.distributed_lock import (
     DistributedLockBusy,
@@ -28,23 +31,25 @@ from app.tasks.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 _STALE_REQUEST_AFTER = timedelta(minutes=5)
-_ALLOCATION_PROCESSING_INTERVAL = timedelta(minutes=5)
-_MAX_HOTELS_PER_PROCESSING_CYCLE = 3
 
 
 def _rotate_active_hotel_ids(
     hotel_ids: list[int], *, now: datetime | None = None
 ) -> list[int]:
-    """Rotate the bounded tenant scan by the durable five-minute wall clock."""
-    if len(hotel_ids) < 2:
+    """Start each durable five-minute scan at the next page of three hotels."""
+    if len(hotel_ids) <= MAX_HOTELS_PER_PROCESSING_CYCLE:
         return hotel_ids
     cycle_time = now or datetime.now(timezone.utc)
     if cycle_time.tzinfo is None:
         cycle_time = cycle_time.replace(tzinfo=timezone.utc)
     cycle_time = cycle_time.astimezone(timezone.utc)
-    interval_seconds = int(_ALLOCATION_PROCESSING_INTERVAL.total_seconds())
+    interval_seconds = int(ALLOCATION_PROCESSING_INTERVAL.total_seconds())
     cycle_number = int(cycle_time.timestamp()) // interval_seconds
-    start_index = cycle_number % len(hotel_ids)
+    page_count = (
+        len(hotel_ids) + MAX_HOTELS_PER_PROCESSING_CYCLE - 1
+    ) // MAX_HOTELS_PER_PROCESSING_CYCLE
+    page_index = cycle_number % page_count
+    start_index = page_index * MAX_HOTELS_PER_PROCESSING_CYCLE
     return hotel_ids[start_index:] + hotel_ids[:start_index]
 
 
@@ -54,8 +59,23 @@ def _session(database_url: str | None = None) -> Session:
     return sessionmaker(bind=engine)()
 
 
+def _active_hotel_count(db: Session) -> int:
+    """Count active tenants only from this globally scoped worker session."""
+    from app.models.hotel_config import HotelConfiguration
+
+    return (
+        db.query(HotelConfiguration.id)
+        .filter(HotelConfiguration.subscription_active.is_(True))
+        .count()
+    )
+
+
 def _claim_request(
-    db: Session, *, hotel_id: int, now: datetime
+    db: Session,
+    *,
+    hotel_id: int,
+    now: datetime,
+    pending_stale_after: timedelta | None = None,
 ) -> tuple[int, str, date | None, date | None] | None:
     """Claim one committed request and release the booking transaction lock."""
     stale_before = now - _STALE_REQUEST_AFTER
@@ -81,6 +101,7 @@ def _claim_request(
         db,
         hotel_id=hotel_id,
         now=now,
+        stale_after=pending_stale_after,
     )
     if failed_stale_pending:
         # Persist terminal failures even when this hotel has no newer request
@@ -119,11 +140,17 @@ def _process_hotel_request(
     now: datetime | None = None,
     allocation_runner: Callable | None = None,
     origin_key: str | None = None,
+    pending_stale_after: timedelta | None = None,
 ) -> dict[str, int]:
     """Process one queued run; existing room changes remain operator proposals."""
     now = now or datetime.now(timezone.utc)
     set_tenant_hotel_context(db, hotel_id)
-    claimed = _claim_request(db, hotel_id=hotel_id, now=now)
+    claimed = _claim_request(
+        db,
+        hotel_id=hotel_id,
+        now=now,
+        pending_stale_after=pending_stale_after,
+    )
     if claimed is None:
         return {"selected": 0, "succeeded": 0, "failed": 0, "deferred": 0}
     request_id, trigger_type, horizon_start, horizon_end = claimed
@@ -242,26 +269,34 @@ def process_recalculation_requests(
     db = _session(database_url)
     try:
         # Rotate the bounded tenant scan on each five-minute cycle. Deferred
-        # requests consume a slot; static ID order could otherwise starve
-        # later hotels when the same early requests keep deferring.
+        # requests consume a slot. Page-aligned starts keep each group within
+        # one full queue scan; walking the remainder still serves sparse work.
         if hotel_id is not None:
             hotel_ids = [hotel_id]
+            stale_after = pending_allocation_stale_after(
+                active_hotel_count=_active_hotel_count(db)
+            )
         else:
             from app.tasks.report_tasks import _active_hotel_ids
 
-            hotel_ids = _rotate_active_hotel_ids(_active_hotel_ids(db))
+            all_active_hotel_ids = _active_hotel_ids(db)
+            stale_after = pending_allocation_stale_after(
+                active_hotel_count=len(all_active_hotel_ids)
+            )
+            hotel_ids = _rotate_active_hotel_ids(all_active_hotel_ids)
         for queued_hotel_id in hotel_ids:
             try:
                 counts = _process_hotel_request(
                     db,
                     hotel_id=queued_hotel_id,
                     origin_key=origin_key if queued_hotel_id == hotel_id else None,
+                    pending_stale_after=stale_after,
                 )
                 for key in totals:
                     totals[key] += counts[key]
                 if (
                     hotel_id is None
-                    and totals["selected"] >= _MAX_HOTELS_PER_PROCESSING_CYCLE
+                    and totals["selected"] >= MAX_HOTELS_PER_PROCESSING_CYCLE
                 ):
                     break
             except Exception as exc:
