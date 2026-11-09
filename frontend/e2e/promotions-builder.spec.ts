@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const backendURL = (process.env.E2E_BACKEND_URL || "http://127.0.0.1:8040").replace(/\/$/, "");
 
 const mockCategories = [
-  { id: 7, name: "Suite Vista Mar", code: "SVM", base_price_per_night: 42000, max_occupancy: 2 }
+  { id: 7, name: "Doble Baño Compartido", code: "DBS", base_price_per_night: 42000, max_occupancy: 2 }
 ];
 
 const createdPromotion = {
@@ -47,9 +47,9 @@ const simulateResult = {
   pricing_source: "canonical_daily_rate",
   hotel_id: 1,
   category_id: 7,
-  check_in: "2026-05-07",
-  check_out: "2026-05-09",
-  nights: 2,
+  check_in: "2026-12-10",
+  check_out: "2026-12-13",
+  nights: 3,
   base_currency: "ARS",
   output_currency: "ARS",
   per_night: [
@@ -86,6 +86,7 @@ const simulateResult = {
 test("owner creates a promotion and simulates its price breakdown", async ({ page }) => {
   let promotionsCreated = false;
   let loggedIn = false;
+  let simulationPayload: unknown = null;
 
   await page.route("https://fonts.googleapis.com/**", async (route) => {
     await route.fulfill({ status: 200, contentType: "text/css", body: "" });
@@ -200,6 +201,7 @@ test("owner creates a promotion and simulates its price breakdown", async ({ pag
       return;
     }
     if (url.pathname.endsWith("/api/promotions/simulate") && request.method() === "POST") {
+      simulationPayload = request.postDataJSON();
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(simulateResult) });
       return;
     }
@@ -239,12 +241,19 @@ test("owner creates a promotion and simulates its price breakdown", async ({ pag
 
   const simulator = page.getByTestId("promotion-simulator");
   await simulator.getByLabel("Categoría").selectOption("7");
-  await simulator.getByLabel("Check-in").fill("2026-05-07");
-  await simulator.getByLabel("Check-out").fill("2026-05-09");
+  await simulator.getByLabel("Check-in").fill("2026-12-10");
+  await simulator.getByLabel("Check-out").fill("2026-12-13");
+  await simulator.getByLabel("Medio de pago").selectOption("cash");
   await simulator.getByRole("button", { name: "Simular" }).click();
 
   const result = page.getByTestId("promotion-simulator-result");
   await expect(result).toBeVisible();
+  expect(simulationPayload).toMatchObject({
+    category_id: 7,
+    check_in_date: "2026-12-10",
+    check_out_date: "2026-12-13",
+    payment_method: "cash"
+  });
   await expect(result.getByText("VERANO2026", { exact: false }).first()).toBeVisible();
   await expect(result.getByText(/Total reserva/)).toBeVisible();
 });

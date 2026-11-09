@@ -682,25 +682,27 @@ function PromotionSimulator() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PromotionSimulateResult | null>(null);
 
-  const canSimulate = Boolean(categoryId && checkIn && checkOut);
-
-  const handleSimulate = async (event: React.FormEvent) => {
+  const handleSimulate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
-    if (!canSimulate) {
+    const formData = new FormData(event.currentTarget);
+    const submittedCategoryId = toIntOrNull(String(formData.get("category_id") ?? ""));
+    const submittedCheckIn = String(formData.get("check_in_date") ?? "").trim();
+    const submittedCheckOut = String(formData.get("check_out_date") ?? "").trim();
+    if (!submittedCategoryId || !submittedCheckIn || !submittedCheckOut) {
       setError("Elegí categoría y fechas de entrada/salida.");
       return;
     }
     try {
       const simulation = await simulateMutation.mutateAsync({
-        category_id: Number(categoryId),
-        check_in_date: checkIn,
-        check_out_date: checkOut,
-        payment_method: paymentMethod || null,
-        target_currency: targetCurrency.trim() ? targetCurrency.trim().toUpperCase() : null,
-        sales_channel_code: salesChannel.trim() || null,
-        guest_id: toIntOrNull(guestId),
-        company_id: toIntOrNull(companyId)
+        category_id: submittedCategoryId,
+        check_in_date: submittedCheckIn,
+        check_out_date: submittedCheckOut,
+        payment_method: String(formData.get("payment_method") ?? "") || null,
+        target_currency: String(formData.get("target_currency") ?? "").trim().toUpperCase() || null,
+        sales_channel_code: String(formData.get("sales_channel_code") ?? "").trim() || null,
+        guest_id: toIntOrNull(String(formData.get("guest_id") ?? "")),
+        company_id: toIntOrNull(String(formData.get("company_id") ?? ""))
       });
       setResult(simulation);
     } catch (err: unknown) {
@@ -720,7 +722,7 @@ function PromotionSimulator() {
       <form onSubmit={handleSimulate} className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <label className={labelClass}>
           Categoría
-          <select className={inputClass} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+          <select name="category_id" className={inputClass} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
             <option value="">Elegir…</option>
             {(categoriesQuery.data ?? []).map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
@@ -729,15 +731,15 @@ function PromotionSimulator() {
         </label>
         <label className={labelClass}>
           Check-in
-          <input type="date" className={inputClass} value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
+          <input name="check_in_date" type="date" className={inputClass} value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
         </label>
         <label className={labelClass}>
           Check-out
-          <input type="date" className={inputClass} value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
+          <input name="check_out_date" type="date" className={inputClass} value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
         </label>
         <label className={labelClass}>
           Medio de pago
-          <select className={inputClass} value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+          <select name="payment_method" className={inputClass} value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
             <option value="">Sin especificar</option>
             {PAYMENT_METHOD_OPTIONS.map((m) => (
               <option key={m.value} value={m.value}>{m.label}</option>
@@ -746,19 +748,19 @@ function PromotionSimulator() {
         </label>
         <label className={labelClass}>
           Moneda destino
-          <input className={inputClass} maxLength={3} value={targetCurrency} onChange={(e) => setTargetCurrency(e.target.value.toUpperCase())} placeholder="Moneda del hotel" />
+          <input name="target_currency" className={inputClass} maxLength={3} value={targetCurrency} onChange={(e) => setTargetCurrency(e.target.value.toUpperCase())} placeholder="Moneda del hotel" />
         </label>
         <label className={labelClass}>
           Canal
-          <input className={inputClass} value={salesChannel} onChange={(e) => setSalesChannel(e.target.value)} placeholder="direct, booking..." />
+          <input name="sales_channel_code" className={inputClass} value={salesChannel} onChange={(e) => setSalesChannel(e.target.value)} placeholder="direct, booking..." />
         </label>
         <label className={labelClass}>
           Huésped (ID)
-          <input type="number" min={1} className={inputClass} value={guestId} onChange={(e) => setGuestId(e.target.value)} />
+          <input name="guest_id" type="number" min={1} className={inputClass} value={guestId} onChange={(e) => setGuestId(e.target.value)} />
         </label>
         <label className={labelClass}>
           Empresa (ID)
-          <input type="number" min={1} className={inputClass} value={companyId} onChange={(e) => setCompanyId(e.target.value)} />
+          <input name="company_id" type="number" min={1} className={inputClass} value={companyId} onChange={(e) => setCompanyId(e.target.value)} />
         </label>
         <div className="flex items-end">
           <button type="submit" className={`${buttonPrimary} w-full`} disabled={simulateMutation.isPending}>
