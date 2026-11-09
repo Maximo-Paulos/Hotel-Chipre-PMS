@@ -104,7 +104,7 @@ import { type HotelConfig } from "../../api/config";
 import { useRooms } from "../../hooks/useRooms";
 import { useSubscriptionStatus } from "../../hooks/useSubscription";
 import { useSession } from "../../state/session";
-import { formatMoney, normalizeCurrencyCode } from "../../utils/currency";
+import { formatMoney, formatMoneyExact, normalizeCurrencyCode } from "../../utils/currency";
 import { countScheduledDepartures } from "../../utils/reservationStats";
 import { escapeHtml, resolveVoucherOperationalBalance } from "../../utils/escapeHtml";
 import { isLargeTotalAdjustment } from "../../utils/largeTotalAdjustment.mjs";
@@ -3072,9 +3072,9 @@ export function ReservationsPage() {
             <p class="label">${htmlText(t("page.voucher.financeLabel"))}</p>
             ${isDeferredCompanyReservation(detailsReservation)
               ? `<p>${htmlText(t("page.details.deferredCompanyFinance"))}</p>`
-              : `<p>${htmlText(t("page.voucher.total"))} <strong>${htmlText(formatMoney(detailsOperations?.financial_summary.operational_total_amount ?? summary?.operational_total_amount ?? detailsReservation.total_amount ?? 0, detailsCurrencyCode))}</strong></p>
-            <p>${htmlText(t("page.voucher.paid"))} <strong>${htmlText(formatMoney(detailsOperations?.financial_summary.amount_paid ?? summary?.amount_paid ?? detailsReservation.amount_paid ?? 0, detailsCurrencyCode))}</strong></p>
-            <p>${htmlText(t("page.voucher.balance"))} <strong>${htmlText(formatMoney(operationalBalanceDue ?? 0, detailsCurrencyCode))}</strong></p>`}
+              : `<p>${htmlText(t("page.voucher.total"))} <strong>${htmlText(formatMoneyExact(detailsOperations?.financial_summary.operational_total_amount ?? summary?.operational_total_amount ?? detailsReservation.total_amount ?? 0, detailsCurrencyCode))}</strong></p>
+            <p>${htmlText(t("page.voucher.paid"))} <strong>${htmlText(formatMoneyExact(detailsOperations?.financial_summary.amount_paid ?? summary?.amount_paid ?? detailsReservation.amount_paid ?? 0, detailsCurrencyCode))}</strong></p>
+            <p>${htmlText(t("page.voucher.balance"))} <strong>${htmlText(formatMoneyExact(operationalBalanceDue ?? 0, detailsCurrencyCode))}</strong></p>`}
           </div>
         </body>
       </html>`;
@@ -5031,21 +5031,21 @@ export function ReservationsPage() {
                       <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2 text-sm text-slate-800">
                         <p className="text-xs text-slate-500">{t("page.form.summaryOperationalTotal")}</p>
                         <p className="font-semibold">
-                          {formatMoney(paymentSummary.operational_total_amount ?? paymentSummary.total_amount ?? 0, editingCurrencyCode)}
+                          {formatMoneyExact(paymentSummary.operational_total_amount ?? paymentSummary.total_amount ?? 0, editingCurrencyCode)}
                         </p>
                       </div>
                       <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2 text-sm text-slate-800">
                         <p className="text-xs text-slate-500">{t("page.form.summaryPaid")}</p>
-                        <p className="font-semibold">{formatMoney(paymentSummary.amount_paid ?? 0, editingCurrencyCode)}</p>
+                        <p className="font-semibold">{formatMoneyExact(paymentSummary.amount_paid ?? 0, editingCurrencyCode)}</p>
                       </div>
                       <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2 text-sm text-slate-800">
                         <p className="text-xs text-slate-500">{t("page.form.summaryDepositRequired")}</p>
-                        <p className="font-semibold">{formatMoney(paymentSummary.deposit_required ?? 0, editingCurrencyCode)}</p>
+                        <p className="font-semibold">{formatMoneyExact(paymentSummary.deposit_required ?? 0, editingCurrencyCode)}</p>
                       </div>
                       <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2 text-sm text-slate-800">
                         <p className="text-xs text-slate-500">{t("page.form.summaryBalance")}</p>
                         <p className="font-semibold">
-                          {formatMoney(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0, editingCurrencyCode)}
+                          {formatMoneyExact(paymentSummary.operational_balance_due ?? paymentSummary.balance_due ?? 0, editingCurrencyCode)}
                         </p>
                       </div>
                     </div>
@@ -5063,13 +5063,13 @@ export function ReservationsPage() {
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600">
                         <span>
                           {t("page.form.summaryBaseAmount")}: <strong className="font-semibold text-slate-800">
-                            {formatMoney(paymentSummary.total_amount ?? 0, editingCurrencyCode)}
+                            {formatMoneyExact(paymentSummary.total_amount ?? 0, editingCurrencyCode)}
                           </strong>
                         </span>
                         <span aria-hidden="true">+</span>
                         <span>
                           {t("page.form.summaryChargesAmount")}: <strong className="font-semibold text-slate-800">
-                            {formatMoney(paymentSummary.billing_adjustment_total, editingCurrencyCode)}
+                            {formatMoneyExact(paymentSummary.billing_adjustment_total, editingCurrencyCode)}
                           </strong>
                         </span>
                       </div>
@@ -5095,15 +5095,15 @@ export function ReservationsPage() {
                             <p className="col-span-3 font-semibold text-slate-800">{credit.currency_code}</p>
                             <div>
                               <p className="text-slate-500">{t("page.form.roundingCreditIssued")}</p>
-                              <p className="font-semibold text-slate-800">{formatMoney(credit.issued_amount, credit.currency_code)}</p>
+                              <p className="font-semibold text-slate-800">{formatMoneyExact(credit.issued_amount, credit.currency_code)}</p>
                             </div>
                             <div>
                               <p className="text-slate-500">{t("page.form.roundingCreditRefunded")}</p>
-                              <p className="font-semibold text-slate-800">{formatMoney(credit.refunded_amount, credit.currency_code)}</p>
+                              <p className="font-semibold text-slate-800">{formatMoneyExact(credit.refunded_amount, credit.currency_code)}</p>
                             </div>
                             <div>
                               <p className="text-slate-500">{t("page.form.roundingCreditOpen")}</p>
-                              <p className="font-semibold text-violet-900">{formatMoney(credit.open_amount, credit.currency_code)}</p>
+                              <p className="font-semibold text-violet-900">{formatMoneyExact(credit.open_amount, credit.currency_code)}</p>
                             </div>
                           </li>
                         ))}
@@ -5485,7 +5485,7 @@ export function ReservationsPage() {
                             ) : null}
                             {refundablePaymentOptions.map((transaction) => (
                               <option key={transaction.id} value={transaction.id}>
-                                {transaction.method} · {formatMoney(transaction.amount, transaction.currency)} · {t("page.form.refundRemaining", { amount: formatMoney(transaction.refundableRemaining, transaction.currency) })}
+                                {transaction.method} · {formatMoneyExact(transaction.amount, transaction.currency)} · {t("page.form.refundRemaining", { amount: formatMoneyExact(transaction.refundableRemaining, transaction.currency) })}
                               </option>
                             ))}
                           </select>
@@ -5576,7 +5576,7 @@ export function ReservationsPage() {
                                   <option key={credit.source_transaction_id} value={credit.source_transaction_id}>
                                     {t("page.form.roundingCreditSourceOption", {
                                       source: credit.source_transaction_id,
-                                      amount: formatMoney(credit.open_amount, credit.currency_code)
+                                      amount: formatMoneyExact(credit.open_amount, credit.currency_code)
                                     })}
                                   </option>
                                 ))}
@@ -5601,7 +5601,7 @@ export function ReservationsPage() {
                               <span id="rounding-credit-refund-available" className="mt-1 block font-normal text-slate-600">
                                 {t("page.form.roundingCreditRefundAvailable", {
                                   amount: selectedRoundingCreditSource
-                                    ? formatMoney(selectedRoundingCreditSource.open_amount, selectedRoundingCreditSource.currency_code)
+                                    ? formatMoneyExact(selectedRoundingCreditSource.open_amount, selectedRoundingCreditSource.currency_code)
                                     : "—"
                                 })}
                               </span>
@@ -5760,7 +5760,7 @@ export function ReservationsPage() {
                           {(paymentProofsQuery.data ?? []).map((proof) => (
                             <li key={proof.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-2 py-2">
                               <span className="min-w-0">
-                                {formatMoney(proof.amount, proof.currency)} · {proof.status}
+                                {formatMoneyExact(proof.amount, proof.currency)} · {proof.status}
                                 {proof.rejection_reason ? ` · ${proof.rejection_reason}` : ""}
                               </span>
                               <div className="flex flex-wrap items-center gap-2">
@@ -5871,7 +5871,7 @@ export function ReservationsPage() {
                             <li key={lnk.id} className="flex flex-wrap items-center justify-between gap-2" data-testid={`payment-link-${lnk.id}`}>
                               <span className="min-w-0">
                                 <span className="block truncate">
-                                  {formatMoney(lnk.requested_amount, lnk.currency)} · {lnk.status}
+                                  {formatMoneyExact(lnk.requested_amount, lnk.currency)} · {lnk.status}
                                 </span>
                                 {lnk.execution_mode === "local_only" && (
                                   <span className="block text-[11px] font-semibold text-amber-700" data-testid="payment-link-local-only">
@@ -5945,14 +5945,14 @@ export function ReservationsPage() {
                               {Number(tx.rounding_credit_amount ?? 0) > 0 ? (
                                 <span className="block text-violet-800">
                                   {t("page.form.roundingCreditTransaction", {
-                                    amount: formatMoney(Number(tx.rounding_credit_amount), tx.currency)
+                                    amount: formatMoneyExact(Number(tx.rounding_credit_amount), tx.currency)
                                   })}
                                 </span>
                               ) : null}
                               {Number(tx.credit_refund_amount ?? 0) > 0 || tx.refund_component === "rounding_credit" ? (
                                 <span className="block text-violet-800">
                                   {t("page.form.roundingCreditRefundTransaction", {
-                                    amount: formatMoney(Number(tx.credit_refund_amount ?? tx.amount), tx.currency)
+                                    amount: formatMoneyExact(Number(tx.credit_refund_amount ?? tx.amount), tx.currency)
                                   })}
                                 </span>
                               ) : null}
@@ -5974,16 +5974,16 @@ export function ReservationsPage() {
                                 </span>
                               ) : null}
                               {tx.fee_amount && tx.fee_amount > 0 ? (
-                                <span className="text-amber-700">{t("page.form.feeSuffix", { amount: formatMoney(tx.fee_amount, tx.currency) })}</span>
+                                <span className="text-amber-700">{t("page.form.feeSuffix", { amount: formatMoneyExact(tx.fee_amount, tx.currency) })}</span>
                               ) : null}
                               {tx.applied_currency && tx.applied_currency !== tx.currency && tx.applied_amount !== null && tx.applied_amount !== undefined ? (
                                 <span className="block text-sky-800">
-                                  Aplica {formatMoney(tx.applied_amount, tx.applied_currency)} al saldo · 1 {tx.applied_currency} = {Number(tx.fx_rate_snapshot ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 6 })} {tx.currency}
+                                  Aplica {formatMoneyExact(tx.applied_amount, tx.applied_currency)} al saldo · 1 {tx.applied_currency} = {Number(tx.fx_rate_snapshot ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 6 })} {tx.currency}
                                 </span>
                               ) : null}
                             </span>
                             <span className="font-semibold">
-                              {formatMoney(tx.gross_amount ?? tx.amount, tx.currency)}
+                              {formatMoneyExact(tx.gross_amount ?? tx.amount, tx.currency)}
                             </span>
                           </li>
                         ))}
@@ -6244,24 +6244,24 @@ export function ReservationsPage() {
                   <div className="grid grid-cols-2 gap-2 text-sm text-slate-800">
                     <div>
                       <p className="text-xs text-slate-500">{t("page.details.financeTotal")}</p>
-                      <p className="font-semibold">{formatMoney(detailsReservation.total_amount ?? detailsSummary.total_amount, detailsCurrencyCode)}</p>
+                      <p className="font-semibold">{formatMoneyExact(detailsReservation.total_amount ?? detailsSummary.total_amount, detailsCurrencyCode)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">{t("page.details.financeHotelReceived")}</p>
-                      <p className="font-semibold">{formatMoney(detailsSummary.hotel_received_amount ?? 0, detailsCurrencyCode)}</p>
+                      <p className="font-semibold">{formatMoneyExact(detailsSummary.hotel_received_amount ?? 0, detailsCurrencyCode)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">{t("page.details.financeOtaPrepaid")}</p>
-                      <p className="font-semibold">{formatMoney(detailsSummary.ota_prepaid_amount ?? 0, detailsCurrencyCode)}</p>
+                      <p className="font-semibold">{formatMoneyExact(detailsSummary.ota_prepaid_amount ?? 0, detailsCurrencyCode)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">{t("page.details.financeDeposit")}</p>
-                      <p className="font-semibold">{formatMoney(detailsSummary.deposit_required, detailsCurrencyCode)}</p>
+                      <p className="font-semibold">{formatMoneyExact(detailsSummary.deposit_required, detailsCurrencyCode)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">{t("page.details.financeBalance")}</p>
                       <p className="font-semibold">
-                        {formatMoney(
+                        {formatMoneyExact(
                           detailsOperations?.financial_summary.operational_balance_due ?? detailsSummary.operational_balance_due ?? detailsSummary.balance_due,
                           detailsCurrencyCode
                         )}
@@ -6296,15 +6296,15 @@ export function ReservationsPage() {
                         <li key={credit.currency_code} className="grid grid-cols-3 gap-2 text-xs">
                           <div>
                             <p className="text-slate-500">{t("page.form.roundingCreditIssued")}</p>
-                            <p className="font-semibold text-slate-800">{formatMoney(credit.issued_amount, credit.currency_code)}</p>
+                            <p className="font-semibold text-slate-800">{formatMoneyExact(credit.issued_amount, credit.currency_code)}</p>
                           </div>
                           <div>
                             <p className="text-slate-500">{t("page.form.roundingCreditRefunded")}</p>
-                            <p className="font-semibold text-slate-800">{formatMoney(credit.refunded_amount, credit.currency_code)}</p>
+                            <p className="font-semibold text-slate-800">{formatMoneyExact(credit.refunded_amount, credit.currency_code)}</p>
                           </div>
                           <div>
                             <p className="text-slate-500">{t("page.form.roundingCreditOpen")}</p>
-                            <p className="font-semibold text-violet-900">{formatMoney(credit.open_amount, credit.currency_code)}</p>
+                            <p className="font-semibold text-violet-900">{formatMoneyExact(credit.open_amount, credit.currency_code)}</p>
                           </div>
                         </li>
                       ))}
@@ -6317,7 +6317,7 @@ export function ReservationsPage() {
                       <div>
                         <p className="text-slate-500">{t("page.details.financeOperationalTotal")}</p>
                         <p className="font-semibold">
-                          {formatMoney(
+                          {formatMoneyExact(
                             detailsOperations.financial_summary.operational_total_amount ?? 0,
                             detailsOperations.financial_summary.currency_code
                           )}
@@ -6326,7 +6326,7 @@ export function ReservationsPage() {
                       <div>
                         <p className="text-slate-500">{t("page.details.financeOperationalBalance")}</p>
                         <p className="font-semibold">
-                          {formatMoney(
+                          {formatMoneyExact(
                             detailsOperations.financial_summary.operational_balance_due ?? 0,
                             detailsOperations.financial_summary.currency_code
                           )}
@@ -6648,7 +6648,7 @@ export function ReservationsPage() {
                 {!detailsDeferredCompanyBilling && detailsOperations?.financial_summary ? (
                   <span className="text-xs font-semibold text-slate-700">
                     {t("page.details.operationalBalanceLabel", {
-                      amount: formatMoney(detailsOperations.financial_summary.operational_balance_due ?? 0, detailsOperations.financial_summary.currency_code)
+                      amount: formatMoneyExact(detailsOperations.financial_summary.operational_balance_due ?? 0, detailsOperations.financial_summary.currency_code)
                     })}
                   </span>
                 ) : null}
@@ -6771,7 +6771,7 @@ export function ReservationsPage() {
                     {detailsSummary.transactions.map((tx) => (
                       <li key={tx.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                         <div>
-                          <p className="font-semibold">{formatMoney(tx.amount, tx.currency)}</p>
+                          <p className="font-semibold">{formatMoneyExact(tx.amount, tx.currency)}</p>
                           <p className="text-xs text-slate-500">
                             {t("page.details.transactionLine", {
                               type: translatedEnum("transactionType", tx.type),
@@ -6782,14 +6782,14 @@ export function ReservationsPage() {
                           {Number(tx.rounding_credit_amount ?? 0) > 0 ? (
                             <p className="text-xs text-violet-800">
                               {t("page.form.roundingCreditTransaction", {
-                                amount: formatMoney(Number(tx.rounding_credit_amount), tx.currency)
+                                amount: formatMoneyExact(Number(tx.rounding_credit_amount), tx.currency)
                               })}
                             </p>
                           ) : null}
                           {Number(tx.credit_refund_amount ?? 0) > 0 || tx.refund_component === "rounding_credit" ? (
                             <p className="text-xs text-violet-800">
                               {t("page.form.roundingCreditRefundTransaction", {
-                                amount: formatMoney(Number(tx.credit_refund_amount ?? tx.amount), tx.currency)
+                                amount: formatMoneyExact(Number(tx.credit_refund_amount ?? tx.amount), tx.currency)
                               })}
                             </p>
                           ) : null}
