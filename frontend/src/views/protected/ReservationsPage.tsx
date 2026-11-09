@@ -3321,7 +3321,7 @@ export function ReservationsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button
-            className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:opacity-60"
+            className="min-h-11 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
             onClick={() => openCreate()}
             type="button"
             disabled={subscriptionBlocked}
@@ -3330,7 +3330,7 @@ export function ReservationsPage() {
           </button>
           {hasPermission("reservation:ota_record") ? (
             <button
-              className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 hover:bg-brand-100 disabled:opacity-60"
+              className="min-h-11 rounded-lg border border-brand-300 bg-white px-4 py-2 text-sm font-semibold text-brand-800 transition-colors hover:border-brand-400 hover:bg-brand-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => {
                 if (subscriptionBlocked) {
                   setToast({ type: "error", message: subscriptionBlockReason || t("page.errors.blockedBySubscription") });
@@ -3347,7 +3347,7 @@ export function ReservationsPage() {
           ) : null}
           <Link
             to="/dashboard"
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
+            className="min-h-11 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
           >
             {t("page.header.dashboardLink")}
           </Link>
