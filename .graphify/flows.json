@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T06:40:01.337Z",
+  "generatedAt": "2026-11-09T08:19:57.240Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -3721,32 +3721,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_allocation_trigger_service_request_manual_allocation",
-      "name": "request_manual_allocation",
-      "entryPoint": "services_allocation_trigger_service_request_manual_allocation",
-      "entryPointId": "services_allocation_trigger_service_request_manual_allocation",
-      "path": [
-        "services_allocation_trigger_service_request_manual_allocation",
-        "services_allocation_trigger_service_allocationrequestinprogress",
-        "services_allocation_trigger_service_fail_stale_pending_allocation_requests",
-        "services_allocation_trigger_service_pending_proposal_query"
-      ],
-      "qualifiedPath": [
-        "services_allocation_trigger_service_request_manual_allocation",
-        "services_allocation_trigger_service_allocationrequestinprogress",
-        "services_allocation_trigger_service_fail_stale_pending_allocation_requests",
-        "services_allocation_trigger_service_pending_proposal_query"
-      ],
-      "depth": 1,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/services/allocation_trigger_service.py"
-      ],
-      "criticality": 0.41,
-      "warnings": []
-    },
-    {
       "id": "flow:app_main_request_telemetry",
       "name": "request_telemetry",
       "entryPoint": "app_main_request_telemetry",
@@ -4873,6 +4847,36 @@
       "warnings": []
     },
     {
+      "id": "flow:services_allocation_trigger_service_request_manual_allocation",
+      "name": "request_manual_allocation",
+      "entryPoint": "services_allocation_trigger_service_request_manual_allocation",
+      "entryPointId": "services_allocation_trigger_service_request_manual_allocation",
+      "path": [
+        "services_allocation_trigger_service_request_manual_allocation",
+        "services_allocation_trigger_service_allocationrequestinprogress",
+        "services_allocation_trigger_service_fail_stale_pending_allocation_requests",
+        "services_allocation_trigger_service_manual_request_matches_pending",
+        "services_allocation_trigger_service_pending_proposal_query",
+        "services_allocation_trigger_service_allocation_trigger_applies"
+      ],
+      "qualifiedPath": [
+        "services_allocation_trigger_service_request_manual_allocation",
+        "services_allocation_trigger_service_allocationrequestinprogress",
+        "services_allocation_trigger_service_fail_stale_pending_allocation_requests",
+        "services_allocation_trigger_service_manual_request_matches_pending",
+        "services_allocation_trigger_service_pending_proposal_query",
+        "services_allocation_trigger_service_allocation_trigger_applies"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/services/allocation_trigger_service.py"
+      ],
+      "criticality": 0.3783,
+      "warnings": []
+    },
+    {
       "id": "flow:services_permission_service_set_visibility_window",
       "name": "set_visibility_window",
       "entryPoint": "services_permission_service_set_visibility_window",
@@ -4900,34 +4904,6 @@
         "app/services/permission_service.py"
       ],
       "criticality": 0.3783,
-      "warnings": []
-    },
-    {
-      "id": "flow:tasks_allocation_tasks_process_recalculation_requests",
-      "name": "process_recalculation_requests",
-      "entryPoint": "tasks_allocation_tasks_process_recalculation_requests",
-      "entryPointId": "tasks_allocation_tasks_process_recalculation_requests",
-      "path": [
-        "tasks_allocation_tasks_process_recalculation_requests",
-        "tasks_allocation_tasks_process_hotel_request",
-        "tasks_allocation_tasks_rotate_active_hotel_ids",
-        "tasks_allocation_tasks_session",
-        "tasks_allocation_tasks_claim_request"
-      ],
-      "qualifiedPath": [
-        "tasks_allocation_tasks_process_recalculation_requests",
-        "tasks_allocation_tasks_process_hotel_request",
-        "tasks_allocation_tasks_rotate_active_hotel_ids",
-        "tasks_allocation_tasks_session",
-        "tasks_allocation_tasks_claim_request"
-      ],
-      "depth": 2,
-      "nodeCount": 5,
-      "fileCount": 1,
-      "files": [
-        "app/tasks/allocation_tasks.py"
-      ],
-      "criticality": 0.37,
       "warnings": []
     },
     {
@@ -5140,6 +5116,36 @@
       "fileCount": 1,
       "files": [
         "app/services/gemma_orchestrator.py"
+      ],
+      "criticality": 0.3367,
+      "warnings": []
+    },
+    {
+      "id": "flow:tasks_allocation_tasks_process_recalculation_requests",
+      "name": "process_recalculation_requests",
+      "entryPoint": "tasks_allocation_tasks_process_recalculation_requests",
+      "entryPointId": "tasks_allocation_tasks_process_recalculation_requests",
+      "path": [
+        "tasks_allocation_tasks_process_recalculation_requests",
+        "tasks_allocation_tasks_active_hotel_count",
+        "tasks_allocation_tasks_process_hotel_request",
+        "tasks_allocation_tasks_rotate_active_hotel_ids",
+        "tasks_allocation_tasks_session",
+        "tasks_allocation_tasks_claim_request"
+      ],
+      "qualifiedPath": [
+        "tasks_allocation_tasks_process_recalculation_requests",
+        "tasks_allocation_tasks_active_hotel_count",
+        "tasks_allocation_tasks_process_hotel_request",
+        "tasks_allocation_tasks_rotate_active_hotel_ids",
+        "tasks_allocation_tasks_session",
+        "tasks_allocation_tasks_claim_request"
+      ],
+      "depth": 2,
+      "nodeCount": 6,
+      "fileCount": 1,
+      "files": [
+        "app/tasks/allocation_tasks.py"
       ],
       "criticality": 0.3367,
       "warnings": []
