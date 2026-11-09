@@ -127,7 +127,8 @@ import {
   invalidateQueriesInBackground,
   refreshReservationCreatedState,
   refreshPaymentState,
-  refreshReservationState
+  refreshReservationState,
+  updateReservationCacheFromCommittedPatch
 } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 import { useOperationalAudit } from "../../hooks/useOperationalAudit";
@@ -1532,12 +1533,56 @@ export function ReservationsPage() {
               setFormError(t("page.errors.collabConflicts"));
               return;
             }
-            if (collaborativeReservation.isDirty) await collaborativeReservation.save();
+            if (collaborativeReservation.isDirty) {
+              const result = await collaborativeReservation.save();
+              if (result?.resource_type === "reservation" && result.resource_id === editing.id) {
+                const reservationPatch: Partial<Reservation> = {};
+                const resource = result.resource;
+
+                if (resource.room_id === null || (typeof resource.room_id === "number" && Number.isInteger(resource.room_id))) {
+                  reservationPatch.room_id = resource.room_id;
+                  reservationPatch.room_number = resource.room_id === null
+                    ? null
+                    : roomsQuery.data?.find((room) => room.id === resource.room_id)?.room_number ?? null;
+                }
+                if (typeof resource.check_in_date === "string") reservationPatch.check_in_date = resource.check_in_date;
+                if (typeof resource.check_out_date === "string") reservationPatch.check_out_date = resource.check_out_date;
+                if (typeof resource.num_adults === "number" && Number.isFinite(resource.num_adults)) {
+                  reservationPatch.num_adults = resource.num_adults;
+                }
+                if (typeof resource.num_children === "number" && Number.isFinite(resource.num_children)) {
+                  reservationPatch.num_children = resource.num_children;
+                }
+                if (resource.notes === null || typeof resource.notes === "string") reservationPatch.notes = resource.notes;
+                if (resource.arrival_time_hint === null || typeof resource.arrival_time_hint === "string") {
+                  reservationPatch.arrival_time_hint = resource.arrival_time_hint;
+                }
+                if (resource.reservation_comment === null || typeof resource.reservation_comment === "string") {
+                  reservationPatch.reservation_comment = resource.reservation_comment;
+                }
+                if (typeof result.version === "number" && Number.isInteger(result.version)) {
+                  reservationPatch.version = result.version;
+                }
+
+                await updateReservationCacheFromCommittedPatch(
+                  queryClient,
+                  session.hotelId,
+                  editing.id,
+                  reservationPatch
+                );
+              }
+            }
           } else {
-            await updateMutation.mutateAsync({
+            const updatedReservation = await updateMutation.mutateAsync({
               id: editing.id,
               payload: { ...payload, client_version: editing.version }
             });
+            await updateReservationCacheFromCommittedPatch(
+              queryClient,
+              session.hotelId,
+              editing.id,
+              updatedReservation
+            );
           }
           showToast("success", t("page.messages.reservationUpdated"));
           closeForm();
