@@ -30,6 +30,13 @@ const statusColors: Record<RoomStatus, string> = {
   maintenance: "bg-orange-100 text-orange-800",
   blocked: "bg-slate-200 text-slate-700"
 };
+const statusAccentClasses: Record<RoomStatus, string> = {
+  available: "border-l-emerald-500",
+  occupied: "border-l-rose-500",
+  cleaning: "border-l-amber-500",
+  maintenance: "border-l-orange-500",
+  blocked: "border-l-slate-500"
+};
 
 const statusOptions: RoomStatus[] = ["available", "occupied", "cleaning", "maintenance", "blocked"];
 const housekeepingStatusOptions: HousekeepingStatus[] = ["dirty", "in_progress", "clean", "inspected"];
@@ -38,6 +45,12 @@ const housekeepingStatusColors: Record<HousekeepingStatus, string> = {
   in_progress: "bg-amber-100 text-amber-800",
   clean: "bg-emerald-100 text-emerald-800",
   inspected: "bg-sky-100 text-sky-800"
+};
+const housekeepingStatusAccentClasses: Record<HousekeepingStatus, string> = {
+  dirty: "border-l-rose-500",
+  in_progress: "border-l-amber-500",
+  clean: "border-l-emerald-500",
+  inspected: "border-l-sky-500"
 };
 
 type BlockFormValues = {
@@ -458,7 +471,7 @@ export function RoomsPage() {
                 key={status}
                 label={housekeepingStatusLabels[status]}
                 value={housekeepingStats[status] ?? 0}
-                className={housekeepingStatusColors[status]}
+                accentClassName={housekeepingStatusAccentClasses[status]}
               />
             ))}
           </div>
@@ -470,7 +483,7 @@ export function RoomsPage() {
               key={status}
               label={t(`stats.${status}`)}
               value={stats[status] ?? 0}
-              className={statusColors[status]}
+              accentClassName={statusAccentClasses[status]}
             />
           ))}
         </div>
@@ -1015,13 +1028,11 @@ function formatRate(value: number | null | undefined) {
   return value.toLocaleString("es-AR", { maximumFractionDigits: 0 });
 }
 
-function StatusBadge({ label, value, className }: { label: string; value: number; className: string }) {
+function StatusBadge({ label, value, accentClassName }: { label: string; value: number; accentClassName: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">{label}</p>
-        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${className}`}>{value}</span>
-      </div>
+    <div className={`min-h-24 rounded-xl border border-slate-200 border-l-4 ${accentClassName} bg-white p-4 shadow-sm`}>
+      <p className="text-sm font-medium text-slate-600">{label}</p>
+      <p className="numeric mt-2 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
     </div>
   );
 }
