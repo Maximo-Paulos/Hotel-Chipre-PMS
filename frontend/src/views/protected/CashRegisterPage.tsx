@@ -573,28 +573,28 @@ export function CashRegisterPage() {
       {message ? <div role="status" aria-live="polite" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</div> : null}
 
       <section className="space-y-4 rounded-xl border border-brand-100 bg-brand-50/40 p-5 shadow-sm" data-testid="cash-daily-summary">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(14rem,1.25fr)_repeat(3,minmax(9rem,1fr))_auto] xl:items-start">
+          <div className="sm:col-span-2 lg:col-span-3 xl:col-span-5">
             <p className="text-xs uppercase tracking-wide text-brand-700">Control diario</p>
             <h2 className="text-xl font-semibold text-slate-900">Caja diaria</h2>
             <p className="text-sm text-slate-600">Día calendario local del hotel: cobros confirmados, devoluciones y caja física.</p>
           </div>
-          <label className="space-y-1 text-sm font-semibold text-slate-700">
+          <label className="min-w-0 space-y-1 text-sm font-semibold text-slate-700">
             <span>Fecha</span>
             <input
               type="date"
               value={reportDate}
               onChange={(event) => setReportDate(event.target.value)}
-              className="block rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+              className="block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
               data-testid="cash-daily-date"
             />
           </label>
-          <label className="space-y-1 text-sm font-semibold text-slate-700">
+          <label className="min-w-0 space-y-1 text-sm font-semibold text-slate-700">
             <span>Moneda</span>
             <select
               value={reportCurrency || defaultCurrency}
               onChange={(event) => setReportCurrency(event.target.value)}
-              className="block rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+              className="block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
               aria-describedby="cash-daily-currency-help"
             >
               {availableCurrencies.map((currencyCode) => (
@@ -607,24 +607,24 @@ export function CashRegisterPage() {
               Usa la moneda del hotel por defecto. No se convierten ni mezclan importes entre monedas.
             </span>
           </label>
-          <label className="space-y-1 text-sm font-semibold text-slate-700">
+          <label className="min-w-0 space-y-1 text-sm font-semibold text-slate-700">
             <span>Exportar desde</span>
             <input
               type="date"
               value={exportFromDate}
               onChange={(event) => setExportFromDate(event.target.value)}
-              className="block rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+              className="block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
               data-testid="cash-export-from"
             />
           </label>
-          <label className="space-y-1 text-sm font-semibold text-slate-700">
+          <label className="min-w-0 space-y-1 text-sm font-semibold text-slate-700">
             <span>Exportar hasta</span>
             <input
               type="date"
               value={exportToDate}
               onChange={(event) => setExportToDate(event.target.value)}
               min={exportFromDate}
-              className="block rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+              className="block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
               data-testid="cash-export-to"
             />
           </label>
@@ -632,11 +632,11 @@ export function CashRegisterPage() {
             type="button"
             onClick={() => void handleExport()}
             disabled={dailySummaryQuery.isLoading || dailySummaryQuery.isError || !hasPermission("cash:view") || !exportFromDate || !exportToDate || exportToDate < exportFromDate}
-            className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-12 rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60 xl:mt-6"
           >
             Exportar CSV
           </button>
-          <div className="basis-full">
+          <div className="sm:col-span-2 lg:col-span-3 xl:col-span-5">
             <PersistentActionError
               message={cashActionErrors.export}
               onClose={() => dismissCashActionError("export")}

@@ -80,6 +80,11 @@ test("daily cash summary defaults to the hotel's currency without converting amo
   await expect(page.getByTestId("cash-daily-summary").getByLabel("Moneda")).toHaveValue("USD");
   await expect(page.getByText("Usa la moneda del hotel por defecto. No se convierten ni mezclan importes entre monedas.")).toBeVisible();
   await expect(page.getByText(/No se pudo cargar el resumen diario/)).toHaveCount(0);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const cashSummaryHeadingWidth = await page.getByRole("heading", { name: "Caja diaria" }).evaluate((element) =>
+    element.getBoundingClientRect().width
+  );
+  expect(cashSummaryHeadingWidth).toBeGreaterThanOrEqual(240);
 });
 
 test("selected cash session labels its currency independently of the daily currency filter", async ({ page }) => {

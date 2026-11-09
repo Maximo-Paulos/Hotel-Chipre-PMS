@@ -33,3 +33,24 @@ Parent review: mobile has no horizontal overflow; the four shortcuts and “Más
 ## Limits
 
 The screenshots use synthetic API responses and confirm visual layout and shell navigation only. They do not prove deployed cloud behavior, live hotel data, every product route, or all operator roles. The repository E2E config requires an explicitly isolated PostgreSQL app and seed database; the E2E suite was not run, and that requirement was not bypassed for this visual review.
+
+## Rehearsal: mobile operational screens
+
+### Gold and adapted StageShow method
+
+Gold: the user's mobile hospitality guide: one-handed operation, 48px minimum touch targets, 52px primary actions, clear plain-language labels, warm neutral surfaces, and compact views without page-level horizontal scrolling. StageShow's `framing.md` guided the audit to start at 390×844 and keep each route's most important task visible; `craft.md` guided touch target sizing and content flow; `verify.md`, `rehearse.md`, and `review.md` guided before/after capture, measurements, and a fresh-eye pass. The real PMS routes and role guards were retained; no StageShow demo components or motion were added.
+
+### Screens and visual changes
+
+Reviewed Planilla, Reservas, Habitaciones, Caja, Limpieza de hoy, and Tareas at 390×844, then at 1280×800 with a synthetic owner session and read-only API fixtures.
+
+- Planilla reservation cells now have a 48px minimum height to make repeated stay cells easier to tap.
+- Caja diaria now separates its heading from the date/currency/export controls and gives those fields a responsive grid so the title and help text do not collapse into a narrow column on desktop.
+- Tareas allows the task summary and its actions to wrap on small screens; task actions no longer widen the page beyond the viewport.
+- The visual fixture hides the unhealthy realtime banner only inside its local browser context so that mock connectivity noise does not obscure screenshots. The product's realtime status behavior is unchanged.
+
+### Evidence and limits
+
+The before/after screenshots were captured from the local Vite app at 390×844 and 1280×800, with synthetic data and blocked mutations. They are task-local review artifacts and are not cloud evidence. The synthetic run observed no browser exceptions and made no backend writes. Focused Playwright assertions were added for planilla touch height, Caja heading width, and mobile task-page overflow.
+
+No PostgreSQL-backed E2E, cloud deployment, live hotel data, payment workflow, or provider behavior was verified in this visual rehearsal. The full role matrix and every downstream state on these routes remain outside this pass.

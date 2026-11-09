@@ -475,11 +475,11 @@ export function OperationalTasksPage() {
           <div className="mt-4 space-y-3">
             {tasks.map((task) => (
               <article key={task.id} className="rounded-lg border border-slate-200 p-4">
-                <div className="flex items-start gap-3">
+                <div className="flex flex-wrap items-start gap-3">
                   {canHandoff && task.status !== "resolved" && canOperateTask(task) && (
                     <input aria-label={`Incluir ${task.title} en el pase`} type="checkbox" checked={selectedIds.includes(task.id)} onChange={() => toggleSelected(task.id)} className="mt-1 h-4 w-4" />
                   )}
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-48">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold text-slate-900">{task.title}</h3>
                       <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">{statusLabels[task.status]}</span>
@@ -492,7 +492,7 @@ export function OperationalTasksPage() {
                       <p className="mt-2 text-xs font-medium text-slate-500">Aviso de Operaciones · solo lectura para Limpieza.</p>
                     )}
                   </div>
-                  <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                  <div className="flex min-w-0 basis-full flex-wrap justify-start gap-2 sm:basis-auto sm:shrink-0 sm:justify-end">
                     {canOperateTask(task) && task.status === "pending" && (
                       <button type="button" disabled={isTaskMutationPending(task.id)} onClick={() => void run(() => statusMutation.mutateAsync({ id: task.id, version: task.version, status: "in_progress" }), "Tarea tomada por el turno.", `task-${task.id}`)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Tomar</button>
                     )}
