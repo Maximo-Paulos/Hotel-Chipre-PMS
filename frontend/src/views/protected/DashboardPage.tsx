@@ -216,14 +216,14 @@ export function DashboardPage() {
 
   return (
     <div className="min-w-0 space-y-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">{t("eyebrow")}</p>
           <h1 className="text-balance text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{t("title")}</h1>
           <p className="text-sm text-slate-600">{t("subtitle")}</p>
           <span className="sr-only" data-testid="dashboard-today-date">{today}</span>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div data-testid="dashboard-primary-actions" className="hidden flex-wrap gap-2 md:flex">
           <Link
             to="/reservas?crear=1"
             className="inline-flex min-h-[52px] items-center rounded-control bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-raise hover:bg-brand-700 active:scale-[0.98] sm:min-h-0"

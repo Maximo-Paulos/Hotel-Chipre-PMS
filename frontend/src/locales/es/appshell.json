@@ -174,18 +174,23 @@
   },
   "bottomNav": {
     "alerts": "Alertas",
-    "more": "Más"
+    "more": "Más",
+    "actions": "Acciones",
+    "room": "Habitación",
+    "assign": "Asignar"
   },
   "alerts": {
     "viewUnread": "Ver alertas ({{count}} sin leer)",
     "view": "Ver alertas"
   },
   "mobileMenu": {
-    "ariaLabel": "Menú de navegación",
+    "ariaLabel": "Acciones y navegación",
     "openMenu": "Abrir menú",
     "home": "Inicio",
     "closeMenu": "Cerrar menú",
-    "title": "Menú",
+    "title": "Acciones y más",
+    "quickActionsHeading": "Acciones rápidas",
+    "sectionsHeading": "Más secciones",
     "navAriaLabel": "Navegación móvil"
   },
   "loading": "Cargando..."

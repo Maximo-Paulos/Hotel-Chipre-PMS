@@ -68,3 +68,23 @@ At 320px, scrolling the page 520px let the occupancy table's sticky left header 
 ### Evidence and limits
 
 The Playwright regression uses 16 synthetic rooms and runs at 390×844 and 320×844. It captures before/after scroll frames, calls `window.scrollTo(0, 520)`, confirms the title remains the hit-tested element, checks that vertical page scrolling leaves the grid's `scrollTop` at zero, and verifies the grid's horizontal scroll and pinned first column still work. Its mock blocks all writes; it does not use hotel data or cloud services. The product header behavior was not checked against every browser engine or role.
+
+## Rehearsal: dashboard quick actions
+
+### Gold and adapted StageShow method
+
+Gold: the user's mobile hotel guide, especially one-handed operation, 48px minimum targets, clear labels, a persistent five-slot navigation, and enough room for the device safe area. StageShow `framing.md` guided the raised center action as the mobile focal point; `craft.md` informed spacing, target size, and sheet hierarchy; `verify.md` and `rehearse.md` drove the 320×568, 390×844, and 1280×800 captures and measured checks; `review.md` informed the fresh-eye pass. This adapts the visual method to the existing PMS shell and routes; it adds no StageShow demo components or motion.
+
+### Composition and behavior
+
+- On mobile, the dashboard's two stacked CTA buttons are replaced by a raised plus in the center of the existing five-slot bottom navigation. Four role-prioritized routes remain visible; the plus opens a sheet that retains the full filtered secondary route directory, including Caja when permitted.
+- The sheet presents “Nueva reserva” and “Asignar habitación” only when their existing effective permissions allow them. Selecting an item navigates to the existing flow; opening the sheet does not create or modify a reservation or room assignment.
+- The sheet has a bounded scroll region, safe-area padding, backdrop dismissal, Escape handling, focus containment, and focus restoration. The primary actions are at least 52px high. At 320px, the compact navigation label “Habitación” fits while the directory keeps the full route name.
+- Desktop retains the existing dashboard CTA stack and desktop navigation.
+- The fixture hides the realtime status and React Query devtools only in the local test browser, so those development overlays do not obscure the product composition. Their actual application behavior is unchanged.
+
+### Evidence and limits
+
+Playwright uses a synthetic manager login and mocked GET responses; POST, PUT, PATCH, and DELETE requests are blocked and recorded. The responsive test passed at 320×568 and 390×844, checks the five visible destinations, safe-area CSS padding, action target sizes, scroll-to-end access to the route directory, Escape/backdrop dismissal and focus restoration, navigation to both existing flows, and no writes. At 1280×800 it confirms the plus is hidden and the desktop CTA stack remains visible. Captures are local test artifacts under `frontend/test-results/` and are not cloud evidence.
+
+The Chromium fixture reports a zero device safe-area inset; the test verifies the component's minimum 8px bottom padding fallback rather than emulating a notched phone. No PostgreSQL-backed E2E, deployed app, live hotel data, payment workflow, or provider behavior was tested.
