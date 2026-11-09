@@ -1,6 +1,6 @@
 # Hotel Chipre PMS — Scale readiness ledger
 
-**Updated:** 2026-07-24
+**Updated:** 2026-11-09
 **Decision:** local hardening is progressing; provider-bound scale certification remains open.
 
 This document separates executable local evidence from claims that require the
@@ -24,6 +24,7 @@ whether those targets have evidence; it does not redefine them.
 | Availability query shape | Set-based room/block/reservation lookup with bounded-query regression (20-room fixture: 85 → 7 statements) | ✅ local regression; PostgreSQL plan/p95 unverified |
 | Financial ledger reads | Confirmed `transactions` aggregate drives payment validation, financial summaries, check-in/out and operational reports; materialized `amount_paid` is compatibility cache only when a ledger exists | ✅ local contracts; historical rows without transactions still require migration; provider concurrency unverified |
 | Critical concurrency | Redis/Valkey lease for cash close and persisted allocation, PostgreSQL row locks, production fail-closed config | ✅ contract-covered |
+| Allocation request queue | Durable five-minute page rotation, up to three selected hotels per cycle; the global worker derives pending expiry from its active-hotel batch (or a worker-only aggregate for an explicit single-hotel dispatch) as `max(15 min, (ceil(active_hotels / 3) + 1) × 5 min)` and passes it explicitly. Tenant-scoped API calls do not expire pending rows without that worker TTL, so an aged request can keep manual retries blocked until the worker visits its hotel. | ✅ local regression; cloud worker cadence and execution unverified |
 | Analytics provenance | All analytics envelopes expose `data_as_of`, `source_lag_seconds`, and `data_source`; UI renders them | ✅ contract-covered |
 | Health visibility | `/health/datastores` reports PostgreSQL and Redis roles separately, including distributed locks | ✅ contract-covered |
 | Realtime invalidation | Tenant-scoped Redis revisions, authenticated SSE, `BroadcastChannel`/storage fallback, query invalidation guarded by `hotel_id` | ✅ contract-covered |

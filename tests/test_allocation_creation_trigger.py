@@ -24,6 +24,7 @@ from app.models.room import Room, RoomCategory
 from app.models.security_audit_log import SecurityAuditLog
 from app.models.user import User
 from app.schemas.reservation import ReservationCreate
+from app.services import allocation_trigger_service
 from app.services.allocation_runtime_service import (
     AllocationRuntimeError,
     _load_json_dict,
@@ -37,6 +38,7 @@ from app.services.allocation_trigger_service import (
     PENDING_ALLOCATION_STALE_REASON,
     _request_allocation_proposal,
     fail_stale_pending_allocation_requests,
+    pending_allocation_stale_after,
     request_manual_allocation,
     trigger_reoptimization_bg,
 )
@@ -739,7 +741,9 @@ def _pg_allocation_trigger_factory(db):
     )
 
 
-def test_stale_manual_pending_run_is_failed_before_new_manual_request(pg_session):
+def test_tenant_manual_request_does_not_expire_pending_without_global_worker_ttl(
+    pg_session, monkeypatch
+):
     db = pg_session
     _pg_allocation_trigger_factory(db)
     set_tenant_hotel_context(db, 1)
@@ -753,22 +757,24 @@ def test_stale_manual_pending_run_is_failed_before_new_manual_request(pg_session
     db.add(stale)
     db.flush()
 
-    replacement = request_manual_allocation(
-        db,
-        hotel_id=1,
-        apply=True,
-        horizon_start=None,
-        horizon_end=None,
-        now=now,
+    monkeypatch.setattr(
+        allocation_trigger_service,
+        "pending_allocation_stale_after",
+        lambda **_kwargs: pytest.fail("tenant request must not derive a global TTL"),
     )
-    db.flush()
+    with pytest.raises(AllocationRequestInProgress):
+        request_manual_allocation(
+            db,
+            hotel_id=1,
+            apply=True,
+            horizon_start=None,
+            horizon_end=None,
+            now=now,
+        )
     db.refresh(stale)
 
-    assert stale.status == AllocationRunStatusEnum.FAILED
-    assert stale.finished_at is not None
-    assert stale.error_message == PENDING_ALLOCATION_STALE_REASON
-    assert replacement.status == AllocationRunStatusEnum.PENDING
-    assert replacement.id != stale.id
+    assert stale.status == AllocationRunStatusEnum.PENDING
+    assert stale.finished_at is None
 
 
 def test_recent_pending_run_still_blocks_manual_request(pg_session):
@@ -800,7 +806,9 @@ def test_recent_pending_run_still_blocks_manual_request(pg_session):
     assert recent.finished_at is None
 
 
-def test_stale_automatic_pending_run_is_failed_before_coalescing(pg_session):
+def test_tenant_automatic_request_coalesces_pending_without_global_worker_ttl(
+    pg_session, monkeypatch
+):
     db = pg_session
     _pg_allocation_trigger_factory(db)
     set_tenant_hotel_context(db, 1)
@@ -814,7 +822,12 @@ def test_stale_automatic_pending_run_is_failed_before_coalescing(pg_session):
     db.add(stale)
     db.flush()
 
-    replacement = _request_allocation_proposal(
+    monkeypatch.setattr(
+        allocation_trigger_service,
+        "pending_allocation_stale_after",
+        lambda **_kwargs: pytest.fail("tenant request must not derive a global TTL"),
+    )
+    coalesced = _request_allocation_proposal(
         db,
         hotel_id=1,
         trigger_type="reservation_update",
@@ -823,11 +836,9 @@ def test_stale_automatic_pending_run_is_failed_before_coalescing(pg_session):
     db.flush()
     db.refresh(stale)
 
-    assert stale.status == AllocationRunStatusEnum.FAILED
-    assert stale.finished_at is not None
-    assert stale.error_message == PENDING_ALLOCATION_STALE_REASON
-    assert replacement.status == AllocationRunStatusEnum.PENDING
-    assert replacement.id != stale.id
+    assert stale.status == AllocationRunStatusEnum.PENDING
+    assert stale.finished_at is None
+    assert coalesced.id == stale.id
 
 
 def test_worker_fails_stale_pending_run_without_claiming_it(pg_session):
@@ -844,7 +855,12 @@ def test_worker_fails_stale_pending_run_without_claiming_it(pg_session):
     db.add(stale)
     db.flush()
 
-    claimed = _claim_request(db, hotel_id=1, now=now)
+    claimed = _claim_request(
+        db,
+        hotel_id=1,
+        now=now,
+        pending_stale_after=timedelta(minutes=15),
+    )
     db.refresh(stale)
 
     assert claimed is None
@@ -853,10 +869,16 @@ def test_worker_fails_stale_pending_run_without_claiming_it(pg_session):
     assert stale.error_message == PENDING_ALLOCATION_STALE_REASON
 
 
-def test_recalculation_processor_rotates_deferred_hotels_across_cycles(monkeypatch):
-    hotel_ids = [101, 102, 103, 104]
-    current_time = datetime(2026, 11, 9, 5, 40, tzinfo=timezone.utc)
+@pytest.mark.parametrize("hotel_count", [7, 13])
+def test_recalculation_processor_scans_tenants_before_pending_expiration(
+    monkeypatch, hotel_count
+):
+    hotel_ids = list(range(101, 101 + hotel_count))
+    cycle_start = datetime(2026, 11, 9, 6, 0, tzinfo=timezone.utc)
+    created_at = cycle_start + timedelta(seconds=1)
+    current_time = cycle_start + timedelta(minutes=5)
     processed_by_cycle = []
+    stale_deadlines = []
 
     class FakeSession:
         def close(self):
@@ -878,24 +900,68 @@ def test_recalculation_processor_rotates_deferred_hotels_across_cycles(monkeypat
         "app.tasks.report_tasks._active_hotel_ids", lambda _db: hotel_ids
     )
 
-    for _cycle in range(len(hotel_ids)):
+    page_count = (
+        hotel_count + allocation_tasks.MAX_HOTELS_PER_PROCESSING_CYCLE - 1
+    ) // allocation_tasks.MAX_HOTELS_PER_PROCESSING_CYCLE
+    for _cycle in range(page_count):
         processed_this_cycle = []
 
-        def defer_request(_db, *, hotel_id, origin_key=None):
+        def defer_request(
+            _db,
+            *,
+            hotel_id,
+            origin_key=None,
+            pending_stale_after,
+        ):
             processed_this_cycle.append(hotel_id)
+            stale_deadlines.append(pending_stale_after)
             return {"selected": 1, "succeeded": 0, "failed": 0, "deferred": 1}
 
         monkeypatch.setattr(
             allocation_tasks, "_process_hotel_request", defer_request
         )
         totals = allocation_tasks.process_recalculation_requests()
-        assert totals == {"selected": 3, "succeeded": 0, "failed": 0, "deferred": 3}
+        assert totals == {
+            "selected": 3,
+            "succeeded": 0,
+            "failed": 0,
+            "deferred": 3,
+        }
         assert len(processed_this_cycle) == 3
+        assert current_time - created_at < stale_deadlines[-1]
         processed_by_cycle.append(processed_this_cycle)
         current_time += timedelta(minutes=5)
 
-    assert 104 in processed_by_cycle[1]
     assert set().union(*map(set, processed_by_cycle)) == set(hotel_ids)
+    assert set(stale_deadlines) == {
+        pending_allocation_stale_after(active_hotel_count=hotel_count)
+    }
+
+
+@pytest.mark.parametrize(
+    ("active_hotel_count", "expected_minutes"),
+    [(1, 15), (4, 15), (7, 20), (13, 30)],
+)
+def test_pending_allocation_ttl_covers_the_bounded_tenant_scan(
+    active_hotel_count, expected_minutes
+):
+    assert pending_allocation_stale_after(
+        active_hotel_count=active_hotel_count
+    ) == timedelta(minutes=expected_minutes)
+
+
+def test_pending_cleanup_requires_explicit_global_worker_ttl(monkeypatch):
+    monkeypatch.setattr(
+        allocation_trigger_service,
+        "pending_allocation_stale_after",
+        lambda **_kwargs: pytest.fail("tenant request must not derive a global TTL"),
+    )
+
+    assert fail_stale_pending_allocation_requests(
+        object(),
+        hotel_id=101,
+        now=datetime(2026, 11, 9, 6, 0, tzinfo=timezone.utc),
+    ) == 0
 
 
 @pytest.mark.parametrize("hotel_ids", [[], [101]])
@@ -913,6 +979,12 @@ def test_explicit_hotel_allocation_processing_skips_tenant_rotation(monkeypatch)
             pass
 
     monkeypatch.setattr(allocation_tasks, "_session", lambda _url: FakeSession())
+    monkeypatch.setattr(allocation_tasks, "_active_hotel_count", lambda _db: 4)
+    monkeypatch.setattr(
+        allocation_tasks,
+        "pending_allocation_stale_after",
+        lambda *, active_hotel_count: timedelta(minutes=15),
+    )
     monkeypatch.setattr(
         allocation_tasks,
         "_rotate_active_hotel_ids",
@@ -921,8 +993,10 @@ def test_explicit_hotel_allocation_processing_skips_tenant_rotation(monkeypatch)
     monkeypatch.setattr(
         allocation_tasks,
         "_process_hotel_request",
-        lambda _db, *, hotel_id, origin_key=None: processed.append(hotel_id)
-        or {"selected": 1, "succeeded": 1, "failed": 0, "deferred": 0},
+        lambda _db, *, hotel_id, origin_key=None, pending_stale_after=None: (
+            processed.append(hotel_id)
+            or {"selected": 1, "succeeded": 1, "failed": 0, "deferred": 0}
+        ),
     )
 
     totals = allocation_tasks.process_recalculation_requests(hotel_id=777)
@@ -973,6 +1047,7 @@ def test_postgres_stale_pending_cleanup_skips_worker_locked_run(pg_engine):
             reaper,
             hotel_id=9904,
             now=datetime.now(timezone.utc),
+            stale_after=timedelta(minutes=15),
         )
         reaper.commit()
         worker.commit()
