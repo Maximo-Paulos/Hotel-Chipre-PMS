@@ -43,6 +43,7 @@
       "failed": "Cálculo detenido",
       "partial": "Resultado parcial"
     },
+    "calculationInProgress": "El cálculo está en proceso. Las asignaciones aparecerán cuando termine.",
     "noAssignments": "El cálculo no generó asignaciones para esta propuesta.",
     "reservationId": "Reserva #{{id}}",
     "roomBeforeProposal": "Habitación antes de la propuesta",

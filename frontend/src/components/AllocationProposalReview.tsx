@@ -35,6 +35,7 @@ const automaticAllocationTriggers = new Set([
   "manual_api_recalculate",
   "rooms_manual_reallocate"
 ]);
+const terminalAllocationRunStatuses = new Set(["succeeded", "failed", "partial"]);
 
 function assignmentReason(assignment: AllocationAssignment, run: AllocationRunDetail, translate: (key: string) => string) {
   const explanation = run.explanations.find((item) => item.reservation_id === assignment.reservation_id && item.explanation_type === "assignment");
@@ -73,6 +74,8 @@ export function AllocationProposalReview({
   const [confirmation, setConfirmation] = useState<"accept" | "reject" | null>(null);
   const [selectedLockedMoveApprovals, setSelectedLockedMoveApprovals] = useState<Set<number>>(new Set());
   const proposed = run?.assignments.filter((assignment) => assignment.status.toLowerCase() === "proposed") ?? [];
+  const runStatus = run?.status.toLowerCase() ?? "";
+  const runIsTerminal = terminalAllocationRunStatuses.has(runStatus);
   const lockedMoveCandidates = proposed.filter((assignment) => assignment.requires_explicit_approval);
   const lockedMoveCandidateIds = new Set(lockedMoveCandidates.map((assignment) => assignment.reservation_id));
   const lockedMoveApprovalIds = [...selectedLockedMoveApprovals].filter((id) => lockedMoveCandidateIds.has(id));
@@ -181,7 +184,11 @@ export function AllocationProposalReview({
           ) : null}
 
           {run.assignments.length === 0 ? (
-            <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{t("proposal.noAssignments")}</p>
+            runIsTerminal ? (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{t("proposal.noAssignments")}</p>
+            ) : runStatus === "pending" || runStatus === "running" ? (
+              <p className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950" role="status">{t("proposal.calculationInProgress")}</p>
+            ) : null
           ) : (
             <div className="space-y-3">
               {run.assignments.map((assignment) => {

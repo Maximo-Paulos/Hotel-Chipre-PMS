@@ -43,6 +43,7 @@
       "failed": "Calculation stopped",
       "partial": "Partial result"
     },
+    "calculationInProgress": "The calculation is still in progress. Assignments will appear when it finishes.",
     "noAssignments": "This calculation did not produce room assignments.",
     "reservationId": "Reservation #{{id}}",
     "roomBeforeProposal": "Room before proposal",
