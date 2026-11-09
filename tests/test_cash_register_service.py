@@ -1345,3 +1345,179 @@ def test_daily_summary_matches_successor_session_with_legacy_handoff_history(pg_
     )
     assert close_report.expected_balance == Decimal("691050.00")
     assert close_report.difference == Decimal("0.00")
+
+
+def test_session_summary_exposes_the_cash_eligibility_breakdown_on_postgres(pg_session, monkeypatch):
+    from app.schemas.cash_register import CashMovementRead, CashSessionSummaryRead
+    from app.services import cash_register_service
+    from app.services.cash_register_service import get_session_summary, list_movements
+
+    hotel_id = 987658
+    hotel = _hotel(pg_session, hotel_id)
+    hotel.hotel_timezone = "UTC"
+    user = _user(pg_session, hotel_id)
+    reservation = _reservation(pg_session, hotel_id, "CASH-ELIGIBILITY")
+    business_now = {"value": datetime(2026, 7, 25, 10, tzinfo=timezone.utc)}
+    monkeypatch.setattr(
+        cash_register_service,
+        "hotel_business_now",
+        lambda *_args, **_kwargs: business_now["value"],
+    )
+    session = open_session(
+        pg_session,
+        hotel_id=hotel_id,
+        opened_by_user_id=user.id,
+        opening_balance=Decimal("751050.00"),
+    )
+    session.opened_at = datetime(2026, 7, 25, 10)
+    session.business_opened_at = datetime(2026, 7, 25, 10)
+    pg_session.flush()
+
+    card_transaction = _transaction(
+        pg_session,
+        hotel_id=hotel_id,
+        reservation_id=reservation.id,
+        amount=Decimal("37720.20"),
+        method=PaymentMethodEnum.CREDIT_CARD,
+    )
+    pending_transaction = _transaction(
+        pg_session,
+        hotel_id=hotel_id,
+        reservation_id=reservation.id,
+        amount=Decimal("15.00"),
+        status=TransactionStatusEnum.PENDING,
+    )
+
+    historical_income_rows = []
+    for index in range(20):
+        occurred_at = datetime(2026, 7, 26, 12) + timedelta(days=index)
+        movement = CashMovement(
+            hotel_id=hotel_id,
+            session_id=session.id,
+            recorded_by_user_id=user.id,
+            movement_type=CashMovementTypeEnum.INCOME,
+            amount=Decimal("37720.20"),
+            description=f"Synthetic historical income {index + 1}",
+            recorded_at=occurred_at,
+            business_recorded_at=occurred_at,
+        )
+        pg_session.add(movement)
+        historical_income_rows.append(movement)
+    for index in range(4):
+        occurred_at = datetime(2026, 8, 20, 12) + timedelta(days=index)
+        pg_session.add(
+            CashMovement(
+                hotel_id=hotel_id,
+                session_id=session.id,
+                recorded_by_user_id=user.id,
+                movement_type=CashMovementTypeEnum.EXPENSE,
+                amount=Decimal("863.50"),
+                description=f"Synthetic historical expense {index + 1}",
+                recorded_at=occurred_at,
+                business_recorded_at=occurred_at,
+            )
+        )
+
+    business_now["value"] = datetime(2026, 11, 8, 16, 30, tzinfo=timezone.utc)
+    add_movement(
+        pg_session,
+        hotel_id=hotel_id,
+        session_id=session.id,
+        recorded_by_user_id=user.id,
+        movement_type=CashMovementTypeEnum.INCOME,
+        amount=Decimal("120000.00"),
+    )
+    add_movement(
+        pg_session,
+        hotel_id=hotel_id,
+        session_id=session.id,
+        recorded_by_user_id=user.id,
+        movement_type=CashMovementTypeEnum.EXPENSE,
+        amount=Decimal("1570.00"),
+    )
+    pg_session.flush()
+    eligible_summary = get_session_summary(
+        pg_session,
+        hotel_id=hotel_id,
+        session_id=session.id,
+    )
+    assert eligible_summary["opening_balance"] == Decimal("751050.00")
+    assert eligible_summary["income_total"] == Decimal("874404.00")
+    assert eligible_summary["expense_total"] == Decimal("5024.00")
+    assert eligible_summary["recorded_movements_count"] == 26
+    assert eligible_summary["confirmed_cash_movements_count"] == 26
+    assert eligible_summary["confirmed_cash_total"] == Decimal("869380.00")
+    assert eligible_summary["expected_balance"] == Decimal("1620430.00")
+
+    historical_income_rows[-1].reservation_id = reservation.id
+    historical_income_rows[-1].transaction_id = card_transaction.id
+    outside_session_at = datetime(2026, 7, 24, 12)
+    pg_session.add_all(
+        [
+            CashMovement(
+                hotel_id=hotel_id,
+                session_id=session.id,
+                recorded_by_user_id=user.id,
+                movement_type=CashMovementTypeEnum.INCOME,
+                amount=Decimal("10.00"),
+                description="Synthetic movement before session opening",
+                recorded_at=outside_session_at,
+                business_recorded_at=outside_session_at,
+            ),
+            CashMovement(
+                hotel_id=hotel_id,
+                session_id=session.id,
+                reservation_id=reservation.id,
+                transaction_id=pending_transaction.id,
+                recorded_by_user_id=user.id,
+                movement_type=CashMovementTypeEnum.INCOME,
+                amount=Decimal("15.00"),
+                description="Synthetic pending cash transaction",
+                recorded_at=datetime(2026, 8, 30, 12),
+                business_recorded_at=datetime(2026, 8, 30, 12),
+            ),
+        ]
+    )
+
+    pg_session.flush()
+
+    summary = get_session_summary(pg_session, hotel_id=hotel_id, session_id=session.id)
+    summary_response = CashSessionSummaryRead.model_validate(
+        {
+            **summary,
+            "by_collector": [
+                {**collector, "collector_name": "Operador QA"}
+                for collector in summary["by_collector"]
+            ],
+        }
+    )
+    movements = list_movements(
+        pg_session,
+        hotel_id=hotel_id,
+        session_id=session.id,
+        cash_session=session,
+        business_as_of=datetime(2026, 11, 8, 16, 30),
+    )
+    read_by_description = {
+        movement.description: CashMovementRead.model_validate(movement)
+        for movement in movements
+    }
+
+    assert summary["income_total"] == Decimal("874414.00")
+    assert summary["expense_total"] == Decimal("5024.00")
+    assert summary["recorded_movements_count"] == 28
+    assert summary["movements_count"] == 27
+    assert summary["confirmed_cash_income_total"] == Decimal("836683.80")
+    assert summary["confirmed_cash_expense_total"] == Decimal("5024.00")
+    assert summary["confirmed_cash_adjustment_total"] == Decimal("0.00")
+    assert summary["confirmed_cash_handoff_total"] == Decimal("0.00")
+    assert summary["confirmed_cash_movements_count"] == 25
+    assert summary["confirmed_cash_total"] == Decimal("831659.80")
+    assert summary["expected_balance"] == Decimal("1582709.80")
+    assert summary_response.confirmed_cash_income_total == Decimal("836683.80")
+    assert summary_response.recorded_movements_count == 28
+    assert read_by_description["Synthetic historical income 20"].cash_eligible is False
+    assert read_by_description["Synthetic historical income 20"].cash_exclusion_reason == "non_cash_payment"
+    assert read_by_description["Synthetic movement before session opening"].cash_exclusion_reason == "outside_session_period"
+    assert read_by_description["Synthetic pending cash transaction"].cash_exclusion_reason == "transaction_not_completed"
+    assert read_by_description["Synthetic historical income 1"].cash_eligible is True

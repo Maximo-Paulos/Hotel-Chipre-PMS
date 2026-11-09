@@ -68,6 +68,16 @@ class CashMovementRead(BaseModel):
     voided_by_payment_correction_id: Optional[int] = None
     recorded_at: UTCDateTime
     business_recorded_at: Optional[UTCDateTime] = None
+    cash_eligible: Optional[bool] = None
+    cash_exclusion_reason: Optional[
+        Literal[
+            "voided",
+            "outside_session_period",
+            "transaction_missing",
+            "transaction_not_completed",
+            "non_cash_payment",
+        ]
+    ] = None
 
     model_config = {"from_attributes": True}
 
@@ -109,10 +119,16 @@ class CashSessionSummaryRead(BaseModel):
     income_total: Decimal
     expense_total: Decimal
     adjustment_total: Decimal
+    confirmed_cash_income_total: Decimal
+    confirmed_cash_expense_total: Decimal
+    confirmed_cash_adjustment_total: Decimal
+    confirmed_cash_handoff_total: Decimal
+    confirmed_cash_movements_count: int
     confirmed_cash_total: Decimal
     cash_tips_total: Decimal = Decimal("0.00")
     expected_balance: Decimal
     movements_count: int
+    recorded_movements_count: int
     by_collector: list[CashSessionCollectorSummaryRead] = Field(default_factory=list)
 
 

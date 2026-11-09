@@ -49,12 +49,24 @@ mutaciones protegidas por `cash:operate` y permite el consolidado de lectura a
 los roles con `cash:view`.
 
 Al cerrar un turno, `Saldo contado` registra todo el efectivo físico del cajón.
+El campo requiere un conteo explícito antes de habilitar el cierre; `0` se
+admite cuando el conteo físico realmente fue cero.
 El cierre guarda el saldo esperado, el contado, la diferencia, las notas, el
 autor y la hora. La caja sucesora comienza en cero. Al recibir la custodia,
 Dueño o Codueña puede declarar por separado el efectivo que deja como fondo de
 cambio; ese importe se limita a lo entregado y queda registrado como apertura
 de la caja sucesora. La aprobación de una diferencia y la recepción de
 custodia son decisiones independientes.
+
+El resumen del turno diferencia los movimientos activos registrados del
+subconjunto que integra el efectivo esperado. El desglose confirmado separa
+ingresos, egresos, ajustes, cantidad de movimientos elegibles y traspaso
+heredado confirmado. Un movimiento cuenta si no está anulado, su fecha de
+negocio cae dentro de la vida del turno (o usa `recorded_at` para filas legadas)
+y, cuando está vinculado a una transacción, esta está completada y pagada en
+efectivo. El historial indica por fila si el movimiento se incluyó y, si no,
+el motivo. Así se conserva la diferencia entre movimientos registrados y
+efectivo que afecta el saldo esperado.
 
 Los gastos manuales se cargan con categoría, proveedor y referencia o imagen
 privada del comprobante. Cargar un gasto lo deja pendiente y no reduce el

@@ -2,6 +2,12 @@ import { apiFetch, buildAuthHeaders, buildUrl, type SessionLike } from "./client
 
 export type CashSessionStatus = "open" | "closed" | "pending_approval";
 export type CashMovementType = "income" | "expense" | "adjustment";
+export type CashMovementExclusionReason =
+  | "voided"
+  | "outside_session_period"
+  | "transaction_missing"
+  | "transaction_not_completed"
+  | "non_cash_payment";
 
 export type CashSession = {
   id: number;
@@ -50,6 +56,8 @@ export type CashMovement = {
   voided_by_payment_correction_id?: number | null;
   recorded_at: string;
   business_recorded_at?: string | null;
+  cash_eligible?: boolean | null;
+  cash_exclusion_reason?: CashMovementExclusionReason | null;
 };
 
 export type CashCloseReport = {
@@ -101,10 +109,16 @@ export type CashSessionSummary = {
   income_total: number;
   expense_total: number;
   adjustment_total: number;
+  confirmed_cash_income_total: number;
+  confirmed_cash_expense_total: number;
+  confirmed_cash_adjustment_total: number;
+  confirmed_cash_handoff_total: number;
+  confirmed_cash_movements_count: number;
   cash_tips_total?: number;
   confirmed_cash_total: number;
   expected_balance: number;
   movements_count: number;
+  recorded_movements_count: number;
   by_collector: Array<{
     collector_user_id: number | null;
     collector_name: string;

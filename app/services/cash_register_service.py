@@ -468,56 +468,43 @@ def _movement_sign(movement_type: CashMovementTypeEnum) -> Decimal:
     return Decimal("1")
 
 
-def _confirmed_cash_movements_total(db: Session, session: CashSession, business_as_of: datetime) -> Decimal:
-    business_opened_at = session.business_opened_at or session.opened_at
-    movements: Iterable[CashMovement] = (
-        db.query(CashMovement)
-        .filter(
-            CashMovement.hotel_id == session.hotel_id,
-            CashMovement.session_id == session.id,
-            CashMovement.voided_at.is_(None),
-            CashMovement.business_recorded_at.is_not(None),
-            CashMovement.business_recorded_at >= business_opened_at,
-            CashMovement.business_recorded_at <= business_as_of,
-        )
-        .all()
-    )
-    legacy_movements: Iterable[CashMovement] = (
-        db.query(CashMovement)
-        .filter(
-            CashMovement.hotel_id == session.hotel_id,
-            CashMovement.session_id == session.id,
-            CashMovement.voided_at.is_(None),
-            CashMovement.business_recorded_at.is_(None),
-            CashMovement.recorded_at >= session.opened_at,
-            CashMovement.recorded_at <= business_as_of,
-        )
-        .all()
-    )
-    movements = [*movements, *legacy_movements]
+def _cash_movement_exclusion_reason(
+    movement: CashMovement,
+    *,
+    session: CashSession,
+    business_as_of: datetime,
+    transaction: Transaction | None,
+) -> str | None:
+    """Apply the single eligibility rule shared by cash totals and ledger rows."""
+    if movement.voided_at is not None:
+        return "voided"
 
-    total = Decimal("0.00")
-    transaction_ids = [movement.transaction_id for movement in movements if movement.transaction_id is not None]
-    transactions_by_id: dict[int, Transaction] = {}
-    if transaction_ids:
-        transactions_by_id = {
-            tx.id: tx
-            for tx in db.query(Transaction)
-            .filter(Transaction.hotel_id == session.hotel_id, Transaction.id.in_(transaction_ids))
-            .all()
-        }
+    movement_at = movement.business_recorded_at
+    opened_at = session.business_opened_at or session.opened_at
+    if movement_at is None:
+        # Legacy rows have no business timestamp, so retain the original
+        # recorded-at fallback and wall-clock session opening boundary.
+        movement_at = movement.recorded_at
+        opened_at = session.opened_at
+    if movement_at < opened_at or movement_at > business_as_of:
+        return "outside_session_period"
 
-    for movement in movements:
-        if movement.transaction_id is not None:
-            tx = transactions_by_id.get(movement.transaction_id)
-            if (
-                tx is None
-                or tx.payment_method != PaymentMethodEnum.CASH
-                or tx.status != TransactionStatusEnum.COMPLETED
-            ):
-                continue
-        total += _movement_sign(movement.movement_type) * _money(movement.amount)
+    if movement.transaction_id is None:
+        return None
+    if transaction is None:
+        return "transaction_missing"
+    if transaction.status != TransactionStatusEnum.COMPLETED:
+        return "transaction_not_completed"
+    if transaction.payment_method != PaymentMethodEnum.CASH:
+        return "non_cash_payment"
+    return None
 
+
+def _confirmed_cash_handoff_total(
+    db: Session,
+    session: CashSession,
+    business_as_of: datetime,
+) -> Decimal:
     # Before successor-float declarations were stored explicitly, daily cash
     # reports treated a confirmed legacy handoff as the successor's opening
     # float. Keep session summaries and close reports on the same basis. Newer
@@ -541,8 +528,96 @@ def _confirmed_cash_movements_total(db: Session, session: CashSession, business_
             or legacy_handoff.delivered_at
         )
         if acknowledged_at is not None and acknowledged_at <= business_as_of:
-            total += _money(legacy_handoff.delivered_amount)
-    return _money(total)
+            return _money(legacy_handoff.delivered_amount)
+    return ZERO
+
+
+def _confirmed_cash_movement_breakdown(
+    db: Session,
+    session: CashSession,
+    business_as_of: datetime,
+    *,
+    movements: Iterable[CashMovement] | None = None,
+) -> dict[str, Decimal | int]:
+    if movements is not None:
+        session_movements = list(movements)
+    else:
+        business_opened_at = session.business_opened_at or session.opened_at
+        current_movements = (
+            db.query(CashMovement)
+            .filter(
+                CashMovement.hotel_id == session.hotel_id,
+                CashMovement.session_id == session.id,
+                CashMovement.voided_at.is_(None),
+                CashMovement.business_recorded_at.is_not(None),
+                CashMovement.business_recorded_at >= business_opened_at,
+                CashMovement.business_recorded_at <= business_as_of,
+            )
+            .all()
+        )
+        legacy_movements = (
+            db.query(CashMovement)
+            .filter(
+                CashMovement.hotel_id == session.hotel_id,
+                CashMovement.session_id == session.id,
+                CashMovement.voided_at.is_(None),
+                CashMovement.business_recorded_at.is_(None),
+                CashMovement.recorded_at >= session.opened_at,
+                CashMovement.recorded_at <= business_as_of,
+            )
+            .all()
+        )
+        session_movements = [*current_movements, *legacy_movements]
+        transaction_ids = {
+            movement.transaction_id
+            for movement in session_movements
+            if movement.transaction_id is not None
+        }
+        transactions_by_id = {
+            transaction.id: transaction
+            for transaction in db.query(Transaction)
+            .filter(Transaction.hotel_id == session.hotel_id, Transaction.id.in_(transaction_ids))
+            .all()
+        } if transaction_ids else {}
+        for movement in session_movements:
+            transaction = transactions_by_id.get(movement.transaction_id)
+            exclusion_reason = _cash_movement_exclusion_reason(
+                movement,
+                session=session,
+                business_as_of=business_as_of,
+                transaction=transaction,
+            )
+            movement.cash_eligible = exclusion_reason is None
+            movement.cash_exclusion_reason = exclusion_reason
+    eligible_movements = [
+        movement for movement in session_movements if getattr(movement, "cash_eligible", False)
+    ]
+    income = _money(sum(
+        (_money(movement.amount) for movement in eligible_movements if movement.movement_type == CashMovementTypeEnum.INCOME),
+        ZERO,
+    ))
+    expense = _money(sum(
+        (_money(movement.amount) for movement in eligible_movements if movement.movement_type == CashMovementTypeEnum.EXPENSE),
+        ZERO,
+    ))
+    adjustment = _money(sum(
+        (_money(movement.amount) for movement in eligible_movements if movement.movement_type == CashMovementTypeEnum.ADJUSTMENT),
+        ZERO,
+    ))
+    handoff = _confirmed_cash_handoff_total(db, session, business_as_of)
+    confirmed_total = _money(income - expense + adjustment + handoff)
+    return {
+        "confirmed_cash_income_total": income,
+        "confirmed_cash_expense_total": expense,
+        "confirmed_cash_adjustment_total": adjustment,
+        "confirmed_cash_handoff_total": handoff,
+        "confirmed_cash_movements_count": len(eligible_movements),
+        "confirmed_cash_total": confirmed_total,
+    }
+
+
+def _confirmed_cash_movements_total(db: Session, session: CashSession, business_as_of: datetime) -> Decimal:
+    return Decimal(str(_confirmed_cash_movement_breakdown(db, session, business_as_of)["confirmed_cash_total"]))
 
 
 def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
@@ -550,9 +625,9 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
 
     ``expected_balance`` reuses the SAME confirmed-cash logic as the arqueo
     (:func:`close_session`) so the number the UI shows always matches what the
-    close will compute — single source of truth. Income/expense/adjustment
-    totals include only active movements; voided rows remain visible in the
-    movement history for audit.
+    close will compute — single source of truth. The separate confirmed-cash
+    breakdown applies that predicate to the movement ledger and reports legacy
+    handoff float separately. Recorded totals remain available for audit.
     """
     session = (
         db.query(CashSession)
@@ -563,7 +638,13 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
         raise CashRegisterError("No se encontró la caja para este hotel")
 
     as_of = utc_naive(hotel_business_now(db, hotel_id))
-    movements = list_movements(db, hotel_id=hotel_id, session_id=session_id)
+    movements = list_movements(
+        db,
+        hotel_id=hotel_id,
+        session_id=session_id,
+        cash_session=session,
+        business_as_of=as_of,
+    )
     active_movements = [
         movement
         for movement in movements
@@ -581,7 +662,13 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
         (_money(getattr(movement, "cash_tip_amount", 0) or 0) for movement in active_movements),
         Decimal("0.00"),
     )
-    confirmed_total = _confirmed_cash_movements_total(db, session, as_of)
+    confirmed_cash = _confirmed_cash_movement_breakdown(
+        db,
+        session,
+        as_of,
+        movements=movements,
+    )
+    confirmed_total = Decimal(str(confirmed_cash["confirmed_cash_total"]))
     expected_balance = _money(session.opening_balance) + confirmed_total
     collector_totals: dict[int | None, dict[str, Decimal | int]] = {}
     total_key_by_movement_type = {
@@ -632,10 +719,11 @@ def get_session_summary(db: Session, *, hotel_id: int, session_id: int) -> dict:
         "income_total": _money(income),
         "expense_total": _money(expense),
         "adjustment_total": _money(adjustment),
-        "confirmed_cash_total": confirmed_total,
+        **confirmed_cash,
         "cash_tips_total": _money(cash_tips_total),
         "expected_balance": expected_balance,
         "movements_count": len(active_movements),
+        "recorded_movements_count": len(movements),
         "by_collector": by_collector,
     }
 
@@ -919,7 +1007,14 @@ def list_sessions(
     return rows[:page_size], has_next_page
 
 
-def list_movements(db: Session, *, hotel_id: int, session_id: int) -> list[CashMovement]:
+def list_movements(
+    db: Session,
+    *,
+    hotel_id: int,
+    session_id: int,
+    cash_session: CashSession | None = None,
+    business_as_of: datetime | None = None,
+) -> list[CashMovement]:
     movements = (
         db.query(CashMovement)
         .join(CashSession, CashSession.id == CashMovement.session_id)
@@ -931,6 +1026,12 @@ def list_movements(db: Session, *, hotel_id: int, session_id: int) -> list[CashM
         .order_by(CashMovement.recorded_at.asc(), CashMovement.id.asc())
         .all()
     )
+    cash_session = cash_session or (
+        db.query(CashSession)
+        .filter(CashSession.id == session_id, CashSession.hotel_id == hotel_id)
+        .one_or_none()
+    )
+    as_of = utc_naive(business_as_of or hotel_business_now(db, hotel_id))
     transaction_ids = {movement.transaction_id for movement in movements if movement.transaction_id is not None}
     transactions = (
         db.query(Transaction)
@@ -947,6 +1048,18 @@ def list_movements(db: Session, *, hotel_id: int, session_id: int) -> list[CashM
             if transaction is not None and hasattr(transaction.status, "value")
             else str(transaction.status) if transaction is not None else None
         )
+        exclusion_reason = (
+            _cash_movement_exclusion_reason(
+                movement,
+                session=cash_session,
+                business_as_of=as_of,
+                transaction=transaction,
+            )
+            if cash_session is not None
+            else "outside_session_period"
+        )
+        movement.cash_eligible = exclusion_reason is None
+        movement.cash_exclusion_reason = exclusion_reason
         is_cash_income = (
             transaction is not None
             and transaction.payment_method == PaymentMethodEnum.CASH

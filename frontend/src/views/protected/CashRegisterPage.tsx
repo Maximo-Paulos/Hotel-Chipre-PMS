@@ -31,6 +31,7 @@ import { useCollaborativeResource } from "../../hooks/useCollaborativeResource";
 import { formatHotelDateTime, formatHotelTime } from "../../utils/date";
 import { useBusinessDate } from "../../hooks/useBusinessClock";
 import { cashExpenseValidationMessage } from "../../utils/cashExpenseValidation.mjs";
+import { MAX_CASH_COUNT, parseCashCount } from "../../utils/cashCountValidation";
 import { formatCashTenderAmount } from "../../utils/cashTender.mjs";
 
 const emptyMovementForm: CashMovementPayload = {
@@ -39,6 +40,13 @@ const emptyMovementForm: CashMovementPayload = {
   description: ""
 };
 const emptyDailyEntries: CashDailyEntry[] = [];
+const cashMovementExclusionLabels: Record<NonNullable<CashMovement["cash_exclusion_reason"]>, string> = {
+  voided: "el movimiento fue anulado",
+  outside_session_period: "la fecha queda fuera del período del turno",
+  transaction_missing: "no se encontró la transacción vinculada",
+  transaction_not_completed: "la transacción todavía no está completada",
+  non_cash_payment: "la transacción se pagó por un medio distinto de efectivo"
+};
 
 const money = (value?: number | string | null, currency = "ARS") =>
   Number(value ?? 0).toLocaleString("es-AR", { style: "currency", currency });
@@ -58,7 +66,7 @@ export function CashRegisterPage() {
   const [openingCurrency, setOpeningCurrency] = useState("ARS");
   const [openingNotes, setOpeningNotes] = useState("");
   const [movementForm, setMovementForm] = useState<CashMovementPayload>(emptyMovementForm);
-  const [countedBalances, setCountedBalances] = useState<Record<number, number>>({});
+  const [countedBalances, setCountedBalances] = useState<Record<number, string>>({});
   const [successorFloatAmounts, setSuccessorFloatAmounts] = useState<Record<number, string>>({});
   const [closeNotes, setCloseNotes] = useState("");
   const [approveOnClose, setApproveOnClose] = useState(false);
@@ -141,7 +149,8 @@ export function CashRegisterPage() {
     () => sessions.find((session) => session.id === selectedSessionId) ?? openSession ?? sessions[0] ?? null,
     [openSession, selectedSessionId, sessions]
   );
-  const countedBalance = selectedSession ? countedBalances[selectedSession.id] ?? 0 : 0;
+  const countedBalanceInput = selectedSession ? countedBalances[selectedSession.id] ?? "" : "";
+  const countedBalance = parseCashCount(countedBalanceInput);
   const movementFormErrorKey = `movement-form:${selectedSession?.id ?? "none"}`;
   const closeSessionErrorKey = `close-session:${selectedSession?.id ?? "none"}`;
   const cashNotesErrorKey = `notes:${selectedSession?.id ?? "none"}`;
@@ -243,6 +252,11 @@ export function CashRegisterPage() {
   );
 
   const expectedBalance = Number(summary?.expected_balance ?? selectedSession?.opening_balance ?? 0);
+  const sessionOpeningBalance = Number(summary?.opening_balance ?? selectedSession?.opening_balance ?? 0);
+  const recordedMovementCount = Number(
+    summary?.recorded_movements_count ?? summary?.movements_count ?? movements.length
+  );
+  const canCloseWithCurrentSummary = Boolean(summary) && !summaryQuery.isFetching && !summaryQuery.isError;
   const currency = selectedSession?.currency_code ?? "ARS";
   const closeReportCurrency = selectedSessionCloseReport?.currency_code ?? currency;
   const busy =
@@ -269,7 +283,7 @@ export function CashRegisterPage() {
       setSelectedSessionId(session.id);
       setOpeningBalance(null);
       setOpeningNotes("");
-      setCountedBalances((current) => ({ ...current, [session.id]: 0 }));
+      setCountedBalances((current) => ({ ...current, [session.id]: "" }));
       setMessage("Caja abierta.");
     } catch (error) {
       setCashActionError(`open:${openingCurrency}`, error, "No se pudo abrir la caja.");
@@ -406,16 +420,30 @@ export function CashRegisterPage() {
   const handleCloseSession = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedSession || selectedSession.status !== "open") return;
+    if (!canCloseWithCurrentSummary) {
+      setCashActionErrors((current) => ({
+        ...current,
+        [closeSessionErrorKey]: "Esperá a que se actualice la conciliación del turno antes de cerrar la caja."
+      }));
+      return;
+    }
+    if (countedBalance === null) {
+      setCashActionErrors((current) => ({
+        ...current,
+        [closeSessionErrorKey]: "Ingresá el efectivo contado antes de cerrar la caja. Podés ingresar 0 si no quedó efectivo."
+      }));
+      return;
+    }
     setMessage(null);
     try {
       const report = await mutations.closeSessionMutation.mutateAsync({
-        counted_balance: Number(countedBalance),
+        counted_balance: countedBalance,
         notes: closeNotes.trim() || null,
         approve_difference: approveOnClose
       });
       setCloseReport(report);
       setSelectedSessionId(report.session_id);
-      setCountedBalances((current) => ({ ...current, [report.session_id]: 0 }));
+      setCountedBalances((current) => ({ ...current, [report.session_id]: "" }));
       setCloseNotes("");
       setApproveOnClose(false);
       setMessage("Caja cerrada.");
@@ -918,12 +946,65 @@ export function CashRegisterPage() {
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Metric label="Saldo inicial" value={money(selectedSession?.opening_balance, currency)} />
-        <Metric label="Ingresos" value={money(totals.income, currency)} />
-        <Metric label="Propinas voluntarias" value={cashMoney(summary?.cash_tips_total ?? 0, currency)} />
-        <Metric label="Egresos" value={money(totals.expense, currency)} />
-        <Metric label="Esperado" value={money(expectedBalance, currency)} />
+        <Metric label="Saldo inicial del turno" value={money(sessionOpeningBalance, currency)} />
+        <Metric label="Ingresos activos registrados" value={summary ? money(totals.income, currency) : "No disponible"} />
+        <Metric label="Propinas voluntarias" value={summary ? cashMoney(summary.cash_tips_total ?? 0, currency) : "No disponible"} />
+        <Metric label="Egresos activos registrados" value={summary ? money(totals.expense, currency) : "No disponible"} />
+        <Metric label="Esperado" value={summary ? money(expectedBalance, currency) : "No disponible"} />
       </div>
+      {selectedSession && summaryQuery.isLoading ? (
+        <p role="status" data-testid="cash-summary-loading" className="text-sm text-slate-600">
+          Cargando la conciliación del turno…
+        </p>
+      ) : null}
+      {selectedSession && summaryQuery.isFetching && summary ? (
+        <p role="status" data-testid="cash-summary-refreshing" className="text-sm text-slate-600">
+          Actualizando la conciliación del turno. Esperá antes de cerrar la caja.
+        </p>
+      ) : null}
+      {selectedSession && summaryQuery.isError ? (
+        <div role="alert" data-testid="cash-summary-error" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          <p>
+            No se pudo actualizar la conciliación del turno. Los valores visibles pueden estar desactualizados; volver a cargar antes de cerrar.
+          </p>
+          <button
+            type="button"
+            disabled={summaryQuery.isFetching}
+            onClick={() => void summaryQuery.refetch()}
+            className="rounded-md border border-rose-300 bg-white px-3 py-2 font-semibold text-rose-900 hover:bg-rose-100 disabled:opacity-60"
+          >
+            Reintentar
+          </button>
+        </div>
+      ) : null}
+      {summary ? (
+        <p className="text-xs text-slate-600">
+          {recordedMovementCount} movimientos registrados · {summary.movements_count} activos en los totales informativos. El esperado usa solo el desglose de efectivo confirmado.
+        </p>
+      ) : null}
+
+      {summary ? (
+        <section
+          className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-5 shadow-sm"
+          data-testid="cash-confirmed-cash-breakdown"
+        >
+          <div>
+            <p className="text-xs uppercase tracking-wide text-emerald-800">Reconciliación</p>
+            <h2 className="text-lg font-semibold text-slate-900">Desglose del efectivo esperado</h2>
+            <p className="text-sm text-slate-600">
+              Se incluyen movimientos no anulados dentro del período del turno; los vinculados a una transacción deben estar completados y pagados en efectivo. Los traspasos heredados se muestran por separado.
+            </p>
+          </div>
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <SummaryLine label="Ingresos en efectivo elegibles" value={money(summary.confirmed_cash_income_total, currency)} />
+            <SummaryLine label="Egresos en efectivo elegibles" value={money(summary.confirmed_cash_expense_total, currency)} />
+            <SummaryLine label="Ajustes elegibles" value={money(summary.confirmed_cash_adjustment_total, currency)} />
+            <SummaryLine label="Traspaso heredado confirmado" value={money(summary.confirmed_cash_handoff_total, currency)} />
+            <SummaryLine label="Movimientos que integran el esperado" value={String(summary.confirmed_cash_movements_count)} />
+            <SummaryLine label="Neto confirmado en efectivo" value={money(summary.confirmed_cash_total, currency)} />
+          </dl>
+        </section>
+      ) : null}
 
       {summary?.by_collector.length ? (
         <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -1305,6 +1386,13 @@ export function CashRegisterPage() {
                         <p className="text-xs text-slate-500">
                           {movement.description || "Sin descripción"} - {formatHotelDateTime(movement.business_recorded_at ?? movement.recorded_at, hotelTimeZone)}
                         </p>
+                        {movement.cash_eligible === true ? (
+                          <p className="mt-1 text-xs text-emerald-800">Incluido en el efectivo esperado.</p>
+                        ) : movement.cash_eligible === false ? (
+                          <p className="mt-1 text-xs text-amber-800">
+                            Excluido del efectivo esperado: {cashMovementExclusionLabels[movement.cash_exclusion_reason ?? "outside_session_period"]}.
+                          </p>
+                        ) : null}
                         {movement.voided_at ? (
                           <p className="mt-1 text-xs text-rose-700">
                             {t("page.cashRegister.voidedExcludedTotals")} · {t("page.cashRegister.paymentCorrection", { id: movement.voided_by_payment_correction_id })}
@@ -1420,7 +1508,7 @@ export function CashRegisterPage() {
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Arqueo</p>
               <h2 className="text-lg font-semibold text-slate-900">Cerrar caja</h2>
-              <p className="text-sm text-slate-600">Saldo esperado: {money(expectedBalance, currency)}</p>
+              <p className="text-sm text-slate-600">Saldo esperado: {summary ? money(expectedBalance, currency) : "No disponible"}</p>
             </div>
             <PersistentActionError
               message={cashActionErrors[closeSessionErrorKey]}
@@ -1432,15 +1520,24 @@ export function CashRegisterPage() {
                 <input
                   type="number"
                   min={0}
+                  max={MAX_CASH_COUNT}
                   step="0.01"
-                  value={countedBalance || ""}
+                  required
+                  value={countedBalanceInput}
                   onChange={(event) => {
                     if (selectedSession) {
-                      setCountedBalances((current) => ({ ...current, [selectedSession.id]: Number(event.target.value) }));
+                      setCountedBalances((current) => ({ ...current, [selectedSession.id]: event.target.value }));
+                      setCashActionErrors((current) => {
+                        if (!current[closeSessionErrorKey]) return current;
+                        const next = { ...current };
+                        delete next[closeSessionErrorKey];
+                        return next;
+                      });
                     }
                   }}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                 />
+                <span className="block text-xs text-slate-500">Ingresá el efectivo físico contado. El valor 0 es válido si el conteo fue cero.</span>
               </label>
               <label className="flex items-center gap-2 pt-6 text-sm text-slate-700">
                 <input
@@ -1467,7 +1564,7 @@ export function CashRegisterPage() {
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={busy || !canOperateCash || !selectedSession || selectedSession.status !== "open"}
+                disabled={busy || !canOperateCash || !selectedSession || selectedSession.status !== "open" || !canCloseWithCurrentSummary || countedBalance === null}
                 className="rounded-lg border border-brand-200 bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
               >
                 Cerrar caja

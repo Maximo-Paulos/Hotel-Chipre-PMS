@@ -51,14 +51,20 @@ test("owner finds and approves a receptionist's pending close from another brows
     const expectedText = await closeForm.getByText(/Saldo esperado:/).innerText();
     const expectedBalance = parseMoney(expectedText);
     const countedBalance = expectedBalance > 50 ? expectedBalance - 1 : 51;
-    await closeForm.getByText("Saldo contado", { exact: true }).locator("..").locator("input").fill(String(countedBalance));
+    const countedBalanceInput = closeForm.getByText("Saldo contado", { exact: true }).locator("..").locator("input");
+    const closeButton = closeForm.getByRole("button", { name: "Cerrar caja", exact: true });
+    await expect(countedBalanceInput).toHaveValue("");
+    await expect(countedBalanceInput).toHaveAttribute("required", "");
+    await expect(closeButton).toBeDisabled();
+    await countedBalanceInput.fill(String(countedBalance));
+    await expect(closeButton).toBeEnabled();
     const closeResponsePromise = receptionPage.waitForResponse((response) =>
       response.url().includes("/api/cash-register/sessions/") &&
       response.url().endsWith("/close") &&
       response.request().method() === "POST" &&
       response.status() === 200
     );
-    await closeForm.getByRole("button", { name: "Cerrar caja", exact: true }).click();
+    await closeButton.click();
     const closeResponse = await closeResponsePromise;
     const pendingReport = await closeResponse.json() as {
       id: number;

@@ -1094,3 +1094,68 @@ def test_prior_receipt_api_requires_management_permission_and_stays_out_of_cash(
     db.refresh(reservation)
     assert reservation.check_out_date == original_checkout
     assert db.query(Transaction).filter(Transaction.reservation_id == reservation.id).count() == transaction_count
+
+
+def test_cash_session_summary_api_keeps_permission_and_hotel_scope_on_postgres(pg_session):
+    hotel_id = 987659
+    other_hotel_id = hotel_id + 1
+    owner_id = 987659
+    for current_hotel_id in (hotel_id, other_hotel_id):
+        pg_session.add(HotelConfiguration(id=current_hotel_id, subscription_active=True, hotel_timezone="UTC"))
+    owner = User(
+        id=owner_id,
+        email="cash-summary-owner@test.invalid",
+        password_hash="test-hash",
+        is_active=True,
+        is_verified=True,
+    )
+    pg_session.add(owner)
+    pg_session.flush()
+    sessions = [
+        CashSession(
+            hotel_id=current_hotel_id,
+            opened_by_user_id=owner_id,
+            status=CashSessionStatusEnum.OPEN,
+            opening_balance=Decimal("751050.00"),
+            currency_code="ARS",
+            opened_at=datetime(2026, 11, 8, 10),
+            business_opened_at=datetime(2026, 11, 8, 10),
+        )
+        for current_hotel_id in (hotel_id, other_hotel_id)
+    ]
+    pg_session.add_all(sessions)
+    pg_session.flush()
+
+    role = {"value": "owner"}
+
+    def override_get_db():
+        yield pg_session
+
+    def override_auth():
+        return AuthContext(
+            hotel_id=hotel_id,
+            user_id=owner_id,
+            user_email="cash-summary-owner@test.invalid",
+            user_role=role["value"],
+            is_verified=True,
+            permissions=set(),
+        )
+
+    fastapi_app.dependency_overrides[get_db] = override_get_db
+    fastapi_app.dependency_overrides[get_auth_context] = override_auth
+    try:
+        client = TestClient(fastapi_app)
+        own_session = client.get(f"/api/cash-register/sessions/{sessions[0].id}/summary")
+        assert own_session.status_code == 200, own_session.text
+        assert own_session.json()["confirmed_cash_income_total"] == "0.00"
+        assert own_session.json()["recorded_movements_count"] == 0
+
+        role["value"] = "housekeeping"
+        denied = client.get(f"/api/cash-register/sessions/{sessions[0].id}/summary")
+        assert denied.status_code == 403
+
+        role["value"] = "owner"
+        other_hotel_session = client.get(f"/api/cash-register/sessions/{sessions[1].id}/summary")
+        assert other_hotel_session.status_code == 404
+    finally:
+        fastapi_app.dependency_overrides.clear()
