@@ -1808,20 +1808,33 @@ def move_reservation_room(
         quoted_total = previous_total
         amount_delta = Decimal("0.00")
         currency_code = reservation.currency_code
+    elif price_action == "keep" and not category_changed:
+        # A same-category move does not change the commercial agreement. Keep
+        # the persisted total and avoid requiring a new quote when hotel pricing
+        # policy is not configured yet.
+        pricing = None
+        quoted_total = previous_total
+        amount_delta = Decimal("0.00")
+        currency_code = reservation.currency_code
     else:
-        pricing = calculate_reservation_pricing(
-            db,
-            category_id=room.category_id,
-            check_in=reservation.check_in_date,
-            check_out=reservation.check_out_date,
-            hotel_id=hotel_id,
-            sellable_product_id=None if category_changed else reservation.sellable_product_id,
-            rate_plan_id=None if category_changed else reservation.rate_plan_id,
-            tax_policy_id=reservation.tax_policy_id,
-            pricing_channel_code=reservation.source_provider_code or reservation.source.value,
-            target_currency=reservation.currency_code,
-            occupancy=reservation.num_adults + reservation.num_children,
-        )
+        try:
+            pricing = calculate_reservation_pricing(
+                db,
+                category_id=room.category_id,
+                check_in=reservation.check_in_date,
+                check_out=reservation.check_out_date,
+                hotel_id=hotel_id,
+                sellable_product_id=None if category_changed else reservation.sellable_product_id,
+                rate_plan_id=None if category_changed else reservation.rate_plan_id,
+                tax_policy_id=reservation.tax_policy_id,
+                pricing_channel_code=reservation.source_provider_code or reservation.source.value,
+                target_currency=reservation.currency_code,
+                occupancy=reservation.num_adults + reservation.num_children,
+            )
+        except ReservationError as exc:
+            # Required pricing failures are a domain validation problem, not an
+            # unexpected server error; the API maps this error to a safe 4xx.
+            raise ReservationOperationsError(str(exc)) from exc
         quoted_total = Decimal(str(pricing.total_amount)).quantize(Decimal("0.01"))
         amount_delta = (quoted_total - previous_total).quantize(Decimal("0.01"))
         currency_code = pricing.currency_code
