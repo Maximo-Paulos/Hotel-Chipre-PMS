@@ -17,6 +17,10 @@ test("formats the trial end date in the hotel local timezone", () => {
   );
 });
 
+test("keeps date-only reservation values on their calendar day in Argentina", () => {
+  assert.equal(formatHotelDate("2026-11-09", "UTC"), "09/11/2026");
+});
+
 test("treats legacy naive backend timestamps as UTC", () => {
   assert.equal(
     formatHotelTime("2026-09-28T21:55:19", "America/Argentina/Buenos_Aires"),
