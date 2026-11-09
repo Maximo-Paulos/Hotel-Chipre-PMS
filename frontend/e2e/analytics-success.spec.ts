@@ -11,31 +11,35 @@ async function login(page: Page) {
   await page.waitForURL("**/dashboard", { timeout: 15_000 });
 }
 
-test("owner opens the analytics summary with reconciled freshness metadata", async ({ page }) => {
-  await login(page);
-  await page.goto("/analytics");
-
-  await expect(page.getByRole("heading", { name: "Analítica", exact: true })).toBeVisible();
-  await expect(page.getByRole("status", { name: /Fuente (PostgreSQL|ClickHouse)\. Dato incluido más antiguo actualizado el/ })).toBeVisible();
-  await expect(page.getByText("Cargando analytics...", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("alert")).toHaveCount(0);
-});
-
-test("analytics freshness label explains the oldest included data timestamp in English", async ({ page }) => {
+async function mockInterfaceLanguage(page: Page, language: "en" | "es") {
   await page.route("**/api/config/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname.endsWith("/interface-language")) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ interface_language: "en" })
+        body: JSON.stringify({ interface_language: language })
       });
       return;
     }
     const response = await route.fetch();
     const config = await response.json();
-    await route.fulfill({ response, body: JSON.stringify({ ...config, interface_language: "en" }) });
+    await route.fulfill({ response, body: JSON.stringify({ ...config, interface_language: language }) });
   });
+}
+
+test("owner opens analytics summary with an explicit unavailable freshness state", async ({ page }) => {
+  await login(page);
+  await page.goto("/analytics");
+
+  await expect(page.getByRole("heading", { name: "Analítica", exact: true })).toBeVisible();
+  await expect(page.getByRole("status", { name: /Fuente PostgreSQL\. Fecha del dato incluido más antiguo no disponible/ })).toBeVisible();
+  await expect(page.getByText("Cargando analytics...", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("analytics freshness label explains the oldest included data timestamp in English", async ({ page }) => {
+  await mockInterfaceLanguage(page, "en");
   await page.route("**/api/analytics/home**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -87,20 +91,7 @@ test("operations keeps rendering when a legacy analytics response omits data_sou
 });
 
 test("operations renders room event labels in Spanish", async ({ page }) => {
-  await page.route("**/api/config/**", async (route) => {
-    const pathname = new URL(route.request().url()).pathname;
-    if (pathname.endsWith("/interface-language")) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ interface_language: "es" })
-      });
-      return;
-    }
-    const response = await route.fetch();
-    const config = await response.json();
-    await route.fulfill({ response, body: JSON.stringify({ ...config, interface_language: "es" }) });
-  });
+  await mockInterfaceLanguage(page, "es");
   await page.route("**/api/analytics/operations**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -138,6 +129,7 @@ test("operations renders room event labels in Spanish", async ({ page }) => {
 });
 
 test("analytics marks a missing historical currency quote as unavailable without changing other metrics", async ({ page }) => {
+  await mockInterfaceLanguage(page, "es");
   await page.route("**/api/analytics/home**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -168,6 +160,8 @@ test("analytics marks a missing historical currency quote as unavailable without
   await page.goto("/analytics");
 
   await expect(page.getByRole("heading", { name: "Analítica", exact: true })).toBeVisible();
+  await expect(page.getByText("No disponible", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Moneda").selectOption("USD");
   await expect(page.getByText("No disponible", { exact: true })).toBeVisible();
   await expect(page.getByText("42", { exact: true })).toBeVisible();
   await expect(page.getByText("Sin cotización histórica", { exact: true })).toHaveCount(0);
@@ -234,8 +228,20 @@ test("analytics home switches monetary cards between stored ARS and USD values",
 test("analytics renders requested period comparisons and explicit unavailable states", async ({ page }) => {
   await page.route("**/api/analytics/home**", async (route) => {
     const url = new URL(route.request().url());
+    const comparePrevious = url.searchParams.get("compare_previous") === "true";
     const compareYoy = url.searchParams.get("compare_yoy") === "true";
-    const unavailableYoy = compareYoy;
+    const previousMetrics = [
+      {
+        card_code: "home_revenue_gross",
+        label: "Revenue bruto",
+        value_ars: "100000.00",
+        value_ars_available: true,
+        value_usd: "1000.00",
+        value_usd_available: true
+      },
+      { card_code: "home_occupancy", label: "Ocupación promedio", value_pct: 40 },
+      { card_code: "home_no_shows", label: "No-shows", value_count: 1 }
+    ];
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -249,28 +255,17 @@ test("analytics renders requested period comparisons and explicit unavailable st
         data_source: "postgresql",
         comparison: {
           previous: {
-            requested: true,
-            available: true,
-            metrics_available: true,
-            date_from: "2026-10-27",
-            date_to: "2026-10-31",
-            metrics: [
-              {
-                card_code: "home_revenue_gross",
-                label: "Revenue bruto",
-                value_ars: "100000.00",
-                value_ars_available: true,
-                value_usd: "1000.00",
-                value_usd_available: true
-              },
-              { card_code: "home_occupancy", label: "Ocupación promedio", value_pct: 40 },
-              { card_code: "home_no_shows", label: "No-shows", value_count: 1 }
-            ]
+            requested: comparePrevious,
+            available: comparePrevious,
+            metrics_available: comparePrevious,
+            date_from: comparePrevious ? "2026-10-27" : null,
+            date_to: comparePrevious ? "2026-10-31" : null,
+            metrics: comparePrevious ? previousMetrics : []
           },
           yoy: {
             requested: compareYoy,
-            available: !unavailableYoy,
-            metrics_available: !unavailableYoy,
+            available: false,
+            metrics_available: false,
             date_from: compareYoy ? "2025-11-01" : null,
             date_to: compareYoy ? "2025-11-05" : null,
             metrics: []
@@ -302,6 +297,9 @@ test("analytics renders requested period comparisons and explicit unavailable st
       await route.fallback();
       return;
     }
+    const url = new URL(route.request().url());
+    const comparePrevious = url.searchParams.get("compare_previous") === "true";
+    const compareYoy = url.searchParams.get("compare_yoy") === "true";
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -315,14 +313,14 @@ test("analytics renders requested period comparisons and explicit unavailable st
         data_source: "postgresql",
         comparison: {
           previous: {
-            requested: true,
-            available: true,
-            metrics_available: true,
-            date_from: "2026-10-27",
-            date_to: "2026-10-31",
-            metrics: [{ card_code: "report_occupancy", label: "Ocupación", value_pct: 39 }]
+            requested: comparePrevious,
+            available: comparePrevious,
+            metrics_available: comparePrevious,
+            date_from: comparePrevious ? "2026-10-27" : null,
+            date_to: comparePrevious ? "2026-10-31" : null,
+            metrics: comparePrevious ? [{ card_code: "report_occupancy", label: "Ocupación", value_pct: 39 }] : []
           },
-          yoy: { requested: false, available: false, metrics: [] }
+          yoy: { requested: compareYoy, available: false, metrics_available: false, metrics: [] }
         },
         data: { cards: [{ card_code: "report_occupancy", label: "Ocupación", value_pct: 42 }] }
       })
