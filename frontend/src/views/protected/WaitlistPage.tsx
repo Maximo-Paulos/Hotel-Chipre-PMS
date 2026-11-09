@@ -8,14 +8,16 @@ import {
   getWaitlistPromotionSuggestions,
   listWaitlistEntries,
   promoteWaitlistEntry,
+  type WaitlistEntry,
   type WaitlistEntryCreate,
+  type WaitlistPromotionSuggestion,
   type WaitlistStatus
 } from "../../api/waitlist";
 import { ApiError, hasValidSession } from "../../api/client";
 import { useSession } from "../../state/session";
 import { useRooms } from "../../hooks/useRooms";
 import { useEffectivePermissions } from "../../hooks/usePermissions";
-import { refreshReservationState } from "../../api/queryInvalidation";
+import { invalidateQueriesInBackground, refreshReservationCreatedState } from "../../api/queryInvalidation";
 import { useGuardedMutation } from "../../hooks/useGuardedMutation";
 
 const waitlistStatusLabel: Record<WaitlistStatus, string> = {
@@ -84,7 +86,6 @@ export function WaitlistPage() {
 
   const invalidateWaitlist = async () => {
     await Promise.all([
-      refreshReservationState(queryClient, session.hotelId),
       queryClient.invalidateQueries({ queryKey: ["waitlist", session.hotelId] }),
       queryClient.invalidateQueries({ queryKey: ["waitlist", "suggestions", session.hotelId] })
     ]);
@@ -110,11 +111,24 @@ export function WaitlistPage() {
       expected_entry_fingerprint: expectedEntryFingerprint,
       notes
     }, session),
-    onSuccess: async () => {
-      await invalidateWaitlist();
+    onSuccess: (result) => {
+      const promotedEntry = result.waitlist_entry;
+      queryClient.setQueryData<WaitlistEntry[]>(["waitlist", session.hotelId, statusFilter], (current) => {
+        if (!current) return current;
+        if (statusFilter === "waiting") {
+          return current.filter((entry) => entry.id !== promotedEntry.id);
+        }
+        return current.map((entry) => entry.id === promotedEntry.id ? promotedEntry : entry);
+      });
+      queryClient.setQueryData<WaitlistPromotionSuggestion[]>(["waitlist", "suggestions", session.hotelId], (current) =>
+        current?.filter((suggestion) => suggestion.entry_id !== promotedEntry.id)
+      );
       setSelectedEntryId(null);
       setPromoteNotes("");
       setMessage("Entrada promovida a reserva.");
+      invalidateQueriesInBackground(queryClient, { queryKey: ["waitlist", session.hotelId] });
+      invalidateQueriesInBackground(queryClient, { queryKey: ["waitlist", "suggestions", session.hotelId] });
+      void refreshReservationCreatedState(queryClient, session.hotelId);
     }
   });
 
