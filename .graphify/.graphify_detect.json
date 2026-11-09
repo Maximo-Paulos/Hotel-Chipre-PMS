@@ -1850,7 +1850,7 @@
   "graphifyignore_patterns": 69,
   "git": {
     "source_owner": "git",
-    "source_hash": "8dea0c85fd10abaa6114bb22df7069448f9555bd",
+    "source_hash": "38fc139d58d7a302f1e55e003683bce19d1788c5",
     "branches": [
       "codex/allocation-history-localization-20261107",
       "codex/allocation-latest-query",
@@ -2017,7 +2017,7 @@
     "source": "cli",
     "root": ".",
     "git_root": ".",
-    "head": "8dea0c85fd10abaa6114bb22df7069448f9555bd",
+    "head": "38fc139d58d7a302f1e55e003683bce19d1788c5",
     "candidate_count": null,
     "included_count": 1817,
     "excluded_untracked_count": 0,
