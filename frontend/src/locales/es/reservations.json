@@ -787,6 +787,7 @@
       },
       "assigned": "Asignaciones calculadas",
       "movedUnassigned": "Cambios sugeridos / sin asignar",
+      "queuedNotice": "La solicitud quedó guardada y se está procesando. Podés revisar el resultado en Autoasignación.",
       "reviewProposals": "Revisar y aprobar sugerencias",
       "recentGroups": "Grupos recientes",
       "refresh": "Actualizar",

@@ -134,6 +134,8 @@ from app.services.distributed_lock import (
 )
 from app.services.allocation_trigger_service import (
     trigger_reoptimization_bg as _coalesced_reoptimization_bg,
+    AllocationRequestInProgress,
+    request_manual_allocation,
 )
 from app.dependencies.auth import AuthContext, authorize_permission, get_auth_context, require_all_permissions, require_any_permission, require_permission
 from app.api.manual_rate_access import authorize_manual_rate_scope
@@ -2359,41 +2361,35 @@ def recalculate_allocation(
     context: AuthContext = Depends(require_permission(PERMISSION_RESERVATION_MOVE)),
 ):
     try:
-        result = run_persisted_allocation(
+        queued_run = request_manual_allocation(
             db,
             hotel_id=context.hotel_id,
-            trigger_type=(
-                "manual_api_recalculate" if payload.apply else "manual_api_preview"
-            ),
             apply=payload.apply,
             horizon_start=payload.horizon_start,
             horizon_end=payload.horizon_end,
         )
-    except AllocationRuntimeError as exc:
+        run_id = queued_run.id
+        run_status = queued_run.status.value if hasattr(queued_run.status, "value") else str(queued_run.status)
+        trigger_type = queued_run.trigger_type
+        db.commit()
+    except AllocationRequestInProgress as exc:
         db.rollback()
         raise HTTPException(
             status_code=409,
-            detail="La reserva o la disponibilidad cambió durante el cálculo. Volvé a ejecutar la asignación.",
+            detail="Ya hay una asignación pendiente para este hotel. Esperá a que termine y volvé a intentarlo.",
         ) from exc
-    except DistributedLockBusy as exc:
+    except Exception:
         db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="Ya hay un cálculo de asignación en curso. Esperá a que termine y volvé a intentar.",
-        ) from exc
-    except DistributedLockUnavailable as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=503,
-            detail="No se pudo confirmar que la asignación sea exclusiva. Reintentá en unos segundos.",
-            headers={"Retry-After": "5"},
-        ) from exc
-    db.commit()
+        raise
+
+    # The queued request is durable; the best-effort wake-up can fail safely
+    # because the scheduled allocation processor will pick it up later.
+    _coalesced_reoptimization_bg(context.hotel_id, trigger_type)
     return AllocationRunResponse(
-        run_id=result.run.id,
-        status=result.run.status.value if hasattr(result.run.status, "value") else str(result.run.status),
-        objective_score=result.run.objective_score or 0.0,
-        assignments_created=len(result.solver_result.assignments),
-        unassigned_count=len(result.solver_result.unassigned_reservations),
-        moved_count=len(result.solver_result.moved_reservations),
+        run_id=run_id,
+        status=run_status,
+        objective_score=0.0,
+        assignments_created=0,
+        unassigned_count=0,
+        moved_count=0,
     )

@@ -159,13 +159,15 @@ class AllocationRun(Base):
                 "status = 'pending' AND trigger_type IN "
                 "('reservation_created_auto_proposal', 'new_reservation', "
                 "'reservation_date_change', 'reservation_update', "
-                "'reservation_room_move', 'reservation_group_created')"
+                "'reservation_room_move', 'reservation_group_created', "
+                "'manual_api_recalculate', 'manual_api_preview')"
             ),
             sqlite_where=text(
                 "status = 'pending' AND trigger_type IN "
                 "('reservation_created_auto_proposal', 'new_reservation', "
                 "'reservation_date_change', 'reservation_update', "
-                "'reservation_room_move', 'reservation_group_created')"
+                "'reservation_room_move', 'reservation_group_created', "
+                "'manual_api_recalculate', 'manual_api_preview')"
             ),
         ),
     )

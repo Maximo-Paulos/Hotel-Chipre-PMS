@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
@@ -28,8 +28,14 @@ ALLOCATION_PROPOSAL_TRIGGER_TYPES = frozenset(
         "reservation_update",
         "reservation_room_move",
         "reservation_group_created",
+        "manual_api_recalculate",
+        "manual_api_preview",
     }
 )
+
+
+class AllocationRequestInProgress(RuntimeError):
+    """A hotel already has a pending allocation request."""
 
 
 def _pending_proposal_query(db: Session, hotel_id: int):
@@ -71,6 +77,40 @@ def _request_allocation_proposal(
         if existing is not None:
             return existing
         raise
+    return request
+
+
+def request_manual_allocation(
+    db: Session,
+    *,
+    hotel_id: int,
+    apply: bool,
+    horizon_start: date | None,
+    horizon_end: date | None,
+) -> AllocationRun:
+    """Persist a manual run request so the HTTP request never runs the solver."""
+    trigger_type = "manual_api_recalculate" if apply else "manual_api_preview"
+    pending_query = _pending_proposal_query(db, hotel_id)
+    if pending_query.first() is not None:
+        raise AllocationRequestInProgress("An allocation request is already queued for this hotel")
+
+    request = AllocationRun(
+        hotel_id=hotel_id,
+        trigger_type=trigger_type,
+        horizon_start=datetime.combine(horizon_start, time.min) if horizon_start else None,
+        horizon_end=datetime.combine(horizon_end, time.min) if horizon_end else None,
+        status=AllocationRunStatusEnum.PENDING,
+    )
+    try:
+        # The partial unique index also serializes two simultaneous manual
+        # requests and automatic reservation-triggered requests.
+        with db.begin_nested():
+            db.add(request)
+            db.flush()
+    except IntegrityError as exc:
+        raise AllocationRequestInProgress(
+            "An allocation request is already queued for this hotel"
+        ) from exc
     return request
 
 

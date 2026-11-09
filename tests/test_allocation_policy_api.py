@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.dependencies.auth import AuthContext, get_auth_context
 from app.main import app as fastapi_app
-from app.models.allocation import ReservationAllocationLock
+from app.models.allocation import AllocationRunStatusEnum, ReservationAllocationLock
 from app.models.commercial import ProductRoomCompatibility, SellableProduct
 from app.models.guest import Guest
 from app.models.hotel_config import HotelConfiguration
@@ -24,10 +24,7 @@ from app.models.room import Room, RoomCategory, RoomStatusEnum
 from app.models.security_audit_log import SecurityAuditLog
 from app.services.allocation_policy_service import record_manual_override_feedback
 from app.services.allocation_runtime_service import run_persisted_allocation
-from app.services.distributed_lock import (
-    DistributedLockBusy,
-    DistributedLockUnavailable,
-)
+from app.services.allocation_trigger_service import AllocationRequestInProgress
 
 GEMMA_DEFER_REASON = "Gemma validation is deferred until the final IA configuration phase."
 
@@ -73,16 +70,68 @@ def _cleanup_client(db, engine):
     engine.dispose()
 
 
-@pytest.mark.parametrize(
-    ("lock_error", "expected_status", "expected_retry_after"),
-    [
-        (DistributedLockBusy("busy"), 409, None),
-        (DistributedLockUnavailable("offline"), 503, "5"),
-    ],
-)
-def test_manual_allocation_returns_retryable_lock_error_without_database(
-    monkeypatch, lock_error, expected_status, expected_retry_after
-):
+def test_manual_allocation_is_queued_without_running_solver_in_request(monkeypatch):
+    class FakeSession:
+        def __init__(self):
+            self.commit_count = 0
+            self.rollback_count = 0
+
+        def commit(self):
+            self.commit_count += 1
+
+        def rollback(self):
+            self.rollback_count += 1
+
+    db = FakeSession()
+    queued_run = type(
+        "QueuedRun",
+        (),
+        {"id": 42, "status": AllocationRunStatusEnum.PENDING, "trigger_type": "manual_api_recalculate"},
+    )()
+
+    def override_db():
+        yield db
+
+    fastapi_app.dependency_overrides[get_db] = override_db
+    fastapi_app.dependency_overrides[get_auth_context] = _override_auth(1, "owner")
+    monkeypatch.setattr(
+        "app.dependencies.auth.authorize_permission",
+        lambda request, db, context, permission: context,
+    )
+
+    monkeypatch.setattr(
+        "app.api.reservations.request_manual_allocation",
+        lambda *args, **kwargs: queued_run,
+    )
+    dispatched = []
+    monkeypatch.setattr(
+        "app.api.reservations._coalesced_reoptimization_bg",
+        lambda hotel_id, trigger_type: dispatched.append((hotel_id, trigger_type)),
+    )
+
+    try:
+        response = TestClient(fastapi_app).post(
+            "/api/reservations/allocation/recalculate",
+            json={"apply": True},
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json() == {
+            "run_id": 42,
+            "status": "pending",
+            "objective_score": 0.0,
+            "assignments_created": 0,
+            "unassigned_count": 0,
+            "moved_count": 0,
+        }
+        assert db.commit_count == 1
+        assert db.rollback_count == 0
+        assert dispatched == [(1, "manual_api_recalculate")]
+    finally:
+        fastapi_app.dependency_overrides.clear()
+
+
+def test_manual_allocation_rejects_duplicate_pending_request(monkeypatch):
     class FakeSession:
         def __init__(self):
             self.rollback_count = 0
@@ -102,23 +151,17 @@ def test_manual_allocation_returns_retryable_lock_error_without_database(
         lambda request, db, context, permission: context,
     )
 
-    def raise_lock_error(*args, **kwargs):
-        raise lock_error
+    def duplicate_request(*args, **kwargs):
+        raise AllocationRequestInProgress("pending")
 
-    monkeypatch.setattr(
-        "app.api.reservations.run_persisted_allocation",
-        raise_lock_error,
-    )
-
+    monkeypatch.setattr("app.api.reservations.request_manual_allocation", duplicate_request)
     try:
         response = TestClient(fastapi_app).post(
             "/api/reservations/allocation/recalculate",
             json={"apply": True},
         )
-
-        assert response.status_code == expected_status, response.text
-        assert response.json()["detail"]
-        assert response.headers.get("retry-after") == expected_retry_after
+        assert response.status_code == 409
+        assert "pendiente" in response.json()["detail"].lower()
         assert db.rollback_count == 1
     finally:
         fastapi_app.dependency_overrides.clear()

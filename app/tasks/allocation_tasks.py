@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 from uuid import UUID
 
@@ -37,7 +37,7 @@ def _session(database_url: str | None = None) -> Session:
 
 def _claim_request(
     db: Session, *, hotel_id: int, now: datetime
-) -> tuple[int, str] | None:
+) -> tuple[int, str, date | None, date | None] | None:
     """Claim one committed request and release the booking transaction lock."""
     stale_before = now - _STALE_REQUEST_AFTER
     stale_running = (
@@ -77,8 +77,10 @@ def _claim_request(
     request.error_message = None
     request_id = request.id
     trigger_type = request.trigger_type
+    horizon_start = request.horizon_start.date() if isinstance(request.horizon_start, datetime) else request.horizon_start
+    horizon_end = request.horizon_end.date() if isinstance(request.horizon_end, datetime) else request.horizon_end
     db.commit()
-    return request_id, trigger_type
+    return request_id, trigger_type, horizon_start, horizon_end
 
 
 def _process_hotel_request(
@@ -95,7 +97,7 @@ def _process_hotel_request(
     claimed = _claim_request(db, hotel_id=hotel_id, now=now)
     if claimed is None:
         return {"selected": 0, "succeeded": 0, "failed": 0, "deferred": 0}
-    request_id, trigger_type = claimed
+    request_id, trigger_type, horizon_start, horizon_end = claimed
 
     if allocation_runner is None:
         from app.services.allocation_runtime_service import run_persisted_allocation
@@ -110,13 +112,24 @@ def _process_hotel_request(
         db.info["domain_event_origin_key"] = normalized_origin_key
 
     try:
+        allocation_kwargs = {
+            "hotel_id": hotel_id,
+            "trigger_type": trigger_type,
+            "apply": trigger_type in {
+                "reservation_created_auto_proposal",
+                "new_reservation",
+                "manual_api_recalculate",
+            },
+            "queued_run_id": request_id,
+            "origin_key": normalized_origin_key,
+        }
+        if horizon_start is not None:
+            allocation_kwargs["horizon_start"] = horizon_start
+        if horizon_end is not None:
+            allocation_kwargs["horizon_end"] = horizon_end
         result = allocation_runner(
             db,
-            hotel_id=hotel_id,
-            trigger_type=trigger_type,
-            apply=trigger_type in {"reservation_created_auto_proposal", "new_reservation"},
-            queued_run_id=request_id,
-            origin_key=normalized_origin_key,
+            **allocation_kwargs,
         )
         # Initial assignment for an unassigned new reservation happens during
         # run_persisted_allocation. Any move of an existing room assignment

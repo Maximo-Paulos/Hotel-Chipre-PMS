@@ -787,6 +787,7 @@
       },
       "assigned": "Assignments calculated",
       "movedUnassigned": "Suggested changes / unassigned",
+      "queuedNotice": "The request was saved and is processing. You can review the result in Smart Allocation.",
       "reviewProposals": "Review and approve suggestions",
       "recentGroups": "Recent groups",
       "refresh": "Refresh",

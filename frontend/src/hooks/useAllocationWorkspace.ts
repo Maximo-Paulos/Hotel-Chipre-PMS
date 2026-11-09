@@ -37,6 +37,10 @@ export function useAllocationWorkspace(reservationSkip: number) {
     queryFn: () => getLatestAllocationRun(session),
     enabled: sessionReady && canMoveReservations,
     staleTime: 15_000,
+    refetchInterval: (query) => {
+      const status = String(query.state.data?.status ?? "").trim().toLowerCase();
+      return status === "pending" || status === "running" ? 5_000 : false;
+    },
     retry: false
   });
 

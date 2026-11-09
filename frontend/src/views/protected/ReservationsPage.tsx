@@ -845,6 +845,7 @@ export function ReservationsPage() {
       defaultValue: t("page.allocation.statusValues.unknown")
     })
     : null;
+  const allocationRunIsQueued = allocationRunStatusKey === "pending" || allocationRunStatusKey === "running";
 
   const revertMovementGroupMutation = useGuardedMutation<RoomMovementGroup, unknown, number>({
     mutationFn: (groupId) => revertRoomMovementGroup(groupId, session),
@@ -3899,16 +3900,22 @@ export function ReservationsPage() {
             </div>
             <div>
               <p className="text-xs text-sky-800">{t("page.allocation.assigned")}</p>
-              <p className="font-semibold">{allocationRunMutation.data.assignments_created}</p>
+              <p className="font-semibold">{allocationRunIsQueued ? "—" : allocationRunMutation.data.assignments_created}</p>
             </div>
             <div>
               <p className="text-xs text-sky-800">{t("page.allocation.movedUnassigned")}</p>
               <p className="font-semibold">
-                {allocationRunMutation.data.moved_count} / {allocationRunMutation.data.unassigned_count}
+                {allocationRunIsQueued
+                  ? "—"
+                  : `${allocationRunMutation.data.moved_count} / ${allocationRunMutation.data.unassigned_count}`}
               </p>
             </div>
             </div>
-            <p className="mt-2">{t("page.messages.allocationRecalculated", { moved: allocationRunMutation.data.moved_count })}</p>
+            <p className="mt-2">
+              {allocationRunIsQueued
+                ? t("page.allocation.queuedNotice")
+                : t("page.messages.allocationRecalculated", { moved: allocationRunMutation.data.moved_count })}
+            </p>
             <Link to="/operacion/asignacion" className="mt-2 inline-flex font-semibold text-brand-800 underline underline-offset-2">
               {t("page.allocation.reviewProposals")}
             </Link>
