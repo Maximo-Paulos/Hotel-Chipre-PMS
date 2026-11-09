@@ -8,7 +8,13 @@ test("reservation reads retry one transient 408 timeout or pool-exhaustion 503",
   assert.match(source, /const retryTransientServiceUnavailable = \(failureCount: number, error: unknown\) =>\s+error instanceof ApiError && \(error\.status === 408 \|\| error\.status === 503\) && failureCount < 1/);
   assert.match(source, /const transientServiceUnavailableRetryDelay = \(_failureCount: number, error: unknown\) =>\s+error instanceof ApiError \? error\.retryAfterMs \?\? 1000 : 1000/);
 
-  for (const hookName of ["useReservations", "usePendingReservationActions", "usePendingCancellationReviews"]) {
+  for (const hookName of [
+    "useReservations",
+    "useReservation",
+    "useReservationOperationsSummary",
+    "usePendingReservationActions",
+    "usePendingCancellationReviews"
+  ]) {
     const hook = source.match(new RegExp(`export function ${hookName}\\([^]*?\\n\\}`))?.[0] ?? "";
     assert.ok(hook, `${hookName} must remain defined`);
     assert.match(hook, /retry: retryTransientServiceUnavailable/);

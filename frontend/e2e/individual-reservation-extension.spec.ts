@@ -399,6 +399,12 @@ test("a fully-paid direct stay can be extended with pending balance and no email
   };
   const extensionRequests: Array<Record<string, unknown>> = [];
   const externalPaymentWrites: string[] = [];
+  const cashReadsAfterExtension: string[] = [];
+  let extensionCommitted = false;
+  let failReservationReadAfterExtension = false;
+  let failOperationsReadAfterExtension = false;
+  let reservationReadsAfterExtension = 0;
+  let operationsReadsAfterExtension = 0;
   const financialSummary = () => ({
     reservation_id: paidReservationId,
     confirmation_code: confirmationCode,
@@ -439,12 +445,27 @@ test("a fully-paid direct stay can be extended with pending balance and no email
     latest_room_move: null
   });
 
-  await page.route(new RegExp(`/api/reservations/${paidReservationId}$`), (route) =>
-    route.request().method() === "GET" ? fulfillJson(route, { ...currentReservation }) : route.continue()
-  );
-  await page.route(new RegExp(`/api/reservations/${paidReservationId}/operations-summary$`), (route) =>
-    fulfillJson(route, operationsSummary())
-  );
+  await page.route(new RegExp(`/api/reservations/${paidReservationId}$`), (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    if (extensionCommitted) {
+      reservationReadsAfterExtension += 1;
+      if (failReservationReadAfterExtension) {
+        failReservationReadAfterExtension = false;
+        return fulfillJson(route, { detail: "temporary database pool exhaustion" }, 503);
+      }
+    }
+    return fulfillJson(route, { ...currentReservation });
+  });
+  await page.route(new RegExp(`/api/reservations/${paidReservationId}/operations-summary$`), (route) => {
+    if (extensionCommitted) {
+      operationsReadsAfterExtension += 1;
+      if (failOperationsReadAfterExtension) {
+        failOperationsReadAfterExtension = false;
+        return fulfillJson(route, { detail: "temporary database pool exhaustion" }, 503);
+      }
+    }
+    return fulfillJson(route, operationsSummary());
+  });
   await page.route(new RegExp(`/api/payments/summary/${paidReservationId}$`), (route) =>
     fulfillJson(route, financialSummary())
   );
@@ -473,6 +494,9 @@ test("a fully-paid direct stay can be extended with pending balance and no email
       status: "pending",
       version: Number(currentReservation.version) + 1
     };
+    extensionCommitted = true;
+    failReservationReadAfterExtension = true;
+    failOperationsReadAfterExtension = true;
     return fulfillJson(route, {
       reservation: { ...currentReservation },
       extension_amount: extensionAmount,
@@ -481,8 +505,11 @@ test("a fully-paid direct stay can be extended with pending balance and no email
     });
   });
   page.on("request", (request) => {
-    if (request.method() !== "POST") return;
     const pathname = new URL(request.url()).pathname;
+    if (extensionCommitted && request.method() === "GET" && pathname.startsWith("/api/cash-register/")) {
+      cashReadsAfterExtension.push(pathname);
+    }
+    if (request.method() !== "POST") return;
     if (/\/api\/(?:payments?|payment-links)(?:\/|$)/.test(pathname)) {
       externalPaymentWrites.push(pathname);
     }
@@ -510,6 +537,15 @@ test("a fully-paid direct stay can be extended with pending balance and no email
   await expect(confirmation).toContainText("60.000");
   await expect(confirmation).toContainText("No se registra ni solicita un pago");
 
+  const reservationReconciled = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === `/api/reservations/${paidReservationId}` &&
+    response.request().method() === "GET" &&
+    response.status() === 200
+  );
+  const operationsReconciled = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === `/api/reservations/${paidReservationId}/operations-summary` &&
+    response.status() === 200
+  );
   const extensionResponse = page.waitForResponse((response) =>
     new URL(response.url()).pathname.endsWith(`/api/reservations/${paidReservationId}/extend`) &&
     response.request().method() === "POST"
@@ -517,6 +553,7 @@ test("a fully-paid direct stay can be extended with pending balance and no email
   await confirmation.getByRole("button", { name: "Confirmar extensión" }).click();
   const result = await extensionResponse;
   expect(result.ok()).toBeTruthy();
+  await Promise.all([reservationReconciled, operationsReconciled]);
   expect(extensionRequests).toHaveLength(1);
   expect(extensionRequests[0]).toMatchObject({
     new_checkout_date: extendedCheckoutDate,
@@ -530,5 +567,12 @@ test("a fully-paid direct stay can be extended with pending balance and no email
   expect(Number(currentReservation.total_amount)).toBe(180000);
   expect(Number(currentReservation.amount_paid)).toBe(120000);
   expect(externalPaymentWrites).toEqual([]);
+  expect(cashReadsAfterExtension).toEqual([]);
   await expect(drawer.getByText("Extensión aplicada. El saldo quedó pendiente de cobro.", { exact: true })).toBeVisible();
+  await expect(drawer.getByTestId("reservation-drawer-load-error")).toHaveCount(0);
+  await expect(drawer.getByTestId("reservation-drawer-operations-error")).toHaveCount(0);
+  expect(reservationReadsAfterExtension).toBeGreaterThanOrEqual(2);
+  expect(operationsReadsAfterExtension).toBeGreaterThanOrEqual(2);
+  await expect(drawer.getByTestId("reservation-drawer-operational-total")).toContainText("180.000");
+  await expect(drawer.getByTestId("drawer-balance-due")).toContainText("60.000");
 });

@@ -10,7 +10,11 @@ import {
   correctCompanyNightChargeAmounts,
   type CompanyNightChargeCorrection
 } from "../api/companyNightCharges";
-import { invalidateQueriesInBackground, refreshPaymentState, refreshReservationRecordState } from "../api/queryInvalidation";
+import {
+  invalidateQueriesInBackground,
+  reconcileCommittedReservationRecord,
+  refreshPaymentState
+} from "../api/queryInvalidation";
 import {
   extendReservationStay,
   isDeferredCompanyReservation,
@@ -392,10 +396,19 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
   const individualExtensionMutation = useGuardedMutation({
     mutationFn: ({ id, payload }: { id: number; payload: ReservationExtensionPayload }) =>
       extendReservationStay(id, payload, session),
-    onSuccess: async (_, variables) => Promise.all([
-      refreshPaymentState(queryClient, session.hotelId, variables.id),
-      refreshReservationRecordState(queryClient, session.hotelId, variables.id, { includePaymentLinks: true })
-    ])
+    onSuccess: async (result, variables) => reconcileCommittedReservationRecord(
+      queryClient,
+      session.hotelId,
+      variables.id,
+      result.reservation,
+      {
+        includePaymentSummary: true,
+        includePaymentLinks: variables.payload.payment_action === "payment_link",
+        includeCash: variables.payload.payment_action === "immediate_payment" &&
+          variables.payload.immediate_payment?.payment_method === "cash" &&
+          variables.payload.immediate_payment.collected_before !== true
+      }
+    )
   });
   const companyNightChargesQuery = useCompanyNightCharges(reservationId ?? undefined, Boolean(reservationQuery.data?.company_id));
   const refreshCompanyNightCharges = () => {
@@ -2125,7 +2138,7 @@ export function ReservationDetailDrawer({ reservationId, onClose }: Props) {
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <div>
                       <p className="text-xs text-slate-500">{t("drawer.billing.operationalTotal")}</p>
-                      <p className="font-semibold">
+                      <p className="font-semibold" data-testid="reservation-drawer-operational-total">
                         {formatMoneyExact(operations?.financial_summary?.operational_total_amount ?? summary.total_amount, currencyCode)}
                       </p>
                     </div>
