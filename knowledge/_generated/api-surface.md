@@ -1,6 +1,8 @@
 # Inventario OpenAPI
 
-Generado: 2026-11-09T06:40:02.192359+00:00
-Commit: `b4d2a10b6c0faa6a9c58d32dff3836a07ce7d045`
+Generado: 2026-11-09T16:49:15.612773+00:00
+Commit: `cf6ef49f21888a45da98337c29d562b6337d9c0b`
 
-Estado: **needs-verification** — no se pudo importar FastAPI: `ModuleNotFoundError("No module named 'fastapi'")`.
+Contrato generado desde `app.main:app`: **509 paths**, **595 operaciones**.
+
+El contrato completo está en [openapi.json](openapi.json). No editarlo a mano.

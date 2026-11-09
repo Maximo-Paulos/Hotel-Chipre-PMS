@@ -161,6 +161,8 @@
       "manualReferenceRequired": "Ingresá el cupón o número de operación del pago recibido.",
       "confirmTitle": "Confirmar extensión y cobro",
       "confirmMessage": "La estadía se extenderá hasta {{date}} y agregará {{amount}} al total. Confirmá que la fecha y la acción de cobro sean correctas.",
+      "pendingBalanceConfirmTitle": "Confirmar extensión con saldo pendiente",
+      "pendingBalanceConfirmMessage": "La estadía se extenderá hasta {{date}} y sumará {{amount}} al total. No se registra ni solicita un pago; el saldo quedará pendiente.",
       "confirmApply": "Confirmar extensión",
       "cancel": "Volver",
       "applying": "Aplicando extensión…",
