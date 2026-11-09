@@ -119,3 +119,34 @@ test("owner sees clear not-connected status and a human error, not a raw technic
   await expect(gmailNotice).toContainText("Todavía falta configurar la app de Google");
   expectNoRawTechnicalError(await gmailNotice.innerText());
 });
+
+test("owner sees how to recover a Gmail authorization without a usable token", async ({ page }) => {
+  await page.route("**/api/integrations", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      json: {
+        catalog: [{ id: 903, provider: "gmail", display_name: "Gmail", auth_type: "oauth_code" }],
+        connections: [
+          {
+            id: 1903,
+            integration: { id: 903, provider: "gmail", display_name: "Gmail", auth_type: "oauth_code" },
+            status: "error",
+            last_error: "Google no devolvio un access token valido para Gmail."
+          }
+        ]
+      }
+    });
+  });
+
+  await login(page);
+  await page.goto("/settings/connections");
+
+  const gmailCard = page.getByTestId("integration-card-gmail");
+  await expect(gmailCard.getByText("Requiere reconexión", { exact: true })).toBeVisible();
+  await expect(gmailCard.getByText(/Google no completó la autorización de Gmail/)).toBeVisible();
+  await expect(gmailCard.getByText(/el Owner debe volver a autorizar Gmail/)).toBeVisible();
+  await expect(gmailCard.getByRole("button", { name: "Reconectar Gmail", exact: true })).toBeVisible();
+  await expect(gmailCard.getByText(/Google no devolvio un access token valido para Gmail/i)).toHaveCount(0);
+});

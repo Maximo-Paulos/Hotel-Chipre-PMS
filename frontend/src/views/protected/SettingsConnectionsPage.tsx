@@ -21,8 +21,22 @@ const getErrorMessage = (error: unknown) => {
   return "No se pudo completar la acción.";
 };
 
+const getProviderMessage = (provider: string, message: string) => {
+  const normalizedMessage = message
+    .replace(/^error:\s*/i, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase();
+
+  if (provider === "gmail" && normalizedMessage.includes("google no devolvio un access token valido para gmail")) {
+    return "Google no completó la autorización de Gmail. El correo del hotel sigue desconectado. Para recuperarlo, el Owner debe volver a autorizar Gmail con el botón «Reconectar Gmail».";
+  }
+
+  return message;
+};
+
 const getProviderErrorMessage = (provider: string, error: unknown) => {
-  const message = getErrorMessage(error);
+  const message = getProviderMessage(provider, getErrorMessage(error));
   if (
     provider === "mercadopago" &&
     (message.includes("La conexión con Mercado Pago todavía no está habilitada") ||
@@ -80,6 +94,7 @@ export function SettingsConnectionsPage() {
         | {
             type?: string;
             integrationId?: number;
+            provider?: string;
             status?: "connected" | "error" | string;
             message?: string;
           }
@@ -90,7 +105,10 @@ export function SettingsConnectionsPage() {
       setNoticeFor(
         payload.integrationId,
         payload.status === "connected" ? "success" : "error",
-        payload.message || (payload.status === "connected" ? "Conexión completada." : "No se pudo completar la conexión."),
+        getProviderMessage(
+          payload.provider || "",
+          payload.message || (payload.status === "connected" ? "Conexión completada." : "No se pudo completar la conexión."),
+        ),
       );
       await refetch();
     };
@@ -201,12 +219,13 @@ export function SettingsConnectionsPage() {
   };
 
   const handleRefresh = async (id: number) => {
+    const provider = data?.catalog.find((item) => item.id === id)?.provider || "";
     try {
       const result = await refresh.mutateAsync(id);
-      setNoticeFor(id, result.status === "error" ? "error" : "success", result.message);
+      setNoticeFor(id, result.status === "error" ? "error" : "success", getProviderMessage(provider, result.message));
       await refetch();
     } catch (error) {
-      setNoticeFor(id, "error", getErrorMessage(error));
+      setNoticeFor(id, "error", getProviderErrorMessage(provider, error));
     }
   };
 
@@ -306,7 +325,13 @@ export function SettingsConnectionsPage() {
                   <p className="text-xs text-slate-500">{connectionDescription[cat.provider] || "Conexión del hotel"}</p>
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  {cat.provider === "whatsapp" ? "Próximamente" : status === "not_connected" ? "No conectado" : status}
+                  {cat.provider === "whatsapp"
+                    ? "Próximamente"
+                    : status === "not_connected"
+                      ? "No conectado"
+                      : cat.provider === "gmail" && status === "error"
+                        ? "Requiere reconexión"
+                        : status}
                 </span>
               </div>
 
@@ -453,7 +478,13 @@ export function SettingsConnectionsPage() {
                       disabled={connect.isPending}
                       type="button"
                     >
-                      {isGmail ? "Conectar Gmail" : isMercadoPago ? "Conectar Mercado Pago" : "Abrir autorización"}
+                      {isGmail
+                        ? status === "error" || status === "revoked"
+                          ? "Reconectar Gmail"
+                          : "Conectar Gmail"
+                        : isMercadoPago
+                          ? "Conectar Mercado Pago"
+                          : "Abrir autorización"}
                     </button>
                     {isGmail ? (
                       <>
@@ -575,7 +606,9 @@ export function SettingsConnectionsPage() {
                   Última verificación: {new Date(conn.last_checked_at).toLocaleString()}
                 </p>
               )}
-              {conn?.last_error && <p className="mt-2 text-xs text-rose-700">Error: {conn.last_error}</p>}
+              {conn?.last_error && (
+                <p className="mt-2 text-xs text-rose-700">{getProviderMessage(cat.provider, conn.last_error)}</p>
+              )}
             </div>
           );
         })}
