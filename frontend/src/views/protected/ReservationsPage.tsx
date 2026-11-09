@@ -5029,7 +5029,7 @@ export function ReservationsPage() {
                   {paymentSummary ? (
                     <div className="mt-2 grid gap-2 sm:grid-cols-4">
                       <div className="rounded-lg border border-emerald-100 bg-white/70 px-3 py-2 text-sm text-slate-800">
-                        <p className="text-xs text-slate-500">{t("page.form.summaryTotal")}</p>
+                        <p className="text-xs text-slate-500">{t("page.form.summaryOperationalTotal")}</p>
                         <p className="font-semibold">
                           {formatMoney(paymentSummary.operational_total_amount ?? paymentSummary.total_amount ?? 0, editingCurrencyCode)}
                         </p>
@@ -5052,6 +5052,29 @@ export function ReservationsPage() {
                   ) : (
                     <p className="mt-2 text-sm text-slate-600">{t("page.form.loadingSummary")}</p>
                   )}
+
+                  {paymentSummary && paymentSummary.billing_adjustment_total != null ? (
+                    <div
+                      className="mt-3 rounded-lg border border-emerald-100 bg-white/70 px-3 py-2"
+                      role="group"
+                      aria-label={t("page.form.summaryBreakdown")}
+                      data-testid="reservation-operational-total-breakdown"
+                    >
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600">
+                        <span>
+                          {t("page.form.summaryBaseAmount")}: <strong className="font-semibold text-slate-800">
+                            {formatMoney(paymentSummary.total_amount ?? 0, editingCurrencyCode)}
+                          </strong>
+                        </span>
+                        <span aria-hidden="true">+</span>
+                        <span>
+                          {t("page.form.summaryChargesAmount")}: <strong className="font-semibold text-slate-800">
+                            {formatMoney(paymentSummary.billing_adjustment_total, editingCurrencyCode)}
+                          </strong>
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {roundingCreditByCurrency.length > 0 ? (
                     <section
