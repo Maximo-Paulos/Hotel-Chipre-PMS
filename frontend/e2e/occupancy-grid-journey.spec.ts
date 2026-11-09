@@ -170,6 +170,10 @@ test("owner sees a real reservation on the current-month grid and opens it via t
   }));
   expect(mobileLayout.pageWidth).toBeLessThanOrEqual(mobileLayout.viewportWidth);
   expect(mobileLayout.gridContentWidth).toBeGreaterThan(mobileLayout.gridWidth);
+  const reservationTouchHeight = await page.getByTestId(`occupancy-reservation-${reservationId}`).first().evaluate((element) =>
+    element.getBoundingClientRect().height
+  );
+  expect(reservationTouchHeight).toBeGreaterThanOrEqual(48);
   await page.getByTestId(`occupancy-create-${createTarget!.room.id}-${createTarget!.date}`).click();
   await expect(page).toHaveURL(/\/reservas(?:\?.*)?$/);
   const createForm = page.locator("form").filter({ hasText: "Datos de la reserva" });

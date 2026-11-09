@@ -37,6 +37,8 @@ test("a room linked to an operational task survives saving and reload", async ({
   await expect(task).toContainText("Habitación 101");
   await page.reload();
   await expect(page.locator("article").filter({ hasText: title })).toContainText("Habitación 101");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
 test("an operational task keeps its hotel-local due time through the API round trip", async ({ page }) => {

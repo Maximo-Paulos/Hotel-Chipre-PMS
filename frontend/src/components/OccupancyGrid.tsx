@@ -242,7 +242,7 @@ function Cell({
           onDragEnd={() => onDragReservationChange?.(null)}
           title={`${item.guest_name} · ${item.confirmation_code}`}
           className={cx(
-            "w-full truncate rounded-lg px-2 py-1.5 text-left text-xs font-semibold shadow-sm hover:opacity-80",
+            "min-h-12 w-full truncate rounded-lg px-2 py-1.5 text-left text-xs font-semibold shadow-sm hover:opacity-80",
             status.className
           )}
         >
