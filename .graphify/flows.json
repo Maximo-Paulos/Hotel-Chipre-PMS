@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T05:56:20.689Z",
+  "generatedAt": "2026-11-09T06:40:01.337Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -9573,40 +9573,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_cash_register_service_close_session",
-      "name": "close_session",
-      "entryPoint": "services_cash_register_service_close_session",
-      "entryPointId": "services_cash_register_service_close_session",
-      "path": [
-        "services_cash_register_service_close_session",
-        "services_cash_register_service_cashregistererror",
-        "services_cash_register_service_confirmed_cash_movements_total",
-        "services_cash_register_service_money",
-        "services_cash_register_service_confirmed_cash_movement_breakdown",
-        "services_cash_register_service_movement_sign",
-        "services_cash_register_service_cash_movement_exclusion_reason",
-        "services_cash_register_service_confirmed_cash_handoff_total"
-      ],
-      "qualifiedPath": [
-        "services_cash_register_service_close_session",
-        "services_cash_register_service_cashregistererror",
-        "services_cash_register_service_confirmed_cash_movements_total",
-        "services_cash_register_service_money",
-        "services_cash_register_service_confirmed_cash_movement_breakdown",
-        "services_cash_register_service_movement_sign",
-        "services_cash_register_service_cash_movement_exclusion_reason",
-        "services_cash_register_service_confirmed_cash_handoff_total"
-      ],
-      "depth": 3,
-      "nodeCount": 8,
-      "fileCount": 1,
-      "files": [
-        "app/services/cash_register_service.py"
-      ],
-      "criticality": 0.2425,
-      "warnings": []
-    },
-    {
       "id": "flow:services_audit_log_service_create_required_audit_log",
       "name": "create_required_audit_log",
       "entryPoint": "services_audit_log_service_create_required_audit_log",
@@ -10945,42 +10911,6 @@
       "warnings": []
     },
     {
-      "id": "flow:services_cash_register_service_get_session_summary",
-      "name": "get_session_summary",
-      "entryPoint": "services_cash_register_service_get_session_summary",
-      "entryPointId": "services_cash_register_service_get_session_summary",
-      "path": [
-        "services_cash_register_service_get_session_summary",
-        "services_cash_register_service_cashregistererror",
-        "services_cash_register_service_confirmed_cash_movement_breakdown",
-        "services_cash_register_service_confirmed_cash_movements_total",
-        "services_cash_register_service_list_movements",
-        "services_cash_register_service_money",
-        "services_cash_register_service_cash_movement_exclusion_reason",
-        "services_cash_register_service_confirmed_cash_handoff_total",
-        "services_cash_register_service_movement_sign"
-      ],
-      "qualifiedPath": [
-        "services_cash_register_service_get_session_summary",
-        "services_cash_register_service_cashregistererror",
-        "services_cash_register_service_confirmed_cash_movement_breakdown",
-        "services_cash_register_service_confirmed_cash_movements_total",
-        "services_cash_register_service_list_movements",
-        "services_cash_register_service_money",
-        "services_cash_register_service_cash_movement_exclusion_reason",
-        "services_cash_register_service_confirmed_cash_handoff_total",
-        "services_cash_register_service_movement_sign"
-      ],
-      "depth": 2,
-      "nodeCount": 9,
-      "fileCount": 1,
-      "files": [
-        "app/services/cash_register_service.py"
-      ],
-      "criticality": 0.2256,
-      "warnings": []
-    },
-    {
       "id": "flow:services_operational_task_service_update_task",
       "name": "update_task",
       "entryPoint": "services_operational_task_service_update_task",
@@ -11979,6 +11909,38 @@
       "warnings": []
     },
     {
+      "id": "flow:services_cash_register_service_close_session",
+      "name": "close_session",
+      "entryPoint": "services_cash_register_service_close_session",
+      "entryPointId": "services_cash_register_service_close_session",
+      "path": [
+        "services_cash_register_service_close_session",
+        "services_cash_register_service_cashregistererror",
+        "services_cash_register_service_confirmed_cash_movements_total",
+        "services_cash_register_service_money",
+        "services_cash_register_service_confirmed_cash_movement_breakdown",
+        "services_cash_register_service_cash_movement_exclusion_reason",
+        "services_cash_register_service_confirmed_cash_handoff_total"
+      ],
+      "qualifiedPath": [
+        "services_cash_register_service_close_session",
+        "services_cash_register_service_cashregistererror",
+        "services_cash_register_service_confirmed_cash_movements_total",
+        "services_cash_register_service_money",
+        "services_cash_register_service_confirmed_cash_movement_breakdown",
+        "services_cash_register_service_cash_movement_exclusion_reason",
+        "services_cash_register_service_confirmed_cash_handoff_total"
+      ],
+      "depth": 3,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/cash_register_service.py"
+      ],
+      "criticality": 0.2157,
+      "warnings": []
+    },
+    {
       "id": "flow:services_domain_events_publish_pending_domain_events",
       "name": "publish_pending_domain_events",
       "entryPoint": "services_domain_events_publish_pending_domain_events",
@@ -12908,6 +12870,38 @@
       "fileCount": 1,
       "files": [
         "app/services/rate_change_draft_service.py"
+      ],
+      "criticality": 0.2057,
+      "warnings": []
+    },
+    {
+      "id": "flow:services_cash_register_service_get_session_summary",
+      "name": "get_session_summary",
+      "entryPoint": "services_cash_register_service_get_session_summary",
+      "entryPointId": "services_cash_register_service_get_session_summary",
+      "path": [
+        "services_cash_register_service_get_session_summary",
+        "services_cash_register_service_cashregistererror",
+        "services_cash_register_service_confirmed_cash_movement_breakdown",
+        "services_cash_register_service_list_movements",
+        "services_cash_register_service_money",
+        "services_cash_register_service_cash_movement_exclusion_reason",
+        "services_cash_register_service_confirmed_cash_handoff_total"
+      ],
+      "qualifiedPath": [
+        "services_cash_register_service_get_session_summary",
+        "services_cash_register_service_cashregistererror",
+        "services_cash_register_service_confirmed_cash_movement_breakdown",
+        "services_cash_register_service_list_movements",
+        "services_cash_register_service_money",
+        "services_cash_register_service_cash_movement_exclusion_reason",
+        "services_cash_register_service_confirmed_cash_handoff_total"
+      ],
+      "depth": 2,
+      "nodeCount": 7,
+      "fileCount": 1,
+      "files": [
+        "app/services/cash_register_service.py"
       ],
       "criticality": 0.2057,
       "warnings": []
