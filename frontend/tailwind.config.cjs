@@ -49,9 +49,9 @@ module.exports = {
           800: "#5c3e21"
         },
         paper: {
-          DEFAULT: "#f5f7f6",
-          raised: "#ffffff",
-          sunk: "#eaeeed"
+          DEFAULT: "#f3f5ef",
+          raised: "#fffefa",
+          sunk: "#e9ede5"
         }
       },
       fontFamily: {

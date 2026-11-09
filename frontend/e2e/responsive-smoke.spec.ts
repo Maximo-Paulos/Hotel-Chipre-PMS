@@ -27,6 +27,50 @@ async function openMobileMenu(page: Page) {
 }
 
 test.describe("Responsive mobile smoke", () => {
+  test("mobile shell keeps five clear slots and the current screen in frame", async ({ page }) => {
+    await login(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const nav = mobileNavigation(page);
+    await expect(page.getByTestId("mobile-screen-title")).toHaveText("Dashboard");
+    await expect(nav.getByTestId("bottom-nav-more-button")).toBeVisible();
+    const slotCount = await nav.locator("a, button").count();
+    expect(slotCount).toBeLessThanOrEqual(5);
+
+    const targetBoxes = await nav.locator("a, button").evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const box = node.getBoundingClientRect();
+        return { width: Math.round(box.width), height: Math.round(box.height) };
+      })
+    );
+    expect(targetBoxes.every((box) => box.width >= 48 && box.height >= 64)).toBe(true);
+
+    const moreButton = page.getByTestId("bottom-nav-more-button");
+    await moreButton.click();
+    await expect(mobileNavigationDialog(page)).toBeVisible();
+    const menuScrollRegion = page.getByTestId("mobile-menu-scroll-region");
+    await menuScrollRegion.evaluate((element) => element.scrollTo({ top: element.scrollHeight, behavior: "instant" }));
+    await expect.poll(() => menuScrollRegion.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    const settingsNavigation = page.getByRole("navigation", { name: /^(?:Configuración|Settings)$/i });
+    await expect(settingsNavigation.locator("a").last()).toBeInViewport({ ratio: 1 });
+    await page.keyboard.press("Escape");
+    await expect(mobileNavigationDialog(page)).toBeHidden();
+    await expect(moreButton).toBeFocused();
+
+    await moreButton.click();
+    await expect(mobileNavigationDialog(page)).toBeVisible();
+    await mobileNavigation(page).locator('a[href="/reservas"]').click();
+    await expect(page.getByTestId("mobile-screen-title")).toHaveText("Reservas");
+
+    const layout = await page.evaluate(() => ({
+      viewportWidth: window.innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      bodyWidth: document.body.scrollWidth
+    }));
+    expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth);
+    expect(layout.bodyWidth).toBeLessThanOrEqual(layout.viewportWidth);
+  });
+
   test("dashboard fits an iPhone viewport and exposes operational navigation", async ({ page }) => {
     await login(page);
 
@@ -138,14 +182,14 @@ test.describe("Responsive mobile smoke", () => {
     );
   });
 
-  test("critical mobile controls provide 44px touch targets", async ({ page }) => {
+  test("critical mobile controls provide at least 48px touch targets", async ({ page }) => {
     await login(page);
     await page.setViewportSize({ width: 375, height: 812 });
 
     await expect(page.getByTestId("mobile-menu-button")).toBeVisible();
     const menuButtonBox = await page.getByTestId("mobile-menu-button").boundingBox();
-    expect(menuButtonBox?.width).toBeGreaterThanOrEqual(44);
-    expect(menuButtonBox?.height).toBeGreaterThanOrEqual(44);
+    expect(menuButtonBox?.width).toBeGreaterThanOrEqual(48);
+    expect(menuButtonBox?.height).toBeGreaterThanOrEqual(48);
 
     await openMobileMenu(page);
     const mobileNavigationTargets = await mobileNavigation(page).locator("a").evaluateAll((nodes) =>
@@ -168,7 +212,7 @@ test.describe("Responsive mobile smoke", () => {
         .filter((target) => target.connected)
     );
     expect(
-      mobileNavigationTargets.filter((target) => target.height < 44 || target.width < 44),
+      mobileNavigationTargets.filter((target) => target.height < 48 || target.width < 48),
       "mobile navigation has undersized touch targets"
     ).toEqual([]);
 
@@ -195,7 +239,7 @@ test.describe("Responsive mobile smoke", () => {
           .filter((target) => target.visible);
       });
 
-      expect(targets.filter((target) => target.height < 44), `${path} has undersized touch targets`).toEqual([]);
+      expect(targets.filter((target) => target.height < 48), `${path} has undersized touch targets`).toEqual([]);
     }
   });
 

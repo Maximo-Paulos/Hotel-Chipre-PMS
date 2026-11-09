@@ -16,12 +16,12 @@ import { useOnlineStatus } from "../hooks/useOnlineStatus";
 import { useEffectivePermissions } from "../hooks/usePermissions";
 import { useReservationDrawer } from "../hooks/useReservationDrawer";
 import { useSubscriptionStatus } from "../hooks/useSubscription";
-import { defaultPathForRole, useSession } from "../state/session";
+import { defaultPathForRole, useSession, type Role } from "../state/session";
 import { ApiError, hasValidSession } from "../api/client";
 import { useCrossTabSync, useRealtimeStatus } from "../sync/crossTabSync";
 import { BrandMark } from "../components/brand/BrandMark";
 
-import { BottomNav, type BottomNavTab } from "./BottomNav";
+import { BottomNav, type BottomNavIcon, type BottomNavTab } from "./BottomNav";
 import { HotelSelector } from "./HotelSelector";
 import { UserBadge, roleLabels } from "./UserBadge";
 
@@ -116,6 +116,25 @@ const groupedNav: NavSection[] = [
   },
 ];
 
+const mobileNavPriorities: Record<Role, string[]> = {
+  owner: ["/operacion/planilla", "/reservas", "/habitaciones", "/caja"],
+  co_owner: ["/operacion/planilla", "/reservas", "/habitaciones", "/caja"],
+  manager: ["/operacion/planilla", "/reservas", "/habitaciones", "/caja"],
+  receptionist: ["/operacion/planilla", "/reservas", "/huespedes", "/caja"],
+  housekeeping: ["/operacion/limpieza-hoy", "/operacion/tareas", "/habitaciones", "/operacion/lavanderia"]
+};
+
+const mobileNavIcons: Record<string, BottomNavIcon> = {
+  "/operacion/planilla": "calendar",
+  "/reservas": "reservations",
+  "/huespedes": "guests",
+  "/habitaciones": "rooms",
+  "/operacion/limpieza-hoy": "cleaning",
+  "/operacion/tareas": "tasks",
+  "/caja": "cash",
+  "/operacion/lavanderia": "laundry"
+};
+
 const planRank: Record<"starter" | "pro" | "ultra", number> = {
   starter: 0,
   pro: 1,
@@ -167,6 +186,9 @@ export function AppShell() {
   const role = session.role;
   const realRole = session.baseRole ?? session.role;
   const previewRole = role && role !== realRole ? role : null;
+  const mobileViewRole = previewRole ?? realRole ?? "receptionist";
+  const mobileInitials = (session.email || session.userId || "??").slice(0, 2).toUpperCase();
+  const mobileRoleLabel = roleLabels[role ?? "receptionist"];
   const isHousekeeping = realRole === "housekeeping";
   const homePath = defaultPathForRole(realRole);
   const { hasAnyPermission, hasAllPermissions, hasPermission } = useEffectivePermissions();
@@ -247,39 +269,37 @@ export function AppShell() {
       .filter((section): section is NavSection => Boolean(section));
   }, [filterItems]);
 
-  // Mobile bottom nav: reuses the exact same NavItem objects (and filterItems
-  // gating) as the desktop sidebar/slide-over -- one permission model, not a
-  // parallel one. Housekeeping gets its own small set (Habitaciones,
-  // Lavanderia) instead of the operator set (Planilla/Reservas/Huespedes)
-  // because those routes are role-gated away from housekeeping already (see
-  // router.tsx); an item that isn't allowed simply never enters the list,
-  // same as "disappears automatically" on desktop.
+  const routeItems = [...dailyNav, ...groupedNav.flatMap((section) => section.items)];
+  const activeNavItem = routeItems
+    .filter((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`))
+    .sort((left, right) => right.to.length - left.to.length)[0];
+  const mobilePageTitle = activeNavItem ? t(activeNavItem.label) : t("mobileMenu.title");
+
+  // Mobile keeps four role-prioritized shortcuts plus the More button. Every
+  // shortcut still uses the existing permission-filtered catalogue, and every
+  // other visible route remains in the full drawer directory below.
   const bottomNavTabs = useMemo<BottomNavTab[]>(() => {
-    const habitaciones = dailyNav.find((item) => item.to === "/habitaciones");
-    const lavanderia = groupedNav.flatMap((section) => section.items).find((item) => item.to === "/operacion/lavanderia");
-    const candidates: NavItem[] = isHousekeeping
-      ? [habitaciones, lavanderia].filter((item): item is NavItem => Boolean(item))
-      : dailyNav.filter((item) => item.to !== "/caja");
-    const links = filterItems(candidates).map((item): BottomNavTab => ({ kind: "link", label: t(item.label), to: item.to }));
-    const tabs: BottomNavTab[] = [...links];
-    if (isHousekeeping) {
-      tabs.push({
-        kind: "button",
-        label: t("bottomNav.alerts"),
-        onClick: () => setAlertsOpen(true),
-        testId: "bottom-nav-alerts-button",
-        badge: unreadNotifications > 0
-      });
-    }
+    const catalogue = [...dailyNav, ...groupedNav.flatMap((section) => section.items)];
+    const priorities = mobileNavPriorities[mobileViewRole].map((path) => catalogue.find((item) => item.to === path));
+    const preferred = filterItems(priorities.filter((item): item is NavItem => Boolean(item)));
+    const daily = filterItems(dailyNav);
+    const chosen = [...preferred, ...daily.filter((item) => !preferred.some((selected) => selected.to === item.to))].slice(0, 4);
+    const tabs: BottomNavTab[] = chosen.map((item) => ({
+      kind: "link",
+      label: t(item.label),
+      to: item.to,
+      icon: mobileNavIcons[item.to] ?? "rooms"
+    }));
     tabs.push({
       kind: "button",
       label: t("bottomNav.more"),
       onClick: () => setMobileMenuOpen(true),
       testId: "bottom-nav-more-button",
-      active: mobileMenuOpen
+      active: mobileMenuOpen,
+      icon: "more"
     });
     return tabs;
-  }, [isHousekeeping, filterItems, mobileMenuOpen, unreadNotifications, t]);
+  }, [mobileViewRole, filterItems, mobileMenuOpen, t]);
 
   const path = location.pathname;
   if (onboarding?.completed && path.startsWith("/onboarding")) return <Navigate to="/dashboard" replace />;
@@ -288,7 +308,7 @@ export function AppShell() {
   if (isLoggedIn && !isVerified) return <Navigate to="/verify-email" replace />;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="pms-shell min-h-screen bg-paper text-slate-900">
       <Seo title={t("seo.title")} description={t("seo.description")} noindex />
       {/* The dark identity strip that used to sit here repeated three facts the
           shell already shows -- the brand mark in the sidebar, the hotel in
@@ -415,7 +435,7 @@ export function AppShell() {
       )}
 
       <div className="flex min-h-[calc(100vh-80px)]">
-        <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white/90 backdrop-blur md:flex md:flex-col">
+        <aside className="hidden w-72 shrink-0 border-r border-ink-100 bg-paper-raised md:flex md:flex-col">
           <div className="px-5 pb-4 pt-6">
             <Link to={homePath} className="block">
               <BrandMark />
@@ -495,22 +515,23 @@ export function AppShell() {
         </aside>
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-            {/* B7 mobile: logo + a single recognizable menu button. No
-                horizontal scroll, no second nav row competing for space --
-                everything (daily links, grouped sections, search, hotel
-                selector, user badge) lives in the slide-over panel below. */}
-            <div className="flex items-center justify-between gap-3 px-4 py-3 md:hidden">
-              <Link to={homePath} className="flex min-h-11 shrink-0 items-center text-slate-900">
+          <header className="sticky top-0 z-20 border-b border-ink-100 bg-paper-raised/95 backdrop-blur">
+            {/* A compact three-part frame: home mark, current screen, role and alerts.
+                The role button and the persistent More tab open the same directory. */}
+            <div className="grid min-h-16 grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 md:hidden">
+              <Link to={homePath} aria-label={t("mobileMenu.home")} className="grid min-h-12 min-w-12 place-items-center text-slate-900">
                 <BrandMark variant="mark" className="h-8 w-8" />
               </Link>
-              <div className="flex items-center gap-2">
+              <h2 data-testid="mobile-screen-title" className="truncate text-center text-sm font-semibold text-ink-800">
+                {mobilePageTitle}
+              </h2>
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setAlertsOpen(true)}
                   aria-label={unreadNotifications > 0 ? t("alerts.viewUnread", { count: unreadNotifications }) : t("alerts.view")}
                   data-testid="mobile-alerts-button"
-                  className="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
+                  className="relative inline-flex min-h-12 min-w-12 items-center justify-center rounded-xl text-slate-700 hover:bg-paper-sunk"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
                     <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -527,18 +548,19 @@ export function AppShell() {
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(true)}
-                  aria-label={t("mobileMenu.openMenu")}
+                  aria-label={`${t("mobileMenu.openMenu")}: ${mobileRoleLabel}`}
                   aria-haspopup="true"
                   aria-expanded={mobileMenuOpen}
                   aria-controls="mobile-menu-panel"
                   data-testid="mobile-menu-button"
-                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100"
+                  className="inline-flex min-h-12 min-w-12 items-center justify-center gap-1 rounded-xl px-1 text-slate-700 hover:bg-paper-sunk"
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-5 w-5" aria-hidden="true">
-                    <line x1="4" y1="6" x2="20" y2="6" />
-                    <line x1="4" y1="12" x2="20" y2="12" />
-                    <line x1="4" y1="18" x2="20" y2="18" />
-                  </svg>
+                  <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-800">
+                    {mobileInitials}
+                  </span>
+                  <span className="hidden max-w-[3.5rem] truncate text-[10px] font-semibold leading-3 min-[380px]:inline">
+                    {mobileRoleLabel}
+                  </span>
                 </button>
               </div>
             </div>
@@ -583,7 +605,7 @@ export function AppShell() {
                 id="mobile-menu-panel"
                 ref={mobileMenuPanelRef}
                 tabIndex={-1}
-                className="flex h-full w-full max-w-xs animate-slide-in-right flex-col overflow-hidden border-l border-slate-200 bg-white shadow-xl outline-none"
+                className="flex h-full w-full max-w-xs animate-slide-in-right flex-col overflow-hidden border-l border-ink-100 bg-paper-raised shadow-xl outline-none"
               >
                 <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
                   {/* Same "where am I" as the desktop sidebar header: without
@@ -602,7 +624,7 @@ export function AppShell() {
                     type="button"
                     onClick={() => setMobileMenuOpen(false)}
                     aria-label={t("mobileMenu.closeMenu")}
-                    className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                   >
                     ×
                   </button>
@@ -616,7 +638,7 @@ export function AppShell() {
                         to={item.to}
                         className={({ isActive }) =>
                           cx(
-                            "flex min-h-11 shrink-0 items-center rounded-lg px-3 py-2 text-sm font-medium",
+                            "flex min-h-12 shrink-0 items-center rounded-lg px-3 py-2 text-sm font-medium",
                             isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
                           )
                         }
@@ -635,7 +657,7 @@ export function AppShell() {
                           to={item.to}
                           className={({ isActive }) =>
                             cx(
-                              "flex min-h-11 shrink-0 items-center rounded-lg px-3 py-2 text-sm font-medium",
+                            "flex min-h-12 shrink-0 items-center rounded-lg px-3 py-2 text-sm font-medium",
                               isActive ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-100",
                             )
                           }
@@ -656,10 +678,10 @@ export function AppShell() {
             </div>
           )}
 
-          {/* Bottom padding clears the fixed BottomNav (56px tall) plus the
+          {/* Bottom padding clears the fixed BottomNav (64px tall) plus the
               home-indicator safe area on notched phones; md+ keeps the
               original padding since the bottom nav is md:hidden there. */}
-          <main className="min-w-0 flex-1 px-4 pb-[calc(56px+env(safe-area-inset-bottom)+1.5rem)] pt-8 sm:px-8 md:pb-8">
+          <main className="min-w-0 flex-1 px-4 pb-[calc(64px+env(safe-area-inset-bottom)+1rem)] pt-5 sm:px-8 md:pb-8 md:pt-8">
             <div className="mx-auto max-w-6xl min-w-0">
               <Suspense fallback={<p className="text-sm text-slate-500">{t("loading")}</p>}>
                 <Outlet />
@@ -669,7 +691,7 @@ export function AppShell() {
         </div>
       </div>
 
-      <BottomNav tabs={bottomNavTabs} />
+      <BottomNav tabs={bottomNavTabs} menuOpen={mobileMenuOpen} />
 
       {hasAnyPermission(["reservation:create", "checkin:perform"]) && (
         <ReservationDetailDrawer reservationId={drawerReservationId} onClose={closeReservation} />
