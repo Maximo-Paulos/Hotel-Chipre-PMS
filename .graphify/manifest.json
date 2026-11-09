@@ -2764,28 +2764,28 @@
     "hash": "84364af62f8c6b7d15983dd02b1a18bf"
   },
   "knowledge/_generated/README.md": {
-    "mtime": 1794201660196.8267,
-    "hash": "20fca111c1e92c162d828e8bc5118af2"
+    "mtime": 1794202050762.1553,
+    "hash": "754cb178a4c0b5dbf6ef9b5fa1485e43"
   },
   "knowledge/_generated/api-surface.md": {
-    "mtime": 1794201659441.0215,
-    "hash": "b0a26c2027ab420b5aa759043e4580a2"
+    "mtime": 1794202050036.0037,
+    "hash": "859b5a4950c54a10eee06fa77082f2e8"
   },
   "knowledge/_generated/cloud-surfaces.md": {
-    "mtime": 1794201660185.1865,
-    "hash": "8e2dc83776cc9a6d2d91f4c0455db69f"
+    "mtime": 1794202050749.7573,
+    "hash": "9774918e267d1c313d0a2f9bc3a0fa07"
   },
   "knowledge/_generated/frontend-routes.md": {
-    "mtime": 1794201659454.1973,
-    "hash": "9f773fc125abc839f07989ed72c09857"
+    "mtime": 1794202050048.375,
+    "hash": "a5f1c69a9edde7209e138c4c4afa1216"
   },
   "knowledge/_generated/graphify-summary.md": {
-    "mtime": 1794201660172.525,
-    "hash": "e9ad9656f485853734f40e48aebfddb5"
+    "mtime": 1794202050736.6636,
+    "hash": "394633e76ccb120b617b2f3516e386eb"
   },
   "knowledge/_generated/migration-head.md": {
-    "mtime": 1794201659660.293,
-    "hash": "9a48b9c10542214867f74a80ed6c7993"
+    "mtime": 1794202050231.7312,
+    "hash": "dd26430dc44c328264cf61fa2498b708"
   },
   "qa/evidence/README.md": {
     "mtime": 1794169911499.7566,
@@ -7476,8 +7476,8 @@
     "hash": "bcdb6613c9e97f5ded2870ab4c611f5f"
   },
   "app/tasks/allocation_tasks.py": {
-    "mtime": 1794197124645.3154,
-    "hash": "f40b5f8d453cbce827895bb4df856c96"
+    "mtime": 1794203677629.7483,
+    "hash": "db458535a67f8af31b4f8d94d49bdcca"
   },
   "frontend/e2e/allocation-operator-flows.spec.ts": {
     "mtime": 1794181304440.412,
@@ -7528,8 +7528,8 @@
     "hash": "b529fc552da8e4f08e4cf144fbf91098"
   },
   "tests/test_allocation_creation_trigger.py": {
-    "mtime": 1794197124645.6382,
-    "hash": "4d04baf18dbd2fba5c7dc299c4e6a44a"
+    "mtime": 1794203677629.8215,
+    "hash": "d4216ff50470fd3e69680dc33077b286"
   },
   "tests/test_allocation_runtime_postgres.py": {
     "mtime": 1794169911509.9048,

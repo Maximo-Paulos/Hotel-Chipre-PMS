@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-09T05:27:26.013Z",
+  "generatedAt": "2026-11-09T05:56:20.689Z",
   "graphPath": ".graphify/graph.json",
   "maxDepth": 15,
   "includeTests": false,
@@ -1656,32 +1656,6 @@
       "fileCount": 1,
       "files": [
         "scripts/backup/verify_local_backup_restore.py"
-      ],
-      "criticality": 0.42,
-      "warnings": []
-    },
-    {
-      "id": "flow:tasks_allocation_tasks_process_recalculation_requests",
-      "name": "process_recalculation_requests",
-      "entryPoint": "tasks_allocation_tasks_process_recalculation_requests",
-      "entryPointId": "tasks_allocation_tasks_process_recalculation_requests",
-      "path": [
-        "tasks_allocation_tasks_process_recalculation_requests",
-        "tasks_allocation_tasks_process_hotel_request",
-        "tasks_allocation_tasks_session",
-        "tasks_allocation_tasks_claim_request"
-      ],
-      "qualifiedPath": [
-        "tasks_allocation_tasks_process_recalculation_requests",
-        "tasks_allocation_tasks_process_hotel_request",
-        "tasks_allocation_tasks_session",
-        "tasks_allocation_tasks_claim_request"
-      ],
-      "depth": 2,
-      "nodeCount": 4,
-      "fileCount": 1,
-      "files": [
-        "app/tasks/allocation_tasks.py"
       ],
       "criticality": 0.42,
       "warnings": []
@@ -4926,6 +4900,34 @@
         "app/services/permission_service.py"
       ],
       "criticality": 0.3783,
+      "warnings": []
+    },
+    {
+      "id": "flow:tasks_allocation_tasks_process_recalculation_requests",
+      "name": "process_recalculation_requests",
+      "entryPoint": "tasks_allocation_tasks_process_recalculation_requests",
+      "entryPointId": "tasks_allocation_tasks_process_recalculation_requests",
+      "path": [
+        "tasks_allocation_tasks_process_recalculation_requests",
+        "tasks_allocation_tasks_process_hotel_request",
+        "tasks_allocation_tasks_rotate_active_hotel_ids",
+        "tasks_allocation_tasks_session",
+        "tasks_allocation_tasks_claim_request"
+      ],
+      "qualifiedPath": [
+        "tasks_allocation_tasks_process_recalculation_requests",
+        "tasks_allocation_tasks_process_hotel_request",
+        "tasks_allocation_tasks_rotate_active_hotel_ids",
+        "tasks_allocation_tasks_session",
+        "tasks_allocation_tasks_claim_request"
+      ],
+      "depth": 2,
+      "nodeCount": 5,
+      "fileCount": 1,
+      "files": [
+        "app/tasks/allocation_tasks.py"
+      ],
+      "criticality": 0.37,
       "warnings": []
     },
     {

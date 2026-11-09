@@ -44,6 +44,7 @@ from app.services.distributed_lock import DistributedLockBusy
 from app.services.reservation_service import create_reservation
 from app.services.tenant_context import set_tenant_hotel_context
 from app.services.timezones import hotel_today
+from app.tasks import allocation_tasks
 from app.tasks.allocation_tasks import (
     _claim_request,
     _process_hotel_request,
@@ -850,6 +851,84 @@ def test_worker_fails_stale_pending_run_without_claiming_it(pg_session):
     assert stale.status == AllocationRunStatusEnum.FAILED
     assert stale.finished_at is not None
     assert stale.error_message == PENDING_ALLOCATION_STALE_REASON
+
+
+def test_recalculation_processor_rotates_deferred_hotels_across_cycles(monkeypatch):
+    hotel_ids = [101, 102, 103, 104]
+    current_time = datetime(2026, 11, 9, 5, 40, tzinfo=timezone.utc)
+    processed_by_cycle = []
+
+    class FakeSession:
+        def close(self):
+            pass
+
+        def rollback(self):
+            pass
+
+    class FixedDateTime:
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return current_time.replace(tzinfo=None)
+            return current_time.astimezone(tz)
+
+    monkeypatch.setattr(allocation_tasks, "datetime", FixedDateTime)
+    monkeypatch.setattr(allocation_tasks, "_session", lambda _url: FakeSession())
+    monkeypatch.setattr(
+        "app.tasks.report_tasks._active_hotel_ids", lambda _db: hotel_ids
+    )
+
+    for _cycle in range(len(hotel_ids)):
+        processed_this_cycle = []
+
+        def defer_request(_db, *, hotel_id, origin_key=None):
+            processed_this_cycle.append(hotel_id)
+            return {"selected": 1, "succeeded": 0, "failed": 0, "deferred": 1}
+
+        monkeypatch.setattr(
+            allocation_tasks, "_process_hotel_request", defer_request
+        )
+        totals = allocation_tasks.process_recalculation_requests()
+        assert totals == {"selected": 3, "succeeded": 0, "failed": 0, "deferred": 3}
+        assert len(processed_this_cycle) == 3
+        processed_by_cycle.append(processed_this_cycle)
+        current_time += timedelta(minutes=5)
+
+    assert 104 in processed_by_cycle[1]
+    assert set().union(*map(set, processed_by_cycle)) == set(hotel_ids)
+
+
+@pytest.mark.parametrize("hotel_ids", [[], [101]])
+def test_active_hotel_rotation_preserves_empty_and_single_lists(hotel_ids):
+    assert allocation_tasks._rotate_active_hotel_ids(
+        hotel_ids, now=datetime(2026, 11, 9, 5, 40, tzinfo=timezone.utc)
+    ) == hotel_ids
+
+
+def test_explicit_hotel_allocation_processing_skips_tenant_rotation(monkeypatch):
+    processed = []
+
+    class FakeSession:
+        def close(self):
+            pass
+
+    monkeypatch.setattr(allocation_tasks, "_session", lambda _url: FakeSession())
+    monkeypatch.setattr(
+        allocation_tasks,
+        "_rotate_active_hotel_ids",
+        lambda _hotel_ids: pytest.fail("explicit hotel processing must not rotate"),
+    )
+    monkeypatch.setattr(
+        allocation_tasks,
+        "_process_hotel_request",
+        lambda _db, *, hotel_id, origin_key=None: processed.append(hotel_id)
+        or {"selected": 1, "succeeded": 1, "failed": 0, "deferred": 0},
+    )
+
+    totals = allocation_tasks.process_recalculation_requests(hotel_id=777)
+
+    assert totals == {"selected": 1, "succeeded": 1, "failed": 0, "deferred": 0}
+    assert processed == [777]
 
 
 def test_postgres_stale_pending_cleanup_skips_worker_locked_run(pg_engine):
