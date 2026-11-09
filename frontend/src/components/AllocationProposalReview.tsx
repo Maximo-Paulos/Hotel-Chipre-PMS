@@ -84,7 +84,21 @@ export function AllocationProposalReview({
     run &&
     run.status.toLowerCase() === "succeeded" &&
     automaticAllocationTriggers.has(run.trigger_type) &&
-    proposed.length > 0
+    reviewable
+  );
+  const proposalRunReviewed = Boolean(
+    run &&
+    run.status.toLowerCase() === "succeeded" &&
+    automaticAllocationTriggers.has(run.trigger_type) &&
+    run.assignments.length > 0 &&
+    run.assignments.every((assignment) => {
+      const status = allocationAssignmentStatusKey(
+        assignment.status,
+        assignment.source_room_id,
+        assignment.room_id
+      );
+      return ["applied", "retained", "locked", "rejected"].includes(status);
+    })
   );
   const proposedMoveCount = proposed.filter(
     (assignment) => assignment.source_room_id !== assignment.room_id
@@ -149,7 +163,9 @@ export function AllocationProposalReview({
             <span className={`rounded-full px-3 py-1 font-semibold ${run.status.toLowerCase() === "succeeded" ? "bg-emerald-100 text-emerald-800" : run.status.toLowerCase() === "failed" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-900"}`}>
               {proposalRunReadyForReview
                 ? t("proposal.status.readyForReview")
-                : t(`proposal.status.${run.status.toLowerCase()}`, { defaultValue: run.status })}
+                : proposalRunReviewed
+                  ? t("proposal.status.reviewed")
+                  : t(`proposal.status.${run.status.toLowerCase()}`, { defaultValue: run.status })}
             </span>
             <time className="text-slate-500" dateTime={run.created_at}>{new Intl.DateTimeFormat(i18n.language === "en" ? "en-US" : "es-AR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(run.created_at))}</time>
           </div>
@@ -200,7 +216,7 @@ export function AllocationProposalReview({
                     </div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div className="rounded-lg bg-slate-50 p-3">
-                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("proposal.roomBeforeProposal")}</p>
+                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t(assignmentStatus === "applied" ? "proposal.sourceRoom" : "proposal.currentRoom")}</p>
                         <p className="mt-1 text-sm font-semibold text-slate-900">{roomLabel(currentRoom)}</p>
                       </div>
                       <div className={`rounded-lg p-3 ${assignmentStatus === "retained" ? "bg-slate-50" : "bg-brand-50"}`}>
